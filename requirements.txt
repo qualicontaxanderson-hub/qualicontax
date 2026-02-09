@@ -3,6 +3,6 @@ mysql-connector-python==9.5.0
 Flask-Login==0.6.3
 Werkzeug==3.0.1
 python-dotenv==1.0.0
-gunicorn==21.2.0
+gunicorn==22.0.0
 Flask-SQLAlchemy==3.0.5
 pymysql
