@@ -10,7 +10,7 @@ dashboard = Blueprint('dashboard', __name__)
 @login_required
 def index():
     """Mostra dashboard principal com cards e gráficos"""
-    return render_template('dashboard/index.html')
+    return render_template('dashboard.html')
 
 
 @dashboard.route('/stats')
