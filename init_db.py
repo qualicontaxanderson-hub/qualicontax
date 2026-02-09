@@ -1,6 +1,16 @@
 """
 Script de inicialização do banco de dados
 Cria as tabelas necessárias e um usuário admin padrão
+
+AVISO: Este script cria uma estrutura de banco de dados que NÃO está compatível
+com a estrutura atual em uso. A tabela real 'usuarios' possui:
+- tipo_usuario ENUM('ADMIN','GERENTE','CONTADOR','ASSISTENTE','ESTAGIARIO') 
+- situacao ENUM('ATIVO','INATIVO','FERIAS','LICENCA')
+- Campos adicionais: cpf, telefone, departamento_id, cargo, capacidade_tarefas,
+  data_admissao, foto_perfil, criado_em, atualizado_em, ultimo_acesso
+
+Este script cria colunas 'tipo' e 'ativo' que não existem no banco real.
+Recomenda-se atualizar este script antes de usar em produção.
 """
 import sys
 from utils.db_helper import execute_query
