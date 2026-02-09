@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Cliente - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="cliente-create-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Novo Cliente</h1>
+            <p class="page-subtitle">Cadastre um novo cliente no sistema</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('clientes.list_clientes') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('clientes.create_cliente') }}" class="form-container">
+        {{ form.hidden_tag() if form }}
+        
+        <!-- Informações Básicas -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Informações Básicas</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="tipo">Tipo de Cliente *</label>
+                        <select id="tipo" name="tipo" class="form-control" required onchange="toggleTipoFields()">
+                            <option value="">Selecione...</option>
+                            <option value="PF">Pessoa Física</option>
+                            <option value="PJ">Pessoa Jurídica</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="status">Status *</label>
+                        <select id="status" name="status" class="form-control" required>
+                            <option value="ativo" selected>Ativo</option>
+                            <option value="inativo">Inativo</option>
+                            <option value="suspenso">Suspenso</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row" id="pfFields" style="display: none;">
+                    <div class="form-group col-md-6">
+                        <label for="nome">Nome Completo *</label>
+                        <input type="text" id="nome" name="nome" class="form-control" placeholder="Nome completo do cliente">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="cpf">CPF *</label>
+                        <input type="text" id="cpf" name="cpf" class="form-control" placeholder="000.000.000-00">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="rg">RG</label>
+                        <input type="text" id="rg" name="rg" class="form-control" placeholder="00.000.000-0">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="data_nascimento">Data de Nascimento</label>
+                        <input type="date" id="data_nascimento" name="data_nascimento" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-row" id="pjFields" style="display: none;">
+                    <div class="form-group col-md-6">
+                        <label for="razao_social">Razão Social *</label>
+                        <input type="text" id="razao_social" name="razao_social" class="form-control" placeholder="Razão social da empresa">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="nome_fantasia">Nome Fantasia</label>
+                        <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="cnpj">CNPJ *</label>
+                        <input type="text" id="cnpj" name="cnpj" class="form-control" placeholder="00.000.000/0000-00">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="inscricao_estadual">Inscrição Estadual</label>
+                        <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contato -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Contato</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="email">E-mail *</label>
+                        <input type="email" id="email" name="email" class="form-control" placeholder="email@exemplo.com" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="telefone">Telefone *</label>
+                        <input type="text" id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-0000" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="celular">Celular</label>
+                        <input type="text" id="celular" name="celular" class="form-control" placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="whatsapp">WhatsApp</label>
+                        <input type="text" id="whatsapp" name="whatsapp" class="form-control" placeholder="(00) 00000-0000">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Endereço -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Endereço</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-3">
+                        <label for="cep">CEP *</label>
+                        <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" required>
+                    </div>
+                    <div class="form-group col-md-9">
+                        <label for="logradouro">Logradouro *</label>
+                        <input type="text" id="logradouro" name="logradouro" class="form-control" placeholder="Rua, Avenida..." required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="numero">Número *</label>
+                        <input type="text" id="numero" name="numero" class="form-control" placeholder="000" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="complemento">Complemento</label>
+                        <input type="text" id="complemento" name="complemento" class="form-control" placeholder="Apto, Sala...">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="bairro">Bairro *</label>
+                        <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="cidade">Cidade *</label>
+                        <input type="text" id="cidade" name="cidade" class="form-control" placeholder="Cidade" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="estado">Estado *</label>
+                        <select id="estado" name="estado" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="AC">Acre</option>
+                            <option value="AL">Alagoas</option>
+                            <option value="AP">Amapá</option>
+                            <option value="AM">Amazonas</option>
+                            <option value="BA">Bahia</option>
+                            <option value="CE">Ceará</option>
+                            <option value="DF">Distrito Federal</option>
+                            <option value="ES">Espírito Santo</option>
+                            <option value="GO">Goiás</option>
+                            <option value="MA">Maranhão</option>
+                            <option value="MT">Mato Grosso</option>
+                            <option value="MS">Mato Grosso do Sul</option>
+                            <option value="MG">Minas Gerais</option>
+                            <option value="PA">Pará</option>
+                            <option value="PB">Paraíba</option>
+                            <option value="PR">Paraná</option>
+                            <option value="PE">Pernambuco</option>
+                            <option value="PI">Piauí</option>
+                            <option value="RJ">Rio de Janeiro</option>
+                            <option value="RN">Rio Grande do Norte</option>
+                            <option value="RS">Rio Grande do Sul</option>
+                            <option value="RO">Rondônia</option>
+                            <option value="RR">Roraima</option>
+                            <option value="SC">Santa Catarina</option>
+                            <option value="SP">São Paulo</option>
+                            <option value="SE">Sergipe</option>
+                            <option value="TO">Tocantins</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Observações</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o cliente"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{{ url_for('clientes.list_clientes') }}" class="btn btn-outline">
+                <i class="fas fa-times"></i>
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                Salvar Cliente
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleTipoFields() {
+    const tipo = document.getElementById('tipo').value;
+    const pfFields = document.getElementById('pfFields');
+    const pjFields = document.getElementById('pjFields');
+    
+    if (tipo === 'PF') {
+        pfFields.style.display = 'flex';
+        pjFields.style.display = 'none';
+    } else if (tipo === 'PJ') {
+        pfFields.style.display = 'none';
+        pjFields.style.display = 'flex';
+    } else {
+        pfFields.style.display = 'none';
+        pjFields.style.display = 'none';
+    }
+}
+
+// CEP lookup
+document.getElementById('cep').addEventListener('blur', function() {
+    const cep = this.value.replace(/\D/g, '');
+    if (cep.length === 8) {
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.erro) {
+                    document.getElementById('logradouro').value = data.logradouro;
+                    document.getElementById('bairro').value = data.bairro;
+                    document.getElementById('cidade').value = data.localidade;
+                    document.getElementById('estado').value = data.uf;
+                }
+            });
+    }
+});
+</script>
+{% endblock %}

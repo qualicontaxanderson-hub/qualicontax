@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Processos - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="relatorio-processos-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Relatório de Processos</h1>
+            <p class="page-subtitle">Acompanhamento de processos em andamento</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('relatorios.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+            <button class="btn btn-outline" onclick="window.print()">
+                <i class="fas fa-print"></i>
+                Imprimir
+            </button>
+            <button class="btn btn-primary">
+                <i class="fas fa-download"></i>
+                Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="GET" class="filters-form">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label for="data_inicio">Data Início</label>
+                        <input type="date" id="data_inicio" name="data_inicio" class="form-control" value="{{ request.args.get('data_inicio', '') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="data_fim">Data Fim</label>
+                        <input type="date" id="data_fim" name="data_fim" class="form-control" value="{{ request.args.get('data_fim', '') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Status</label>
+                        <select id="status" name="status" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="em_andamento" {% if request.args.get('status') == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
+                            <option value="concluido" {% if request.args.get('status') == 'concluido' %}selected{% endif %}>Concluído</option>
+                            <option value="arquivado" {% if request.args.get('status') == 'arquivado' %}selected{% endif %}>Arquivado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="cards-grid">
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-orange">
+                    <i class="fas fa-gavel"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Total de Processos</h3>
+                    <p class="stat-value">{{ report_data.total_processos or 0 }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-blue">
+                    <i class="fas fa-sync"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Em Andamento</h3>
+                    <p class="stat-value">{{ report_data.em_andamento or 0 }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Concluídos</h3>
+                    <p class="stat-value">{{ report_data.concluidos or 0 }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-red">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Atrasados</h3>
+                    <p class="stat-value">{{ report_data.atrasados or 0 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card chart-card">
+        <div class="card-header">
+            <h3 class="card-title">Processos por Status</h3>
+        </div>
+        <div class="card-body">
+            <canvas id="processosChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card table-card">
+        <div class="card-header">
+            <h3 class="card-title">Lista de Processos</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Cliente</th>
+                            <th>Tipo</th>
+                            <th>Assunto</th>
+                            <th>Data Abertura</th>
+                            <th>Status</th>
+                            <th>Responsável</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                <div class="empty-state">
+                                    <i class="fas fa-gavel"></i>
+                                    <p>Nenhum processo encontrado</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('processosChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Em Andamento', 'Concluídos', 'Arquivados', 'Atrasados'],
+            datasets: [{
+                data: [45, 30, 15, 10],
+                backgroundColor: [
+                    '#3B82F6',
+                    '#22C55E',
+                    '#6B7280',
+                    '#EF4444'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+});
+</script>
+{% endblock %}

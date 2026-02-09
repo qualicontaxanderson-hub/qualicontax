@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cliente.nome }} - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="cliente-view-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">{{ cliente.nome }}</h1>
+            <p class="page-subtitle">
+                <span class="badge badge-{{ 'success' if cliente.status == 'ativo' else 'danger' if cliente.status == 'suspenso' else 'secondary' }}">
+                    {{ cliente.status|capitalize }}
+                </span>
+                <span class="badge badge-info">{{ cliente.tipo }}</span>
+            </p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('clientes.list_clientes') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+            <a href="{{ url_for('clientes.edit_cliente', id=cliente.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i>
+                Editar
+            </a>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <ul class="tabs-nav">
+            <li class="tabs-item active">
+                <a href="#informacoes" class="tabs-link">
+                    <i class="fas fa-info-circle"></i>
+                    Informações
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#contratos" class="tabs-link">
+                    <i class="fas fa-file-contract"></i>
+                    Contratos
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#financeiro" class="tabs-link">
+                    <i class="fas fa-dollar-sign"></i>
+                    Financeiro
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#documentos" class="tabs-link">
+                    <i class="fas fa-file"></i>
+                    Documentos
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#historico" class="tabs-link">
+                    <i class="fas fa-history"></i>
+                    Histórico
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tabs-content">
+            <!-- Informações Tab -->
+            <div id="informacoes" class="tab-pane active">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Dados Cadastrais</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-grid">
+                            {% if cliente.tipo == 'PF' %}
+                            <div class="info-item">
+                                <label>Nome Completo</label>
+                                <span>{{ cliente.nome }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>CPF</label>
+                                <span>{{ cliente.cpf_cnpj }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>RG</label>
+                                <span>{{ cliente.rg or '-' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Data de Nascimento</label>
+                                <span>{{ cliente.data_nascimento.strftime('%d/%m/%Y') if cliente.data_nascimento else '-' }}</span>
+                            </div>
+                            {% else %}
+                            <div class="info-item">
+                                <label>Razão Social</label>
+                                <span>{{ cliente.razao_social }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Nome Fantasia</label>
+                                <span>{{ cliente.nome_fantasia or '-' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>CNPJ</label>
+                                <span>{{ cliente.cpf_cnpj }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Inscrição Estadual</label>
+                                <span>{{ cliente.inscricao_estadual or '-' }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Contato</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>E-mail</label>
+                                <span>{{ cliente.email }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Telefone</label>
+                                <span>{{ cliente.telefone }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Celular</label>
+                                <span>{{ cliente.celular or '-' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>WhatsApp</label>
+                                <span>{{ cliente.whatsapp or '-' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Endereço</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>CEP</label>
+                                <span>{{ cliente.cep }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Logradouro</label>
+                                <span>{{ cliente.logradouro }}, {{ cliente.numero }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Complemento</label>
+                                <span>{{ cliente.complemento or '-' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Bairro</label>
+                                <span>{{ cliente.bairro }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Cidade</label>
+                                <span>{{ cliente.cidade }} - {{ cliente.estado }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if cliente.observacoes %}
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Observações</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ cliente.observacoes }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Contratos Tab -->
+            <div id="contratos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Contratos</h3>
+                        <div class="card-actions">
+                            <a href="{{ url_for('contratos.create_contrato', cliente_id=cliente.id) }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                                Novo Contrato
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Número</th>
+                                        <th>Tipo</th>
+                                        <th>Data Início</th>
+                                        <th>Data Fim</th>
+                                        <th>Valor</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if contratos %}
+                                        {% for contrato in contratos %}
+                                        <tr>
+                                            <td>#{{ contrato.numero }}</td>
+                                            <td>{{ contrato.tipo }}</td>
+                                            <td>{{ contrato.data_inicio.strftime('%d/%m/%Y') }}</td>
+                                            <td>{{ contrato.data_fim.strftime('%d/%m/%Y') if contrato.data_fim else '-' }}</td>
+                                            <td>R$ {{ "{:,.2f}".format(contrato.valor) }}</td>
+                                            <td>
+                                                <span class="badge badge-success">{{ contrato.status }}</span>
+                                            </td>
+                                            <td>
+                                                <div class="table-actions">
+                                                    <a href="{{ url_for('contratos.view_contrato', id=contrato.id) }}" class="btn-icon">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="7" class="text-center">Nenhum contrato encontrado</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financeiro Tab -->
+            <div id="financeiro" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Movimentações Financeiras</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>Conteúdo em desenvolvimento</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documentos Tab -->
+            <div id="documentos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Documentos</h3>
+                        <div class="card-actions">
+                            <button class="btn btn-primary">
+                                <i class="fas fa-upload"></i>
+                                Upload
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p>Nenhum documento anexado</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Histórico Tab -->
+            <div id="historico" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Histórico de Atividades</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline">
+                            <div class="timeline-item">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <h4>Cliente cadastrado</h4>
+                                    <p>{{ cliente.created_at.strftime('%d/%m/%Y %H:%M') if cliente.created_at else '-' }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Tabs functionality
+document.querySelectorAll('.tabs-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const target = this.getAttribute('href');
+        
+        document.querySelectorAll('.tabs-item').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+        
+        this.parentElement.classList.add('active');
+        document.querySelector(target).classList.add('active');
+    });
+});
+</script>
+{% endblock %}

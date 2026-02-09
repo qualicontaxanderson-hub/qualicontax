@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Contrato - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="contrato-create-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Novo Contrato</h1>
+            <p class="page-subtitle">Cadastre um novo contrato no sistema</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('contratos.list_contratos') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('contratos.create_contrato') }}" class="form-container">
+        {{ form.hidden_tag() if form }}
+        
+        <!-- Informações do Contrato -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Informações do Contrato</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="cliente_id">Cliente *</label>
+                        <select id="cliente_id" name="cliente_id" class="form-control" required>
+                            <option value="">Selecione um cliente...</option>
+                            {% if clientes %}
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}" {% if request.args.get('cliente_id') == cliente.id|string %}selected{% endif %}>
+                                    {{ cliente.nome }}
+                                </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="numero">Número do Contrato *</label>
+                        <input type="text" id="numero" name="numero" class="form-control" placeholder="Ex: CT-2024-001" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label for="tipo">Tipo *</label>
+                        <select id="tipo" name="tipo" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="mensal">Mensal</option>
+                            <option value="anual">Anual</option>
+                            <option value="unico">Único</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="status">Status *</label>
+                        <select id="status" name="status" class="form-control" required>
+                            <option value="pendente">Pendente</option>
+                            <option value="ativo" selected>Ativo</option>
+                            <option value="cancelado">Cancelado</option>
+                            <option value="encerrado">Encerrado</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="valor">Valor (R$) *</label>
+                        <input type="number" id="valor" name="valor" class="form-control" placeholder="0,00" step="0.01" min="0" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="data_inicio">Data de Início *</label>
+                        <input type="date" id="data_inicio" name="data_inicio" class="form-control" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="data_fim">Data de Término</label>
+                        <input type="date" id="data_fim" name="data_fim" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="objeto">Objeto do Contrato *</label>
+                    <textarea id="objeto" name="objeto" class="form-control" rows="3" placeholder="Descreva o objeto do contrato" required></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Serviços -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Serviços Contratados</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Selecione os serviços:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="servicos" value="contabilidade">
+                            <span>Contabilidade</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="servicos" value="fiscal">
+                            <span>Fiscal</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="servicos" value="pessoal">
+                            <span>Pessoal</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="servicos" value="tributario">
+                            <span>Tributário</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="servicos" value="auditoria">
+                            <span>Auditoria</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="servicos" value="consultoria">
+                            <span>Consultoria</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Termos e Condições -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Termos e Condições</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="clausulas">Cláusulas Contratuais</label>
+                    <textarea id="clausulas" name="clausulas" class="form-control" rows="6" placeholder="Digite as cláusulas do contrato"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Observações</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o contrato"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{{ url_for('contratos.list_contratos') }}" class="btn btn-outline">
+                <i class="fas fa-times"></i>
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                Salvar Contrato
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
