@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Contratos - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="contratos-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Contratos</h1>
+            <p class="page-subtitle">Gerencie os contratos dos clientes</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-outline">
+                <i class="fas fa-download"></i>
+                Exportar
+            </button>
+            <a href="{{ url_for('contratos.create_contrato') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                Novo Contrato
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="GET" class="filters-form">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label for="search">Buscar</label>
+                        <input type="text" id="search" name="search" class="form-control" placeholder="Número, Cliente..." value="{{ request.args.get('search', '') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo">Tipo</label>
+                        <select id="tipo" name="tipo" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="mensal" {% if request.args.get('tipo') == 'mensal' %}selected{% endif %}>Mensal</option>
+                            <option value="anual" {% if request.args.get('tipo') == 'anual' %}selected{% endif %}>Anual</option>
+                            <option value="unico" {% if request.args.get('tipo') == 'unico' %}selected{% endif %}>Único</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Status</label>
+                        <select id="status" name="status" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="ativo" {% if request.args.get('status') == 'ativo' %}selected{% endif %}>Ativo</option>
+                            <option value="pendente" {% if request.args.get('status') == 'pendente' %}selected{% endif %}>Pendente</option>
+                            <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                            <option value="encerrado" {% if request.args.get('status') == 'encerrado' %}selected{% endif %}>Encerrado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contratos Table -->
+    <div class="card table-card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Cliente</th>
+                            <th>Tipo</th>
+                            <th>Data Início</th>
+                            <th>Data Fim</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if contratos %}
+                            {% for contrato in contratos.items %}
+                            <tr>
+                                <td>#{{ contrato.numero }}</td>
+                                <td>
+                                    <div class="table-user">
+                                        <div class="table-user-avatar">
+                                            {{ contrato.cliente.nome[0] }}
+                                        </div>
+                                        <span>{{ contrato.cliente.nome }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge badge-info">{{ contrato.tipo|capitalize }}</span>
+                                </td>
+                                <td>{{ contrato.data_inicio.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ contrato.data_fim.strftime('%d/%m/%Y') if contrato.data_fim else '-' }}</td>
+                                <td>R$ {{ "{:,.2f}".format(contrato.valor) }}</td>
+                                <td>
+                                    <span class="badge badge-{{ 'success' if contrato.status == 'ativo' else 'warning' if contrato.status == 'pendente' else 'danger' if contrato.status == 'cancelado' else 'secondary' }}">
+                                        {{ contrato.status|capitalize }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="table-actions">
+                                        <a href="{{ url_for('contratos.view_contrato', id=contrato.id) }}" class="btn-icon" title="Ver">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('contratos.edit_contrato', id=contrato.id) }}" class="btn-icon" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button class="btn-icon btn-danger" onclick="deleteContrato({{ contrato.id }})" title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="fas fa-file-contract"></i>
+                                        <p>Nenhum contrato encontrado</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if contratos and contratos.pages > 1 %}
+    <div class="pagination-wrapper">
+        <nav class="pagination">
+            {% if contratos.has_prev %}
+            <a href="{{ url_for('contratos.list_contratos', page=contratos.prev_num, **request.args) }}" class="pagination-btn">
+                <i class="fas fa-chevron-left"></i>
+                Anterior
+            </a>
+            {% endif %}
+            
+            <div class="pagination-pages">
+                {% for page_num in contratos.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <a href="{{ url_for('contratos.list_contratos', page=page_num, **request.args) }}" 
+                           class="pagination-page {% if page_num == contratos.page %}active{% endif %}">
+                            {{ page_num }}
+                        </a>
+                    {% else %}
+                        <span class="pagination-ellipsis">...</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            {% if contratos.has_next %}
+            <a href="{{ url_for('contratos.list_contratos', page=contratos.next_num, **request.args) }}" class="pagination-btn">
+                Próximo
+                <i class="fas fa-chevron-right"></i>
+            </a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteContrato(id) {
+    if (confirm('Tem certeza que deseja excluir este contrato?')) {
+        fetch(`/contratos/${id}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Erro ao excluir contrato');
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

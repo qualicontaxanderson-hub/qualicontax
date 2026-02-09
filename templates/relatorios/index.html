@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="relatorios-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Relatórios</h1>
+            <p class="page-subtitle">Acesse os relatórios do sistema</p>
+        </div>
+    </div>
+
+    <!-- Relatórios Grid -->
+    <div class="reports-grid">
+        <a href="{{ url_for('relatorios.clientes') }}" class="report-card">
+            <div class="report-icon report-icon-green">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="report-info">
+                <h3>Relatório de Clientes</h3>
+                <p>Visualize informações completas sobre seus clientes</p>
+            </div>
+            <div class="report-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </a>
+
+        <a href="{{ url_for('relatorios.processos') }}" class="report-card">
+            <div class="report-icon report-icon-orange">
+                <i class="fas fa-gavel"></i>
+            </div>
+            <div class="report-info">
+                <h3>Relatório de Processos</h3>
+                <p>Acompanhe todos os processos em andamento</p>
+            </div>
+            <div class="report-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </a>
+
+        <div class="report-card">
+            <div class="report-icon report-icon-blue">
+                <i class="fas fa-file-contract"></i>
+            </div>
+            <div class="report-info">
+                <h3>Relatório de Contratos</h3>
+                <p>Análise de contratos ativos, vencidos e pendentes</p>
+            </div>
+            <div class="report-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </div>
+
+        <div class="report-card">
+            <div class="report-icon report-icon-purple">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="report-info">
+                <h3>Relatório Financeiro</h3>
+                <p>Receitas, despesas e fluxo de caixa</p>
+            </div>
+            <div class="report-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </div>
+
+        <div class="report-card">
+            <div class="report-icon report-icon-red">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="report-info">
+                <h3>Relatório de Faturamento</h3>
+                <p>Análise de faturamento por período</p>
+            </div>
+            <div class="report-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </div>
+
+        <div class="report-card">
+            <div class="report-icon report-icon-teal">
+                <i class="fas fa-receipt"></i>
+            </div>
+            <div class="report-info">
+                <h3>Relatório de Impostos</h3>
+                <p>Tributos e obrigações fiscais</p>
+            </div>
+            <div class="report-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Estatísticas Rápidas</h3>
+        </div>
+        <div class="card-body">
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="stat-label">Total de Clientes</div>
+                    <div class="stat-value">{{ stats.total_clientes or 0 }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Contratos Ativos</div>
+                    <div class="stat-value">{{ stats.contratos_ativos or 0 }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Processos em Andamento</div>
+                    <div class="stat-value">{{ stats.processos_andamento or 0 }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Receita do Mês</div>
+                    <div class="stat-value">R$ {{ "{:,.2f}".format(stats.receita_mes or 0) }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

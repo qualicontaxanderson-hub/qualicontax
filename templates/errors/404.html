@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>404 - Página Não Encontrada - Qualicontax</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Font Awesome 6.x -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="error-page">
+    <div class="error-container">
+        <div class="error-content">
+            <div class="error-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h1 class="error-title">404</h1>
+            <h2 class="error-subtitle">Página Não Encontrada</h2>
+            <p class="error-message">
+                Desculpe, a página que você está procurando não existe ou foi movida.
+            </p>
+            <div class="error-actions">
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-home"></i>
+                    Voltar ao Início
+                </a>
+                <button onclick="history.back()" class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i>
+                    Voltar
+                </button>
+            </div>
+        </div>
+        
+        <div class="error-illustration">
+            <svg viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="250" cy="200" r="150" fill="#22C55E" opacity="0.1"/>
+                <path d="M200 180 L200 220 M300 180 L300 220 M180 280 Q250 320 320 280" 
+                      stroke="#22C55E" stroke-width="8" stroke-linecap="round" fill="none"/>
+            </svg>
+        </div>
+    </div>
+</body>
+</html>

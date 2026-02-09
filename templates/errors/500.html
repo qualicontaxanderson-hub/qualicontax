@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>500 - Erro no Servidor - Qualicontax</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Font Awesome 6.x -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="error-page">
+    <div class="error-container">
+        <div class="error-content">
+            <div class="error-icon error-icon-danger">
+                <i class="fas fa-server"></i>
+            </div>
+            <h1 class="error-title">500</h1>
+            <h2 class="error-subtitle">Erro no Servidor</h2>
+            <p class="error-message">
+                Ops! Algo deu errado no servidor. Nossa equipe já foi notificada e está trabalhando para resolver o problema.
+            </p>
+            <div class="error-actions">
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-home"></i>
+                    Voltar ao Início
+                </a>
+                <button onclick="location.reload()" class="btn btn-outline">
+                    <i class="fas fa-sync"></i>
+                    Tentar Novamente
+                </button>
+            </div>
+            
+            <div class="error-help">
+                <p>Se o problema persistir, entre em contato com o suporte:</p>
+                <a href="mailto:suporte@qualicontax.com.br">suporte@qualicontax.com.br</a>
+            </div>
+        </div>
+        
+        <div class="error-illustration">
+            <svg viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="250" cy="200" r="150" fill="#EF4444" opacity="0.1"/>
+                <path d="M200 180 L200 220 M300 180 L300 220 M180 280 Q250 240 320 280" 
+                      stroke="#EF4444" stroke-width="8" stroke-linecap="round" fill="none"/>
+            </svg>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Alert Banner -->
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>Você tem 5 contratos pendentes de renovação. <a href="{{ url_for('contratos.list_contratos') }}">Ver contratos</a></span>
+        <button class="alert-close">&times;</button>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Visão geral do sistema</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-outline">
+                <i class="fas fa-download"></i>
+                Exportar
+            </button>
+            <button class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                Novo Cliente
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="cards-grid">
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-green">
+                    <i class="fas fa-arrow-down"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Contas a Receber</h3>
+                    <p class="stat-value">R$ {{ "{:,.2f}".format(stats.contas_receber if stats else 125450.00) }}</p>
+                </div>
+            </div>
+            <div class="stat-footer">
+                <span class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    12% vs mês anterior
+                </span>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-orange">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Contas a Pagar</h3>
+                    <p class="stat-value">R$ {{ "{:,.2f}".format(stats.contas_pagar if stats else 45230.00) }}</p>
+                </div>
+            </div>
+            <div class="stat-footer">
+                <span class="stat-change negative">
+                    <i class="fas fa-arrow-up"></i>
+                    8% vs mês anterior
+                </span>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-blue">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Saldo</h3>
+                    <p class="stat-value">R$ {{ "{:,.2f}".format(stats.saldo if stats else 80220.00) }}</p>
+                </div>
+            </div>
+            <div class="stat-footer">
+                <span class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    15% vs mês anterior
+                </span>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-purple">
+                    <i class="fas fa-file-contract"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Novos Contratos</h3>
+                    <p class="stat-value">{{ stats.novos_contratos if stats else 28 }}</p>
+                </div>
+            </div>
+            <div class="stat-footer">
+                <span class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    23% vs mês anterior
+                </span>
+            </div>
+        </div>
+
+        <div class="card stat-card">
+            <div class="stat-card-header">
+                <div class="stat-icon stat-icon-red">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 class="stat-title">Encerramentos</h3>
+                    <p class="stat-value">{{ stats.encerramentos if stats else 5 }}</p>
+                </div>
+            </div>
+            <div class="stat-footer">
+                <span class="stat-change negative">
+                    <i class="fas fa-arrow-down"></i>
+                    2% vs mês anterior
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-grid">
+        <div class="card chart-card">
+            <div class="card-header">
+                <h3 class="card-title">Receitas vs Despesas</h3>
+                <div class="card-actions">
+                    <button class="btn-icon">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card chart-card">
+            <div class="card-header">
+                <h3 class="card-title">Contratos por Status</h3>
+                <div class="card-actions">
+                    <button class="btn-icon">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="contractsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card chart-card">
+            <div class="card-header">
+                <h3 class="card-title">Clientes por Categoria</h3>
+                <div class="card-actions">
+                    <button class="btn-icon">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="clientsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card chart-card">
+            <div class="card-header">
+                <h3 class="card-title">Evolução Mensal</h3>
+                <div class="card-actions">
+                    <button class="btn-icon">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="evolutionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Members Section -->
+    <div class="card members-card">
+        <div class="card-header">
+            <h3 class="card-title">Membros da Equipe</h3>
+            <div class="card-actions">
+                <button class="btn btn-primary">
+                    <i class="fas fa-user-plus"></i>
+                    Adicionar Membro
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="members-list">
+                <div class="member-item">
+                    <div class="member-avatar">
+                        <img src="{{ url_for('static', filename='images/avatar1.png') }}" alt="Membro">
+                    </div>
+                    <div class="member-info">
+                        <h4>João Silva</h4>
+                        <p>Gerente de Contas</p>
+                    </div>
+                    <div class="member-status">
+                        <span class="status-badge status-online">Online</span>
+                    </div>
+                </div>
+                <div class="member-item">
+                    <div class="member-avatar">
+                        <img src="{{ url_for('static', filename='images/avatar2.png') }}" alt="Membro">
+                    </div>
+                    <div class="member-info">
+                        <h4>Maria Santos</h4>
+                        <p>Analista Financeiro</p>
+                    </div>
+                    <div class="member-status">
+                        <span class="status-badge status-online">Online</span>
+                    </div>
+                </div>
+                <div class="member-item">
+                    <div class="member-avatar">
+                        <img src="{{ url_for('static', filename='images/avatar3.png') }}" alt="Membro">
+                    </div>
+                    <div class="member-info">
+                        <h4>Carlos Oliveira</h4>
+                        <p>Contador</p>
+                    </div>
+                    <div class="member-status">
+                        <span class="status-badge status-away">Ausente</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dashboard charts initialization
+    document.addEventListener('DOMContentLoaded', function() {
+        initDashboardCharts();
+    });
+</script>
+{% endblock %}

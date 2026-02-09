@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Cliente - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="cliente-edit-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Editar Cliente</h1>
+            <p class="page-subtitle">Atualize as informações do cliente</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('clientes.view_cliente', id=cliente.id) }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('clientes.edit_cliente', id=cliente.id) }}" class="form-container">
+        {{ form.hidden_tag() if form }}
+        
+        <!-- Informações Básicas -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Informações Básicas</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="tipo">Tipo de Cliente *</label>
+                        <select id="tipo" name="tipo" class="form-control" required disabled>
+                            <option value="PF" {% if cliente.tipo == 'PF' %}selected{% endif %}>Pessoa Física</option>
+                            <option value="PJ" {% if cliente.tipo == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
+                        </select>
+                        <small class="form-text">O tipo não pode ser alterado após o cadastro</small>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="status">Status *</label>
+                        <select id="status" name="status" class="form-control" required>
+                            <option value="ativo" {% if cliente.status == 'ativo' %}selected{% endif %}>Ativo</option>
+                            <option value="inativo" {% if cliente.status == 'inativo' %}selected{% endif %}>Inativo</option>
+                            <option value="suspenso" {% if cliente.status == 'suspenso' %}selected{% endif %}>Suspenso</option>
+                        </select>
+                    </div>
+                </div>
+
+                {% if cliente.tipo == 'PF' %}
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="nome">Nome Completo *</label>
+                        <input type="text" id="nome" name="nome" class="form-control" value="{{ cliente.nome }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="cpf">CPF *</label>
+                        <input type="text" id="cpf" name="cpf" class="form-control" value="{{ cliente.cpf_cnpj }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="rg">RG</label>
+                        <input type="text" id="rg" name="rg" class="form-control" value="{{ cliente.rg or '' }}">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="data_nascimento">Data de Nascimento</label>
+                        <input type="date" id="data_nascimento" name="data_nascimento" class="form-control" value="{{ cliente.data_nascimento.strftime('%Y-%m-%d') if cliente.data_nascimento else '' }}">
+                    </div>
+                </div>
+                {% else %}
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="razao_social">Razão Social *</label>
+                        <input type="text" id="razao_social" name="razao_social" class="form-control" value="{{ cliente.razao_social }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="nome_fantasia">Nome Fantasia</label>
+                        <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" value="{{ cliente.nome_fantasia or '' }}">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="cnpj">CNPJ *</label>
+                        <input type="text" id="cnpj" name="cnpj" class="form-control" value="{{ cliente.cpf_cnpj }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="inscricao_estadual">Inscrição Estadual</label>
+                        <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" value="{{ cliente.inscricao_estadual or '' }}">
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Contato -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Contato</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="email">E-mail *</label>
+                        <input type="email" id="email" name="email" class="form-control" value="{{ cliente.email }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="telefone">Telefone *</label>
+                        <input type="text" id="telefone" name="telefone" class="form-control" value="{{ cliente.telefone }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="celular">Celular</label>
+                        <input type="text" id="celular" name="celular" class="form-control" value="{{ cliente.celular or '' }}">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="whatsapp">WhatsApp</label>
+                        <input type="text" id="whatsapp" name="whatsapp" class="form-control" value="{{ cliente.whatsapp or '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Endereço -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Endereço</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group col-md-3">
+                        <label for="cep">CEP *</label>
+                        <input type="text" id="cep" name="cep" class="form-control" value="{{ cliente.cep }}" required>
+                    </div>
+                    <div class="form-group col-md-9">
+                        <label for="logradouro">Logradouro *</label>
+                        <input type="text" id="logradouro" name="logradouro" class="form-control" value="{{ cliente.logradouro }}" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="numero">Número *</label>
+                        <input type="text" id="numero" name="numero" class="form-control" value="{{ cliente.numero }}" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="complemento">Complemento</label>
+                        <input type="text" id="complemento" name="complemento" class="form-control" value="{{ cliente.complemento or '' }}">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="bairro">Bairro *</label>
+                        <input type="text" id="bairro" name="bairro" class="form-control" value="{{ cliente.bairro }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="cidade">Cidade *</label>
+                        <input type="text" id="cidade" name="cidade" class="form-control" value="{{ cliente.cidade }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="estado">Estado *</label>
+                        <select id="estado" name="estado" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            {% for uf in ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] %}
+                            <option value="{{ uf }}" {% if cliente.estado == uf %}selected{% endif %}>{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Observações</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" name="observacoes" class="form-control" rows="4">{{ cliente.observacoes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{{ url_for('clientes.view_cliente', id=cliente.id) }}" class="btn btn-outline">
+                <i class="fas fa-times"></i>
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                Salvar Alterações
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// CEP lookup
+document.getElementById('cep').addEventListener('blur', function() {
+    const cep = this.value.replace(/\D/g, '');
+    if (cep.length === 8) {
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.erro) {
+                    document.getElementById('logradouro').value = data.logradouro;
+                    document.getElementById('bairro').value = data.bairro;
+                    document.getElementById('cidade').value = data.localidade;
+                    document.getElementById('estado').value = data.uf;
+                }
+            });
+    }
+});
+</script>
+{% endblock %}
