@@ -56,15 +56,17 @@ class Processo:
         return execute_query(query, (cliente_id,), fetch=True) or []
     
     @staticmethod
-    def get_all(filters=None):
+    def get_all(filters=None, page=1, per_page=10):
         """
-        Retorna todos os processos com filtros opcionais.
+        Retorna todos os processos com filtros opcionais e paginação.
         
         Args:
             filters (dict): Filtros a serem aplicados
+            page (int): Número da página
+            per_page (int): Registros por página
             
         Returns:
-            list: Lista de processos
+            dict: Dicionário com 'processos' e 'total'
         """
         filters = filters or {}
         conditions = []
@@ -84,15 +86,31 @@ class Processo:
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
+        count_query = f"SELECT COUNT(*) as total FROM processos{where_clause}"
+        total_result = execute_query(count_query, tuple(params), fetch=True, fetch_one=True)
+        total = total_result['total'] if total_result else 0
+        
+        offset = (page - 1) * per_page
+        params.extend([per_page, offset])
+        
         query = f"""
             SELECT id, cliente_id, numero_processo, tipo, status, data_abertura,
                    data_conclusao, descricao
             FROM processos
             {where_clause}
             ORDER BY data_abertura DESC
+            LIMIT %s OFFSET %s
         """
         
-        return execute_query(query, tuple(params), fetch=True) or []
+        processos = execute_query(query, tuple(params), fetch=True) or []
+        
+        return {
+            'processos': processos,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        }
     
     @staticmethod
     def create(data):

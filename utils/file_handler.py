@@ -71,3 +71,55 @@ def delete_file(filepath):
         print(f"Erro ao deletar arquivo: {e}")
     
     return False
+
+
+def save_upload_file(file, subfolder='documents'):
+    """
+    Salva arquivo de upload e retorna informações.
+    
+    Args:
+        file: Arquivo do request
+        subfolder (str): Subpasta dentro de uploads
+        
+    Returns:
+        dict: Informações do arquivo salvo ou None se erro
+    """
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        
+        # Adiciona timestamp para evitar conflitos
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        name, ext = os.path.splitext(filename)
+        filename = f"{name}_{timestamp}{ext}"
+        
+        # Cria diretório se não existir
+        upload_path = os.path.join(Config.UPLOAD_FOLDER, subfolder)
+        os.makedirs(upload_path, exist_ok=True)
+        
+        # Salva arquivo
+        filepath = os.path.join(upload_path, filename)
+        file.save(filepath)
+        
+        # Retorna informações do arquivo
+        relative_path = os.path.join('uploads', subfolder, filename)
+        return {
+            'filename': filename,
+            'path': relative_path,
+            'size': os.path.getsize(filepath)
+        }
+    
+    return None
+
+
+def get_file_path(relative_path):
+    """
+    Retorna caminho completo do arquivo.
+    
+    Args:
+        relative_path (str): Caminho relativo do arquivo
+        
+    Returns:
+        str: Caminho completo do arquivo
+    """
+    return os.path.join('static', relative_path)
