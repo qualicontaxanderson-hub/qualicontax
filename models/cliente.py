@@ -74,10 +74,12 @@ class Cliente:
             conditions.append("regime_tributario = %s")
             params.append(filters['regime_tributario'])
         
-        # Busca por nome, CPF/CNPJ ou email
+        # Busca por nome, CPF/CNPJ ou email (usando parameterized queries para prevenir SQL injection)
         if filters.get('busca'):
             conditions.append("(nome_razao_social LIKE %s OR nome_fantasia LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s)")
-            search_pattern = f"%{filters['busca']}%"
+            # Sanitize special characters that have meaning in LIKE patterns
+            search_term = filters['busca'].replace('%', '\\%').replace('_', '\\_')
+            search_pattern = f"%{search_term}%"
             params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""

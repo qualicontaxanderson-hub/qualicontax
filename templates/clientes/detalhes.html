@@ -624,9 +624,14 @@ document.getElementById('cep')?.addEventListener('blur', function() {
                     document.getElementById('bairro').value = data.bairro || '';
                     document.getElementById('cidade').value = data.localidade || '';
                     document.getElementById('estado').value = data.uf || '';
+                } else {
+                    alert('CEP não encontrado. Por favor, verifique o número digitado.');
                 }
             })
-            .catch(error => console.error('Erro ao buscar CEP:', error));
+            .catch(error => {
+                console.error('Erro ao buscar CEP:', error);
+                alert('Erro ao buscar CEP. Por favor, tente novamente ou preencha manualmente.');
+            });
     }
 });
 

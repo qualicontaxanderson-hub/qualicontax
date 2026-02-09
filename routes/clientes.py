@@ -297,11 +297,11 @@ def buscar_cep(cep):
     """Buscar dados do CEP via API externa"""
     import requests
     try:
-        response = requests.get(f'https://viacep.com.br/ws/{cep}/json/')
+        response = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=5)
         if response.status_code == 200:
             return jsonify(response.json())
-    except:
-        pass
+    except requests.RequestException as e:
+        print(f"Erro ao buscar CEP: {e}")
     return jsonify({'erro': True}), 404
 
 
