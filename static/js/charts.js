@@ -5,11 +5,11 @@ Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Rob
 Chart.defaults.font.size = 13;
 Chart.defaults.color = '#374151';
 
-// Cores Qualicontax
+// Cores Qualicontax (brand colors)
 const colors = {
-    green: '#22C55E',
-    darkGreen: '#16A34A',
-    orange: '#FF6B35',
+    green: '#22C55E',        // Primary brand green
+    darkGreen: '#16A34A',    // Dark brand green
+    orange: '#FF6B35',       // Accent brand orange
     blue: '#3B82F6',
     purple: '#8B5CF6',
     yellow: '#F59E0B',

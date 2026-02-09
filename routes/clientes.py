@@ -8,7 +8,7 @@ clientes = Blueprint('clientes', __name__)
 
 @clientes.route('/clientes')
 @login_required
-def list():
+def list_clientes():
     """Lista todos os clientes com filtros e paginação"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)

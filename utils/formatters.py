@@ -85,7 +85,7 @@ def format_date(date, format_str='%d/%m/%Y'):
     if isinstance(date, str):
         try:
             date = datetime.strptime(date, '%Y-%m-%d')
-        except:
+        except (ValueError, TypeError):
             return date
     
     return date.strftime(format_str)

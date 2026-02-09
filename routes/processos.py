@@ -9,7 +9,7 @@ processos = Blueprint('processos', __name__)
 
 @processos.route('/processos')
 @login_required
-def list():
+def list_processos():
     """Lista processos"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)

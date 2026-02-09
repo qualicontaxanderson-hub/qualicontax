@@ -9,7 +9,7 @@ contratos = Blueprint('contratos', __name__)
 
 @contratos.route('/contratos')
 @login_required
-def list():
+def list_contratos():
     """Lista contratos"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
