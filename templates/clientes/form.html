@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar Cliente' if cliente else 'Novo Cliente' }} - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="cliente-form-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">{{ 'Editar Cliente' if cliente else 'Novo Cliente' }}</h1>
+            <p class="page-subtitle">{{ 'Atualize os dados do cliente' if cliente else 'Cadastre um novo cliente no sistema' }}</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container">
+        
+        <!-- Informações Básicas -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Informações Básicas</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="tipo_pessoa">Tipo de Pessoa *</label>
+                        <select id="tipo_pessoa" name="tipo_pessoa" class="form-control" required onchange="toggleTipoFields()">
+                            <option value="">Selecione...</option>
+                            <option value="PF" {% if cliente and cliente.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
+                            <option value="PJ" {% if cliente and cliente.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="situacao">Situação *</label>
+                        <select id="situacao" name="situacao" class="form-control" required>
+                            <option value="ATIVO" {% if not cliente or cliente.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                            <option value="INATIVO" {% if cliente and cliente.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                            <option value="SUSPENSO" {% if cliente and cliente.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
+                            <option value="CANCELADO" {% if cliente and cliente.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Pessoa Física Fields -->
+                <div id="pfFields" style="display: {% if cliente and cliente.tipo_pessoa == 'PF' %}block{% else %}none{% endif %};">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nome_razao_social_pf">Nome Completo *</label>
+                            <input type="text" id="nome_razao_social_pf" name="nome_razao_social" class="form-control" placeholder="Nome completo" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="cpf_cnpj_pf">CPF *</label>
+                            <input type="text" id="cpf_cnpj_pf" name="cpf_cnpj" class="form-control cpf-mask" placeholder="000.000.000-00" value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pessoa Jurídica Fields -->
+                <div id="pjFields" style="display: {% if cliente and cliente.tipo_pessoa == 'PJ' %}block{% else %}none{% endif %};">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nome_razao_social_pj">Razão Social *</label>
+                            <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="form-control" placeholder="Razão social da empresa" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="nome_fantasia">Nome Fantasia</label>
+                            <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cpf_cnpj_pj">CNPJ *</label>
+                            <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="form-control cnpj-mask" placeholder="00.000.000/0000-00" value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="inscricao_estadual">Inscrição Estadual</label>
+                            <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Inscrição Estadual" value="{{ cliente.inscricao_estadual if cliente else '' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="inscricao_municipal">Inscrição Municipal</label>
+                            <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="form-control" placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="regime_tributario">Regime Tributário</label>
+                            <select id="regime_tributario" name="regime_tributario" class="form-control">
+                                <option value="">Selecione...</option>
+                                <option value="SIMPLES" {% if cliente and cliente.regime_tributario == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
+                                <option value="LUCRO_PRESUMIDO" {% if cliente and cliente.regime_tributario == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
+                                <option value="LUCRO_REAL" {% if cliente and cliente.regime_tributario == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
+                                <option value="MEI" {% if cliente and cliente.regime_tributario == 'MEI' %}selected{% endif %}>MEI</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="porte_empresa">Porte da Empresa</label>
+                            <select id="porte_empresa" name="porte_empresa" class="form-control">
+                                <option value="">Selecione...</option>
+                                <option value="MEI" {% if cliente and cliente.porte_empresa == 'MEI' %}selected{% endif %}>MEI</option>
+                                <option value="ME" {% if cliente and cliente.porte_empresa == 'ME' %}selected{% endif %}>Microempresa (ME)</option>
+                                <option value="EPP" {% if cliente and cliente.porte_empresa == 'EPP' %}selected{% endif %}>Empresa de Pequeno Porte (EPP)</option>
+                                <option value="MEDIO" {% if cliente and cliente.porte_empresa == 'MEDIO' %}selected{% endif %}>Médio Porte</option>
+                                <option value="GRANDE" {% if cliente and cliente.porte_empresa == 'GRANDE' %}selected{% endif %}>Grande Porte</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contato -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Informações de Contato</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email">E-mail</label>
+                        <input type="email" id="email" name="email" class="form-control" placeholder="email@exemplo.com" value="{{ cliente.email if cliente else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="telefone">Telefone</label>
+                        <input type="text" id="telefone" name="telefone" class="form-control phone-mask" placeholder="(00) 0000-0000" value="{{ cliente.telefone if cliente else '' }}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="celular">Celular</label>
+                        <input type="text" id="celular" name="celular" class="form-control phone-mask" placeholder="(00) 00000-0000" value="{{ cliente.celular if cliente else '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dados do Contrato -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Dados do Contrato</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="data_inicio_contrato">Data Início do Contrato</label>
+                        <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="data_fim_contrato">Data Fim do Contrato</label>
+                        <input type="date" id="data_fim_contrato" name="data_fim_contrato" class="form-control" value="{{ cliente.data_fim_contrato if cliente else '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Observações</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grupos (apenas em edição) -->
+        {% if cliente and grupos %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Grupos</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Para gerenciar grupos, acesse a aba "Grupos" na página de detalhes do cliente.</p>
+                {% if grupos_cliente %}
+                <div class="badges-list">
+                    {% for grupo in grupos_cliente %}
+                    <span class="badge badge-info badge-lg">{{ grupo.nome }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
+                <i class="fas fa-times"></i>
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                {{ 'Atualizar Cliente' if cliente else 'Cadastrar Cliente' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle fields based on tipo_pessoa
+function toggleTipoFields() {
+    const tipoPessoa = document.getElementById('tipo_pessoa').value;
+    const pfFields = document.getElementById('pfFields');
+    const pjFields = document.getElementById('pjFields');
+    
+    if (tipoPessoa === 'PF') {
+        pfFields.style.display = 'block';
+        pjFields.style.display = 'none';
+        
+        // Make PF fields required
+        document.getElementById('nome_razao_social_pf').required = true;
+        document.getElementById('cpf_cnpj_pf').required = true;
+        
+        // Make PJ fields not required
+        document.getElementById('nome_razao_social_pj').required = false;
+        document.getElementById('cpf_cnpj_pj').required = false;
+    } else if (tipoPessoa === 'PJ') {
+        pfFields.style.display = 'none';
+        pjFields.style.display = 'block';
+        
+        // Make PJ fields required
+        document.getElementById('nome_razao_social_pj').required = true;
+        document.getElementById('cpf_cnpj_pj').required = true;
+        
+        // Make PF fields not required
+        document.getElementById('nome_razao_social_pf').required = false;
+        document.getElementById('cpf_cnpj_pf').required = false;
+    } else {
+        pfFields.style.display = 'none';
+        pjFields.style.display = 'none';
+    }
+}
+
+// Call on page load if editing
+document.addEventListener('DOMContentLoaded', function() {
+    toggleTipoFields();
+    
+    // Simple input masks (could be improved with a library)
+    const cpfInputs = document.querySelectorAll('.cpf-mask');
+    const cnpjInputs = document.querySelectorAll('.cnpj-mask');
+    const phoneInputs = document.querySelectorAll('.phone-mask');
+    
+    // CPF mask
+    cpfInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 11) value = value.substr(0, 11);
+            
+            if (value.length > 9) {
+                value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            } else if (value.length > 6) {
+                value = value.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            } else if (value.length > 3) {
+                value = value.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+            }
+            
+            e.target.value = value;
+        });
+    });
+    
+    // CNPJ mask
+    cnpjInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 14) value = value.substr(0, 14);
+            
+            if (value.length > 12) {
+                value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+            } else if (value.length > 8) {
+                value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+            } else if (value.length > 5) {
+                value = value.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            } else if (value.length > 2) {
+                value = value.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+            }
+            
+            e.target.value = value;
+        });
+    });
+    
+    // Phone mask
+    phoneInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 11) value = value.substr(0, 11);
+            
+            if (value.length > 10) {
+                value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            } else if (value.length > 6) {
+                value = value.replace(/(\d{2})(\d{4})(\d{1,4})/, '($1) $2-$3');
+            } else if (value.length > 2) {
+                value = value.replace(/(\d{2})(\d{1,5})/, '($1) $2');
+            }
+            
+            e.target.value = value;
+        });
+    });
+});
+
+// Validate dates
+document.querySelector('form').addEventListener('submit', function(e) {
+    const dataInicio = document.getElementById('data_inicio_contrato').value;
+    const dataFim = document.getElementById('data_fim_contrato').value;
+    
+    if (dataInicio && dataFim && dataFim < dataInicio) {
+        e.preventDefault();
+        alert('A data de fim do contrato não pode ser anterior à data de início.');
+        return false;
+    }
+});
+</script>
+{% endblock %}
