@@ -1,6 +1,7 @@
 """Rotas de Clientes - CRUD completo"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_required, current_user
+from flask_login import current_user
+from utils.auth_helper import login_required
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente
@@ -307,6 +308,9 @@ def buscar_cep(cep):
 
 # Aliases para manter compatibilidade
 list_clientes = index
+create_cliente = novo
+view_cliente = detalhes
+edit_cliente = editar
 create = novo
 view = detalhes
 edit = editar
