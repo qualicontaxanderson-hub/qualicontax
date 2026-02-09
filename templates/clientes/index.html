@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="clientes-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Clientes</h1>
+            <p class="page-subtitle">Gerencie seus clientes</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-outline">
+                <i class="fas fa-download"></i>
+                Exportar
+            </button>
+            <a href="{{ url_for('clientes.novo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                Novo Cliente
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon bg-primary">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ stats.total or 0 }}</h3>
+                <p class="stat-label">Total de Clientes</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-success">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ stats.ativos or 0 }}</h3>
+                <p class="stat-label">Clientes Ativos</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-danger">
+                <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ stats.inativos or 0 }}</h3>
+                <p class="stat-label">Clientes Inativos</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-info">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ stats.pf or 0 }}</h3>
+                <p class="stat-label">Pessoa Física</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-warning">
+                <i class="fas fa-building"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ stats.pj or 0 }}</h3>
+                <p class="stat-label">Pessoa Jurídica</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="GET" class="filters-form">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label for="busca">Buscar</label>
+                        <input type="text" id="busca" name="busca" class="form-control" placeholder="Nome, CPF/CNPJ, Email..." value="{{ filtros.busca }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo_pessoa">Tipo</label>
+                        <select id="tipo_pessoa" name="tipo_pessoa" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
+                            <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="situacao">Situação</label>
+                        <select id="situacao" name="situacao" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="ATIVO" {% if filtros.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                            <option value="INATIVO" {% if filtros.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                            <option value="SUSPENSO" {% if filtros.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
+                            <option value="CANCELADO" {% if filtros.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="regime">Regime Tributário</label>
+                        <select id="regime" name="regime" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="SIMPLES" {% if filtros.regime == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
+                            <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
+                            <option value="LUCRO_REAL" {% if filtros.regime == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
+                            <option value="MEI" {% if filtros.regime == 'MEI' %}selected{% endif %}>MEI</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Clientes Table -->
+    <div class="card table-card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>CPF/CNPJ</th>
+                            <th>Email</th>
+                            <th>Telefone</th>
+                            <th>Tipo</th>
+                            <th>Situação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if clientes %}
+                            {% for cliente in clientes %}
+                            <tr>
+                                <td>#{{ cliente.id }}</td>
+                                <td>
+                                    <div class="table-user">
+                                        <div class="table-user-avatar">
+                                            {{ cliente.nome_razao_social[0] }}
+                                        </div>
+                                        <span>{{ cliente.nome_razao_social }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ cliente.cpf_cnpj }}</td>
+                                <td>{{ cliente.email or '-' }}</td>
+                                <td>{{ cliente.telefone or cliente.celular or '-' }}</td>
+                                <td>
+                                    <span class="badge badge-info">{{ cliente.tipo_pessoa }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
+                                        {{ cliente.situacao }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="table-actions">
+                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn-icon" title="Ver">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn-icon" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Tem certeza que deseja excluir este cliente?')" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="fas fa-users"></i>
+                                        <p>Nenhum cliente encontrado</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination-wrapper">
+        <nav class="pagination">
+            {% if page > 1 %}
+            <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
+                <i class="fas fa-chevron-left"></i>
+                Anterior
+            </a>
+            {% endif %}
+            
+            <div class="pagination-pages">
+                {% for page_num in range(1, total_pages + 1) %}
+                    {% if page_num == 1 or page_num == total_pages or (page_num >= page - 2 and page_num <= page + 2) %}
+                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" 
+                           class="pagination-page {% if page_num == page %}active{% endif %}">
+                            {{ page_num }}
+                        </a>
+                    {% elif page_num == page - 3 or page_num == page + 3 %}
+                        <span class="pagination-ellipsis">...</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            {% if page < total_pages %}
+            <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
+                Próximo
+                <i class="fas fa-chevron-right"></i>
+            </a>
+            {% endif %}
+        </nav>
+        <p class="pagination-info">
+            Mostrando página {{ page }} de {{ total_pages }} ({{ total }} clientes)
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// No additional JavaScript needed for now
+</script>
+{% endblock %}

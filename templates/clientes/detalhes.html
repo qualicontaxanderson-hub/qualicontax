@@ -1,0 +1,643 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cliente.nome_razao_social }} - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="cliente-view-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">{{ cliente.nome_razao_social }}</h1>
+            <p class="page-subtitle">
+                <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
+                    {{ cliente.situacao }}
+                </span>
+                <span class="badge badge-info">{{ cliente.tipo_pessoa }}</span>
+                {% if cliente.regime_tributario %}
+                <span class="badge badge-secondary">{{ cliente.regime_tributario }}</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+            <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i>
+                Editar
+            </a>
+            {% if cliente.situacao == 'ATIVO' %}
+            <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Deseja realmente inativar este cliente?')">
+                    <i class="fas fa-ban"></i>
+                    Inativar
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <ul class="tabs-nav">
+            <li class="tabs-item active">
+                <a href="#dados-gerais" class="tabs-link">
+                    <i class="fas fa-info-circle"></i>
+                    Dados Gerais
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#enderecos" class="tabs-link">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Endereços ({{ enderecos|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#contatos" class="tabs-link">
+                    <i class="fas fa-users"></i>
+                    Contatos ({{ contatos|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#grupos" class="tabs-link">
+                    <i class="fas fa-tags"></i>
+                    Grupos ({{ grupos|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#processos" class="tabs-link">
+                    <i class="fas fa-briefcase"></i>
+                    Processos ({{ processos|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#tarefas" class="tabs-link">
+                    <i class="fas fa-tasks"></i>
+                    Tarefas ({{ tarefas|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#obrigacoes" class="tabs-link">
+                    <i class="fas fa-calendar-check"></i>
+                    Obrigações ({{ obrigacoes|length }})
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tabs-content">
+            <!-- Dados Gerais Tab -->
+            <div id="dados-gerais" class="tab-pane active">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Informações Cadastrais</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Tipo de Pessoa</label>
+                                <span>{{ 'Pessoa Física' if cliente.tipo_pessoa == 'PF' else 'Pessoa Jurídica' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>{{ 'Nome' if cliente.tipo_pessoa == 'PF' else 'Razão Social' }}</label>
+                                <span>{{ cliente.nome_razao_social }}</span>
+                            </div>
+                            {% if cliente.nome_fantasia %}
+                            <div class="info-item">
+                                <label>Nome Fantasia</label>
+                                <span>{{ cliente.nome_fantasia }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="info-item">
+                                <label>{{ 'CPF' if cliente.tipo_pessoa == 'PF' else 'CNPJ' }}</label>
+                                <span>{{ cliente.cpf_cnpj }}</span>
+                            </div>
+                            {% if cliente.inscricao_estadual %}
+                            <div class="info-item">
+                                <label>Inscrição Estadual</label>
+                                <span>{{ cliente.inscricao_estadual }}</span>
+                            </div>
+                            {% endif %}
+                            {% if cliente.inscricao_municipal %}
+                            <div class="info-item">
+                                <label>Inscrição Municipal</label>
+                                <span>{{ cliente.inscricao_municipal }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="info-item">
+                                <label>Email</label>
+                                <span>{{ cliente.email or '-' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Telefone</label>
+                                <span>{{ cliente.telefone or '-' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Celular</label>
+                                <span>{{ cliente.celular or '-' }}</span>
+                            </div>
+                            {% if cliente.regime_tributario %}
+                            <div class="info-item">
+                                <label>Regime Tributário</label>
+                                <span>{{ cliente.regime_tributario }}</span>
+                            </div>
+                            {% endif %}
+                            {% if cliente.porte_empresa %}
+                            <div class="info-item">
+                                <label>Porte da Empresa</label>
+                                <span>{{ cliente.porte_empresa }}</span>
+                            </div>
+                            {% endif %}
+                            {% if cliente.data_inicio_contrato %}
+                            <div class="info-item">
+                                <label>Início do Contrato</label>
+                                <span>{{ cliente.data_inicio_contrato|format_date if cliente.data_inicio_contrato else '-' }}</span>
+                            </div>
+                            {% endif %}
+                            {% if cliente.data_fim_contrato %}
+                            <div class="info-item">
+                                <label>Fim do Contrato</label>
+                                <span>{{ cliente.data_fim_contrato|format_date if cliente.data_fim_contrato else '-' }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="info-item">
+                                <label>Situação</label>
+                                <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' }}">
+                                    {{ cliente.situacao }}
+                                </span>
+                            </div>
+                        </div>
+                        {% if cliente.observacoes %}
+                        <div class="info-item full-width">
+                            <label>Observações</label>
+                            <p>{{ cliente.observacoes }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Endereços Tab -->
+            <div id="enderecos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Endereços</h3>
+                        <button class="btn btn-primary" onclick="showAddAddressModal()">
+                            <i class="fas fa-plus"></i>
+                            Adicionar Endereço
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if enderecos %}
+                            <div class="addresses-list">
+                                {% for endereco in enderecos %}
+                                <div class="address-item">
+                                    <div class="address-header">
+                                        <span class="badge badge-{{ 'primary' if endereco.principal else 'secondary' }}">
+                                            {{ endereco.tipo }}{{ ' - Principal' if endereco.principal else '' }}
+                                        </span>
+                                        <form action="{{ url_for('clientes.excluir_endereco', id=endereco.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este endereço?')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    <div class="address-content">
+                                        <p>{{ endereco.logradouro }}, {{ endereco.numero }}</p>
+                                        {% if endereco.complemento %}
+                                        <p>{{ endereco.complemento }}</p>
+                                        {% endif %}
+                                        <p>{{ endereco.bairro }} - {{ endereco.cidade }}/{{ endereco.estado }}</p>
+                                        <p>CEP: {{ endereco.cep }}</p>
+                                        {% if endereco.pais %}
+                                        <p>{{ endereco.pais }}</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <p>Nenhum endereço cadastrado</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contatos Tab -->
+            <div id="contatos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Contatos</h3>
+                        <button class="btn btn-primary" onclick="showAddContactModal()">
+                            <i class="fas fa-plus"></i>
+                            Adicionar Contato
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if contatos %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Cargo</th>
+                                            <th>Email</th>
+                                            <th>Telefone</th>
+                                            <th>Celular</th>
+                                            <th>Departamento</th>
+                                            <th>Status</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for contato in contatos %}
+                                        <tr>
+                                            <td>
+                                                {{ contato.nome }}
+                                                {% if contato.principal %}
+                                                <span class="badge badge-primary">Principal</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ contato.cargo or '-' }}</td>
+                                            <td>{{ contato.email or '-' }}</td>
+                                            <td>{{ contato.telefone or '-' }}</td>
+                                            <td>{{ contato.celular or '-' }}</td>
+                                            <td>{{ contato.departamento or '-' }}</td>
+                                            <td>
+                                                <span class="badge badge-{{ 'success' if contato.ativo else 'secondary' }}">
+                                                    {{ 'Ativo' if contato.ativo else 'Inativo' }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display: inline;">
+                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este contato?')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-users"></i>
+                                <p>Nenhum contato cadastrado</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grupos Tab -->
+            <div id="grupos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Grupos</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if grupos %}
+                            <div class="badges-list">
+                                {% for grupo in grupos %}
+                                <span class="badge badge-info badge-lg">
+                                    {{ grupo.nome }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-tags"></i>
+                                <p>Cliente não pertence a nenhum grupo</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processos Tab -->
+            <div id="processos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Processos</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if processos %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Número</th>
+                                            <th>Tipo</th>
+                                            <th>Status</th>
+                                            <th>Abertura</th>
+                                            <th>Conclusão</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for processo in processos %}
+                                        <tr>
+                                            <td>{{ processo.numero_processo }}</td>
+                                            <td>{{ processo.tipo }}</td>
+                                            <td><span class="badge badge-info">{{ processo.status }}</span></td>
+                                            <td>{{ processo.data_abertura|format_date if processo.data_abertura else '-' }}</td>
+                                            <td>{{ processo.data_conclusao|format_date if processo.data_conclusao else '-' }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-briefcase"></i>
+                                <p>Nenhum processo cadastrado</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarefas Tab -->
+            <div id="tarefas" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Tarefas</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if tarefas %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Título</th>
+                                            <th>Processo</th>
+                                            <th>Prazo</th>
+                                            <th>Prioridade</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for tarefa in tarefas %}
+                                        <tr>
+                                            <td>{{ tarefa.titulo }}</td>
+                                            <td>{{ tarefa.numero_processo }}</td>
+                                            <td>{{ tarefa.prazo|format_date if tarefa.prazo else '-' }}</td>
+                                            <td><span class="badge badge-warning">{{ tarefa.prioridade }}</span></td>
+                                            <td><span class="badge badge-info">{{ tarefa.status }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-tasks"></i>
+                                <p>Nenhuma tarefa encontrada</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Obrigações Tab -->
+            <div id="obrigacoes" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Obrigações Fiscais</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if obrigacoes %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Descrição</th>
+                                            <th>Vencimento</th>
+                                            <th>Valor</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for obrigacao in obrigacoes %}
+                                        <tr>
+                                            <td>{{ obrigacao.tipo_obrigacao or '-' }}</td>
+                                            <td>{{ obrigacao.descricao }}</td>
+                                            <td>{{ obrigacao.vencimento|format_date if obrigacao.vencimento else '-' }}</td>
+                                            <td>{{ obrigacao.valor|format_currency if obrigacao.valor else '-' }}</td>
+                                            <td>
+                                                <span class="badge badge-{{ 'success' if obrigacao.pago else 'warning' }}">
+                                                    {{ 'Pago' if obrigacao.pago else obrigacao.status }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-calendar-check"></i>
+                                <p>Nenhuma obrigação cadastrada</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Endereço -->
+<div id="addAddressModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Adicionar Endereço</h3>
+            <button class="modal-close" onclick="closeAddAddressModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('clientes.novo_endereco', cliente_id=cliente.id) }}" method="POST">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="tipo">Tipo de Endereço *</label>
+                    <select id="tipo" name="tipo" class="form-control" required>
+                        <option value="COMERCIAL">Comercial</option>
+                        <option value="RESIDENCIAL">Residencial</option>
+                        <option value="CORRESPONDENCIA">Correspondência</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cep">CEP *</label>
+                        <input type="text" id="cep" name="cep" class="form-control" maxlength="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="logradouro">Logradouro *</label>
+                        <input type="text" id="logradouro" name="logradouro" class="form-control" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="numero">Número *</label>
+                        <input type="text" id="numero" name="numero" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="complemento">Complemento</label>
+                        <input type="text" id="complemento" name="complemento" class="form-control">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="bairro">Bairro *</label>
+                        <input type="text" id="bairro" name="bairro" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cidade">Cidade *</label>
+                        <input type="text" id="cidade" name="cidade" class="form-control" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="estado">Estado *</label>
+                        <input type="text" id="estado" name="estado" class="form-control" maxlength="2" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pais">País</label>
+                        <input type="text" id="pais" name="pais" class="form-control" value="Brasil">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="principal" id="principal">
+                        Marcar como endereço principal
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeAddAddressModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Contato -->
+<div id="addContactModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Adicionar Contato</h3>
+            <button class="modal-close" onclick="closeAddContactModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}" method="POST">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="nome">Nome *</label>
+                    <input type="text" id="nome" name="nome" class="form-control" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cargo">Cargo</label>
+                        <input type="text" id="cargo" name="cargo" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="departamento">Departamento</label>
+                        <input type="text" id="departamento" name="departamento" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" class="form-control">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="telefone">Telefone</label>
+                        <input type="text" id="telefone" name="telefone" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="celular">Celular</label>
+                        <input type="text" id="celular" name="celular" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="principal" id="principal_contato">
+                        Marcar como contato principal
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeAddContactModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Tabs functionality
+document.querySelectorAll('.tabs-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = link.getAttribute('href');
+        
+        // Remove active class from all tabs
+        document.querySelectorAll('.tabs-item').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+        
+        // Add active class to clicked tab
+        link.closest('.tabs-item').classList.add('active');
+        document.querySelector(target).classList.add('active');
+    });
+});
+
+// Modal functions
+function showAddAddressModal() {
+    document.getElementById('addAddressModal').style.display = 'block';
+}
+
+function closeAddAddressModal() {
+    document.getElementById('addAddressModal').style.display = 'none';
+}
+
+function showAddContactModal() {
+    document.getElementById('addContactModal').style.display = 'block';
+}
+
+function closeAddContactModal() {
+    document.getElementById('addContactModal').style.display = 'none';
+}
+
+// CEP search
+document.getElementById('cep')?.addEventListener('blur', function() {
+    const cep = this.value.replace(/\D/g, '');
+    if (cep.length === 8) {
+        fetch(`/api/cep/${cep}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.erro) {
+                    document.getElementById('logradouro').value = data.logradouro || '';
+                    document.getElementById('bairro').value = data.bairro || '';
+                    document.getElementById('cidade').value = data.localidade || '';
+                    document.getElementById('estado').value = data.uf || '';
+                }
+            })
+            .catch(error => console.error('Erro ao buscar CEP:', error));
+    }
+});
+
+// Close modal on outside click
+window.onclick = function(event) {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+}
+</script>
+{% endblock %}

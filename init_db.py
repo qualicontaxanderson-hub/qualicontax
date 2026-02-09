@@ -40,6 +40,7 @@ def create_tables():
             id INT AUTO_INCREMENT PRIMARY KEY,
             tipo_pessoa ENUM('PF', 'PJ') NOT NULL,
             nome_razao_social VARCHAR(255) NOT NULL,
+            nome_fantasia VARCHAR(255),
             cpf_cnpj VARCHAR(18) UNIQUE NOT NULL,
             inscricao_estadual VARCHAR(20),
             inscricao_municipal VARCHAR(20),
@@ -47,11 +48,17 @@ def create_tables():
             telefone VARCHAR(20),
             celular VARCHAR(20),
             regime_tributario ENUM('SIMPLES', 'LUCRO_PRESUMIDO', 'LUCRO_REAL', 'MEI'),
-            porte_empresa VARCHAR(50),
+            porte_empresa ENUM('MEI', 'ME', 'EPP', 'MEDIO', 'GRANDE'),
             data_inicio_contrato DATE,
-            situacao ENUM('ATIVO', 'INATIVO') DEFAULT 'ATIVO',
+            data_fim_contrato DATE,
+            situacao ENUM('ATIVO', 'INATIVO', 'SUSPENSO', 'CANCELADO') DEFAULT 'ATIVO',
             observacoes TEXT,
-            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            criado_por INT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (criado_por) REFERENCES usuarios(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
         
@@ -60,7 +67,7 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS enderecos_clientes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
-            tipo ENUM('COMERCIAL', 'RESIDENCIAL', 'COBRANCA') DEFAULT 'COMERCIAL',
+            tipo ENUM('COMERCIAL', 'RESIDENCIAL', 'CORRESPONDENCIA') DEFAULT 'COMERCIAL',
             cep VARCHAR(10),
             logradouro VARCHAR(255),
             numero VARCHAR(20),
@@ -68,6 +75,8 @@ def create_tables():
             bairro VARCHAR(100),
             cidade VARCHAR(100),
             estado VARCHAR(2),
+            pais VARCHAR(100) DEFAULT 'Brasil',
+            principal BOOLEAN DEFAULT FALSE,
             FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
@@ -82,8 +91,34 @@ def create_tables():
             email VARCHAR(255),
             telefone VARCHAR(20),
             celular VARCHAR(20),
+            departamento VARCHAR(100),
             principal BOOLEAN DEFAULT FALSE,
+            ativo BOOLEAN DEFAULT TRUE,
             FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """,
+        
+        # Grupos de Clientes
+        """
+        CREATE TABLE IF NOT EXISTS grupos_clientes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(255) NOT NULL,
+            descricao TEXT,
+            situacao ENUM('ATIVO', 'INATIVO') DEFAULT 'ATIVO',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """,
+        
+        # Relação Cliente-Grupo
+        """
+        CREATE TABLE IF NOT EXISTS cliente_grupo_relacao (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            grupo_id INT NOT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+            FOREIGN KEY (grupo_id) REFERENCES grupos_clientes(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_cliente_grupo (cliente_id, grupo_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
         
