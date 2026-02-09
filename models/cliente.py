@@ -36,9 +36,10 @@ class Cliente:
             dict: Dados do cliente ou None
         """
         query = """
-            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
+            SELECT id, tipo_pessoa, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
-                   porte_empresa, data_inicio_contrato, situacao, observacoes
+                   porte_empresa, data_inicio_contrato, data_fim_contrato, situacao, observacoes,
+                   criado_em, atualizado_em, criado_por
             FROM clientes
             WHERE id = %s
         """
@@ -50,7 +51,7 @@ class Cliente:
         Retorna todos os clientes com paginação e filtros.
         
         Args:
-            filters (dict): Filtros a serem aplicados
+            filters (dict): Filtros a serem aplicados (tipo_pessoa, situacao, regime_tributario, busca)
             page (int): Número da página
             per_page (int): Registros por página
             
@@ -73,6 +74,12 @@ class Cliente:
             conditions.append("regime_tributario = %s")
             params.append(filters['regime_tributario'])
         
+        # Busca por nome, CPF/CNPJ ou email
+        if filters.get('busca'):
+            conditions.append("(nome_razao_social LIKE %s OR nome_fantasia LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s)")
+            search_pattern = f"%{filters['busca']}%"
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+        
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
         count_query = f"SELECT COUNT(*) as total FROM clientes{where_clause}"
@@ -83,7 +90,7 @@ class Cliente:
         params.extend([per_page, offset])
         
         query = f"""
-            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
+            SELECT id, tipo_pessoa, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
                    porte_empresa, data_inicio_contrato, situacao, observacoes
             FROM clientes
@@ -115,15 +122,16 @@ class Cliente:
         """
         query = """
             INSERT INTO clientes (
-                tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
+                tipo_pessoa, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
-                porte_empresa, data_inicio_contrato, situacao, observacoes, data_criacao
+                porte_empresa, data_inicio_contrato, situacao, observacoes, criado_por, criado_em
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """
         params = (
             data.get('tipo_pessoa'),
             data.get('nome_razao_social'),
+            data.get('nome_fantasia'),
             data.get('cpf_cnpj'),
             data.get('inscricao_estadual'),
             data.get('inscricao_municipal'),
@@ -133,8 +141,9 @@ class Cliente:
             data.get('regime_tributario'),
             data.get('porte_empresa'),
             data.get('data_inicio_contrato'),
-            data.get('situacao', 'Ativo'),
-            data.get('observacoes')
+            data.get('situacao', 'ATIVO'),
+            data.get('observacoes'),
+            data.get('criado_por')
         )
         return execute_query(query, params)
     
@@ -152,16 +161,17 @@ class Cliente:
         """
         query = """
             UPDATE clientes
-            SET tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
+            SET tipo_pessoa = %s, nome_razao_social = %s, nome_fantasia = %s, cpf_cnpj = %s,
                 inscricao_estadual = %s, inscricao_municipal = %s, email = %s,
                 telefone = %s, celular = %s, regime_tributario = %s,
-                porte_empresa = %s, data_inicio_contrato = %s, situacao = %s,
-                observacoes = %s, data_atualizacao = NOW()
+                porte_empresa = %s, data_inicio_contrato = %s, data_fim_contrato = %s,
+                situacao = %s, observacoes = %s, atualizado_em = NOW()
             WHERE id = %s
         """
         params = (
             data.get('tipo_pessoa'),
             data.get('nome_razao_social'),
+            data.get('nome_fantasia'),
             data.get('cpf_cnpj'),
             data.get('inscricao_estadual'),
             data.get('inscricao_municipal'),
@@ -171,6 +181,7 @@ class Cliente:
             data.get('regime_tributario'),
             data.get('porte_empresa'),
             data.get('data_inicio_contrato'),
+            data.get('data_fim_contrato'),
             data.get('situacao'),
             data.get('observacoes'),
             cliente_id
@@ -215,3 +226,148 @@ class Cliente:
         """
         search_pattern = f"%{query_text}%"
         return execute_query(query, (search_pattern, search_pattern, search_pattern), fetch=True) or []
+    
+    @staticmethod
+    def get_stats():
+        """
+        Retorna estatísticas sobre os clientes.
+        
+        Returns:
+            dict: Dicionário com estatísticas
+        """
+        query = """
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN situacao = 'ATIVO' THEN 1 ELSE 0 END) as ativos,
+                SUM(CASE WHEN situacao = 'INATIVO' THEN 1 ELSE 0 END) as inativos,
+                SUM(CASE WHEN tipo_pessoa = 'PF' THEN 1 ELSE 0 END) as pf,
+                SUM(CASE WHEN tipo_pessoa = 'PJ' THEN 1 ELSE 0 END) as pj
+            FROM clientes
+        """
+        result = execute_query(query, fetch=True, fetch_one=True)
+        return result if result else {
+            'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0
+        }
+    
+    @staticmethod
+    def existe_cpf_cnpj(cpf_cnpj, cliente_id=None):
+        """
+        Verifica se CPF/CNPJ já está cadastrado.
+        
+        Args:
+            cpf_cnpj (str): CPF ou CNPJ a verificar
+            cliente_id (int, optional): ID do cliente para excluir da verificação (usado em edições)
+            
+        Returns:
+            bool: True se já existe, False caso contrário
+        """
+        query = "SELECT id FROM clientes WHERE cpf_cnpj = %s"
+        params = [cpf_cnpj]
+        
+        if cliente_id:
+            query += " AND id != %s"
+            params.append(cliente_id)
+        
+        result = execute_query(query, tuple(params), fetch=True, fetch_one=True)
+        return result is not None
+    
+    @staticmethod
+    def update_situacao(cliente_id, situacao):
+        """
+        Atualiza situação do cliente.
+        
+        Args:
+            cliente_id (int): ID do cliente
+            situacao (str): Nova situação (ATIVO, INATIVO, SUSPENSO, CANCELADO)
+            
+        Returns:
+            bool: True se bem-sucedido
+        """
+        query = """
+            UPDATE clientes
+            SET situacao = %s, atualizado_em = NOW()
+            WHERE id = %s
+        """
+        return execute_query(query, (situacao, cliente_id)) is not None
+    
+    @staticmethod
+    def get_grupos(cliente_id):
+        """
+        Retorna grupos do cliente.
+        
+        Args:
+            cliente_id (int): ID do cliente
+            
+        Returns:
+            list: Lista de grupos
+        """
+        query = """
+            SELECT g.id, g.nome, g.descricao, g.situacao
+            FROM grupos_clientes g
+            INNER JOIN cliente_grupo_relacao cgr ON g.id = cgr.grupo_id
+            WHERE cgr.cliente_id = %s
+            ORDER BY g.nome
+        """
+        return execute_query(query, (cliente_id,), fetch=True) or []
+    
+    @staticmethod
+    def get_processos(cliente_id):
+        """
+        Retorna processos do cliente.
+        
+        Args:
+            cliente_id (int): ID do cliente
+            
+        Returns:
+            list: Lista de processos
+        """
+        query = """
+            SELECT id, numero_processo, tipo, status, data_abertura, data_conclusao, descricao
+            FROM processos
+            WHERE cliente_id = %s
+            ORDER BY data_abertura DESC
+        """
+        return execute_query(query, (cliente_id,), fetch=True) or []
+    
+    @staticmethod
+    def get_tarefas(cliente_id):
+        """
+        Retorna tarefas relacionadas ao cliente (através de processos).
+        
+        Args:
+            cliente_id (int): ID do cliente
+            
+        Returns:
+            list: Lista de tarefas
+        """
+        query = """
+            SELECT t.id, t.titulo, t.descricao, t.prazo, t.status, t.prioridade,
+                   p.numero_processo
+            FROM tarefas t
+            INNER JOIN processos p ON t.processo_id = p.id
+            WHERE p.cliente_id = %s
+            ORDER BY t.prazo ASC
+        """
+        return execute_query(query, (cliente_id,), fetch=True) or []
+    
+    @staticmethod
+    def get_obrigacoes(cliente_id):
+        """
+        Retorna obrigações do cliente.
+        
+        Args:
+            cliente_id (int): ID do cliente
+            
+        Returns:
+            list: Lista de obrigações
+        """
+        query = """
+            SELECT o.id, o.descricao, o.vencimento, o.valor, o.status, o.pago,
+                   to.nome as tipo_obrigacao
+            FROM obrigacoes o
+            LEFT JOIN tipos_obrigacoes to ON o.tipo_obrigacao_id = to.id
+            WHERE o.cliente_id = %s
+            ORDER BY o.vencimento ASC
+        """
+        return execute_query(query, (cliente_id,), fetch=True) or []
+
