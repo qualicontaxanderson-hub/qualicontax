@@ -128,6 +128,11 @@ class Cliente:
         # Converter nome para MAIÚSCULAS
         nome_razao_social = data.get('nome_razao_social', '').upper()
         
+        # Converter strings vazias para None em campos ENUM
+        regime_tributario = data.get('regime_tributario') or None
+        porte_empresa = data.get('porte_empresa') or None
+        data_inicio_contrato = data.get('data_inicio_contrato') or None
+        
         query = """
             INSERT INTO clientes (
                 tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
@@ -140,16 +145,16 @@ class Cliente:
             data.get('tipo_pessoa'),
             nome_razao_social,
             data.get('cpf_cnpj'),
-            data.get('inscricao_estadual'),
-            data.get('inscricao_municipal'),
-            data.get('email'),
-            data.get('telefone'),
-            data.get('celular'),
-            data.get('regime_tributario'),
-            data.get('porte_empresa'),
-            data.get('data_inicio_contrato'),
+            data.get('inscricao_estadual') or None,
+            data.get('inscricao_municipal') or None,
+            data.get('email') or None,
+            data.get('telefone') or None,
+            data.get('celular') or None,
+            regime_tributario,
+            porte_empresa,
+            data_inicio_contrato,
             data.get('situacao', 'ATIVO'),
-            data.get('observacoes')
+            data.get('observacoes') or None
         )
         return execute_query(query, params)
     
@@ -168,6 +173,11 @@ class Cliente:
         # Converter nome para MAIÚSCULAS
         nome_razao_social = data.get('nome_razao_social', '').upper()
         
+        # Converter strings vazias para None em campos ENUM
+        regime_tributario = data.get('regime_tributario') or None
+        porte_empresa = data.get('porte_empresa') or None
+        data_inicio_contrato = data.get('data_inicio_contrato') or None
+        
         query = """
             UPDATE clientes
             SET tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
@@ -181,16 +191,16 @@ class Cliente:
             data.get('tipo_pessoa'),
             nome_razao_social,
             data.get('cpf_cnpj'),
-            data.get('inscricao_estadual'),
-            data.get('inscricao_municipal'),
-            data.get('email'),
-            data.get('telefone'),
-            data.get('celular'),
-            data.get('regime_tributario'),
-            data.get('porte_empresa'),
-            data.get('data_inicio_contrato'),
+            data.get('inscricao_estadual') or None,
+            data.get('inscricao_municipal') or None,
+            data.get('email') or None,
+            data.get('telefone') or None,
+            data.get('celular') or None,
+            regime_tributario,
+            porte_empresa,
+            data_inicio_contrato,
             data.get('situacao'),
-            data.get('observacoes'),
+            data.get('observacoes') or None,
             cliente_id
         )
         return execute_query(query, params)
