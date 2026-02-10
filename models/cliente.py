@@ -129,13 +129,14 @@ class Cliente:
         nome_razao_social = data.get('nome_razao_social', '').upper()
         
         # Handle regime_tributario based on tipo_pessoa
+        # Valid ENUM values in DB: SIMPLES, LUCRO_PRESUMIDO, LUCRO_REAL, MEI (NOT 'OUTROS')
         tipo_pessoa = data.get('tipo_pessoa')
         if tipo_pessoa == 'PF':
-            # PF doesn't have regime, use default
-            regime_tributario = 'OUTROS'
+            # PF doesn't have regime, use SIMPLES as default (most common)
+            regime_tributario = 'SIMPLES'
         else:
-            # PJ can have regime, use provided or default
-            regime_tributario = data.get('regime_tributario') or 'OUTROS'
+            # PJ can have regime, use provided or default to SIMPLES
+            regime_tributario = data.get('regime_tributario') or 'SIMPLES'
         
         # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
@@ -182,13 +183,14 @@ class Cliente:
         nome_razao_social = data.get('nome_razao_social', '').upper()
         
         # Handle regime_tributario based on tipo_pessoa
+        # Valid ENUM values in DB: SIMPLES, LUCRO_PRESUMIDO, LUCRO_REAL, MEI (NOT 'OUTROS')
         tipo_pessoa = data.get('tipo_pessoa')
         if tipo_pessoa == 'PF':
-            # PF doesn't have regime, use default
-            regime_tributario = 'OUTROS'
+            # PF doesn't have regime, use SIMPLES as default (most common)
+            regime_tributario = 'SIMPLES'
         else:
-            # PJ can have regime, use provided or default
-            regime_tributario = data.get('regime_tributario') or 'OUTROS'
+            # PJ can have regime, use provided or default to SIMPLES
+            regime_tributario = data.get('regime_tributario') or 'SIMPLES'
         
         # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
