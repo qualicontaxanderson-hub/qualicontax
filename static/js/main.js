@@ -3,9 +3,9 @@
 // Sidebar toggle
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.querySelector('.sidebar');
-    const toggleBtn = document.querySelector('.sidebar-toggle');
+    const toggleBtn = document.querySelector('#menuToggle') || document.querySelector('.sidebar-toggle') || document.querySelector('.menu-toggle');
     
-    if (toggleBtn) {
+    if (toggleBtn && sidebar) {
         toggleBtn.addEventListener('click', function() {
             sidebar.classList.toggle('collapsed');
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
@@ -30,15 +30,40 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Mobile menu toggle
     const menuToggle = document.querySelector('.mobile-menu-toggle');
-    if (menuToggle) {
+    if (menuToggle && sidebar) {
         menuToggle.addEventListener('click', function() {
             sidebar.classList.toggle('show');
+        });
+    }
+    
+    // Profile dropdown toggle
+    const profileToggle = document.querySelector('#profileToggle');
+    const profileMenu = document.querySelector('#profileMenu');
+    if (profileToggle && profileMenu) {
+        profileToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            profileMenu.classList.toggle('show');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!profileToggle.contains(e.target)) {
+                profileMenu.classList.remove('show');
+            }
         });
     }
     
     // Auto-hide alerts after 5 seconds
     const alerts = document.querySelectorAll('.alert');
     alerts.forEach(alert => {
+        const closeBtn = alert.querySelector('.alert-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 300);
+            });
+        }
+        
         setTimeout(() => {
             alert.style.opacity = '0';
             setTimeout(() => alert.remove(), 300);
