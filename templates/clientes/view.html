@@ -16,11 +16,11 @@
             </p>
         </div>
         <div class="page-actions">
-            <a href="{{ url_for('clientes.list_clientes') }}" class="btn btn-outline">
+            <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
                 <i class="fas fa-arrow-left"></i>
                 Voltar
             </a>
-            <a href="{{ url_for('clientes.edit_cliente', id=cliente.id) }}" class="btn btn-primary">
+            <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-primary">
                 <i class="fas fa-edit"></i>
                 Editar
             </a>
