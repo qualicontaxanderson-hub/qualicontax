@@ -151,38 +151,40 @@ def editar(id):
         return redirect(url_for('clientes.index'))
     
     if request.method == 'POST':
-        # Validação de campos obrigatórios
-        if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not request.form.get('cpf_cnpj'):
-            flash('Preencha todos os campos obrigatórios.', 'danger')
-            grupos = GrupoCliente.get_all(situacao='ATIVO')
-            grupos_cliente = Cliente.get_grupos(id)
-            return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
-        
-        data = {
-            'tipo_pessoa': request.form.get('tipo_pessoa'),
-            'nome_razao_social': request.form.get('nome_razao_social'),
-            'nome_fantasia': request.form.get('nome_fantasia'),
-            'cpf_cnpj': request.form.get('cpf_cnpj'),
-            'inscricao_estadual': request.form.get('inscricao_estadual'),
-            'inscricao_municipal': request.form.get('inscricao_municipal'),
-            'email': request.form.get('email'),
-            'telefone': request.form.get('telefone'),
-            'celular': request.form.get('celular'),
-            'regime_tributario': request.form.get('regime_tributario'),
-            'porte_empresa': request.form.get('porte_empresa'),
-            'situacao': request.form.get('situacao'),
-            'data_inicio_contrato': request.form.get('data_inicio_contrato'),
-            'data_fim_contrato': request.form.get('data_fim_contrato'),
-            'observacoes': request.form.get('observacoes')
-        }
-        
-        sucesso = Cliente.update(id, data)
-        
-        if sucesso:
-            flash('Cliente atualizado com sucesso!', 'success')
-            return redirect(url_for('clientes.detalhes', id=id))
-        else:
-            flash('Erro ao atualizar cliente!', 'danger')
+        try:
+            # Validação de campos obrigatórios
+            if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not request.form.get('cpf_cnpj'):
+                flash('Preencha todos os campos obrigatórios.', 'danger')
+                grupos = GrupoCliente.get_all(situacao='ATIVO')
+                grupos_cliente = Cliente.get_grupos(id)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
+            
+            data = {
+                'tipo_pessoa': request.form.get('tipo_pessoa'),
+                'nome_razao_social': request.form.get('nome_razao_social'),
+                'cpf_cnpj': request.form.get('cpf_cnpj'),
+                'inscricao_estadual': request.form.get('inscricao_estadual'),
+                'inscricao_municipal': request.form.get('inscricao_municipal'),
+                'email': request.form.get('email'),
+                'telefone': request.form.get('telefone'),
+                'celular': request.form.get('celular'),
+                'regime_tributario': request.form.get('regime_tributario'),
+                'porte_empresa': request.form.get('porte_empresa'),
+                'situacao': request.form.get('situacao'),
+                'data_inicio_contrato': request.form.get('data_inicio_contrato'),
+                'observacoes': request.form.get('observacoes')
+            }
+            
+            sucesso = Cliente.update(id, data)
+            
+            if sucesso:
+                flash('Cliente atualizado com sucesso!', 'success')
+                return redirect(url_for('clientes.detalhes', id=id))
+            else:
+                flash('Erro ao atualizar cliente. Verifique os dados e tente novamente.', 'danger')
+        except Exception as e:
+            flash(f'Erro ao atualizar cliente: {str(e)}', 'danger')
+            print(f"Erro ao atualizar cliente {id}: {str(e)}")
     
     grupos = GrupoCliente.get_all(situacao='ATIVO')
     grupos_cliente = Cliente.get_grupos(id)
