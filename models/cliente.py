@@ -356,13 +356,16 @@ class Cliente:
         Returns:
             list: Lista de processos
         """
-        query = """
-            SELECT id, numero_processo, tipo, status, data_abertura, data_conclusao, descricao
-            FROM processos
-            WHERE cliente_id = %s
-            ORDER BY data_abertura DESC
-        """
-        return execute_query(query, (cliente_id,), fetch=True) or []
+        # TODO: Implementar quando tabela processos estiver disponível
+        # Query atual não funciona pois a coluna 'tipo' não existe na tabela processos
+        # query = """
+        #     SELECT id, numero_processo, status, data_abertura, data_conclusao, descricao
+        #     FROM processos
+        #     WHERE cliente_id = %s
+        #     ORDER BY data_abertura DESC
+        # """
+        # return execute_query(query, (cliente_id,), fetch=True) or []
+        return []
     
     @staticmethod
     def get_tarefas(cliente_id):
@@ -375,15 +378,18 @@ class Cliente:
         Returns:
             list: Lista de tarefas
         """
-        query = """
-            SELECT t.id, t.titulo, t.descricao, t.prazo, t.status, t.prioridade,
-                   p.numero_processo
-            FROM tarefas t
-            INNER JOIN processos p ON t.processo_id = p.id
-            WHERE p.cliente_id = %s
-            ORDER BY t.prazo ASC
-        """
-        return execute_query(query, (cliente_id,), fetch=True) or []
+        # TODO: Implementar quando tabela tarefas estiver disponível
+        # Query atual não funciona pois a coluna 'prazo' não existe (provavelmente 'data_vencimento')
+        # query = """
+        #     SELECT t.id, t.titulo, t.descricao, t.data_vencimento, t.status, t.prioridade,
+        #            p.numero_processo
+        #     FROM tarefas t
+        #     INNER JOIN processos p ON t.processo_id = p.id
+        #     WHERE p.cliente_id = %s
+        #     ORDER BY t.data_vencimento ASC
+        # """
+        # return execute_query(query, (cliente_id,), fetch=True) or []
+        return []
     
     @staticmethod
     def get_obrigacoes(cliente_id):
@@ -396,13 +402,17 @@ class Cliente:
         Returns:
             list: Lista de obrigações
         """
-        query = """
-            SELECT o.id, o.descricao, o.vencimento, o.valor, o.status, o.pago,
-                   to.nome as tipo_obrigacao
-            FROM obrigacoes o
-            LEFT JOIN tipos_obrigacoes to ON o.tipo_obrigacao_id = to.id
-            WHERE o.cliente_id = %s
-            ORDER BY o.vencimento ASC
-        """
-        return execute_query(query, (cliente_id,), fetch=True) or []
+        # TODO: Implementar quando tabela obrigacoes estiver disponível
+        # Query tinha erro de sintaxe com alias 'to' (palavra reservada MySQL)
+        # Deve usar alias diferente como 'tpo' ou 'tipo_ob'
+        # query = """
+        #     SELECT o.id, o.descricao, o.vencimento, o.valor, o.status, o.pago,
+        #            tpo.nome as tipo_obrigacao
+        #     FROM obrigacoes o
+        #     LEFT JOIN tipos_obrigacoes tpo ON o.tipo_obrigacao_id = tpo.id
+        #     WHERE o.cliente_id = %s
+        #     ORDER BY o.vencimento ASC
+        # """
+        # return execute_query(query, (cliente_id,), fetch=True) or []
+        return []
 
