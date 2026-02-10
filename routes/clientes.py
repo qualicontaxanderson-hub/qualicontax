@@ -14,37 +14,57 @@ clientes = Blueprint('clientes', __name__)
 @login_required
 def index():
     """Lista todos os clientes com filtros e paginação"""
-    # Parâmetros de filtro
-    situacao = request.args.get('situacao', '')
-    regime = request.args.get('regime', '')
-    tipo_pessoa = request.args.get('tipo_pessoa', '')
-    busca = request.args.get('busca', '')
-    page = request.args.get('page', 1, type=int)
-    per_page = 20
+    try:
+        # Parâmetros de filtro
+        situacao = request.args.get('situacao', '')
+        regime = request.args.get('regime', '')
+        tipo_pessoa = request.args.get('tipo_pessoa', '')
+        busca = request.args.get('busca', '')
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        
+        # Buscar clientes com filtros
+        filters = {}
+        if situacao:
+            filters['situacao'] = situacao
+        if regime:
+            filters['regime_tributario'] = regime
+        if tipo_pessoa:
+            filters['tipo_pessoa'] = tipo_pessoa
+        if busca:
+            filters['busca'] = busca
+        
+        result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
+        
+        # Contadores para o dashboard
+        stats = Cliente.get_stats()
+        
+        # Verificar se houve erro na obtenção dos dados
+        if result is None:
+            flash('Erro ao buscar clientes. Verifique a conexão com o banco de dados.', 'danger')
+            result = {'clientes': [], 'page': 1, 'total_pages': 0, 'total': 0}
+        
+        if stats is None:
+            flash('Erro ao buscar estatísticas. Verifique a conexão com o banco de dados.', 'danger')
+            stats = {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
+        
+        return render_template('clientes/index.html', 
+                             clientes=result['clientes'],
+                             page=result['page'],
+                             total_pages=result['total_pages'],
+                             total=result['total'],
+                             stats=stats,
+                             filtros={'situacao': situacao, 'regime': regime, 'tipo_pessoa': tipo_pessoa, 'busca': busca})
     
-    # Buscar clientes com filtros
-    filters = {}
-    if situacao:
-        filters['situacao'] = situacao
-    if regime:
-        filters['regime_tributario'] = regime
-    if tipo_pessoa:
-        filters['tipo_pessoa'] = tipo_pessoa
-    if busca:
-        filters['busca'] = busca
-    
-    result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
-    
-    # Contadores para o dashboard
-    stats = Cliente.get_stats()
-    
-    return render_template('clientes/index.html', 
-                         clientes=result['clientes'],
-                         page=result['page'],
-                         total_pages=result['total_pages'],
-                         total=result['total'],
-                         stats=stats,
-                         filtros={'situacao': situacao, 'regime': regime, 'tipo_pessoa': tipo_pessoa, 'busca': busca})
+    except Exception as e:
+        flash(f'Erro ao carregar página de clientes: {str(e)}', 'danger')
+        return render_template('clientes/index.html',
+                             clientes=[],
+                             page=1,
+                             total_pages=0,
+                             total=0,
+                             stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
+                             filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '', 'busca': ''})
 
 
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])

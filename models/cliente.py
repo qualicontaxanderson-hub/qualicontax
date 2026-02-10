@@ -55,7 +55,7 @@ class Cliente:
             per_page (int): Registros por página
             
         Returns:
-            dict: Dicionário com 'clientes' e 'total'
+            dict: Dicionário com 'clientes', 'total', 'page', 'per_page', 'total_pages'
         """
         filters = filters or {}
         conditions = []
@@ -100,14 +100,18 @@ class Cliente:
             LIMIT %s OFFSET %s
         """
         
-        clientes = execute_query(query, tuple(params), fetch=True) or []
+        clientes = execute_query(query, tuple(params), fetch=True)
+        
+        # Garantir que sempre retorna uma lista, mesmo que vazia
+        if clientes is None:
+            clientes = []
         
         return {
             'clientes': clientes,
             'total': total,
             'page': page,
             'per_page': per_page,
-            'total_pages': (total + per_page - 1) // per_page
+            'total_pages': (total + per_page - 1) // per_page if total > 0 else 0
         }
     
     @staticmethod

@@ -2,6 +2,10 @@
 import mysql.connector
 from mysql.connector import Error
 from config import Config
+import logging
+
+# Configurar logging
+logger = logging.getLogger(__name__)
 
 
 def get_db_connection():
@@ -26,6 +30,7 @@ def get_db_connection():
             return connection
             
     except Error as e:
+        logger.error(f"Erro ao conectar ao MySQL: {e}")
         print(f"Erro ao conectar ao MySQL: {e}")
         return None
 
@@ -45,6 +50,7 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
     """
     connection = get_db_connection()
     if not connection:
+        logger.error("Não foi possível obter conexão com o banco de dados")
         return None
         
     try:
@@ -59,7 +65,11 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
             return cursor.lastrowid
             
     except Error as e:
+        logger.error(f"Erro ao executar query: {e}")
+        logger.error(f"Query: {query}")
+        logger.error(f"Params: {params}")
         print(f"Erro ao executar query: {e}")
+        print(f"Query: {query}")
         connection.rollback()
         return None
         
