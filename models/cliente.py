@@ -128,8 +128,16 @@ class Cliente:
         # Converter nome para MAIÚSCULAS
         nome_razao_social = data.get('nome_razao_social', '').upper()
         
-        # Converter strings vazias para None em campos ENUM
-        regime_tributario = data.get('regime_tributario') or None
+        # Handle regime_tributario based on tipo_pessoa
+        tipo_pessoa = data.get('tipo_pessoa')
+        if tipo_pessoa == 'PF':
+            # PF doesn't have regime, use default
+            regime_tributario = 'OUTROS'
+        else:
+            # PJ can have regime, use provided or default
+            regime_tributario = data.get('regime_tributario') or 'OUTROS'
+        
+        # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
         data_inicio_contrato = data.get('data_inicio_contrato') or None
         
@@ -173,8 +181,16 @@ class Cliente:
         # Converter nome para MAIÚSCULAS
         nome_razao_social = data.get('nome_razao_social', '').upper()
         
-        # Converter strings vazias para None em campos ENUM
-        regime_tributario = data.get('regime_tributario') or None
+        # Handle regime_tributario based on tipo_pessoa
+        tipo_pessoa = data.get('tipo_pessoa')
+        if tipo_pessoa == 'PF':
+            # PF doesn't have regime, use default
+            regime_tributario = 'OUTROS'
+        else:
+            # PJ can have regime, use provided or default
+            regime_tributario = data.get('regime_tributario') or 'OUTROS'
+        
+        # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
         data_inicio_contrato = data.get('data_inicio_contrato') or None
         
