@@ -64,6 +64,9 @@ class ContatoCliente:
         Returns:
             int: ID do contato criado ou None
         """
+        # Converter nome para MAIÚSCULAS
+        nome = nome.upper() if nome else nome
+        
         # Se for marcado como principal, desmarca os outros
         if principal:
             ContatoCliente.set_principal(cliente_id, None)
@@ -101,6 +104,9 @@ class ContatoCliente:
         Returns:
             int: ID do contato ou None
         """
+        # Converter nome para MAIÚSCULAS
+        nome = nome.upper() if nome else nome
+        
         # Se for marcado como principal, desmarca os outros
         if principal:
             contato = ContatoCliente.get_by_id(contato_id)

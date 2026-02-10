@@ -125,17 +125,20 @@ class Cliente:
         Returns:
             int: ID do cliente criado ou None
         """
+        # Converter nome para MAIÚSCULAS
+        nome_razao_social = data.get('nome_razao_social', '').upper()
+        
         query = """
             INSERT INTO clientes (
                 tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
-                porte_empresa, data_inicio_contrato, situacao, observacoes, data_criacao
+                porte_empresa, data_inicio_contrato, situacao, observacoes
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             data.get('tipo_pessoa'),
-            data.get('nome_razao_social'),
+            nome_razao_social,
             data.get('cpf_cnpj'),
             data.get('inscricao_estadual'),
             data.get('inscricao_municipal'),
@@ -162,18 +165,21 @@ class Cliente:
         Returns:
             int: ID do cliente ou None
         """
+        # Converter nome para MAIÚSCULAS
+        nome_razao_social = data.get('nome_razao_social', '').upper()
+        
         query = """
             UPDATE clientes
             SET tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
                 inscricao_estadual = %s, inscricao_municipal = %s, email = %s,
                 telefone = %s, celular = %s, regime_tributario = %s,
                 porte_empresa = %s, data_inicio_contrato = %s,
-                situacao = %s, observacoes = %s, data_atualizacao = NOW()
+                situacao = %s, observacoes = %s
             WHERE id = %s
         """
         params = (
             data.get('tipo_pessoa'),
-            data.get('nome_razao_social'),
+            nome_razao_social,
             data.get('cpf_cnpj'),
             data.get('inscricao_estadual'),
             data.get('inscricao_municipal'),
@@ -286,7 +292,7 @@ class Cliente:
         """
         query = """
             UPDATE clientes
-            SET situacao = %s, data_atualizacao = NOW()
+            SET situacao = %s
             WHERE id = %s
         """
         return execute_query(query, (situacao, cliente_id)) is not None

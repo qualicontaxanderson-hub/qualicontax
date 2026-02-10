@@ -247,6 +247,28 @@ function toggleTipoFields() {
 document.addEventListener('DOMContentLoaded', function() {
     toggleTipoFields();
     
+    // Convert name fields to UPPERCASE automatically
+    const nameFields = [
+        document.getElementById('nome_razao_social_pf'),
+        document.getElementById('nome_razao_social_pj'),
+        document.getElementById('nome_fantasia')
+    ];
+    
+    nameFields.forEach(field => {
+        if (field) {
+            // Apply uppercase CSS
+            field.style.textTransform = 'uppercase';
+            
+            // Convert on input
+            field.addEventListener('input', function(e) {
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                e.target.value = e.target.value.toUpperCase();
+                e.target.setSelectionRange(start, end);
+            });
+        }
+    });
+    
     // Simple input masks (could be improved with a library)
     const cpfInputs = document.querySelectorAll('.cpf-mask');
     const cnpjInputs = document.querySelectorAll('.cnpj-mask');
