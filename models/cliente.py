@@ -36,10 +36,9 @@ class Cliente:
             dict: Dados do cliente ou None
         """
         query = """
-            SELECT id, tipo_pessoa, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_estadual,
+            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
-                   porte_empresa, data_inicio_contrato, data_fim_contrato, situacao, observacoes,
-                   criado_em, atualizado_em, criado_por
+                   porte_empresa, data_inicio_contrato, situacao, observacoes
             FROM clientes
             WHERE id = %s
         """
@@ -76,11 +75,11 @@ class Cliente:
         
         # Busca por nome, CPF/CNPJ ou email (usando parameterized queries para prevenir SQL injection)
         if filters.get('busca'):
-            conditions.append("(nome_razao_social LIKE %s OR nome_fantasia LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s)")
+            conditions.append("(nome_razao_social LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s)")
             # Sanitize special characters that have meaning in LIKE patterns
             search_term = filters['busca'].replace('%', '\\%').replace('_', '\\_')
             search_pattern = f"%{search_term}%"
-            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+            params.extend([search_pattern, search_pattern, search_pattern])
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
@@ -92,7 +91,7 @@ class Cliente:
         params.extend([per_page, offset])
         
         query = f"""
-            SELECT id, tipo_pessoa, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_estadual,
+            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
                    porte_empresa, data_inicio_contrato, situacao, observacoes
             FROM clientes
@@ -124,16 +123,15 @@ class Cliente:
         """
         query = """
             INSERT INTO clientes (
-                tipo_pessoa, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_estadual,
+                tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
-                porte_empresa, data_inicio_contrato, situacao, observacoes, criado_por, criado_em
+                porte_empresa, data_inicio_contrato, situacao, observacoes, data_criacao
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """
         params = (
             data.get('tipo_pessoa'),
             data.get('nome_razao_social'),
-            data.get('nome_fantasia'),
             data.get('cpf_cnpj'),
             data.get('inscricao_estadual'),
             data.get('inscricao_municipal'),
@@ -144,8 +142,7 @@ class Cliente:
             data.get('porte_empresa'),
             data.get('data_inicio_contrato'),
             data.get('situacao', 'ATIVO'),
-            data.get('observacoes'),
-            data.get('criado_por')
+            data.get('observacoes')
         )
         return execute_query(query, params)
     
@@ -163,17 +160,16 @@ class Cliente:
         """
         query = """
             UPDATE clientes
-            SET tipo_pessoa = %s, nome_razao_social = %s, nome_fantasia = %s, cpf_cnpj = %s,
+            SET tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
                 inscricao_estadual = %s, inscricao_municipal = %s, email = %s,
                 telefone = %s, celular = %s, regime_tributario = %s,
-                porte_empresa = %s, data_inicio_contrato = %s, data_fim_contrato = %s,
-                situacao = %s, observacoes = %s, atualizado_em = NOW()
+                porte_empresa = %s, data_inicio_contrato = %s,
+                situacao = %s, observacoes = %s, data_atualizacao = NOW()
             WHERE id = %s
         """
         params = (
             data.get('tipo_pessoa'),
             data.get('nome_razao_social'),
-            data.get('nome_fantasia'),
             data.get('cpf_cnpj'),
             data.get('inscricao_estadual'),
             data.get('inscricao_municipal'),
@@ -183,7 +179,6 @@ class Cliente:
             data.get('regime_tributario'),
             data.get('porte_empresa'),
             data.get('data_inicio_contrato'),
-            data.get('data_fim_contrato'),
             data.get('situacao'),
             data.get('observacoes'),
             cliente_id
@@ -287,7 +282,7 @@ class Cliente:
         """
         query = """
             UPDATE clientes
-            SET situacao = %s, atualizado_em = NOW()
+            SET situacao = %s, data_atualizacao = NOW()
             WHERE id = %s
         """
         return execute_query(query, (situacao, cliente_id)) is not None
