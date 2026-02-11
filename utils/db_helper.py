@@ -73,8 +73,9 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
             if cursor.lastrowid > 0:
                 return cursor.lastrowid
             else:
-                # Para UPDATE/DELETE, retorna rowcount ou True se foi executado com sucesso
-                return cursor.rowcount if cursor.rowcount >= 0 else True
+                # Para UPDATE/DELETE, sempre retorna True para indicar sucesso
+                # Mesmo se rowcount for 0 (nenhuma linha afetada), o UPDATE foi executado sem erro
+                return True
             
     except Error as e:
         logger.error(f"Erro ao executar query: {e}")

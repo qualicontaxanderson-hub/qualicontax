@@ -177,7 +177,8 @@ def editar(id):
             
             sucesso = Cliente.update(id, data)
             
-            if sucesso:
+            # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
+            if sucesso is not None:
                 flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
             else:
