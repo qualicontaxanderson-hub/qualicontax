@@ -16,48 +16,78 @@
     
     <nav class="sidebar-nav">
         <ul class="nav-list">
+            <!-- Dashboard -->
             <li class="nav-item">
                 <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                     <i class="fas fa-chart-line"></i>
                     <span>Dashboard</span>
                 </a>
             </li>
+            
+            <!-- Cadastros (com submenu) -->
+            <li class="nav-item has-submenu">
+                <a href="#" class="nav-link" onclick="toggleSubmenu(this); return false;">
+                    <i class="fas fa-folder-open"></i>
+                    <span>Cadastros</span>
+                    <i class="fas fa-chevron-down submenu-arrow"></i>
+                </a>
+                <ul class="submenu">
+                    <li class="submenu-item">
+                        <a href="{{ url_for('clientes.index') }}" class="submenu-link {% if 'clientes' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-user-tie"></i>
+                            <span>Clientes</span>
+                        </a>
+                    </li>
+                    <li class="submenu-item">
+                        <a href="{{ url_for('contratos.list_contratos') }}" class="submenu-link {% if 'contratos' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-file-contract"></i>
+                            <span>Contratos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            
+            <!-- Escrita Fiscal -->
             <li class="nav-item">
                 <a href="#" class="nav-link">
-                    <i class="fas fa-users"></i>
-                    <span>CRM</span>
+                    <i class="fas fa-file-invoice"></i>
+                    <span>Escrita Fiscal</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="{{ url_for('clientes.index') }}" class="nav-link {% if 'clientes' in request.endpoint %}active{% endif %}">
-                    <i class="fas fa-user-tie"></i>
-                    <span>Cliente</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="{{ url_for('contratos.list_contratos') }}" class="nav-link {% if 'contratos' in request.endpoint %}active{% endif %}">
-                    <i class="fas fa-file-contract"></i>
-                    <span>Contrato</span>
-                </a>
-            </li>
+            
+            <!-- Contábil -->
             <li class="nav-item">
                 <a href="#" class="nav-link">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>Venda</span>
+                    <i class="fas fa-calculator"></i>
+                    <span>Contábil</span>
                 </a>
             </li>
+            
+            <!-- Legalização -->
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-balance-scale"></i>
+                    <span>Legalização</span>
+                </a>
+            </li>
+            
+            <!-- Análise -->
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Análise</span>
+                </a>
+            </li>
+            
+            <!-- Financeiro -->
             <li class="nav-item">
                 <a href="#" class="nav-link">
                     <i class="fas fa-dollar-sign"></i>
                     <span>Financeiro</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="#" class="nav-link">
-                    <i class="fas fa-receipt"></i>
-                    <span>Faturamento</span>
-                </a>
-            </li>
+            
+            <!-- Relatórios -->
             <li class="nav-item">
                 <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if 'relatorios' in request.endpoint %}active{% endif %}">
                     <i class="fas fa-chart-bar"></i>
