@@ -11,7 +11,7 @@
             <p class="page-subtitle">Atualize as informações do cliente</p>
         </div>
         <div class="page-actions">
-            <a href="{{ url_for('clientes.view_cliente', id=cliente.id) }}" class="btn btn-outline">
+            <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn btn-outline">
                 <i class="fas fa-arrow-left"></i>
                 Voltar
             </a>
@@ -19,7 +19,7 @@
     </div>
 
     <!-- Form -->
-    <form method="POST" action="{{ url_for('clientes.edit_cliente', id=cliente.id) }}" class="form-container">
+    <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) }}" class="form-container">
         {{ form.hidden_tag() if form }}
         
         <!-- Informações Básicas -->
@@ -175,7 +175,7 @@
 
         <!-- Form Actions -->
         <div class="form-actions">
-            <a href="{{ url_for('clientes.view_cliente', id=cliente.id) }}" class="btn btn-outline">
+            <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn btn-outline">
                 <i class="fas fa-times"></i>
                 Cancelar
             </a>

@@ -2,6 +2,10 @@
 import mysql.connector
 from mysql.connector import Error
 from config import Config
+import logging
+
+# Configurar logging
+logger = logging.getLogger(__name__)
 
 
 def get_db_connection():
@@ -26,6 +30,7 @@ def get_db_connection():
             return connection
             
     except Error as e:
+        logger.error(f"Erro ao conectar ao MySQL: {e}")
         print(f"Erro ao conectar ao MySQL: {e}")
         return None
 
@@ -41,10 +46,15 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         fetch_one (bool): Se True, retorna apenas um registro
         
     Returns:
-        list/dict/None: Resultados da query ou None em caso de erro
+        list/dict/int/None: 
+            - Para SELECT: lista de dicts ou dict único
+            - Para INSERT: lastrowid (ID do registro inserido)
+            - Para UPDATE/DELETE: número de linhas afetadas
+            - None em caso de erro
     """
     connection = get_db_connection()
     if not connection:
+        logger.error("Não foi possível obter conexão com o banco de dados")
         return None
         
     try:
@@ -56,10 +66,25 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
             return result
         else:
             connection.commit()
-            return cursor.lastrowid
+            # Para INSERT, retorna lastrowid (ID do novo registro)
+            # Para UPDATE/DELETE, retorna rowcount (número de linhas afetadas)
+            # Se lastrowid > 0, é um INSERT, retorna o ID
+            # Se lastrowid == 0, é UPDATE/DELETE, retorna rowcount (pode ser 0 se nada mudou)
+            if cursor.lastrowid > 0:
+                return cursor.lastrowid
+            else:
+                # Para UPDATE/DELETE, sempre retorna True para indicar sucesso
+                # Mesmo se rowcount for 0 (nenhuma linha afetada), o UPDATE foi executado sem erro
+                return True
             
     except Error as e:
+        logger.error(f"Erro ao executar query: {e}")
+        logger.error(f"Query: {query}")
+        logger.error(f"Params: {params}")
         print(f"Erro ao executar query: {e}")
+        print(f"Query: {query}")
+        if params:
+            print(f"Params: {params}")
         connection.rollback()
         return None
         
