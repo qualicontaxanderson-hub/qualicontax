@@ -131,6 +131,22 @@
                             </select>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ramo_atividade_id">Ramo de Atividade</label>
+                            <select id="ramo_atividade_id" name="ramo_atividade_id" class="form-control">
+                                <option value="">Selecione...</option>
+                                {% for ramo in ramos_atividade %}
+                                <option value="{{ ramo.id }}" {% if cliente_ramo and ramo.id == cliente_ramo %}selected{% endif %}>
+                                    {{ ramo.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                Ex: Posto de Gasolina, Distribuidora, Transportadoras, Lava Rápido, etc.
+                            </small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

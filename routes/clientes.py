@@ -6,6 +6,7 @@ from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente
 from models.grupo_cliente import GrupoCliente
+from models.ramo_atividade import RamoAtividade
 
 clientes = Blueprint('clientes', __name__)
 
@@ -83,14 +84,14 @@ def novo():
         # Validar número do cliente se fornecido
         if numero_cliente and Cliente.existe_numero_cliente(numero_cliente):
             flash(f'Número do cliente "{numero_cliente}" já está em uso!', 'danger')
-            grupos = GrupoCliente.get_all(situacao='ATIVO')
-            return render_template('clientes/form.html', cliente=None, grupos=grupos)
+            ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+            return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
         
         # Validação de campos obrigatórios
         if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not cpf_cnpj:
             flash('Preencha todos os campos obrigatórios.', 'danger')
-            grupos = GrupoCliente.get_all(situacao='ATIVO')
-            return render_template('clientes/form.html', cliente=None, grupos=grupos)
+            ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+            return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
         
         # Criar cliente
         data = {
@@ -115,13 +116,18 @@ def novo():
         cliente_id = Cliente.create(data)
         
         if cliente_id:
+            # Adicionar ao ramo de atividade se selecionado
+            ramo_atividade_id = request.form.get('ramo_atividade_id', type=int)
+            if ramo_atividade_id:
+                RamoAtividade.add_cliente(ramo_atividade_id, cliente_id)
+            
             flash('Cliente criado com sucesso!', 'success')
             return redirect(url_for('clientes.detalhes', id=cliente_id))
         else:
             flash('Erro ao criar cliente!', 'danger')
     
-    grupos = GrupoCliente.get_all(situacao='ATIVO')
-    return render_template('clientes/form.html', cliente=None, grupos=grupos)
+    ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+    return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
 
 
 @clientes.route('/clientes/<int:id>')
@@ -136,6 +142,7 @@ def detalhes(id):
     enderecos = EnderecoCliente.get_by_cliente(id)
     contatos = ContatoCliente.get_by_cliente(id)
     grupos = Cliente.get_grupos(id)
+    ramos_atividade = RamoAtividade.get_by_cliente(id)
     processos = Cliente.get_processos(id)
     tarefas = Cliente.get_tarefas(id)
     obrigacoes = Cliente.get_obrigacoes(id)
@@ -151,6 +158,7 @@ def detalhes(id):
                          contatos=contatos,
                          grupos=grupos,
                          grupos_disponiveis=grupos_disponiveis,
+                         ramos_atividade=ramos_atividade,
                          processos=processos,
                          tarefas=tarefas,
                          obrigacoes=obrigacoes)
@@ -170,17 +178,23 @@ def editar(id):
             # Validação de campos obrigatórios
             if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not request.form.get('cpf_cnpj'):
                 flash('Preencha todos os campos obrigatórios.', 'danger')
+                ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+                cliente_ramos = RamoAtividade.get_by_cliente(id)
+                cliente_ramo = cliente_ramos[0]['id'] if cliente_ramos else None
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, cliente_ramo=cliente_ramo)
             
             # Validar número do cliente se fornecido
             numero_cliente = request.form.get('numero_cliente', '').strip()
             if numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
                 flash(f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!', 'danger')
+                ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+                cliente_ramos = RamoAtividade.get_by_cliente(id)
+                cliente_ramo = cliente_ramos[0]['id'] if cliente_ramos else None
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, cliente_ramo=cliente_ramo)
             
             data = {
                 'numero_cliente': numero_cliente if numero_cliente else None,
@@ -203,6 +217,18 @@ def editar(id):
             
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
             if sucesso is not None:
+                # Gerenciar ramo de atividade
+                ramo_atividade_id = request.form.get('ramo_atividade_id', type=int)
+                cliente_ramos_atuais = RamoAtividade.get_by_cliente(id)
+                
+                # Remover todos os ramos atuais
+                for ramo_atual in cliente_ramos_atuais:
+                    RamoAtividade.remove_cliente(ramo_atual['id'], id)
+                
+                # Adicionar novo ramo se selecionado
+                if ramo_atividade_id:
+                    RamoAtividade.add_cliente(ramo_atividade_id, id)
+                
                 flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
             else:
@@ -211,9 +237,13 @@ def editar(id):
             flash(f'Erro ao atualizar cliente: {str(e)}', 'danger')
             print(f"Erro ao atualizar cliente {id}: {str(e)}")
     
+    # GET - Buscar ramos de atividade e ramo atual do cliente
+    ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+    cliente_ramos = RamoAtividade.get_by_cliente(id)
+    cliente_ramo = cliente_ramos[0]['id'] if cliente_ramos else None
     grupos = GrupoCliente.get_all(situacao='ATIVO')
     grupos_cliente = Cliente.get_grupos(id)
-    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
+    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, cliente_ramo=cliente_ramo)
 
 
 @clientes.route('/clientes/<int:id>/inativar', methods=['POST'])
