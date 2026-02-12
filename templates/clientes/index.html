@@ -132,6 +132,7 @@
                             <th>CPF/CNPJ</th>
                             <th>Email</th>
                             <th>Telefone</th>
+                            <th>Ramo de Atividade</th>
                             <th>Tipo</th>
                             <th>Situação</th>
                             <th>Ações</th>
@@ -159,6 +160,15 @@
                                 <td>{{ cliente.cpf_cnpj }}</td>
                                 <td>{{ cliente.email or '-' }}</td>
                                 <td>{{ cliente.telefone or cliente.celular or '-' }}</td>
+                                <td>
+                                    {% if cliente.ramo_atividade_nome %}
+                                        <span class="badge badge-secondary" title="{{ cliente.ramo_atividade_nome }}">
+                                            <i class="fas fa-industry"></i> {{ cliente.ramo_atividade_nome }}
+                                        </span>
+                                    {% else %}
+                                        <span style="color: #9CA3AF;">-</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="badge badge-info">{{ cliente.tipo_pessoa }}</span>
                                 </td>

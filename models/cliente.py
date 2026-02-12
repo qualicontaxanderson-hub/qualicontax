@@ -91,12 +91,15 @@ class Cliente:
         params.extend([per_page, offset])
         
         query = f"""
-            SELECT id, numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
-                   inscricao_municipal, email, telefone, celular, regime_tributario,
-                   porte_empresa, data_inicio_contrato, situacao, observacoes
-            FROM clientes
-            {where_clause}
-            ORDER BY nome_razao_social
+            SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
+                   c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
+                   c.porte_empresa, c.data_inicio_contrato, c.situacao, c.observacoes,
+                   ra.nome as ramo_atividade_nome
+            FROM clientes c
+            LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
+            LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id
+            {where_clause.replace('WHERE', 'WHERE') if where_clause else ''}
+            ORDER BY c.nome_razao_social
             LIMIT %s OFFSET %s
         """
         
