@@ -74,9 +74,17 @@ def novo():
     if request.method == 'POST':
         # Validações
         cpf_cnpj = request.form.get('cpf_cnpj')
+        numero_cliente = request.form.get('numero_cliente', '').strip()
+        
         if Cliente.existe_cpf_cnpj(cpf_cnpj):
             flash('CPF/CNPJ já cadastrado!', 'danger')
             return redirect(url_for('clientes.novo'))
+        
+        # Validar número do cliente se fornecido
+        if numero_cliente and Cliente.existe_numero_cliente(numero_cliente):
+            flash(f'Número do cliente "{numero_cliente}" já está em uso!', 'danger')
+            grupos = GrupoCliente.get_all(situacao='ATIVO')
+            return render_template('clientes/form.html', cliente=None, grupos=grupos)
         
         # Validação de campos obrigatórios
         if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not cpf_cnpj:
@@ -86,6 +94,7 @@ def novo():
         
         # Criar cliente
         data = {
+            'numero_cliente': numero_cliente if numero_cliente else None,
             'tipo_pessoa': request.form.get('tipo_pessoa'),
             'nome_razao_social': request.form.get('nome_razao_social'),
             'nome_fantasia': request.form.get('nome_fantasia'),
@@ -159,7 +168,16 @@ def editar(id):
                 grupos_cliente = Cliente.get_grupos(id)
                 return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
             
+            # Validar número do cliente se fornecido
+            numero_cliente = request.form.get('numero_cliente', '').strip()
+            if numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
+                flash(f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!', 'danger')
+                grupos = GrupoCliente.get_all(situacao='ATIVO')
+                grupos_cliente = Cliente.get_grupos(id)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente)
+            
             data = {
+                'numero_cliente': numero_cliente if numero_cliente else None,
                 'tipo_pessoa': request.form.get('tipo_pessoa'),
                 'nome_razao_social': request.form.get('nome_razao_social'),
                 'cpf_cnpj': request.form.get('cpf_cnpj'),

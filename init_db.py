@@ -38,6 +38,7 @@ def create_tables():
         """
         CREATE TABLE IF NOT EXISTS clientes (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            numero_cliente VARCHAR(20) UNIQUE,
             tipo_pessoa ENUM('PF', 'PJ') NOT NULL,
             nome_razao_social VARCHAR(255) NOT NULL,
             nome_fantasia VARCHAR(255),

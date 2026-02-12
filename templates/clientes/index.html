@@ -127,7 +127,7 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            <th>Nº Cliente</th>
                             <th>Nome</th>
                             <th>CPF/CNPJ</th>
                             <th>Email</th>
@@ -141,7 +141,13 @@
                         {% if clientes %}
                             {% for cliente in clientes %}
                             <tr>
-                                <td>#{{ cliente.id }}</td>
+                                <td>
+                                    {% if cliente.numero_cliente %}
+                                        <strong style="color: #22C55E;">#{{ cliente.numero_cliente }}</strong>
+                                    {% else %}
+                                        <span style="color: #9CA3AF; font-size: 12px;">Auto: {{ cliente.id }}</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <div class="table-user">
                                         <div class="table-user-avatar">

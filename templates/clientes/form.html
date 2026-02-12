@@ -29,6 +29,25 @@
             <div class="card-body">
                 <div class="form-row">
                     <div class="form-group">
+                        <label for="numero_cliente">
+                            Número do Cliente
+                            <span class="text-muted" style="font-size: 12px;">(opcional - ex: 102)</span>
+                        </label>
+                        <input type="text" 
+                               id="numero_cliente" 
+                               name="numero_cliente" 
+                               class="form-control" 
+                               placeholder="Digite o número do cliente (ex: 102)" 
+                               value="{{ cliente.numero_cliente if cliente else '' }}"
+                               maxlength="20">
+                        <small class="form-text text-muted">
+                            Deixe em branco para usar apenas o ID automático ou digite um número personalizado (ex: 102 para manter consistência com seus cadastros atuais)
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
                         <label for="tipo_pessoa">Tipo de Pessoa *</label>
                         <select id="tipo_pessoa" name="tipo_pessoa" class="form-control" required onchange="toggleTipoFields()">
                             <option value="">Selecione...</option>
