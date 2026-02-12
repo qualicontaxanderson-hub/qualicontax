@@ -116,10 +116,13 @@ def novo():
         cliente_id = Cliente.create(data)
         
         if cliente_id:
-            # Adicionar ao ramo de atividade se selecionado
-            ramo_atividade_id = request.form.get('ramo_atividade_id', type=int)
-            if ramo_atividade_id:
-                RamoAtividade.add_cliente(ramo_atividade_id, cliente_id)
+            # Adicionar aos ramos de atividade selecionados (múltiplos)
+            ramos_ids = request.form.getlist('ramos_atividade_ids')
+            for ramo_id in ramos_ids:
+                try:
+                    RamoAtividade.add_cliente(int(ramo_id), cliente_id)
+                except:
+                    pass  # Ignora erros de duplicação
             
             flash('Cliente criado com sucesso!', 'success')
             return redirect(url_for('clientes.detalhes', id=cliente_id))
@@ -127,7 +130,7 @@ def novo():
             flash('Erro ao criar cliente!', 'danger')
     
     ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-    return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
+    return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, ramos_cliente=[])
 
 
 @clientes.route('/clientes/<int:id>')
@@ -180,10 +183,10 @@ def editar(id):
                 flash('Preencha todos os campos obrigatórios.', 'danger')
                 ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
                 cliente_ramos = RamoAtividade.get_by_cliente(id)
-                cliente_ramo = cliente_ramos[0]['id'] if cliente_ramos else None
+                ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, cliente_ramo=cliente_ramo)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
             
             # Validar número do cliente se fornecido
             numero_cliente = request.form.get('numero_cliente', '').strip()
@@ -191,10 +194,10 @@ def editar(id):
                 flash(f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!', 'danger')
                 ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
                 cliente_ramos = RamoAtividade.get_by_cliente(id)
-                cliente_ramo = cliente_ramos[0]['id'] if cliente_ramos else None
+                ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, cliente_ramo=cliente_ramo)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
             
             data = {
                 'numero_cliente': numero_cliente if numero_cliente else None,
@@ -217,17 +220,20 @@ def editar(id):
             
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
             if sucesso is not None:
-                # Gerenciar ramo de atividade
-                ramo_atividade_id = request.form.get('ramo_atividade_id', type=int)
+                # Gerenciar ramos de atividade (múltiplos)
+                ramos_ids_novos = request.form.getlist('ramos_atividade_ids')
                 cliente_ramos_atuais = RamoAtividade.get_by_cliente(id)
                 
                 # Remover todos os ramos atuais
                 for ramo_atual in cliente_ramos_atuais:
                     RamoAtividade.remove_cliente(ramo_atual['id'], id)
                 
-                # Adicionar novo ramo se selecionado
-                if ramo_atividade_id:
-                    RamoAtividade.add_cliente(ramo_atividade_id, id)
+                # Adicionar novos ramos selecionados
+                for ramo_id in ramos_ids_novos:
+                    try:
+                        RamoAtividade.add_cliente(int(ramo_id), id)
+                    except:
+                        pass  # Ignora erros de duplicação
                 
                 flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
@@ -237,13 +243,13 @@ def editar(id):
             flash(f'Erro ao atualizar cliente: {str(e)}', 'danger')
             print(f"Erro ao atualizar cliente {id}: {str(e)}")
     
-    # GET - Buscar ramos de atividade e ramo atual do cliente
+    # GET - Buscar ramos de atividade e ramos atuais do cliente
     ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
     cliente_ramos = RamoAtividade.get_by_cliente(id)
-    cliente_ramo = cliente_ramos[0]['id'] if cliente_ramos else None
+    ramos_cliente = [ramo['id'] for ramo in cliente_ramos]  # Lista de IDs para checkboxes
     grupos = GrupoCliente.get_all(situacao='ATIVO')
     grupos_cliente = Cliente.get_grupos(id)
-    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, cliente_ramo=cliente_ramo)
+    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
 
 
 @clientes.route('/clientes/<int:id>/inativar', methods=['POST'])

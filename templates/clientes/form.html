@@ -133,17 +133,27 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="ramo_atividade_id">Ramo de Atividade</label>
-                            <select id="ramo_atividade_id" name="ramo_atividade_id" class="form-control">
-                                <option value="">Selecione...</option>
-                                {% for ramo in ramos_atividade %}
-                                <option value="{{ ramo.id }}" {% if cliente_ramo and ramo.id == cliente_ramo %}selected{% endif %}>
-                                    {{ ramo.nome }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <label>Ramos de Atividade</label>
+                            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background-color: #f9f9f9;">
+                                {% if ramos_atividade %}
+                                    {% for ramo in ramos_atividade %}
+                                    <div class="form-check" style="margin-bottom: 8px;">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="ramos_atividade_ids" 
+                                               value="{{ ramo.id }}" 
+                                               id="ramo_{{ ramo.id }}"
+                                               {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
+                                        <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 5px;">
+                                            {{ ramo.nome }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted" style="margin: 0;">Nenhum ramo de atividade cadastrado.</p>
+                                {% endif %}
+                            </div>
                             <small class="form-text text-muted">
-                                Ex: Posto de Gasolina, Distribuidora, Transportadoras, Lava Rápido, etc.
+                                Selecione um ou mais ramos de atividade. Ex: Posto de Gasolina, Distribuidora, Transportadoras, Lava Rápido, etc.
                             </small>
                         </div>
                     </div>
