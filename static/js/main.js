@@ -27,13 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
             parent.classList.toggle('open');
         });
     });
-});
-
-// Global function for submenu toggle (can be called from onclick)
-function toggleSubmenu(element) {
-    const parent = element.parentElement;
-    parent.classList.toggle('open');
-}
+    
     // Mobile menu toggle
     const menuToggle = document.querySelector('.mobile-menu-toggle');
     if (menuToggle && sidebar) {
@@ -76,6 +70,12 @@ function toggleSubmenu(element) {
         }, 5000);
     });
 });
+
+// Global function for submenu toggle (can be called from onclick)
+function toggleSubmenu(element) {
+    const parent = element.parentElement;
+    parent.classList.toggle('open');
+}
 
 // Máscaras de input
 function maskCPF(input) {
