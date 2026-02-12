@@ -445,6 +445,92 @@ def buscar_cep(cep):
     return jsonify({'erro': True}), 404
 
 
+@clientes.route('/api/consultar-cnpj/<cnpj>')
+@login_required
+def consultar_cnpj(cnpj):
+    """
+    Consulta CNPJ na Receita Federal via Brasil API
+    Retorna dados da empresa para preenchimento automático
+    """
+    import requests
+    import re
+    
+    try:
+        # Remover caracteres não numéricos
+        cnpj_limpo = re.sub(r'\D', '', cnpj)
+        
+        # Validar tamanho
+        if len(cnpj_limpo) != 14:
+            return jsonify({
+                'success': False,
+                'message': 'CNPJ deve ter 14 dígitos'
+            }), 400
+        
+        # Consultar Brasil API
+        url = f'https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}'
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extrair dados relevantes
+            resultado = {
+                'success': True,
+                'data': {
+                    'cnpj': data.get('cnpj', ''),
+                    'razao_social': data.get('razao_social', ''),
+                    'nome_fantasia': data.get('nome_fantasia', ''),
+                    'situacao_cadastral': data.get('descricao_situacao_cadastral', ''),
+                    'porte': data.get('porte', ''),
+                    'natureza_juridica': data.get('natureza_juridica', ''),
+                    'data_inicio_atividade': data.get('data_inicio_atividade', ''),
+                    'cnae_fiscal': data.get('cnae_fiscal', ''),
+                    'cnae_fiscal_descricao': data.get('cnae_fiscal_descricao', ''),
+                    # Endereço
+                    'logradouro': data.get('logradouro', ''),
+                    'numero': data.get('numero', ''),
+                    'complemento': data.get('complemento', ''),
+                    'bairro': data.get('bairro', ''),
+                    'municipio': data.get('municipio', ''),
+                    'uf': data.get('uf', ''),
+                    'cep': data.get('cep', ''),
+                    # Contatos
+                    'ddd_telefone_1': data.get('ddd_telefone_1', ''),
+                    'ddd_telefone_2': data.get('ddd_telefone_2', ''),
+                    'email': data.get('email', ''),
+                    # QSAs (sócios)
+                    'qsa': data.get('qsa', [])
+                }
+            }
+            
+            return jsonify(resultado), 200
+        
+        elif response.status_code == 404:
+            return jsonify({
+                'success': False,
+                'message': 'CNPJ não encontrado na Receita Federal'
+            }), 404
+        
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Erro ao consultar CNPJ. Tente novamente.'
+            }), 500
+    
+    except requests.Timeout:
+        return jsonify({
+            'success': False,
+            'message': 'Timeout ao consultar CNPJ. Tente novamente.'
+        }), 408
+    
+    except Exception as e:
+        print(f"Erro ao consultar CNPJ: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao consultar CNPJ: {str(e)}'
+        }), 500
+
+
 # Aliases para manter compatibilidade
 list_clientes = index
 create_cliente = novo

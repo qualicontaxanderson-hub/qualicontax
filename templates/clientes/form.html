@@ -95,7 +95,15 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="cpf_cnpj_pj">CNPJ *</label>
-                            <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="form-control cnpj-mask" placeholder="00.000.000/0000-00" value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="form-control cnpj-mask" placeholder="00.000.000/0000-00" value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}" style="flex: 1;">
+                                <button type="button" id="btnConsultarCNPJ" class="btn btn-info" onclick="consultarCNPJ()" style="white-space: nowrap;">
+                                    <i class="fas fa-search"></i> Consultar CNPJ
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                Digite o CNPJ e clique em "Consultar CNPJ" para preencher automaticamente os dados da Receita Federal
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="inscricao_estadual">Inscrição Estadual</label>
@@ -387,5 +395,103 @@ document.querySelector('form').addEventListener('submit', function(e) {
         return false;
     }
 });
+
+// Função para consultar CNPJ na Receita Federal
+function consultarCNPJ() {
+    const cnpjInput = document.getElementById('cpf_cnpj_pj');
+    const cnpj = cnpjInput.value.replace(/\D/g, '');
+    
+    if (!cnpj || cnpj.length !== 14) {
+        alert('Por favor, digite um CNPJ válido com 14 dígitos.');
+        cnpjInput.focus();
+        return;
+    }
+    
+    const btn = document.getElementById('btnConsultarCNPJ');
+    const btnOriginalHTML = btn.innerHTML;
+    
+    // Mostrar loading
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
+    
+    // Fazer requisição
+    fetch(`/api/consultar-cnpj/${cnpj}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Confirmar preenchimento
+                if (confirm('Dados encontrados! Deseja preencher automaticamente os campos com as informações da Receita Federal?')) {
+                    preencherDadosCNPJ(data.data);
+                }
+            } else {
+                alert(data.message || 'Erro ao consultar CNPJ. Verifique o número e tente novamente.');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao consultar CNPJ. Verifique sua conexão e tente novamente.');
+        })
+        .finally(() => {
+            // Restaurar botão
+            btn.disabled = false;
+            btn.innerHTML = btnOriginalHTML;
+        });
+}
+
+// Função para preencher os campos com dados da Receita
+function preencherDadosCNPJ(data) {
+    // Dados básicos
+    if (data.razao_social) {
+        document.getElementById('nome_razao_social_pj').value = data.razao_social;
+    }
+    if (data.nome_fantasia) {
+        document.getElementById('nome_fantasia').value = data.nome_fantasia;
+    }
+    
+    // Converter porte para o formato do sistema
+    if (data.porte) {
+        const porteMap = {
+            'ME': 'ME',
+            'EPP': 'EPP',
+            'DEMAIS': 'MEDIO',
+            'MICRO EMPRESA': 'ME',
+            'EMPRESA DE PEQUENO PORTE': 'EPP'
+        };
+        const porte = porteMap[data.porte.toUpperCase()] || '';
+        if (porte) {
+            document.getElementById('porte_empresa').value = porte;
+        }
+    }
+    
+    // Data de início (converter de YYYY-MM-DD para formato do input)
+    if (data.data_inicio_atividade) {
+        // A API retorna no formato DD/MM/YYYY, converter para YYYY-MM-DD
+        const partes = data.data_inicio_atividade.split('/');
+        if (partes.length === 3) {
+            const dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+            document.getElementById('data_inicio_contrato').value = dataFormatada;
+        }
+    }
+    
+    // Exibir mensagem de sucesso
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+    alertDiv.innerHTML = `
+        <strong>Dados preenchidos!</strong> Os dados foram obtidos da Receita Federal. 
+        Revise as informações e complete os campos restantes.
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    `;
+    
+    const form = document.querySelector('form');
+    form.insertBefore(alertDiv, form.firstChild);
+    
+    // Auto-remover alerta após 5 segundos
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+    
+    // Scroll para o topo
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 </script>
 {% endblock %}
