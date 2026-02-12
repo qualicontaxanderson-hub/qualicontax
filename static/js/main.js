@@ -101,7 +101,22 @@ function maskCNPJ(input) {
 
 function maskPhone(input) {
     let value = input.value.replace(/\D/g, '');
+    if (value.length <= 10) {
+        // Telefone fixo: (XX) XXXX-XXXX
+        value = value.replace(/^(\d{2})(\d)/, '($1) $2');
+        value = value.replace(/(\d{4})(\d)/, '$1-$2');
+    } else if (value.length <= 11) {
+        // Celular: (XX) XXXXX-XXXX
+        value = value.replace(/^(\d{2})(\d)/, '($1) $2');
+        value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    input.value = value;
+}
+
+function maskCelular(input) {
+    let value = input.value.replace(/\D/g, '');
     if (value.length <= 11) {
+        // Celular: (XX) XXXXX-XXXX (sempre 9 dígitos após DDD)
         value = value.replace(/^(\d{2})(\d)/, '($1) $2');
         value = value.replace(/(\d{5})(\d)/, '$1-$2');
     }
@@ -136,6 +151,13 @@ document.addEventListener('DOMContentLoaded', function() {
     phoneInputs.forEach(input => {
         input.addEventListener('input', function() {
             maskPhone(this);
+        });
+    });
+    
+    const celularInputs = document.querySelectorAll('input[data-mask="celular"]');
+    celularInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            maskCelular(this);
         });
     });
     
