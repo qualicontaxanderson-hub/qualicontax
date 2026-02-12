@@ -121,6 +121,30 @@ def create_tables():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
         
+        # Ramos de Atividade
+        """
+        CREATE TABLE IF NOT EXISTS ramos_atividade (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(255) NOT NULL,
+            descricao TEXT,
+            situacao ENUM('ATIVO', 'INATIVO') DEFAULT 'ATIVO',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """,
+        
+        # Relação Cliente-Ramo de Atividade
+        """
+        CREATE TABLE IF NOT EXISTS cliente_ramo_atividade_relacao (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            ramo_atividade_id INT NOT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+            FOREIGN KEY (ramo_atividade_id) REFERENCES ramos_atividade(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_cliente_ramo (cliente_id, ramo_atividade_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """,
+        
         # Processos
         """
         CREATE TABLE IF NOT EXISTS processos (

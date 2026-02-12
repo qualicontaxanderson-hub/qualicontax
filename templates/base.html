@@ -63,6 +63,12 @@
                             </a>
                         </li>
                         <li class="submenu-item">
+                            <a href="{{ url_for('ramos_atividade.index') }}" class="submenu-link {% if 'ramos_atividade' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-industry"></i>
+                                <span>Ramo de Atividade</span>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
                             <a href="{{ url_for('contratos.list_contratos') }}" class="submenu-link {% if 'contratos' in request.endpoint %}active{% endif %}">
                                 <i class="fas fa-file-contract"></i>
                                 <span>Contratos</span>

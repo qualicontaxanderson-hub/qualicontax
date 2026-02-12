@@ -28,6 +28,7 @@ from routes.auth import auth
 from routes.dashboard import dashboard
 from routes.clientes import clientes
 from routes.grupos import grupos
+from routes.ramos_atividade import ramos_atividade
 from routes.contratos import contratos
 from routes.processos import processos
 from routes.relatorios import relatorios
@@ -38,6 +39,7 @@ app.register_blueprint(auth)
 app.register_blueprint(dashboard)
 app.register_blueprint(clientes)
 app.register_blueprint(grupos)
+app.register_blueprint(ramos_atividade)
 app.register_blueprint(contratos)
 app.register_blueprint(processos)
 app.register_blueprint(relatorios)
