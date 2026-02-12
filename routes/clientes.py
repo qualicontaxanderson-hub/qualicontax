@@ -140,11 +140,17 @@ def detalhes(id):
     tarefas = Cliente.get_tarefas(id)
     obrigacoes = Cliente.get_obrigacoes(id)
     
+    # Buscar grupos disponíveis (que o cliente ainda não pertence)
+    todos_grupos = GrupoCliente.get_all(situacao='ATIVO')
+    grupos_ids_cliente = [g['id'] for g in grupos]
+    grupos_disponiveis = [g for g in todos_grupos if g['id'] not in grupos_ids_cliente]
+    
     return render_template('clientes/detalhes.html',
                          cliente=cliente,
                          enderecos=enderecos,
                          contatos=contatos,
                          grupos=grupos,
+                         grupos_disponiveis=grupos_disponiveis,
                          processos=processos,
                          tarefas=tarefas,
                          obrigacoes=obrigacoes)
@@ -328,6 +334,62 @@ def excluir_contato(id):
         flash('Contato excluído com sucesso!', 'success')
     else:
         flash('Erro ao excluir contato!', 'danger')
+    
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/clientes/<int:cliente_id>/adicionar-grupo', methods=['POST'])
+@login_required
+def adicionar_grupo(cliente_id):
+    """Adicionar cliente a um grupo"""
+    try:
+        grupo_id = request.form.get('grupo_id', type=int)
+        
+        if not grupo_id:
+            flash('Grupo não selecionado!', 'danger')
+            return redirect(url_for('clientes.detalhes', id=cliente_id))
+        
+        # Verificar se cliente existe
+        cliente = Cliente.get_by_id(cliente_id)
+        if not cliente:
+            flash('Cliente não encontrado!', 'danger')
+            return redirect(url_for('clientes.index'))
+        
+        # Adicionar cliente ao grupo
+        sucesso = GrupoCliente.add_cliente(grupo_id, cliente_id)
+        
+        if sucesso:
+            flash('Cliente adicionado ao grupo com sucesso!', 'success')
+        else:
+            flash('Erro ao adicionar cliente ao grupo!', 'danger')
+    
+    except Exception as e:
+        flash(f'Erro ao adicionar cliente ao grupo: {str(e)}', 'danger')
+    
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/clientes/<int:cliente_id>/remover-grupo/<int:grupo_id>', methods=['POST'])
+@login_required
+def remover_grupo(cliente_id, grupo_id):
+    """Remover cliente de um grupo"""
+    try:
+        # Verificar se cliente existe
+        cliente = Cliente.get_by_id(cliente_id)
+        if not cliente:
+            flash('Cliente não encontrado!', 'danger')
+            return redirect(url_for('clientes.index'))
+        
+        # Remover cliente do grupo
+        sucesso = GrupoCliente.remove_cliente(grupo_id, cliente_id)
+        
+        if sucesso is not None:
+            flash('Cliente removido do grupo com sucesso!', 'success')
+        else:
+            flash('Erro ao remover cliente do grupo!', 'danger')
+    
+    except Exception as e:
+        flash(f'Erro ao remover cliente do grupo: {str(e)}', 'danger')
     
     return redirect(url_for('clientes.detalhes', id=cliente_id))
 
