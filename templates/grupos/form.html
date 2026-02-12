@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar Grupo' if grupo else 'Novo Grupo' }} - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="grupo-form-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">{{ 'Editar Grupo' if grupo else 'Novo Grupo' }}</h1>
+            <p class="page-subtitle">{{ 'Atualize os dados do grupo' if grupo else 'Cadastre um novo grupo de clientes' }}</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('grupos.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('grupos.editar', id=grupo.id) if grupo else url_for('grupos.novo') }}" class="form-container">
+        
+        <!-- Informações Básicas -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Informações do Grupo</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="nome">Nome do Grupo *</label>
+                    <input type="text" 
+                           id="nome" 
+                           name="nome" 
+                           class="form-control" 
+                           placeholder="Ex: Clientes VIP, Empresas de Tecnologia, etc." 
+                           value="{{ grupo.nome if grupo else '' }}"
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="descricao">Descrição</label>
+                    <textarea id="descricao" 
+                              name="descricao" 
+                              class="form-control" 
+                              rows="4"
+                              placeholder="Descreva o propósito deste grupo">{{ grupo.descricao if grupo else '' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="situacao">Situação *</label>
+                    <select id="situacao" name="situacao" class="form-control" required>
+                        <option value="ATIVO" {% if not grupo or grupo.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                        <option value="INATIVO" {% if grupo and grupo.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                Salvar Grupo
+            </button>
+            <a href="{{ url_for('grupos.index') }}" class="btn btn-outline">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

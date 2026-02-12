@@ -57,6 +57,12 @@
                             </a>
                         </li>
                         <li class="submenu-item">
+                            <a href="{{ url_for('grupos.index') }}" class="submenu-link {% if 'grupos' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-users-cog"></i>
+                                <span>Grupos</span>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
                             <a href="{{ url_for('contratos.list_contratos') }}" class="submenu-link {% if 'contratos' in request.endpoint %}active{% endif %}">
                                 <i class="fas fa-file-contract"></i>
                                 <span>Contratos</span>
