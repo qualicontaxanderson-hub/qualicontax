@@ -124,6 +124,42 @@ def novo():
                 except:
                     pass  # Ignora erros de duplicação
             
+            # Salvar endereço se fornecido
+            cep = request.form.get('cep', '').strip()
+            logradouro = request.form.get('logradouro', '').strip()
+            
+            if cep or logradouro:  # Se pelo menos um campo de endereço foi preenchido
+                try:
+                    endereco_data = {
+                        'tipo': 'COMERCIAL',  # Padrão para PJ
+                        'cep': cep,
+                        'logradouro': logradouro,
+                        'numero': request.form.get('numero', '').strip(),
+                        'complemento': request.form.get('complemento', '').strip(),
+                        'bairro': request.form.get('bairro', '').strip(),
+                        'cidade': request.form.get('cidade', '').strip(),
+                        'estado': request.form.get('estado', '').strip(),
+                        'pais': 'Brasil',
+                        'principal': True
+                    }
+                    
+                    EnderecoCliente.create(
+                        cliente_id=cliente_id,
+                        tipo=endereco_data['tipo'],
+                        cep=endereco_data['cep'],
+                        logradouro=endereco_data['logradouro'],
+                        numero=endereco_data['numero'],
+                        complemento=endereco_data['complemento'],
+                        bairro=endereco_data['bairro'],
+                        cidade=endereco_data['cidade'],
+                        estado=endereco_data['estado'],
+                        pais=endereco_data['pais'],
+                        principal=endereco_data['principal']
+                    )
+                except Exception as e:
+                    # Se houver erro no endereço, não impede a criação do cliente
+                    print(f"Erro ao salvar endereço: {e}")
+            
             flash('Cliente criado com sucesso!', 'success')
             return redirect(url_for('clientes.detalhes', id=cliente_id))
         else:
