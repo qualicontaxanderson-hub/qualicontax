@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Ramos de Atividade - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="ramos-atividade-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Ramos de Atividade</h1>
+            <p class="page-subtitle">Gerencie os ramos de atividade dos clientes</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('ramos_atividade.novo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                Novo Ramo
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="GET" class="filters-form">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label for="situacao">Situação</label>
+                        <select id="situacao" name="situacao" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="ATIVO" {% if filtro_situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                            <option value="INATIVO" {% if filtro_situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ramos Table -->
+    <div class="card table-card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Total de Clientes</th>
+                            <th>Situação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if ramos %}
+                            {% for ramo in ramos %}
+                            <tr>
+                                <td>
+                                    <strong>{{ ramo.nome }}</strong>
+                                </td>
+                                <td>{{ ramo.descricao or '-' }}</td>
+                                <td>
+                                    <span class="badge badge-info">
+                                        <i class="fas fa-users"></i> {{ ramo.total_clientes }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-{{ 'success' if ramo.situacao == 'ATIVO' else 'danger' }}">
+                                        {{ ramo.situacao }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="table-actions">
+                                        <a href="{{ url_for('ramos_atividade.detalhes', id=ramo.id) }}" class="btn-icon" title="Ver Detalhes">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('ramos_atividade.editar', id=ramo.id) }}" class="btn-icon" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ url_for('ramos_atividade.deletar', id=ramo.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Tem certeza que deseja excluir este ramo de atividade?')" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="fas fa-industry"></i>
+                                        <p>Nenhum ramo de atividade encontrado</p>
+                                        <a href="{{ url_for('ramos_atividade.novo') }}" class="btn btn-primary">
+                                            <i class="fas fa-plus"></i>
+                                            Criar Primeiro Ramo
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

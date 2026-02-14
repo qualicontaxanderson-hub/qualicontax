@@ -36,7 +36,7 @@ class Cliente:
             dict: Dados do cliente ou None
         """
         query = """
-            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
+            SELECT id, numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
                    porte_empresa, data_inicio_contrato, situacao, observacoes
             FROM clientes
@@ -73,13 +73,13 @@ class Cliente:
             conditions.append("regime_tributario = %s")
             params.append(filters['regime_tributario'])
         
-        # Busca por nome, CPF/CNPJ ou email (usando parameterized queries para prevenir SQL injection)
+        # Busca por nome, CPF/CNPJ, email ou número do cliente
         if filters.get('busca'):
-            conditions.append("(nome_razao_social LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s)")
+            conditions.append("(nome_razao_social LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s OR numero_cliente LIKE %s)")
             # Sanitize special characters that have meaning in LIKE patterns
             search_term = filters['busca'].replace('%', '\\%').replace('_', '\\_')
             search_pattern = f"%{search_term}%"
-            params.extend([search_pattern, search_pattern, search_pattern])
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
@@ -91,12 +91,15 @@ class Cliente:
         params.extend([per_page, offset])
         
         query = f"""
-            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
-                   inscricao_municipal, email, telefone, celular, regime_tributario,
-                   porte_empresa, data_inicio_contrato, situacao, observacoes
-            FROM clientes
-            {where_clause}
-            ORDER BY nome_razao_social
+            SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
+                   c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
+                   c.porte_empresa, c.data_inicio_contrato, c.situacao, c.observacoes,
+                   ra.nome as ramo_atividade_nome
+            FROM clientes c
+            LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
+            LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id
+            {where_clause.replace('WHERE', 'WHERE') if where_clause else ''}
+            ORDER BY c.nome_razao_social
             LIMIT %s OFFSET %s
         """
         
@@ -144,13 +147,14 @@ class Cliente:
         
         query = """
             INSERT INTO clientes (
-                tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
+                numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
                 porte_empresa, data_inicio_contrato, situacao, observacoes
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
+            data.get('numero_cliente') or None,
             data.get('tipo_pessoa'),
             nome_razao_social,
             data.get('cpf_cnpj'),
@@ -198,7 +202,7 @@ class Cliente:
         
         query = """
             UPDATE clientes
-            SET tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
+            SET numero_cliente = %s, tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
                 inscricao_estadual = %s, inscricao_municipal = %s, email = %s,
                 telefone = %s, celular = %s, regime_tributario = %s,
                 porte_empresa = %s, data_inicio_contrato = %s,
@@ -206,6 +210,7 @@ class Cliente:
             WHERE id = %s
         """
         params = (
+            data.get('numero_cliente') or None,
             data.get('tipo_pessoa'),
             nome_razao_social,
             data.get('cpf_cnpj'),
@@ -298,6 +303,31 @@ class Cliente:
         """
         query = "SELECT id FROM clientes WHERE cpf_cnpj = %s"
         params = [cpf_cnpj]
+        
+        if cliente_id:
+            query += " AND id != %s"
+            params.append(cliente_id)
+        
+        result = execute_query(query, tuple(params), fetch=True, fetch_one=True)
+        return result is not None
+    
+    @staticmethod
+    def existe_numero_cliente(numero_cliente, cliente_id=None):
+        """
+        Verifica se número do cliente já está cadastrado.
+        
+        Args:
+            numero_cliente (str): Número do cliente a verificar
+            cliente_id (int, optional): ID do cliente para excluir da verificação (usado em edições)
+            
+        Returns:
+            bool: True se já existe, False caso contrário
+        """
+        if not numero_cliente:
+            return False
+            
+        query = "SELECT id FROM clientes WHERE numero_cliente = %s"
+        params = [numero_cliente]
         
         if cliente_id:
             query += " AND id != %s"
