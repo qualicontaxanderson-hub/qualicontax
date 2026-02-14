@@ -509,6 +509,13 @@ def consultar_cnpj(cnpj):
         if response.status_code == 200:
             data = response.json()
             
+            # DEBUG: Log para verificar dados
+            print(f"=== DADOS RETORNADOS PELA BRASIL API ===")
+            print(f"Email: {data.get('email')}")
+            print(f"DDD Telefone 1: {data.get('ddd_telefone_1')}")
+            print(f"DDD Telefone 2: {data.get('ddd_telefone_2')}")
+            print(f"Razão Social: {data.get('razao_social')}")
+            
             # Extrair dados relevantes
             resultado = {
                 'success': True,

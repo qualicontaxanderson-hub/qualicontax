@@ -530,6 +530,8 @@ function consultarCNPJ() {
 
 // Função para preencher os campos com dados da Receita
 function preencherDadosCNPJ(data) {
+    console.log('=== DADOS RECEBIDOS DA API ===', data); // DEBUG
+    
     // Dados básicos
     if (data.razao_social) {
         document.getElementById('nome_razao_social_pj').value = data.razao_social;
@@ -565,9 +567,18 @@ function preencherDadosCNPJ(data) {
     
     // ===== NOVOS CAMPOS =====
     
-    // Email
-    if (data.email) {
-        document.getElementById('email').value = data.email.toLowerCase();
+    // Email - com debug detalhado
+    console.log('Email recebido:', data.email, '| Tipo:', typeof data.email); // DEBUG
+    if (data.email && data.email.trim && data.email.trim() !== '') {
+        const emailField = document.getElementById('email');
+        if (emailField) {
+            emailField.value = data.email.toLowerCase().trim();
+            console.log('✅ Email preenchido com sucesso:', emailField.value); // DEBUG
+        } else {
+            console.error('❌ Campo #email não encontrado no DOM'); // DEBUG
+        }
+    } else {
+        console.warn('⚠️ Email não disponível ou vazio na resposta da API'); // DEBUG
     }
     
     // Telefones
