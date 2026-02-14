@@ -567,18 +567,23 @@ function preencherDadosCNPJ(data) {
     
     // ===== NOVOS CAMPOS =====
     
-    // Email - com debug detalhado
+    // Email - com debug detalhado e múltiplas tentativas
     console.log('Email recebido:', data.email, '| Tipo:', typeof data.email); // DEBUG
-    if (data.email && data.email.trim && data.email.trim() !== '') {
+    
+    // Tentar pegar email de diferentes campos possíveis
+    const email = data.email || data.email_principal || data.email_empresa || '';
+    
+    if (email && typeof email === 'string' && email.trim() !== '') {
         const emailField = document.getElementById('email');
         if (emailField) {
-            emailField.value = data.email.toLowerCase().trim();
+            emailField.value = email.toLowerCase().trim();
             console.log('✅ Email preenchido com sucesso:', emailField.value); // DEBUG
         } else {
             console.error('❌ Campo #email não encontrado no DOM'); // DEBUG
         }
     } else {
         console.warn('⚠️ Email não disponível ou vazio na resposta da API'); // DEBUG
+        console.warn('   Nota: Muitas empresas não possuem email cadastrado na Receita Federal');
     }
     
     // Telefones
@@ -640,18 +645,41 @@ function preencherDadosCNPJ(data) {
         document.getElementById('estado').value = data.uf;
     }
     
-    // Exibir mensagem de sucesso
+    // Exibir mensagem de sucesso com detalhes do que foi preenchido
+    const camposPreenchidos = [];
+    if (data.razao_social) camposPreenchidos.push('Razão Social');
+    if (data.nome_fantasia) camposPreenchidos.push('Nome Fantasia');
+    if (email && email.trim() !== '') camposPreenchidos.push('E-mail');
+    if (data.ddd_telefone_1) camposPreenchidos.push('Telefone');
+    if (data.ddd_telefone_2) camposPreenchidos.push('Celular');
+    if (data.cep) camposPreenchidos.push('CEP');
+    if (data.logradouro) camposPreenchidos.push('Endereço');
+    if (data.porte) camposPreenchidos.push('Porte');
+    if (data.data_inicio_atividade) camposPreenchidos.push('Data de Início');
+    
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-success alert-dismissible fade show';
+    
+    let mensagemCampos = '';
+    if (camposPreenchidos.length > 0) {
+        mensagemCampos = '<ul style="margin: 10px 0 0 0; padding-left: 20px;">';
+        camposPreenchidos.forEach(campo => {
+            mensagemCampos += `<li>${campo}</li>`;
+        });
+        mensagemCampos += '</ul>';
+    }
+    
+    let avisoEmail = '';
+    if (!email || email.trim() === '') {
+        avisoEmail = '<p style="margin-top: 10px;"><small><strong>⚠️ Nota:</strong> E-mail não encontrado na Receita Federal. Por favor, preencha manualmente.</small></p>';
+    }
+    
     alertDiv.innerHTML = `
-        <strong>✅ Dados preenchidos com sucesso!</strong> Os dados foram obtidos da Receita Federal, incluindo:
-        <ul style="margin: 10px 0 0 0; padding-left: 20px;">
-            <li>Razão Social e Nome Fantasia</li>
-            <li>E-mail e Telefones</li>
-            <li>Endereço completo</li>
-            <li>Porte e Data de Início</li>
-        </ul>
-        Revise as informações e complete os campos restantes.
+        <strong>✅ Dados preenchidos com sucesso!</strong> 
+        <p style="margin: 5px 0;">Os seguintes dados foram obtidos da Receita Federal:</p>
+        ${mensagemCampos}
+        ${avisoEmail}
+        <p style="margin-top: 10px;">Revise as informações e complete os campos restantes.</p>
         <button type="button" class="close" data-dismiss="alert">&times;</button>
     `;
     
