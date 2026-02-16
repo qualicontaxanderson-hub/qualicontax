@@ -107,7 +107,13 @@
                         </div>
                         <div class="form-group">
                             <label for="inscricao_estadual">Inscrição Estadual</label>
-                            <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Inscrição Estadual" value="{{ cliente.inscricao_estadual if cliente else '' }}">
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Inscrição Estadual" value="{{ cliente.inscricao_estadual if cliente else '' }}" style="flex: 1;">
+                                <button type="button" class="btn btn-secondary" onclick="preencherIE()" title="A Inscrição Estadual será preenchida automaticamente ao consultar o CNPJ" style="white-space: nowrap;">
+                                    <i class="fas fa-info-circle"></i> IE via CNPJ
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">A Inscrição Estadual é preenchida automaticamente ao consultar o CNPJ</small>
                         </div>
                     </div>
                     <div class="form-row">
@@ -140,28 +146,35 @@
                         </div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group">
-                            <label>Ramos de Atividade</label>
-                            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background-color: #f9f9f9;">
+                        <div class="form-group" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <label style="margin: 0;">Ramos de Atividade</label>
+                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm" style="padding: 5px 10px; font-size: 13px;">
+                                    <i class="fas fa-plus"></i> Novo Ramo de Atividade
+                                </a>
+                            </div>
+                            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
                                 {% if ramos_atividade %}
-                                    {% for ramo in ramos_atividade %}
-                                    <div class="form-check" style="margin-bottom: 8px;">
-                                        <input class="form-check-input" type="checkbox" 
-                                               name="ramos_atividade_ids" 
-                                               value="{{ ramo.id }}" 
-                                               id="ramo_{{ ramo.id }}"
-                                               {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                                        <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 5px;">
-                                            {{ ramo.nome }}
-                                        </label>
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                                        {% for ramo in ramos_atividade %}
+                                        <div class="form-check" style="margin-bottom: 5px;">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="ramos_atividade_ids" 
+                                                   value="{{ ramo.id }}" 
+                                                   id="ramo_{{ ramo.id }}"
+                                                   {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
+                                            <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 5px; font-size: 14px;">
+                                                {{ ramo.nome }}
+                                            </label>
+                                        </div>
+                                        {% endfor %}
                                     </div>
-                                    {% endfor %}
                                 {% else %}
-                                    <p class="text-muted" style="margin: 0;">Nenhum ramo de atividade cadastrado.</p>
+                                    <p class="text-muted" style="margin: 0;">Nenhum ramo de atividade cadastrado. <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank">Clique aqui para criar o primeiro</a>.</p>
                                 {% endif %}
                             </div>
                             <small class="form-text text-muted">
-                                Selecione um ou mais ramos de atividade. Ex: Posto de Gasolina, Distribuidora, Transportadoras, Lava Rápido, etc.
+                                Selecione um ou mais ramos de atividade. Se não encontrar o ramo desejado, clique em "Novo Ramo de Atividade".
                             </small>
                         </div>
                     </div>
@@ -555,14 +568,21 @@ function preencherDadosCNPJ(data) {
         }
     }
     
-    // Data de início (converter de YYYY-MM-DD para formato do input)
+    // Data de início (converter de DD/MM/YYYY para YYYY-MM-DD)
     if (data.data_inicio_atividade) {
         // A API retorna no formato DD/MM/YYYY, converter para YYYY-MM-DD
         const partes = data.data_inicio_atividade.split('/');
         if (partes.length === 3) {
             const dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
             document.getElementById('data_inicio_contrato').value = dataFormatada;
+            console.log('✅ Data de início preenchida:', dataFormatada);
         }
+    }
+    
+    // Inscrição Estadual
+    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
+        document.getElementById('inscricao_estadual').value = data.inscricao_estadual.trim();
+        console.log('✅ Inscrição Estadual preenchida:', data.inscricao_estadual);
     }
     
     // ===== NOVOS CAMPOS =====
@@ -649,13 +669,14 @@ function preencherDadosCNPJ(data) {
     const camposPreenchidos = [];
     if (data.razao_social) camposPreenchidos.push('Razão Social');
     if (data.nome_fantasia) camposPreenchidos.push('Nome Fantasia');
+    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') camposPreenchidos.push('Inscrição Estadual');
     if (email && email.trim() !== '') camposPreenchidos.push('E-mail');
     if (data.ddd_telefone_1) camposPreenchidos.push('Telefone');
     if (data.ddd_telefone_2) camposPreenchidos.push('Celular');
     if (data.cep) camposPreenchidos.push('CEP');
     if (data.logradouro) camposPreenchidos.push('Endereço');
     if (data.porte) camposPreenchidos.push('Porte');
-    if (data.data_inicio_atividade) camposPreenchidos.push('Data de Início');
+    if (data.data_inicio_atividade) camposPreenchidos.push('Data de Início da Atividade');
     
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-success alert-dismissible fade show';
@@ -693,6 +714,11 @@ function preencherDadosCNPJ(data) {
     
     // Scroll para o topo
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Função auxiliar para preencher IE (chamada pelo botão)
+function preencherIE() {
+    alert('A Inscrição Estadual é preenchida automaticamente ao consultar o CNPJ.\n\nClique no botão "Consultar CNPJ" para obter todos os dados da empresa, incluindo a IE.');
 }
 </script>
 {% endblock %}

@@ -516,6 +516,22 @@ def consultar_cnpj(cnpj):
             print(f"DDD Telefone 2: {data.get('ddd_telefone_2')}")
             print(f"Razão Social: {data.get('razao_social')}")
             
+            # Extrair inscrição estadual (IE)
+            inscricao_estadual = ''
+            if 'inscricoes_estaduais' in data and isinstance(data['inscricoes_estaduais'], list):
+                # Pegar a primeira IE ativa
+                for ie_obj in data['inscricoes_estaduais']:
+                    if isinstance(ie_obj, dict) and ie_obj.get('ativo'):
+                        inscricao_estadual = ie_obj.get('inscricao_estadual', '')
+                        break
+                # Se não encontrou ativa, pega a primeira disponível
+                if not inscricao_estadual and len(data['inscricoes_estaduais']) > 0:
+                    ie_obj = data['inscricoes_estaduais'][0]
+                    if isinstance(ie_obj, dict):
+                        inscricao_estadual = ie_obj.get('inscricao_estadual', '')
+            
+            print(f"Inscrição Estadual extraída: '{inscricao_estadual}'")
+            
             # Extrair dados relevantes
             resultado = {
                 'success': True,
@@ -527,6 +543,7 @@ def consultar_cnpj(cnpj):
                     'porte': data.get('porte', ''),
                     'natureza_juridica': data.get('natureza_juridica', ''),
                     'data_inicio_atividade': data.get('data_inicio_atividade', ''),
+                    'inscricao_estadual': inscricao_estadual,
                     'cnae_fiscal': data.get('cnae_fiscal', ''),
                     'cnae_fiscal_descricao': data.get('cnae_fiscal_descricao', ''),
                     # Endereço
