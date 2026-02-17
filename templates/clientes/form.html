@@ -101,12 +101,20 @@
                         <div class="form-group">
                             <label for="inscricao_estadual">Inscrição Estadual ⭐</label>
                             <div style="display: flex; gap: 10px;">
-                                <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Preenchido automaticamente via CNPJ" value="{{ cliente.inscricao_estadual if cliente else '' }}" style="flex: 1;">
+                                <input type="text" 
+                                       id="inscricao_estadual" 
+                                       name="inscricao_estadual" 
+                                       class="form-control" 
+                                       placeholder="Preenchido automaticamente via CNPJ" 
+                                       value="{{ cliente.inscricao_estadual if cliente else '' }}" 
+                                       style="flex: 1;"
+                                       aria-label="Inscrição Estadual - preenchido automaticamente ao consultar CNPJ"
+                                       aria-describedby="ie-help-text">
                                 <button type="button" class="btn btn-secondary" onclick="preencherIE()" title="A Inscrição Estadual será preenchida automaticamente ao consultar o CNPJ" style="white-space: nowrap;">
                                     <i class="fas fa-info-circle"></i> IE via CNPJ
                                 </button>
                             </div>
-                            <small class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
+                            <small id="ie-help-text" class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
                         </div>
                     </div>
                     <!-- Razão Social DEPOIS do CNPJ -->
