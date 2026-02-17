@@ -260,7 +260,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="estado">Estado (UF) *</label>
-                        <select id="estado" name="estado" class="form-control" style="text-transform: uppercase;">
+                        <select id="estado" name="estado" class="form-control">
                             <option value="">Selecione...</option>
                             <option value="AC">AC - Acre</option>
                             <option value="AL">AL - Alagoas</option>
@@ -307,7 +307,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="data_inicio_contrato">Data de Início da Atividade ⭐</label>
-                        <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}" placeholder="Preenchido automaticamente via CNPJ">
+                        <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}">
                         <small class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
                     </div>
                     <div class="form-group">
@@ -382,9 +382,8 @@
     border-color: #22C55E !important;
 }
 
-/* Make Estado field display uppercase */
+/* Style Estado select for better visibility */
 #estado {
-    text-transform: uppercase;
     font-weight: 600;
 }
 </style>
