@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}{{ grupo.nome }} - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="grupo-detalhes-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">{{ grupo.nome }}</h1>
+            <p class="page-subtitle">{{ grupo.descricao or 'Grupo de clientes' }}</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('grupos.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+            <a href="{{ url_for('grupos.editar', id=grupo.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i>
+                Editar Grupo
+            </a>
+        </div>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon bg-primary">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ clientes|length }}</h3>
+                <p class="stat-label">Clientes no Grupo</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-{{ 'success' if grupo.situacao == 'ATIVO' else 'danger' }}">
+                <i class="fas fa-{{ 'check-circle' if grupo.situacao == 'ATIVO' else 'times-circle' }}"></i>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ grupo.situacao }}</h3>
+                <p class="stat-label">Situação do Grupo</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Adicionar Cliente -->
+    {% if clientes_disponiveis %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Adicionar Cliente ao Grupo</h3>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('grupos.adicionar_cliente', grupo_id=grupo.id) }}" class="inline-form">
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="cliente_id">Selecione o Cliente</label>
+                        <select id="cliente_id" name="cliente_id" class="form-control" required>
+                            <option value="">Escolha um cliente...</option>
+                            {% for cliente in clientes_disponiveis %}
+                            <option value="{{ cliente.id }}">
+                                {{ cliente.nome_razao_social }} - {{ cliente.cpf_cnpj }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Adicionar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Clientes no Grupo -->
+    <div class="card table-card">
+        <div class="card-header">
+            <h3 class="card-title">Clientes no Grupo</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>CPF/CNPJ</th>
+                            <th>Email</th>
+                            <th>Telefone</th>
+                            <th>Tipo</th>
+                            <th>Situação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if clientes %}
+                            {% for cliente in clientes %}
+                            <tr>
+                                <td>
+                                    <div class="table-user">
+                                        <div class="table-user-avatar">
+                                            {{ cliente.nome_razao_social[0] }}
+                                        </div>
+                                        <span>{{ cliente.nome_razao_social }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ cliente.cpf_cnpj }}</td>
+                                <td>{{ cliente.email or '-' }}</td>
+                                <td>{{ cliente.telefone or '-' }}</td>
+                                <td>
+                                    <span class="badge badge-info">{{ cliente.tipo_pessoa }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' }}">
+                                        {{ cliente.situacao }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="table-actions">
+                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn-icon" title="Ver Cliente">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <form action="{{ url_for('grupos.remover_cliente', grupo_id=grupo.id, cliente_id=cliente.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Remover este cliente do grupo?')" title="Remover do Grupo">
+                                                <i class="fas fa-user-times"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="fas fa-users"></i>
+                                        <p>Nenhum cliente neste grupo ainda</p>
+                                        {% if clientes_disponiveis %}
+                                        <p class="text-muted">Use o formulário acima para adicionar clientes</p>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

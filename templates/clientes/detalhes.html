@@ -149,6 +149,16 @@
                                 <span>{{ cliente.porte_empresa }}</span>
                             </div>
                             {% endif %}
+                            {% if ramos_atividade %}
+                            <div class="info-item">
+                                <label>Ramo de Atividade</label>
+                                <span>
+                                    {% for ramo in ramos_atividade %}
+                                        <span class="badge badge-secondary">{{ ramo.nome }}</span>
+                                    {% endfor %}
+                                </span>
+                            </div>
+                            {% endif %}
                             {% if cliente.data_inicio_contrato %}
                             <div class="info-item">
                                 <label>Início do Contrato</label>
@@ -298,21 +308,73 @@
             <div id="grupos" class="tab-pane">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Grupos</h3>
+                        <h3 class="card-title">Grupos do Cliente</h3>
                     </div>
                     <div class="card-body">
+                        <!-- Formulário para adicionar grupo -->
+                        {% if grupos_disponiveis %}
+                        <form method="POST" action="{{ url_for('clientes.adicionar_grupo', cliente_id=cliente.id) }}" class="form-inline" style="margin-bottom: 20px;">
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1; margin-right: 10px;">
+                                    <label for="grupo_id" style="margin-right: 10px;">Adicionar ao Grupo:</label>
+                                    <select id="grupo_id" name="grupo_id" class="form-control" required style="min-width: 250px;">
+                                        <option value="">Selecione um grupo...</option>
+                                        {% for grupo in grupos_disponiveis %}
+                                        <option value="{{ grupo.id }}">{{ grupo.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i>
+                                    Adicionar
+                                </button>
+                            </div>
+                        </form>
+                        {% endif %}
+                        
+                        <!-- Lista de grupos -->
                         {% if grupos %}
-                            <div class="badges-list">
-                                {% for grupo in grupos %}
-                                <span class="badge badge-info badge-lg">
-                                    {{ grupo.nome }}
-                                </span>
-                                {% endfor %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome do Grupo</th>
+                                            <th>Descrição</th>
+                                            <th>Situação</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for grupo in grupos %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ grupo.nome }}</strong>
+                                            </td>
+                                            <td>{{ grupo.descricao or '-' }}</td>
+                                            <td>
+                                                <span class="badge badge-{{ 'success' if grupo.situacao == 'ATIVO' else 'danger' }}">
+                                                    {{ grupo.situacao }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <form action="{{ url_for('clientes.remover_grupo', cliente_id=cliente.id, grupo_id=grupo.id) }}" method="POST" style="display: inline;">
+                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Remover cliente deste grupo?')" title="Remover do Grupo">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
                             </div>
                         {% else %}
                             <div class="empty-state">
                                 <i class="fas fa-tags"></i>
                                 <p>Cliente não pertence a nenhum grupo</p>
+                                {% if grupos_disponiveis %}
+                                <p class="text-muted">Use o formulário acima para adicionar o cliente a um grupo</p>
+                                {% endif %}
                             </div>
                         {% endif %}
                     </div>
@@ -554,11 +616,11 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="telefone">Telefone</label>
-                        <input type="text" id="telefone" name="telefone" class="form-control">
+                        <input type="text" id="telefone" name="telefone" class="form-control" data-mask="phone" placeholder="(00) 0000-0000">
                     </div>
                     <div class="form-group">
                         <label for="celular">Celular</label>
-                        <input type="text" id="celular" name="celular" class="form-control">
+                        <input type="text" id="celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000">
                     </div>
                 </div>
                 <div class="form-group">
