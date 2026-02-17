@@ -22,11 +22,13 @@
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container">
         
         <!-- Informações Básicas -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Informações Básicas</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-id-card"></i> Informações Básicas
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="numero_cliente">
@@ -82,16 +84,7 @@
 
                 <!-- Pessoa Jurídica Fields -->
                 <div id="pjFields" style="display: {% if cliente and cliente.tipo_pessoa == 'PJ' %}block{% else %}none{% endif %};">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="nome_razao_social_pj">Razão Social *</label>
-                            <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="form-control" placeholder="Razão social da empresa" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
-                        </div>
-                        <div class="form-group">
-                            <label for="nome_fantasia">Nome Fantasia</label>
-                            <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
-                        </div>
-                    </div>
+                    <!-- CNPJ PRIMEIRO - Para seguir lógica de preenchimento -->
                     <div class="form-row">
                         <div class="form-group">
                             <label for="cpf_cnpj_pj">CNPJ *</label>
@@ -106,14 +99,25 @@
                             </small>
                         </div>
                         <div class="form-group">
-                            <label for="inscricao_estadual">Inscrição Estadual</label>
+                            <label for="inscricao_estadual">Inscrição Estadual ⭐</label>
                             <div style="display: flex; gap: 10px;">
-                                <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Inscrição Estadual" value="{{ cliente.inscricao_estadual if cliente else '' }}" style="flex: 1;">
+                                <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Preenchido automaticamente via CNPJ" value="{{ cliente.inscricao_estadual if cliente else '' }}" style="flex: 1;">
                                 <button type="button" class="btn btn-secondary" onclick="preencherIE()" title="A Inscrição Estadual será preenchida automaticamente ao consultar o CNPJ" style="white-space: nowrap;">
                                     <i class="fas fa-info-circle"></i> IE via CNPJ
                                 </button>
                             </div>
-                            <small class="form-text text-muted">A Inscrição Estadual é preenchida automaticamente ao consultar o CNPJ</small>
+                            <small class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
+                        </div>
+                    </div>
+                    <!-- Razão Social DEPOIS do CNPJ -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nome_razao_social_pj">Razão Social *</label>
+                            <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="form-control" placeholder="Razão social da empresa" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="nome_fantasia">Nome Fantasia</label>
+                            <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
                         </div>
                     </div>
                     <div class="form-row">
@@ -147,34 +151,37 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group" style="width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <label style="margin: 0;">Ramos de Atividade</label>
-                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm" style="padding: 5px 10px; font-size: 13px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <label style="margin: 0; font-weight: 600; font-size: 15px;">Ramos de Atividade</label>
+                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                                     <i class="fas fa-plus"></i> Novo Ramo de Atividade
                                 </a>
                             </div>
-                            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                            <div style="border: 2px solid #e5e7eb; border-radius: 10px; padding: 20px; background: linear-gradient(to bottom, #ffffff, #f9fafb);">
                                 {% if ramos_atividade %}
-                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                                         {% for ramo in ramos_atividade %}
-                                        <div class="form-check" style="margin-bottom: 5px;">
+                                        <div class="form-check" style="margin-bottom: 0; padding: 10px; border-radius: 6px; background-color: white; border: 1px solid #e5e7eb; transition: all 0.2s;">
                                             <input class="form-check-input" type="checkbox" 
                                                    name="ramos_atividade_ids" 
                                                    value="{{ ramo.id }}" 
                                                    id="ramo_{{ ramo.id }}"
+                                                   style="margin-top: 3px;"
                                                    {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                                            <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 5px; font-size: 14px;">
+                                            <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 8px; font-size: 14px; cursor: pointer; user-select: none;">
                                                 {{ ramo.nome }}
                                             </label>
                                         </div>
                                         {% endfor %}
                                     </div>
                                 {% else %}
-                                    <p class="text-muted" style="margin: 0;">Nenhum ramo de atividade cadastrado. <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank">Clique aqui para criar o primeiro</a>.</p>
+                                    <p class="text-muted" style="margin: 0; text-align: center; padding: 20px;">
+                                        Nenhum ramo de atividade cadastrado. <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" style="color: #22C55E; text-decoration: none; font-weight: 600;">Clique aqui para criar o primeiro</a>.
+                                    </p>
                                 {% endif %}
                             </div>
-                            <small class="form-text text-muted">
-                                Selecione um ou mais ramos de atividade. Se não encontrar o ramo desejado, clique em "Novo Ramo de Atividade".
+                            <small class="form-text text-muted" style="margin-top: 10px; display: block;">
+                                <i class="fas fa-info-circle"></i> Selecione um ou mais ramos de atividade. Se não encontrar o ramo desejado, clique em "Novo Ramo de Atividade".
                             </small>
                         </div>
                     </div>
@@ -183,11 +190,13 @@
         </div>
 
         <!-- Contato -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Informações de Contato</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-envelope"></i> Informações de Contato
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="email">E-mail</label>
@@ -208,12 +217,16 @@
         </div>
 
         <!-- Endereço -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Endereço</h3>
-                <small class="text-muted">Opcional - será preenchido automaticamente ao consultar CNPJ</small>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <div style="flex: 1;">
+                    <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-map-marker-alt"></i> Endereço
+                    </h3>
+                    <small style="color: rgba(255,255,255,0.9); font-size: 13px;">Opcional - será preenchido automaticamente ao consultar CNPJ</small>
+                </div>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="cep">CEP</label>
@@ -246,52 +259,56 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="estado">Estado</label>
-                        <select id="estado" name="estado" class="form-control">
+                        <label for="estado">Estado (UF) *</label>
+                        <select id="estado" name="estado" class="form-control" style="text-transform: uppercase;">
                             <option value="">Selecione...</option>
-                            <option value="AC">Acre</option>
-                            <option value="AL">Alagoas</option>
-                            <option value="AP">Amapá</option>
-                            <option value="AM">Amazonas</option>
-                            <option value="BA">Bahia</option>
-                            <option value="CE">Ceará</option>
-                            <option value="DF">Distrito Federal</option>
-                            <option value="ES">Espírito Santo</option>
-                            <option value="GO">Goiás</option>
-                            <option value="MA">Maranhão</option>
-                            <option value="MT">Mato Grosso</option>
-                            <option value="MS">Mato Grosso do Sul</option>
-                            <option value="MG">Minas Gerais</option>
-                            <option value="PA">Pará</option>
-                            <option value="PB">Paraíba</option>
-                            <option value="PR">Paraná</option>
-                            <option value="PE">Pernambuco</option>
-                            <option value="PI">Piauí</option>
-                            <option value="RJ">Rio de Janeiro</option>
-                            <option value="RN">Rio Grande do Norte</option>
-                            <option value="RS">Rio Grande do Sul</option>
-                            <option value="RO">Rondônia</option>
-                            <option value="RR">Roraima</option>
-                            <option value="SC">Santa Catarina</option>
-                            <option value="SP">São Paulo</option>
-                            <option value="SE">Sergipe</option>
-                            <option value="TO">Tocantins</option>
+                            <option value="AC">AC - Acre</option>
+                            <option value="AL">AL - Alagoas</option>
+                            <option value="AP">AP - Amapá</option>
+                            <option value="AM">AM - Amazonas</option>
+                            <option value="BA">BA - Bahia</option>
+                            <option value="CE">CE - Ceará</option>
+                            <option value="DF">DF - Distrito Federal</option>
+                            <option value="ES">ES - Espírito Santo</option>
+                            <option value="GO">GO - Goiás</option>
+                            <option value="MA">MA - Maranhão</option>
+                            <option value="MT">MT - Mato Grosso</option>
+                            <option value="MS">MS - Mato Grosso do Sul</option>
+                            <option value="MG">MG - Minas Gerais</option>
+                            <option value="PA">PA - Pará</option>
+                            <option value="PB">PB - Paraíba</option>
+                            <option value="PR">PR - Paraná</option>
+                            <option value="PE">PE - Pernambuco</option>
+                            <option value="PI">PI - Piauí</option>
+                            <option value="RJ">RJ - Rio de Janeiro</option>
+                            <option value="RN">RN - Rio Grande do Norte</option>
+                            <option value="RS">RS - Rio Grande do Sul</option>
+                            <option value="RO">RO - Rondônia</option>
+                            <option value="RR">RR - Roraima</option>
+                            <option value="SC">SC - Santa Catarina</option>
+                            <option value="SP">SP - São Paulo</option>
+                            <option value="SE">SE - Sergipe</option>
+                            <option value="TO">TO - Tocantins</option>
                         </select>
+                        <small class="form-text text-muted">Sigla do estado em letras maiúsculas (ex: SP, RJ, MG)</small>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Dados do Contrato -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Dados do Contrato</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-file-contract"></i> Dados do Contrato
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="data_inicio_contrato">Data Início do Contrato</label>
-                        <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}">
+                        <label for="data_inicio_contrato">Data de Início da Atividade ⭐</label>
+                        <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}" placeholder="Preenchido automaticamente via CNPJ">
+                        <small class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
                     </div>
                     <div class="form-group">
                         <label for="data_fim_contrato">Data Fim do Contrato</label>
@@ -302,11 +319,13 @@
         </div>
 
         <!-- Observações -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Observações</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-sticky-note"></i> Observações
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-group">
                     <label for="observacoes">Observações</label>
                     <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
@@ -349,6 +368,26 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+/* Hover effect for Ramos de Atividade checkboxes */
+.form-check:has(input[type="checkbox"]):hover {
+    background-color: #f0f9ff !important;
+    border-color: #22C55E !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+.form-check:has(input[type="checkbox"]:checked) {
+    background-color: #ecfdf5 !important;
+    border-color: #22C55E !important;
+}
+
+/* Make Estado field display uppercase */
+#estado {
+    text-transform: uppercase;
+    font-weight: 600;
+}
+</style>
 <script>
 // Toggle fields based on tipo_pessoa
 function toggleTipoFields() {
