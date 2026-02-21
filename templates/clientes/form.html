@@ -117,6 +117,19 @@
                             <small id="ie-help-text" class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="data_inicio_atividade">Data de Início da Atividade ⭐</label>
+                            <input type="date" 
+                                   id="data_inicio_atividade" 
+                                   name="data_inicio_atividade" 
+                                   class="form-control" 
+                                   value="{{ cliente.data_inicio_atividade if cliente else '' }}"
+                                   aria-label="Data de início das atividades da empresa - preenchido automaticamente ao consultar CNPJ"
+                                   aria-describedby="data-atividade-help-text">
+                            <small id="data-atividade-help-text" class="form-text text-muted">✅ Data de fundação da empresa (preenchido automaticamente ao consultar o CNPJ)</small>
+                        </div>
+                    </div>
                     <!-- Razão Social DEPOIS do CNPJ -->
                     <div class="form-row">
                         <div class="form-group">
@@ -341,9 +354,9 @@
             <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="data_inicio_contrato">Data de Início da Atividade ⭐</label>
+                        <label for="data_inicio_contrato">Data Início do Contrato</label>
                         <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}">
-                        <small class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
+                        <small class="form-text text-muted">Data de início do contrato de prestação de serviços</small>
                     </div>
                     <div class="form-group">
                         <label for="data_fim_contrato">Data Fim do Contrato</label>
@@ -647,8 +660,8 @@ function preencherDadosCNPJ(data) {
         const partes = data.data_inicio_atividade.split('/');
         if (partes.length === 3) {
             const dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-            document.getElementById('data_inicio_contrato').value = dataFormatada;
-            console.log('✅ Data de início preenchida:', dataFormatada);
+            document.getElementById('data_inicio_atividade').value = dataFormatada;
+            console.log('✅ Data de início da atividade preenchida:', dataFormatada);
         }
     }
     
