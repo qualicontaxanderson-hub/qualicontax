@@ -691,8 +691,12 @@ function preencherDadosCNPJ(data) {
     }
     
     // Telefones
+    console.log('DEBUG Telefones - ddd_telefone_1:', data.ddd_telefone_1, 'Tipo:', typeof data.ddd_telefone_1);
+    console.log('DEBUG Telefones - ddd_telefone_2:', data.ddd_telefone_2, 'Tipo:', typeof data.ddd_telefone_2);
+    
     if (data.ddd_telefone_1) {
-        const telefone1 = data.ddd_telefone_1.replace(/\D/g, '');
+        const telefone1 = String(data.ddd_telefone_1).replace(/\D/g, '');
+        console.log('DEBUG - Telefone 1 limpo:', telefone1, 'Tamanho:', telefone1.length);
         if (telefone1.length >= 10) {
             // Formatar telefone
             let telFormatado;
@@ -701,12 +705,17 @@ function preencherDadosCNPJ(data) {
             } else {
                 telFormatado = telefone1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
             }
+            console.log('DEBUG - Telefone 1 formatado:', telFormatado);
             document.getElementById('telefone').value = telFormatado;
+            console.log('✅ Telefone preenchido:', telFormatado);
+        } else {
+            console.warn('⚠️ Telefone 1 inválido - tamanho:', telefone1.length);
         }
     }
     
     if (data.ddd_telefone_2) {
-        const telefone2 = data.ddd_telefone_2.replace(/\D/g, '');
+        const telefone2 = String(data.ddd_telefone_2).replace(/\D/g, '');
+        console.log('DEBUG - Telefone 2 limpo:', telefone2, 'Tamanho:', telefone2.length);
         if (telefone2.length >= 10) {
             // Formatar telefone
             let telFormatado;
@@ -715,38 +724,56 @@ function preencherDadosCNPJ(data) {
             } else {
                 telFormatado = telefone2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
             }
+            console.log('DEBUG - Telefone 2 formatado:', telFormatado);
             document.getElementById('celular').value = telFormatado;
+            console.log('✅ Celular preenchido:', telFormatado);
+        } else {
+            console.warn('⚠️ Telefone 2 inválido - tamanho:', telefone2.length);
         }
     }
     
     // Endereço
+    console.log('DEBUG Endereço - CEP:', data.cep);
+    console.log('DEBUG Endereço - Logradouro:', data.logradouro);
+    console.log('DEBUG Endereço - Número:', data.numero);
+    console.log('DEBUG Endereço - Bairro:', data.bairro);
+    console.log('DEBUG Endereço - Município:', data.municipio);
+    console.log('DEBUG Endereço - UF:', data.uf);
+    
     if (data.cep) {
-        const cepFormatado = data.cep.replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
+        const cepFormatado = String(data.cep).replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
         document.getElementById('cep').value = cepFormatado;
+        console.log('✅ CEP preenchido:', cepFormatado);
     }
     
     if (data.logradouro) {
         document.getElementById('logradouro').value = data.logradouro;
+        console.log('✅ Logradouro preenchido:', data.logradouro);
     }
     
     if (data.numero) {
         document.getElementById('numero').value = data.numero;
+        console.log('✅ Número preenchido:', data.numero);
     }
     
     if (data.complemento) {
         document.getElementById('complemento').value = data.complemento;
+        console.log('✅ Complemento preenchido:', data.complemento);
     }
     
     if (data.bairro) {
         document.getElementById('bairro').value = data.bairro;
+        console.log('✅ Bairro preenchido:', data.bairro);
     }
     
     if (data.municipio) {
         document.getElementById('cidade').value = data.municipio;
+        console.log('✅ Cidade preenchida:', data.municipio);
     }
     
     if (data.uf) {
         document.getElementById('estado').value = data.uf;
+        console.log('✅ Estado preenchido:', data.uf);
     }
     
     // Exibir mensagem de sucesso com detalhes do que foi preenchido
