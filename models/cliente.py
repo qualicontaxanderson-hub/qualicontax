@@ -40,7 +40,7 @@ class Cliente:
         query = """
             SELECT id, numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
-                   porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_contrato, situacao, observacoes
+                   porte_empresa, data_inicio_contrato, situacao, observacoes
             FROM clientes
             WHERE id = %s
         """
@@ -95,7 +95,7 @@ class Cliente:
         query = f"""
             SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                    c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
-                   c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_contrato, c.situacao, c.observacoes,
+                   c.porte_empresa, c.data_inicio_contrato, c.situacao, c.observacoes,
                    ra.nome as ramo_atividade_nome
             FROM clientes c
             LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
@@ -146,16 +146,17 @@ class Cliente:
         # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
         data_inicio_contrato = data.get('data_inicio_contrato') or None
-        cnae_fiscal = data.get('cnae_fiscal') or None
-        cnae_fiscal_descricao = data.get('cnae_fiscal_descricao') or None
+        # CNAE fields temporarily disabled until migration is run
+        # cnae_fiscal = data.get('cnae_fiscal') or None
+        # cnae_fiscal_descricao = data.get('cnae_fiscal_descricao') or None
         
         query = """
             INSERT INTO clientes (
                 numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
-                porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_contrato, situacao, observacoes
+                porte_empresa, data_inicio_contrato, situacao, observacoes
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             data.get('numero_cliente') or None,
@@ -169,8 +170,8 @@ class Cliente:
             data.get('celular') or None,
             regime_tributario,
             porte_empresa,
-            cnae_fiscal,
-            cnae_fiscal_descricao,
+            # cnae_fiscal,  # Disabled until migration
+            # cnae_fiscal_descricao,  # Disabled until migration
             data_inicio_contrato,
             data.get('situacao', 'ATIVO'),
             data.get('observacoes') or None
@@ -205,16 +206,17 @@ class Cliente:
         # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
         data_inicio_contrato = data.get('data_inicio_contrato') or None
-        cnae_fiscal = data.get('cnae_fiscal') or None
-        cnae_fiscal_descricao = data.get('cnae_fiscal_descricao') or None
+        # CNAE fields temporarily disabled until migration is run
+        # cnae_fiscal = data.get('cnae_fiscal') or None
+        # cnae_fiscal_descricao = data.get('cnae_fiscal_descricao') or None
         
         query = """
             UPDATE clientes
             SET numero_cliente = %s, tipo_pessoa = %s, nome_razao_social = %s, cpf_cnpj = %s,
                 inscricao_estadual = %s, inscricao_municipal = %s, email = %s,
                 telefone = %s, celular = %s, regime_tributario = %s,
-                porte_empresa = %s, cnae_fiscal = %s, cnae_fiscal_descricao = %s,
-                data_inicio_contrato = %s, situacao = %s, observacoes = %s
+                porte_empresa = %s, data_inicio_contrato = %s,
+                situacao = %s, observacoes = %s
             WHERE id = %s
         """
         params = (
@@ -229,8 +231,8 @@ class Cliente:
             data.get('celular') or None,
             regime_tributario,
             porte_empresa,
-            cnae_fiscal,
-            cnae_fiscal_descricao,
+            # cnae_fiscal,  # Disabled until migration
+            # cnae_fiscal_descricao,  # Disabled until migration
             data_inicio_contrato,
             data.get('situacao'),
             data.get('observacoes') or None,
