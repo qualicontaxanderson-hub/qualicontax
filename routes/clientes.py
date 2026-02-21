@@ -107,6 +107,8 @@ def novo():
             'celular': request.form.get('celular'),
             'regime_tributario': request.form.get('regime_tributario'),
             'porte_empresa': request.form.get('porte_empresa'),
+            'cnae_fiscal': request.form.get('cnae_fiscal'),
+            'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
             'situacao': request.form.get('situacao', 'ATIVO'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
@@ -247,6 +249,8 @@ def editar(id):
                 'celular': request.form.get('celular'),
                 'regime_tributario': request.form.get('regime_tributario'),
                 'porte_empresa': request.form.get('porte_empresa'),
+                'cnae_fiscal': request.form.get('cnae_fiscal'),
+                'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
                 'situacao': request.form.get('situacao'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes')

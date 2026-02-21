@@ -158,6 +158,33 @@
                         </div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group">
+                            <label for="cnae_fiscal">CNAE Fiscal ⭐</label>
+                            <input type="text" 
+                                   id="cnae_fiscal" 
+                                   name="cnae_fiscal" 
+                                   class="form-control" 
+                                   placeholder="Código CNAE (ex: 4711-3/02)"
+                                   value="{{ cliente.cnae_fiscal if cliente else '' }}"
+                                   readonly
+                                   aria-label="CNAE Fiscal - preenchido automaticamente ao consultar CNPJ"
+                                   aria-describedby="cnae-help-text">
+                            <small id="cnae-help-text" class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cnae_fiscal_descricao">Descrição do CNAE ⭐</label>
+                            <input type="text" 
+                                   id="cnae_fiscal_descricao" 
+                                   name="cnae_fiscal_descricao" 
+                                   class="form-control" 
+                                   placeholder="Descrição da atividade principal"
+                                   value="{{ cliente.cnae_fiscal_descricao if cliente else '' }}"
+                                   readonly
+                                   aria-label="Descrição do CNAE - preenchido automaticamente ao consultar CNPJ">
+                            <small class="form-text text-muted">Atividade econômica principal da empresa</small>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group" style="width: 100%;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <label style="margin: 0; font-weight: 600; font-size: 15px;">Ramos de Atividade</label>
@@ -631,6 +658,17 @@ function preencherDadosCNPJ(data) {
         console.log('✅ Inscrição Estadual preenchida:', data.inscricao_estadual);
     }
     
+    // CNAE Fiscal (Código e Descrição)
+    if (data.cnae_fiscal && data.cnae_fiscal.trim() !== '') {
+        document.getElementById('cnae_fiscal').value = data.cnae_fiscal.trim();
+        console.log('✅ CNAE Fiscal preenchido:', data.cnae_fiscal);
+    }
+    
+    if (data.cnae_fiscal_descricao && data.cnae_fiscal_descricao.trim() !== '') {
+        document.getElementById('cnae_fiscal_descricao').value = data.cnae_fiscal_descricao.trim();
+        console.log('✅ Descrição do CNAE preenchida:', data.cnae_fiscal_descricao);
+    }
+    
     // ===== NOVOS CAMPOS =====
     
     // Email - com debug detalhado e múltiplas tentativas
@@ -723,6 +761,8 @@ function preencherDadosCNPJ(data) {
     if (data.logradouro) camposPreenchidos.push('Endereço');
     if (data.porte) camposPreenchidos.push('Porte');
     if (data.data_inicio_atividade) camposPreenchidos.push('Data de Início da Atividade');
+    if (data.cnae_fiscal) camposPreenchidos.push('CNAE Fiscal');
+    if (data.cnae_fiscal_descricao) camposPreenchidos.push('Descrição do CNAE');
     
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-success alert-dismissible fade show';
