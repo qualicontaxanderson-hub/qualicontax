@@ -629,14 +629,33 @@ function consultarCNPJ() {
 
 // Função para preencher os campos com dados da Receita
 function preencherDadosCNPJ(data) {
-    console.log('=== DADOS RECEBIDOS DA API ===', data); // DEBUG
+    console.log('=== INÍCIO DO PREENCHIMENTO AUTOMÁTICO ===');
+    console.log('=== DADOS RECEBIDOS DA API (COMPLETOS) ===', JSON.stringify(data, null, 2));
+    
+    // Contador de campos preenchidos
+    let camposPreenchidosCount = 0;
     
     // Dados básicos
     if (data.razao_social) {
-        document.getElementById('nome_razao_social_pj').value = data.razao_social;
+        const campo = document.getElementById('nome_razao_social_pj');
+        if (campo) {
+            campo.value = data.razao_social;
+            camposPreenchidosCount++;
+            console.log('✅ Razão Social preenchida:', data.razao_social);
+        } else {
+            console.error('❌ Campo nome_razao_social_pj não encontrado!');
+        }
     }
+    
     if (data.nome_fantasia) {
-        document.getElementById('nome_fantasia').value = data.nome_fantasia;
+        const campo = document.getElementById('nome_fantasia');
+        if (campo) {
+            campo.value = data.nome_fantasia;
+            camposPreenchidosCount++;
+            console.log('✅ Nome Fantasia preenchido:', data.nome_fantasia);
+        } else {
+            console.error('❌ Campo nome_fantasia não encontrado!');
+        }
     }
     
     // Converter porte para o formato do sistema
@@ -650,151 +669,250 @@ function preencherDadosCNPJ(data) {
         };
         const porte = porteMap[data.porte.toUpperCase()] || '';
         if (porte) {
-            document.getElementById('porte_empresa').value = porte;
+            const campo = document.getElementById('porte_empresa');
+            if (campo) {
+                campo.value = porte;
+                camposPreenchidosCount++;
+                console.log('✅ Porte preenchido:', porte);
+            } else {
+                console.error('❌ Campo porte_empresa não encontrado!');
+            }
         }
     }
     
     // Data de início (converter de DD/MM/YYYY para YYYY-MM-DD)
     if (data.data_inicio_atividade) {
+        console.log('DEBUG - data_inicio_atividade recebida:', data.data_inicio_atividade);
         // A API retorna no formato DD/MM/YYYY, converter para YYYY-MM-DD
         const partes = data.data_inicio_atividade.split('/');
         if (partes.length === 3) {
             const dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-            document.getElementById('data_inicio_atividade').value = dataFormatada;
-            console.log('✅ Data de início da atividade preenchida:', dataFormatada);
+            const campo = document.getElementById('data_inicio_atividade');
+            if (campo) {
+                campo.value = dataFormatada;
+                camposPreenchidosCount++;
+                console.log('✅ Data de início da atividade preenchida:', dataFormatada);
+            } else {
+                console.error('❌ Campo data_inicio_atividade não encontrado!');
+            }
         }
+    } else {
+        console.warn('⚠️ data_inicio_atividade não disponível na API');
     }
     
     // Inscrição Estadual
     if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
-        document.getElementById('inscricao_estadual').value = data.inscricao_estadual.trim();
-        console.log('✅ Inscrição Estadual preenchida:', data.inscricao_estadual);
+        const campo = document.getElementById('inscricao_estadual');
+        if (campo) {
+            campo.value = data.inscricao_estadual.trim();
+            camposPreenchidosCount++;
+            console.log('✅ Inscrição Estadual preenchida:', data.inscricao_estadual);
+        } else {
+            console.error('❌ Campo inscricao_estadual não encontrado!');
+        }
+    } else {
+        console.warn('⚠️ Inscrição Estadual não disponível (normal para muitas empresas)');
     }
     
     // CNAE Fiscal (Código e Descrição)
     if (data.cnae_fiscal && data.cnae_fiscal.trim() !== '') {
-        document.getElementById('cnae_fiscal').value = data.cnae_fiscal.trim();
-        console.log('✅ CNAE Fiscal preenchido:', data.cnae_fiscal);
+        const campo = document.getElementById('cnae_fiscal');
+        if (campo) {
+            campo.value = data.cnae_fiscal.trim();
+            camposPreenchidosCount++;
+            console.log('✅ CNAE Fiscal preenchido:', data.cnae_fiscal);
+        } else {
+            console.error('❌ Campo cnae_fiscal não encontrado!');
+        }
     }
     
     if (data.cnae_fiscal_descricao && data.cnae_fiscal_descricao.trim() !== '') {
-        document.getElementById('cnae_fiscal_descricao').value = data.cnae_fiscal_descricao.trim();
-        console.log('✅ Descrição do CNAE preenchida:', data.cnae_fiscal_descricao);
+        const campo = document.getElementById('cnae_fiscal_descricao');
+        if (campo) {
+            campo.value = data.cnae_fiscal_descricao.trim();
+            camposPreenchidosCount++;
+            console.log('✅ Descrição do CNAE preenchida:', data.cnae_fiscal_descricao);
+        } else {
+            console.error('❌ Campo cnae_fiscal_descricao não encontrado!');
+        }
     }
     
-    // ===== NOVOS CAMPOS =====
+    // ===== EMAIL =====
+    console.log('=== PROCESSANDO EMAIL ===');
+    console.log('Email recebido:', data.email, '| Tipo:', typeof data.email);
     
-    // Email - com debug detalhado e múltiplas tentativas
-    console.log('Email recebido:', data.email, '| Tipo:', typeof data.email); // DEBUG
-    
-    // Tentar pegar email de diferentes campos possíveis
-    const email = data.email || data.email_principal || data.email_empresa || '';
-    
-    if (email && typeof email === 'string' && email.trim() !== '') {
+    if (data.email && typeof data.email === 'string' && data.email.trim() !== '') {
         const emailField = document.getElementById('email');
         if (emailField) {
-            emailField.value = email.toLowerCase().trim();
-            console.log('✅ Email preenchido com sucesso:', emailField.value); // DEBUG
+            emailField.value = data.email.toLowerCase().trim();
+            camposPreenchidosCount++;
+            console.log('✅ Email preenchido:', data.email);
         } else {
-            console.error('❌ Campo #email não encontrado no DOM'); // DEBUG
+            console.error('❌ Campo email não encontrado no DOM!');
         }
     } else {
-        console.warn('⚠️ Email não disponível ou vazio na resposta da API'); // DEBUG
-        console.warn('   Nota: Muitas empresas não possuem email cadastrado na Receita Federal');
+        console.warn('⚠️ Email não disponível (normal - muitas empresas não têm email na Receita Federal)');
     }
     
-    // Telefones
-    console.log('DEBUG Telefones - ddd_telefone_1:', data.ddd_telefone_1, 'Tipo:', typeof data.ddd_telefone_1);
-    console.log('DEBUG Telefones - ddd_telefone_2:', data.ddd_telefone_2, 'Tipo:', typeof data.ddd_telefone_2);
+    // ===== TELEFONES =====
+    console.log('=== PROCESSANDO TELEFONES ===');
+    console.log('Telefone 1 recebido:', data.ddd_telefone_1, '| Tipo:', typeof data.ddd_telefone_1);
+    console.log('Telefone 2 recebido:', data.ddd_telefone_2, '| Tipo:', typeof data.ddd_telefone_2);
     
     if (data.ddd_telefone_1) {
         const telefone1 = String(data.ddd_telefone_1).replace(/\D/g, '');
-        console.log('DEBUG - Telefone 1 limpo:', telefone1, 'Tamanho:', telefone1.length);
+        console.log('Telefone 1 limpo:', telefone1, '| Tamanho:', telefone1.length);
+        
         if (telefone1.length >= 10) {
             // Formatar telefone
             let telFormatado;
             if (telefone1.length === 10) {
                 telFormatado = telefone1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-            } else {
+            } else if (telefone1.length === 11) {
                 telFormatado = telefone1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            } else {
+                telFormatado = telefone1;
             }
-            console.log('DEBUG - Telefone 1 formatado:', telFormatado);
-            document.getElementById('telefone').value = telFormatado;
-            console.log('✅ Telefone preenchido:', telFormatado);
+            
+            const campo = document.getElementById('telefone');
+            if (campo) {
+                campo.value = telFormatado;
+                camposPreenchidosCount++;
+                console.log('✅ Telefone preenchido:', telFormatado);
+            } else {
+                console.error('❌ Campo telefone não encontrado no DOM!');
+            }
         } else {
-            console.warn('⚠️ Telefone 1 inválido - tamanho:', telefone1.length);
+            console.warn('⚠️ Telefone 1 inválido - tamanho:', telefone1.length, '- valor:', telefone1);
         }
+    } else {
+        console.warn('⚠️ ddd_telefone_1 não disponível na resposta');
     }
     
     if (data.ddd_telefone_2) {
         const telefone2 = String(data.ddd_telefone_2).replace(/\D/g, '');
-        console.log('DEBUG - Telefone 2 limpo:', telefone2, 'Tamanho:', telefone2.length);
+        console.log('Telefone 2 limpo:', telefone2, '| Tamanho:', telefone2.length);
+        
         if (telefone2.length >= 10) {
             // Formatar telefone
             let telFormatado;
             if (telefone2.length === 10) {
                 telFormatado = telefone2.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-            } else {
+            } else if (telefone2.length === 11) {
                 telFormatado = telefone2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            } else {
+                telFormatado = telefone2;
             }
-            console.log('DEBUG - Telefone 2 formatado:', telFormatado);
-            document.getElementById('celular').value = telFormatado;
-            console.log('✅ Celular preenchido:', telFormatado);
+            
+            const campo = document.getElementById('celular');
+            if (campo) {
+                campo.value = telFormatado;
+                camposPreenchidosCount++;
+                console.log('✅ Celular preenchido:', telFormatado);
+            } else {
+                console.error('❌ Campo celular não encontrado no DOM!');
+            }
         } else {
-            console.warn('⚠️ Telefone 2 inválido - tamanho:', telefone2.length);
+            console.warn('⚠️ Telefone 2 inválido - tamanho:', telefone2.length, '- valor:', telefone2);
         }
+    } else {
+        console.warn('⚠️ ddd_telefone_2 não disponível na resposta');
     }
     
-    // Endereço
-    console.log('DEBUG Endereço - CEP:', data.cep);
-    console.log('DEBUG Endereço - Logradouro:', data.logradouro);
-    console.log('DEBUG Endereço - Número:', data.numero);
-    console.log('DEBUG Endereço - Bairro:', data.bairro);
-    console.log('DEBUG Endereço - Município:', data.municipio);
-    console.log('DEBUG Endereço - UF:', data.uf);
+    // ===== ENDEREÇO =====
+    console.log('=== PROCESSANDO ENDEREÇO ===');
+    console.log('CEP:', data.cep, '| Logradouro:', data.logradouro, '| Número:', data.numero);
+    console.log('Bairro:', data.bairro, '| Cidade:', data.municipio, '| UF:', data.uf);
     
     if (data.cep) {
         const cepFormatado = String(data.cep).replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
-        document.getElementById('cep').value = cepFormatado;
-        console.log('✅ CEP preenchido:', cepFormatado);
+        const campo = document.getElementById('cep');
+        if (campo) {
+            campo.value = cepFormatado;
+            camposPreenchidosCount++;
+            console.log('✅ CEP preenchido:', cepFormatado);
+        } else {
+            console.error('❌ Campo cep não encontrado!');
+        }
     }
     
     if (data.logradouro) {
-        document.getElementById('logradouro').value = data.logradouro;
-        console.log('✅ Logradouro preenchido:', data.logradouro);
+        const campo = document.getElementById('logradouro');
+        if (campo) {
+            campo.value = data.logradouro;
+            camposPreenchidosCount++;
+            console.log('✅ Logradouro preenchido:', data.logradouro);
+        } else {
+            console.error('❌ Campo logradouro não encontrado!');
+        }
     }
     
     if (data.numero) {
-        document.getElementById('numero').value = data.numero;
-        console.log('✅ Número preenchido:', data.numero);
+        const campo = document.getElementById('numero');
+        if (campo) {
+            campo.value = data.numero;
+            camposPreenchidosCount++;
+            console.log('✅ Número preenchido:', data.numero);
+        } else {
+            console.error('❌ Campo numero não encontrado!');
+        }
     }
     
     if (data.complemento) {
-        document.getElementById('complemento').value = data.complemento;
-        console.log('✅ Complemento preenchido:', data.complemento);
+        const campo = document.getElementById('complemento');
+        if (campo) {
+            campo.value = data.complemento;
+            camposPreenchidosCount++;
+            console.log('✅ Complemento preenchido:', data.complemento);
+        } else {
+            console.error('❌ Campo complemento não encontrado!');
+        }
     }
     
     if (data.bairro) {
-        document.getElementById('bairro').value = data.bairro;
-        console.log('✅ Bairro preenchido:', data.bairro);
+        const campo = document.getElementById('bairro');
+        if (campo) {
+            campo.value = data.bairro;
+            camposPreenchidosCount++;
+            console.log('✅ Bairro preenchido:', data.bairro);
+        } else {
+            console.error('❌ Campo bairro não encontrado!');
+        }
     }
     
     if (data.municipio) {
-        document.getElementById('cidade').value = data.municipio;
-        console.log('✅ Cidade preenchida:', data.municipio);
+        const campo = document.getElementById('cidade');
+        if (campo) {
+            campo.value = data.municipio;
+            camposPreenchidosCount++;
+            console.log('✅ Cidade preenchida:', data.municipio);
+        } else {
+            console.error('❌ Campo cidade não encontrado!');
+        }
     }
     
     if (data.uf) {
-        document.getElementById('estado').value = data.uf;
-        console.log('✅ Estado preenchido:', data.uf);
+        const campo = document.getElementById('estado');
+        if (campo) {
+            campo.value = data.uf;
+            camposPreenchidosCount++;
+            console.log('✅ Estado preenchido:', data.uf);
+        } else {
+            console.error('❌ Campo estado não encontrado!');
+        }
     }
     
-    // Exibir mensagem de sucesso com detalhes do que foi preenchido
+    // ===== MENSAGEM FINAL =====
+    console.log('=== RESUMO DO PREENCHIMENTO ===');
+    console.log(`Total de campos preenchidos: ${camposPreenchidosCount}`);
+    console.log('=== FIM DO PREENCHIMENTO AUTOMÁTICO ===');
+    
+    // Exibir mensagem de sucesso com contagem
     const camposPreenchidos = [];
     if (data.razao_social) camposPreenchidos.push('Razão Social');
     if (data.nome_fantasia) camposPreenchidos.push('Nome Fantasia');
     if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') camposPreenchidos.push('Inscrição Estadual');
-    if (email && email.trim() !== '') camposPreenchidos.push('E-mail');
+    if (data.email && data.email.trim() !== '') camposPreenchidos.push('E-mail');
     if (data.ddd_telefone_1) camposPreenchidos.push('Telefone');
     if (data.ddd_telefone_2) camposPreenchidos.push('Celular');
     if (data.cep) camposPreenchidos.push('CEP');
