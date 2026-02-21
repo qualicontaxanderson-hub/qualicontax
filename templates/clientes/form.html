@@ -608,10 +608,9 @@ function consultarCNPJ() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Confirmar preenchimento
-                if (confirm('Dados encontrados! Deseja preencher automaticamente os campos com as informações da Receita Federal?')) {
-                    preencherDadosCNPJ(data.data);
-                }
+                console.log('🎯 DADOS RECEBIDOS! Preenchendo automaticamente...');
+                // PREENCHER AUTOMATICAMENTE (sem confirmar)
+                preencherDadosCNPJ(data.data);
             } else {
                 alert(data.message || 'Erro ao consultar CNPJ. Verifique o número e tente novamente.');
             }
