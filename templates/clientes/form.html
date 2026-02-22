@@ -994,35 +994,66 @@ function consultarSintegra() {
     console.log('CNPJ limpo (só números):', cnpjLimpo);
     
     // PASSO 1: COPIAR CNPJ para clipboard
+    console.log('Tentando copiar CNPJ para clipboard...');
+    
+    // Tenta copiar usando clipboard API
+    let copiouComSucesso = false;
+    
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(cnpjLimpo)
-            .then(() => {
-                console.log('✅ CNPJ copiado para área de transferência:', cnpjLimpo);
-                // PASSO 2: ABRIR SITE após copiar com sucesso
-                alert('✅ CNPJ copiado!\n\n' + 
-                      'CNPJ: ' + cnpjLimpo + '\n\n' +
-                      'O site do Sintegra será aberto.\n' +
-                      'Escolha o estado e cole o CNPJ (Ctrl+V).');
-                window.open('https://www.sintegra.gov.br/', '_blank');
-            })
-            .catch(err => {
-                console.warn('⚠️ Não foi possível copiar automaticamente:', err);
-                // Mesmo com erro, abre o site
-                alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
-                      'Copie este CNPJ manualmente.\n' +
-                      'O site do Sintegra será aberto.\n' +
-                      'Escolha o estado e cole o CNPJ.');
-                window.open('https://www.sintegra.gov.br/', '_blank');
-            });
+        console.log('Clipboard API disponível, tentando copiar...');
+        
+        // Usa try/catch para capturar erros síncronos
+        try {
+            navigator.clipboard.writeText(cnpjLimpo)
+                .then(() => {
+                    console.log('✅ CNPJ copiado COM SUCESSO!');
+                    copiouComSucesso = true;
+                })
+                .catch(err => {
+                    console.error('❌ ERRO ao copiar CNPJ:', err);
+                    console.error('Tipo de erro:', typeof err, err.name, err.message);
+                });
+        } catch (e) {
+            console.error('❌ ERRO SÍNCRONO ao tentar copiar:', e);
+        }
     } else {
-        // Fallback para navegadores antigos
-        alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
-              'Copie este CNPJ.\n' +
-              'O site do Sintegra será aberto.\n' +
-              'Escolha o estado e cole o CNPJ.');
-        // Abre site após mostrar alert
-        window.open('https://www.sintegra.gov.br/', '_blank');
+        console.warn('⚠️ Clipboard API não disponível neste navegador');
     }
+    
+    // IMPORTANTE: Aguardar um pouco para a cópia assíncrona completar
+    // Então mostrar alert e abrir site
+    setTimeout(() => {
+        // PASSO 2: Mostrar mensagem e ABRIR SITE
+        let mensagem;
+        
+        if (copiouComSucesso) {
+            mensagem = '✅ CNPJ COPIADO COM SUCESSO!\n\n' + 
+                      'CNPJ: ' + cnpjLimpo + '\n\n' +
+                      'O site do Sintegra será aberto agora.\n\n' +
+                      'Instruções:\n' +
+                      '1. Escolha o estado (UF)\n' +
+                      '2. Cole o CNPJ (Ctrl+V ou Cmd+V)\n' +
+                      '3. Consulte a Inscrição Estadual';
+        } else {
+            mensagem = '📋 CNPJ para copiar:\n\n' + 
+                      cnpjLimpo + '\n\n' +
+                      '⚠️ A cópia automática pode ter falhado.\n' +
+                      'Por favor, COPIE O CNPJ ACIMA manualmente.\n\n' +
+                      'O site do Sintegra será aberto agora.\n\n' +
+                      'Instruções:\n' +
+                      '1. Escolha o estado (UF)\n' +
+                      '2. Cole ou digite o CNPJ\n' +
+                      '3. Consulte a Inscrição Estadual';
+        }
+        
+        alert(mensagem);
+        
+        // Abre o site do Sintegra
+        console.log('Abrindo site do Sintegra...');
+        window.open('https://www.sintegra.gov.br/', '_blank');
+        console.log('=== FIM CONSULTAR SINTEGRA ===');
+        
+    }, 500); // Aguarda 500ms para clipboard API completar
 }
 </script>
 {% endblock %}
