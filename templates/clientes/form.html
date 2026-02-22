@@ -811,7 +811,7 @@ function preencherDadosCNPJ(data) {
     }
     
     // 8. Email (tentar múltiplos nomes de campos)
-    const emailValue = data.email || data.correio_eletronico || '';
+    const emailValue = data.email || data.correio_eletronico || data.endereco_eletronico || '';
     if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '') {
         tentarPreencher('email', emailValue.toLowerCase().trim(), 'E-mail');
     } else {
@@ -933,8 +933,8 @@ function preencherDadosCNPJ(data) {
 
 // Função para abrir Sintegra do estado correto
 function consultarSintegra() {
-    // Pegar UF do formulário
-    const ufField = document.getElementById('uf');
+    // Pegar UF do formulário (campo tem id='estado' no HTML)
+    const ufField = document.getElementById('estado');
     const ieField = document.getElementById('inscricao_estadual');
     
     if (!ufField || !ufField.value) {
