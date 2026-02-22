@@ -517,6 +517,7 @@ def consultar_cnpj(cnpj):
             print(f"=== DADOS RETORNADOS PELA BRASIL API ===")
             print(f"Email: {data.get('email')}")
             print(f"Correio Eletrônico: {data.get('correio_eletronico')}")
+            print(f"Endereço Eletrônico: {data.get('endereco_eletronico')}")
             print(f"DDD Telefone 1: {data.get('ddd_telefone_1')}")
             print(f"DDD Telefone 2: {data.get('ddd_telefone_2')}")
             print(f"Razão Social: {data.get('razao_social')}")
@@ -558,10 +559,14 @@ def consultar_cnpj(cnpj):
             print(f"Inscrição Estadual extraída: '{inscricao_estadual}'")
             
             # Extrair e-mail - tentar múltiplos campos possíveis
+            # Brasil API pode retornar em diferentes formatos
             email = (data.get('email') or 
                     data.get('correio_eletronico') or 
+                    data.get('endereco_eletronico') or  # NOVO: Campo "ENDEREÇO ELETRÔNICO"
                     data.get('email_principal') or 
                     '')
+            if email:
+                print(f"DEBUG: Email encontrado: {email}")
             
             # Extrair CNAEs secundários
             cnaes_secundarios = data.get('cnaes_secundarios', [])

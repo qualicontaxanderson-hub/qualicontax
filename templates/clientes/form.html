@@ -110,11 +110,20 @@
                                        style="flex: 1;"
                                        aria-label="Inscrição Estadual - preenchido automaticamente ao consultar CNPJ"
                                        aria-describedby="ie-help-text">
-                                <button type="button" class="btn btn-secondary" onclick="preencherIE()" title="A Inscrição Estadual será preenchida automaticamente ao consultar o CNPJ" style="white-space: nowrap;">
-                                    <i class="fas fa-info-circle"></i> IE via CNPJ
+                                <button type="button" 
+                                        class="btn btn-info" 
+                                        onclick="consultarSintegra()" 
+                                        title="Abrir Sintegra para validar IE no estado"
+                                        style="white-space: nowrap;">
+                                    <i class="fas fa-external-link-alt"></i> Validar no Sintegra
                                 </button>
                             </div>
-                            <small id="ie-help-text" class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
+                            <small id="ie-help-text" class="form-text text-muted">
+                                ✅ Preenchido automaticamente ao consultar o CNPJ | 
+                                <a href="javascript:consultarSintegra()" style="color: #17a2b8; text-decoration: none;">
+                                    <i class="fas fa-check-circle"></i> Clique para validar no Sintegra do estado
+                                </a>
+                            </small>
                         </div>
                     </div>
                     <div class="form-row">
@@ -922,9 +931,73 @@ function preencherDadosCNPJ(data) {
     console.log('=== 🏁 FIM DO PREENCHIMENTO AUTOMÁTICO ===');
 }
 
-// Função auxiliar para preencher IE (chamada pelo botão)
-function preencherIE() {
-    alert('A Inscrição Estadual é preenchida automaticamente ao consultar o CNPJ.\n\nClique no botão "Consultar CNPJ" para obter todos os dados da empresa, incluindo a IE.');
+// Função para abrir Sintegra do estado correto
+function consultarSintegra() {
+    // Pegar UF do formulário
+    const ufField = document.getElementById('uf');
+    const ieField = document.getElementById('inscricao_estadual');
+    
+    if (!ufField || !ufField.value) {
+        alert('⚠️ Estado (UF) não preenchido!\n\nPor favor, preencha o campo "Estado (UF)" antes de consultar o Sintegra.\n\nDica: Consulte o CNPJ primeiro para preencher automaticamente o estado.');
+        return;
+    }
+    
+    const uf = ufField.value.toUpperCase();
+    const ie = ieField ? ieField.value.trim() : '';
+    
+    // URLs do Sintegra por estado
+    const sintegraUrls = {
+        'AC': 'https://sefaznet.ac.gov.br/sintegra/',
+        'AL': 'http://www.sintegra.al.gov.br/',
+        'AP': 'https://www.sefaz.ap.gov.br/sintegra/',
+        'AM': 'http://www.sintegra.am.gov.br/',
+        'BA': 'https://www.sefaz.ba.gov.br/scripts/sintegra/',
+        'CE': 'https://www.sintegra.ce.gov.br/',
+        'DF': 'https://www.fazenda.df.gov.br/area.cfm?id_area=815',
+        'ES': 'https://www.sintegra.es.gov.br/',
+        'GO': 'http://www.sintegra.go.gov.br/',
+        'MA': 'http://www.sintegra.ma.gov.br/',
+        'MT': 'http://www.sefaz.mt.gov.br/portal/sintegra/',
+        'MS': 'http://www.sefaz.ms.gov.br/sintegra/',
+        'MG': 'http://www.sintegra.mg.gov.br/',
+        'PA': 'https://www.sefa.pa.gov.br/sintegra/',
+        'PB': 'http://www.receita.pb.gov.br/ser/sintegra/',
+        'PR': 'http://www.sintegra.pr.gov.br/',
+        'PE': 'https://efisco.sefaz.pe.gov.br/sfi_trb_gcc/PRConsultarExtratoCadastroContribuinte',
+        'PI': 'http://webas.sefaz.pi.gov.br/sintegra/',
+        'RJ': 'http://www.sintegra.rj.gov.br/',
+        'RN': 'http://www.set.rn.gov.br/sintegra/',
+        'RS': 'https://www.sefaz.rs.gov.br/ASP/app_sintegra.asp',
+        'RO': 'http://www.sintegra.ro.gov.br/',
+        'RR': 'https://www.sefaz.rr.gov.br/sintegra/',
+        'SC': 'http://www.sef.sc.gov.br/sintegra',
+        'SP': 'https://www.fazenda.sp.gov.br/sintegra/',
+        'SE': 'http://www.sefaz.se.gov.br/sintegra/',
+        'TO': 'https://www.sefaz.to.gov.br/sintegra/'
+    };
+    
+    const url = sintegraUrls[uf];
+    
+    if (!url) {
+        alert(`⚠️ Estado "${uf}" não reconhecido!\n\nPor favor, verifique se o campo UF está preenchido corretamente.`);
+        return;
+    }
+    
+    // Informação ao usuário
+    let mensagem = `🔍 Abrindo Sintegra de ${uf}...\n\n`;
+    if (ie) {
+        mensagem += `IE a validar: ${ie}\n\n`;
+    }
+    mensagem += `Você será redirecionado para o site oficial do Sintegra do estado de ${uf}.\n\n`;
+    mensagem += `⚠️ IMPORTANTE:\n`;
+    mensagem += `- Cada estado tem seu próprio sistema\n`;
+    mensagem += `- Você precisará digitar a IE manualmente no site\n`;
+    mensagem += `- Alguns estados podem pedir captcha ou outros dados\n`;
+    
+    console.log(`🔍 Abrindo Sintegra: UF=${uf}, URL=${url}, IE=${ie || 'não informada'}`);
+    
+    // Abrir em nova aba
+    window.open(url, '_blank');
 }
 </script>
 {% endblock %}
