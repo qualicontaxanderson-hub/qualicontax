@@ -197,6 +197,20 @@
                             <small class="form-text text-muted">Atividade econômica principal da empresa</small>
                         </div>
                     </div>
+                    
+                    <!-- CNAEs Secundários (se existirem) -->
+                    <div id="cnaes_secundarios_container" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group" style="width: 100%;">
+                                <label>CNAEs Secundários ⭐</label>
+                                <div id="cnaes_secundarios_list" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; background: #f9fafb; max-height: 200px; overflow-y: auto;">
+                                    <!-- Será preenchido via JavaScript -->
+                                </div>
+                                <small class="form-text text-muted">Atividades econômicas secundárias da empresa</small>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="form-row">
                         <div class="form-group" style="width: 100%;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -693,17 +707,48 @@ function preencherDadosCNPJ(data) {
     
     // 4. Data de Início da Atividade (converter DD/MM/YYYY -> YYYY-MM-DD)
     if (data.data_inicio_atividade) {
-        const partes = data.data_inicio_atividade.split('/');
-        if (partes.length === 3) {
-            const dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+        console.log(`DEBUG: Data recebida da API: "${data.data_inicio_atividade}"`);
+        let dataFormatada = '';
+        
+        // Tentar split por "/"
+        if (data.data_inicio_atividade.includes('/')) {
+            const partes = data.data_inicio_atividade.split('/');
+            if (partes.length === 3) {
+                // DD/MM/YYYY -> YYYY-MM-DD
+                dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+            }
+        } 
+        // Tentar split por "-" (caso já venha em outro formato)
+        else if (data.data_inicio_atividade.includes('-')) {
+            const partes = data.data_inicio_atividade.split('-');
+            if (partes.length === 3 && partes[0].length === 4) {
+                // Já está em YYYY-MM-DD
+                dataFormatada = data.data_inicio_atividade;
+            } else if (partes.length === 3 && partes[0].length === 2) {
+                // DD-MM-YYYY -> YYYY-MM-DD
+                dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+            }
+        }
+        
+        if (dataFormatada) {
+            console.log(`DEBUG: Data formatada para: "${dataFormatada}"`);
             tentarPreencher('data_inicio_atividade', dataFormatada, 'Data de Início da Atividade');
+        } else {
+            console.warn(`⚠️ Não foi possível formatar data: "${data.data_inicio_atividade}"`);
+            naoPreenchidos.push(`Data de Início da Atividade (formato inválido: ${data.data_inicio_atividade})`);
         }
     } else {
         naoPreenchidos.push('Data de Início da Atividade (não disponível)');
     }
     
     // 5. Inscrição Estadual
-    tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
+    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
+        tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
+    } else {
+        console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
+        console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
+        naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
+    }
     
     // 6. CNAE Fiscal
     tentarPreencher('cnae_fiscal', data.cnae_fiscal, 'CNAE Fiscal');
@@ -711,11 +756,59 @@ function preencherDadosCNPJ(data) {
     // 7. Descrição do CNAE
     tentarPreencher('cnae_fiscal_descricao', data.cnae_fiscal_descricao, 'Descrição do CNAE');
     
-    // 8. Email
-    if (data.email) {
-        tentarPreencher('email', data.email.toLowerCase(), 'E-mail');
+    // 7.5. CNAEs Secundários (NOVO)
+    if (data.cnaes_secundarios && Array.isArray(data.cnaes_secundarios) && data.cnaes_secundarios.length > 0) {
+        console.log(`✅ CNAEs Secundários encontrados: ${data.cnaes_secundarios.length}`);
+        const container = document.getElementById('cnaes_secundarios_container');
+        const lista = document.getElementById('cnaes_secundarios_list');
+        
+        if (container && lista) {
+            // Mostrar container
+            container.style.display = 'block';
+            
+            // Criar lista de CNAEs
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+            data.cnaes_secundarios.forEach((cnae, index) => {
+                if (typeof cnae === 'object') {
+                    const codigo = cnae.codigo || cnae.cnae || '';
+                    const descricao = cnae.descricao || '';
+                    html += `
+                        <div style="padding: 10px; background: white; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                            <strong style="color: #1e40af; font-size: 14px;">${codigo}</strong>
+                            <span style="color: #64748b; font-size: 13px; margin-left: 8px;">${descricao}</span>
+                        </div>
+                    `;
+                } else if (typeof cnae === 'string') {
+                    html += `
+                        <div style="padding: 10px; background: white; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                            <span style="color: #1e40af; font-size: 13px;">${cnae}</span>
+                        </div>
+                    `;
+                }
+            });
+            html += '</div>';
+            lista.innerHTML = html;
+            
+            preenchidos.push(`CNAEs Secundários: ${data.cnaes_secundarios.length} encontrados`);
+            console.log(`✅ ${data.cnaes_secundarios.length} CNAEs secundários exibidos`);
+        }
     } else {
-        naoPreenchidos.push('E-mail (não disponível - normal)');
+        console.log('ℹ️ Sem CNAEs secundários (normal - nem todas empresas têm)');
+        // Esconder container se existir
+        const container = document.getElementById('cnaes_secundarios_container');
+        if (container) {
+            container.style.display = 'none';
+        }
+    }
+    
+    // 8. Email (tentar múltiplos nomes de campos)
+    const emailValue = data.email || data.correio_eletronico || '';
+    if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '') {
+        tentarPreencher('email', emailValue.toLowerCase().trim(), 'E-mail');
+    } else {
+        console.warn('⚠️ E-mail: não disponível ou vazio');
+        console.warn('   Nota: Muitas empresas não possuem e-mail cadastrado na Receita Federal');
+        naoPreenchidos.push('E-mail (não disponível - normal, muitas empresas não têm cadastrado)');
     }
     
     // 9. Telefone (formatar)
