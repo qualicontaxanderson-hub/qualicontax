@@ -820,18 +820,34 @@ function preencherDadosCNPJ(data) {
     const emailValue = data.email || data.correio_eletronico || data.endereco_eletronico || '';
     console.log('emailValue final:', emailValue, 'tipo:', typeof emailValue);
     
+    // NOVO: Verificar se campo existe e seu estado ANTES de tentar preencher
+    const emailField = document.getElementById('email');
+    console.log('Campo email encontrado?', emailField ? 'SIM' : 'NÃO');
+    if (emailField) {
+        console.log('Campo email disabled?', emailField.disabled);
+        console.log('Campo email readonly?', emailField.readOnly);
+        console.log('Campo email valor atual:', emailField.value);
+    }
+    
     if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '') {
         const emailFinal = emailValue.toLowerCase().trim();
         console.log('Tentando preencher email com:', emailFinal);
         
-        // Tentar via tentarPreencher primeiro
-        tentarPreencher('email', emailFinal, 'E-mail');
-        
-        // FALLBACK: Preencher diretamente também, caso tentarPreencher falhe
-        const emailField = document.getElementById('email');
+        // Preencher DIRETAMENTE (método mais garantido)
         if (emailField) {
+            // Remove readonly temporariamente se existir
+            const wasReadonly = emailField.readOnly;
+            emailField.readOnly = false;
+            
             emailField.value = emailFinal;
             console.log('✅ Email preenchido DIRETAMENTE:', emailFinal);
+            console.log('✅ Valor do campo após preencher:', emailField.value);
+            
+            // Restaura readonly se estava
+            if (wasReadonly) {
+                emailField.readOnly = true;
+            }
+            
             preenchidos.push('E-mail: ' + emailFinal);
         } else {
             console.error('❌ Campo email não encontrado no DOM!');
@@ -954,70 +970,59 @@ function preencherDadosCNPJ(data) {
     console.log('=== 🏁 FIM DO PREENCHIMENTO AUTOMÁTICO ===');
 }
 
-// Função para abrir Sintegra do estado correto
+// Função para abrir Sintegra (1º copia CNPJ, 2º abre site)
 function consultarSintegra() {
+    console.log('=== FUNÇÃO CONSULTAR SINTEGRA ===');
+    
     // Pegar CNPJ do formulário
     const cnpjField = document.getElementById('cpf_cnpj');
     const cnpj = cnpjField ? cnpjField.value.trim() : '';
     
-    // Copiar CNPJ para clipboard se disponível
-    if (cnpj) {
-        // Remove formatação do CNPJ (deixa só números)
-        const cnpjLimpo = cnpj.replace(/\D/g, '');
-        
-        // Tentar copiar para clipboard
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(cnpjLimpo)
-                .then(() => {
-                    console.log('✅ CNPJ copiado para área de transferência:', cnpjLimpo);
-                    alert('✅ CNPJ copiado!\n\n' + 
-                          'CNPJ: ' + cnpjLimpo + '\n\n' +
-                          'O site do Sintegra será aberto.\n' +
-                          'Escolha o estado e cole o CNPJ (Ctrl+V).');
-                })
-                .catch(err => {
-                    console.warn('⚠️ Não foi possível copiar automaticamente:', err);
-                    alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
-                          'Copie este CNPJ manualmente.\n' +
-                          'O site do Sintegra será aberto.\n' +
-                          'Escolha o estado e cole o CNPJ.');
-                });
-        } else {
-            // Fallback para navegadores antigos
-            alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
-                  'Copie este CNPJ.\n' +
-                  'O site do Sintegra será aberto.\n' +
-                  'Escolha o estado e cole o CNPJ.');
-        }
-    } else {
+    console.log('CNPJ encontrado:', cnpj);
+    
+    if (!cnpj) {
         alert('⚠️ CNPJ não preenchido!\n\n' +
               'Por favor, preencha o CNPJ antes de abrir o Sintegra.\n\n' +
               'O site será aberto, mas você precisará digitar o CNPJ manualmente.');
-    }
-    
-    // Abrir site principal do Sintegra
-    const url = 'https://www.sintegra.gov.br/';
-    
-    if (!url) {
-        alert(`⚠️ Estado "${uf}" não reconhecido!\n\nPor favor, verifique se o campo UF está preenchido corretamente.`);
+        // Abre site mesmo sem CNPJ
+        window.open('https://www.sintegra.gov.br/', '_blank');
         return;
     }
     
-    // Informação ao usuário
-    let mensagem = `🔍 Abrindo Sintegra de ${uf}...\n\n`;
-    if (ie) {
-        mensagem += `IE a validar: ${ie}\n\n`;
+    // Remove formatação do CNPJ (deixa só números)
+    const cnpjLimpo = cnpj.replace(/\D/g, '');
+    console.log('CNPJ limpo (só números):', cnpjLimpo);
+    
+    // PASSO 1: COPIAR CNPJ para clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cnpjLimpo)
+            .then(() => {
+                console.log('✅ CNPJ copiado para área de transferência:', cnpjLimpo);
+                // PASSO 2: ABRIR SITE após copiar com sucesso
+                alert('✅ CNPJ copiado!\n\n' + 
+                      'CNPJ: ' + cnpjLimpo + '\n\n' +
+                      'O site do Sintegra será aberto.\n' +
+                      'Escolha o estado e cole o CNPJ (Ctrl+V).');
+                window.open('https://www.sintegra.gov.br/', '_blank');
+            })
+            .catch(err => {
+                console.warn('⚠️ Não foi possível copiar automaticamente:', err);
+                // Mesmo com erro, abre o site
+                alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
+                      'Copie este CNPJ manualmente.\n' +
+                      'O site do Sintegra será aberto.\n' +
+                      'Escolha o estado e cole o CNPJ.');
+                window.open('https://www.sintegra.gov.br/', '_blank');
+            });
+    } else {
+        // Fallback para navegadores antigos
+        alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
+              'Copie este CNPJ.\n' +
+              'O site do Sintegra será aberto.\n' +
+              'Escolha o estado e cole o CNPJ.');
+        // Abre site após mostrar alert
+        window.open('https://www.sintegra.gov.br/', '_blank');
     }
-    mensagem += `Você será redirecionado para o site oficial do Sintegra do estado de ${uf}.\n\n`;
-    mensagem += `⚠️ IMPORTANTE:\n`;
-    mensagem += `- Cada estado tem seu próprio sistema\n`;
-    mensagem += `- Você precisará digitar a IE manualmente no site\n`;
-    mensagem += `- Alguns estados podem pedir captcha ou outros dados\n`;
-    
-    console.log(`🔍 Abrindo Sintegra: UF=${uf}, URL=${url}, IE=${ie || 'não informada'}`);
-    
-    // Abrir em nova aba
-    window.open(url, '_blank');
 }
 </script>
 {% endblock %}
