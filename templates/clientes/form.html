@@ -113,9 +113,9 @@
                                 <button type="button" 
                                         class="btn btn-info" 
                                         onclick="consultarSintegra()" 
-                                        title="Abrir Sintegra para validar IE no estado"
+                                        title="Abrir site do Sintegra com CNPJ copiado"
                                         style="white-space: nowrap;">
-                                    <i class="fas fa-external-link-alt"></i> Validar no Sintegra
+                                    <i class="fas fa-external-link-alt"></i> Sintegra
                                 </button>
                             </div>
                             <small id="ie-help-text" class="form-text text-muted">
@@ -811,9 +811,32 @@ function preencherDadosCNPJ(data) {
     }
     
     // 8. Email (tentar múltiplos nomes de campos)
+    // 8. E-mail (tentar todos os campos possíveis e preencher diretamente)
+    console.log('=== DEBUG EMAIL ===');
+    console.log('data.email:', data.email);
+    console.log('data.correio_eletronico:', data.correio_eletronico);
+    console.log('data.endereco_eletronico:', data.endereco_eletronico);
+    
     const emailValue = data.email || data.correio_eletronico || data.endereco_eletronico || '';
+    console.log('emailValue final:', emailValue, 'tipo:', typeof emailValue);
+    
     if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '') {
-        tentarPreencher('email', emailValue.toLowerCase().trim(), 'E-mail');
+        const emailFinal = emailValue.toLowerCase().trim();
+        console.log('Tentando preencher email com:', emailFinal);
+        
+        // Tentar via tentarPreencher primeiro
+        tentarPreencher('email', emailFinal, 'E-mail');
+        
+        // FALLBACK: Preencher diretamente também, caso tentarPreencher falhe
+        const emailField = document.getElementById('email');
+        if (emailField) {
+            emailField.value = emailFinal;
+            console.log('✅ Email preenchido DIRETAMENTE:', emailFinal);
+            preenchidos.push('E-mail: ' + emailFinal);
+        } else {
+            console.error('❌ Campo email não encontrado no DOM!');
+            camposNaoExistem.push('E-mail (campo não existe no HTML)');
+        }
     } else {
         console.warn('⚠️ E-mail: não disponível ou vazio');
         console.warn('   Nota: Muitas empresas não possuem e-mail cadastrado na Receita Federal');
@@ -933,50 +956,47 @@ function preencherDadosCNPJ(data) {
 
 // Função para abrir Sintegra do estado correto
 function consultarSintegra() {
-    // Pegar UF do formulário (campo tem id='estado' no HTML)
-    const ufField = document.getElementById('estado');
-    const ieField = document.getElementById('inscricao_estadual');
+    // Pegar CNPJ do formulário
+    const cnpjField = document.getElementById('cpf_cnpj');
+    const cnpj = cnpjField ? cnpjField.value.trim() : '';
     
-    if (!ufField || !ufField.value) {
-        alert('⚠️ Estado (UF) não preenchido!\n\nPor favor, preencha o campo "Estado (UF)" antes de consultar o Sintegra.\n\nDica: Consulte o CNPJ primeiro para preencher automaticamente o estado.');
-        return;
+    // Copiar CNPJ para clipboard se disponível
+    if (cnpj) {
+        // Remove formatação do CNPJ (deixa só números)
+        const cnpjLimpo = cnpj.replace(/\D/g, '');
+        
+        // Tentar copiar para clipboard
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(cnpjLimpo)
+                .then(() => {
+                    console.log('✅ CNPJ copiado para área de transferência:', cnpjLimpo);
+                    alert('✅ CNPJ copiado!\n\n' + 
+                          'CNPJ: ' + cnpjLimpo + '\n\n' +
+                          'O site do Sintegra será aberto.\n' +
+                          'Escolha o estado e cole o CNPJ (Ctrl+V).');
+                })
+                .catch(err => {
+                    console.warn('⚠️ Não foi possível copiar automaticamente:', err);
+                    alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
+                          'Copie este CNPJ manualmente.\n' +
+                          'O site do Sintegra será aberto.\n' +
+                          'Escolha o estado e cole o CNPJ.');
+                });
+        } else {
+            // Fallback para navegadores antigos
+            alert('📋 CNPJ: ' + cnpjLimpo + '\n\n' +
+                  'Copie este CNPJ.\n' +
+                  'O site do Sintegra será aberto.\n' +
+                  'Escolha o estado e cole o CNPJ.');
+        }
+    } else {
+        alert('⚠️ CNPJ não preenchido!\n\n' +
+              'Por favor, preencha o CNPJ antes de abrir o Sintegra.\n\n' +
+              'O site será aberto, mas você precisará digitar o CNPJ manualmente.');
     }
     
-    const uf = ufField.value.toUpperCase();
-    const ie = ieField ? ieField.value.trim() : '';
-    
-    // URLs do Sintegra por estado
-    const sintegraUrls = {
-        'AC': 'https://sefaznet.ac.gov.br/sintegra/',
-        'AL': 'http://www.sintegra.al.gov.br/',
-        'AP': 'https://www.sefaz.ap.gov.br/sintegra/',
-        'AM': 'http://www.sintegra.am.gov.br/',
-        'BA': 'https://www.sefaz.ba.gov.br/scripts/sintegra/',
-        'CE': 'https://www.sintegra.ce.gov.br/',
-        'DF': 'https://www.fazenda.df.gov.br/area.cfm?id_area=815',
-        'ES': 'https://www.sintegra.es.gov.br/',
-        'GO': 'http://www.sintegra.go.gov.br/',
-        'MA': 'http://www.sintegra.ma.gov.br/',
-        'MT': 'http://www.sefaz.mt.gov.br/portal/sintegra/',
-        'MS': 'http://www.sefaz.ms.gov.br/sintegra/',
-        'MG': 'http://www.sintegra.mg.gov.br/',
-        'PA': 'https://www.sefa.pa.gov.br/sintegra/',
-        'PB': 'http://www.receita.pb.gov.br/ser/sintegra/',
-        'PR': 'http://www.sintegra.pr.gov.br/',
-        'PE': 'https://efisco.sefaz.pe.gov.br/sfi_trb_gcc/PRConsultarExtratoCadastroContribuinte',
-        'PI': 'http://webas.sefaz.pi.gov.br/sintegra/',
-        'RJ': 'http://www.sintegra.rj.gov.br/',
-        'RN': 'http://www.set.rn.gov.br/sintegra/',
-        'RS': 'https://www.sefaz.rs.gov.br/ASP/app_sintegra.asp',
-        'RO': 'http://www.sintegra.ro.gov.br/',
-        'RR': 'https://www.sefaz.rr.gov.br/sintegra/',
-        'SC': 'http://www.sef.sc.gov.br/sintegra',
-        'SP': 'https://www.fazenda.sp.gov.br/sintegra/',
-        'SE': 'http://www.sefaz.se.gov.br/sintegra/',
-        'TO': 'https://www.sefaz.to.gov.br/sintegra/'
-    };
-    
-    const url = sintegraUrls[uf];
+    // Abrir site principal do Sintegra
+    const url = 'https://www.sintegra.gov.br/';
     
     if (!url) {
         alert(`⚠️ Estado "${uf}" não reconhecido!\n\nPor favor, verifique se o campo UF está preenchido corretamente.`);
