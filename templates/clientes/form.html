@@ -837,15 +837,26 @@ function preencherDadosCNPJ(data) {
         if (emailField) {
             // Remove readonly temporariamente se existir
             const wasReadonly = emailField.readOnly;
+            const wasDisabled = emailField.disabled;
+            
             emailField.readOnly = false;
+            emailField.disabled = false;
             
             emailField.value = emailFinal;
+            
+            // Dispara eventos para garantir que frameworks detectem a mudança
+            emailField.dispatchEvent(new Event('input', { bubbles: true }));
+            emailField.dispatchEvent(new Event('change', { bubbles: true }));
+            
             console.log('✅ Email preenchido DIRETAMENTE:', emailFinal);
             console.log('✅ Valor do campo após preencher:', emailField.value);
             
-            // Restaura readonly se estava
+            // Restaura estados se estavam
             if (wasReadonly) {
                 emailField.readOnly = true;
+            }
+            if (wasDisabled) {
+                emailField.disabled = true;
             }
             
             preenchidos.push('E-mail: ' + emailFinal);
@@ -993,56 +1004,73 @@ async function consultarSintegra() {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
     console.log('CNPJ limpo (só números):', cnpjLimpo);
     
-    // PASSO 1: COPIAR CNPJ para clipboard (usando async/await)
+    // PASSO 1: COPIAR CNPJ para clipboard
     console.log('Tentando copiar CNPJ para clipboard...');
     
+    let copiouComSucesso = false;
     let mensagem;
     
-    // Verifica se clipboard API está disponível
+    // Método 1: Tentar Clipboard API moderna (funciona em HTTPS)
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        console.log('Clipboard API disponível, tentando copiar...');
-        
+        console.log('Tentando Clipboard API (moderna)...');
         try {
-            // AGUARDA a cópia completar usando await
             await navigator.clipboard.writeText(cnpjLimpo);
-            console.log('✅ CNPJ copiado COM SUCESSO!');
-            
-            // Mensagem de SUCESSO
-            mensagem = '✅ CNPJ COPIADO COM SUCESSO!\n\n' + 
-                      'CNPJ: ' + cnpjLimpo + '\n\n' +
-                      'O site do Sintegra será aberto agora.\n\n' +
-                      'Instruções:\n' +
-                      '1. Escolha o estado (UF)\n' +
-                      '2. Cole o CNPJ (Ctrl+V ou Cmd+V)\n' +
-                      '3. Consulte a Inscrição Estadual';
+            copiouComSucesso = true;
+            console.log('✅ CNPJ copiado COM SUCESSO via Clipboard API!');
         } catch (err) {
-            // Erro ao copiar
-            console.error('❌ ERRO ao copiar CNPJ:', err);
-            console.error('Detalhes:', err.name, err.message);
-            
-            // Mensagem de FALHA - mostra CNPJ para copiar manualmente
-            mensagem = '📋 CNPJ para copiar:\n\n' + 
-                      cnpjLimpo + '\n\n' +
-                      '⚠️ A cópia automática falhou.\n' +
-                      'Por favor, COPIE O CNPJ ACIMA manualmente.\n\n' +
-                      'O site do Sintegra será aberto agora.\n\n' +
-                      'Instruções:\n' +
-                      '1. Escolha o estado (UF)\n' +
-                      '2. Cole ou digite o CNPJ\n' +
-                      '3. Consulte a Inscrição Estadual';
+            console.warn('⚠️ Clipboard API falhou:', err.message);
+            copiouComSucesso = false;
         }
-    } else {
-        // Clipboard API não disponível
-        console.warn('⚠️ Clipboard API não disponível neste navegador');
-        
-        mensagem = '📋 CNPJ para copiar:\n\n' + 
-                  cnpjLimpo + '\n\n' +
-                  '⚠️ Cópia automática não disponível neste navegador.\n' +
-                  'Por favor, COPIE O CNPJ ACIMA manualmente.\n\n' +
+    }
+    
+    // Método 2: Fallback usando input temporário (funciona em HTTP e contextos antigos)
+    if (!copiouComSucesso) {
+        console.log('Tentando método fallback (input temporário)...');
+        try {
+            // Cria input temporário
+            const tempInput = document.createElement('input');
+            tempInput.value = cnpjLimpo;
+            tempInput.style.position = 'fixed';
+            tempInput.style.top = '-1000px';
+            tempInput.style.left = '-1000px';
+            document.body.appendChild(tempInput);
+            
+            // Seleciona e copia
+            tempInput.select();
+            tempInput.setSelectionRange(0, 99999); // Para mobile
+            
+            const copied = document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            if (copied) {
+                copiouComSucesso = true;
+                console.log('✅ CNPJ copiado COM SUCESSO via método fallback!');
+            } else {
+                console.warn('⚠️ execCommand falhou');
+            }
+        } catch (err) {
+            console.error('❌ ERRO no fallback:', err);
+        }
+    }
+    
+    // Monta mensagem baseada no resultado
+    if (copiouComSucesso) {
+        mensagem = '✅ CNPJ COPIADO COM SUCESSO!\n\n' + 
+                  'CNPJ: ' + cnpjLimpo + '\n\n' +
                   'O site do Sintegra será aberto agora.\n\n' +
                   'Instruções:\n' +
                   '1. Escolha o estado (UF)\n' +
-                  '2. Digite o CNPJ\n' +
+                  '2. Cole o CNPJ (Ctrl+V ou Cmd+V)\n' +
+                  '3. Consulte a Inscrição Estadual';
+    } else {
+        mensagem = '📋 CNPJ para copiar:\n\n' + 
+                  cnpjLimpo + '\n\n' +
+                  '⚠️ A cópia automática falhou.\n' +
+                  'Por favor, COPIE O CNPJ ACIMA manualmente (Ctrl+C).\n\n' +
+                  'O site do Sintegra será aberto agora.\n\n' +
+                  'Instruções:\n' +
+                  '1. Escolha o estado (UF)\n' +
+                  '2. Cole ou digite o CNPJ\n' +
                   '3. Consulte a Inscrição Estadual';
     }
     
