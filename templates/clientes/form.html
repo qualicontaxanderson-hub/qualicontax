@@ -812,13 +812,20 @@ function preencherDadosCNPJ(data) {
     
     // 8. Email (tentar múltiplos nomes de campos)
     // 8. E-mail (tentar todos os campos possíveis e preencher diretamente)
-    console.log('=== DEBUG EMAIL ===');
+    console.log('=== DEBUG EMAIL INÍCIO ===');
     console.log('data.email:', data.email);
     console.log('data.correio_eletronico:', data.correio_eletronico);
     console.log('data.endereco_eletronico:', data.endereco_eletronico);
     
     const emailValue = data.email || data.correio_eletronico || data.endereco_eletronico || '';
     console.log('emailValue final:', emailValue, 'tipo:', typeof emailValue);
+    
+    // DEBUG: Mostrar alert se email foi encontrado nos dados
+    if (data.email || data.correio_eletronico || data.endereco_eletronico) {
+        console.log('⚠️ EMAIL ENCONTRADO NOS DADOS! Valor:', emailValue);
+    } else {
+        console.warn('⚠️ NENHUM CAMPO DE EMAIL NOS DADOS DA API');
+    }
     
     // NOVO: Verificar se campo existe e seu estado ANTES de tentar preencher
     const emailField = document.getElementById('email');
@@ -982,8 +989,11 @@ function preencherDadosCNPJ(data) {
 }
 
 // Função para abrir Sintegra (1º copia CNPJ, 2º abre site)
-async function consultarSintegra() {
-    console.log('=== FUNÇÃO CONSULTAR SINTEGRA ===');
+function consultarSintegra() {
+    console.log('=== FUNÇÃO CONSULTAR SINTEGRA CHAMADA ===');
+    
+    // DEBUG: Confirmar que função foi chamada
+    console.log('Função consultarSintegra() executando...');
     
     // Pegar CNPJ do formulário
     const cnpjField = document.getElementById('cpf_cnpj');
@@ -992,11 +1002,8 @@ async function consultarSintegra() {
     console.log('CNPJ encontrado:', cnpj);
     
     if (!cnpj) {
-        alert('⚠️ CNPJ não preenchido!\n\n' +
-              'Por favor, preencha o CNPJ antes de abrir o Sintegra.\n\n' +
-              'O site será aberto, mas você precisará digitar o CNPJ manualmente.');
-        // Abre site mesmo sem CNPJ
-        window.open('https://www.sintegra.gov.br/', '_blank');
+        alert('⚠️ CNPJ NÃO PREENCHIDO!\n\n' +
+              'Por favor, preencha o CNPJ antes de clicar em Sintegra.');
         return;
     }
     
@@ -1004,82 +1011,94 @@ async function consultarSintegra() {
     const cnpjLimpo = cnpj.replace(/\D/g, '');
     console.log('CNPJ limpo (só números):', cnpjLimpo);
     
-    // PASSO 1: COPIAR CNPJ para clipboard
-    console.log('Tentando copiar CNPJ para clipboard...');
+    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
+        alert('⚠️ CNPJ INVÁLIDO!\n\n' +
+              'O CNPJ deve ter 14 dígitos.\n' +
+              'CNPJ encontrado: ' + cnpj);
+        return;
+    }
+    
+    // PASSO 1: COPIAR CNPJ IMEDIATAMENTE
+    console.log('Tentando copiar CNPJ:', cnpjLimpo);
     
     let copiouComSucesso = false;
+    let metodoUsado = 'nenhum';
+    
+    // Método 1: Input temporário (SEMPRE funciona, inclusive em HTTP)
+    try {
+        console.log('Tentando método input temporário...');
+        
+        const tempInput = document.createElement('input');
+        tempInput.value = cnpjLimpo;
+        tempInput.style.position = 'absolute';
+        tempInput.style.left = '-9999px';
+        tempInput.setAttribute('readonly', '');
+        document.body.appendChild(tempInput);
+        
+        tempInput.select();
+        tempInput.setSelectionRange(0, 99999);
+        
+        const copied = document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        
+        if (copied) {
+            copiouComSucesso = true;
+            metodoUsado = 'input temporário';
+            console.log('✅ CNPJ copiado via input temporário!');
+        }
+    } catch (err) {
+        console.error('❌ Erro no método input:', err);
+    }
+    
+    // Método 2: Clipboard API (só se primeiro falhou)
+    if (!copiouComSucesso && navigator.clipboard && navigator.clipboard.writeText) {
+        console.log('Tentando Clipboard API...');
+        try {
+            // Nota: Clipboard API retorna Promise, mas vamos usar de forma síncrona via flag
+            navigator.clipboard.writeText(cnpjLimpo).then(() => {
+                console.log('✅ Clipboard API funcionou!');
+            }).catch(err => {
+                console.warn('Clipboard API error:', err);
+            });
+            // Consideramos sucesso imediato pois é assíncrono
+            copiouComSucesso = true;
+            metodoUsado = 'Clipboard API';
+        } catch (err) {
+            console.error('❌ Erro Clipboard API:', err);
+        }
+    }
+    
+    // PASSO 2: Mostrar mensagem IMEDIATAMENTE
     let mensagem;
     
-    // Método 1: Tentar Clipboard API moderna (funciona em HTTPS)
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        console.log('Tentando Clipboard API (moderna)...');
-        try {
-            await navigator.clipboard.writeText(cnpjLimpo);
-            copiouComSucesso = true;
-            console.log('✅ CNPJ copiado COM SUCESSO via Clipboard API!');
-        } catch (err) {
-            console.warn('⚠️ Clipboard API falhou:', err.message);
-            copiouComSucesso = false;
-        }
-    }
-    
-    // Método 2: Fallback usando input temporário (funciona em HTTP e contextos antigos)
-    if (!copiouComSucesso) {
-        console.log('Tentando método fallback (input temporário)...');
-        try {
-            // Cria input temporário
-            const tempInput = document.createElement('input');
-            tempInput.value = cnpjLimpo;
-            tempInput.style.position = 'fixed';
-            tempInput.style.top = '-1000px';
-            tempInput.style.left = '-1000px';
-            document.body.appendChild(tempInput);
-            
-            // Seleciona e copia
-            tempInput.select();
-            tempInput.setSelectionRange(0, 99999); // Para mobile
-            
-            const copied = document.execCommand('copy');
-            document.body.removeChild(tempInput);
-            
-            if (copied) {
-                copiouComSucesso = true;
-                console.log('✅ CNPJ copiado COM SUCESSO via método fallback!');
-            } else {
-                console.warn('⚠️ execCommand falhou');
-            }
-        } catch (err) {
-            console.error('❌ ERRO no fallback:', err);
-        }
-    }
-    
-    // Monta mensagem baseada no resultado
     if (copiouComSucesso) {
-        mensagem = '✅ CNPJ COPIADO COM SUCESSO!\n\n' + 
-                  'CNPJ: ' + cnpjLimpo + '\n\n' +
-                  'O site do Sintegra será aberto agora.\n\n' +
-                  'Instruções:\n' +
-                  '1. Escolha o estado (UF)\n' +
-                  '2. Cole o CNPJ (Ctrl+V ou Cmd+V)\n' +
-                  '3. Consulte a Inscrição Estadual';
-    } else {
-        mensagem = '📋 CNPJ para copiar:\n\n' + 
+        mensagem = '✅ CNPJ COPIADO!\n\n' + 
                   cnpjLimpo + '\n\n' +
-                  '⚠️ A cópia automática falhou.\n' +
-                  'Por favor, COPIE O CNPJ ACIMA manualmente (Ctrl+C).\n\n' +
-                  'O site do Sintegra será aberto agora.\n\n' +
-                  'Instruções:\n' +
-                  '1. Escolha o estado (UF)\n' +
-                  '2. Cole ou digite o CNPJ\n' +
-                  '3. Consulte a Inscrição Estadual';
+                  '(Método: ' + metodoUsado + ')\n\n' +
+                  'O site do Sintegra será aberto.\n' +
+                  'Cole o CNPJ com Ctrl+V';
+    } else {
+        mensagem = '📋 COPIE ESTE CNPJ:\n\n' + 
+                  cnpjLimpo + '\n\n' +
+                  '⚠️ Cópia automática falhou.\n' +
+                  'Copie o número acima (selecione + Ctrl+C)';
     }
     
-    // PASSO 2: Mostrar mensagem e ABRIR SITE
     alert(mensagem);
+    console.log('Alert mostrado:', mensagem.substring(0, 50) + '...');
     
-    // Abre o site do Sintegra
+    // PASSO 3: Abrir site
     console.log('Abrindo site do Sintegra...');
-    window.open('https://www.sintegra.gov.br/', '_blank');
+    const sintegraWindow = window.open('https://www.sintegra.gov.br/', '_blank');
+    
+    if (sintegraWindow) {
+        console.log('✅ Site aberto com sucesso');
+    } else {
+        console.error('❌ Falha ao abrir site (pop-up bloqueado?)');
+        alert('⚠️ O site foi bloqueado pelo navegador.\n\n' +
+              'Por favor, permita pop-ups para este site.');
+    }
+    
     console.log('=== FIM CONSULTAR SINTEGRA ===');
 }
 </script>
