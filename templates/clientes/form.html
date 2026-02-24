@@ -324,8 +324,27 @@
                         <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro">
                     </div>
                     <div class="form-group">
-                        <label for="cidade">Cidade</label>
-                        <input type="text" id="cidade" name="cidade" class="form-control" placeholder="Cidade">
+                        <label for="cidade">Cidade / Município</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" 
+                                   id="cidade" 
+                                   name="cidade" 
+                                   class="form-control" 
+                                   placeholder="Digite o nome da cidade" 
+                                   value="{{ cliente.cidade if cliente else '' }}"
+                                   style="flex: 1;">
+                            <button type="button" 
+                                    class="btn btn-info" 
+                                    onclick="buscarMunicipio()" 
+                                    title="Buscar município no IBGE"
+                                    style="white-space: nowrap;">
+                                <i class="fas fa-map-marked-alt"></i> Buscar Município
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Clique em "Buscar Município" para consultar a lista oficial de municípios do IBGE por estado
+                        </small>
                     </div>
                 </div>
                 <div class="form-row">
@@ -995,6 +1014,61 @@ function preencherDadosCNPJ(data) {
     
     alert(mensagem);
     console.log('=== 🏁 FIM DO PREENCHIMENTO AUTOMÁTICO ===');
+}
+
+// Função para buscar município no IBGE
+function buscarMunicipio() {
+    console.log('=== FUNÇÃO BUSCAR MUNICÍPIO CHAMADA ===');
+    
+    const estado = document.getElementById('estado').value;
+    const cidadeInput = document.getElementById('cidade');
+    
+    // Verificar se estado foi selecionado
+    if (!estado) {
+        alert('⚠️ ESTADO NÃO SELECIONADO!\n\n' +
+              'Por favor, selecione o Estado (UF) antes de buscar o município.\n\n' +
+              'O estado é necessário para filtrar os municípios corretos.');
+        document.getElementById('estado').focus();
+        return;
+    }
+    
+    console.log('Estado selecionado:', estado);
+    
+    // Mostrar instruções ao usuário
+    const estadoNome = document.getElementById('estado').options[document.getElementById('estado').selectedIndex].text;
+    
+    alert('🗺️ BUSCAR MUNICÍPIO\n\n' +
+          'Estado selecionado: ' + estadoNome + '\n\n' +
+          'A página do IBGE Cidades será aberta.\n\n' +
+          'Você poderá:\n' +
+          '• Ver todos os municípios do estado\n' +
+          '• Pesquisar pelo nome do município\n' +
+          '• Verificar informações oficiais\n\n' +
+          'Após encontrar o município, digite o nome no campo "Cidade".');
+    
+    // Abrir página do IBGE com municípios do estado selecionado
+    // URL do IBGE Cidades com panorama do estado (mostra todos os municípios)
+    const url = `https://cidades.ibge.gov.br/brasil/${estado.toLowerCase()}/panorama`;
+    console.log('Abrindo URL:', url);
+    
+    const ibgeWindow = window.open(url, '_blank');
+    
+    if (ibgeWindow) {
+        console.log('✅ Página do IBGE aberta com sucesso');
+        // Focar no campo cidade para facilitar preenchimento após consulta
+        setTimeout(() => {
+            if (cidadeInput) {
+                cidadeInput.focus();
+            }
+        }, 500);
+    } else {
+        console.error('❌ Falha ao abrir página (pop-up bloqueado?)');
+        alert('⚠️ A página foi bloqueada pelo navegador.\n\n' +
+              'Por favor, permita pop-ups para este site.\n\n' +
+              'Ou acesse manualmente: ' + url);
+    }
+    
+    console.log('=== FIM BUSCAR MUNICÍPIO ===');
 }
 
 // Função para abrir Sintegra (1º copia CNPJ, 2º abre site)
