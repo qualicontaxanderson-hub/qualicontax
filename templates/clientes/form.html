@@ -459,6 +459,9 @@
 }
 </style>
 <script>
+// Variável global para armazenar o último CNPJ consultado
+let ultimoCNPJConsultado = '';
+
 // Toggle fields based on tipo_pessoa
 function toggleTipoFields() {
     const tipoPessoa = document.getElementById('tipo_pessoa').value;
@@ -633,6 +636,10 @@ function consultarCNPJ() {
             if (data.success) {
                 console.log('🎯 DADOS RECEBIDOS! Preenchendo automaticamente...');
                 console.log('📦 DADOS COMPLETOS:', JSON.stringify(data.data, null, 2));
+                
+                // Salvar CNPJ consultado para uso no Sintegra
+                ultimoCNPJConsultado = cnpj;
+                console.log('✅ CNPJ salvo para Sintegra:', ultimoCNPJConsultado);
                 
                 // SOLUÇÃO NUCLEAR: Preencher com delay para garantir DOM pronto
                 setTimeout(() => {
@@ -821,10 +828,12 @@ function preencherDadosCNPJ(data) {
     console.log('emailValue final:', emailValue, 'tipo:', typeof emailValue);
     
     // DEBUG: Mostrar alert se email foi encontrado nos dados
-    if (data.email || data.correio_eletronico || data.endereco_eletronico) {
+    // IMPORTANTE: Verificar se tem CONTEÚDO (não apenas se existe)
+    // String vazia "" é falsy, mas queremos detectar isso também
+    if (emailValue && emailValue.trim() !== '') {
         console.log('⚠️ EMAIL ENCONTRADO NOS DADOS! Valor:', emailValue);
     } else {
-        console.warn('⚠️ NENHUM CAMPO DE EMAIL NOS DADOS DA API');
+        console.warn('⚠️ NENHUM CAMPO DE EMAIL NOS DADOS DA API (ou está vazio)');
     }
     
     // NOVO: Verificar se campo existe e seu estado ANTES de tentar preencher
@@ -995,9 +1004,19 @@ function consultarSintegra() {
     // DEBUG: Confirmar que função foi chamada
     console.log('Função consultarSintegra() executando...');
     
-    // Pegar CNPJ do formulário
-    const cnpjField = document.getElementById('cpf_cnpj');
-    const cnpj = cnpjField ? cnpjField.value.trim() : '';
+    // PRIORIDADE 1: Usar CNPJ que foi consultado pela API
+    // PRIORIDADE 2: Pegar do campo do formulário
+    let cnpj = '';
+    
+    if (ultimoCNPJConsultado) {
+        cnpj = ultimoCNPJConsultado;
+        console.log('✅ Usando CNPJ da última consulta:', cnpj);
+    } else {
+        // Fallback: pegar do campo
+        const cnpjField = document.getElementById('cpf_cnpj_pj');
+        cnpj = cnpjField ? cnpjField.value.trim() : '';
+        console.log('⚠️ CNPJ da última consulta não encontrado, pegando do campo:', cnpj);
+    }
     
     console.log('CNPJ encontrado:', cnpj);
     
