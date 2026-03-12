@@ -153,7 +153,26 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="inscricao_municipal">Inscrição Municipal</label>
-                            <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="form-control" placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" 
+                                       id="inscricao_municipal" 
+                                       name="inscricao_municipal" 
+                                       class="form-control" 
+                                       placeholder="Inscrição Municipal" 
+                                       value="{{ cliente.inscricao_municipal if cliente else '' }}"
+                                       style="flex: 1;">
+                                <button type="button" 
+                                        class="btn btn-info" 
+                                        onclick="buscarMunicipio()" 
+                                        title="Buscar município no IBGE"
+                                        style="white-space: nowrap;">
+                                    <i class="fas fa-map-marked-alt"></i> Buscar Município
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Consulte municípios oficiais do IBGE por estado
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="regime_tributario">Regime Tributário</label>
@@ -325,26 +344,12 @@
                     </div>
                     <div class="form-group">
                         <label for="cidade">Cidade / Município</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" 
-                                   id="cidade" 
-                                   name="cidade" 
-                                   class="form-control" 
-                                   placeholder="Digite o nome da cidade" 
-                                   value="{{ cliente.cidade if cliente else '' }}"
-                                   style="flex: 1;">
-                            <button type="button" 
-                                    class="btn btn-info" 
-                                    onclick="buscarMunicipio()" 
-                                    title="Buscar município no IBGE"
-                                    style="white-space: nowrap;">
-                                <i class="fas fa-map-marked-alt"></i> Buscar Município
-                            </button>
-                        </div>
-                        <small class="form-text text-muted">
-                            <i class="fas fa-info-circle"></i> 
-                            Clique em "Buscar Município" para consultar a lista oficial de municípios do IBGE por estado
-                        </small>
+                        <input type="text" 
+                               id="cidade" 
+                               name="cidade" 
+                               class="form-control" 
+                               placeholder="Digite o nome da cidade" 
+                               value="{{ cliente.cidade if cliente else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
@@ -1021,7 +1026,7 @@ function buscarMunicipio() {
     console.log('=== FUNÇÃO BUSCAR MUNICÍPIO CHAMADA ===');
     
     const estado = document.getElementById('estado').value;
-    const cidadeInput = document.getElementById('cidade');
+    const inscricaoMunicipalInput = document.getElementById('inscricao_municipal');
     
     // Verificar se estado foi selecionado
     if (!estado) {
@@ -1044,7 +1049,7 @@ function buscarMunicipio() {
           '• Ver todos os municípios do estado\n' +
           '• Pesquisar pelo nome do município\n' +
           '• Verificar informações oficiais\n\n' +
-          'Após encontrar o município, digite o nome no campo "Cidade".');
+          'Após encontrar o município, você pode anotar a inscrição municipal no campo correspondente.');
     
     // Abrir página do IBGE com municípios do estado selecionado
     // URL do IBGE Cidades com panorama do estado (mostra todos os municípios)
@@ -1055,10 +1060,10 @@ function buscarMunicipio() {
     
     if (ibgeWindow) {
         console.log('✅ Página do IBGE aberta com sucesso');
-        // Focar no campo cidade para facilitar preenchimento após consulta
+        // Focar no campo inscrição municipal para facilitar preenchimento após consulta
         setTimeout(() => {
-            if (cidadeInput) {
-                cidadeInput.focus();
+            if (inscricaoMunicipalInput) {
+                inscricaoMunicipalInput.focus();
             }
         }, 500);
     } else {
