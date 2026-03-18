@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Importar OFX - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-file-upload text-primary"></i>
+                Importar Extrato OFX
+            </h2>
+            <p class="text-muted">Importe extratos bancários no formato OFX para conciliação</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cloud-upload-alt"></i> Upload de Arquivo OFX
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" action="{{ url_for('contabil.importar_ofx') }}">
+                        <!-- Seleção de Cliente -->
+                        <div class="form-group">
+                            <label for="cliente_id">Cliente *</label>
+                            <select name="cliente_id" id="cliente_id" class="form-control" required>
+                                <option value="">Selecione o cliente...</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}">{{ cliente.razao_social }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                Selecione o cliente ao qual este extrato pertence
+                            </small>
+                        </div>
+
+                        <!-- Seleção de Conta Corrente -->
+                        <div class="form-group">
+                            <label for="conta_id">Conta Corrente *</label>
+                            <select name="conta_id" id="conta_id" class="form-control" required>
+                                <option value="">Selecione a conta...</option>
+                                {% for conta in contas %}
+                                <option value="{{ conta.id }}">
+                                    {{ conta.banco_nome }} - Ag: {{ conta.agencia }} - Conta: {{ conta.numero_conta }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                Se a conta não aparece na lista, cadastre-a primeiro em 
+                                <a href="{{ url_for('contabil.contas_correntes') }}">Contas Correntes</a>
+                            </small>
+                        </div>
+
+                        <!-- Upload de Arquivo OFX -->
+                        <div class="form-group">
+                            <label for="arquivo_ofx">Arquivo OFX *</label>
+                            <div class="custom-file">
+                                <input type="file" name="arquivo_ofx" id="arquivo_ofx" 
+                                       class="custom-file-input" accept=".ofx" required>
+                                <label class="custom-file-label" for="arquivo_ofx">Escolher arquivo...</label>
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Formatos aceitos: .ofx (Open Financial Exchange)
+                            </small>
+                        </div>
+
+                        <!-- Área de Drop Zone -->
+                        <div class="dropzone-area mt-4 mb-4 text-center p-5 border border-dashed rounded" 
+                             id="dropzone" style="cursor: pointer; background-color: #f8f9fa;">
+                            <i class="fas fa-cloud-upload-alt fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted">Arraste o arquivo OFX aqui</h5>
+                            <p class="text-muted mb-0">ou clique para selecionar</p>
+                        </div>
+
+                        <!-- Opções de Importação -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-cog"></i> Opções de Importação
+                                </h6>
+                                
+                                <div class="form-check">
+                                    <input type="checkbox" name="usar_memorizacoes_grupo" id="usar_memorizacoes_grupo" 
+                                           class="form-check-input" checked>
+                                    <label class="form-check-label" for="usar_memorizacoes_grupo">
+                                        Usar memorizações do grupo (se cliente pertencer a um grupo)
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check">
+                                    <input type="checkbox" name="classificar_automaticamente" id="classificar_automaticamente" 
+                                           class="form-check-input" checked>
+                                    <label class="form-check-label" for="classificar_automaticamente">
+                                        Classificar transações automaticamente usando memorizações
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check">
+                                    <input type="checkbox" name="ignorar_duplicadas" id="ignorar_duplicadas" 
+                                           class="form-check-input" checked>
+                                    <label class="form-check-label" for="ignorar_duplicadas">
+                                        Ignorar transações duplicadas (já importadas anteriormente)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botões de Ação -->
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary btn-lg btn-block">
+                                <i class="fas fa-upload"></i> Processar Arquivo OFX
+                            </button>
+                            <a href="{{ url_for('contabil.index') }}" class="btn btn-secondary btn-block">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Informações sobre OFX -->
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-question-circle"></i> Como obter o arquivo OFX?
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2"><strong>1. Acesse o internet banking do seu banco</strong></p>
+                    <p class="mb-2"><strong>2. Vá para a área de extratos</strong></p>
+                    <p class="mb-2"><strong>3. Selecione o período desejado</strong></p>
+                    <p class="mb-2"><strong>4. Escolha a opção "Exportar" ou "Download"</strong></p>
+                    <p class="mb-2"><strong>5. Selecione o formato OFX</strong></p>
+                    <p class="mb-0">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            A maioria dos bancos brasileiros oferece extrato em formato OFX: 
+                            Banco do Brasil, Itaú, Bradesco, Santander, Caixa, etc.
+                        </small>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Atualizar label do arquivo quando selecionar
+document.getElementById('arquivo_ofx').addEventListener('change', function(e) {
+    var fileName = e.target.files[0] ? e.target.files[0].name : 'Escolher arquivo...';
+    var nextSibling = e.target.nextElementSibling;
+    nextSibling.innerText = fileName;
+});
+
+// Dropzone click to open file dialog
+document.getElementById('dropzone').addEventListener('click', function() {
+    document.getElementById('arquivo_ofx').click();
+});
+
+// Drag and drop
+var dropzone = document.getElementById('dropzone');
+dropzone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.backgroundColor = '#e9ecef';
+    dropzone.style.borderColor = '#007bff';
+});
+
+dropzone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.backgroundColor = '#f8f9fa';
+    dropzone.style.borderColor = '#dee2e6';
+});
+
+dropzone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.backgroundColor = '#f8f9fa';
+    dropzone.style.borderColor = '#dee2e6';
+    
+    var files = e.dataTransfer.files;
+    if (files.length > 0) {
+        var fileInput = document.getElementById('arquivo_ofx');
+        fileInput.files = files;
+        
+        // Atualizar label
+        var fileName = files[0].name;
+        var label = fileInput.nextElementSibling;
+        label.innerText = fileName;
+    }
+});
+</script>
+{% endblock %}
