@@ -15,6 +15,82 @@
     <!-- Chart.js 4.x -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
+    <!-- CSS para Dropdown Aninhado -->
+    <style>
+        /* Dropdown aninhado - Container */
+        .submenu-item.has-dropdown {
+            position: relative;
+        }
+
+        /* Submenu dropdown (oculto inicialmente) */
+        .dropdown-submenu {
+            display: none;
+            position: absolute;
+            left: 100%;
+            top: 0;
+            min-width: 250px;
+            background: #2c3e50;
+            border-radius: 5px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+            padding: 5px 0;
+            z-index: 1000;
+            list-style: none;
+        }
+
+        /* Mostrar dropdown ao hover */
+        .submenu-item.has-dropdown:hover > .dropdown-submenu {
+            display: block;
+            animation: slideIn 300ms ease-out;
+        }
+
+        /* Animação de entrada */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Seta indicadora */
+        .dropdown-arrow {
+            margin-left: auto;
+            font-size: 0.8em;
+            transition: transform 0.3s;
+        }
+
+        .has-dropdown:hover .dropdown-arrow {
+            transform: translateX(3px);
+        }
+
+        /* Estilo dos links do dropdown */
+        .dropdown-submenu li {
+            list-style: none;
+        }
+
+        .dropdown-submenu li a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            color: #ecf0f1;
+            text-decoration: none;
+            transition: background 0.3s;
+        }
+
+        .dropdown-submenu li a:hover {
+            background: #34495e;
+        }
+
+        .dropdown-submenu li a i {
+            width: 20px;
+            text-align: center;
+        }
+    </style>
+    
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -97,17 +173,38 @@
                                 <span>Início</span>
                             </a>
                         </li>
-                        <li class="submenu-item">
-                            <a href="{{ url_for('contabil.conciliacoes') }}" class="submenu-link {% if 'contabil.conciliacoes' in request.endpoint %}active{% endif %}">
+                        <li class="submenu-item has-dropdown">
+                            <a href="#" class="submenu-link">
                                 <i class="fas fa-file-invoice-dollar"></i>
-                                <span>Conciliações Bancárias</span>
+                                <span>Conciliação Bancária</span>
+                                <i class="fas fa-chevron-right dropdown-arrow"></i>
                             </a>
-                        </li>
-                        <li class="submenu-item">
-                            <a href="{{ url_for('contabil.memorizacoes') }}" class="submenu-link {% if 'contabil.memorizacoes' in request.endpoint %}active{% endif %}">
-                                <i class="fas fa-brain"></i>
-                                <span>Memorizações</span>
-                            </a>
+                            <ul class="dropdown-submenu">
+                                <li>
+                                    <a href="{{ url_for('contabil.contas_correntes') }}">
+                                        <i class="fas fa-university"></i>
+                                        <span>Cadastro de Conta Corrente</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('contabil.importar_ofx') }}">
+                                        <i class="fas fa-file-upload"></i>
+                                        <span>Importar OFX</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('contabil.extrato_conciliacao') }}">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>Extrato de Conciliação</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('contabil.memorizacoes') }}">
+                                        <i class="fas fa-brain"></i>
+                                        <span>Memorizações</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                     </ul>
                 </li>
