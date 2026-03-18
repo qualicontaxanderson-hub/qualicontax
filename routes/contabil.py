@@ -76,6 +76,55 @@ def ver_conciliacao(conciliacao_id):
                          transacoes=transacoes)
 
 
+@contabil.route('/contas_correntes')
+@login_required
+def contas_correntes():
+    """Cadastro e gestão de contas correntes bancárias"""
+    # TODO: Implementar busca de contas do banco de dados
+    contas = []  # Placeholder
+    clientes = Cliente.get_all()
+    
+    return render_template('contabil/contas_correntes.html',
+                         contas=contas,
+                         clientes=clientes)
+
+
+@contabil.route('/importar_ofx')
+@login_required
+def importar_ofx():
+    """Interface para importação de arquivos OFX"""
+    # Buscar contas correntes para seleção
+    # TODO: Implementar busca de contas do banco
+    contas = []  # Placeholder
+    clientes = Cliente.get_all()
+    
+    return render_template('contabil/importar_ofx.html',
+                         contas=contas,
+                         clientes=clientes)
+
+
+@contabil.route('/extrato_conciliacao')
+@login_required
+def extrato_conciliacao():
+    """Visualização e conciliação de extratos bancários"""
+    conta_id = request.args.get('conta_id')
+    data_inicial = request.args.get('data_inicial')
+    data_final = request.args.get('data_final')
+    
+    # TODO: Implementar busca de transações do banco
+    transacoes = []  # Placeholder
+    contas = []  # Placeholder
+    
+    return render_template('contabil/extrato_conciliacao.html',
+                         transacoes=transacoes,
+                         contas=contas,
+                         filtros={
+                             'conta_id': conta_id,
+                             'data_inicial': data_inicial,
+                             'data_final': data_final
+                         })
+
+
 @contabil.route('/memorizacoes')
 @login_required
 def memorizacoes():
