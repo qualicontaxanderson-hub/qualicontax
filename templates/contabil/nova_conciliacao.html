@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Conciliação - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="fas fa-file-upload"></i>
+            Nova Conciliação Bancária
+        </h1>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Importar Arquivo OFX</h3>
+        </div>
+        <div class="card-body">
+            <div class="info-box info-box-info">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <strong>Formato OFX (Open Financial Exchange)</strong>
+                    <p>
+                        O arquivo OFX pode ser baixado diretamente do seu banco, geralmente na área de 
+                        extratos ou movimentações. Certifique-se de que o arquivo seja do cliente correto.
+                    </p>
+                </div>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="form-group">
+                    <label for="cliente_id">Cliente *</label>
+                    <select name="cliente_id" id="cliente_id" class="form-control" required>
+                        <option value="">Selecione o cliente</option>
+                        {% for cliente in clientes %}
+                        <option value="{{ cliente.id }}">{{ cliente.nome_razao_social }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="arquivo_ofx">Arquivo OFX *</label>
+                    <div class="file-upload-area">
+                        <input type="file" name="arquivo_ofx" id="arquivo_ofx" 
+                               accept=".ofx,.OFX" required>
+                        <div class="file-upload-placeholder">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Clique ou arraste o arquivo OFX aqui</p>
+                            <small>Apenas arquivos .ofx são aceitos</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="usar_grupo" id="usar_grupo">
+                        Usar memorizações do grupo (se aplicável)
+                    </label>
+                    <small class="form-text text-muted">
+                        Se marcado, o sistema tentará usar primeiro as memorizações do grupo ao qual 
+                        o cliente pertence. Caso contrário, usará apenas as memorizações individuais.
+                    </small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Importar e Processar
+                    </button>
+                    <a href="{{ url_for('contabil.conciliacoes') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Informações adicionais -->
+    <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+            <h3><i class="fas fa-question-circle"></i> Como Obter o Arquivo OFX</h3>
+        </div>
+        <div class="card-body">
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Acesse o Internet Banking</h4>
+                        <p>Entre no site ou aplicativo do banco do seu cliente</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Busque a Opção de Extrato</h4>
+                        <p>Geralmente está em "Extratos", "Movimentações" ou "Downloads"</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Selecione o Formato OFX</h4>
+                        <p>Escolha OFX, Money ou similar (não Excel/PDF)</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Defina o Período</h4>
+                        <p>Selecione as datas inicial e final do extrato desejado</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Baixe o Arquivo</h4>
+                        <p>Faça o download e salve em local seguro</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box info-box-warning" style="margin-top: 1.5rem;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>Atenção</strong>
+                    <p>
+                        Cada banco pode ter um formato ligeiramente diferente de OFX. 
+                        Caso encontre problemas na importação, entre em contato com o suporte.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.file-upload-area {
+    position: relative;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.file-upload-area:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.file-upload-area input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.file-upload-placeholder i {
+    font-size: 3rem;
+    color: #667eea;
+    margin-bottom: 1rem;
+}
+
+.file-upload-placeholder p {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.file-upload-placeholder small {
+    color: #999;
+}
+
+.steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.step-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.step-content h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1rem;
+}
+
+.step-content p {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.info-box {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.info-box i {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.info-box strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.info-box p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.info-box-info {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+}
+
+.info-box-info i {
+    color: #2196f3;
+}
+
+.info-box-warning {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.info-box-warning i {
+    color: #ffc107;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+</style>
+
+<script>
+// Mostra nome do arquivo selecionado
+document.getElementById('arquivo_ofx').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name;
+    if (fileName) {
+        const placeholder = document.querySelector('.file-upload-placeholder');
+        placeholder.innerHTML = `
+            <i class="fas fa-file-alt"></i>
+            <p>${fileName}</p>
+            <small>Arquivo selecionado com sucesso</small>
+        `;
+    }
+});
+
+// Drag and drop
+const uploadArea = document.querySelector('.file-upload-area');
+const fileInput = document.getElementById('arquivo_ofx');
+
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.style.borderColor = '#667eea';
+    uploadArea.style.background = '#f8f9ff';
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.style.borderColor = '#ddd';
+    uploadArea.style.background = 'transparent';
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.style.borderColor = '#ddd';
+    uploadArea.style.background = 'transparent';
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        fileInput.files = files;
+        fileInput.dispatchEvent(new Event('change'));
+    }
+});
+</script>
+{% endblock %}

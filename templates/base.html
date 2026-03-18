@@ -84,11 +84,32 @@
                     </a>
                 </li>
                 
-                <li class="nav-item">
+                <li class="nav-item has-submenu">
                     <a href="#" class="nav-link">
                         <i class="fas fa-calculator"></i>
                         <span>Contábil</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu">
+                        <li class="submenu-item">
+                            <a href="{{ url_for('contabil.index') }}" class="submenu-link {% if 'contabil.index' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-home"></i>
+                                <span>Início</span>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a href="{{ url_for('contabil.conciliacoes') }}" class="submenu-link {% if 'contabil.conciliacoes' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                                <span>Conciliações Bancárias</span>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a href="{{ url_for('contabil.memorizacoes') }}" class="submenu-link {% if 'contabil.memorizacoes' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-brain"></i>
+                                <span>Memorizações</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 
                 <li class="nav-item">
