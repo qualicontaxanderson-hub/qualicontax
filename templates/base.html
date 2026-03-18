@@ -89,7 +89,54 @@
             width: 20px;
             text-align: center;
         }
+
+        /* Suporte para clique - mostrar dropdown quando tem classe active */
+        .submenu-item.has-dropdown.active > .dropdown-submenu {
+            display: block;
+        }
+
+        /* Melhorar visibilidade no mobile */
+        @media (max-width: 768px) {
+            .dropdown-submenu {
+                position: relative;
+                left: 0;
+                margin-left: 20px;
+                margin-top: 5px;
+            }
+        }
     </style>
+
+    <!-- JavaScript para toggle de dropdown ao clicar -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Toggle dropdown ao clicar (suporte mobile e backup para desktop)
+            document.querySelectorAll('.has-dropdown > a').forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault(); // Prevenir navegação do href="#"
+                    
+                    // Toggle classe 'active' no parent (li.has-dropdown)
+                    var parent = this.parentElement;
+                    parent.classList.toggle('active');
+                    
+                    // Fechar outros dropdowns abertos
+                    document.querySelectorAll('.has-dropdown.active').forEach(function(other) {
+                        if (other !== parent) {
+                            other.classList.remove('active');
+                        }
+                    });
+                });
+            });
+
+            // Fechar dropdown ao clicar fora
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.has-dropdown')) {
+                    document.querySelectorAll('.has-dropdown.active').forEach(function(item) {
+                        item.classList.remove('active');
+                    });
+                }
+            });
+        });
+    </script>
     
     {% block extra_css %}{% endblock %}
 </head>
