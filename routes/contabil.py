@@ -115,8 +115,10 @@ def contas_correntes():
     """Cadastro e gestão de contas correntes bancárias"""
     # TODO: Implementar busca de contas do banco de dados
     contas = []  # Placeholder
-    clientes = Cliente.get_all()
-    
+    # get_all() returns a paginated dict; extract the list
+    clientes_result = Cliente.get_all()
+    clientes = clientes_result.get('clientes', []) if isinstance(clientes_result, dict) else (clientes_result or [])
+
     return render_template('contabil/contas_correntes.html',
                          contas=contas,
                          clientes=clientes)
