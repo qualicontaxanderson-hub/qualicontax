@@ -15,6 +15,132 @@
     <!-- Chart.js 4.x -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
+    <!-- CSS para Dropdown Aninhado -->
+    <style>
+        /* Dropdown aninhado - Container */
+        .submenu-item.has-dropdown {
+            position: relative !important;
+        }
+
+        /* Submenu dropdown (oculto inicialmente) - mais específico para sobrescrever style.css */
+        ul.dropdown-submenu {
+            display: none !important;
+            position: absolute !important;
+            left: 100% !important;
+            top: 0 !important;
+            min-width: 250px !important;
+            background: #2c3e50 !important;
+            border-radius: 5px !important;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3) !important;
+            padding: 5px 0 !important;
+            z-index: 1000 !important;
+            list-style: none !important;
+            margin: 0 !important;
+        }
+
+        /* Mostrar dropdown ao hover */
+        .submenu-item.has-dropdown:hover > ul.dropdown-submenu {
+            display: block !important;
+            animation: slideIn 300ms ease-out;
+        }
+
+        /* Animação de entrada */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Seta indicadora */
+        .dropdown-arrow {
+            margin-left: auto;
+            font-size: 0.8em;
+            transition: transform 0.3s;
+        }
+
+        .has-dropdown:hover .dropdown-arrow {
+            transform: translateX(3px);
+        }
+
+        /* Estilo dos links do dropdown */
+        ul.dropdown-submenu li {
+            list-style: none !important;
+        }
+
+        ul.dropdown-submenu li a {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            padding: 12px 20px !important;
+            color: #ecf0f1 !important;
+            text-decoration: none !important;
+            transition: background 0.3s !important;
+            background-color: transparent !important;
+        }
+
+        ul.dropdown-submenu li a:hover {
+            background: #34495e !important;
+        }
+
+        ul.dropdown-submenu li a i {
+            width: 20px !important;
+            text-align: center !important;
+            opacity: 1 !important;
+        }
+
+        /* Suporte para clique - mostrar dropdown quando tem classe active */
+        .submenu-item.has-dropdown.active > ul.dropdown-submenu {
+            display: block !important;
+        }
+
+        /* Melhorar visibilidade no mobile */
+        @media (max-width: 768px) {
+            ul.dropdown-submenu {
+                position: relative !important;
+                left: 0 !important;
+                margin-left: 20px !important;
+                margin-top: 5px !important;
+            }
+        }
+    </style>
+
+    <!-- JavaScript para toggle de dropdown ao clicar -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Toggle dropdown ao clicar (suporte mobile e backup para desktop)
+            document.querySelectorAll('.has-dropdown > a').forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault(); // Prevenir navegação do href="#"
+                    
+                    // Toggle classe 'active' no parent (li.has-dropdown)
+                    var parent = this.parentElement;
+                    parent.classList.toggle('active');
+                    
+                    // Fechar outros dropdowns abertos
+                    document.querySelectorAll('.has-dropdown.active').forEach(function(other) {
+                        if (other !== parent) {
+                            other.classList.remove('active');
+                        }
+                    });
+                });
+            });
+
+            // Fechar dropdown ao clicar fora
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.has-dropdown')) {
+                    document.querySelectorAll('.has-dropdown.active').forEach(function(item) {
+                        item.classList.remove('active');
+                    });
+                }
+            });
+        });
+    </script>
+    
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -84,11 +210,53 @@
                     </a>
                 </li>
                 
-                <li class="nav-item">
+                <li class="nav-item has-submenu">
                     <a href="#" class="nav-link">
                         <i class="fas fa-calculator"></i>
                         <span>Contábil</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu">
+                        <li class="submenu-item">
+                            <a href="{{ url_for('contabil.index') }}" class="submenu-link {% if 'contabil.index' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-home"></i>
+                                <span>Início</span>
+                            </a>
+                        </li>
+                        <li class="submenu-item has-dropdown">
+                            <a href="#" class="submenu-link">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                                <span>Conciliação Bancária</span>
+                                <i class="fas fa-chevron-right dropdown-arrow"></i>
+                            </a>
+                            <ul class="dropdown-submenu">
+                                <li>
+                                    <a href="{{ url_for('contabil.contas_correntes') }}">
+                                        <i class="fas fa-university"></i>
+                                        <span>Cadastro de Conta Corrente</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('contabil.importar_ofx') }}">
+                                        <i class="fas fa-file-upload"></i>
+                                        <span>Importar OFX</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('contabil.extrato_conciliacao') }}">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>Extrato de Conciliação</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('contabil.memorizacoes') }}">
+                                        <i class="fas fa-brain"></i>
+                                        <span>Memorizações</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    </ul>
                 </li>
                 
                 <li class="nav-item">

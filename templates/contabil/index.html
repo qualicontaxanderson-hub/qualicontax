@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Contábil - Conciliação Bancária - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="fas fa-calculator"></i>
+            Módulo Contábil
+        </h1>
+        <p class="page-subtitle">Gestão de Conciliações Bancárias e Classificações Contábeis</p>
+    </div>
+
+    <div class="dashboard-cards">
+        <!-- Card Conciliações -->
+        <div class="card dashboard-card">
+            <div class="card-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <div class="card-content">
+                <h3 class="card-title">Conciliações Bancárias</h3>
+                <p class="card-description">
+                    Gerencie suas conciliações bancárias, importe extratos OFX e classifique transações.
+                </p>
+                <div class="card-actions">
+                    <a href="{{ url_for('contabil.conciliacoes') }}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> Ver Conciliações
+                    </a>
+                    <a href="{{ url_for('contabil.nova_conciliacao') }}" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Nova Conciliação
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Memorizações -->
+        <div class="card dashboard-card">
+            <div class="card-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <i class="fas fa-brain"></i>
+            </div>
+            <div class="card-content">
+                <h3 class="card-title">Memorizações</h3>
+                <p class="card-description">
+                    Configure regras de classificação automática por grupo ou individuais.
+                </p>
+                <div class="card-actions">
+                    <a href="{{ url_for('contabil.memorizacoes') }}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> Ver Memorizações
+                    </a>
+                    <a href="{{ url_for('contabil.nova_memorizacao') }}" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Nova Memorização
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações do Sistema -->
+    <div class="info-section" style="margin-top: 2rem;">
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-info-circle"></i> Sobre o Módulo Contábil</h3>
+            </div>
+            <div class="card-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <h4><i class="fas fa-file-import"></i> Importação OFX</h4>
+                        <p>
+                            Importe extratos bancários no formato OFX (Open Financial Exchange) diretamente 
+                            do seu banco. O sistema processará automaticamente todas as transações.
+                        </p>
+                    </div>
+
+                    <div class="info-item">
+                        <h4><i class="fas fa-users-cog"></i> Memorizações por Grupo</h4>
+                        <p>
+                            Configure regras de classificação que se aplicam a todos os clientes de um grupo.
+                            Ideal para empresas do mesmo ramo ou com padrões similares de movimentação.
+                        </p>
+                    </div>
+
+                    <div class="info-item">
+                        <h4><i class="fas fa-user-cog"></i> Memorizações Individuais</h4>
+                        <p>
+                            Crie regras específicas para cada cliente. As memorizações individuais têm 
+                            prioridade sobre as memorizações do grupo.
+                        </p>
+                    </div>
+
+                    <div class="info-item">
+                        <h4><i class="fas fa-file-export"></i> Exportação Contábil</h4>
+                        <p>
+                            Após classificar as transações, exporte os dados para diversos sistemas contábeis 
+                            como Domínio, Alterdata, Sage, entre outros.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Como Funciona -->
+    <div class="workflow-section" style="margin-top: 2rem;">
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-route"></i> Fluxo de Trabalho</h3>
+            </div>
+            <div class="card-body">
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Importar Extrato</h4>
+                            <p>Faça upload do arquivo OFX do banco</p>
+                        </div>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Escolher Memorizações</h4>
+                            <p>Opte por usar regras do grupo ou individuais</p>
+                        </div>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>Classificar</h4>
+                            <p>Sistema classifica automaticamente ou manualmente</p>
+                        </div>
+                    </div>
+
+                    <div class="workflow-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+
+                    <div class="workflow-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4>Exportar</h4>
+                            <p>Exporte para seu sistema contábil</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.dashboard-card {
+    display: flex;
+    padding: 0;
+    overflow: hidden;
+}
+
+.card-icon {
+    width: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2.5rem;
+}
+
+.card-content {
+    flex: 1;
+    padding: 1.5rem;
+}
+
+.card-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    color: #333;
+}
+
+.card-description {
+    margin: 0 0 1rem 0;
+    color: #666;
+    line-height: 1.5;
+}
+
+.card-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-item h4 {
+    margin: 0 0 0.5rem 0;
+    color: #667eea;
+}
+
+.info-item p {
+    margin: 0;
+    color: #666;
+    line-height: 1.6;
+}
+
+.workflow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.workflow-step {
+    flex: 1;
+    min-width: 150px;
+    text-align: center;
+}
+
+.step-number {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto 0.75rem;
+}
+
+.step-content h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1rem;
+}
+
+.step-content p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #666;
+}
+
+.workflow-arrow {
+    color: #667eea;
+    font-size: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .workflow-arrow {
+        display: none;
+    }
+    
+    .workflow-steps {
+        flex-direction: column;
+    }
+}
+</style>
+{% endblock %}

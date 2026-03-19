@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Extrato de Conciliação - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-chart-line text-primary"></i>
+                Extrato de Conciliação
+            </h2>
+            <p class="text-muted">Visualize e concilie transações bancárias importadas</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row">
+                <div class="col-md-3">
+                    <label for="conta_id">Conta Corrente</label>
+                    <select name="conta_id" id="conta_id" class="form-control">
+                        <option value="">Todas as contas</option>
+                        {% for conta in contas %}
+                        <option value="{{ conta.id }}" {% if filtros.conta_id == conta.id|string %}selected{% endif %}>
+                            {{ conta.banco_nome }} - {{ conta.numero_conta }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="data_inicial">Data Inicial</label>
+                    <input type="date" name="data_inicial" id="data_inicial" class="form-control" 
+                           value="{{ filtros.data_inicial or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="data_final">Data Final</label>
+                    <input type="date" name="data_final" id="data_final" class="form-control"
+                           value="{{ filtros.data_final or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="status">Status</label>
+                    <select name="status" id="status" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {% if filtros.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                        <option value="CLASSIFICADA" {% if filtros.status == 'CLASSIFICADA' %}selected{% endif %}>Classificada</option>
+                        <option value="CONCILIADA" {% if filtros.status == 'CONCILIADA' %}selected{% endif %}>Conciliada</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-info btn-block">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Saldo Inicial</h6>
+                    <h4 class="text-primary">R$ 10.000,00</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h6>Total Créditos</h6>
+                    <h4>R$ 25.000,00</h4>
+                    <small>150 transações</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h6>Total Débitos</h6>
+                    <h4>R$ 20.000,00</h4>
+                    <small>89 transações</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h6>Saldo Final</h6>
+                    <h4>R$ 15.000,00</h4>
+                    <small>Diferença: R$ 0,00</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Transações -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list"></i> Transações
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-success" title="Classificar selecionadas">
+                        <i class="fas fa-check"></i> Classificar
+                    </button>
+                    <button class="btn btn-sm btn-primary" title="Exportar">
+                        <i class="fas fa-download"></i> Exportar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th width="30">
+                                <input type="checkbox" id="select-all">
+                            </th>
+                            <th>Data</th>
+                            <th>Descrição</th>
+                            <th>Tipo</th>
+                            <th class="text-right">Valor</th>
+                            <th>Categoria</th>
+                            <th>Conta Contábil</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if transacoes %}
+                            {% for t in transacoes %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" name="transacao_ids[]" value="{{ t.id }}">
+                                </td>
+                                <td>{{ t.data|format_date }}</td>
+                                <td>{{ t.descricao }}</td>
+                                <td>
+                                    {% if t.tipo == 'CREDITO' %}
+                                    <span class="badge badge-success">
+                                        <i class="fas fa-arrow-up"></i> Crédito
+                                    </span>
+                                    {% else %}
+                                    <span class="badge badge-danger">
+                                        <i class="fas fa-arrow-down"></i> Débito
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if t.tipo == 'CREDITO' %}
+                                    <span class="text-success">+ R$ {{ t.valor|format_currency }}</span>
+                                    {% else %}
+                                    <span class="text-danger">- R$ {{ t.valor|format_currency }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if t.categoria_contabil %}
+                                        {{ t.categoria_contabil }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if t.conta_contabil %}
+                                        <code>{{ t.conta_contabil }}</code>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if t.status == 'CONCILIADA' %}
+                                    <span class="badge badge-success">Conciliada</span>
+                                    {% elif t.status == 'CLASSIFICADA' %}
+                                    <span class="badge badge-info">Classificada</span>
+                                    {% else %}
+                                    <span class="badge badge-warning">Pendente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" title="Classificar">
+                                            <i class="fas fa-tag"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" title="Conciliar">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" title="Detalhes">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center py-5">
+                                    <i class="fas fa-inbox fa-4x text-muted mb-3 d-block"></i>
+                                    <p class="text-muted mb-3">Nenhuma transação encontrada</p>
+                                    <a href="{{ url_for('contabil.importar_ofx') }}" class="btn btn-primary">
+                                        <i class="fas fa-file-upload"></i> Importar Extrato OFX
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h6 class="card-title">
+                <i class="fas fa-info-circle"></i> Legenda de Status
+            </h6>
+            <div class="row">
+                <div class="col-md-4">
+                    <span class="badge badge-warning">Pendente</span> - Transação importada, aguardando classificação
+                </div>
+                <div class="col-md-4">
+                    <span class="badge badge-info">Classificada</span> - Categoria e conta contábil definidas
+                </div>
+                <div class="col-md-4">
+                    <span class="badge badge-success">Conciliada</span> - Transação verificada e confirmada
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Select all checkbox
+document.getElementById('select-all').addEventListener('change', function() {
+    var checkboxes = document.querySelectorAll('input[name="transacao_ids[]"]');
+    checkboxes.forEach(function(checkbox) {
+        checkbox.checked = this.checked;
+    }, this);
+});
+</script>
+{% endblock %}

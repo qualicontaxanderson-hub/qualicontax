@@ -34,6 +34,7 @@ from routes.processos import processos
 from routes.relatorios import relatorios
 from routes.documentos import documentos
 from routes.api import api
+from routes.contabil import contabil
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -45,6 +46,7 @@ app.register_blueprint(processos)
 app.register_blueprint(relatorios)
 app.register_blueprint(documentos)
 app.register_blueprint(api)
+app.register_blueprint(contabil)
 
 
 # Template filters

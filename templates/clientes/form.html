@@ -22,11 +22,13 @@
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container">
         
         <!-- Informações Básicas -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Informações Básicas</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-id-card"></i> Informações Básicas
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="numero_cliente">
@@ -82,16 +84,7 @@
 
                 <!-- Pessoa Jurídica Fields -->
                 <div id="pjFields" style="display: {% if cliente and cliente.tipo_pessoa == 'PJ' %}block{% else %}none{% endif %};">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="nome_razao_social_pj">Razão Social *</label>
-                            <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="form-control" placeholder="Razão social da empresa" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
-                        </div>
-                        <div class="form-group">
-                            <label for="nome_fantasia">Nome Fantasia</label>
-                            <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
-                        </div>
-                    </div>
+                    <!-- CNPJ PRIMEIRO - Para seguir lógica de preenchimento -->
                     <div class="form-row">
                         <div class="form-group">
                             <label for="cpf_cnpj_pj">CNPJ *</label>
@@ -106,20 +99,80 @@
                             </small>
                         </div>
                         <div class="form-group">
-                            <label for="inscricao_estadual">Inscrição Estadual</label>
+                            <label for="inscricao_estadual">Inscrição Estadual ⭐</label>
                             <div style="display: flex; gap: 10px;">
-                                <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="form-control" placeholder="Inscrição Estadual" value="{{ cliente.inscricao_estadual if cliente else '' }}" style="flex: 1;">
-                                <button type="button" class="btn btn-secondary" onclick="preencherIE()" title="A Inscrição Estadual será preenchida automaticamente ao consultar o CNPJ" style="white-space: nowrap;">
-                                    <i class="fas fa-info-circle"></i> IE via CNPJ
+                                <input type="text" 
+                                       id="inscricao_estadual" 
+                                       name="inscricao_estadual" 
+                                       class="form-control" 
+                                       placeholder="Preenchido automaticamente via CNPJ" 
+                                       value="{{ cliente.inscricao_estadual if cliente else '' }}" 
+                                       style="flex: 1;"
+                                       aria-label="Inscrição Estadual - preenchido automaticamente ao consultar CNPJ"
+                                       aria-describedby="ie-help-text">
+                                <button type="button" 
+                                        class="btn btn-info" 
+                                        onclick="consultarSintegra()" 
+                                        title="Abrir site do Sintegra com CNPJ copiado"
+                                        style="white-space: nowrap;">
+                                    <i class="fas fa-external-link-alt"></i> Sintegra
                                 </button>
                             </div>
-                            <small class="form-text text-muted">A Inscrição Estadual é preenchida automaticamente ao consultar o CNPJ</small>
+                            <small id="ie-help-text" class="form-text text-muted">
+                                ✅ Preenchido automaticamente ao consultar o CNPJ | 
+                                <a href="javascript:consultarSintegra()" style="color: #17a2b8; text-decoration: none;">
+                                    <i class="fas fa-check-circle"></i> Clique para validar no Sintegra do estado
+                                </a>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="data_inicio_atividade">Data de Início da Atividade ⭐</label>
+                            <input type="date" 
+                                   id="data_inicio_atividade" 
+                                   name="data_inicio_atividade" 
+                                   class="form-control" 
+                                   value="{{ cliente.data_inicio_atividade if cliente else '' }}"
+                                   aria-label="Data de início das atividades da empresa - preenchido automaticamente ao consultar CNPJ"
+                                   aria-describedby="data-atividade-help-text">
+                            <small id="data-atividade-help-text" class="form-text text-muted">✅ Data de fundação da empresa (preenchido automaticamente ao consultar o CNPJ)</small>
+                        </div>
+                    </div>
+                    <!-- Razão Social DEPOIS do CNPJ -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nome_razao_social_pj">Razão Social *</label>
+                            <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="form-control" placeholder="Razão social da empresa" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label for="nome_fantasia">Nome Fantasia</label>
+                            <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="inscricao_municipal">Inscrição Municipal</label>
-                            <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="form-control" placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" 
+                                       id="inscricao_municipal" 
+                                       name="inscricao_municipal" 
+                                       class="form-control" 
+                                       placeholder="Inscrição Municipal" 
+                                       value="{{ cliente.inscricao_municipal if cliente else '' }}"
+                                       style="flex: 1;">
+                                <button type="button" 
+                                        class="btn btn-info" 
+                                        onclick="buscarMunicipio()" 
+                                        title="Buscar município no IBGE"
+                                        style="white-space: nowrap;">
+                                    <i class="fas fa-map-marked-alt"></i> Buscar Município
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Consulte municípios oficiais do IBGE por estado
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="regime_tributario">Regime Tributário</label>
@@ -146,35 +199,79 @@
                         </div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group">
+                            <label for="cnae_fiscal">CNAE Fiscal ⭐</label>
+                            <input type="text" 
+                                   id="cnae_fiscal" 
+                                   name="cnae_fiscal" 
+                                   class="form-control" 
+                                   placeholder="Código CNAE (ex: 4711-3/02)"
+                                   value="{{ cliente.cnae_fiscal if cliente else '' }}"
+                                   readonly
+                                   aria-label="CNAE Fiscal - preenchido automaticamente ao consultar CNPJ"
+                                   aria-describedby="cnae-help-text">
+                            <small id="cnae-help-text" class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cnae_fiscal_descricao">Descrição do CNAE ⭐</label>
+                            <input type="text" 
+                                   id="cnae_fiscal_descricao" 
+                                   name="cnae_fiscal_descricao" 
+                                   class="form-control" 
+                                   placeholder="Descrição da atividade principal"
+                                   value="{{ cliente.cnae_fiscal_descricao if cliente else '' }}"
+                                   readonly
+                                   aria-label="Descrição do CNAE - preenchido automaticamente ao consultar CNPJ">
+                            <small class="form-text text-muted">Atividade econômica principal da empresa</small>
+                        </div>
+                    </div>
+                    
+                    <!-- CNAEs Secundários (se existirem) -->
+                    <div id="cnaes_secundarios_container" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group" style="width: 100%;">
+                                <label>CNAEs Secundários ⭐</label>
+                                <div id="cnaes_secundarios_list" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; background: #f9fafb; max-height: 200px; overflow-y: auto;">
+                                    <!-- Será preenchido via JavaScript -->
+                                </div>
+                                <small class="form-text text-muted">Atividades econômicas secundárias da empresa</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
                         <div class="form-group" style="width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <label style="margin: 0;">Ramos de Atividade</label>
-                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm" style="padding: 5px 10px; font-size: 13px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <label style="margin: 0; font-weight: 600; font-size: 15px;">Ramos de Atividade</label>
+                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                                     <i class="fas fa-plus"></i> Novo Ramo de Atividade
                                 </a>
                             </div>
-                            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                            <div style="border: 2px solid #e5e7eb; border-radius: 10px; padding: 20px; background: linear-gradient(to bottom, #ffffff, #f9fafb);">
                                 {% if ramos_atividade %}
-                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                                         {% for ramo in ramos_atividade %}
-                                        <div class="form-check" style="margin-bottom: 5px;">
+                                        <div class="form-check" style="margin-bottom: 0; padding: 10px; border-radius: 6px; background-color: white; border: 1px solid #e5e7eb; transition: all 0.2s;">
                                             <input class="form-check-input" type="checkbox" 
                                                    name="ramos_atividade_ids" 
                                                    value="{{ ramo.id }}" 
                                                    id="ramo_{{ ramo.id }}"
+                                                   style="margin-top: 3px;"
                                                    {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                                            <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 5px; font-size: 14px;">
+                                            <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 8px; font-size: 14px; cursor: pointer; user-select: none;">
                                                 {{ ramo.nome }}
                                             </label>
                                         </div>
                                         {% endfor %}
                                     </div>
                                 {% else %}
-                                    <p class="text-muted" style="margin: 0;">Nenhum ramo de atividade cadastrado. <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank">Clique aqui para criar o primeiro</a>.</p>
+                                    <p class="text-muted" style="margin: 0; text-align: center; padding: 20px;">
+                                        Nenhum ramo de atividade cadastrado. <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" style="color: #22C55E; text-decoration: none; font-weight: 600;">Clique aqui para criar o primeiro</a>.
+                                    </p>
                                 {% endif %}
                             </div>
-                            <small class="form-text text-muted">
-                                Selecione um ou mais ramos de atividade. Se não encontrar o ramo desejado, clique em "Novo Ramo de Atividade".
+                            <small class="form-text text-muted" style="margin-top: 10px; display: block;">
+                                <i class="fas fa-info-circle"></i> Selecione um ou mais ramos de atividade. Se não encontrar o ramo desejado, clique em "Novo Ramo de Atividade".
                             </small>
                         </div>
                     </div>
@@ -183,11 +280,13 @@
         </div>
 
         <!-- Contato -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Informações de Contato</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-envelope"></i> Informações de Contato
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="email">E-mail</label>
@@ -208,12 +307,16 @@
         </div>
 
         <!-- Endereço -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Endereço</h3>
-                <small class="text-muted">Opcional - será preenchido automaticamente ao consultar CNPJ</small>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <div style="flex: 1;">
+                    <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-map-marker-alt"></i> Endereço
+                    </h3>
+                    <small style="color: rgba(255,255,255,0.9); font-size: 13px;">Opcional - será preenchido automaticamente ao consultar CNPJ</small>
+                </div>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="cep">CEP</label>
@@ -240,58 +343,67 @@
                         <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro">
                     </div>
                     <div class="form-group">
-                        <label for="cidade">Cidade</label>
-                        <input type="text" id="cidade" name="cidade" class="form-control" placeholder="Cidade">
+                        <label for="cidade">Cidade / Município</label>
+                        <input type="text" 
+                               id="cidade" 
+                               name="cidade" 
+                               class="form-control" 
+                               placeholder="Digite o nome da cidade" 
+                               value="{{ cliente.cidade if cliente else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="estado">Estado</label>
+                        <label for="estado">Estado (UF) *</label>
                         <select id="estado" name="estado" class="form-control">
                             <option value="">Selecione...</option>
-                            <option value="AC">Acre</option>
-                            <option value="AL">Alagoas</option>
-                            <option value="AP">Amapá</option>
-                            <option value="AM">Amazonas</option>
-                            <option value="BA">Bahia</option>
-                            <option value="CE">Ceará</option>
-                            <option value="DF">Distrito Federal</option>
-                            <option value="ES">Espírito Santo</option>
-                            <option value="GO">Goiás</option>
-                            <option value="MA">Maranhão</option>
-                            <option value="MT">Mato Grosso</option>
-                            <option value="MS">Mato Grosso do Sul</option>
-                            <option value="MG">Minas Gerais</option>
-                            <option value="PA">Pará</option>
-                            <option value="PB">Paraíba</option>
-                            <option value="PR">Paraná</option>
-                            <option value="PE">Pernambuco</option>
-                            <option value="PI">Piauí</option>
-                            <option value="RJ">Rio de Janeiro</option>
-                            <option value="RN">Rio Grande do Norte</option>
-                            <option value="RS">Rio Grande do Sul</option>
-                            <option value="RO">Rondônia</option>
-                            <option value="RR">Roraima</option>
-                            <option value="SC">Santa Catarina</option>
-                            <option value="SP">São Paulo</option>
-                            <option value="SE">Sergipe</option>
-                            <option value="TO">Tocantins</option>
+                            <option value="AC">AC - Acre</option>
+                            <option value="AL">AL - Alagoas</option>
+                            <option value="AP">AP - Amapá</option>
+                            <option value="AM">AM - Amazonas</option>
+                            <option value="BA">BA - Bahia</option>
+                            <option value="CE">CE - Ceará</option>
+                            <option value="DF">DF - Distrito Federal</option>
+                            <option value="ES">ES - Espírito Santo</option>
+                            <option value="GO">GO - Goiás</option>
+                            <option value="MA">MA - Maranhão</option>
+                            <option value="MT">MT - Mato Grosso</option>
+                            <option value="MS">MS - Mato Grosso do Sul</option>
+                            <option value="MG">MG - Minas Gerais</option>
+                            <option value="PA">PA - Pará</option>
+                            <option value="PB">PB - Paraíba</option>
+                            <option value="PR">PR - Paraná</option>
+                            <option value="PE">PE - Pernambuco</option>
+                            <option value="PI">PI - Piauí</option>
+                            <option value="RJ">RJ - Rio de Janeiro</option>
+                            <option value="RN">RN - Rio Grande do Norte</option>
+                            <option value="RS">RS - Rio Grande do Sul</option>
+                            <option value="RO">RO - Rondônia</option>
+                            <option value="RR">RR - Roraima</option>
+                            <option value="SC">SC - Santa Catarina</option>
+                            <option value="SP">SP - São Paulo</option>
+                            <option value="SE">SE - Sergipe</option>
+                            <option value="TO">TO - Tocantins</option>
                         </select>
+                        <small class="form-text text-muted">Sigla do estado em letras maiúsculas (ex: SP, RJ, MG)</small>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Dados do Contrato -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Dados do Contrato</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-file-contract"></i> Dados do Contrato
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="data_inicio_contrato">Data Início do Contrato</label>
                         <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}">
+                        <small class="form-text text-muted">Data de início do contrato de prestação de serviços</small>
                     </div>
                     <div class="form-group">
                         <label for="data_fim_contrato">Data Fim do Contrato</label>
@@ -302,11 +414,13 @@
         </div>
 
         <!-- Observações -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Observações</h3>
+        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <div class="card-header" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
+                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-sticky-note"></i> Observações
+                </h3>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 25px;">
                 <div class="form-group">
                     <label for="observacoes">Observações</label>
                     <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
@@ -349,7 +463,29 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+/* Hover effect for Ramos de Atividade checkboxes */
+.form-check:has(input[type="checkbox"]):hover {
+    background-color: #f0f9ff !important;
+    border-color: #22C55E !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+.form-check:has(input[type="checkbox"]:checked) {
+    background-color: #ecfdf5 !important;
+    border-color: #22C55E !important;
+}
+
+/* Style Estado select for better visibility */
+#estado {
+    font-weight: 600;
+}
+</style>
 <script>
+// Variável global para armazenar o último CNPJ consultado
+let ultimoCNPJConsultado = '';
+
 // Toggle fields based on tipo_pessoa
 function toggleTipoFields() {
     const tipoPessoa = document.getElementById('tipo_pessoa').value;
@@ -522,10 +658,17 @@ function consultarCNPJ() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Confirmar preenchimento
-                if (confirm('Dados encontrados! Deseja preencher automaticamente os campos com as informações da Receita Federal?')) {
+                console.log('🎯 DADOS RECEBIDOS! Preenchendo automaticamente...');
+                console.log('📦 DADOS COMPLETOS:', JSON.stringify(data.data, null, 2));
+                
+                // Salvar CNPJ consultado para uso no Sintegra
+                ultimoCNPJConsultado = cnpj;
+                console.log('✅ CNPJ salvo para Sintegra:', ultimoCNPJConsultado);
+                
+                // SOLUÇÃO NUCLEAR: Preencher com delay para garantir DOM pronto
+                setTimeout(() => {
                     preencherDadosCNPJ(data.data);
-                }
+                }, 100); // Pequeno delay para garantir DOM está pronto
             } else {
                 alert(data.message || 'Erro ao consultar CNPJ. Verifique o número e tente novamente.');
             }
@@ -543,17 +686,51 @@ function consultarCNPJ() {
 
 // Função para preencher os campos com dados da Receita
 function preencherDadosCNPJ(data) {
-    console.log('=== DADOS RECEBIDOS DA API ===', data); // DEBUG
+    console.log('=== 🚀 INÍCIO DO PREENCHIMENTO AUTOMÁTICO (VERSÃO DEFINITIVA) ===');
+    console.log('=== 📦 DADOS COMPLETOS RECEBIDOS ===');
+    console.log(JSON.stringify(data, null, 2));
     
-    // Dados básicos
-    if (data.razao_social) {
-        document.getElementById('nome_razao_social_pj').value = data.razao_social;
-    }
-    if (data.nome_fantasia) {
-        document.getElementById('nome_fantasia').value = data.nome_fantasia;
+    // Listas para rastreamento
+    const preenchidos = [];
+    const naoPreenchidos = [];
+    const camposNaoExistem = [];
+    
+    // Helper function para tentar preencher um campo
+    function tentarPreencher(fieldId, valor, label) {
+        try {
+            if (!valor || (typeof valor === 'string' && valor.trim() === '')) {
+                naoPreenchidos.push(`${label} (dado não disponível)`);
+                console.warn(`⚠️ ${label}: Dado não disponível`);
+                return false;
+            }
+            
+            const campo = document.getElementById(fieldId);
+            if (!campo) {
+                camposNaoExistem.push(`${label} (campo #${fieldId} não existe no HTML)`);
+                console.error(`❌ ${label}: Campo #${fieldId} NÃO EXISTE no DOM!`);
+                return false;
+            }
+            
+            campo.value = valor;
+            preenchidos.push(`${label}: ${valor}`);
+            console.log(`✅ ${label} preenchido: ${valor}`);
+            return true;
+        } catch (e) {
+            console.error(`❌ ERRO ao preencher ${label}:`, e);
+            naoPreenchidos.push(`${label} (erro: ${e.message})`);
+            return false;
+        }
     }
     
-    // Converter porte para o formato do sistema
+    console.log('=== 📋 PREENCHENDO TODOS OS CAMPOS ===');
+    
+    // 1. Razão Social
+    tentarPreencher('nome_razao_social_pj', data.razao_social, 'Razão Social');
+    
+    // 2. Nome Fantasia
+    tentarPreencher('nome_fantasia', data.nome_fantasia, 'Nome Fantasia');
+    
+    // 3. Porte da Empresa (com mapeamento)
     if (data.porte) {
         const porteMap = {
             'ME': 'ME',
@@ -563,162 +740,464 @@ function preencherDadosCNPJ(data) {
             'EMPRESA DE PEQUENO PORTE': 'EPP'
         };
         const porte = porteMap[data.porte.toUpperCase()] || '';
-        if (porte) {
-            document.getElementById('porte_empresa').value = porte;
-        }
+        tentarPreencher('porte_empresa', porte, 'Porte da Empresa');
+    } else {
+        naoPreenchidos.push('Porte da Empresa (não disponível)');
     }
     
-    // Data de início (converter de DD/MM/YYYY para YYYY-MM-DD)
+    // 4. Data de Início da Atividade (converter DD/MM/YYYY -> YYYY-MM-DD)
     if (data.data_inicio_atividade) {
-        // A API retorna no formato DD/MM/YYYY, converter para YYYY-MM-DD
-        const partes = data.data_inicio_atividade.split('/');
-        if (partes.length === 3) {
-            const dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-            document.getElementById('data_inicio_contrato').value = dataFormatada;
-            console.log('✅ Data de início preenchida:', dataFormatada);
+        console.log(`DEBUG: Data recebida da API: "${data.data_inicio_atividade}"`);
+        let dataFormatada = '';
+        
+        // Tentar split por "/"
+        if (data.data_inicio_atividade.includes('/')) {
+            const partes = data.data_inicio_atividade.split('/');
+            if (partes.length === 3) {
+                // DD/MM/YYYY -> YYYY-MM-DD
+                dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+            }
+        } 
+        // Tentar split por "-" (caso já venha em outro formato)
+        else if (data.data_inicio_atividade.includes('-')) {
+            const partes = data.data_inicio_atividade.split('-');
+            if (partes.length === 3 && partes[0].length === 4) {
+                // Já está em YYYY-MM-DD
+                dataFormatada = data.data_inicio_atividade;
+            } else if (partes.length === 3 && partes[0].length === 2) {
+                // DD-MM-YYYY -> YYYY-MM-DD
+                dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+            }
         }
-    }
-    
-    // Inscrição Estadual
-    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
-        document.getElementById('inscricao_estadual').value = data.inscricao_estadual.trim();
-        console.log('✅ Inscrição Estadual preenchida:', data.inscricao_estadual);
-    }
-    
-    // ===== NOVOS CAMPOS =====
-    
-    // Email - com debug detalhado e múltiplas tentativas
-    console.log('Email recebido:', data.email, '| Tipo:', typeof data.email); // DEBUG
-    
-    // Tentar pegar email de diferentes campos possíveis
-    const email = data.email || data.email_principal || data.email_empresa || '';
-    
-    if (email && typeof email === 'string' && email.trim() !== '') {
-        const emailField = document.getElementById('email');
-        if (emailField) {
-            emailField.value = email.toLowerCase().trim();
-            console.log('✅ Email preenchido com sucesso:', emailField.value); // DEBUG
+        
+        if (dataFormatada) {
+            console.log(`DEBUG: Data formatada para: "${dataFormatada}"`);
+            tentarPreencher('data_inicio_atividade', dataFormatada, 'Data de Início da Atividade');
         } else {
-            console.error('❌ Campo #email não encontrado no DOM'); // DEBUG
+            console.warn(`⚠️ Não foi possível formatar data: "${data.data_inicio_atividade}"`);
+            naoPreenchidos.push(`Data de Início da Atividade (formato inválido: ${data.data_inicio_atividade})`);
         }
     } else {
-        console.warn('⚠️ Email não disponível ou vazio na resposta da API'); // DEBUG
-        console.warn('   Nota: Muitas empresas não possuem email cadastrado na Receita Federal');
+        naoPreenchidos.push('Data de Início da Atividade (não disponível)');
     }
     
-    // Telefones
+    // 5. Inscrição Estadual
+    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
+        tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
+    } else {
+        console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
+        console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
+        naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
+    }
+    
+    // 6. CNAE Fiscal
+    tentarPreencher('cnae_fiscal', data.cnae_fiscal, 'CNAE Fiscal');
+    
+    // 7. Descrição do CNAE
+    tentarPreencher('cnae_fiscal_descricao', data.cnae_fiscal_descricao, 'Descrição do CNAE');
+    
+    // 7.5. CNAEs Secundários (NOVO)
+    if (data.cnaes_secundarios && Array.isArray(data.cnaes_secundarios) && data.cnaes_secundarios.length > 0) {
+        console.log(`✅ CNAEs Secundários encontrados: ${data.cnaes_secundarios.length}`);
+        const container = document.getElementById('cnaes_secundarios_container');
+        const lista = document.getElementById('cnaes_secundarios_list');
+        
+        if (container && lista) {
+            // Mostrar container
+            container.style.display = 'block';
+            
+            // Criar lista de CNAEs
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+            data.cnaes_secundarios.forEach((cnae, index) => {
+                if (typeof cnae === 'object') {
+                    const codigo = cnae.codigo || cnae.cnae || '';
+                    const descricao = cnae.descricao || '';
+                    html += `
+                        <div style="padding: 10px; background: white; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                            <strong style="color: #1e40af; font-size: 14px;">${codigo}</strong>
+                            <span style="color: #64748b; font-size: 13px; margin-left: 8px;">${descricao}</span>
+                        </div>
+                    `;
+                } else if (typeof cnae === 'string') {
+                    html += `
+                        <div style="padding: 10px; background: white; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                            <span style="color: #1e40af; font-size: 13px;">${cnae}</span>
+                        </div>
+                    `;
+                }
+            });
+            html += '</div>';
+            lista.innerHTML = html;
+            
+            preenchidos.push(`CNAEs Secundários: ${data.cnaes_secundarios.length} encontrados`);
+            console.log(`✅ ${data.cnaes_secundarios.length} CNAEs secundários exibidos`);
+        }
+    } else {
+        console.log('ℹ️ Sem CNAEs secundários (normal - nem todas empresas têm)');
+        // Esconder container se existir
+        const container = document.getElementById('cnaes_secundarios_container');
+        if (container) {
+            container.style.display = 'none';
+        }
+    }
+    
+    // 8. Email (tentar múltiplos nomes de campos)
+    // 8. E-mail (tentar todos os campos possíveis e preencher diretamente)
+    console.log('=== DEBUG EMAIL INÍCIO ===');
+    console.log('data.email:', data.email);
+    console.log('data.correio_eletronico:', data.correio_eletronico);
+    console.log('data.endereco_eletronico:', data.endereco_eletronico);
+    
+    const emailValue = data.email || data.correio_eletronico || data.endereco_eletronico || '';
+    console.log('emailValue final:', emailValue, 'tipo:', typeof emailValue);
+    
+    // DEBUG: Mostrar alert se email foi encontrado nos dados
+    // IMPORTANTE: Verificar se tem CONTEÚDO (não apenas se existe)
+    // String vazia "" é falsy, mas queremos detectar isso também
+    if (emailValue && emailValue.trim() !== '') {
+        console.log('⚠️ EMAIL ENCONTRADO NOS DADOS! Valor:', emailValue);
+    } else {
+        console.warn('⚠️ NENHUM CAMPO DE EMAIL NOS DADOS DA API (ou está vazio)');
+    }
+    
+    // NOVO: Verificar se campo existe e seu estado ANTES de tentar preencher
+    const emailField = document.getElementById('email');
+    console.log('Campo email encontrado?', emailField ? 'SIM' : 'NÃO');
+    if (emailField) {
+        console.log('Campo email disabled?', emailField.disabled);
+        console.log('Campo email readonly?', emailField.readOnly);
+        console.log('Campo email valor atual:', emailField.value);
+    }
+    
+    if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '') {
+        const emailFinal = emailValue.toLowerCase().trim();
+        console.log('Tentando preencher email com:', emailFinal);
+        
+        // Preencher DIRETAMENTE (método mais garantido)
+        if (emailField) {
+            // Remove readonly temporariamente se existir
+            const wasReadonly = emailField.readOnly;
+            const wasDisabled = emailField.disabled;
+            
+            emailField.readOnly = false;
+            emailField.disabled = false;
+            
+            emailField.value = emailFinal;
+            
+            // Dispara eventos para garantir que frameworks detectem a mudança
+            emailField.dispatchEvent(new Event('input', { bubbles: true }));
+            emailField.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            console.log('✅ Email preenchido DIRETAMENTE:', emailFinal);
+            console.log('✅ Valor do campo após preencher:', emailField.value);
+            
+            // Restaura estados se estavam
+            if (wasReadonly) {
+                emailField.readOnly = true;
+            }
+            if (wasDisabled) {
+                emailField.disabled = true;
+            }
+            
+            preenchidos.push('E-mail: ' + emailFinal);
+        } else {
+            console.error('❌ Campo email não encontrado no DOM!');
+            camposNaoExistem.push('E-mail (campo não existe no HTML)');
+        }
+    } else {
+        console.warn('⚠️ E-mail: não disponível ou vazio');
+        console.warn('   Nota: Muitas empresas não possuem e-mail cadastrado na Receita Federal');
+        naoPreenchidos.push('E-mail (não disponível - normal, muitas empresas não têm cadastrado)');
+    }
+    
+    // 9. Telefone (formatar)
     if (data.ddd_telefone_1) {
-        const telefone1 = data.ddd_telefone_1.replace(/\D/g, '');
-        if (telefone1.length >= 10) {
-            // Formatar telefone
+        const tel1 = String(data.ddd_telefone_1).replace(/\D/g, '');
+        if (tel1.length >= 10) {
             let telFormatado;
-            if (telefone1.length === 10) {
-                telFormatado = telefone1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+            if (tel1.length === 10) {
+                telFormatado = tel1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+            } else if (tel1.length === 11) {
+                telFormatado = tel1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
             } else {
-                telFormatado = telefone1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                telFormatado = tel1;
             }
-            document.getElementById('telefone').value = telFormatado;
+            tentarPreencher('telefone', telFormatado, 'Telefone');
+        } else {
+            naoPreenchidos.push('Telefone (número inválido)');
         }
+    } else {
+        naoPreenchidos.push('Telefone (não disponível)');
     }
     
+    // 10. Celular (formatar)
     if (data.ddd_telefone_2) {
-        const telefone2 = data.ddd_telefone_2.replace(/\D/g, '');
-        if (telefone2.length >= 10) {
-            // Formatar telefone
+        const tel2 = String(data.ddd_telefone_2).replace(/\D/g, '');
+        if (tel2.length >= 10) {
             let telFormatado;
-            if (telefone2.length === 10) {
-                telFormatado = telefone2.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+            if (tel2.length === 10) {
+                telFormatado = tel2.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+            } else if (tel2.length === 11) {
+                telFormatado = tel2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
             } else {
-                telFormatado = telefone2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                telFormatado = tel2;
             }
-            document.getElementById('celular').value = telFormatado;
+            tentarPreencher('celular', telFormatado, 'Celular');
+        } else {
+            naoPreenchidos.push('Celular (número inválido)');
         }
+    } else {
+        naoPreenchidos.push('Celular (não disponível)');
     }
     
-    // Endereço
+    // 11. CEP (formatar)
     if (data.cep) {
-        const cepFormatado = data.cep.replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
-        document.getElementById('cep').value = cepFormatado;
+        const cepFormatado = String(data.cep).replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
+        tentarPreencher('cep', cepFormatado, 'CEP');
+    } else {
+        naoPreenchidos.push('CEP (não disponível)');
     }
     
-    if (data.logradouro) {
-        document.getElementById('logradouro').value = data.logradouro;
-    }
+    // 12. Logradouro
+    tentarPreencher('logradouro', data.logradouro, 'Logradouro');
     
-    if (data.numero) {
-        document.getElementById('numero').value = data.numero;
-    }
+    // 13. Número
+    tentarPreencher('numero', data.numero, 'Número');
     
-    if (data.complemento) {
-        document.getElementById('complemento').value = data.complemento;
-    }
+    // 14. Complemento
+    tentarPreencher('complemento', data.complemento, 'Complemento');
     
-    if (data.bairro) {
-        document.getElementById('bairro').value = data.bairro;
-    }
+    // 15. Bairro
+    tentarPreencher('bairro', data.bairro, 'Bairro');
     
-    if (data.municipio) {
-        document.getElementById('cidade').value = data.municipio;
-    }
+    // 16. Cidade
+    tentarPreencher('cidade', data.municipio, 'Cidade');
     
+    // 17. Estado/UF
     if (data.uf) {
-        document.getElementById('estado').value = data.uf;
+        tentarPreencher('estado', data.uf.toUpperCase(), 'Estado (UF)');
+    } else {
+        naoPreenchidos.push('Estado (não disponível)');
     }
     
-    // Exibir mensagem de sucesso com detalhes do que foi preenchido
-    const camposPreenchidos = [];
-    if (data.razao_social) camposPreenchidos.push('Razão Social');
-    if (data.nome_fantasia) camposPreenchidos.push('Nome Fantasia');
-    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') camposPreenchidos.push('Inscrição Estadual');
-    if (email && email.trim() !== '') camposPreenchidos.push('E-mail');
-    if (data.ddd_telefone_1) camposPreenchidos.push('Telefone');
-    if (data.ddd_telefone_2) camposPreenchidos.push('Celular');
-    if (data.cep) camposPreenchidos.push('CEP');
-    if (data.logradouro) camposPreenchidos.push('Endereço');
-    if (data.porte) camposPreenchidos.push('Porte');
-    if (data.data_inicio_atividade) camposPreenchidos.push('Data de Início da Atividade');
+    // === RESUMO FINAL ===
+    console.log('=== ✅ CAMPOS PREENCHIDOS COM SUCESSO (' + preenchidos.length + ') ===');
+    preenchidos.forEach((item, i) => console.log(`  ${i+1}. ✅ ${item}`));
     
-    const alertDiv = document.createElement('div');
-    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+    console.log('=== ⚠️ CAMPOS NÃO PREENCHIDOS (' + naoPreenchidos.length + ') ===');
+    naoPreenchidos.forEach((item, i) => console.log(`  ${i+1}. ⚠️ ${item}`));
     
-    let mensagemCampos = '';
-    if (camposPreenchidos.length > 0) {
-        mensagemCampos = '<ul style="margin: 10px 0 0 0; padding-left: 20px;">';
-        camposPreenchidos.forEach(campo => {
-            mensagemCampos += `<li>${campo}</li>`;
-        });
-        mensagemCampos += '</ul>';
+    if (camposNaoExistem.length > 0) {
+        console.log('=== ❌ CAMPOS QUE NÃO EXISTEM NO HTML (' + camposNaoExistem.length + ') ===');
+        camposNaoExistem.forEach((item, i) => console.log(`  ${i+1}. ❌ ${item}`));
     }
     
-    let avisoEmail = '';
-    if (!email || email.trim() === '') {
-        avisoEmail = '<p style="margin-top: 10px;"><small><strong>⚠️ Nota:</strong> E-mail não encontrado na Receita Federal. Por favor, preencha manualmente.</small></p>';
+    // ALERT com resumo para usuário
+    let mensagem = `✅ Consulta CNPJ realizada com sucesso!\n\n`;
+    mensagem += `📊 RESUMO DO PREENCHIMENTO:\n\n`;
+    mensagem += `✅ Campos preenchidos: ${preenchidos.length}\n`;
+    mensagem += `⚠️ Campos não disponíveis: ${naoPreenchidos.length}\n`;
+    
+    if (camposNaoExistem.length > 0) {
+        mensagem += `❌ Campos com erro: ${camposNaoExistem.length}\n\n`;
+        mensagem += `⚠️ ATENÇÃO: Alguns campos não existem no formulário!\n`;
+        mensagem += `Isso pode indicar problema no código.\n`;
+        mensagem += `Abra o Console (F12) para ver detalhes.`;
+    } else if (preenchidos.length < 5) {
+        mensagem += `\n⚠️ ATENÇÃO: Poucos campos foram preenchidos!\n`;
+        mensagem += `Isso NÃO É NORMAL.\n\n`;
+        mensagem += `Possíveis causas:\n`;
+        mensagem += `1. Cache do navegador (MAIS PROVÁVEL)\n`;
+        mensagem += `2. Código não deployado\n\n`;
+        mensagem += `SOLUÇÃO: Feche o navegador completamente,\n`;
+        mensagem += `reabra e pressione Ctrl+Shift+Delete\n`;
+        mensagem += `para limpar o cache.`;
+    } else {
+        mensagem += `\nPor favor, revise os dados preenchidos\n`;
+        mensagem += `e complete os campos restantes manualmente.`;
     }
     
-    alertDiv.innerHTML = `
-        <strong>✅ Dados preenchidos com sucesso!</strong> 
-        <p style="margin: 5px 0;">Os seguintes dados foram obtidos da Receita Federal:</p>
-        ${mensagemCampos}
-        ${avisoEmail}
-        <p style="margin-top: 10px;">Revise as informações e complete os campos restantes.</p>
-        <button type="button" class="close" data-dismiss="alert">&times;</button>
-    `;
-    
-    const form = document.querySelector('form');
-    form.insertBefore(alertDiv, form.firstChild);
-    
-    // Auto-remover alerta após 8 segundos
-    setTimeout(() => {
-        alertDiv.remove();
-    }, 8000);
-    
-    // Scroll para o topo
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    alert(mensagem);
+    console.log('=== 🏁 FIM DO PREENCHIMENTO AUTOMÁTICO ===');
 }
 
-// Função auxiliar para preencher IE (chamada pelo botão)
-function preencherIE() {
-    alert('A Inscrição Estadual é preenchida automaticamente ao consultar o CNPJ.\n\nClique no botão "Consultar CNPJ" para obter todos os dados da empresa, incluindo a IE.');
+// Função para buscar município no IBGE
+function buscarMunicipio() {
+    console.log('=== FUNÇÃO BUSCAR MUNICÍPIO CHAMADA ===');
+    
+    const estado = document.getElementById('estado').value;
+    const inscricaoMunicipalInput = document.getElementById('inscricao_municipal');
+    
+    // Verificar se estado foi selecionado
+    if (!estado) {
+        alert('⚠️ ESTADO NÃO SELECIONADO!\n\n' +
+              'Por favor, selecione o Estado (UF) antes de buscar o município.\n\n' +
+              'O estado é necessário para filtrar os municípios corretos.');
+        document.getElementById('estado').focus();
+        return;
+    }
+    
+    console.log('Estado selecionado:', estado);
+    
+    // Mostrar instruções ao usuário
+    const estadoNome = document.getElementById('estado').options[document.getElementById('estado').selectedIndex].text;
+    
+    alert('🗺️ BUSCAR MUNICÍPIO\n\n' +
+          'Estado selecionado: ' + estadoNome + '\n\n' +
+          'A página do IBGE Cidades será aberta.\n\n' +
+          'Você poderá:\n' +
+          '• Ver todos os municípios do estado\n' +
+          '• Pesquisar pelo nome do município\n' +
+          '• Verificar informações oficiais\n\n' +
+          'Após encontrar o município, você pode anotar a inscrição municipal no campo correspondente.');
+    
+    // Abrir página do IBGE com municípios do estado selecionado
+    // URL do IBGE Cidades com panorama do estado (mostra todos os municípios)
+    const url = `https://cidades.ibge.gov.br/brasil/${estado.toLowerCase()}/panorama`;
+    console.log('Abrindo URL:', url);
+    
+    const ibgeWindow = window.open(url, '_blank');
+    
+    if (ibgeWindow) {
+        console.log('✅ Página do IBGE aberta com sucesso');
+        // Focar no campo inscrição municipal para facilitar preenchimento após consulta
+        setTimeout(() => {
+            if (inscricaoMunicipalInput) {
+                inscricaoMunicipalInput.focus();
+            }
+        }, 500);
+    } else {
+        console.error('❌ Falha ao abrir página (pop-up bloqueado?)');
+        alert('⚠️ A página foi bloqueada pelo navegador.\n\n' +
+              'Por favor, permita pop-ups para este site.\n\n' +
+              'Ou acesse manualmente: ' + url);
+    }
+    
+    console.log('=== FIM BUSCAR MUNICÍPIO ===');
+}
+
+// Função para abrir Sintegra (1º copia CNPJ, 2º abre site)
+function consultarSintegra() {
+    console.log('=== FUNÇÃO CONSULTAR SINTEGRA CHAMADA ===');
+    
+    // DEBUG: Confirmar que função foi chamada
+    console.log('Função consultarSintegra() executando...');
+    
+    // PRIORIDADE 1: Usar CNPJ que foi consultado pela API
+    // PRIORIDADE 2: Pegar do campo do formulário
+    let cnpj = '';
+    
+    if (ultimoCNPJConsultado) {
+        cnpj = ultimoCNPJConsultado;
+        console.log('✅ Usando CNPJ da última consulta:', cnpj);
+    } else {
+        // Fallback: pegar do campo
+        const cnpjField = document.getElementById('cpf_cnpj_pj');
+        cnpj = cnpjField ? cnpjField.value.trim() : '';
+        console.log('⚠️ CNPJ da última consulta não encontrado, pegando do campo:', cnpj);
+    }
+    
+    console.log('CNPJ encontrado:', cnpj);
+    
+    if (!cnpj) {
+        alert('⚠️ CNPJ NÃO PREENCHIDO!\n\n' +
+              'Por favor, preencha o CNPJ antes de clicar em Sintegra.');
+        return;
+    }
+    
+    // Remove formatação do CNPJ (deixa só números)
+    const cnpjLimpo = cnpj.replace(/\D/g, '');
+    console.log('CNPJ limpo (só números):', cnpjLimpo);
+    
+    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
+        alert('⚠️ CNPJ INVÁLIDO!\n\n' +
+              'O CNPJ deve ter 14 dígitos.\n' +
+              'CNPJ encontrado: ' + cnpj);
+        return;
+    }
+    
+    // PASSO 1: COPIAR CNPJ IMEDIATAMENTE
+    console.log('Tentando copiar CNPJ:', cnpjLimpo);
+    
+    let copiouComSucesso = false;
+    let metodoUsado = 'nenhum';
+    
+    // Método 1: Input temporário (SEMPRE funciona, inclusive em HTTP)
+    try {
+        console.log('Tentando método input temporário...');
+        
+        const tempInput = document.createElement('input');
+        tempInput.value = cnpjLimpo;
+        tempInput.style.position = 'absolute';
+        tempInput.style.left = '-9999px';
+        tempInput.setAttribute('readonly', '');
+        document.body.appendChild(tempInput);
+        
+        tempInput.select();
+        tempInput.setSelectionRange(0, 99999);
+        
+        const copied = document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        
+        if (copied) {
+            copiouComSucesso = true;
+            metodoUsado = 'input temporário';
+            console.log('✅ CNPJ copiado via input temporário!');
+        }
+    } catch (err) {
+        console.error('❌ Erro no método input:', err);
+    }
+    
+    // Método 2: Clipboard API (só se primeiro falhou)
+    if (!copiouComSucesso && navigator.clipboard && navigator.clipboard.writeText) {
+        console.log('Tentando Clipboard API...');
+        try {
+            // Nota: Clipboard API retorna Promise, mas vamos usar de forma síncrona via flag
+            navigator.clipboard.writeText(cnpjLimpo).then(() => {
+                console.log('✅ Clipboard API funcionou!');
+            }).catch(err => {
+                console.warn('Clipboard API error:', err);
+            });
+            // Consideramos sucesso imediato pois é assíncrono
+            copiouComSucesso = true;
+            metodoUsado = 'Clipboard API';
+        } catch (err) {
+            console.error('❌ Erro Clipboard API:', err);
+        }
+    }
+    
+    // PASSO 2: Mostrar mensagem IMEDIATAMENTE
+    let mensagem;
+    
+    if (copiouComSucesso) {
+        mensagem = '✅ CNPJ COPIADO!\n\n' + 
+                  cnpjLimpo + '\n\n' +
+                  '(Método: ' + metodoUsado + ')\n\n' +
+                  'O site do Sintegra será aberto.\n' +
+                  'Cole o CNPJ com Ctrl+V';
+    } else {
+        mensagem = '📋 COPIE ESTE CNPJ:\n\n' + 
+                  cnpjLimpo + '\n\n' +
+                  '⚠️ Cópia automática falhou.\n' +
+                  'Copie o número acima (selecione + Ctrl+C)';
+    }
+    
+    alert(mensagem);
+    console.log('Alert mostrado:', mensagem.substring(0, 50) + '...');
+    
+    // PASSO 3: Abrir site
+    console.log('Abrindo site do Sintegra...');
+    const sintegraWindow = window.open('https://www.sintegra.gov.br/', '_blank');
+    
+    if (sintegraWindow) {
+        console.log('✅ Site aberto com sucesso');
+    } else {
+        console.error('❌ Falha ao abrir site (pop-up bloqueado?)');
+        alert('⚠️ O site foi bloqueado pelo navegador.\n\n' +
+              'Por favor, permita pop-ups para este site.');
+    }
+    
+    console.log('=== FIM CONSULTAR SINTEGRA ===');
 }
 </script>
 {% endblock %}

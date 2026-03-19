@@ -107,6 +107,8 @@ def novo():
             'celular': request.form.get('celular'),
             'regime_tributario': request.form.get('regime_tributario'),
             'porte_empresa': request.form.get('porte_empresa'),
+            'cnae_fiscal': request.form.get('cnae_fiscal'),
+            'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
             'situacao': request.form.get('situacao', 'ATIVO'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
@@ -247,6 +249,8 @@ def editar(id):
                 'celular': request.form.get('celular'),
                 'regime_tributario': request.form.get('regime_tributario'),
                 'porte_empresa': request.form.get('porte_empresa'),
+                'cnae_fiscal': request.form.get('cnae_fiscal'),
+                'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
                 'situacao': request.form.get('situacao'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes')
@@ -509,28 +513,67 @@ def consultar_cnpj(cnpj):
         if response.status_code == 200:
             data = response.json()
             
-            # DEBUG: Log para verificar dados
+            # DEBUG: Log para verificar dados completos
             print(f"=== DADOS RETORNADOS PELA BRASIL API ===")
             print(f"Email: {data.get('email')}")
+            print(f"Correio Eletrônico: {data.get('correio_eletronico')}")
+            print(f"Endereço Eletrônico: {data.get('endereco_eletronico')}")
             print(f"DDD Telefone 1: {data.get('ddd_telefone_1')}")
             print(f"DDD Telefone 2: {data.get('ddd_telefone_2')}")
             print(f"Razão Social: {data.get('razao_social')}")
+            print(f"Data Início Atividade: {data.get('data_inicio_atividade')}")
+            print(f"Inscrições Estaduais (raw): {data.get('inscricoes_estaduais')}")
+            print(f"CNAE Fiscal: {data.get('cnae_fiscal')}")
+            print(f"CNAEs Secundários: {data.get('cnaes_secundarios')}")
+            print(f"CEP: {data.get('cep')}")
+            print(f"Logradouro: {data.get('logradouro')}")
+            print(f"Número: {data.get('numero')}")
+            print(f"UF: {data.get('uf')}")
             
             # Extrair inscrição estadual (IE)
             inscricao_estadual = ''
             if 'inscricoes_estaduais' in data and isinstance(data['inscricoes_estaduais'], list):
+                print(f"DEBUG: Total de IEs: {len(data['inscricoes_estaduais'])}")
                 # Pegar a primeira IE ativa
-                for ie_obj in data['inscricoes_estaduais']:
-                    if isinstance(ie_obj, dict) and ie_obj.get('ativo'):
-                        inscricao_estadual = ie_obj.get('inscricao_estadual', '')
-                        break
+                for idx, ie_obj in enumerate(data['inscricoes_estaduais']):
+                    print(f"DEBUG: IE[{idx}] = {ie_obj} (tipo: {type(ie_obj)})")
+                    if isinstance(ie_obj, dict):
+                        ie_numero = ie_obj.get('inscricao_estadual', '')
+                        ie_ativo = ie_obj.get('ativo', False)
+                        print(f"DEBUG: IE número: {ie_numero}, ativo: {ie_ativo}")
+                        if ie_ativo and ie_numero:
+                            inscricao_estadual = ie_numero
+                            print(f"DEBUG: IE ativa encontrada: {inscricao_estadual}")
+                            break
                 # Se não encontrou ativa, pega a primeira disponível
                 if not inscricao_estadual and len(data['inscricoes_estaduais']) > 0:
                     ie_obj = data['inscricoes_estaduais'][0]
                     if isinstance(ie_obj, dict):
                         inscricao_estadual = ie_obj.get('inscricao_estadual', '')
+                        print(f"DEBUG: IE primeira disponível: {inscricao_estadual}")
+            elif 'inscricao_estadual' in data and data['inscricao_estadual']:
+                # Às vezes vem direto como string
+                inscricao_estadual = data['inscricao_estadual']
+                print(f"DEBUG: IE como string direta: {inscricao_estadual}")
             
             print(f"Inscrição Estadual extraída: '{inscricao_estadual}'")
+            
+            # Extrair e-mail - tentar múltiplos campos possíveis
+            # Brasil API pode retornar em diferentes formatos
+            email = (data.get('email') or 
+                    data.get('correio_eletronico') or 
+                    data.get('endereco_eletronico') or  # NOVO: Campo "ENDEREÇO ELETRÔNICO"
+                    data.get('email_principal') or 
+                    '')
+            if email:
+                print(f"DEBUG: Email encontrado: {email}")
+            
+            # Extrair CNAEs secundários
+            cnaes_secundarios = data.get('cnaes_secundarios', [])
+            print(f"DEBUG: CNAEs Secundários encontrados: {len(cnaes_secundarios)}")
+            if cnaes_secundarios:
+                for idx, cnae in enumerate(cnaes_secundarios[:3]):  # Mostrar só primeiros 3 no log
+                    print(f"DEBUG: CNAE Secundário[{idx}]: {cnae}")
             
             # Extrair dados relevantes
             resultado = {
@@ -546,6 +589,7 @@ def consultar_cnpj(cnpj):
                     'inscricao_estadual': inscricao_estadual,
                     'cnae_fiscal': data.get('cnae_fiscal', ''),
                     'cnae_fiscal_descricao': data.get('cnae_fiscal_descricao', ''),
+                    'cnaes_secundarios': cnaes_secundarios,  # NOVO: CNAEs secundários
                     # Endereço
                     'logradouro': data.get('logradouro', ''),
                     'numero': data.get('numero', ''),
@@ -557,7 +601,7 @@ def consultar_cnpj(cnpj):
                     # Contatos
                     'ddd_telefone_1': data.get('ddd_telefone_1', ''),
                     'ddd_telefone_2': data.get('ddd_telefone_2', ''),
-                    'email': data.get('email', ''),
+                    'email': email,  # MELHORADO: tenta múltiplos campos
                     # QSAs (sócios)
                     'qsa': data.get('qsa', [])
                 }

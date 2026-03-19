@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Contas Correntes - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>
+                        <i class="fas fa-university text-primary"></i>
+                        Cadastro de Contas Correntes
+                    </h2>
+                    <p class="text-muted">Gerencie as contas bancárias dos seus clientes</p>
+                </div>
+                <div>
+                    <button class="btn btn-primary" data-toggle="modal" data-target="#novaContaModal">
+                        <i class="fas fa-plus"></i> Nova Conta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row">
+                <div class="col-md-4">
+                    <label for="cliente_id">Cliente</label>
+                    <select name="cliente_id" id="cliente_id" class="form-control">
+                        <option value="">Todos os clientes</option>
+                        {% for cliente in clientes %}
+                        <option value="{{ cliente.id }}">{{ cliente.razao_social }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="banco">Banco</label>
+                    <input type="text" name="banco" id="banco" class="form-control" placeholder="Nome do banco">
+                </div>
+                <div class="col-md-3">
+                    <label for="status">Status</label>
+                    <select name="status" id="status" class="form-control">
+                        <option value="">Todas</option>
+                        <option value="ativa">Ativa</option>
+                        <option value="inativa">Inativa</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-info btn-block">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Contas -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Banco</th>
+                            <th>Agência</th>
+                            <th>Conta</th>
+                            <th>Tipo</th>
+                            <th>Saldo</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if contas %}
+                            {% for conta in contas %}
+                            <tr>
+                                <td>{{ conta.cliente_nome }}</td>
+                                <td>{{ conta.banco_nome }} ({{ conta.banco_codigo }})</td>
+                                <td>{{ conta.agencia }}-{{ conta.agencia_digito }}</td>
+                                <td>{{ conta.numero_conta }}-{{ conta.conta_digito }}</td>
+                                <td>
+                                    {% if conta.tipo == 'CORRENTE' %}
+                                    <span class="badge badge-primary">Corrente</span>
+                                    {% else %}
+                                    <span class="badge badge-info">Poupança</span>
+                                    {% endif %}
+                                </td>
+                                <td>R$ {{ conta.saldo|format_currency }}</td>
+                                <td>
+                                    {% if conta.ativa %}
+                                    <span class="badge badge-success">Ativa</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">Inativa</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" title="Desativar">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
+                                    <p class="text-muted">Nenhuma conta cadastrada</p>
+                                    <button class="btn btn-primary" data-toggle="modal" data-target="#novaContaModal">
+                                        <i class="fas fa-plus"></i> Cadastrar primeira conta
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Conta -->
+<div class="modal fade" id="novaContaModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-university"></i> Nova Conta Corrente
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('contabil.contas_correntes') }}">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="cliente_id">Cliente *</label>
+                                <select name="cliente_id" id="cliente_id" class="form-control" required>
+                                    <option value="">Selecione o cliente...</option>
+                                    {% for cliente in clientes %}
+                                    <option value="{{ cliente.id }}">{{ cliente.razao_social }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="banco_nome">Nome do Banco *</label>
+                                <input type="text" name="banco_nome" id="banco_nome" class="form-control" 
+                                       placeholder="Ex: Banco do Brasil" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="banco_codigo">Código do Banco *</label>
+                                <input type="text" name="banco_codigo" id="banco_codigo" class="form-control" 
+                                       placeholder="Ex: 001" required maxlength="3">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="agencia">Agência *</label>
+                                <input type="text" name="agencia" id="agencia" class="form-control" 
+                                       placeholder="0000" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="agencia_digito">Dígito</label>
+                                <input type="text" name="agencia_digito" id="agencia_digito" class="form-control" 
+                                       placeholder="0" maxlength="1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="numero_conta">Conta *</label>
+                                <input type="text" name="numero_conta" id="numero_conta" class="form-control" 
+                                       placeholder="00000000" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="conta_digito">Dígito *</label>
+                                <input type="text" name="conta_digito" id="conta_digito" class="form-control" 
+                                       placeholder="0" required maxlength="1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="tipo">Tipo de Conta *</label>
+                                <select name="tipo" id="tipo" class="form-control" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="CORRENTE">Conta Corrente</option>
+                                    <option value="POUPANCA">Poupança</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="saldo_inicial">Saldo Inicial</label>
+                                <input type="number" name="saldo_inicial" id="saldo_inicial" class="form-control" 
+                                       placeholder="0.00" step="0.01" value="0.00">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar Conta
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
