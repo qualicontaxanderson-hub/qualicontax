@@ -19,27 +19,28 @@
     <style>
         /* Dropdown aninhado - Container */
         .submenu-item.has-dropdown {
-            position: relative;
+            position: relative !important;
         }
 
-        /* Submenu dropdown (oculto inicialmente) */
-        .dropdown-submenu {
-            display: none;
-            position: absolute;
-            left: 100%;
-            top: 0;
-            min-width: 250px;
-            background: #2c3e50;
-            border-radius: 5px;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
-            padding: 5px 0;
-            z-index: 1000;
-            list-style: none;
+        /* Submenu dropdown (oculto inicialmente) - mais específico para sobrescrever style.css */
+        ul.dropdown-submenu {
+            display: none !important;
+            position: absolute !important;
+            left: 100% !important;
+            top: 0 !important;
+            min-width: 250px !important;
+            background: #2c3e50 !important;
+            border-radius: 5px !important;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3) !important;
+            padding: 5px 0 !important;
+            z-index: 1000 !important;
+            list-style: none !important;
+            margin: 0 !important;
         }
 
         /* Mostrar dropdown ao hover */
-        .submenu-item.has-dropdown:hover > .dropdown-submenu {
-            display: block;
+        .submenu-item.has-dropdown:hover > ul.dropdown-submenu {
+            display: block !important;
             animation: slideIn 300ms ease-out;
         }
 
@@ -67,41 +68,43 @@
         }
 
         /* Estilo dos links do dropdown */
-        .dropdown-submenu li {
-            list-style: none;
+        ul.dropdown-submenu li {
+            list-style: none !important;
         }
 
-        .dropdown-submenu li a {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 20px;
-            color: #ecf0f1;
-            text-decoration: none;
-            transition: background 0.3s;
+        ul.dropdown-submenu li a {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            padding: 12px 20px !important;
+            color: #ecf0f1 !important;
+            text-decoration: none !important;
+            transition: background 0.3s !important;
+            background-color: transparent !important;
         }
 
-        .dropdown-submenu li a:hover {
-            background: #34495e;
+        ul.dropdown-submenu li a:hover {
+            background: #34495e !important;
         }
 
-        .dropdown-submenu li a i {
-            width: 20px;
-            text-align: center;
+        ul.dropdown-submenu li a i {
+            width: 20px !important;
+            text-align: center !important;
+            opacity: 1 !important;
         }
 
         /* Suporte para clique - mostrar dropdown quando tem classe active */
-        .submenu-item.has-dropdown.active > .dropdown-submenu {
-            display: block;
+        .submenu-item.has-dropdown.active > ul.dropdown-submenu {
+            display: block !important;
         }
 
         /* Melhorar visibilidade no mobile */
         @media (max-width: 768px) {
-            .dropdown-submenu {
-                position: relative;
-                left: 0;
-                margin-left: 20px;
-                margin-top: 5px;
+            ul.dropdown-submenu {
+                position: relative !important;
+                left: 0 !important;
+                margin-left: 20px !important;
+                margin-top: 5px !important;
             }
         }
     </style>
