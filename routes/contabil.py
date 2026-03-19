@@ -1,13 +1,46 @@
 """Rotas para o módulo Contábil - Conciliação Bancária"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from models.conciliacao_bancaria import ConciliacaoBancaria
-from models.memorizacao_conciliacao import MemorizacaoConciliacao
-from models.cliente import Cliente
-from models.grupo_cliente import GrupoCliente
 
-# Cria Blueprint
+# Cria Blueprint primeiro (antes de importar models)
 contabil = Blueprint('contabil', __name__, url_prefix='/contabil')
+
+# Try to import models with error handling
+try:
+    from models.conciliacao_bancaria import ConciliacaoBancaria
+    from models.memorizacao_conciliacao import MemorizacaoConciliacao
+    from models.cliente import Cliente
+    from models.grupo_cliente import GrupoCliente
+    print("✅ Contabil: Models imported successfully")
+    MODELS_LOADED = True
+except Exception as e:
+    print(f"❌ Contabil: Error importing models: {type(e).__name__}: {e}")
+    import traceback
+    traceback.print_exc()
+    MODELS_LOADED = False
+    # Create placeholder classes to allow blueprint to load
+    class ConciliacaoBancaria:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
+        @staticmethod
+        def get_by_id(*args, **kwargs):
+            return None
+    class MemorizacaoConciliacao:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
+        @staticmethod
+        def get_by_id(*args, **kwargs):
+            return None
+    class Cliente:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
+    class GrupoCliente:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
 
 
 @contabil.route('/')
