@@ -15,47 +15,8 @@
     <!-- Chart.js 4.x -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
-    <!-- CSS para Dropdown Aninhado -->
+    <!-- CSS para Dropdown Aninhado (inline accordion) -->
     <style>
-        /* Dropdown aninhado - Container */
-        .submenu-item.has-dropdown {
-            position: relative !important;
-        }
-
-        /* Submenu dropdown (oculto inicialmente) - mais específico para sobrescrever style.css */
-        ul.dropdown-submenu {
-            display: none !important;
-            position: absolute !important;
-            left: 100% !important;
-            top: 0 !important;
-            min-width: 250px !important;
-            background: #2c3e50 !important;
-            border-radius: 5px !important;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.3) !important;
-            padding: 5px 0 !important;
-            z-index: 1000 !important;
-            list-style: none !important;
-            margin: 0 !important;
-        }
-
-        /* Mostrar dropdown ao hover */
-        .submenu-item.has-dropdown:hover > ul.dropdown-submenu {
-            display: block !important;
-            animation: slideIn 300ms ease-out;
-        }
-
-        /* Animação de entrada */
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
         /* Seta indicadora */
         .dropdown-arrow {
             margin-left: auto;
@@ -63,8 +24,22 @@
             transition: transform 0.3s;
         }
 
-        .has-dropdown:hover .dropdown-arrow {
-            transform: translateX(3px);
+        .has-dropdown.active .dropdown-arrow {
+            transform: rotate(90deg);
+        }
+
+        /* Submenu dropdown (oculto inicialmente) - inline abaixo do item pai */
+        ul.dropdown-submenu {
+            display: none;
+            list-style: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: rgba(0, 0, 0, 0.04);
+        }
+
+        /* Mostrar dropdown quando active (clique) */
+        .submenu-item.has-dropdown.active > ul.dropdown-submenu {
+            display: block !important;
         }
 
         /* Estilo dos links do dropdown */
@@ -76,67 +51,35 @@
             display: flex !important;
             align-items: center !important;
             gap: 10px !important;
-            padding: 12px 20px !important;
-            color: #ecf0f1 !important;
+            padding: 9px 20px 9px 70px !important;
+            color: var(--text-primary) !important;
             text-decoration: none !important;
-            transition: background 0.3s !important;
-            background-color: transparent !important;
+            font-size: 13px !important;
+            transition: background 0.2s !important;
         }
 
         ul.dropdown-submenu li a:hover {
-            background: #34495e !important;
+            background-color: rgba(0, 0, 0, 0.05) !important;
+            padding-left: 73px !important;
         }
 
         ul.dropdown-submenu li a i {
-            width: 20px !important;
+            font-size: 13px !important;
+            width: 16px !important;
             text-align: center !important;
-            opacity: 1 !important;
-        }
-
-        /* Suporte para clique - mostrar dropdown quando tem classe active */
-        .submenu-item.has-dropdown.active > ul.dropdown-submenu {
-            display: block !important;
-        }
-
-        /* Melhorar visibilidade no mobile */
-        @media (max-width: 768px) {
-            ul.dropdown-submenu {
-                position: relative !important;
-                left: 0 !important;
-                margin-left: 20px !important;
-                margin-top: 5px !important;
-            }
+            opacity: 0.7 !important;
         }
     </style>
 
     <!-- JavaScript para toggle de dropdown ao clicar -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Toggle dropdown ao clicar (suporte mobile e backup para desktop)
-            document.querySelectorAll('.has-dropdown > a').forEach(function(item) {
+            document.querySelectorAll('.submenu-item.has-dropdown > a').forEach(function(item) {
                 item.addEventListener('click', function(e) {
-                    e.preventDefault(); // Prevenir navegação do href="#"
-                    
-                    // Toggle classe 'active' no parent (li.has-dropdown)
+                    e.preventDefault();
                     var parent = this.parentElement;
                     parent.classList.toggle('active');
-                    
-                    // Fechar outros dropdowns abertos
-                    document.querySelectorAll('.has-dropdown.active').forEach(function(other) {
-                        if (other !== parent) {
-                            other.classList.remove('active');
-                        }
-                    });
                 });
-            });
-
-            // Fechar dropdown ao clicar fora
-            document.addEventListener('click', function(e) {
-                if (!e.target.closest('.has-dropdown')) {
-                    document.querySelectorAll('.has-dropdown.active').forEach(function(item) {
-                        item.classList.remove('active');
-                    });
-                }
             });
         });
     </script>
@@ -227,7 +170,7 @@
                             <a href="#" class="submenu-link">
                                 <i class="fas fa-file-invoice-dollar"></i>
                                 <span>Conciliação Bancária</span>
-                                <i class="fas fa-chevron-right dropdown-arrow"></i>
+                                <i class="fas fa-chevron-down dropdown-arrow"></i>
                             </a>
                             <ul class="dropdown-submenu">
                                 <li>
