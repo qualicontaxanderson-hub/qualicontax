@@ -16,8 +16,8 @@
     --sidebar-bg: #1a2535;
     --sidebar-hover: #243147;
     --sidebar-active: #22C55E;
-    --sidebar-text: #C8D3E0;
-    --sidebar-text-muted: #7A8FA6;
+    --sidebar-text: #ffffff;
+    --sidebar-text-muted: #A8BBCC;
     --sidebar-border: rgba(255, 255, 255, 0.07);
 
     /* Outros */
@@ -183,6 +183,7 @@ body {
     padding: 12px 20px;
     color: var(--sidebar-text);
     text-decoration: none;
+    font-weight: 500;
     transition: all 0.2s;
     cursor: pointer;
 }
