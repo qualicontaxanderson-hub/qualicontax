@@ -73,8 +73,11 @@ def index():
 def novo():
     """Criar novo cliente"""
     if request.method == 'POST':
-        # Validações
-        cpf_cnpj = request.form.get('cpf_cnpj')
+        # The form has duplicate-named fields (PF + PJ sections both submit
+        # 'cpf_cnpj' and 'nome_razao_social'). The hidden section sends an empty
+        # value that appears first in getlist(); pick the first non-empty one.
+        cpf_cnpj = next((v for v in request.form.getlist('cpf_cnpj') if v.strip()), '')
+        nome_razao_social = next((v for v in request.form.getlist('nome_razao_social') if v.strip()), '')
         numero_cliente = request.form.get('numero_cliente', '').strip()
         
         if Cliente.existe_cpf_cnpj(cpf_cnpj):
@@ -88,7 +91,7 @@ def novo():
             return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
         
         # Validação de campos obrigatórios
-        if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not cpf_cnpj:
+        if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
             flash('Preencha todos os campos obrigatórios.', 'danger')
             ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
             return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
@@ -97,7 +100,7 @@ def novo():
         data = {
             'numero_cliente': numero_cliente if numero_cliente else None,
             'tipo_pessoa': request.form.get('tipo_pessoa'),
-            'nome_razao_social': request.form.get('nome_razao_social'),
+            'nome_razao_social': nome_razao_social,
             'nome_fantasia': request.form.get('nome_fantasia'),
             'cpf_cnpj': cpf_cnpj,
             'inscricao_estadual': request.form.get('inscricao_estadual'),
@@ -216,8 +219,14 @@ def editar(id):
     
     if request.method == 'POST':
         try:
+            # The form has duplicate-named fields (PF + PJ sections both submit
+            # 'cpf_cnpj' and 'nome_razao_social'). The hidden section sends an empty
+            # value that appears first in getlist(); pick the first non-empty one.
+            cpf_cnpj = next((v for v in request.form.getlist('cpf_cnpj') if v.strip()), '')
+            nome_razao_social = next((v for v in request.form.getlist('nome_razao_social') if v.strip()), '')
+
             # Validação de campos obrigatórios
-            if not request.form.get('tipo_pessoa') or not request.form.get('nome_razao_social') or not request.form.get('cpf_cnpj'):
+            if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
                 flash('Preencha todos os campos obrigatórios.', 'danger')
                 ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
                 cliente_ramos = RamoAtividade.get_by_cliente(id)
@@ -240,8 +249,8 @@ def editar(id):
             data = {
                 'numero_cliente': numero_cliente if numero_cliente else None,
                 'tipo_pessoa': request.form.get('tipo_pessoa'),
-                'nome_razao_social': request.form.get('nome_razao_social'),
-                'cpf_cnpj': request.form.get('cpf_cnpj'),
+                'nome_razao_social': nome_razao_social,
+                'cpf_cnpj': cpf_cnpj,
                 'inscricao_estadual': request.form.get('inscricao_estadual'),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
                 'email': request.form.get('email'),

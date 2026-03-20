@@ -185,10 +185,10 @@
                         <form method="POST" action="{{ url_for('contabil.confirmar_importacao_pdf') }}" id="formConfirmar">
                             <input type="hidden" name="cliente_id" value="{{ cliente_id or '' }}">
                             {% for t in transacoes %}
-                            <input type="hidden" name="data[]" value="{{ t.data }}">
-                            <input type="hidden" name="descricao[]" value="{{ t.descricao }}">
-                            <input type="hidden" name="valor[]" value="{{ t.valor }}">
-                            <input type="hidden" name="tipo[]" value="{{ t.tipo }}">
+                            <input type="hidden" name="data[]" value="{{ t.data | e }}">
+                            <input type="hidden" name="descricao[]" value="{{ t.descricao | e }}">
+                            <input type="hidden" name="valor[]" value="{{ t.valor | e }}">
+                            <input type="hidden" name="tipo[]" value="{{ t.tipo | e }}">
                             {% endfor %}
                             <button type="submit" class="btn btn-success btn-block">
                                 <i class="fas fa-save"></i>
