@@ -1202,8 +1202,14 @@ function abrirPortalMunicipio(url) {
         setTimeout(function() { document.body.removeChild(toast); }, 4000);
     }
 
-    // Open portal in a new tab
-    window.open(url, '_blank', 'noopener,noreferrer');
+    // Open portal in a new tab — use anchor click to avoid popup-blocker interference
+    var a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
 function pesquisarMunicipios() {
@@ -1245,9 +1251,12 @@ function pesquisarMunicipios() {
             data.municipios.forEach(m => {
                 let site;
                 if (m.site_prefeitura) {
-                    const urlEsc = m.site_prefeitura.replace(/"/g, '&quot;');
-                    site = `<button type="button" onclick="abrirPortalMunicipio('${urlEsc}')" ` +
-                        `class="btn btn-outline" style="padding:4px 10px;font-size:12px;" ` +
+                    // Use data-url attribute to safely store URL without any inline JS injection risk
+                    const urlHtmlEsc = m.site_prefeitura
+                        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    site = `<button type="button" class="btn btn-outline btn-abrir-portal" ` +
+                        `data-url="${urlHtmlEsc}" style="padding:4px 10px;font-size:12px;" ` +
                         `title="Copia o CNPJ e abre o portal da prefeitura">` +
                         `<i class="fas fa-external-link-alt"></i> Abrir</button>`;
                 } else {
@@ -1271,6 +1280,15 @@ function pesquisarMunicipios() {
 window.addEventListener('click', function(e) {
     var modal = document.getElementById('municipioModal');
     if (e.target === modal) fecharModalMunicipio();
+});
+
+// Event delegation for "Abrir" portal buttons rendered inside the results table
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-abrir-portal');
+    if (btn) {
+        var url = btn.getAttribute('data-url');
+        if (url) abrirPortalMunicipio(url);
+    }
 });
 
 // Fechar modal com Esc
