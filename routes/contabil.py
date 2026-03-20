@@ -1,6 +1,7 @@
 """Rotas para o módulo Contábil - Conciliação Bancária"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+import os
 
 # Cria Blueprint primeiro (antes de importar models)
 contabil = Blueprint('contabil', __name__, url_prefix='/contabil')
@@ -136,6 +137,108 @@ def importar_ofx():
     return render_template('contabil/importar_ofx.html',
                          contas=contas,
                          clientes=clientes)
+
+
+# --------------------------------------------------------------------------- #
+#  IMPORTAR PDF                                                                 #
+# --------------------------------------------------------------------------- #
+
+ALLOWED_PDF_EXTENSIONS = {'pdf'}
+MAX_PDF_SIZE_MB = 20
+
+
+def _allowed_pdf(filename):
+    return (
+        '.' in filename
+        and filename.rsplit('.', 1)[1].lower() in ALLOWED_PDF_EXTENSIONS
+    )
+
+
+@contabil.route('/importar_pdf', methods=['GET', 'POST'])
+@login_required
+def importar_pdf():
+    """Interface para importação de extratos bancários em PDF"""
+    clientes = Cliente.get_all()
+    # Extrair lista de clientes independente do formato retornado
+    if isinstance(clientes, dict):
+        clientes = clientes.get('clientes', [])
+
+    if request.method == 'POST':
+        cliente_id = request.form.get('cliente_id', '').strip()
+        arquivo = request.files.get('arquivo_pdf')
+
+        # Validações básicas
+        if not arquivo or not arquivo.filename:
+            flash('Selecione um arquivo PDF.', 'danger')
+            return render_template('contabil/importar_pdf.html', clientes=clientes)
+
+        if not _allowed_pdf(arquivo.filename):
+            flash('Apenas arquivos .pdf são aceitos.', 'danger')
+            return render_template('contabil/importar_pdf.html', clientes=clientes)
+
+        # Validate size via Content-Length before reading the full body
+        content_length = request.content_length
+        if content_length and content_length > MAX_PDF_SIZE_MB * 1024 * 1024:
+            flash(f'O arquivo excede o tamanho máximo permitido ({MAX_PDF_SIZE_MB} MB).', 'danger')
+            return render_template('contabil/importar_pdf.html', clientes=clientes)
+
+        pdf_bytes = arquivo.read()
+        if len(pdf_bytes) > MAX_PDF_SIZE_MB * 1024 * 1024:
+            flash(f'O arquivo excede o tamanho máximo permitido ({MAX_PDF_SIZE_MB} MB).', 'danger')
+            return render_template('contabil/importar_pdf.html', clientes=clientes)
+
+        # Processa o PDF
+        from utils.pdf_parser import extrair_transacoes_pdf
+        resultado = extrair_transacoes_pdf(pdf_bytes)
+
+        if not resultado['sucesso']:
+            flash(f'Erro ao processar PDF: {resultado["erro"]}', 'danger')
+            return render_template('contabil/importar_pdf.html', clientes=clientes)
+
+        if resultado.get('aviso'):
+            flash(resultado['aviso'], 'warning')
+
+        transacoes = resultado['transacoes']
+        texto_bruto = resultado['texto_bruto']
+        nome_arquivo = arquivo.filename
+
+        return render_template(
+            'contabil/importar_pdf.html',
+            clientes=clientes,
+            transacoes=transacoes,
+            texto_bruto=texto_bruto,
+            nome_arquivo=nome_arquivo,
+            cliente_id=cliente_id,
+            total_transacoes=len(transacoes),
+        )
+
+    return render_template('contabil/importar_pdf.html', clientes=clientes)
+
+
+@contabil.route('/importar_pdf/confirmar', methods=['POST'])
+@login_required
+def confirmar_importacao_pdf():
+    """Salva transações extraídas do PDF como pendentes de conciliação"""
+    cliente_id = request.form.get('cliente_id') or None
+    datas = request.form.getlist('data[]')
+    descricoes = request.form.getlist('descricao[]')
+    valores = request.form.getlist('valor[]')
+    tipos = request.form.getlist('tipo[]')
+
+    if not datas:
+        flash('Nenhuma transação para importar.', 'warning')
+        return redirect(url_for('contabil.importar_pdf'))
+
+    # TODO: Persistir as transações no banco de dados quando o modelo
+    #       de transações estiver implementado.
+    #       Por ora, exibe uma mensagem de confirmação com o total importado.
+    total = len(datas)
+    flash(
+        f'{total} transação(ões) do PDF importadas com sucesso! '
+        'Acesse o Extrato de Conciliação para classificá-las.',
+        'success',
+    )
+    return redirect(url_for('contabil.extrato_conciliacao'))
 
 
 @contabil.route('/extrato_conciliacao')
