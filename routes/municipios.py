@@ -46,6 +46,12 @@ def index():
 @login_required
 def novo():
     """Criar novo município"""
+    # Support pre-filling via query params (e.g. from "Buscar Município" modal)
+    prefill_nome = (request.args.get('nome') or '').strip().upper()
+    prefill_uf = (request.args.get('uf') or '').strip().upper()
+    if prefill_uf not in UFS:
+        prefill_uf = ''
+
     if request.method == 'POST':
         try:
             nome = (request.form.get('nome') or '').strip()
@@ -55,10 +61,12 @@ def novo():
 
             if not nome:
                 flash('Nome do município é obrigatório!', 'danger')
-                return render_template('municipios/form.html', municipio=None, ufs=UFS)
+                return render_template('municipios/form.html', municipio=None, ufs=UFS,
+                                       prefill_nome=nome, prefill_uf=uf)
             if not uf or uf.upper() not in UFS:
                 flash('UF inválida!', 'danger')
-                return render_template('municipios/form.html', municipio=None, ufs=UFS)
+                return render_template('municipios/form.html', municipio=None, ufs=UFS,
+                                       prefill_nome=nome, prefill_uf='')
 
             municipio_id = Municipio.create(nome, uf, site_prefeitura or None, situacao)
             if municipio_id:
@@ -74,7 +82,8 @@ def novo():
             else:
                 flash(f'Erro ao cadastrar município: {err_msg}', 'danger')
 
-    return render_template('municipios/form.html', municipio=None, ufs=UFS)
+    return render_template('municipios/form.html', municipio=None, ufs=UFS,
+                           prefill_nome=prefill_nome, prefill_uf=prefill_uf)
 
 
 @municipios.route('/municipios/<int:id>/editar', methods=['GET', 'POST'])

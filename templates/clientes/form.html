@@ -1128,16 +1128,82 @@ function preencherDadosCNPJ(data) {
 function buscarMunicipio() {
     const modal = document.getElementById('municipioModal');
     modal.style.display = 'block';
-    // Pré-preencher UF a partir do campo estado, se já selecionado
+
+    // Auto-fill cidade from address fields populated by CNPJ lookup
+    const cidadeEl = document.getElementById('cidade');
     const estadoEl = document.getElementById('estado');
+    const cidadeVal = cidadeEl ? cidadeEl.value.trim() : '';
+
+    if (cidadeVal) {
+        document.getElementById('municipioBusca').value = cidadeVal;
+    }
     if (estadoEl && estadoEl.value) {
         document.getElementById('municipioFiltroUF').value = estadoEl.value;
     }
+
+    // Fire search immediately with pre-filled values
     pesquisarMunicipios();
 }
 
 function fecharModalMunicipio() {
     document.getElementById('municipioModal').style.display = 'none';
+}
+
+// Fallback copy helper using deprecated execCommand (for older browsers)
+function _copiarViaExecCommand(text) {
+    try {
+        const tmp = document.createElement('input');
+        tmp.value = text;
+        tmp.style.position = 'absolute';
+        tmp.style.left = '-9999px';
+        tmp.setAttribute('readonly', '');
+        document.body.appendChild(tmp);
+        tmp.select();
+        tmp.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+    } catch (e) { /* silent */ }
+}
+
+// Copy CNPJ (digits only) to clipboard and open the portal URL
+function abrirPortalMunicipio(url) {
+    // Get CNPJ from form
+    let cnpj = '';
+    if (ultimoCNPJConsultado) {
+        cnpj = ultimoCNPJConsultado;
+    } else {
+        const cnpjField = document.getElementById('cpf_cnpj_pj');
+        cnpj = cnpjField ? cnpjField.value.trim() : '';
+    }
+    const cnpjLimpo = cnpj.replace(/\D/g, '');
+
+    // Copy CNPJ to clipboard so user can paste it in the portal
+    // Prefer modern Clipboard API; fall back to execCommand for older browsers
+    let copiou = false;
+    if (cnpjLimpo) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(cnpjLimpo).then(function() {
+                copiou = true;
+            }).catch(function() {
+                // Fallback via execCommand
+                _copiarViaExecCommand(cnpjLimpo);
+            });
+        } else {
+            _copiarViaExecCommand(cnpjLimpo);
+        }
+
+        // Show a brief toast so user knows CNPJ is in the clipboard
+        const toast = document.createElement('div');
+        toast.textContent = '📋 CNPJ ' + cnpjLimpo + ' copiado! Cole no portal da prefeitura.';
+        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);' +
+            'background:#22C55E;color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;' +
+            'font-weight:600;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+        document.body.appendChild(toast);
+        setTimeout(function() { document.body.removeChild(toast); }, 4000);
+    }
+
+    // Open portal in a new tab
+    window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 function pesquisarMunicipios() {
@@ -1151,23 +1217,42 @@ function pesquisarMunicipios() {
     if (q) params.append('q', q);
     if (uf) params.append('uf', uf);
 
+    // Build "cadastrar" link with pre-filled nome/uf query params
+    const nomeEnc = encodeURIComponent(q);
+    const ufEnc = encodeURIComponent(uf);
+    const cadastrarUrl = '/municipios/novo' + (q || uf ? '?nome=' + nomeEnc + '&uf=' + ufEnc : '');
+
     fetch('/api/municipios/search?' + params.toString())
         .then(r => r.json())
         .then(data => {
             if (!data.municipios || data.municipios.length === 0) {
-                resultados.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">' +
-                    '<i class="fas fa-info-circle"></i> Nenhum município encontrado.<br>' +
-                    '<small>Cadastre municípios em Cadastros &rsaquo; Município</small></p>';
+                resultados.innerHTML =
+                    '<div style="text-align:center;padding:24px;">' +
+                    '<div style="font-size:2rem;margin-bottom:8px;">🏙️</div>' +
+                    '<p style="color:var(--text-secondary);margin-bottom:12px;">' +
+                    '<strong>Município sem Cadastro</strong><br>' +
+                    (q ? '<small>Nenhum resultado para <em>"' + q + '"</em>' + (uf ? ' (' + uf + ')' : '') + '</small>' : '') +
+                    '</p>' +
+                    '<a href="' + cadastrarUrl + '" target="_blank" ' +
+                    'style="display:inline-block;padding:8px 18px;background:var(--primary-green);color:#fff;' +
+                    'border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">' +
+                    '<i class="fas fa-plus-circle"></i> Deseja cadastrar? Clique aqui</a>' +
+                    '</div>';
                 return;
             }
             let html = '<table class="table" style="margin:0;">';
             html += '<thead><tr><th>Município</th><th>UF</th><th>Portal</th></tr></thead><tbody>';
             data.municipios.forEach(m => {
-                const site = m.site_prefeitura
-                    ? `<a href="${m.site_prefeitura}" target="_blank" rel="noopener noreferrer" ` +
-                        `class="btn btn-outline" style="padding:4px 10px;font-size:12px;">` +
-                        `<i class="fas fa-external-link-alt"></i> Abrir</a>`
-                    : '<span style="color:var(--text-secondary);">\u2014</span>';
+                let site;
+                if (m.site_prefeitura) {
+                    const urlEsc = m.site_prefeitura.replace(/"/g, '&quot;');
+                    site = `<button type="button" onclick="abrirPortalMunicipio('${urlEsc}')" ` +
+                        `class="btn btn-outline" style="padding:4px 10px;font-size:12px;" ` +
+                        `title="Copia o CNPJ e abre o portal da prefeitura">` +
+                        `<i class="fas fa-external-link-alt"></i> Abrir</button>`;
+                } else {
+                    site = '<span style="color:var(--text-secondary);">\u2014</span>';
+                }
                 html += `<tr>
                     <td><strong>${m.nome}</strong></td>
                     <td><span class="badge badge-info">${m.uf}</span></td>

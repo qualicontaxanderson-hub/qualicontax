@@ -37,7 +37,7 @@
                                name="nome"
                                class="form-control"
                                placeholder="Ex: GOIÂNIA"
-                               value="{{ municipio.nome if municipio else '' }}"
+                               value="{{ municipio.nome if municipio else (prefill_nome or '') }}"
                                required>
                     </div>
                     <div class="form-group">
@@ -45,7 +45,10 @@
                         <select id="uf" name="uf" class="form-control" required>
                             <option value="">Selecione...</option>
                             {% for uf in ufs %}
-                            <option value="{{ uf }}" {% if municipio and municipio.uf == uf %}selected{% endif %}>{{ uf }}</option>
+                            <option value="{{ uf }}"
+                                {% if municipio and municipio.uf == uf %}selected
+                                {% elif not municipio and (prefill_uf or '') == uf %}selected
+                                {% endif %}>{{ uf }}</option>
                             {% endfor %}
                         </select>
                     </div>
