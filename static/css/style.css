@@ -7,11 +7,19 @@
     --black: #000000;
     --white: #FFFFFF;
     --dark-bg: #1F2937;
-    --light-bg: #F9FAFB;
-    --gray-light: #F3F4F6;
+    --light-bg: #EEF0F5;
+    --gray-light: #E4E7EC;
     --gray-dark: #374151;
-    --border: #E5E7EB;
-    
+    --border: #D1D5DB;
+
+    /* Sidebar escura */
+    --sidebar-bg: #1a2535;
+    --sidebar-hover: #243147;
+    --sidebar-active: #22C55E;
+    --sidebar-text: #C8D3E0;
+    --sidebar-text-muted: #7A8FA6;
+    --sidebar-border: rgba(255, 255, 255, 0.07);
+
     /* Outros */
     --text-primary: #111827;
     --text-secondary: #6B7280;
@@ -52,8 +60,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
-    background-color: var(--white);
-    border-right: 1px solid var(--border);
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
     position: fixed;
     left: 0;
     top: 0;
@@ -67,9 +75,68 @@ body {
     width: var(--sidebar-collapsed);
 }
 
+/* Sidebar header/logo (classes used in base.html) */
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--sidebar-border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sidebar-header .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-header .logo-img {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--border-radius);
+}
+
+.sidebar-header .logo-text {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--white);
+}
+
+.sidebar.collapsed .sidebar-header .logo-text {
+    display: none;
+}
+
+/* Search box inside sidebar */
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-box i {
+    position: absolute;
+    left: 12px;
+    color: var(--sidebar-text-muted);
+    font-size: 13px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    background-color: rgba(255, 255, 255, 0.07);
+    color: var(--sidebar-text);
+}
+
+.search-box input::placeholder {
+    color: var(--sidebar-text-muted);
+}
+
 .sidebar-logo {
     padding: 20px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--sidebar-border);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -78,7 +145,7 @@ body {
 .sidebar-logo h1 {
     font-size: 24px;
     font-weight: 700;
-    color: var(--primary-green);
+    color: var(--white);
 }
 
 .sidebar.collapsed .sidebar-logo h1 {
@@ -87,15 +154,21 @@ body {
 
 .sidebar-search {
     padding: 15px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
 .sidebar-search input {
     width: 100%;
     padding: 10px 15px;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--border-radius);
     font-size: 14px;
+    background-color: rgba(255, 255, 255, 0.07);
+    color: var(--sidebar-text);
+}
+
+.sidebar-search input::placeholder {
+    color: var(--sidebar-text-muted);
 }
 
 .sidebar.collapsed .sidebar-search {
@@ -115,20 +188,21 @@ body {
     align-items: center;
     gap: 12px;
     padding: 12px 20px;
-    color: var(--text-primary);
+    color: var(--sidebar-text);
     text-decoration: none;
     transition: all 0.2s;
     cursor: pointer;
 }
 
 .nav-link:hover {
-    background-color: var(--gray-light);
+    background-color: var(--sidebar-hover);
+    color: var(--white);
 }
 
 .nav-link.active {
-    background-color: var(--accent-orange);
+    background-color: var(--primary-green);
     color: var(--white);
-    border-right: 3px solid var(--dark-green);
+    border-right: 3px solid #86efac;
 }
 
 .nav-link i {
@@ -157,7 +231,7 @@ body {
 
 .nav-submenu {
     display: none;
-    background-color: var(--gray-light);
+    background-color: rgba(0, 0, 0, 0.2);
     padding: 5px 0;
 }
 
@@ -188,7 +262,7 @@ body {
 .submenu {
     display: none;
     list-style: none;
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: rgba(0, 0, 0, 0.18);
     margin: 0;
     padding: 0;
 }
@@ -218,21 +292,22 @@ body {
     align-items: center;
     gap: 12px;
     padding: 10px 20px 10px 52px;
-    color: var(--text-primary);
+    color: var(--sidebar-text);
     text-decoration: none;
     transition: all 0.2s;
     font-size: 13px;
 }
 
 .submenu-link:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--sidebar-hover);
+    color: var(--white);
     padding-left: 55px;
 }
 
 .submenu-link.active {
-    background-color: var(--accent-orange);
+    background-color: var(--primary-green);
     color: var(--white);
-    border-left: 3px solid var(--primary-green);
+    border-left: 3px solid #86efac;
 }
 
 .submenu-link i {
@@ -269,6 +344,7 @@ body {
     height: var(--header-height);
     background-color: var(--white);
     border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--primary-green);
     position: sticky;
     top: 0;
     z-index: 999;
@@ -283,6 +359,7 @@ body {
     height: var(--header-height);
     background-color: var(--white);
     border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--primary-green);
     position: fixed;
     top: 0;
     right: 0;
@@ -707,7 +784,7 @@ table {
 }
 
 thead {
-    background-color: var(--gray-light);
+    background-color: #D1FAE5;
 }
 
 th {
@@ -715,7 +792,7 @@ th {
     text-align: left;
     font-weight: 600;
     font-size: 13px;
-    color: var(--text-secondary);
+    color: #065F46;
 }
 
 td {
@@ -969,6 +1046,7 @@ tr:hover {
     align-items: center;
     gap: 15px;
     transition: all 0.2s;
+    border-left: 4px solid var(--primary-green);
 }
 
 .stat-card:hover {
@@ -1110,7 +1188,7 @@ tr:hover {
 }
 
 .data-table thead {
-    background-color: var(--gray-light);
+    background-color: #D1FAE5;
 }
 
 .data-table th {
@@ -1118,7 +1196,7 @@ tr:hover {
     text-align: left;
     font-weight: 600;
     font-size: 13px;
-    color: var(--text-secondary);
+    color: #065F46;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -1564,15 +1642,15 @@ tr:hover {
 }
 
 .table thead {
-    background: var(--gray-light);
+    background: #D1FAE5;
 }
 
 .table th {
     padding: 12px 16px;
     text-align: left;
     font-weight: 600;
-    color: var(--text-primary);
-    border-bottom: 2px solid var(--border);
+    color: #065F46;
+    border-bottom: 2px solid var(--primary-green);
 }
 
 .table td {
