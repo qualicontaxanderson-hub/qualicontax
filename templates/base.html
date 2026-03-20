@@ -143,6 +143,12 @@
                                 <span>Contratos</span>
                             </a>
                         </li>
+                        <li class="submenu-item">
+                            <a href="{{ url_for('municipios.index') }}" class="submenu-link {% if 'municipios' in request.endpoint %}active{% endif %}">
+                                <i class="fas fa-map-marked-alt"></i>
+                                <span>Município</span>
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 

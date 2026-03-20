@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar Município' if municipio else 'Novo Município' }} - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="municipio-form-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">{{ 'Editar Município' if municipio else 'Novo Município' }}</h1>
+            <p class="page-subtitle">{{ 'Atualize os dados do município' if municipio else 'Cadastre um novo município e seu portal da prefeitura' }}</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('municipios.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST"
+          action="{{ url_for('municipios.editar', id=municipio.id) if municipio else url_for('municipios.novo') }}"
+          class="form-container">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Dados do Município</h3>
+            </div>
+            <div class="card-body">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="nome">Nome do Município *</label>
+                        <input type="text"
+                               id="nome"
+                               name="nome"
+                               class="form-control"
+                               placeholder="Ex: GOIÂNIA"
+                               value="{{ municipio.nome if municipio else '' }}"
+                               required>
+                    </div>
+                    <div class="form-group">
+                        <label for="uf">Estado (UF) *</label>
+                        <select id="uf" name="uf" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}" {% if municipio and municipio.uf == uf %}selected{% endif %}>{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="site_prefeitura">Portal da Prefeitura (URL)</label>
+                    <input type="url"
+                           id="site_prefeitura"
+                           name="site_prefeitura"
+                           class="form-control"
+                           placeholder="https://www.goiania.go.gov.br/"
+                           value="{{ municipio.site_prefeitura if municipio and municipio.site_prefeitura else '' }}">
+                    <small class="form-text text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        URL do site da prefeitura para consulta de inscrição municipal. Ex: https://www.goiania.go.gov.br/
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="situacao">Situação *</label>
+                    <select id="situacao" name="situacao" class="form-control" required>
+                        <option value="ATIVO" {% if not municipio or municipio.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                        <option value="INATIVO" {% if municipio and municipio.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                Salvar Município
+            </button>
+            <a href="{{ url_for('municipios.index') }}" class="btn btn-outline">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
