@@ -77,33 +77,26 @@ body {
 
 /* Sidebar header/logo (classes used in base.html) */
 .sidebar-header {
-    padding: 20px;
+    padding: 20px 16px;
     border-bottom: 1px solid var(--sidebar-border);
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    background-color: #2d3f55;
 }
 
 .sidebar-header .logo {
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
 }
 
 .sidebar-header .logo-img {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--border-radius);
-}
-
-.sidebar-header .logo-text {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--white);
-}
-
-.sidebar.collapsed .sidebar-header .logo-text {
-    display: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
 }
 
 /* Search box inside sidebar */
