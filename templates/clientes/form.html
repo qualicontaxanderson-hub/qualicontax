@@ -99,14 +99,17 @@
                             </small>
                         </div>
                         <div class="form-group">
-                            <label for="inscricao_estadual">Inscrição Estadual ⭐</label>
-                            <div style="display: flex; gap: 10px;">
+                            <label for="inscricao_estadual">
+                                Inscrição Estadual ⭐
+                                <span class="text-muted" style="font-size:12px;">(Comércio)</span>
+                            </label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
                                 <input type="text" 
                                        id="inscricao_estadual" 
                                        name="inscricao_estadual" 
                                        class="form-control" 
                                        placeholder="Preenchido automaticamente via CNPJ" 
-                                       value="{{ cliente.inscricao_estadual if cliente else '' }}" 
+                                       value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}" 
                                        style="flex: 1;"
                                        aria-label="Inscrição Estadual - preenchido automaticamente ao consultar CNPJ"
                                        aria-describedby="ie-help-text">
@@ -117,6 +120,21 @@
                                         style="white-space: nowrap;">
                                     <i class="fas fa-external-link-alt"></i> Sintegra
                                 </button>
+                            </div>
+                            <!-- Checkbox ISENTO para prestadores de serviço -->
+                            <div class="form-check mt-2" id="isento-ie-container">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       id="inscricao_estadual_isento"
+                                       name="inscricao_estadual_isento"
+                                       value="1"
+                                       {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
+                                       onchange="toggleIsentoIE(this)">
+                                <label class="form-check-label" for="inscricao_estadual_isento"
+                                       style="font-size:13px; color:#6c757d; cursor:pointer;">
+                                    <i class="fas fa-ban" style="color:#e67e22;"></i>
+                                    Isento de Inscrição Estadual (Prestador de Serviços)
+                                </label>
                             </div>
                             <small id="ie-help-text" class="form-text text-muted">
                                 ✅ Preenchido automaticamente ao consultar o CNPJ | 
@@ -566,8 +584,44 @@ function toggleTipoFields() {
     }
 }
 
+// Toggle Isento de Inscrição Estadual
+function toggleIsentoIE(checkbox) {
+    var input = document.getElementById('inscricao_estadual');
+    if (checkbox.checked) {
+        input.value = '';
+        input.disabled = true;
+        input.placeholder = 'Isento — não possui Inscrição Estadual';
+        input.style.backgroundColor = '#f8f9fa';
+        input.style.color = '#6c757d';
+    } else {
+        input.disabled = false;
+        input.placeholder = 'Preenchido automaticamente via CNPJ';
+        input.style.backgroundColor = '';
+        input.style.color = '';
+    }
+}
+
 // Call on page load if editing
 document.addEventListener('DOMContentLoaded', function() {
+    // Apply initial ISENTO state if editing a client with ISENTO
+    var isentoCheckbox = document.getElementById('inscricao_estadual_isento');
+    if (isentoCheckbox && isentoCheckbox.checked) {
+        toggleIsentoIE(isentoCheckbox);
+    }
+
+    // Before form submit: inject 'ISENTO' into disabled field so value is sent
+    var form = document.querySelector('form.form-container');
+    if (form) {
+        form.addEventListener('submit', function() {
+            var cb = document.getElementById('inscricao_estadual_isento');
+            var ie = document.getElementById('inscricao_estadual');
+            if (cb && cb.checked) {
+                ie.disabled = false;
+                ie.value = 'ISENTO';
+            }
+        });
+    }
+
     toggleTipoFields();
     
     // Convert name fields to UPPERCASE automatically
@@ -827,13 +881,16 @@ function preencherDadosCNPJ(data) {
         naoPreenchidos.push('Data de Início da Atividade (não disponível)');
     }
     
-    // 5. Inscrição Estadual
-    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
-        tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
-    } else {
-        console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
-        console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
-        naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
+    // 5. Inscrição Estadual — only fill if not marked as ISENTO
+    var isentoIECb = document.getElementById('inscricao_estadual_isento');
+    if (!(isentoIECb && isentoIECb.checked)) {
+        if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
+            tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
+        } else {
+            console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
+            console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
+            naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
+        }
     }
     
     // 6. CNAE Fiscal

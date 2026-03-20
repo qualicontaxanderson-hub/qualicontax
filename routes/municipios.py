@@ -65,10 +65,14 @@ def novo():
                 flash('Município cadastrado com sucesso!', 'success')
                 return redirect(url_for('municipios.index'))
             else:
-                flash('Erro ao cadastrar município!', 'danger')
+                flash('Erro ao cadastrar município! Verifique se já existe um município com o mesmo nome e UF.', 'danger')
 
         except Exception as e:
-            flash(f'Erro ao cadastrar município: {str(e)}', 'danger')
+            err_msg = str(e)
+            if 'Duplicate entry' in err_msg or '1062' in err_msg:
+                flash(f'Município "{nome}" ({uf}) já está cadastrado!', 'danger')
+            else:
+                flash(f'Erro ao cadastrar município: {err_msg}', 'danger')
 
     return render_template('municipios/form.html', municipio=None, ufs=UFS)
 

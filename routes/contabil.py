@@ -145,6 +145,7 @@ def importar_ofx():
 
 ALLOWED_PDF_EXTENSIONS = {'pdf'}
 MAX_PDF_SIZE_MB = 20
+_MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024
 
 
 def _allowed_pdf(filename):
@@ -178,12 +179,12 @@ def importar_pdf():
 
         # Validate size via Content-Length before reading the full body
         content_length = request.content_length
-        if content_length and content_length > MAX_PDF_SIZE_MB * 1024 * 1024:
+        if content_length and content_length > _MAX_PDF_SIZE_BYTES:
             flash(f'O arquivo excede o tamanho máximo permitido ({MAX_PDF_SIZE_MB} MB).', 'danger')
             return render_template('contabil/importar_pdf.html', clientes=clientes)
 
         pdf_bytes = arquivo.read()
-        if len(pdf_bytes) > MAX_PDF_SIZE_MB * 1024 * 1024:
+        if len(pdf_bytes) > _MAX_PDF_SIZE_BYTES:
             flash(f'O arquivo excede o tamanho máximo permitido ({MAX_PDF_SIZE_MB} MB).', 'danger')
             return render_template('contabil/importar_pdf.html', clientes=clientes)
 
