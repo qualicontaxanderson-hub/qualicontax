@@ -7,3 +7,4 @@ gunicorn==22.0.0
 Flask-SQLAlchemy==3.0.5
 pymysql==1.1.1
 requests==2.31.0
+pdfplumber==0.11.9

@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Importar PDF - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-file-pdf" style="color: #e74c3c;"></i>
+                Importar Extrato em PDF
+            </h2>
+            <p class="text-muted">Importe extratos bancários em formato PDF para conciliação</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Coluna do formulário -->
+        <div class="col-md-{{ '5' if transacoes is defined else '8 offset-md-2' }}">
+            <div class="card">
+                <div class="card-header" style="background-color: #e74c3c; color: #fff;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cloud-upload-alt"></i> Upload de Arquivo PDF
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" action="{{ url_for('contabil.importar_pdf') }}"
+                          id="formPDF">
+
+                        <!-- Seleção de Cliente -->
+                        <div class="form-group">
+                            <label for="cliente_id">Cliente</label>
+                            <select name="cliente_id" id="cliente_id" class="form-control">
+                                <option value="">Selecione o cliente (opcional)...</option>
+                                {% if clientes %}
+                                    {% for cliente in clientes %}
+                                    <option value="{{ cliente.id }}"
+                                        {% if cliente_id is defined and cliente_id == cliente.id|string %}selected{% endif %}>
+                                        {{ cliente.nome_razao_social or cliente.razao_social or cliente.id }}
+                                    </option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+
+                        <!-- Upload de Arquivo PDF -->
+                        <div class="form-group">
+                            <label for="arquivo_pdf">Arquivo PDF *</label>
+                            <div class="custom-file">
+                                <input type="file" name="arquivo_pdf" id="arquivo_pdf"
+                                       class="custom-file-input" accept=".pdf" required>
+                                <label class="custom-file-label" for="arquivo_pdf" id="labelPDF">
+                                    Escolher arquivo PDF...
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Formato aceito: .pdf — Tamanho máximo: 20 MB
+                            </small>
+                        </div>
+
+                        <!-- Área de Drop Zone -->
+                        <div class="dropzone-area mt-3 mb-3 text-center p-4 border rounded"
+                             id="dropzone"
+                             style="cursor: pointer; background-color: #fdf2f2; border: 2px dashed #e74c3c !important;">
+                            <i class="fas fa-file-pdf fa-3x mb-2" style="color: #e74c3c;"></i>
+                            <h6 class="text-muted">Arraste o arquivo PDF aqui</h6>
+                            <p class="text-muted mb-0" style="font-size: 13px;">ou clique para selecionar</p>
+                        </div>
+
+                        <!-- Botões de Ação -->
+                        <div class="form-group mt-3">
+                            <button type="submit" class="btn btn-danger btn-lg btn-block" id="btnProcessar">
+                                <i class="fas fa-cogs"></i> Processar PDF
+                            </button>
+                            <a href="{{ url_for('contabil.index') }}" class="btn btn-secondary btn-block mt-2">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Informações -->
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-question-circle"></i> Dicas para melhor resultado
+                    </h6>
+                </div>
+                <div class="card-body" style="font-size: 13px;">
+                    <p class="mb-1"><i class="fas fa-check text-success"></i> <strong>PDFs digitais</strong> (gerados pelo banco) funcionam melhor</p>
+                    <p class="mb-1"><i class="fas fa-check text-success"></i> PDFs com tabelas estruturadas têm melhor extração</p>
+                    <p class="mb-1"><i class="fas fa-times text-danger"></i> PDFs escaneados (imagem) podem não ser reconhecidos</p>
+                    <p class="mb-1"><i class="fas fa-info-circle text-info"></i> Bancos suportados: Banco do Brasil, Itaú, Bradesco, Santander, Caixa, Sicoob, Sicredi e outros</p>
+                    <p class="mb-0"><i class="fas fa-info-circle text-info"></i> Revise as transações extraídas antes de confirmar a importação</p>
+                </div>
+            </div>
+        </div>
+
+        {% if transacoes is defined %}
+        <!-- Coluna de resultados -->
+        <div class="col-md-7">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background-color: {% if total_transacoes > 0 %}#27ae60{% else %}#e67e22{% endif %}; color: #fff;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-{% if total_transacoes > 0 %}list-alt{% else %}exclamation-triangle{% endif %}"></i>
+                        {% if total_transacoes > 0 %}
+                            {{ total_transacoes }} transação(ões) extraída(s) de <em>{{ nome_arquivo }}</em>
+                        {% else %}
+                            Nenhuma transação identificada automaticamente
+                        {% endif %}
+                    </h5>
+                    {% if total_transacoes > 0 %}
+                    <span class="badge badge-light">{{ nome_arquivo }}</span>
+                    {% endif %}
+                </div>
+                <div class="card-body p-0">
+
+                    {% if total_transacoes > 0 %}
+                    <!-- Abas: Transações / Texto Bruto -->
+                    <ul class="nav nav-tabs px-3 pt-2" id="resultTabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="tab-transacoes" href="#" onclick="mostrarAba('transacoes'); return false;">
+                                <i class="fas fa-table"></i> Transações
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="tab-bruto" href="#" onclick="mostrarAba('bruto'); return false;">
+                                <i class="fas fa-file-alt"></i> Texto Bruto
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div id="painel-transacoes" style="overflow-y: auto; max-height: 450px;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Data</th>
+                                    <th>Descrição</th>
+                                    <th>Tipo</th>
+                                    <th class="text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in transacoes %}
+                                <tr>
+                                    <td class="text-muted" style="font-size: 11px;">{{ loop.index }}</td>
+                                    <td style="white-space: nowrap;">{{ t.data }}</td>
+                                    <td style="font-size: 12px;">{{ t.descricao }}</td>
+                                    <td>
+                                        {% if t.tipo == 'CREDITO' %}
+                                        <span class="badge badge-success">
+                                            <i class="fas fa-arrow-up"></i> Crédito
+                                        </span>
+                                        {% else %}
+                                        <span class="badge badge-danger">
+                                            <i class="fas fa-arrow-down"></i> Débito
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right" style="white-space: nowrap;">
+                                        <span class="{{ 'text-success' if t.tipo == 'CREDITO' else 'text-danger' }}">
+                                            R$ {{ t.valor|format_currency }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="painel-bruto" style="display: none; padding: 12px;">
+                        <pre style="font-size: 11px; max-height: 430px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-break: break-word;">{{ texto_bruto }}</pre>
+                    </div>
+
+                    <!-- Botão Confirmar Importação -->
+                    <div class="p-3 border-top">
+                        <p class="text-muted mb-2" style="font-size: 12px;">
+                            <i class="fas fa-info-circle"></i>
+                            Revise as transações acima. Quando estiver pronto, clique em Confirmar para salvá-las no sistema.
+                        </p>
+                        <form method="POST" action="{{ url_for('contabil.confirmar_importacao_pdf') }}" id="formConfirmar">
+                            <input type="hidden" name="cliente_id" value="{{ cliente_id or '' }}">
+                            {% for t in transacoes %}
+                            <input type="hidden" name="data[]" value="{{ t.data | e }}">
+                            <input type="hidden" name="descricao[]" value="{{ t.descricao | e }}">
+                            <input type="hidden" name="valor[]" value="{{ t.valor | e }}">
+                            <input type="hidden" name="tipo[]" value="{{ t.tipo | e }}">
+                            {% endfor %}
+                            <button type="submit" class="btn btn-success btn-block">
+                                <i class="fas fa-save"></i>
+                                Confirmar Importação ({{ total_transacoes }} transações)
+                            </button>
+                        </form>
+                    </div>
+
+                    {% else %}
+                    <!-- Sem transações: mostra texto bruto -->
+                    <div class="p-3">
+                        <p class="text-muted mb-2" style="font-size: 13px;">
+                            <i class="fas fa-info-circle"></i>
+                            Texto extraído do PDF (revise manualmente):
+                        </p>
+                        <pre style="font-size: 11px; max-height: 430px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-break: break-word;">{{ texto_bruto if texto_bruto else 'Nenhum texto pôde ser extraído deste PDF.' }}</pre>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Atualizar label quando selecionar arquivo
+document.getElementById('arquivo_pdf').addEventListener('change', function(e) {
+    var fileName = e.target.files[0] ? e.target.files[0].name : 'Escolher arquivo PDF...';
+    document.getElementById('labelPDF').innerText = fileName;
+    // Validar extensão
+    if (e.target.files[0] && !e.target.files[0].name.toLowerCase().endsWith('.pdf')) {
+        alert('⚠️ Por favor, selecione apenas arquivos .pdf');
+        e.target.value = '';
+        document.getElementById('labelPDF').innerText = 'Escolher arquivo PDF...';
+    }
+});
+
+// Dropzone clique
+document.getElementById('dropzone').addEventListener('click', function() {
+    document.getElementById('arquivo_pdf').click();
+});
+
+// Drag and drop
+var dropzone = document.getElementById('dropzone');
+dropzone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.backgroundColor = '#fce4e4';
+});
+dropzone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.backgroundColor = '#fdf2f2';
+});
+dropzone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.backgroundColor = '#fdf2f2';
+    var files = e.dataTransfer.files;
+    if (files.length > 0) {
+        var f = files[0];
+        if (!f.name.toLowerCase().endsWith('.pdf')) {
+            alert('⚠️ Por favor, use apenas arquivos .pdf');
+            return;
+        }
+        var fileInput = document.getElementById('arquivo_pdf');
+        fileInput.files = files;
+        document.getElementById('labelPDF').innerText = f.name;
+    }
+});
+
+// Indicador de carregamento ao submeter
+document.getElementById('formPDF').addEventListener('submit', function() {
+    var btn = document.getElementById('btnProcessar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+});
+
+// Alternância de abas
+function mostrarAba(aba) {
+    var tabs = ['transacoes', 'bruto'];
+    tabs.forEach(function(t) {
+        document.getElementById('painel-' + t).style.display = (t === aba) ? 'block' : 'none';
+        document.getElementById('tab-' + t).classList.toggle('active', t === aba);
+    });
+}
+</script>
+{% endblock %}

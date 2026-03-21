@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Municípios - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="municipios-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="fas fa-map-marked-alt" style="color: var(--primary-green);"></i>
+                Municípios
+            </h1>
+            <p class="page-subtitle">Cadastre os portais dos municípios dos seus clientes</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('municipios.novo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                Novo Município
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="GET" class="filters-form">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label for="busca">Buscar</label>
+                        <input type="text" id="busca" name="busca" class="form-control"
+                               placeholder="Nome do município..." value="{{ filtro_busca }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="uf">Estado (UF)</label>
+                        <select id="uf" name="uf" class="form-control">
+                            <option value="">Todos</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}" {% if filtro_uf == uf %}selected{% endif %}>{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="situacao">Situação</label>
+                        <select id="situacao" name="situacao" class="form-control">
+                            <option value="">Todas</option>
+                            <option value="ATIVO" {% if filtro_situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                            <option value="INATIVO" {% if filtro_situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card table-card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Município</th>
+                            <th>UF</th>
+                            <th>Portal da Prefeitura</th>
+                            <th>Situação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if municipios %}
+                            {% for municipio in municipios %}
+                            <tr>
+                                <td><strong>{{ municipio.nome }}</strong></td>
+                                <td>
+                                    <span class="badge badge-info">{{ municipio.uf }}</span>
+                                </td>
+                                <td>
+                                    {% if municipio.site_prefeitura %}
+                                    <a href="{{ municipio.site_prefeitura }}" target="_blank" rel="noopener noreferrer"
+                                       title="Abrir portal da prefeitura">
+                                        <i class="fas fa-external-link-alt"></i>
+                                        {{ municipio.site_prefeitura }}
+                                    </a>
+                                    {% else %}
+                                    <span style="color: var(--text-secondary);">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge badge-{{ 'success' if municipio.situacao == 'ATIVO' else 'danger' }}">
+                                        {{ municipio.situacao }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="table-actions">
+                                        <a href="{{ url_for('municipios.editar', id=municipio.id) }}" class="btn-icon" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ url_for('municipios.deletar', id=municipio.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn-icon btn-danger"
+                                                    onclick="return confirm('Tem certeza que deseja excluir o município {{ municipio.nome }}?')"
+                                                    title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <div class="empty-state" style="padding: 40px 20px;">
+                                        <i class="fas fa-map-marked-alt" style="font-size: 3rem; color: var(--text-secondary); display: block; margin-bottom: 12px;"></i>
+                                        <p style="color: var(--text-secondary);">Nenhum município cadastrado</p>
+                                        <a href="{{ url_for('municipios.novo') }}" class="btn btn-primary" style="margin-top: 12px;">
+                                            <i class="fas fa-plus"></i>
+                                            Cadastrar Primeiro Município
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

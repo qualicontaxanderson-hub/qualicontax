@@ -99,14 +99,17 @@
                             </small>
                         </div>
                         <div class="form-group">
-                            <label for="inscricao_estadual">Inscrição Estadual ⭐</label>
-                            <div style="display: flex; gap: 10px;">
+                            <label for="inscricao_estadual">
+                                Inscrição Estadual ⭐
+                                <span class="text-muted" style="font-size:12px;">(Comércio)</span>
+                            </label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
                                 <input type="text" 
                                        id="inscricao_estadual" 
                                        name="inscricao_estadual" 
                                        class="form-control" 
                                        placeholder="Preenchido automaticamente via CNPJ" 
-                                       value="{{ cliente.inscricao_estadual if cliente else '' }}" 
+                                       value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}" 
                                        style="flex: 1;"
                                        aria-label="Inscrição Estadual - preenchido automaticamente ao consultar CNPJ"
                                        aria-describedby="ie-help-text">
@@ -117,6 +120,21 @@
                                         style="white-space: nowrap;">
                                     <i class="fas fa-external-link-alt"></i> Sintegra
                                 </button>
+                            </div>
+                            <!-- Checkbox ISENTO para prestadores de serviço -->
+                            <div class="form-check mt-2" id="isento-ie-container">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       id="inscricao_estadual_isento"
+                                       name="inscricao_estadual_isento"
+                                       value="1"
+                                       {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
+                                       onchange="toggleIsentoIE(this)">
+                                <label class="form-check-label" for="inscricao_estadual_isento"
+                                       style="font-size:13px; color:#6c757d; cursor:pointer;">
+                                    <i class="fas fa-ban" style="color:#e67e22;"></i>
+                                    Isento de Inscrição Estadual (Prestador de Serviços)
+                                </label>
                             </div>
                             <small id="ie-help-text" class="form-text text-muted">
                                 ✅ Preenchido automaticamente ao consultar o CNPJ | 
@@ -164,14 +182,14 @@
                                 <button type="button" 
                                         class="btn btn-info" 
                                         onclick="buscarMunicipio()" 
-                                        title="Buscar município no IBGE"
+                                        title="Buscar município cadastrado"
                                         style="white-space: nowrap;">
                                     <i class="fas fa-map-marked-alt"></i> Buscar Município
                                 </button>
                             </div>
                             <small class="form-text text-muted">
                                 <i class="fas fa-info-circle"></i> 
-                                Consulte municípios oficiais do IBGE por estado
+                                Consulte municípios cadastrados e acesse o portal da prefeitura
                             </small>
                         </div>
                         <div class="form-group">
@@ -460,6 +478,52 @@
         </div>
     </form>
 </div>
+
+
+<!-- Modal Buscar Município -->
+<div id="municipioModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-map-marked-alt" style="color: var(--primary-green);"></i>
+                Buscar Município
+            </h3>
+            <button class="modal-close" onclick="fecharModalMunicipio()" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+                <input type="text" id="municipioBusca" class="form-control"
+                       placeholder="Digite o nome do município..."
+                       oninput="pesquisarMunicipios()"
+                       style="flex: 1; min-width: 160px;">
+                <select id="municipioFiltroUF" class="form-control" onchange="pesquisarMunicipios()"
+                        style="max-width: 100px;">
+                    <option value="">Todas UFs</option>
+                    {% for uf in ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA',
+                                  'MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN',
+                                  'RS','RO','RR','SC','SP','SE','TO'] %}
+                    <option value="{{ uf }}">{{ uf }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="municipioResultados" style="max-height: 350px; overflow-y: auto;">
+                <p style="color: var(--text-secondary); text-align: center; padding: 20px;">
+                    <i class="fas fa-search"></i> Digite o nome do município para pesquisar
+                </p>
+            </div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                <small style="color: var(--text-secondary);">
+                    <i class="fas fa-info-circle"></i>
+                    Não encontrou o município?
+                    <a href="/municipios/novo" target="_blank">Cadastrar novo município</a>
+                </small>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalMunicipio()">Fechar</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -520,8 +584,44 @@ function toggleTipoFields() {
     }
 }
 
+// Toggle Isento de Inscrição Estadual
+function toggleIsentoIE(checkbox) {
+    var input = document.getElementById('inscricao_estadual');
+    if (checkbox.checked) {
+        input.value = '';
+        input.disabled = true;
+        input.placeholder = 'Isento — não possui Inscrição Estadual';
+        input.style.backgroundColor = '#f8f9fa';
+        input.style.color = '#6c757d';
+    } else {
+        input.disabled = false;
+        input.placeholder = 'Preenchido automaticamente via CNPJ';
+        input.style.backgroundColor = '';
+        input.style.color = '';
+    }
+}
+
 // Call on page load if editing
 document.addEventListener('DOMContentLoaded', function() {
+    // Apply initial ISENTO state if editing a client with ISENTO
+    var isentoCheckbox = document.getElementById('inscricao_estadual_isento');
+    if (isentoCheckbox && isentoCheckbox.checked) {
+        toggleIsentoIE(isentoCheckbox);
+    }
+
+    // Before form submit: inject 'ISENTO' into disabled field so value is sent
+    var form = document.querySelector('form.form-container');
+    if (form) {
+        form.addEventListener('submit', function() {
+            var cb = document.getElementById('inscricao_estadual_isento');
+            var ie = document.getElementById('inscricao_estadual');
+            if (cb && cb.checked) {
+                ie.disabled = false;
+                ie.value = 'ISENTO';
+            }
+        });
+    }
+
     toggleTipoFields();
     
     // Convert name fields to UPPERCASE automatically
@@ -781,13 +881,16 @@ function preencherDadosCNPJ(data) {
         naoPreenchidos.push('Data de Início da Atividade (não disponível)');
     }
     
-    // 5. Inscrição Estadual
-    if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
-        tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
-    } else {
-        console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
-        console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
-        naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
+    // 5. Inscrição Estadual — only fill if not marked as ISENTO
+    var isentoIECb = document.getElementById('inscricao_estadual_isento');
+    if (!(isentoIECb && isentoIECb.checked)) {
+        if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
+            tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
+        } else {
+            console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
+            console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
+            naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
+        }
     }
     
     // 6. CNAE Fiscal
@@ -1021,60 +1124,177 @@ function preencherDadosCNPJ(data) {
     console.log('=== 🏁 FIM DO PREENCHIMENTO AUTOMÁTICO ===');
 }
 
-// Função para buscar município no IBGE
+// Função para buscar município no banco de dados interno
 function buscarMunicipio() {
-    console.log('=== FUNÇÃO BUSCAR MUNICÍPIO CHAMADA ===');
-    
-    const estado = document.getElementById('estado').value;
-    const inscricaoMunicipalInput = document.getElementById('inscricao_municipal');
-    
-    // Verificar se estado foi selecionado
-    if (!estado) {
-        alert('⚠️ ESTADO NÃO SELECIONADO!\n\n' +
-              'Por favor, selecione o Estado (UF) antes de buscar o município.\n\n' +
-              'O estado é necessário para filtrar os municípios corretos.');
-        document.getElementById('estado').focus();
-        return;
+    const modal = document.getElementById('municipioModal');
+    modal.style.display = 'block';
+
+    // Auto-fill cidade from address fields populated by CNPJ lookup
+    const cidadeEl = document.getElementById('cidade');
+    const estadoEl = document.getElementById('estado');
+    const cidadeVal = cidadeEl ? cidadeEl.value.trim() : '';
+
+    if (cidadeVal) {
+        document.getElementById('municipioBusca').value = cidadeVal;
     }
-    
-    console.log('Estado selecionado:', estado);
-    
-    // Mostrar instruções ao usuário
-    const estadoNome = document.getElementById('estado').options[document.getElementById('estado').selectedIndex].text;
-    
-    alert('🗺️ BUSCAR MUNICÍPIO\n\n' +
-          'Estado selecionado: ' + estadoNome + '\n\n' +
-          'A página do IBGE Cidades será aberta.\n\n' +
-          'Você poderá:\n' +
-          '• Ver todos os municípios do estado\n' +
-          '• Pesquisar pelo nome do município\n' +
-          '• Verificar informações oficiais\n\n' +
-          'Após encontrar o município, você pode anotar a inscrição municipal no campo correspondente.');
-    
-    // Abrir página do IBGE com municípios do estado selecionado
-    // URL do IBGE Cidades com panorama do estado (mostra todos os municípios)
-    const url = `https://cidades.ibge.gov.br/brasil/${estado.toLowerCase()}/panorama`;
-    console.log('Abrindo URL:', url);
-    
-    const ibgeWindow = window.open(url, '_blank');
-    
-    if (ibgeWindow) {
-        console.log('✅ Página do IBGE aberta com sucesso');
-        // Focar no campo inscrição municipal para facilitar preenchimento após consulta
-        setTimeout(() => {
-            if (inscricaoMunicipalInput) {
-                inscricaoMunicipalInput.focus();
-            }
-        }, 500);
-    } else {
-        console.error('❌ Falha ao abrir página (pop-up bloqueado?)');
-        alert('⚠️ A página foi bloqueada pelo navegador.\n\n' +
-              'Por favor, permita pop-ups para este site.\n\n' +
-              'Ou acesse manualmente: ' + url);
+    if (estadoEl && estadoEl.value) {
+        document.getElementById('municipioFiltroUF').value = estadoEl.value;
     }
-    
-    console.log('=== FIM BUSCAR MUNICÍPIO ===');
+
+    // Fire search immediately with pre-filled values
+    pesquisarMunicipios();
 }
+
+function fecharModalMunicipio() {
+    document.getElementById('municipioModal').style.display = 'none';
+}
+
+// Fallback copy helper using deprecated execCommand (for older browsers)
+function _copiarViaExecCommand(text) {
+    try {
+        const tmp = document.createElement('input');
+        tmp.value = text;
+        tmp.style.position = 'absolute';
+        tmp.style.left = '-9999px';
+        tmp.setAttribute('readonly', '');
+        document.body.appendChild(tmp);
+        tmp.select();
+        tmp.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+    } catch (e) { /* silent */ }
+}
+
+// Copy CNPJ (digits only) to clipboard and open the portal URL
+function abrirPortalMunicipio(url) {
+    // Get CNPJ from form
+    let cnpj = '';
+    if (ultimoCNPJConsultado) {
+        cnpj = ultimoCNPJConsultado;
+    } else {
+        const cnpjField = document.getElementById('cpf_cnpj_pj');
+        cnpj = cnpjField ? cnpjField.value.trim() : '';
+    }
+    const cnpjLimpo = cnpj.replace(/\D/g, '');
+
+    // Copy CNPJ to clipboard so user can paste it in the portal
+    // Prefer modern Clipboard API; fall back to execCommand for older browsers
+    let copiou = false;
+    if (cnpjLimpo) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(cnpjLimpo).then(function() {
+                copiou = true;
+            }).catch(function() {
+                // Fallback via execCommand
+                _copiarViaExecCommand(cnpjLimpo);
+            });
+        } else {
+            _copiarViaExecCommand(cnpjLimpo);
+        }
+
+        // Show a brief toast so user knows CNPJ is in the clipboard
+        const toast = document.createElement('div');
+        toast.textContent = '📋 CNPJ ' + cnpjLimpo + ' copiado! Cole no portal da prefeitura.';
+        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);' +
+            'background:#22C55E;color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;' +
+            'font-weight:600;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+        document.body.appendChild(toast);
+        setTimeout(function() { document.body.removeChild(toast); }, 4000);
+    }
+
+    // Open portal in a new tab — use anchor click to avoid popup-blocker interference
+    var a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function pesquisarMunicipios() {
+    const q = document.getElementById('municipioBusca').value.trim();
+    const uf = document.getElementById('municipioFiltroUF').value;
+    const resultados = document.getElementById('municipioResultados');
+
+    resultados.innerHTML = '<p style="color:var(--text-secondary);text-align:center;">Buscando...</p>';
+
+    const params = new URLSearchParams();
+    if (q) params.append('q', q);
+    if (uf) params.append('uf', uf);
+
+    // Build "cadastrar" link with pre-filled nome/uf query params
+    const nomeEnc = encodeURIComponent(q);
+    const ufEnc = encodeURIComponent(uf);
+    const cadastrarUrl = '/municipios/novo' + (q || uf ? '?nome=' + nomeEnc + '&uf=' + ufEnc : '');
+
+    fetch('/api/municipios/search?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+            if (!data.municipios || data.municipios.length === 0) {
+                resultados.innerHTML =
+                    '<div style="text-align:center;padding:24px;">' +
+                    '<div style="font-size:2rem;margin-bottom:8px;">🏙️</div>' +
+                    '<p style="color:var(--text-secondary);margin-bottom:12px;">' +
+                    '<strong>Município sem Cadastro</strong><br>' +
+                    (q ? '<small>Nenhum resultado para <em>"' + q + '"</em>' + (uf ? ' (' + uf + ')' : '') + '</small>' : '') +
+                    '</p>' +
+                    '<a href="' + cadastrarUrl + '" target="_blank" ' +
+                    'style="display:inline-block;padding:8px 18px;background:var(--primary-green);color:#fff;' +
+                    'border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">' +
+                    '<i class="fas fa-plus-circle"></i> Deseja cadastrar? Clique aqui</a>' +
+                    '</div>';
+                return;
+            }
+            let html = '<table class="table" style="margin:0;">';
+            html += '<thead><tr><th>Município</th><th>UF</th><th>Portal</th></tr></thead><tbody>';
+            data.municipios.forEach(m => {
+                let site;
+                if (m.site_prefeitura) {
+                    // Use data-url attribute to safely store URL without any inline JS injection risk
+                    const urlHtmlEsc = m.site_prefeitura
+                        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    site = `<button type="button" class="btn btn-outline btn-abrir-portal" ` +
+                        `data-url="${urlHtmlEsc}" style="padding:4px 10px;font-size:12px;" ` +
+                        `title="Copia o CNPJ e abre o portal da prefeitura">` +
+                        `<i class="fas fa-external-link-alt"></i> Abrir</button>`;
+                } else {
+                    site = '<span style="color:var(--text-secondary);">\u2014</span>';
+                }
+                html += `<tr>
+                    <td><strong>${m.nome}</strong></td>
+                    <td><span class="badge badge-info">${m.uf}</span></td>
+                    <td>${site}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            resultados.innerHTML = html;
+        })
+        .catch(() => {
+            resultados.innerHTML = '<p style="color:var(--danger);text-align:center;">Erro ao buscar municípios.</p>';
+        });
+}
+
+// Fechar modal ao clicar fora
+window.addEventListener('click', function(e) {
+    var modal = document.getElementById('municipioModal');
+    if (e.target === modal) fecharModalMunicipio();
+});
+
+// Event delegation for "Abrir" portal buttons rendered inside the results table
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-abrir-portal');
+    if (btn) {
+        var url = btn.getAttribute('data-url');
+        if (url) abrirPortalMunicipio(url);
+    }
+});
+
+// Fechar modal com Esc
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') fecharModalMunicipio();
+});
 
 // Função para abrir Sintegra (1º copia CNPJ, 2º abre site)
 function consultarSintegra() {
