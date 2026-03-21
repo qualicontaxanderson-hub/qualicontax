@@ -17,7 +17,7 @@
     --sidebar-hover: #243147;
     --sidebar-active: #22C55E;
     --sidebar-text: #ffffff;
-    --sidebar-text-muted: #A8BBCC;
+    --sidebar-text-muted: #D0DCE8;
     --sidebar-border: rgba(255, 255, 255, 0.07);
 
     /* Outros */
@@ -116,10 +116,10 @@ body {
 .search-box input {
     width: 100%;
     padding: 9px 12px 9px 34px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: var(--border-radius);
     font-size: 13px;
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.12);
     color: var(--sidebar-text);
 }
 
@@ -153,10 +153,10 @@ body {
 .sidebar-search input {
     width: 100%;
     padding: 10px 15px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: var(--border-radius);
     font-size: 14px;
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.12);
     color: var(--sidebar-text);
 }
 

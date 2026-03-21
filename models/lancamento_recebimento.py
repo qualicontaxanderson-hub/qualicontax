@@ -178,11 +178,11 @@ class LancamentoRecebimento:
     # ------------------------------------------------------------------
     @staticmethod
     def excluir_lote(ids):
-        """Exclui múltiplos lançamentos. ids deve ser uma lista de inteiros."""
+        """Exclui múltiplos lançamentos. ids deve ser uma lista de inteiros positivos."""
         if not ids:
             return False
-        # Validate every element is a positive integer before building query
-        validated = [int(i) for i in ids if isinstance(i, int) and i > 0]
+        # Ensure every element is a positive integer (defensive guard)
+        validated = [int(i) for i in ids if str(i).isdigit() and int(i) > 0]
         if not validated:
             return False
         placeholders = ",".join(["%s"] * len(validated))
