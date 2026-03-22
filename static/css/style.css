@@ -27,6 +27,10 @@
     --border-radius: 8px;
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+
+    /* Logo */
+    --logo-filter: drop-shadow(0 2px 10px rgba(34, 197, 94, 0.35)) brightness(1.15) contrast(1.05);
+    --logo-filter-hover: drop-shadow(0 4px 16px rgba(34, 197, 94, 0.55)) brightness(1.25) contrast(1.1);
 }
 
 * {
@@ -52,8 +56,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
-    background-color: var(--white);
-    border-right: 1px solid var(--border);
+    background-color: #1e2a3b;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
     position: fixed;
     left: 0;
     top: 0;
@@ -67,9 +71,52 @@ body {
     width: var(--sidebar-collapsed);
 }
 
+/* Sidebar header / logo section */
+.sidebar-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 20px 22px;
+    background: linear-gradient(180deg, #162030 0%, #1e2a3b 100%);
+    gap: 8px;
+    transition: background 0.3s ease;
+}
+
+.logo:hover {
+    background: linear-gradient(180deg, #1a2840 0%, #223249 100%);
+}
+
+.logo-img {
+    width: 150px;
+    max-width: 85%;
+    height: auto;
+    object-fit: contain;
+    filter: var(--logo-filter);
+    transition: all 0.3s ease;
+}
+
+.logo:hover .logo-img {
+    filter: var(--logo-filter-hover);
+    transform: scale(1.04);
+}
+
+.logo-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Legacy sidebar-logo (backwards compatibility) */
 .sidebar-logo {
     padding: 20px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -85,17 +132,45 @@ body {
     display: none;
 }
 
+/* Search box */
 .sidebar-search {
-    padding: 15px;
-    border-bottom: 1px solid var(--border);
+    padding: 14px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-box i {
+    position: absolute;
+    left: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    pointer-events: none;
 }
 
 .sidebar-search input {
     width: 100%;
-    padding: 10px 15px;
-    border: 1px solid var(--border);
+    padding: 9px 12px 9px 34px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--border-radius);
-    font-size: 14px;
+    font-size: 13px;
+    background-color: rgba(255, 255, 255, 0.07);
+    color: #cbd5e1;
+    transition: all 0.2s;
+}
+
+.sidebar-search input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.sidebar-search input:focus {
+    outline: none;
+    border-color: rgba(34, 197, 94, 0.5);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar.collapsed .sidebar-search {
@@ -103,7 +178,7 @@ body {
 }
 
 .sidebar-nav {
-    padding: 15px 0;
+    padding: 10px 0;
 }
 
 .nav-item {
@@ -115,18 +190,19 @@ body {
     align-items: center;
     gap: 12px;
     padding: 12px 20px;
-    color: var(--text-primary);
+    color: #cbd5e1;
     text-decoration: none;
     transition: all 0.2s;
     cursor: pointer;
 }
 
 .nav-link:hover {
-    background-color: var(--gray-light);
+    background-color: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
 }
 
 .nav-link.active {
-    background-color: var(--accent-orange);
+    background-color: var(--primary-green);
     color: var(--white);
     border-right: 3px solid var(--dark-green);
 }
@@ -157,7 +233,7 @@ body {
 
 .nav-submenu {
     display: none;
-    background-color: var(--gray-light);
+    background-color: rgba(0, 0, 0, 0.2);
     padding: 5px 0;
 }
 
@@ -188,7 +264,7 @@ body {
 .submenu {
     display: none;
     list-style: none;
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: rgba(0, 0, 0, 0.18);
     margin: 0;
     padding: 0;
 }
@@ -218,15 +294,16 @@ body {
     align-items: center;
     gap: 12px;
     padding: 10px 20px 10px 52px;
-    color: var(--text-primary);
+    color: #94a3b8;
     text-decoration: none;
     transition: all 0.2s;
     font-size: 13px;
 }
 
 .submenu-link:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: rgba(255, 255, 255, 0.06);
     padding-left: 55px;
+    color: #ffffff;
 }
 
 .submenu-link.active {
