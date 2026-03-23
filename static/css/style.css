@@ -70,6 +70,7 @@ body {
 /* Sidebar header / logo section */
 .sidebar-header {
     border-bottom: 1px solid var(--border);
+    background-color: #ffffff !important;
 }
 
 .logo {
@@ -78,7 +79,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 24px 20px 20px;
-    background: var(--white);
+    background-color: #ffffff !important;
     gap: 8px;
 }
 
