@@ -35,6 +35,8 @@ from routes.relatorios import relatorios
 from routes.documentos import documentos
 from routes.api import api
 from routes.contabil import contabil
+from routes.municipios import municipios
+from routes.financeiro import financeiro
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -47,6 +49,8 @@ app.register_blueprint(relatorios)
 app.register_blueprint(documentos)
 app.register_blueprint(api)
 app.register_blueprint(contabil)
+app.register_blueprint(municipios)
+app.register_blueprint(financeiro)
 
 
 # Template filters
@@ -75,6 +79,21 @@ def internal_error(error):
 # Cria diretórios necessários
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
+
+# Garante que a tabela de municípios existe (cria se necessário)
+from utils.db_helper import execute_query as _execute_query
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS municipios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(100) NOT NULL,
+        uf CHAR(2) NOT NULL,
+        site_prefeitura VARCHAR(500) DEFAULT NULL,
+        situacao ENUM('ATIVO', 'INATIVO') NOT NULL DEFAULT 'ATIVO',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_municipio_uf_nome (uf, nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
 
 
 if __name__ == '__main__':

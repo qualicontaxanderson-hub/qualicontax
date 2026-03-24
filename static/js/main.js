@@ -1,61 +1,91 @@
 // Qualicontax - Scripts principais
 
-// Sidebar toggle
 document.addEventListener('DOMContentLoaded', function() {
-    const sidebar = document.querySelector('.sidebar');
-    const toggleBtn = document.querySelector('#menuToggle') || document.querySelector('.sidebar-toggle') || document.querySelector('.menu-toggle');
-    
-    if (toggleBtn && sidebar) {
-        toggleBtn.addEventListener('click', function() {
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+
+    // ── Nav panel toggle (hamburger button in top bar) ──
+    const navPanel    = document.querySelector('.nav-panel');
+    const mainArea    = document.querySelector('.main-area');
+    const panelToggle = document.querySelector('#navPanelToggle');
+
+    function isPanelVisible() {
+        return navPanel && !navPanel.classList.contains('hidden') && !navPanel.classList.contains('mobile-open') === false;
+    }
+
+    if (panelToggle && navPanel && mainArea) {
+        // Restore saved state
+        const savedHidden = localStorage.getItem('navPanelHidden') === 'true';
+        if (savedHidden) {
+            navPanel.classList.add('hidden');
+            mainArea.classList.add('panel-hidden');
+        }
+
+        panelToggle.addEventListener('click', function() {
+            const isMobile = window.innerWidth <= 900;
+            if (isMobile) {
+                // Mobile: slide in/out as overlay
+                navPanel.classList.toggle('mobile-open');
+            } else {
+                // Desktop: toggle panel + adjust main area margin
+                navPanel.classList.toggle('hidden');
+                mainArea.classList.toggle('panel-hidden');
+                localStorage.setItem('navPanelHidden', navPanel.classList.contains('hidden'));
+            }
+        });
+
+        // Close panel overlay when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth <= 900 &&
+                navPanel.classList.contains('mobile-open') &&
+                !navPanel.contains(e.target) &&
+                !panelToggle.contains(e.target)) {
+                navPanel.classList.remove('mobile-open');
+            }
         });
     }
-    
-    // Restaura estado do sidebar
-    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-    if (isCollapsed && sidebar) {
-        sidebar.classList.add('collapsed');
-    }
-    
-    // Submenu toggle
-    const navItems = document.querySelectorAll('.nav-item.has-submenu > .nav-link');
-    navItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            const parent = this.parentElement;
-            parent.classList.toggle('open');
+
+    // ── Panel expandable sections ──
+    document.querySelectorAll('.panel-section-toggle').forEach(function(btn) {
+        // Open sections that contain the active link automatically
+        const section = document.getElementById(btn.dataset.target);
+        if (section && section.querySelector('.active')) {
+            btn.classList.add('open');
+        }
+
+        btn.addEventListener('click', function() {
+            this.classList.toggle('open');
         });
     });
-    
-    // Mobile menu toggle
-    const menuToggle = document.querySelector('.mobile-menu-toggle');
-    if (menuToggle && sidebar) {
-        menuToggle.addEventListener('click', function() {
-            sidebar.classList.toggle('show');
+
+    // ── Panel sub-section toggles (Conciliação Bancária) ──
+    document.querySelectorAll('.panel-subsection-toggle').forEach(function(btn) {
+        const section = document.getElementById(btn.dataset.target);
+        if (section && section.querySelector('.active')) {
+            btn.classList.add('open');
+        }
+
+        btn.addEventListener('click', function() {
+            this.classList.toggle('open');
         });
-    }
-    
-    // Profile dropdown toggle
+    });
+
+    // ── Profile dropdown ──
     const profileToggle = document.querySelector('#profileToggle');
-    const profileMenu = document.querySelector('#profileMenu');
+    const profileMenu   = document.querySelector('#profileMenu');
     if (profileToggle && profileMenu) {
         profileToggle.addEventListener('click', function(e) {
             e.stopPropagation();
             profileMenu.classList.toggle('show');
         });
-        
-        // Close dropdown when clicking outside
+
         document.addEventListener('click', function(e) {
             if (!profileToggle.contains(e.target)) {
                 profileMenu.classList.remove('show');
             }
         });
     }
-    
-    // Auto-hide alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
+
+    // ── Auto-hide alerts after 5 seconds ──
+    document.querySelectorAll('.alert').forEach(function(alert) {
         const closeBtn = alert.querySelector('.alert-close');
         if (closeBtn) {
             closeBtn.addEventListener('click', function() {
@@ -63,12 +93,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(() => alert.remove(), 300);
             });
         }
-        
-        setTimeout(() => {
+        setTimeout(function() {
             alert.style.opacity = '0';
             setTimeout(() => alert.remove(), 300);
         }, 5000);
     });
+
 });
 
 // Global function for submenu toggle (can be called from onclick)

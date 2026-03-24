@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}Recebimentos - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="recebimentos-page">
+
+    <!-- ── Page Header ──────────────────────────────────────────────── -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="fas fa-hand-holding-dollar" style="color: var(--primary-green);"></i>
+                Recebimentos
+            </h1>
+            <p class="page-subtitle">Lançamentos financeiros de recebimento</p>
+        </div>
+        <div class="page-actions">
+            <a href="#" class="btn btn-primary">
+                <i class="fas fa-plus"></i>
+                Novo Lançamento
+            </a>
+        </div>
+    </div>
+
+    <!-- ── Summary cards ────────────────────────────────────────────── -->
+    <div class="stats-grid" style="margin-bottom: 24px;">
+        <div class="stat-card">
+            <div class="stat-icon bg-primary"><i class="fas fa-list"></i></div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ totais.total or 0 }}</h3>
+                <p class="stat-label">Total de Lançamentos</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-success"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ totais.valor_recebido | default(0) | float | round(2) | format_currency }}</h3>
+                <p class="stat-label">Recebido ({{ totais.qtd_recebido or 0 }} lanç.)</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-warning"><i class="fas fa-clock"></i></div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ totais.valor_pendente | default(0) | float | round(2) | format_currency }}</h3>
+                <p class="stat-label">Pendente ({{ totais.qtd_pendente or 0 }} lanç.)</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-info"><i class="fas fa-dollar-sign"></i></div>
+            <div class="stat-content">
+                <h3 class="stat-value">{{ totais.valor_total | default(0) | float | round(2) | format_currency }}</h3>
+                <p class="stat-label">Valor Total</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Filter bar ────────────────────────────────────────────────── -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('financeiro.recebimento_index') }}" id="form-filtros">
+                <div class="filter-grid">
+
+                    <div class="filter-item">
+                        <label class="filter-label">Empresa</label>
+                        <select name="empresa_id" class="form-control" id="sel-empresa">
+                            <option value="">Todas</option>
+                            {% for e in empresas %}
+                            <option value="{{ e.id }}" {% if filtros.empresa_id|string == e.id|string %}selected{% endif %}>
+                                {{ e.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label class="filter-label">Conta</label>
+                        <select name="conta_id" class="form-control">
+                            <option value="">Todas</option>
+                            {% for c in contas %}
+                            <option value="{{ c.id }}" {% if filtros.conta_id|string == c.id|string %}selected{% endif %}>
+                                {{ c.descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label class="filter-label">Forma de Recebimento</label>
+                        <select name="forma_recebimento_id" class="form-control">
+                            <option value="">Todas</option>
+                            {% for f in formas %}
+                            <option value="{{ f.id }}" {% if filtros.forma_recebimento_id|string == f.id|string %}selected{% endif %}>
+                                {{ f.descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label class="filter-label">Status</label>
+                        <select name="status" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="PENDENTE"  {% if filtros.status == 'PENDENTE'  %}selected{% endif %}>Pendente</option>
+                            <option value="RECEBIDO"  {% if filtros.status == 'RECEBIDO'  %}selected{% endif %}>Recebido</option>
+                            <option value="CANCELADO" {% if filtros.status == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                            <option value="ESTORNADO" {% if filtros.status == 'ESTORNADO' %}selected{% endif %}>Estornado</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label class="filter-label">Data Início</label>
+                        <input type="date" name="data_inicio" class="form-control"
+                               value="{{ filtros.data_inicio }}">
+                    </div>
+
+                    <div class="filter-item">
+                        <label class="filter-label">Data Fim</label>
+                        <input type="date" name="data_fim" class="form-control"
+                               value="{{ filtros.data_fim }}">
+                    </div>
+
+                    <div class="filter-item filter-item--wide">
+                        <label class="filter-label">Descrição</label>
+                        <input type="text" name="f_descricao" class="form-control"
+                               placeholder="Buscar por descrição..."
+                               value="{{ filtros.f_descricao }}">
+                    </div>
+
+                </div><!-- .filter-grid -->
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('financeiro.recebimento_index') }}" class="btn btn-outline">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Batch-delete toolbar (visible when rows selected) ─────────── -->
+    <div id="batch-toolbar" class="batch-toolbar" style="display:none;">
+        <span id="batch-count" class="batch-count">0 selecionado(s)</span>
+        <form method="POST" action="{{ url_for('financeiro.recebimento_excluir_lote') }}"
+              id="form-excluir-lote" onsubmit="return confirmarExclusaoLote()">
+            <!-- Preserve current filters so we redirect back with same view -->
+            {% for k, v in filtros.items() %}
+            <input type="hidden" name="{{ k }}" value="{{ v }}">
+            {% endfor %}
+            <!-- Checkboxes are injected here by JS before submit -->
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-trash-alt"></i>
+                Excluir Selecionados
+            </button>
+        </form>
+        <button type="button" class="btn btn-outline" onclick="desmarcarTodos()">
+            <i class="fas fa-times"></i> Desmarcar
+        </button>
+    </div>
+
+    <!-- ── Data table ────────────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover" id="tabela-recebimentos">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <input type="checkbox" id="chk-todos" title="Selecionar todos"
+                                       onchange="toggleTodos(this)">
+                            </th>
+                            <th>Data</th>
+                            <th>Descrição</th>
+                            <th>Empresa</th>
+                            <th>Conta</th>
+                            <th>Forma</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Vencimento</th>
+                            <th width="110">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if lancamentos %}
+                            {% for l in lancamentos %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="chk-lancamento"
+                                           value="{{ l.id }}" onchange="atualizarBatch()">
+                                </td>
+                                <td>{{ l.data_lancamento | format_date if l.data_lancamento else '-' }}</td>
+                                <td>{{ l.descricao }}</td>
+                                <td>{{ l.empresa_nome or '-' }}</td>
+                                <td>{{ l.conta_descricao or '-' }}</td>
+                                <td>{{ l.forma_descricao or '-' }}</td>
+                                <td class="text-right">
+                                    <strong>{{ l.valor | format_currency }}</strong>
+                                </td>
+                                <td>
+                                    {% set badge = {
+                                        'PENDENTE':  'warning',
+                                        'RECEBIDO':  'success',
+                                        'CANCELADO': 'secondary',
+                                        'ESTORNADO': 'danger'
+                                    } %}
+                                    <span class="badge badge-{{ badge.get(l.status, 'secondary') }}">
+                                        {{ l.status }}
+                                    </span>
+                                </td>
+                                <td>{{ l.data_vencimento | format_date if l.data_vencimento else '-' }}</td>
+                                <td>
+                                    <div class="table-actions">
+                                        <!-- Excluir individual -->
+                                        <form method="POST"
+                                              action="{{ url_for('financeiro.recebimento_excluir', lancamento_id=l.id) }}"
+                                              style="display:inline;"
+                                              onsubmit="return confirm('Excluir este lançamento?\n\nEsta ação não pode ser desfeita.')">
+                                            {% for k, v in filtros.items() %}
+                                            <input type="hidden" name="{{ k }}" value="{{ v }}">
+                                            {% endfor %}
+                                            <button type="submit"
+                                                    class="btn-icon btn-danger"
+                                                    title="Excluir lançamento">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="10" class="text-center">
+                                    <div class="empty-state" style="padding: 48px 24px;">
+                                        <i class="fas fa-hand-holding-dollar"
+                                           style="font-size:48px; color:#D1D5DB; margin-bottom:12px; display:block;"></i>
+                                        <p style="color:#6B7280; font-size:15px;">
+                                            Nenhum lançamento encontrado
+                                        </p>
+                                        {% if filtros.values() | select | list %}
+                                        <a href="{{ url_for('financeiro.recebimento_index') }}"
+                                           class="btn btn-outline" style="margin-top:12px;">
+                                            <i class="fas fa-times"></i> Limpar filtros
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div><!-- .table-responsive -->
+        </div>
+    </div><!-- .card -->
+
+</div><!-- .recebimentos-page -->
+
+<!-- ── Styles ─────────────────────────────────────────────────────────── -->
+<style>
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.filter-item--wide {
+    grid-column: span 2;
+}
+.filter-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.filter-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Batch toolbar */
+.batch-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #FEF3C7;
+    border: 1px solid #FCD34D;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    animation: slideDown .2s ease;
+}
+.batch-count {
+    font-weight: 600;
+    color: #92400E;
+    flex: 1;
+}
+
+/* Table tweaks */
+#tabela-recebimentos thead th {
+    background: #22C55E;
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+    padding: 12px 14px;
+}
+#tabela-recebimentos tbody tr:hover {
+    background: #F0FDF4;
+}
+.text-right { text-align: right; }
+</style>
+
+<!-- ── JavaScript ─────────────────────────────────────────────────────── -->
+<script>
+function getCheckboxes() {
+    return document.querySelectorAll('.chk-lancamento');
+}
+function getChecked() {
+    return Array.from(getCheckboxes()).filter(c => c.checked);
+}
+
+function toggleTodos(master) {
+    getCheckboxes().forEach(c => c.checked = master.checked);
+    atualizarBatch();
+}
+
+function desmarcarTodos() {
+    getCheckboxes().forEach(c => c.checked = false);
+    document.getElementById('chk-todos').checked = false;
+    atualizarBatch();
+}
+
+function atualizarBatch() {
+    const checked = getChecked();
+    const toolbar = document.getElementById('batch-toolbar');
+    const count   = document.getElementById('batch-count');
+    toolbar.style.display = checked.length ? 'flex' : 'none';
+    count.textContent = `${checked.length} lançamento(s) selecionado(s)`;
+
+    // Sync master checkbox
+    const all = getCheckboxes();
+    document.getElementById('chk-todos').checked =
+        all.length > 0 && checked.length === all.length;
+}
+
+function confirmarExclusaoLote() {
+    const checked = getChecked();
+    if (!checked.length) {
+        alert('Selecione ao menos um lançamento.');
+        return false;
+    }
+    if (!confirm(`Excluir ${checked.length} lançamento(s)?\n\nEsta ação não pode ser desfeita.`)) {
+        return false;
+    }
+    // Inject hidden inputs with selected IDs
+    const form = document.getElementById('form-excluir-lote');
+    // Remove any previously injected ids inputs
+    form.querySelectorAll('input[name="ids"]').forEach(el => el.remove());
+    checked.forEach(c => {
+        const inp = document.createElement('input');
+        inp.type  = 'hidden';
+        inp.name  = 'ids';
+        inp.value = c.value;
+        form.appendChild(inp);
+    });
+    return true;
+}
+</script>
+{% endblock %}

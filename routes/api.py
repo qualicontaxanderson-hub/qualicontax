@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from utils.auth_helper import login_required
 from models.cliente import Cliente
+from models.municipio import Municipio
 from utils.db_helper import execute_query
 
 api = Blueprint('api', __name__)
@@ -31,6 +32,33 @@ def search_clientes():
         })
     
     return jsonify({'clientes': result})
+
+
+@api.route('/api/municipios/search')
+@login_required
+def search_municipios():
+    """Busca municípios por nome/UF, retorna JSON"""
+    q = request.args.get('q', '').strip()
+    uf = request.args.get('uf', '').strip()
+
+    if not q and not uf:
+        return jsonify({'municipios': []})
+
+    if q and len(q) < 2:
+        return jsonify({'municipios': []})
+
+    municipios_list = Municipio.search(q if q else '', uf if uf else None)
+
+    result = [
+        {
+            'id': m['id'],
+            'nome': m['nome'],
+            'uf': m['uf'],
+            'site_prefeitura': m['site_prefeitura'] or '',
+        }
+        for m in municipios_list
+    ]
+    return jsonify({'municipios': result})
 
 
 @api.route('/api/dashboard/charts')

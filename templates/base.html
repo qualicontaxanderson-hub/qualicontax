@@ -15,313 +15,210 @@
     <!-- Chart.js 4.x -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
-    <!-- CSS para Dropdown Aninhado -->
-    <style>
-        /* Dropdown aninhado - Container */
-        .submenu-item.has-dropdown {
-            position: relative !important;
-        }
-
-        /* Submenu dropdown (oculto inicialmente) - mais específico para sobrescrever style.css */
-        ul.dropdown-submenu {
-            display: none !important;
-            position: absolute !important;
-            left: 100% !important;
-            top: 0 !important;
-            min-width: 250px !important;
-            background: #2c3e50 !important;
-            border-radius: 5px !important;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.3) !important;
-            padding: 5px 0 !important;
-            z-index: 1000 !important;
-            list-style: none !important;
-            margin: 0 !important;
-        }
-
-        /* Mostrar dropdown ao hover */
-        .submenu-item.has-dropdown:hover > ul.dropdown-submenu {
-            display: block !important;
-            animation: slideIn 300ms ease-out;
-        }
-
-        /* Animação de entrada */
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        /* Seta indicadora */
-        .dropdown-arrow {
-            margin-left: auto;
-            font-size: 0.8em;
-            transition: transform 0.3s;
-        }
-
-        .has-dropdown:hover .dropdown-arrow {
-            transform: translateX(3px);
-        }
-
-        /* Estilo dos links do dropdown */
-        ul.dropdown-submenu li {
-            list-style: none !important;
-        }
-
-        ul.dropdown-submenu li a {
-            display: flex !important;
-            align-items: center !important;
-            gap: 10px !important;
-            padding: 12px 20px !important;
-            color: #ecf0f1 !important;
-            text-decoration: none !important;
-            transition: background 0.3s !important;
-            background-color: transparent !important;
-        }
-
-        ul.dropdown-submenu li a:hover {
-            background: #34495e !important;
-        }
-
-        ul.dropdown-submenu li a i {
-            width: 20px !important;
-            text-align: center !important;
-            opacity: 1 !important;
-        }
-
-        /* Suporte para clique - mostrar dropdown quando tem classe active */
-        .submenu-item.has-dropdown.active > ul.dropdown-submenu {
-            display: block !important;
-        }
-
-        /* Melhorar visibilidade no mobile */
-        @media (max-width: 768px) {
-            ul.dropdown-submenu {
-                position: relative !important;
-                left: 0 !important;
-                margin-left: 20px !important;
-                margin-top: 5px !important;
-            }
-        }
-    </style>
-
-    <!-- JavaScript para toggle de dropdown ao clicar -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Toggle dropdown ao clicar (suporte mobile e backup para desktop)
-            document.querySelectorAll('.has-dropdown > a').forEach(function(item) {
-                item.addEventListener('click', function(e) {
-                    e.preventDefault(); // Prevenir navegação do href="#"
-                    
-                    // Toggle classe 'active' no parent (li.has-dropdown)
-                    var parent = this.parentElement;
-                    parent.classList.toggle('active');
-                    
-                    // Fechar outros dropdowns abertos
-                    document.querySelectorAll('.has-dropdown.active').forEach(function(other) {
-                        if (other !== parent) {
-                            other.classList.remove('active');
-                        }
-                    });
-                });
-            });
-
-            // Fechar dropdown ao clicar fora
-            document.addEventListener('click', function(e) {
-                if (!e.target.closest('.has-dropdown')) {
-                    document.querySelectorAll('.has-dropdown.active').forEach(function(item) {
-                        item.classList.remove('active');
-                    });
-                }
-            });
-        });
-    </script>
-    
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <div class="logo">
-                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="logo-img">
-                <span class="logo-text">Qualicontax</span>
-            </div>
+
+    <!-- Icon Rail (64px) -->
+    <nav class="nav-rail" id="navRail">
+        <a href="{{ url_for('dashboard.index') }}" class="rail-logo">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="rail-logo-img">
+        </a>
+
+        <ul class="rail-nav">
+            <li>
+                <a href="{{ url_for('dashboard.index') }}" class="rail-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" title="Dashboard">
+                    <i class="fas fa-home"></i>
+                    <span>Início</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="rail-link {% if request.endpoint and ('clientes' in request.endpoint or 'grupos' in request.endpoint or 'ramos' in request.endpoint or 'contratos' in request.endpoint) %}active{% endif %}" title="Cadastros" data-section="cadastros">
+                    <i class="fas fa-folder-open"></i>
+                    <span>Pastas</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="rail-link {% if request.endpoint and 'contabil' in request.endpoint %}active{% endif %}" title="Contábil" data-section="contabil">
+                    <i class="fas fa-calculator"></i>
+                    <span>Contábil</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="rail-link" title="Escrita Fiscal" data-section="fiscal">
+                    <i class="fas fa-file-invoice"></i>
+                    <span>Fiscal</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="rail-link" title="Financeiro" data-section="financeiro">
+                    <i class="fas fa-dollar-sign"></i>
+                    <span>Financeiro</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('relatorios.index') }}" class="rail-link {% if request.endpoint and 'relatorios' in request.endpoint %}active{% endif %}" title="Relatórios">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Relatórios</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="rail-link" title="Mais">
+                    <i class="fas fa-ellipsis-h"></i>
+                    <span>Mais</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="rail-bottom">
+            <a href="{{ url_for('auth.logout') }}" class="rail-link" title="Sair">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Sair</span>
+            </a>
         </div>
-        
-        <div class="sidebar-search">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Buscar...">
-            </div>
+    </nav>
+
+    <!-- Nav Panel (210px) -->
+    <aside class="nav-panel" id="navPanel">
+        <div class="nav-panel-logo">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="panel-logo-img">
+            <span class="panel-logo-text">Qualicontax</span>
         </div>
-        
-        <nav class="sidebar-nav">
-            <ul class="nav-list">
-                <li class="nav-item">
-                    <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                
-                <li class="nav-item has-submenu">
-                    <a href="#" class="nav-link">
-                        <i class="fas fa-folder-open"></i>
-                        <span>Cadastros</span>
-                        <i class="fas fa-chevron-down submenu-arrow"></i>
-                    </a>
-                    <ul class="submenu">
-                        <li class="submenu-item">
-                            <a href="{{ url_for('clientes.index') }}" class="submenu-link {% if 'clientes' in request.endpoint %}active{% endif %}">
-                                <i class="fas fa-user-tie"></i>
-                                <span>Clientes</span>
-                            </a>
-                        </li>
-                        <li class="submenu-item">
-                            <a href="{{ url_for('grupos.index') }}" class="submenu-link {% if 'grupos' in request.endpoint %}active{% endif %}">
-                                <i class="fas fa-users-cog"></i>
-                                <span>Grupos</span>
-                            </a>
-                        </li>
-                        <li class="submenu-item">
-                            <a href="{{ url_for('ramos_atividade.index') }}" class="submenu-link {% if 'ramos_atividade' in request.endpoint %}active{% endif %}">
-                                <i class="fas fa-industry"></i>
-                                <span>Ramo de Atividade</span>
-                            </a>
-                        </li>
-                        <li class="submenu-item">
-                            <a href="{{ url_for('contratos.list_contratos') }}" class="submenu-link {% if 'contratos' in request.endpoint %}active{% endif %}">
-                                <i class="fas fa-file-contract"></i>
-                                <span>Contratos</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="fas fa-file-invoice"></i>
-                        <span>Escrita Fiscal</span>
-                    </a>
-                </li>
-                
-                <li class="nav-item has-submenu">
-                    <a href="#" class="nav-link">
-                        <i class="fas fa-calculator"></i>
-                        <span>Contábil</span>
-                        <i class="fas fa-chevron-down submenu-arrow"></i>
-                    </a>
-                    <ul class="submenu">
-                        <li class="submenu-item">
-                            <a href="{{ url_for('contabil.index') }}" class="submenu-link {% if 'contabil.index' in request.endpoint %}active{% endif %}">
-                                <i class="fas fa-home"></i>
-                                <span>Início</span>
-                            </a>
-                        </li>
-                        <li class="submenu-item has-dropdown">
-                            <a href="#" class="submenu-link">
-                                <i class="fas fa-file-invoice-dollar"></i>
-                                <span>Conciliação Bancária</span>
-                                <i class="fas fa-chevron-right dropdown-arrow"></i>
-                            </a>
-                            <ul class="dropdown-submenu">
-                                <li>
-                                    <a href="{{ url_for('contabil.contas_correntes') }}">
-                                        <i class="fas fa-university"></i>
-                                        <span>Cadastro de Conta Corrente</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="{{ url_for('contabil.importar_ofx') }}">
-                                        <i class="fas fa-file-upload"></i>
-                                        <span>Importar OFX</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="{{ url_for('contabil.extrato_conciliacao') }}">
-                                        <i class="fas fa-chart-line"></i>
-                                        <span>Extrato de Conciliação</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="{{ url_for('contabil.memorizacoes') }}">
-                                        <i class="fas fa-brain"></i>
-                                        <span>Memorizações</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    </ul>
-                </li>
-                
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="fas fa-balance-scale"></i>
-                        <span>Legalização</span>
-                    </a>
-                </li>
-                
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="fas fa-chart-pie"></i>
-                        <span>Análise</span>
-                    </a>
-                </li>
-                
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="fas fa-dollar-sign"></i>
-                        <span>Financeiro</span>
-                    </a>
-                </li>
-                
-                <li class="nav-item">
-                    <a href="{{ url_for('relatorios.index') }}" class="nav-link {% if 'relatorios' in request.endpoint %}active{% endif %}">
-                        <i class="fas fa-chart-bar"></i>
-                        <span>Relatórios</span>
-                    </a>
-                </li>
-            </ul>
+
+        <nav class="nav-panel-nav">
+
+            <a href="{{ url_for('dashboard.index') }}" class="panel-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                Dashboard
+            </a>
+
+            <!-- Cadastros -->
+            <div class="panel-section">
+                <button class="panel-section-toggle {% if request.endpoint and ('clientes' in request.endpoint or 'grupos' in request.endpoint or 'ramos' in request.endpoint or 'contratos' in request.endpoint) %}open{% endif %}" data-target="section-cadastros">
+                    <i class="fas fa-folder-open"></i>
+                    Cadastros
+                    <i class="fas fa-chevron-down panel-section-arrow"></i>
+                </button>
+                <ul class="panel-section-items" id="section-cadastros">
+                    <li><a href="{{ url_for('clientes.index') }}" class="panel-sublink {% if 'clientes' in request.endpoint %}active{% endif %}">
+                        <i class="fas fa-user-tie"></i> Clientes
+                    </a></li>
+                    <li><a href="{{ url_for('grupos.index') }}" class="panel-sublink {% if 'grupos' in request.endpoint %}active{% endif %}">
+                        <i class="fas fa-users-cog"></i> Grupos
+                    </a></li>
+                    <li><a href="{{ url_for('ramos_atividade.index') }}" class="panel-sublink {% if 'ramos_atividade' in request.endpoint %}active{% endif %}">
+                        <i class="fas fa-industry"></i> Ramo de Atividade
+                    </a></li>
+                    <li><a href="{{ url_for('contratos.list_contratos') }}" class="panel-sublink {% if 'contratos' in request.endpoint %}active{% endif %}">
+                        <i class="fas fa-file-contract"></i> Contratos
+                    </a></li>
+                    <li><a href="{{ url_for('municipios.index') }}" class="panel-sublink {% if 'municipios' in request.endpoint %}active{% endif %}">
+                        <i class="fas fa-map-marked-alt"></i> Município
+                    </a></li>
+                </ul>
+            </div>
+
+            <a href="#" class="panel-link">
+                <i class="fas fa-file-invoice"></i>
+                Escrita Fiscal
+            </a>
+
+            <!-- Contábil -->
+            <div class="panel-section">
+                <button class="panel-section-toggle {% if request.endpoint and 'contabil' in request.endpoint %}open{% endif %}" data-target="section-contabil">
+                    <i class="fas fa-calculator"></i>
+                    Contábil
+                    <i class="fas fa-chevron-down panel-section-arrow"></i>
+                </button>
+                <ul class="panel-section-items" id="section-contabil">
+                    <li><a href="{{ url_for('contabil.index') }}" class="panel-sublink {% if request.endpoint == 'contabil.index' %}active{% endif %}">
+                        <i class="fas fa-home"></i> Início
+                    </a></li>
+                    <!-- Conciliação Bancária expandable -->
+                    <li class="panel-subsection">
+                        <button class="panel-subsection-toggle" data-target="section-conciliacao">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                            Conciliação Bancária
+                            <i class="fas fa-chevron-down panel-subsection-arrow"></i>
+                        </button>
+                        <ul class="panel-subsection-items" id="section-conciliacao">
+                            <li><a href="{{ url_for('contabil.contas_correntes') }}" class="panel-sublink {% if request.endpoint == 'contabil.contas_correntes' %}active{% endif %}">
+                                <i class="fas fa-university"></i> Conta Corrente
+                            </a></li>
+                            <li><a href="{{ url_for('contabil.importar_ofx') }}" class="panel-sublink {% if request.endpoint == 'contabil.importar_ofx' %}active{% endif %}">
+                                <i class="fas fa-file-upload"></i> Importar OFX
+                            </a></li>
+                            <li><a href="{{ url_for('contabil.importar_pdf') }}" class="panel-sublink {% if request.endpoint == 'contabil.importar_pdf' %}active{% endif %}">
+                                <i class="fas fa-file-pdf"></i> Importar PDF
+                            </a></li>
+                            <li><a href="{{ url_for('contabil.extrato_conciliacao') }}" class="panel-sublink {% if request.endpoint == 'contabil.extrato_conciliacao' %}active{% endif %}">
+                                <i class="fas fa-chart-line"></i> Extrato
+                            </a></li>
+                            <li><a href="{{ url_for('contabil.memorizacoes') }}" class="panel-sublink {% if request.endpoint == 'contabil.memorizacoes' %}active{% endif %}">
+                                <i class="fas fa-brain"></i> Memorizações
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <a href="#" class="panel-link">
+                <i class="fas fa-balance-scale"></i>
+                Legalização
+            </a>
+
+            <a href="#" class="panel-link">
+                <i class="fas fa-chart-pie"></i>
+                Análise
+            </a>
+
+            <!-- Financeiro -->
+            <div class="panel-section">
+                <button class="panel-section-toggle {% if request.endpoint and 'financeiro' in request.endpoint %}open{% endif %}" data-target="section-financeiro">
+                    <i class="fas fa-dollar-sign"></i>
+                    Financeiro
+                    <i class="fas fa-chevron-down panel-section-arrow"></i>
+                </button>
+                <ul class="panel-section-items" id="section-financeiro">
+                    <li><a href="{{ url_for('financeiro.recebimento_index') }}" class="panel-sublink {% if 'financeiro.recebimento' in (request.endpoint or '') %}active{% endif %}">
+                        <i class="fas fa-hand-holding-dollar"></i> Recebimentos
+                    </a></li>
+                </ul>
+            </div>
+
+            <a href="{{ url_for('relatorios.index') }}" class="panel-link {% if request.endpoint and 'relatorios' in request.endpoint %}active{% endif %}">
+                <i class="fas fa-chart-bar"></i>
+                Relatórios
+            </a>
+
         </nav>
     </aside>
 
-    <!-- Main Content -->
-    <div class="main-wrapper">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <button class="menu-toggle" id="menuToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
+    <!-- Main Area -->
+    <div class="main-area">
+
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <button class="top-bar-toggle" id="navPanelToggle" title="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div class="top-bar-search">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Buscar...">
             </div>
-            
-            <div class="header-center">
-                <div class="header-search">
-                    <i class="fas fa-search"></i>
-                    <input type="text" placeholder="Buscar...">
-                </div>
-            </div>
-            
-            <div class="header-right">
+
+            <div class="top-bar-actions">
                 <button class="btn btn-refer">
                     <i class="fas fa-gift"></i>
                     Indique e Ganhe
                 </button>
-                
-                <button class="header-icon" id="darkModeToggle">
-                    <i class="fas fa-moon"></i>
-                </button>
-                
-                <button class="header-icon" id="notificationsToggle">
+
+                <button class="top-bar-icon" id="notificationsToggle" title="Notificações">
                     <i class="fas fa-bell"></i>
                     <span class="badge">3</span>
                 </button>
-                
+
                 <div class="profile-dropdown">
                     <button class="profile-toggle" id="profileToggle">
                         <img src="{{ url_for('static', filename='images/avatar.png') }}" alt="Profile" class="profile-img">
@@ -362,10 +259,11 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Content Area -->
+        <!-- Content -->
         <main class="content">
             {% block content %}{% endblock %}
         </main>
+
     </div>
 
     <!-- Scripts -->
