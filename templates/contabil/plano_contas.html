@@ -11,138 +11,195 @@
                 <i class="fas fa-sitemap" style="color: var(--primary-green);"></i>
                 Plano de Contas
             </h1>
-            <p class="page-subtitle">Gerencie o plano de contas contábil</p>
+            <p class="page-subtitle">Gerencie os grupos do plano de contas vinculados aos seus grupos de clientes</p>
         </div>
         <div class="page-actions">
-            <button class="btn btn-primary" onclick="abrirModal()">
+            <button class="btn btn-primary" onclick="abrirModalCriar()">
                 <i class="fas fa-plus"></i>
-                Nova Conta
+                Criar Grupo de Plano
             </button>
         </div>
     </div>
 
-    <!-- Tabela de Contas -->
-    <div class="card table-card">
+    <!-- Filtro por Grupo -->
+    <div class="card filters-card" style="margin-bottom: 20px;">
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descrição</th>
-                            <th>Tipo</th>
-                            <th>Natureza</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6" class="text-center">
-                                <div class="empty-state" style="padding: 40px 20px;">
-                                    <i class="fas fa-sitemap" style="font-size: 3rem; color: var(--text-secondary); display: block; margin-bottom: 12px;"></i>
-                                    <p style="color: var(--text-secondary);">Nenhuma conta cadastrada no plano de contas</p>
-                                    <button class="btn btn-primary" style="margin-top: 12px;" onclick="abrirModal()">
-                                        <i class="fas fa-plus"></i>
-                                        Cadastrar primeira conta
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <form method="GET" class="filters-form">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label for="grupo_id">Filtrar por Grupo</label>
+                        <select name="grupo_id" id="grupo_id" class="form-control">
+                            <option value="">Todos os grupos</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo.id }}" {% if filtro_grupo_id|string == grupo.id|string %}selected{% endif %}>
+                                {{ grupo.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="align-self: flex-end;">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        {% if filtro_grupo_id %}
+                        <a href="{{ url_for('contabil.plano_contas') }}" class="btn btn-outline" style="margin-left: 8px;">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Planos -->
+    {% if planos %}
+    <div class="cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+        {% for plano in planos %}
+        <div class="card" style="border-left: 4px solid var(--primary-green);">
+            <div class="card-body">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div>
+                        <h3 style="margin: 0 0 4px 0; font-size: 1rem; color: var(--text-primary);">
+                            <i class="fas fa-sitemap" style="color: var(--primary-green); margin-right: 6px;"></i>
+                            {{ plano.nome }}
+                        </h3>
+                        {% if plano.descricao %}
+                        <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">{{ plano.descricao }}</p>
+                        {% endif %}
+                    </div>
+                    <span class="badge {% if plano.situacao == 'ATIVO' %}badge-success{% else %}badge-secondary{% endif %}">
+                        {{ plano.situacao }}
+                    </span>
+                </div>
+
+                <div style="display: flex; gap: 16px; margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">
+                    <span>
+                        <i class="fas fa-users" style="margin-right: 4px;"></i>
+                        <strong>Grupo:</strong>
+                        {% if plano.grupo_nome %}
+                            <a href="{{ url_for('grupos.index') }}" style="color: var(--primary-green);">{{ plano.grupo_nome }}</a>
+                        {% else %}
+                            <em>Sem grupo</em>
+                        {% endif %}
+                    </span>
+                    <span>
+                        <i class="fas fa-list" style="margin-right: 4px;"></i>
+                        <strong>{{ plano.total_contas }}</strong> conta(s)
+                    </span>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <a href="{{ url_for('contabil.ver_plano_contas', plano_id=plano.id) }}"
+                       class="btn btn-primary" style="flex: 1; text-align: center; font-size: 0.85rem;">
+                        <i class="fas fa-eye"></i> Abrir
+                    </a>
+                    <button class="btn btn-outline btn-danger-outline"
+                            onclick="confirmarExclusao({{ plano.id }}, '{{ plano.nome }}')"
+                            style="font-size: 0.85rem;" title="Excluir plano">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state" style="padding: 60px 20px; text-align: center;">
+                <i class="fas fa-sitemap" style="font-size: 3.5rem; color: var(--text-secondary); display: block; margin-bottom: 16px;"></i>
+                <h3 style="color: var(--text-secondary); margin-bottom: 8px;">Nenhum plano de contas cadastrado</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                    Crie um grupo de plano de contas e vincule-o a um grupo de clientes.
+                </p>
+                <button class="btn btn-primary" onclick="abrirModalCriar()">
+                    <i class="fas fa-plus"></i>
+                    Criar primeiro plano
+                </button>
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
-<!-- Modal Nova Conta -->
-<div id="novaContaModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 600px;">
+<!-- Modal Criar Plano -->
+<div id="modalCriarPlano" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 520px;">
         <div class="modal-header">
             <h3>
                 <i class="fas fa-sitemap" style="color: var(--primary-green);"></i>
-                Nova Conta Contábil
+                Criar Grupo de Plano de Contas
             </h3>
-            <button class="modal-close" onclick="fecharModal()" aria-label="Fechar">&times;</button>
+            <button class="modal-close" onclick="fecharModalCriar()" aria-label="Fechar">&times;</button>
         </div>
-        <form method="POST" action="{{ url_for('contabil.plano_contas') }}">
+        <form method="POST" action="{{ url_for('contabil.criar_plano_contas') }}">
             <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="codigo">Código *</label>
-                        <input type="text" name="codigo" id="codigo" class="form-control"
-                               placeholder="Ex: 1.1.001" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="tipo">Tipo *</label>
-                        <select name="tipo" id="tipo" class="form-control" required>
-                            <option value="">Selecione...</option>
-                            <option value="ANALITICA">Analítica</option>
-                            <option value="SINTETICA">Sintética</option>
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label for="nome">Nome do Plano *</label>
+                    <input type="text" name="nome" id="nome" class="form-control"
+                           placeholder="Ex: Plano de Contas Padrão" required>
                 </div>
                 <div class="form-group">
-                    <label for="descricao">Descrição *</label>
-                    <input type="text" name="descricao" id="descricao" class="form-control"
-                           placeholder="Nome da conta contábil" required>
+                    <label for="descricao">Descrição</label>
+                    <textarea name="descricao" id="descricao" class="form-control" rows="2"
+                              placeholder="Descrição opcional do plano"></textarea>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="natureza">Natureza *</label>
-                        <select name="natureza" id="natureza" class="form-control" required>
-                            <option value="">Selecione...</option>
-                            <option value="DEVEDORA">Devedora</option>
-                            <option value="CREDORA">Credora</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="grupo">Grupo *</label>
-                        <select name="grupo" id="grupo" class="form-control" required>
-                            <option value="">Selecione...</option>
-                            <option value="ATIVO">Ativo</option>
-                            <option value="PASSIVO">Passivo</option>
-                            <option value="PATRIMONIO_LIQUIDO">Patrimônio Líquido</option>
-                            <option value="RECEITA">Receita</option>
-                            <option value="DESPESA">Despesa</option>
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label for="grupo_id_modal">Grupo de Clientes</label>
+                    <select name="grupo_id" id="grupo_id_modal" class="form-control">
+                        <option value="">Selecione o grupo (opcional)</option>
+                        {% for grupo in grupos %}
+                        <option value="{{ grupo.id }}">{{ grupo.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <small style="color: var(--text-secondary);">
+                        Vincule este plano a um grupo de clientes para organização.
+                    </small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+                <button type="button" class="btn btn-secondary" onclick="fecharModalCriar()">Cancelar</button>
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i>
-                    Salvar
+                    Criar Plano
                 </button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- Form oculto para exclusão -->
+<form id="formExcluir" method="POST" style="display: none;">
+</form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    function abrirModal() {
-        document.getElementById('novaContaModal').style.display = 'block';
+    function abrirModalCriar() {
+        document.getElementById('modalCriarPlano').style.display = 'block';
     }
 
-    function fecharModal() {
-        document.getElementById('novaContaModal').style.display = 'none';
+    function fecharModalCriar() {
+        document.getElementById('modalCriarPlano').style.display = 'none';
+    }
+
+    function confirmarExclusao(planoId, planoNome) {
+        if (!confirm('Tem certeza que deseja excluir o plano "' + planoNome + '"?\n\nTodas as contas vinculadas a este plano serão removidas.')) {
+            return;
+        }
+        var form = document.getElementById('formExcluir');
+        form.action = '/contabil/plano_contas/' + planoId + '/excluir';
+        form.submit();
     }
 
     window.addEventListener('click', function(e) {
-        var modal = document.getElementById('novaContaModal');
-        if (e.target === modal) {
-            fecharModal();
-        }
+        var modal = document.getElementById('modalCriarPlano');
+        if (e.target === modal) fecharModalCriar();
     });
 
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            fecharModal();
-        }
+        if (e.key === 'Escape') fecharModalCriar();
     });
 </script>
 {% endblock %}

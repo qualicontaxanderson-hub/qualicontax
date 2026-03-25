@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block title %}{{ plano.nome }} - Plano de Contas - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="plano-contas-detalhe-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <div style="margin-bottom: 4px;">
+                <a href="{{ url_for('contabil.plano_contas') }}" style="color: var(--text-secondary); font-size: 0.85rem; text-decoration: none;">
+                    <i class="fas fa-arrow-left"></i> Plano de Contas
+                </a>
+            </div>
+            <h1 class="page-title">
+                <i class="fas fa-sitemap" style="color: var(--primary-green);"></i>
+                {{ plano.nome }}
+            </h1>
+            <p class="page-subtitle">
+                {% if plano.grupo_nome %}
+                    <i class="fas fa-users"></i> Grupo:
+                    <a href="{{ url_for('grupos.index') }}" style="color: var(--primary-green);">{{ plano.grupo_nome }}</a>
+                    &nbsp;·&nbsp;
+                {% endif %}
+                {{ itens|length }} conta(s) cadastrada(s)
+            </p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('contabil.template_csv_plano_contas') }}" class="btn btn-outline">
+                <i class="fas fa-download"></i>
+                Baixar Modelo CSV
+            </a>
+            <button class="btn btn-outline" onclick="abrirModalImportar()">
+                <i class="fas fa-file-upload"></i>
+                Importar CSV
+            </button>
+            <button class="btn btn-primary" onclick="abrirModalNovaConta()">
+                <i class="fas fa-plus"></i>
+                Nova Conta
+            </button>
+        </div>
+    </div>
+
+    <!-- Info Card -->
+    {% if plano.descricao %}
+    <div class="card" style="margin-bottom: 16px; border-left: 4px solid var(--primary-green);">
+        <div class="card-body" style="padding: 12px 16px;">
+            <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+                <i class="fas fa-info-circle" style="margin-right: 6px;"></i>{{ plano.descricao }}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabela de Contas -->
+    <div class="card table-card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Tipo</th>
+                            <th>Natureza</th>
+                            <th>Grupo Contábil</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if itens %}
+                            {% for item in itens %}
+                            <tr>
+                                <td>
+                                    <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.85rem;">
+                                        {{ item.codigo }}
+                                    </code>
+                                </td>
+                                <td>{{ item.descricao }}</td>
+                                <td>
+                                    {% if item.tipo == 'ANALITICA' %}
+                                    <span class="badge badge-primary">Analítica</span>
+                                    {% else %}
+                                    <span class="badge badge-info">Sintética</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.natureza == 'DEVEDORA' %}
+                                    <span class="badge" style="background: #e3f2fd; color: #1565c0;">Devedora</span>
+                                    {% else %}
+                                    <span class="badge" style="background: #fce4ec; color: #b71c1c;">Credora</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% set grupo_labels = {
+                                        'ATIVO': ('badge-success', 'Ativo'),
+                                        'PASSIVO': ('badge-warning', 'Passivo'),
+                                        'PATRIMONIO_LIQUIDO': ('badge-info', 'Patrimônio Líquido'),
+                                        'RECEITA': ('badge-primary', 'Receita'),
+                                        'DESPESA': ('badge-danger', 'Despesa')
+                                    } %}
+                                    {% if item.grupo_contabil in grupo_labels %}
+                                    <span class="badge {{ grupo_labels[item.grupo_contabil][0] }}">
+                                        {{ grupo_labels[item.grupo_contabil][1] }}
+                                    </span>
+                                    {% else %}
+                                    {{ item.grupo_contabil }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.situacao == 'ATIVO' %}
+                                    <span class="badge badge-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST"
+                                          action="{{ url_for('contabil.excluir_conta_plano', plano_id=plano.id, item_id=item.id) }}"
+                                          onsubmit="return confirm('Remover a conta {{ item.codigo }} - {{ item.descricao }}?')">
+                                        <button type="submit" class="btn-icon btn-danger" title="Remover conta">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center">
+                                    <div class="empty-state" style="padding: 40px 20px;">
+                                        <i class="fas fa-list-alt" style="font-size: 3rem; color: var(--text-secondary); display: block; margin-bottom: 12px;"></i>
+                                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                                            Nenhuma conta cadastrada neste plano
+                                        </p>
+                                        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                                            <button class="btn btn-primary" onclick="abrirModalNovaConta()">
+                                                <i class="fas fa-plus"></i> Adicionar conta
+                                            </button>
+                                            <button class="btn btn-outline" onclick="abrirModalImportar()">
+                                                <i class="fas fa-file-upload"></i> Importar CSV
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Conta -->
+<div id="modalNovaConta" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-plus" style="color: var(--primary-green);"></i>
+                Nova Conta Contábil
+            </h3>
+            <button class="modal-close" onclick="fecharModalNovaConta()" aria-label="Fechar">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('contabil.nova_conta_plano', plano_id=plano.id) }}">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="codigo">Código *</label>
+                        <input type="text" name="codigo" id="codigo" class="form-control"
+                               placeholder="Ex: 1.1.001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo">Tipo *</label>
+                        <select name="tipo" id="tipo" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="ANALITICA">Analítica</option>
+                            <option value="SINTETICA">Sintética</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="descricao_conta">Descrição *</label>
+                    <input type="text" name="descricao" id="descricao_conta" class="form-control"
+                           placeholder="Nome da conta contábil" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="natureza">Natureza *</label>
+                        <select name="natureza" id="natureza" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="DEVEDORA">Devedora</option>
+                            <option value="CREDORA">Credora</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="grupo_contabil">Grupo Contábil *</label>
+                        <select name="grupo_contabil" id="grupo_contabil" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="ATIVO">Ativo</option>
+                            <option value="PASSIVO">Passivo</option>
+                            <option value="PATRIMONIO_LIQUIDO">Patrimônio Líquido</option>
+                            <option value="RECEITA">Receita</option>
+                            <option value="DESPESA">Despesa</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalNovaConta()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i>
+                    Salvar Conta
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Importar CSV -->
+<div id="modalImportar" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-file-upload" style="color: var(--primary-green);"></i>
+                Importar Contas via CSV
+            </h3>
+            <button class="modal-close" onclick="fecharModalImportar()" aria-label="Fechar">&times;</button>
+        </div>
+        <form method="POST"
+              action="{{ url_for('contabil.importar_plano_contas', plano_id=plano.id) }}"
+              enctype="multipart/form-data">
+            <div class="modal-body">
+                <div class="alert" style="background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+                    <p style="margin: 0 0 8px 0; font-weight: 600; color: #2e7d32;">
+                        <i class="fas fa-info-circle"></i> Instruções
+                    </p>
+                    <ol style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #388e3c;">
+                        <li>Baixe o modelo CSV clicando em <strong>"Baixar Modelo CSV"</strong></li>
+                        <li>Preencha o arquivo com as contas do plano</li>
+                        <li>Selecione o arquivo preenchido aqui e clique em <strong>Importar</strong></li>
+                    </ol>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <a href="{{ url_for('contabil.template_csv_plano_contas') }}" class="btn btn-outline" style="width: 100%; text-align: center;">
+                        <i class="fas fa-download"></i>
+                        Baixar Modelo CSV (.csv)
+                    </a>
+                </div>
+
+                <div class="form-group">
+                    <label for="arquivo_csv">Arquivo CSV preenchido *</label>
+                    <input type="file" name="arquivo_csv" id="arquivo_csv" class="form-control"
+                           accept=".csv" required>
+                    <small style="color: var(--text-secondary);">
+                        Colunas obrigatórias: codigo, descricao, tipo, natureza, grupo_contabil
+                    </small>
+                </div>
+
+                <div class="card" style="background: var(--bg-secondary); margin-top: 12px;">
+                    <div class="card-body" style="padding: 10px 14px;">
+                        <p style="margin: 0 0 6px 0; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Valores aceitos</p>
+                        <ul style="margin: 0; padding-left: 16px; font-size: 0.8rem; color: var(--text-secondary);">
+                            <li><strong>tipo:</strong> ANALITICA | SINTETICA</li>
+                            <li><strong>natureza:</strong> DEVEDORA | CREDORA</li>
+                            <li><strong>grupo_contabil:</strong> ATIVO | PASSIVO | PATRIMONIO_LIQUIDO | RECEITA | DESPESA</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalImportar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload"></i>
+                    Importar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function abrirModalNovaConta() {
+        document.getElementById('modalNovaConta').style.display = 'block';
+    }
+    function fecharModalNovaConta() {
+        document.getElementById('modalNovaConta').style.display = 'none';
+    }
+
+    function abrirModalImportar() {
+        document.getElementById('modalImportar').style.display = 'block';
+    }
+    function fecharModalImportar() {
+        document.getElementById('modalImportar').style.display = 'none';
+    }
+
+    window.addEventListener('click', function(e) {
+        if (e.target === document.getElementById('modalNovaConta')) fecharModalNovaConta();
+        if (e.target === document.getElementById('modalImportar')) fecharModalImportar();
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            fecharModalNovaConta();
+            fecharModalImportar();
+        }
+    });
+</script>
+{% endblock %}

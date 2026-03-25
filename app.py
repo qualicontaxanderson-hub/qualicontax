@@ -80,8 +80,42 @@ def internal_error(error):
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
 
-# Garante que a tabela de municípios existe (cria se necessário)
+# Garante que as tabelas necessárias existem (cria se necessário)
 from utils.db_helper import execute_query as _execute_query
+
+# Tabelas do módulo Plano de Contas
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS planos_contas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT NULL,
+        grupo_id INT NULL,
+        situacao ENUM('ATIVO', 'INATIVO') NOT NULL DEFAULT 'ATIVO',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (grupo_id) REFERENCES grupos_clientes(id) ON DELETE SET NULL,
+        INDEX idx_grupo (grupo_id),
+        INDEX idx_situacao (situacao)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS plano_contas_itens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        plano_id INT NOT NULL,
+        codigo VARCHAR(50) NOT NULL,
+        descricao VARCHAR(255) NOT NULL,
+        tipo ENUM('ANALITICA', 'SINTETICA') NOT NULL,
+        natureza ENUM('DEVEDORA', 'CREDORA') NOT NULL,
+        grupo_contabil ENUM('ATIVO', 'PASSIVO', 'PATRIMONIO_LIQUIDO', 'RECEITA', 'DESPESA') NOT NULL,
+        situacao ENUM('ATIVO', 'INATIVO') NOT NULL DEFAULT 'ATIVO',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (plano_id) REFERENCES planos_contas(id) ON DELETE CASCADE,
+        INDEX idx_plano (plano_id),
+        INDEX idx_codigo (codigo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
 _execute_query("""
     CREATE TABLE IF NOT EXISTS municipios (
         id INT AUTO_INCREMENT PRIMARY KEY,
