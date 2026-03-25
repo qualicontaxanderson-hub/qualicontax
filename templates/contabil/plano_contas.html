@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Plano de Contas - Qualicontax{% endblock %}
+
+{% block content %}
+<div class="plano-contas-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="fas fa-sitemap" style="color: var(--primary-green);"></i>
+                Plano de Contas
+            </h1>
+            <p class="page-subtitle">Gerencie o plano de contas contábil</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-primary" onclick="abrirModal()">
+                <i class="fas fa-plus"></i>
+                Nova Conta
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabela de Contas -->
+    <div class="card table-card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Tipo</th>
+                            <th>Natureza</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" class="text-center">
+                                <div class="empty-state" style="padding: 40px 20px;">
+                                    <i class="fas fa-sitemap" style="font-size: 3rem; color: var(--text-secondary); display: block; margin-bottom: 12px;"></i>
+                                    <p style="color: var(--text-secondary);">Nenhuma conta cadastrada no plano de contas</p>
+                                    <button class="btn btn-primary" style="margin-top: 12px;" onclick="abrirModal()">
+                                        <i class="fas fa-plus"></i>
+                                        Cadastrar primeira conta
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Conta -->
+<div id="novaContaModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-sitemap" style="color: var(--primary-green);"></i>
+                Nova Conta Contábil
+            </h3>
+            <button class="modal-close" onclick="fecharModal()" aria-label="Fechar">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('contabil.plano_contas') }}">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="codigo">Código *</label>
+                        <input type="text" name="codigo" id="codigo" class="form-control"
+                               placeholder="Ex: 1.1.001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo">Tipo *</label>
+                        <select name="tipo" id="tipo" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="ANALITICA">Analítica</option>
+                            <option value="SINTETICA">Sintética</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="descricao">Descrição *</label>
+                    <input type="text" name="descricao" id="descricao" class="form-control"
+                           placeholder="Nome da conta contábil" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="natureza">Natureza *</label>
+                        <select name="natureza" id="natureza" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="DEVEDORA">Devedora</option>
+                            <option value="CREDORA">Credora</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="grupo">Grupo *</label>
+                        <select name="grupo" id="grupo" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="ATIVO">Ativo</option>
+                            <option value="PASSIVO">Passivo</option>
+                            <option value="PATRIMONIO_LIQUIDO">Patrimônio Líquido</option>
+                            <option value="RECEITA">Receita</option>
+                            <option value="DESPESA">Despesa</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i>
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function abrirModal() {
+        document.getElementById('novaContaModal').style.display = 'block';
+    }
+
+    function fecharModal() {
+        document.getElementById('novaContaModal').style.display = 'none';
+    }
+
+    window.addEventListener('click', function(e) {
+        var modal = document.getElementById('novaContaModal');
+        if (e.target === modal) {
+            fecharModal();
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            fecharModal();
+        }
+    });
+</script>
+{% endblock %}

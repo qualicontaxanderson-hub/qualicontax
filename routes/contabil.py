@@ -51,6 +51,13 @@ def index():
     return render_template('contabil/index.html')
 
 
+@contabil.route('/plano_contas')
+@login_required
+def plano_contas():
+    """Plano de Contas"""
+    return render_template('contabil/plano_contas.html')
+
+
 @contabil.route('/conciliacoes')
 @login_required
 def conciliacoes():
