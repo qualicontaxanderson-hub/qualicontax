@@ -19,6 +19,7 @@ try:
     from models.cliente import Cliente
     from models.grupo_cliente import GrupoCliente
     from models.plano_contas import PlanoConta, PlanoContaItem
+    from models.conta_corrente import ContaCorrente
     print("✅ Contabil: Models imported successfully")
     MODELS_LOADED = True
 except Exception as e:
@@ -74,6 +75,16 @@ except Exception as e:
             return False
         @staticmethod
         def delete(*args, **kwargs):
+            return None
+    class ContaCorrente:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
+        @staticmethod
+        def create(*args, **kwargs):
+            return None
+        @staticmethod
+        def set_ativa(*args, **kwargs):
             return None
 
 
@@ -360,19 +371,69 @@ def ver_conciliacao(conciliacao_id):
                          transacoes=transacoes)
 
 
-@contabil.route('/contas_correntes')
+@contabil.route('/contas_correntes', methods=['GET', 'POST'])
 @login_required
 def contas_correntes():
     """Cadastro e gestão de contas correntes bancárias"""
-    # TODO: Implementar busca de contas do banco de dados
-    contas = []  # Placeholder
-    # get_all() returns a paginated dict; extract the list
+    if request.method == 'POST':
+        cliente_id = request.form.get('cliente_id')
+        banco_nome = request.form.get('banco_nome', '').strip()
+        banco_codigo = request.form.get('banco_codigo', '').strip()
+        agencia = request.form.get('agencia', '').strip()
+        agencia_digito = request.form.get('agencia_digito', '').strip()
+        numero_conta = request.form.get('numero_conta', '').strip()
+        conta_digito = request.form.get('conta_digito', '').strip()
+        tipo = request.form.get('tipo', '').strip()
+        saldo_inicial = request.form.get('saldo_inicial', '0') or '0'
+
+        if not all([cliente_id, banco_nome, banco_codigo, agencia, numero_conta, conta_digito, tipo]):
+            flash('Preencha todos os campos obrigatórios.', 'danger')
+        else:
+            try:
+                saldo = float(saldo_inicial)
+            except ValueError:
+                saldo = 0.00
+
+            resultado = ContaCorrente.create(
+                cliente_id=int(cliente_id),
+                banco_nome=banco_nome,
+                banco_codigo=banco_codigo,
+                agencia=agencia,
+                agencia_digito=agencia_digito,
+                numero_conta=numero_conta,
+                conta_digito=conta_digito,
+                tipo=tipo,
+                saldo_inicial=saldo,
+            )
+            if resultado:
+                flash('Conta corrente cadastrada com sucesso!', 'success')
+            else:
+                flash('Erro ao cadastrar conta corrente. Tente novamente.', 'danger')
+
+        return redirect(url_for('contabil.contas_correntes'))
+
+    # GET
+    cliente_id_filtro = request.args.get('cliente_id')
+    banco_filtro = request.args.get('banco')
+    status_filtro = request.args.get('status')
+
+    ativa = None
+    if status_filtro == 'ativa':
+        ativa = True
+    elif status_filtro == 'inativa':
+        ativa = False
+
+    contas = ContaCorrente.get_all(
+        cliente_id=cliente_id_filtro,
+        banco=banco_filtro,
+        ativa=ativa,
+    )
     clientes_result = Cliente.get_all()
     clientes = clientes_result.get('clientes', []) if isinstance(clientes_result, dict) else (clientes_result or [])
 
     return render_template('contabil/contas_correntes.html',
-                         contas=contas,
-                         clientes=clientes)
+                           contas=contas,
+                           clientes=clientes)
 
 
 @contabil.route('/importar_ofx')

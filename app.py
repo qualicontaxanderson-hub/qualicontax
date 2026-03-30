@@ -129,6 +129,28 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
+# Tabela de Contas Bancárias (Contas Correntes)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS contas_bancarias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente_id INT NOT NULL,
+        banco_nome VARCHAR(100) NOT NULL,
+        banco_codigo VARCHAR(10) NOT NULL,
+        agencia VARCHAR(20) NOT NULL,
+        agencia_digito VARCHAR(2) DEFAULT '',
+        numero_conta VARCHAR(30) NOT NULL,
+        conta_digito VARCHAR(2) NOT NULL,
+        tipo ENUM('CORRENTE', 'POUPANCA') NOT NULL DEFAULT 'CORRENTE',
+        saldo DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        ativa TINYINT(1) NOT NULL DEFAULT 1,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+        INDEX idx_cliente (cliente_id),
+        INDEX idx_ativa (ativa)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
 
 if __name__ == '__main__':
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
