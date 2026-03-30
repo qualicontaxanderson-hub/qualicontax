@@ -153,22 +153,42 @@ _execute_query("""
 
 # Migração incremental: garantir colunas em contas_bancarias caso a tabela
 # já existia com schema antigo (sem alguns campos).
-for _col_sql in [
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS cliente_id INT NULL AFTER id",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS banco_nome VARCHAR(100) NOT NULL DEFAULT '' AFTER cliente_id",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS banco_codigo VARCHAR(10) NOT NULL DEFAULT '' AFTER banco_nome",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS agencia VARCHAR(20) NOT NULL DEFAULT '' AFTER banco_codigo",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS agencia_digito VARCHAR(2) DEFAULT '' AFTER agencia",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS numero_conta VARCHAR(30) NOT NULL DEFAULT '' AFTER agencia_digito",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS conta_digito VARCHAR(2) NOT NULL DEFAULT '' AFTER numero_conta",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS tipo ENUM('CORRENTE','POUPANCA') NOT NULL DEFAULT 'CORRENTE' AFTER conta_digito",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS saldo DECIMAL(15,2) NOT NULL DEFAULT 0.00 AFTER tipo",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS ativa TINYINT(1) NOT NULL DEFAULT 1 AFTER saldo",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER ativa",
-    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER criado_em",
-]:
+# Usa INFORMATION_SCHEMA para compatibilidade com todas as versões do MySQL.
+_CONTAS_BANCARIAS_COLS = [
+    ("cliente_id",    "INT NULL"),
+    ("banco_nome",    "VARCHAR(100) NOT NULL DEFAULT ''"),
+    ("banco_codigo",  "VARCHAR(10) NOT NULL DEFAULT ''"),
+    ("agencia",       "VARCHAR(20) NOT NULL DEFAULT ''"),
+    ("agencia_digito","VARCHAR(2) DEFAULT ''"),
+    ("numero_conta",  "VARCHAR(30) NOT NULL DEFAULT ''"),
+    ("conta_digito",  "VARCHAR(2) NOT NULL DEFAULT ''"),
+    ("tipo",          "ENUM('CORRENTE','POUPANCA') NOT NULL DEFAULT 'CORRENTE'"),
+    ("saldo",         "DECIMAL(15,2) NOT NULL DEFAULT 0.00"),
+    ("ativa",         "TINYINT(1) NOT NULL DEFAULT 1"),
+    ("criado_em",     "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ("atualizado_em", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
+]
+
+_CONTAS_BANCARIAS_COLS_SET = {c for c, _ in _CONTAS_BANCARIAS_COLS}
+
+for _col_name, _col_def in _CONTAS_BANCARIAS_COLS:
+    if _col_name not in _CONTAS_BANCARIAS_COLS_SET:
+        continue  # guard: only process known column names
     try:
-        _execute_query(_col_sql, fetch=False)
+        _exists = _execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'contas_bancarias' "
+            "AND COLUMN_NAME = %s",
+            (_col_name,),
+            fetch=True,
+            fetch_one=True,
+        )
+        if _exists and _exists.get('cnt', 0) == 0:
+            _execute_query(
+                f"ALTER TABLE contas_bancarias ADD COLUMN {_col_name} {_col_def}",
+                fetch=False,
+            )
     except Exception:
         pass
 
