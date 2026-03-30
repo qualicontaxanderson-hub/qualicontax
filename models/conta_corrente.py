@@ -23,7 +23,7 @@ class ContaCorrente:
                    cb.agencia, cb.agencia_digito, cb.numero_conta, cb.conta_digito,
                    cb.tipo, cb.saldo, cb.ativa, cb.criado_em,
                    c.nome_razao_social AS cliente_nome
-            FROM contas_bancarias cb
+            FROM contas_correntes cb
             LEFT JOIN clientes c ON cb.cliente_id = c.id
             WHERE 1=1
         """
@@ -52,7 +52,7 @@ class ContaCorrente:
                    cb.agencia, cb.agencia_digito, cb.numero_conta, cb.conta_digito,
                    cb.tipo, cb.saldo, cb.ativa, cb.criado_em,
                    c.nome_razao_social AS cliente_nome
-            FROM contas_bancarias cb
+            FROM contas_correntes cb
             LEFT JOIN clientes c ON cb.cliente_id = c.id
             WHERE cb.id = %s
         """
@@ -68,7 +68,7 @@ class ContaCorrente:
             int: ID da conta criada, ou None em caso de erro
         """
         query = """
-            INSERT INTO contas_bancarias
+            INSERT INTO contas_correntes
                 (cliente_id, banco_nome, banco_codigo, agencia, agencia_digito,
                  numero_conta, conta_digito, tipo, saldo, ativa)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
@@ -83,17 +83,17 @@ class ContaCorrente:
     @staticmethod
     def update_saldo(conta_id, saldo):
         """Atualiza saldo da conta."""
-        query = "UPDATE contas_bancarias SET saldo = %s WHERE id = %s"
+        query = "UPDATE contas_correntes SET saldo = %s WHERE id = %s"
         return execute_query(query, (saldo, conta_id))
 
     @staticmethod
     def set_ativa(conta_id, ativa):
         """Ativa ou desativa uma conta."""
-        query = "UPDATE contas_bancarias SET ativa = %s WHERE id = %s"
+        query = "UPDATE contas_correntes SET ativa = %s WHERE id = %s"
         return execute_query(query, (1 if ativa else 0, conta_id))
 
     @staticmethod
     def delete(conta_id):
         """Remove uma conta bancária."""
-        query = "DELETE FROM contas_bancarias WHERE id = %s"
+        query = "DELETE FROM contas_correntes WHERE id = %s"
         return execute_query(query, (conta_id,))

@@ -129,9 +129,9 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
-# Tabela de Contas Bancárias (Contas Correntes)
+# Tabela de Contas Correntes dos Clientes (Conciliação Bancária)
 _execute_query("""
-    CREATE TABLE IF NOT EXISTS contas_bancarias (
+    CREATE TABLE IF NOT EXISTS contas_correntes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         cliente_id INT NOT NULL,
         banco_nome VARCHAR(100) NOT NULL,
@@ -151,10 +151,10 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
-# Migração incremental: garantir colunas em contas_bancarias caso a tabela
+# Migração incremental: garantir colunas em contas_correntes caso a tabela
 # já existia com schema antigo (sem alguns campos).
 # Usa INFORMATION_SCHEMA para compatibilidade com todas as versões do MySQL.
-_CONTAS_BANCARIAS_COLS = [
+_CONTAS_CORRENTES_COLS = [
     ("cliente_id",    "INT NULL"),
     ("banco_nome",    "VARCHAR(100) NOT NULL DEFAULT ''"),
     ("banco_codigo",  "VARCHAR(10) NOT NULL DEFAULT ''"),
@@ -169,16 +169,12 @@ _CONTAS_BANCARIAS_COLS = [
     ("atualizado_em", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
 ]
 
-_CONTAS_BANCARIAS_COLS_SET = {c for c, _ in _CONTAS_BANCARIAS_COLS}
-
-for _col_name, _col_def in _CONTAS_BANCARIAS_COLS:
-    if _col_name not in _CONTAS_BANCARIAS_COLS_SET:
-        continue  # guard: only process known column names
+for _col_name, _col_def in _CONTAS_CORRENTES_COLS:
     try:
         _exists = _execute_query(
             "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
             "WHERE TABLE_SCHEMA = DATABASE() "
-            "AND TABLE_NAME = 'contas_bancarias' "
+            "AND TABLE_NAME = 'contas_correntes' "
             "AND COLUMN_NAME = %s",
             (_col_name,),
             fetch=True,
@@ -186,7 +182,7 @@ for _col_name, _col_def in _CONTAS_BANCARIAS_COLS:
         )
         if _exists and _exists.get('cnt', 0) == 0:
             _execute_query(
-                f"ALTER TABLE contas_bancarias ADD COLUMN {_col_name} {_col_def}",
+                f"ALTER TABLE contas_correntes ADD COLUMN {_col_name} {_col_def}",
                 fetch=False,
             )
     except Exception:
