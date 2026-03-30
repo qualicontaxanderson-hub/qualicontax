@@ -151,6 +151,27 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
+# Migração incremental: garantir colunas em contas_bancarias caso a tabela
+# já existia com schema antigo (sem alguns campos).
+for _col_sql in [
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS cliente_id INT NULL AFTER id",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS banco_nome VARCHAR(100) NOT NULL DEFAULT '' AFTER cliente_id",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS banco_codigo VARCHAR(10) NOT NULL DEFAULT '' AFTER banco_nome",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS agencia VARCHAR(20) NOT NULL DEFAULT '' AFTER banco_codigo",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS agencia_digito VARCHAR(2) DEFAULT '' AFTER agencia",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS numero_conta VARCHAR(30) NOT NULL DEFAULT '' AFTER agencia_digito",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS conta_digito VARCHAR(2) NOT NULL DEFAULT '' AFTER numero_conta",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS tipo ENUM('CORRENTE','POUPANCA') NOT NULL DEFAULT 'CORRENTE' AFTER conta_digito",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS saldo DECIMAL(15,2) NOT NULL DEFAULT 0.00 AFTER tipo",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS ativa TINYINT(1) NOT NULL DEFAULT 1 AFTER saldo",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER ativa",
+    "ALTER TABLE contas_bancarias ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER criado_em",
+]:
+    try:
+        _execute_query(_col_sql, fetch=False)
+    except Exception:
+        pass
+
 
 if __name__ == '__main__':
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
