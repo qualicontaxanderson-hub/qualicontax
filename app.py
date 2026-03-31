@@ -189,5 +189,27 @@ for _col_name, _col_def in _CONTAS_CORRENTES_COLS:
         pass
 
 
+# Migração incremental: adicionar empresa_id em conciliacoes_bancarias
+# para suportar o relatório de conferência de despesas por empresa.
+try:
+    _emp_col_exists = _execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() "
+        "AND TABLE_NAME = 'conciliacoes_bancarias' "
+        "AND COLUMN_NAME = 'empresa_id'",
+        fetch=True,
+        fetch_one=True,
+    )
+    if _emp_col_exists and _emp_col_exists.get('cnt', 0) == 0:
+        _execute_query(
+            "ALTER TABLE conciliacoes_bancarias "
+            "ADD COLUMN empresa_id INT NULL, "
+            "ADD INDEX idx_empresa (empresa_id)",
+            fetch=False,
+        )
+except Exception:
+    pass
+
+
 if __name__ == '__main__':
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
