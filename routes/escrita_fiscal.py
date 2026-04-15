@@ -1,7 +1,7 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify, current_app,
+    flash, jsonify,
 )
 from utils.auth_helper import login_required
 from utils.db_helper import execute_query
@@ -14,7 +14,53 @@ _MAX_XML_SIZE = 16_000_000  # MEDIUMTEXT max is 16 MB
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
 
+# Categorias de produtos para Postos de Combustíveis
+CATEGORIAS_COMBUSTIVEL = [
+    ('Combustíveis', [
+        'Gasolina Comum', 'Gasolina Aditivada',
+        'Etanol Comum', 'Etanol Aditivado',
+        'Diesel S-500 Comum', 'Diesel S-500 Aditivado',
+        'Diesel S10 Comum', 'Diesel S10 Aditivado',
+    ]),
+    ('Loja de Conveniência', ['Cigarros', 'Sorvetes', 'Salgados', 'Outros']),
+    ('Lubrificantes e Aditivos', ['Lubrificantes', 'Aditivos', 'Outros']),
+    ('Insumos e Despesas', []),
+]
+
 escrita_fiscal = Blueprint('escrita_fiscal', __name__, url_prefix='/escrita-fiscal')
+
+
+# ---------------------------------------------------------------------------
+# Helpers internos
+# ---------------------------------------------------------------------------
+def _get_empresas():
+    return execute_query(
+        "SELECT id, nome_razao_social, cpf_cnpj FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        fetch=True,
+    ) or []
+
+
+def _get_grupos():
+    return execute_query(
+        "SELECT id, nome FROM grupos_clientes WHERE situacao='ATIVO' ORDER BY nome",
+        fetch=True,
+    ) or []
+
+
+def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
+    """Retorna fragmento WHERE + params list para filtro empresa/grupo."""
+    if params is None:
+        params = []
+    clauses = []
+    if f_cliente_id:
+        clauses.append(f'{alias}.cliente_id = %s')
+        params.append(int(f_cliente_id))
+    if f_grupo_id:
+        clauses.append(f'{alias}.grupo_id = %s')
+        params.append(int(f_grupo_id))
+    return clauses, params
+
+
 # ---------------------------------------------------------------------------
 # Landing page
 # ---------------------------------------------------------------------------
@@ -25,12 +71,19 @@ def index():
 
 
 # ---------------------------------------------------------------------------
-# Conferência de Compras — lista principal
+# Conferência de Compras — página principal
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/')
 @login_required
 def conf_compras():
-    # Totais para o cabeçalho
+    empresas = _get_empresas()
+    grupos = _get_grupos()
+    emitentes = execute_query(
+        "SELECT DISTINCT emit_cnpj, emit_nome FROM nfe_importacoes ORDER BY emit_nome",
+        fetch=True,
+    ) or []
+
+    # KPIs globais
     stats = execute_query(
         """SELECT COUNT(*) AS total_notas,
                   COALESCE(SUM(valor_total), 0) AS total_valor,
@@ -41,18 +94,14 @@ def conf_compras():
         fetch=True, fetch_one=True,
     ) or {}
 
-    # Emitentes distintos para o filtro
-    emitentes = execute_query(
-        "SELECT DISTINCT emit_cnpj, emit_nome FROM nfe_importacoes ORDER BY emit_nome",
-        fetch=True,
-    ) or []
-
     dropbox_ok = dropbox_sync.is_configured()
 
     return render_template(
         'escrita_fiscal/conf_compras.html',
         stats=stats,
         emitentes=emitentes,
+        empresas=empresas,
+        grupos=grupos,
         dropbox_configured=dropbox_ok,
         uf_list=_UF_LIST,
         dropbox_folder=Config.DROPBOX_XML_FOLDER,
@@ -60,11 +109,13 @@ def conf_compras():
 
 
 # ---------------------------------------------------------------------------
-# API JSON — retorna notas com filtros
+# API — notas fiscais (com filtros incluindo empresa/grupo)
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/api/notas')
 @login_required
 def api_notas():
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
     f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
@@ -80,101 +131,254 @@ def api_notas():
     per_page = 50
 
     where, params = [], []
+    _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=params)
+    extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra_clauses)
 
     if f_emit_cnpj:
-        where.append('emit_cnpj = %s')
+        where.append('n.emit_cnpj = %s')
         params.append(f_emit_cnpj)
     if f_data_ini:
-        where.append('data_emissao >= %s')
+        where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
     if f_data_fim:
-        where.append('data_emissao <= %s')
+        where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
     if f_chave:
-        where.append('chave_acesso LIKE %s')
+        where.append('n.chave_acesso LIKE %s')
         params.append(f'%{f_chave}%')
     if f_num_nota:
-        where.append('num_nota = %s')
+        where.append('n.num_nota = %s')
         params.append(f_num_nota)
     if f_cfop:
-        where.append('cfop LIKE %s')
+        where.append('n.cfop LIKE %s')
         params.append(f'{f_cfop}%')
     if f_emit_uf:
-        where.append('emit_uf = %s')
+        where.append('n.emit_uf = %s')
         params.append(f_emit_uf)
     if f_dest_cnpj:
-        where.append('dest_cnpj LIKE %s')
+        where.append('n.dest_cnpj LIKE %s')
         params.append(f'%{f_dest_cnpj}%')
     if f_vmin:
-        where.append('valor_total >= %s')
+        where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
     if f_vmax:
-        where.append('valor_total <= %s')
+        where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
     if f_origem:
-        where.append('origem = %s')
+        where.append('n.origem = %s')
         params.append(f_origem)
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
 
     count_row = execute_query(
-        f"SELECT COUNT(*) AS c FROM nfe_importacoes {where_sql}",
+        f"SELECT COUNT(*) AS c FROM nfe_importacoes n {where_sql}",
         tuple(params), fetch=True, fetch_one=True,
     ) or {}
     total = count_row.get('c', 0)
 
     rows = execute_query(
-        f"""SELECT id, chave_acesso, num_nota, serie, data_emissao,
-                   emit_cnpj, emit_nome, emit_uf,
-                   dest_cnpj, dest_nome,
-                   valor_total, valor_icms, valor_pis, valor_cofins, valor_ipi,
-                   cfop, natureza_operacao, origem, nome_arquivo,
-                   importado_em
-              FROM nfe_importacoes {where_sql}
-             ORDER BY data_emissao DESC, id DESC
+        f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
+                   n.emit_cnpj, n.emit_nome, n.emit_uf,
+                   n.dest_cnpj, n.dest_nome,
+                   n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
+                   n.cfop, n.natureza_operacao, n.origem, n.nome_arquivo,
+                   n.importado_em, n.cliente_id, n.grupo_id,
+                   c.nome_razao_social AS empresa_nome,
+                   g.nome AS grupo_nome,
+                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens
+              FROM nfe_importacoes n
+              LEFT JOIN clientes c ON c.id = n.cliente_id
+              LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
+              {where_sql}
+             ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
         tuple(params) + (per_page, offset),
         fetch=True,
     ) or []
 
-    # Serialise dates
     for r in rows:
         for k in ('data_emissao', 'importado_em'):
             if r.get(k) and hasattr(r[k], 'isoformat'):
                 r[k] = r[k].isoformat()
+        for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):
+            r[k] = float(r.get(k) or 0)
 
     return jsonify({'total': total, 'page': page, 'per_page': per_page, 'rows': rows})
 
 
 # ---------------------------------------------------------------------------
-# API JSON — notas agrupadas por emissor
+# API — itens de uma NF-e específica
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/itens/<int:nfe_id>')
+@login_required
+def api_itens(nfe_id):
+    nota = execute_query(
+        "SELECT id, emit_cnpj, emit_nome, num_nota, data_emissao, dest_nome, cliente_id, grupo_id "
+        "FROM nfe_importacoes WHERE id = %s",
+        (nfe_id,), fetch=True, fetch_one=True,
+    )
+    if not nota:
+        return jsonify({'error': 'NF-e não encontrada'}), 404
+
+    for k in ('data_emissao',):
+        if nota.get(k) and hasattr(nota[k], 'isoformat'):
+            nota[k] = nota[k].isoformat()
+
+    itens = execute_query(
+        """SELECT i.id, i.num_item, i.codigo_produto, i.descricao, i.ncm, i.cfop,
+                  i.unidade, i.quantidade, i.valor_unitario, i.valor_total,
+                  i.valor_icms, i.valor_pis, i.valor_cofins,
+                  i.produto_catalogo_id,
+                  p.nome AS produto_catalogo_nome, p.categoria AS produto_categoria
+             FROM nfe_itens i
+             LEFT JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
+            WHERE i.nfe_id = %s
+            ORDER BY i.num_item""",
+        (nfe_id,), fetch=True,
+    ) or []
+
+    for it in itens:
+        for k in ('quantidade', 'valor_unitario', 'valor_total',
+                  'valor_icms', 'valor_pis', 'valor_cofins'):
+            it[k] = float(it.get(k) or 0)
+
+    return jsonify({'nota': nota, 'itens': itens})
+
+
+# ---------------------------------------------------------------------------
+# API — sugestão de produto para vínculo automático
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/sugestao-produto')
+@login_required
+def api_sugestao_produto():
+    emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    codigo_xml = request.args.get('codigo_produto', '').strip()
+    cliente_id = request.args.get('cliente_id', '').strip()
+    grupo_id = request.args.get('grupo_id', '').strip()
+
+    if not emit_cnpj or not codigo_xml:
+        return jsonify({'produto_id': None})
+
+    # Procura vínculo registrado (específico por empresa → grupo → global)
+    row = None
+    for cli, grp in [
+        (int(cliente_id) if cliente_id else None, None),
+        (None, int(grupo_id) if grupo_id else None),
+        (None, None),
+    ]:
+        q = ("SELECT produto_catalogo_id FROM nfe_produto_vinculo "
+             "WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
+             "AND cliente_id %s AND grupo_id %s LIMIT 1")
+        cli_cond = '= %s' if cli is not None else 'IS NULL'
+        grp_cond = '= %s' if grp is not None else 'IS NULL'
+        query = (f"SELECT produto_catalogo_id FROM nfe_produto_vinculo "
+                 f"WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
+                 f"AND cliente_id {cli_cond} AND grupo_id {grp_cond} LIMIT 1")
+        bind = [emit_cnpj, codigo_xml]
+        if cli is not None:
+            bind.append(cli)
+        if grp is not None:
+            bind.append(grp)
+        row = execute_query(query, tuple(bind), fetch=True, fetch_one=True)
+        if row:
+            break
+
+    return jsonify({'produto_id': row['produto_catalogo_id'] if row else None})
+
+
+# ---------------------------------------------------------------------------
+# API — vincular item ao produto do catálogo
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/vincular-produto', methods=['POST'])
+@login_required
+def api_vincular_produto():
+    data = request.get_json(force=True) or {}
+    item_id = data.get('item_id')
+    produto_id = data.get('produto_id')  # None = desvincular
+    salvar_regra = bool(data.get('salvar_regra', True))
+
+    if not item_id:
+        return jsonify({'error': 'item_id obrigatório'}), 400
+
+    # Busca o item para obter emit_cnpj e código
+    item = execute_query(
+        """SELECT i.id, i.nfe_id, i.codigo_produto,
+                  n.emit_cnpj, n.cliente_id, n.grupo_id
+             FROM nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id
+            WHERE i.id = %s""",
+        (item_id,), fetch=True, fetch_one=True,
+    )
+    if not item:
+        return jsonify({'error': 'Item não encontrado'}), 404
+
+    # Atualiza o vínculo no item
+    execute_query(
+        "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
+        (produto_id, item_id),
+    )
+
+    # Salva regra de auto-vínculo
+    if salvar_regra and produto_id:
+        emit_cnpj = item['emit_cnpj']
+        cod = item['codigo_produto']
+        cli = item.get('cliente_id')
+        grp = item.get('grupo_id')
+        # Tenta INSERT; se já existe, atualiza
+        execute_query(
+            """INSERT INTO nfe_produto_vinculo
+                   (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
+               VALUES (%s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
+            (cli, grp, emit_cnpj, cod, produto_id),
+        )
+
+    # Nome do produto vinculado
+    prod_nome = None
+    if produto_id:
+        p = execute_query(
+            "SELECT nome, categoria FROM nfe_produtos_catalogo WHERE id = %s",
+            (produto_id,), fetch=True, fetch_one=True,
+        )
+        if p:
+            prod_nome = p['nome']
+
+    return jsonify({'ok': True, 'produto_nome': prod_nome})
+
+
+# ---------------------------------------------------------------------------
+# API — por emissor
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/api/por-emissor')
 @login_required
 def api_por_emissor():
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
 
     where, params = [], []
+    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
     if f_data_ini:
-        where.append('data_emissao >= %s')
+        where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
     if f_data_fim:
-        where.append('data_emissao <= %s')
+        where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
     rows = execute_query(
-        f"""SELECT emit_cnpj, emit_nome, emit_uf,
+        f"""SELECT n.emit_cnpj, n.emit_nome, n.emit_uf,
                    COUNT(*) AS qtd_notas,
-                   SUM(valor_total) AS total_valor,
-                   SUM(valor_icms) AS total_icms,
-                   SUM(valor_pis) AS total_pis,
-                   SUM(valor_cofins) AS total_cofins
-              FROM nfe_importacoes {where_sql}
-             GROUP BY emit_cnpj, emit_nome, emit_uf
+                   SUM(n.valor_total) AS total_valor,
+                   SUM(n.valor_icms) AS total_icms,
+                   SUM(n.valor_pis) AS total_pis,
+                   SUM(n.valor_cofins) AS total_cofins
+              FROM nfe_importacoes n {where_sql}
+             GROUP BY n.emit_cnpj, n.emit_nome, n.emit_uf
              ORDER BY total_valor DESC""",
         tuple(params), fetch=True,
     ) or []
@@ -187,11 +391,13 @@ def api_por_emissor():
 
 
 # ---------------------------------------------------------------------------
-# API JSON — itens agrupados por produto
+# API — por produto
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/api/por-produto')
 @login_required
 def api_por_produto():
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
     f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
@@ -199,6 +405,8 @@ def api_por_produto():
     f_descricao = request.args.get('descricao', '').strip()
 
     where, params = [], []
+    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
     if f_data_ini:
         where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
@@ -219,6 +427,8 @@ def api_por_produto():
 
     rows = execute_query(
         f"""SELECT i.codigo_produto, i.descricao, i.ncm, i.cfop, i.unidade,
+                   i.produto_catalogo_id,
+                   p.nome AS produto_catalogo_nome, p.categoria AS produto_categoria,
                    COUNT(DISTINCT n.id) AS qtd_notas,
                    SUM(i.quantidade) AS total_qtd,
                    SUM(i.valor_total) AS total_valor,
@@ -227,8 +437,10 @@ def api_por_produto():
                    SUM(i.valor_cofins) AS total_cofins
               FROM nfe_itens i
               JOIN nfe_importacoes n ON n.id = i.nfe_id
+              LEFT JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
               {where_sql}
-             GROUP BY i.codigo_produto, i.descricao, i.ncm, i.cfop, i.unidade
+             GROUP BY i.codigo_produto, i.descricao, i.ncm, i.cfop, i.unidade,
+                      i.produto_catalogo_id, p.nome, p.categoria
              ORDER BY total_valor DESC
              LIMIT 500""",
         tuple(params), fetch=True,
@@ -242,12 +454,15 @@ def api_por_produto():
 
 
 # ---------------------------------------------------------------------------
-# Import — upload de arquivos XML
+# Importar XML — upload manual
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/importar', methods=['POST'])
 @login_required
 def importar_xml():
     files = request.files.getlist('xml_files')
+    cliente_id = request.form.get('cliente_id', '').strip() or None
+    grupo_id = request.form.get('grupo_id', '').strip() or None
+
     if not files or all(f.filename == '' for f in files):
         flash('Nenhum arquivo selecionado.', 'warning')
         return redirect(url_for('escrita_fiscal.conf_compras'))
@@ -263,7 +478,8 @@ def importar_xml():
         try:
             content = f.read().decode('utf-8', errors='replace')
             parsed = parse_nfe_xml(content)
-            result = _save_nfe(parsed, f.filename, 'UPLOAD', content)
+            result = _save_nfe(parsed, f.filename, 'UPLOAD', content,
+                               cliente_id=cliente_id, grupo_id=grupo_id)
             if result == 'dup':
                 dup += 1
             else:
@@ -283,26 +499,29 @@ def importar_xml():
     if err:
         msgs.append(f'{err} arquivo(s) com erro.')
     flash(' '.join(msgs) or 'Nenhuma nota processada.', 'success' if ok else 'warning')
-
-    if errors:
-        for e in errors[:5]:
-            flash(e, 'danger')
+    for e in errors[:5]:
+        flash(e, 'danger')
 
     return redirect(url_for('escrita_fiscal.conf_compras'))
 
 
 # ---------------------------------------------------------------------------
-# Import — sincronização com Dropbox
+# Importar XML — sincronização com Dropbox
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/sync-dropbox', methods=['POST'])
 @login_required
 def sync_dropbox():
     if not dropbox_sync.is_configured():
-        return jsonify({'error': 'Dropbox não configurado. Defina DROPBOX_ACCESS_TOKEN no ambiente.'}), 400
+        return jsonify({'error': 'Dropbox não configurado. Defina DROPBOX_ACCESS_TOKEN.'}), 400
+
+    data = request.get_json(force=True) or {}
+    cliente_id = data.get('cliente_id') or None
+    grupo_id = data.get('grupo_id') or None
 
     files = dropbox_sync.list_xml_files()
     if not files:
-        return jsonify({'ok': 0, 'dup': 0, 'err': 0, 'msg': 'Nenhum arquivo XML encontrado na pasta Dropbox.'}), 200
+        return jsonify({'ok': 0, 'dup': 0, 'err': 0,
+                        'msg': 'Nenhum arquivo XML encontrado na pasta Dropbox.'}), 200
 
     ok, dup, err = 0, 0, 0
     for info in files:
@@ -312,7 +531,8 @@ def sync_dropbox():
             continue
         try:
             parsed = parse_nfe_xml(content)
-            result = _save_nfe(parsed, info['name'], 'DROPBOX', content)
+            result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
+                               cliente_id=cliente_id, grupo_id=grupo_id)
             if result == 'dup':
                 dup += 1
             else:
@@ -328,17 +548,159 @@ def sync_dropbox():
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Excluir NF-e
 # ---------------------------------------------------------------------------
-def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str):
+@escrita_fiscal.route('/conf-compras/excluir/<int:nfe_id>', methods=['POST'])
+@login_required
+def excluir_nfe(nfe_id):
+    execute_query("DELETE FROM nfe_importacoes WHERE id = %s", (nfe_id,))
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True})
+    flash('Nota fiscal excluída.', 'success')
+    return redirect(url_for('escrita_fiscal.conf_compras'))
+
+
+# ---------------------------------------------------------------------------
+# Catálogo de Produtos — listagem
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/')
+@login_required
+def produtos_catalogo():
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+
+    where, params = [], []
+    if f_cliente_id:
+        where.append('cliente_id = %s')
+        params.append(int(f_cliente_id))
+    if f_grupo_id:
+        where.append('grupo_id = %s')
+        params.append(int(f_grupo_id))
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    produtos = execute_query(
+        f"""SELECT p.id, p.codigo, p.nome, p.categoria, p.subcategoria, p.unidade,
+                   p.ativo, p.cliente_id, p.grupo_id,
+                   c.nome_razao_social AS empresa_nome,
+                   g.nome AS grupo_nome
+              FROM nfe_produtos_catalogo p
+              LEFT JOIN clientes c ON c.id = p.cliente_id
+              LEFT JOIN grupos_clientes g ON g.id = p.grupo_id
+              {where_sql}
+             ORDER BY p.categoria, p.nome""",
+        tuple(params) if params else None,
+        fetch=True,
+    ) or []
+
+    empresas = _get_empresas()
+    grupos = _get_grupos()
+
+    return render_template(
+        'escrita_fiscal/produtos_catalogo.html',
+        produtos=produtos,
+        empresas=empresas,
+        grupos=grupos,
+        f_cliente_id=f_cliente_id,
+        f_grupo_id=f_grupo_id,
+        categorias=CATEGORIAS_COMBUSTIVEL,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Catálogo de Produtos — salvar (criar / editar)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/salvar', methods=['POST'])
+@login_required
+def produtos_catalogo_salvar():
+    pid = request.form.get('id', '').strip() or None
+    cliente_id = request.form.get('cliente_id', '').strip() or None
+    grupo_id = request.form.get('grupo_id', '').strip() or None
+    codigo = request.form.get('codigo', '').strip()
+    nome = request.form.get('nome', '').strip()
+    categoria = request.form.get('categoria', '').strip()
+    subcategoria = request.form.get('subcategoria', '').strip()
+    unidade = request.form.get('unidade', '').strip()
+    ativo = 1 if request.form.get('ativo') else 0
+
+    if not nome:
+        flash('Nome do produto é obrigatório.', 'danger')
+        return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+    if pid:
+        execute_query(
+            """UPDATE nfe_produtos_catalogo
+                  SET cliente_id=%s, grupo_id=%s, codigo=%s, nome=%s,
+                      categoria=%s, subcategoria=%s, unidade=%s, ativo=%s
+                WHERE id=%s""",
+            (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, unidade, ativo, int(pid)),
+        )
+        flash('Produto atualizado.', 'success')
+    else:
+        execute_query(
+            """INSERT INTO nfe_produtos_catalogo
+                   (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, unidade, ativo)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, unidade, ativo),
+        )
+        flash('Produto cadastrado.', 'success')
+
+    return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+
+# ---------------------------------------------------------------------------
+# Catálogo de Produtos — excluir
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/excluir/<int:pid>', methods=['POST'])
+@login_required
+def produtos_catalogo_excluir(pid):
+    execute_query("DELETE FROM nfe_produtos_catalogo WHERE id = %s", (pid,))
+    flash('Produto excluído.', 'success')
+    return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+
+# ---------------------------------------------------------------------------
+# API — lista produtos do catálogo (para dropdowns)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/produtos-catalogo')
+@login_required
+def api_produtos_catalogo():
+    cliente_id = request.args.get('cliente_id', '').strip()
+    grupo_id = request.args.get('grupo_id', '').strip()
+
+    # Retorna produtos do cliente + do grupo + globais
+    conds, params = ["ativo = 1"], []
+    scope_or = ["(cliente_id IS NULL AND grupo_id IS NULL)"]
+    if cliente_id:
+        scope_or.append("cliente_id = %s")
+        params.append(int(cliente_id))
+    if grupo_id:
+        scope_or.append("grupo_id = %s")
+        params.append(int(grupo_id))
+    conds.append('(' + ' OR '.join(scope_or) + ')')
+
+    rows = execute_query(
+        "SELECT id, codigo, nome, categoria, subcategoria, unidade "
+        "FROM nfe_produtos_catalogo WHERE " + ' AND '.join(conds) +
+        " ORDER BY categoria, nome",
+        tuple(params) if params else None,
+        fetch=True,
+    ) or []
+
+    return jsonify(rows)
+
+
+# ---------------------------------------------------------------------------
+# Helpers internos
+# ---------------------------------------------------------------------------
+def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
+              cliente_id=None, grupo_id=None):
     """
-    Salva uma NF-e parseada no banco.
-    Returns: 'ok' ou 'dup' (chave já existe)
+    Salva NF-e parseada no banco.
+    Returns: 'ok' ou 'dup'
     """
     h = parsed['header']
     chave = h['chave_acesso']
 
-    # Verifica duplicata
     existing = execute_query(
         "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s",
         (chave,), fetch=True, fetch_one=True,
@@ -346,19 +708,20 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str):
     if existing:
         return 'dup'
 
-    # Trunca xml_raw se necessário (MEDIUMTEXT suporta 16 MB)
     xml_raw_store = xml_raw[:_MAX_XML_SIZE] if xml_raw else ''
+    cli = int(cliente_id) if cliente_id else None
+    grp = int(grupo_id) if grupo_id else None
 
     nfe_id = execute_query(
         """INSERT INTO nfe_importacoes
-               (nome_arquivo, chave_acesso, num_nota, serie,
+               (cliente_id, grupo_id, nome_arquivo, chave_acesso, num_nota, serie,
                 data_emissao, emit_cnpj, emit_nome, emit_uf,
                 dest_cnpj, dest_nome,
                 valor_total, valor_icms, valor_pis, valor_cofins, valor_ipi,
                 cfop, natureza_operacao, xml_raw, origem)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (
-            nome_arquivo, chave, h['num_nota'], h['serie'],
+            cli, grp, nome_arquivo, chave, h['num_nota'], h['serie'],
             h['data_emissao'], h['emit_cnpj'], h['emit_nome'], h['emit_uf'],
             h['dest_cnpj'], h['dest_nome'],
             h['valor_total'], h['valor_icms'], h['valor_pis'],
@@ -368,19 +731,52 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str):
     )
 
     for item in parsed.get('itens', []):
+        # Tenta auto-vincular produto pelo emit_cnpj + codigo_produto
+        prod_id = _auto_vincular(h['emit_cnpj'], item['codigo_produto'], cli, grp)
+
         execute_query(
             """INSERT INTO nfe_itens
                    (nfe_id, num_item, codigo_produto, descricao, ncm, cfop,
                     unidade, quantidade, valor_unitario, valor_total,
-                    valor_icms, valor_pis, valor_cofins)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    valor_icms, valor_pis, valor_cofins, produto_catalogo_id)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (
                 nfe_id, item['num_item'], item['codigo_produto'],
                 item['descricao'], item['ncm'], item['cfop'],
                 item['unidade'], item['quantidade'], item['valor_unitario'],
                 item['valor_total'], item['valor_icms'],
-                item['valor_pis'], item['valor_cofins'],
+                item['valor_pis'], item['valor_cofins'], prod_id,
             ),
         )
 
     return 'ok'
+
+
+def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
+    """
+    Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
+    Busca na ordem: empresa específica → grupo → global.
+    """
+    if not emit_cnpj or not codigo_produto:
+        return None
+
+    for cli, grp in [
+        (cliente_id, None),
+        (None, grupo_id),
+        (None, None),
+    ]:
+        cli_cond = '= %s' if cli is not None else 'IS NULL'
+        grp_cond = '= %s' if grp is not None else 'IS NULL'
+        query = (f"SELECT produto_catalogo_id FROM nfe_produto_vinculo "
+                 f"WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
+                 f"AND cliente_id {cli_cond} AND grupo_id {grp_cond} LIMIT 1")
+        bind = [emit_cnpj, codigo_produto]
+        if cli is not None:
+            bind.append(cli)
+        if grp is not None:
+            bind.append(grp)
+        row = execute_query(query, tuple(bind), fetch=True, fetch_one=True)
+        if row:
+            return row['produto_catalogo_id']
+
+    return None

@@ -219,6 +219,8 @@ except Exception:
 _execute_query("""
     CREATE TABLE IF NOT EXISTS nfe_importacoes (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente_id INT NULL,
+        grupo_id INT NULL,
         nome_arquivo VARCHAR(500) NOT NULL,
         chave_acesso VARCHAR(44) UNIQUE NOT NULL,
         num_nota VARCHAR(20) DEFAULT '',
@@ -242,9 +244,21 @@ _execute_query("""
         INDEX idx_chave (chave_acesso),
         INDEX idx_emit_cnpj (emit_cnpj),
         INDEX idx_data (data_emissao),
-        INDEX idx_dest_cnpj (dest_cnpj)
+        INDEX idx_dest_cnpj (dest_cnpj),
+        INDEX idx_cliente (cliente_id),
+        INDEX idx_grupo (grupo_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
+
+# Incremental: add cliente_id / grupo_id columns if table was created before this migration
+for _col, _defn in [('cliente_id', 'INT NULL'), ('grupo_id', 'INT NULL')]:
+    _exists = _execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' AND COLUMN_NAME = %s",
+        (_col,), fetch=True, fetch_one=True,
+    ) or {}
+    if _exists.get('cnt', 0) == 0:
+        _execute_query(f"ALTER TABLE nfe_importacoes ADD COLUMN {_col} {_defn}", fetch=False)
 
 _execute_query("""
     CREATE TABLE IF NOT EXISTS nfe_itens (
@@ -262,10 +276,53 @@ _execute_query("""
         valor_icms DECIMAL(15,2) NOT NULL DEFAULT 0.00,
         valor_pis DECIMAL(15,2) NOT NULL DEFAULT 0.00,
         valor_cofins DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        produto_catalogo_id INT NULL,
         FOREIGN KEY (nfe_id) REFERENCES nfe_importacoes(id) ON DELETE CASCADE,
         INDEX idx_nfe (nfe_id),
         INDEX idx_ncm (ncm),
         INDEX idx_produto (codigo_produto(20))
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Incremental: add produto_catalogo_id to nfe_itens
+_pcat_exists = _execute_query(
+    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_itens' AND COLUMN_NAME = 'produto_catalogo_id'",
+    fetch=True, fetch_one=True,
+) or {}
+if _pcat_exists.get('cnt', 0) == 0:
+    _execute_query("ALTER TABLE nfe_itens ADD COLUMN produto_catalogo_id INT NULL", fetch=False)
+
+# ---- Catálogo de Produtos (por empresa/grupo) ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS nfe_produtos_catalogo (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente_id INT NULL,
+        grupo_id INT NULL,
+        codigo VARCHAR(60) DEFAULT '',
+        nome VARCHAR(255) NOT NULL,
+        categoria VARCHAR(100) DEFAULT '',
+        subcategoria VARCHAR(100) DEFAULT '',
+        unidade VARCHAR(6) DEFAULT '',
+        ativo TINYINT(1) NOT NULL DEFAULT 1,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_cli (cliente_id),
+        INDEX idx_grp (grupo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# ---- Regras de vínculo automático (emit_cnpj + cod_xml → produto_catalogo) ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS nfe_produto_vinculo (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente_id INT NULL,
+        grupo_id INT NULL,
+        emit_cnpj VARCHAR(18) NOT NULL DEFAULT '',
+        codigo_produto_xml VARCHAR(60) NOT NULL DEFAULT '',
+        produto_catalogo_id INT NOT NULL,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_vinculo (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml),
+        INDEX idx_lookup (emit_cnpj, codigo_produto_xml)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 

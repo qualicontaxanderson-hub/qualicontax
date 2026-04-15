@@ -5,71 +5,107 @@
 <style>
 /* ---- Layout ---- */
 .cc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
-.cc-header h1 { font-size:22px; font-weight:700; color:#111827; }
-.cc-header .cc-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.cc-header h1 { font-size:22px; font-weight:700; color:#111827; margin:0; }
+.cc-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ---- Empresa selector bar ---- */
+.cc-empresa-bar { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.cc-empresa-bar label { font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; white-space:nowrap; }
+.cc-empresa-bar select { padding:7px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; color:#111827; background:#fff; min-width:200px; }
+.cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:99px; font-size:12px; font-weight:600; }
+.cc-scope-badge.empresa { background:#dbeafe; color:#1d4ed8; }
+.cc-scope-badge.grupo { background:#f3e8ff; color:#7c3aed; }
+.cc-scope-badge.global { background:#f3f4f6; color:#6b7280; }
 
 /* ---- KPI cards ---- */
-.cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
-.cc-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; }
-.cc-kpi-label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.5px; }
-.cc-kpi-value { font-size:20px; font-weight:700; color:#111827; margin-top:4px; }
+.cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+.cc-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 14px; }
+.cc-kpi-label { font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; }
+.cc-kpi-value { font-size:18px; font-weight:700; color:#111827; margin-top:3px; }
 .cc-kpi-value.green { color:#16a34a; }
 .cc-kpi-value.blue  { color:#2563eb; }
 .cc-kpi-value.amber { color:#d97706; }
 .cc-kpi-value.red   { color:#dc2626; }
 
 /* ---- Import card ---- */
-.cc-import-card { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:16px 20px; margin-bottom:20px; }
-.cc-import-card h3 { font-size:14px; font-weight:600; color:#166534; margin-bottom:12px; }
-.cc-import-body { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
-.cc-import-body label { font-size:12px; font-weight:500; color:#374151; display:block; margin-bottom:4px; }
+.cc-import-card { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+.cc-import-card h3 { font-size:13px; font-weight:700; color:#166534; margin:0 0 10px; }
+.cc-import-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.cc-import-row label { font-size:11px; font-weight:600; color:#374151; display:block; margin-bottom:3px; }
 
-/* Dropbox card */
-.cc-dropbox-card { background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:16px 20px; margin-bottom:20px; }
-.cc-dropbox-card h3 { font-size:14px; font-weight:600; color:#1d4ed8; margin-bottom:10px; }
-.cc-dropbox-card p { font-size:12px; color:#374151; margin-bottom:10px; }
+/* ---- Dropbox card ---- */
+.cc-dropbox-card { background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+.cc-dropbox-card h3 { font-size:13px; font-weight:700; color:#1d4ed8; margin:0 0 8px; }
 
 /* ---- Filters ---- */
-.cc-filters { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:16px 20px; margin-bottom:20px; }
-.cc-filters h3 { font-size:13px; font-weight:600; color:#374151; margin-bottom:12px; display:flex; align-items:center; gap:6px; cursor:pointer; }
-.cc-filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; }
-.cc-filter-grid label { font-size:11px; font-weight:600; color:#6b7280; display:block; margin-bottom:3px; text-transform:uppercase; }
+.cc-filters { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+.cc-filters-head { display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:0; }
+.cc-filters-head h3 { font-size:13px; font-weight:700; color:#374151; margin:0; flex:1; }
+.cc-filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; margin-top:12px; }
+.cc-filter-grid label { font-size:10px; font-weight:700; color:#9ca3af; display:block; margin-bottom:3px; text-transform:uppercase; }
 .cc-filter-grid input, .cc-filter-grid select {
-    width:100%; padding:7px 10px; border:1px solid #d1d5db; border-radius:6px;
+    width:100%; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px;
     font-size:13px; color:#111827; background:#fff;
 }
-.cc-filter-actions { display:flex; gap:8px; margin-top:12px; }
+.cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
 
 /* ---- Tabs ---- */
-.cc-tabs { display:flex; gap:2px; border-bottom:2px solid #e5e7eb; margin-bottom:16px; }
-.cc-tab { padding:8px 18px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .15s; }
+.cc-tabs { display:flex; gap:2px; border-bottom:2px solid #e5e7eb; margin-bottom:14px; }
+.cc-tab { padding:8px 16px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .15s; }
 .cc-tab:hover { color:#111827; }
 .cc-tab.active { color:#22c55e; border-bottom-color:#22c55e; }
 
 /* ---- Table ---- */
 .cc-table-wrap { overflow-x:auto; }
-table.cc-table { width:100%; border-collapse:collapse; font-size:13px; }
-table.cc-table th { background:#f9fafb; font-weight:600; font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:1px solid #e5e7eb; text-align:left; white-space:nowrap; }
-table.cc-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; color:#374151; }
-table.cc-table tr:hover td { background:#f9fafb; }
+table.cc-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.cc-table th { background:#f9fafb; font-weight:700; font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; padding:9px 10px; border-bottom:1px solid #e5e7eb; white-space:nowrap; }
+table.cc-table td { padding:8px 10px; border-bottom:1px solid #f3f4f6; color:#374151; vertical-align:middle; }
+table.cc-table tr.cc-row-clickable:hover td { background:#f0fdf4; cursor:pointer; }
 table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
-.badge-upload { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; }
-.badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; }
+.badge-upload  { background:#dcfce7; color:#166534; padding:2px 7px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 7px; border-radius:99px; font-size:10px; font-weight:700; }
+.cc-empresa-pill { background:#eff6ff; color:#2563eb; padding:2px 7px; border-radius:99px; font-size:10px; font-weight:600; white-space:nowrap; }
+.cc-grupo-pill   { background:#f3e8ff; color:#7c3aed; padding:2px 7px; border-radius:99px; font-size:10px; font-weight:600; white-space:nowrap; }
+
+/* Delete button */
+.btn-del { background:transparent; border:none; color:#dc2626; padding:3px 6px; border-radius:4px; cursor:pointer; font-size:13px; }
+.btn-del:hover { background:#fee2e2; }
 
 /* ---- Pagination ---- */
-.cc-pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; }
-.cc-pagination button { padding:5px 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; font-size:13px; }
+.cc-pagination { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; }
+.cc-pagination button { padding:4px 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
 .cc-pagination button:disabled { opacity:.4; cursor:not-allowed; }
-.cc-pagination span { color:#6b7280; }
 
-/* ---- Empty ---- */
-.cc-empty { text-align:center; padding:40px 20px; color:#9ca3af; }
-.cc-empty i { font-size:36px; margin-bottom:10px; display:block; }
-
-/* ---- Loading ---- */
-.cc-loading { text-align:center; padding:30px; color:#6b7280; display:none; }
-.cc-loading i { animation:spin 1s linear infinite; font-size:22px; }
+/* ---- Empty / Loading ---- */
+.cc-empty { text-align:center; padding:36px 20px; color:#9ca3af; }
+.cc-empty i { font-size:32px; margin-bottom:8px; display:block; }
+.cc-loading { text-align:center; padding:28px; color:#6b7280; display:none; }
+.cc-loading i { animation:spin 1s linear infinite; font-size:20px; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* ---- Slide-in panel (itens da NF-e) ---- */
+.cc-panel-overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:999; display:none; }
+.cc-panel-overlay.open { display:block; }
+.cc-panel { position:fixed; top:0; right:0; width:680px; max-width:100vw; height:100vh; background:#fff; z-index:1000; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .25s ease; box-shadow:-4px 0 24px rgba(0,0,0,.12); }
+.cc-panel.open { transform:translateX(0); }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e5e7eb; background:#f9fafb; }
+.cc-panel-header h3 { font-size:15px; font-weight:700; color:#111827; margin:0; }
+.cc-panel-body { flex:1; overflow-y:auto; padding:16px 20px; }
+.cc-panel-footer { padding:12px 20px; border-top:1px solid #e5e7eb; background:#f9fafb; }
+.panel-nota-info { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin-bottom:14px; background:#f0fdf4; border-radius:8px; padding:12px 14px; }
+.panel-nota-info dt { font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; }
+.panel-nota-info dd { font-size:13px; font-weight:600; color:#111827; margin:0 0 4px; }
+
+/* Item table inside panel */
+table.cc-items-table { width:100%; border-collapse:collapse; font-size:12px; }
+table.cc-items-table th { background:#f9fafb; font-weight:700; font-size:10px; color:#9ca3af; text-transform:uppercase; padding:7px 8px; border-bottom:1px solid #e5e7eb; white-space:nowrap; }
+table.cc-items-table td { padding:7px 8px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+table.cc-items-table td.r { text-align:right; }
+.prod-vinculo { display:flex; align-items:center; gap:6px; }
+.prod-vinculo select { flex:1; padding:4px 8px; border:1px solid #d1d5db; border-radius:5px; font-size:12px; }
+.prod-vinculo button { padding:4px 8px; border-radius:5px; border:none; background:#22c55e; color:#fff; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.prod-vinculo button:hover { background:#16a34a; }
+.vinculado-badge { background:#dcfce7; color:#166534; padding:2px 7px; border-radius:99px; font-size:10px; font-weight:700; }
 </style>
 {% endblock %}
 
@@ -82,32 +118,58 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
         <h1 style="margin-top:4px;"><i class="fas fa-file-search" style="color:#22c55e;margin-right:8px;"></i>Conferência de Compras</h1>
     </div>
     <div class="cc-actions">
-        <button class="btn" onclick="exportarCSV()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">
-            <i class="fas fa-download"></i> Exportar CSV
+        <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="btn"
+           style="background:#8b5cf6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
+            <i class="fas fa-tag"></i> Cadastro de Produtos
+        </a>
+        <button onclick="exportarCSV()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">
+            <i class="fas fa-download"></i> CSV
         </button>
     </div>
 </div>
 
+<!-- Seletor empresa / grupo -->
+<div class="cc-empresa-bar">
+    <label><i class="fas fa-building"></i> Visualizar por</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="sel_empresa" onchange="onEmpresaChange()">
+            <option value="">— Todas as Empresas —</option>
+            {% for e in empresas %}
+            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+            {% endfor %}
+        </select>
+        <span style="color:#d1d5db;font-size:11px;">OU</span>
+        <select id="sel_grupo" onchange="onGrupoChange()">
+            <option value="">— Todos os Grupos —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+</div>
+
 <!-- KPIs -->
-<div class="cc-kpis" id="kpiArea">
+<div class="cc-kpis">
     <div class="cc-kpi">
         <div class="cc-kpi-label">Total de Notas</div>
         <div class="cc-kpi-value" id="kpiNotas">{{ stats.total_notas or 0 }}</div>
     </div>
     <div class="cc-kpi">
-        <div class="cc-kpi-label">Valor Total (R$)</div>
+        <div class="cc-kpi-label">Valor Total</div>
         <div class="cc-kpi-value green" id="kpiValor">{{ stats.total_valor | default(0) | format_currency }}</div>
     </div>
     <div class="cc-kpi">
-        <div class="cc-kpi-label">ICMS Total (R$)</div>
+        <div class="cc-kpi-label">ICMS</div>
         <div class="cc-kpi-value blue" id="kpiICMS">{{ stats.total_icms | default(0) | format_currency }}</div>
     </div>
     <div class="cc-kpi">
-        <div class="cc-kpi-label">PIS Total (R$)</div>
+        <div class="cc-kpi-label">PIS</div>
         <div class="cc-kpi-value amber" id="kpiPIS">{{ stats.total_pis | default(0) | format_currency }}</div>
     </div>
     <div class="cc-kpi">
-        <div class="cc-kpi-label">COFINS Total (R$)</div>
+        <div class="cc-kpi-label">COFINS</div>
         <div class="cc-kpi-value red" id="kpiCOFINS">{{ stats.total_cofins | default(0) | format_currency }}</div>
     </div>
 </div>
@@ -116,14 +178,32 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
 <div class="cc-import-card">
     <h3><i class="fas fa-upload"></i> Importar XMLs de NF-e</h3>
     <form method="POST" action="{{ url_for('escrita_fiscal.importar_xml') }}" enctype="multipart/form-data">
-        <div class="cc-import-body">
+        <div class="cc-import-row">
             <div>
-                <label>Selecione um ou mais arquivos .xml</label>
+                <label>Empresa</label>
+                <select name="cliente_id" id="imp_empresa" style="min-width:200px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                    <option value="">— Sem empresa específica —</option>
+                    {% for e in empresas %}
+                    <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Grupo</label>
+                <select name="grupo_id" style="min-width:160px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                    <option value="">— Sem grupo —</option>
+                    {% for g in grupos %}
+                    <option value="{{ g.id }}">{{ g.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Arquivo(s) .xml</label>
                 <input type="file" name="xml_files" accept=".xml" multiple
                        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;background:#fff;font-size:13px;">
             </div>
-            <button type="submit" class="btn btn-primary"
-                    style="background:#22c55e;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+            <button type="submit"
+                    style="background:#22c55e;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-end;">
                 <i class="fas fa-file-import"></i> Importar
             </button>
         </div>
@@ -134,38 +214,32 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
 {% if dropbox_configured %}
 <div class="cc-dropbox-card">
     <h3><i class="fas fa-cloud-download-alt"></i> Sincronizar com Dropbox</h3>
-    <p>Pasta configurada: <strong>{{ dropbox_folder }}</strong></p>
-    <button id="btnDropbox" onclick="syncDropbox()"
-            style="background:#2563eb;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-        <i class="fas fa-sync-alt"></i> Sincronizar agora
-    </button>
-    <span id="dropboxMsg" style="margin-left:12px;font-size:13px;color:#374151;"></span>
+    <p style="font-size:12px;color:#374151;margin-bottom:8px;">Pasta: <strong>{{ dropbox_folder }}</strong></p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button id="btnDropbox" onclick="syncDropbox()"
+                style="background:#2563eb;color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-sync-alt"></i> Sincronizar
+        </button>
+        <span id="dropboxMsg" style="font-size:13px;color:#374151;"></span>
+    </div>
 </div>
 {% else %}
 <div class="cc-dropbox-card" style="background:#fffbeb;border-color:#fde68a;">
-    <h3 style="color:#92400e;"><i class="fas fa-cloud"></i> Integração com Dropbox</h3>
-    <p style="color:#92400e;">Configure a variável de ambiente <code>DROPBOX_ACCESS_TOKEN</code> e <code>DROPBOX_XML_FOLDER</code> para habilitar a sincronização automática de XMLs a partir de uma pasta no Dropbox.</p>
-    <p style="color:#92400e; font-size:11px;">Gere um token em: <a href="https://www.dropbox.com/developers/apps" target="_blank" style="color:#2563eb;">dropbox.com/developers/apps</a></p>
+    <h3 style="color:#92400e;"><i class="fas fa-cloud"></i> Integração Dropbox</h3>
+    <p style="color:#92400e;font-size:12px;">Configure <code>DROPBOX_ACCESS_TOKEN</code> e <code>DROPBOX_XML_FOLDER</code> para sincronização automática.</p>
 </div>
 {% endif %}
 
 <!-- Filters -->
 <div class="cc-filters">
-    <h3 onclick="toggleFilters()">
-        <i class="fas fa-filter" style="color:#22c55e;"></i>
-        Filtros
-        <i class="fas fa-chevron-down" id="filterChevron" style="margin-left:auto;font-size:11px;"></i>
-    </h3>
+    <div class="cc-filters-head" onclick="toggleFilters()">
+        <h3><i class="fas fa-filter" style="color:#22c55e;margin-right:4px;"></i>Filtros</h3>
+        <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
+    </div>
     <div id="filterBody">
         <div class="cc-filter-grid">
-            <div>
-                <label>Data Início</label>
-                <input type="date" id="f_data_ini">
-            </div>
-            <div>
-                <label>Data Fim</label>
-                <input type="date" id="f_data_fim">
-            </div>
+            <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
             <div>
                 <label>Emitente (CNPJ)</label>
                 <select id="f_emit_cnpj">
@@ -184,30 +258,12 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
                     {% endfor %}
                 </select>
             </div>
-            <div>
-                <label>Nº da Nota</label>
-                <input type="text" id="f_num_nota" placeholder="Ex: 000123">
-            </div>
-            <div>
-                <label>CFOP</label>
-                <input type="text" id="f_cfop" placeholder="Ex: 1102">
-            </div>
-            <div>
-                <label>Chave de Acesso</label>
-                <input type="text" id="f_chave" placeholder="Parcial ou completa">
-            </div>
-            <div>
-                <label>CNPJ Destinatário</label>
-                <input type="text" id="f_dest_cnpj" placeholder="Ex: 12.345.678/0001-95">
-            </div>
-            <div>
-                <label>Valor Mínimo (R$)</label>
-                <input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01">
-            </div>
-            <div>
-                <label>Valor Máximo (R$)</label>
-                <input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01">
-            </div>
+            <div><label>Nº da Nota</label><input type="text" id="f_num_nota" placeholder="Ex: 000123"></div>
+            <div><label>CFOP</label><input type="text" id="f_cfop" placeholder="Ex: 1102"></div>
+            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
+            <div><label>CNPJ Destinatário</label><input type="text" id="f_dest_cnpj" placeholder="Ex: 12.345.678/0001-95"></div>
+            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
             <div>
                 <label>Origem</label>
                 <select id="f_origem">
@@ -216,21 +272,17 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
                     <option value="DROPBOX">Dropbox</option>
                 </select>
             </div>
-            <!-- Produto (only shown in Por Produto tab) -->
-            <div id="f_descricao_wrap" style="display:none;">
-                <label>Descrição do Produto</label>
-                <input type="text" id="f_descricao" placeholder="Ex: Cimento">
-            </div>
-            <div id="f_ncm_wrap" style="display:none;">
-                <label>NCM</label>
-                <input type="text" id="f_ncm" placeholder="Ex: 3214">
-            </div>
+            <!-- Produto / Por Produto tab -->
+            <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
+            <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
         </div>
         <div class="cc-filter-actions">
-            <button onclick="applyFilters()" style="background:#22c55e;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+            <button onclick="applyFilters()"
+                    style="background:#22c55e;color:#fff;border:none;padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
                 <i class="fas fa-search"></i> Buscar
             </button>
-            <button onclick="clearFilters()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+            <button onclick="clearFilters()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;">
                 <i class="fas fa-times"></i> Limpar
             </button>
         </div>
@@ -241,7 +293,7 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
 <div class="cc-tabs">
     <div class="cc-tab active" data-tab="notas" onclick="switchTab('notas')">
         <i class="fas fa-file-alt"></i> Notas Fiscais
-        <span id="tabBadgeNotas" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:11px;margin-left:6px;">0</span>
+        <span id="tabBadgeNotas" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
     </div>
     <div class="cc-tab" data-tab="emissor" onclick="switchTab('emissor')">
         <i class="fas fa-building"></i> Por Emissor
@@ -251,10 +303,7 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
     </div>
 </div>
 
-<!-- Loading -->
-<div class="cc-loading" id="loadingIndicator">
-    <i class="fas fa-spinner"></i><br>Carregando dados...
-</div>
+<div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
 
 <!-- Tab: Notas Fiscais -->
 <div id="tab-notas">
@@ -264,21 +313,19 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
                 <tr>
                     <th>Data</th>
                     <th>Nº / Série</th>
+                    <th>Empresa</th>
                     <th>Emitente</th>
                     <th>UF</th>
-                    <th>Destinatário</th>
                     <th>CFOP</th>
-                    <th>Natureza Op.</th>
+                    <th>Itens</th>
                     <th style="text-align:right;">Valor R$</th>
                     <th style="text-align:right;">ICMS</th>
-                    <th style="text-align:right;">PIS</th>
-                    <th style="text-align:right;">COFINS</th>
                     <th>Origem</th>
-                    <th>Arquivo</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="tbodyNotas">
-                <tr><td colspan="13" class="cc-empty"><i class="fas fa-file-search"></i>Use os filtros acima e clique em Buscar</td></tr>
+                <tr><td colspan="11" class="cc-empty"><i class="fas fa-file-search"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -302,7 +349,7 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
                 </tr>
             </thead>
             <tbody id="tbodyEmissor">
-                <tr><td colspan="8" class="cc-empty"><i class="fas fa-building"></i>Use os filtros e clique em Buscar</td></tr>
+                <tr><td colspan="8" class="cc-empty"><i class="fas fa-building"></i>Clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -315,7 +362,8 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
             <thead>
                 <tr>
                     <th>Código</th>
-                    <th>Descrição</th>
+                    <th>Descrição XML</th>
+                    <th>Produto Vinculado</th>
                     <th>NCM</th>
                     <th>CFOP</th>
                     <th>Unid.</th>
@@ -323,14 +371,31 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
                     <th style="text-align:right;">Qtd. Total</th>
                     <th style="text-align:right;">Total R$</th>
                     <th style="text-align:right;">ICMS</th>
-                    <th style="text-align:right;">PIS</th>
-                    <th style="text-align:right;">COFINS</th>
                 </tr>
             </thead>
             <tbody id="tbodyProduto">
-                <tr><td colspan="11" class="cc-empty"><i class="fas fa-box-open"></i>Use os filtros e clique em Buscar</td></tr>
+                <tr><td colspan="10" class="cc-empty"><i class="fas fa-box-open"></i>Clique em Buscar</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- ===================== PANEL: Itens da NF-e ===================== -->
+<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+<div class="cc-panel" id="itemPanel">
+    <div class="cc-panel-header">
+        <h3 id="panelTitle">Itens da Nota Fiscal</h3>
+        <button onclick="closePanel()" style="background:none;border:none;font-size:20px;color:#6b7280;cursor:pointer;">&times;</button>
+    </div>
+    <div class="cc-panel-body" id="panelBody">
+        <div id="panelLoading" style="text-align:center;padding:40px;color:#9ca3af;">
+            <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
+        </div>
+    </div>
+    <div class="cc-panel-footer">
+        <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+            Fechar
+        </button>
     </div>
 </div>
 
@@ -338,35 +403,65 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; }
 
 {% block extra_js %}
 <script>
-// ---- state ----
+// ---- global state ----
 let currentTab = 'notas';
 let currentPage = 1;
-let allEmissorData = [];
-let allProdutoData = [];
+let currentClienteId = '';
+let currentGrupoId = '';
+let catalogoProdutos = [];
+
+// ---- Empresa / Grupo selector ----
+function onEmpresaChange() {
+    currentClienteId = document.getElementById('sel_empresa').value;
+    if (currentClienteId) {
+        document.getElementById('sel_grupo').value = '';
+        currentGrupoId = '';
+        updateScopeBadge('empresa', document.getElementById('sel_empresa').options[document.getElementById('sel_empresa').selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    // Sync import selector
+    document.getElementById('imp_empresa').value = currentClienteId;
+    applyFilters();
+}
+function onGrupoChange() {
+    currentGrupoId = document.getElementById('sel_grupo').value;
+    if (currentGrupoId) {
+        document.getElementById('sel_empresa').value = '';
+        currentClienteId = '';
+        updateScopeBadge('grupo', document.getElementById('sel_grupo').options[document.getElementById('sel_grupo').selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    applyFilters();
+}
+function updateScopeBadge(type, label) {
+    const b = document.getElementById('scopeBadge');
+    b.className = 'cc-scope-badge ' + type;
+    const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
+    b.innerHTML = `<i class="${icons[type]}"></i> ${label}`;
+}
 
 // ---- Tabs ----
 function switchTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.cc-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-    ['notas', 'emissor', 'produto'].forEach(t => {
-        document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+    ['notas','emissor','produto'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
     });
-    // Show/hide product-only filters
-    const isProduto = tab === 'produto';
-    document.getElementById('f_descricao_wrap').style.display = isProduto ? '' : 'none';
-    document.getElementById('f_ncm_wrap').style.display = isProduto ? '' : 'none';
+    document.getElementById('f_descricao_wrap').style.display = tab === 'produto' ? '' : 'none';
+    document.getElementById('f_ncm_wrap').style.display = tab === 'produto' ? '' : 'none';
     applyFilters();
 }
 
-// ---- Filters toggle ----
+// ---- Filter toggle ----
 function toggleFilters() {
-    const body = document.getElementById('filterBody');
-    const ch = document.getElementById('filterChevron');
-    const hidden = body.style.display === 'none';
-    body.style.display = hidden ? '' : 'none';
-    ch.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
+    const b = document.getElementById('filterBody');
+    const c = document.getElementById('filterChevron');
+    const hidden = b.style.display === 'none';
+    b.style.display = hidden ? '' : 'none';
+    c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
 }
-
 function clearFilters() {
     ['f_data_ini','f_data_fim','f_num_nota','f_cfop','f_chave','f_dest_cnpj','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
         document.getElementById(id).value = '';
@@ -377,9 +472,10 @@ function clearFilters() {
     currentPage = 1;
     applyFilters();
 }
-
 function getFilters() {
     return {
+        cliente_id: currentClienteId,
+        grupo_id: currentGrupoId,
         data_ini: document.getElementById('f_data_ini').value,
         data_fim: document.getElementById('f_data_fim').value,
         emit_cnpj: document.getElementById('f_emit_cnpj').value,
@@ -395,7 +491,6 @@ function getFilters() {
         ncm: document.getElementById('f_ncm').value,
     };
 }
-
 function applyFilters() {
     currentPage = 1;
     if (currentTab === 'notas') loadNotas();
@@ -403,67 +498,71 @@ function applyFilters() {
     else loadProduto();
 }
 
-// ---- Currency formatter ----
+// ---- Formatters ----
 function fmtBRL(v) {
-    return 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
-function fmtNum(v, dec) {
-    return parseFloat(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: dec||0, maximumFractionDigits: dec||4});
+function fmtNum(v,d) {
+    return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||2,maximumFractionDigits:d||4});
 }
 
 // ---- Loading ----
-function showLoading() { document.getElementById('loadingIndicator').style.display = 'block'; }
-function hideLoading() { document.getElementById('loadingIndicator').style.display = 'none'; }
+function showLoad() { document.getElementById('loadingIndicator').style.display='block'; }
+function hideLoad() { document.getElementById('loadingIndicator').style.display='none'; }
 
 // ---- Load Notas ----
 function loadNotas() {
     const f = getFilters();
     const params = new URLSearchParams({...f, page: currentPage});
-    showLoading();
+    showLoad();
     document.getElementById('tbodyNotas').innerHTML = '';
     fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
         .then(r => r.json())
         .then(data => {
-            hideLoading();
+            hideLoad();
             document.getElementById('tabBadgeNotas').textContent = data.total;
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }
-            tbody.innerHTML = data.rows.map(r => `
-                <tr>
-                    <td>${r.data_emissao || '—'}</td>
-                    <td>${r.num_nota || '—'} / ${r.serie || '—'}</td>
-                    <td title="${r.emit_cnpj}">${r.emit_nome || r.emit_cnpj || '—'}</td>
-                    <td>${r.emit_uf || '—'}</td>
-                    <td title="${r.dest_cnpj}">${r.dest_nome || r.dest_cnpj || '—'}</td>
-                    <td>${r.cfop || '—'}</td>
-                    <td title="${r.natureza_operacao}">${(r.natureza_operacao || '—').substring(0,20)}</td>
-                    <td class="money">${fmtBRL(r.valor_total)}</td>
+            tbody.innerHTML = data.rows.map(r => {
+                const empPill = r.empresa_nome
+                    ? `<span class="cc-empresa-pill">${r.empresa_nome}</span>`
+                    : (r.grupo_nome ? `<span class="cc-grupo-pill">${r.grupo_nome}</span>` : '<span style="color:#d1d5db">—</span>');
+                return `<tr class="cc-row-clickable" onclick="openPanel(${r.id}, event)">
+                    <td>${r.data_emissao||'—'}</td>
+                    <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
+                    <td>${empPill}</td>
+                    <td title="${r.emit_cnpj}">${r.emit_nome||r.emit_cnpj||'—'}</td>
+                    <td>${r.emit_uf||'—'}</td>
+                    <td>${r.cfop||'—'}</td>
+                    <td style="text-align:center;">${r.qtd_itens||0}</td>
+                    <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
                     <td class="money">${fmtBRL(r.valor_icms)}</td>
-                    <td class="money">${fmtBRL(r.valor_pis)}</td>
-                    <td class="money">${fmtBRL(r.valor_cofins)}</td>
                     <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span></td>
-                    <td title="${r.nome_arquivo}" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">${r.nome_arquivo}</td>
-                </tr>
-            `).join('');
+                    <td onclick="event.stopPropagation()">
+                        <button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page);
         })
-        .catch(() => { hideLoading(); });
+        .catch(() => hideLoad());
 }
 
 // ---- Load Por Emissor ----
 function loadEmissor() {
     const f = getFilters();
-    const params = new URLSearchParams({data_ini: f.data_ini, data_fim: f.data_fim});
-    showLoading();
+    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});
+    showLoad();
     fetch('{{ url_for("escrita_fiscal.api_por_emissor") }}?' + params)
         .then(r => r.json())
         .then(data => {
-            hideLoading();
-            allEmissorData = data;
+            hideLoad();
             const tbody = document.getElementById('tbodyEmissor');
             if (!data || data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="8" class="cc-empty"><i class="fas fa-building"></i><br>Nenhum emissor encontrado</td></tr>';
@@ -471,9 +570,9 @@ function loadEmissor() {
             }
             tbody.innerHTML = data.map(r => `
                 <tr>
-                    <td>${r.emit_cnpj || '—'}</td>
-                    <td>${r.emit_nome || '—'}</td>
-                    <td>${r.emit_uf || '—'}</td>
+                    <td>${r.emit_cnpj||'—'}</td>
+                    <td>${r.emit_nome||'—'}</td>
+                    <td>${r.emit_uf||'—'}</td>
                     <td class="money">${r.qtd_notas}</td>
                     <td class="money">${fmtBRL(r.total_valor)}</td>
                     <td class="money">${fmtBRL(r.total_icms)}</td>
@@ -482,101 +581,235 @@ function loadEmissor() {
                 </tr>
             `).join('');
         })
-        .catch(() => { hideLoading(); });
+        .catch(() => hideLoad());
 }
 
 // ---- Load Por Produto ----
 function loadProduto() {
     const f = getFilters();
     const params = new URLSearchParams({
-        data_ini: f.data_ini, data_fim: f.data_fim,
-        emit_cnpj: f.emit_cnpj, ncm: f.ncm, descricao: f.descricao,
+        cliente_id:f.cliente_id, grupo_id:f.grupo_id,
+        data_ini:f.data_ini, data_fim:f.data_fim,
+        emit_cnpj:f.emit_cnpj, ncm:f.ncm, descricao:f.descricao,
     });
-    showLoading();
+    showLoad();
     fetch('{{ url_for("escrita_fiscal.api_por_produto") }}?' + params)
         .then(r => r.json())
         .then(data => {
-            hideLoading();
+            hideLoad();
             const tbody = document.getElementById('tbodyProduto');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="cc-empty"><i class="fas fa-box-open"></i><br>Nenhum produto encontrado</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="cc-empty"><i class="fas fa-box-open"></i><br>Nenhum produto encontrado</td></tr>';
                 return;
             }
-            tbody.innerHTML = data.map(r => `
-                <tr>
-                    <td>${r.codigo_produto || '—'}</td>
-                    <td>${r.descricao || '—'}</td>
-                    <td>${r.ncm || '—'}</td>
-                    <td>${r.cfop || '—'}</td>
-                    <td>${r.unidade || '—'}</td>
+            tbody.innerHTML = data.map(r => {
+                const vincPill = r.produto_catalogo_nome
+                    ? `<span class="vinculado-badge">${r.produto_catalogo_nome}</span>`
+                    : `<span style="color:#d1d5db;font-size:11px;">Não vinculado</span>`;
+                return `<tr>
+                    <td>${r.codigo_produto||'—'}</td>
+                    <td>${r.descricao||'—'}</td>
+                    <td>${vincPill}</td>
+                    <td>${r.ncm||'—'}</td>
+                    <td>${r.cfop||'—'}</td>
+                    <td>${r.unidade||'—'}</td>
                     <td class="money">${r.qtd_notas}</td>
-                    <td class="money">${fmtNum(r.total_qtd, 2)}</td>
+                    <td class="money">${fmtNum(r.total_qtd,2)}</td>
                     <td class="money">${fmtBRL(r.total_valor)}</td>
                     <td class="money">${fmtBRL(r.total_icms)}</td>
-                    <td class="money">${fmtBRL(r.total_pis)}</td>
-                    <td class="money">${fmtBRL(r.total_cofins)}</td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
         })
-        .catch(() => { hideLoading(); });
+        .catch(() => hideLoad());
 }
 
 // ---- Pagination ----
-function renderPagination(containerId, total, perPage, page) {
-    const totalPages = Math.ceil(total / perPage);
-    const el = document.getElementById(containerId);
-    if (totalPages <= 1) { el.innerHTML = ''; return; }
+function renderPagination(id, total, perPage, page) {
+    const pages = Math.ceil(total / perPage);
+    const el = document.getElementById(id);
+    if (pages <= 1) { el.innerHTML = ''; return; }
     el.innerHTML = `
-        <button onclick="goPage(${page-1})" ${page<=1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>
-        <span>Página ${page} de ${totalPages} &nbsp;|&nbsp; ${total} registro(s)</span>
-        <button onclick="goPage(${page+1})" ${page>=totalPages ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>
+        <button onclick="goPage(${page-1})" ${page<=1?'disabled':''}><i class="fas fa-chevron-left"></i></button>
+        <span>Página ${page} de ${pages} &nbsp;|&nbsp; ${total} registro(s)</span>
+        <button onclick="goPage(${page+1})" ${page>=pages?'disabled':''}><i class="fas fa-chevron-right"></i></button>
     `;
 }
 function goPage(p) { currentPage = p; loadNotas(); }
 
+// ---- Delete NF-e ----
+function excluirNfe(id, btn) {
+    if (!confirm('Excluir esta nota fiscal e todos os seus itens?')) return;
+    fetch(`/escrita-fiscal/conf-compras/excluir/${id}`,
+        { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'} })
+        .then(r => r.json())
+        .then(() => { btn.closest('tr').remove(); applyFilters(); })
+        .catch(() => alert('Erro ao excluir.'));
+}
+
+// ---- Panel: Itens da NF-e ----
+function openPanel(nfeId, evt) {
+    document.getElementById('panelOverlay').classList.add('open');
+    document.getElementById('itemPanel').classList.add('open');
+    document.getElementById('panelBody').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+
+    // Load catalog for linking
+    const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
+    fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
+        .then(r => r.json())
+        .then(cats => { catalogoProdutos = cats; });
+
+    fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { document.getElementById('panelBody').innerHTML = `<p style="color:red">${data.error}</p>`; return; }
+            const nota = data.nota;
+            document.getElementById('panelTitle').textContent =
+                `NF ${nota.num_nota||'s/n'} — ${nota.emit_nome||nota.emit_cnpj}`;
+
+            let html = `<dl class="panel-nota-info">
+                <div><dt>Emitente</dt><dd>${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
+                <div><dt>Destinatário</dt><dd>${nota.dest_nome||'—'}</dd></div>
+                <div><dt>Data Emissão</dt><dd>${nota.data_emissao||'—'}</dd></div>
+            </dl>`;
+
+            if (!data.itens || data.itens.length === 0) {
+                html += '<p style="color:#9ca3af;text-align:center;">Nenhum item encontrado nesta NF-e.</p>';
+            } else {
+                html += `<table class="cc-items-table">
+                    <thead><tr>
+                        <th>#</th><th>Código</th><th>Descrição</th><th>NCM</th>
+                        <th class="r">Qtd.</th><th class="r">Vl.Unit</th><th class="r">Total R$</th>
+                        <th>Produto Vinculado</th>
+                    </tr></thead><tbody>`;
+                data.itens.forEach(it => {
+                    const opts = buildProdOpts(it.produto_catalogo_id);
+                    html += `<tr>
+                        <td>${it.num_item}</td>
+                        <td>${it.codigo_produto||'—'}</td>
+                        <td>${it.descricao||'—'}</td>
+                        <td>${it.ncm||'—'}</td>
+                        <td class="r">${fmtNum(it.quantidade,3)} ${it.unidade||''}</td>
+                        <td class="r">${fmtBRL(it.valor_unitario)}</td>
+                        <td class="r"><strong>${fmtBRL(it.valor_total)}</strong></td>
+                        <td>
+                            <div class="prod-vinculo" id="vinculo_${it.id}">
+                                <select id="sel_prod_${it.id}">${opts}</select>
+                                <button onclick="vincularProduto(${it.id}, ${nota.cliente_id||'null'}, ${nota.grupo_id||'null'})">
+                                    Vincular
+                                </button>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            document.getElementById('panelBody').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('panelBody').innerHTML = '<p style="color:red">Erro ao carregar itens.</p>';
+        });
+}
+
+function buildProdOpts(selectedId) {
+    let opts = '<option value="">— Sem vínculo —</option>';
+    let lastCat = '';
+    catalogoProdutos.forEach(p => {
+        if (p.categoria !== lastCat) {
+            if (lastCat) opts += '</optgroup>';
+            opts += `<optgroup label="${p.categoria||'Sem categoria'}">`;
+            lastCat = p.categoria;
+        }
+        opts += `<option value="${p.id}" ${p.id == selectedId ? 'selected':''}>${p.nome}</option>`;
+    });
+    if (lastCat) opts += '</optgroup>';
+    return opts;
+}
+
+function closePanel() {
+    document.getElementById('panelOverlay').classList.remove('open');
+    document.getElementById('itemPanel').classList.remove('open');
+}
+
+function vincularProduto(itemId, clienteId, grupoId) {
+    const sel = document.getElementById('sel_prod_' + itemId);
+    const produtoId = sel.value ? parseInt(sel.value) : null;
+    fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            const wrap = document.getElementById('vinculo_' + itemId);
+            if (produtoId && data.produto_nome) {
+                wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
+                    <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;font-size:11px;cursor:pointer;">Alterar</button>`;
+            } else {
+                // Rebuild with fresh select
+                const opts = buildProdOpts(null);
+                wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+                    <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+            }
+        }
+    });
+}
+
+function desvincular(itemId) {
+    const wrap = document.getElementById('vinculo_' + itemId);
+    const opts = buildProdOpts(null);
+    wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+        <button onclick="vincularProduto(${itemId}, null, null)">Vincular</button>`;
+}
+
 // ---- Dropbox Sync ----
 function syncDropbox() {
     const btn = document.getElementById('btnDropbox');
-    const msg = document.getElementById('dropboxMsg');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
-    msg.textContent = '';
-    fetch('{{ url_for("escrita_fiscal.sync_dropbox") }}', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar agora';
-            msg.textContent = data.msg || data.error || '';
-            if (data.ok > 0) applyFilters();
-        })
-        .catch(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar agora';
-            msg.textContent = 'Erro ao comunicar com o servidor.';
-        });
+    fetch('{{ url_for("escrita_fiscal.sync_dropbox") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({cliente_id: currentClienteId||null, grupo_id: currentGrupoId||null}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar';
+        document.getElementById('dropboxMsg').textContent = data.msg || data.error || '';
+        if (data.ok > 0) applyFilters();
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar';
+    });
 }
 
 // ---- CSV Export ----
 function exportarCSV() {
     const f = getFilters();
-    const params = new URLSearchParams({...f, page: 1, per_page: 99999});
+    const params = new URLSearchParams({...f, page:1, per_page:99999});
     fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
         .then(r => r.json())
         .then(data => {
-            if (!data.rows || data.rows.length === 0) { alert('Nenhuma nota para exportar.'); return; }
-            const cols = ['data_emissao','num_nota','serie','emit_cnpj','emit_nome','emit_uf','dest_cnpj','dest_nome','cfop','natureza_operacao','valor_total','valor_icms','valor_pis','valor_cofins','valor_ipi','chave_acesso','origem'];
+            if (!data.rows || !data.rows.length) { alert('Nenhuma nota para exportar.'); return; }
+            const cols = ['data_emissao','num_nota','serie','emit_cnpj','emit_nome','emit_uf',
+                          'dest_cnpj','dest_nome','empresa_nome','cfop','natureza_operacao',
+                          'valor_total','valor_icms','valor_pis','valor_cofins','valor_ipi','origem','chave_acesso'];
             let csv = cols.join(';') + '\n';
             data.rows.forEach(r => {
-                csv += cols.map(c => JSON.stringify(r[c] ?? '')).join(';') + '\n';
+                csv += cols.map(c => JSON.stringify(r[c]??'')).join(';') + '\n';
             });
-            const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
-            const url = URL.createObjectURL(blob);
+            const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
             const a = document.createElement('a');
-            a.href = url; a.download = 'conf_compras.csv'; a.click();
+            a.href = URL.createObjectURL(blob);
+            a.download = 'conf_compras.csv';
+            a.click();
         });
 }
 
-// ---- Init: load all on first visit if there are notes ----
+// ---- Init ----
 document.addEventListener('DOMContentLoaded', () => {
     const total = parseInt(document.getElementById('kpiNotas').textContent || '0');
     if (total > 0) loadNotas();
