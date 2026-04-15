@@ -6,6 +6,7 @@
     --white: #FFFFFF;
     --light-bg: #F9FAFB;
     --gray-light: #F3F4F6;
+    --page-bg: #F0F2F5;
     --gray-dark: #374151;
     --border: #E5E7EB;
     --text-primary: #111827;
@@ -30,11 +31,7 @@ body {
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-primary);
-    background: #ffffff;
-}
-
-/* ==========================================
-   ICON RAIL (64px)
+    background: var(--page-bg);
    ========================================== */
 .nav-rail {
     width: var(--rail-width);
@@ -555,7 +552,7 @@ body {
 .content {
     flex: 1;
     padding: 28px 32px;
-    background: #ffffff;
+    background: var(--page-bg);
 }
 
 /* ==========================================
