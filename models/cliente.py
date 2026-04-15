@@ -86,22 +86,29 @@ class Cliente:
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
-        count_query = f"SELECT COUNT(*) as total FROM clientes{where_clause}"
+        # COUNT must be on the clientes table alone (not on the JOIN) to avoid
+        # counting one row per ramo when a client has multiple ramos de atividade.
+        count_query = f"SELECT COUNT(DISTINCT id) as total FROM clientes{where_clause}"
         total_result = execute_query(count_query, tuple(params), fetch=True, fetch_one=True)
         total = total_result['total'] if total_result else 0
         
         offset = (page - 1) * per_page
         params.extend([per_page, offset])
         
+        # GROUP BY c.id + GROUP_CONCAT ensures one row per client even when the
+        # client has multiple ramos de atividade in the many-to-many relation.
         query = f"""
             SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                    c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                    c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
-                   ra.nome as ramo_atividade_nome
+                   GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome SEPARATOR ', ') as ramo_atividade_nome
             FROM clientes c
             LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
             LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id
             {where_clause.replace('WHERE', 'WHERE') if where_clause else ''}
+            GROUP BY c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
+                     c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
+                     c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes
             ORDER BY c.nome_razao_social
             LIMIT %s OFFSET %s
         """
