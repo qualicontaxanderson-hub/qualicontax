@@ -32,6 +32,10 @@ body {
     line-height: 1.5;
     color: var(--text-primary);
     background: var(--page-bg);
+}
+
+/* ==========================================
+   ICON RAIL (64px)
    ========================================== */
 .nav-rail {
     width: var(--rail-width);
