@@ -311,7 +311,7 @@ def api_vincular_produto():
 
     # Busca o item para obter emit_cnpj e código
     item = execute_query(
-        """SELECT i.id, i.nfe_id, i.codigo_produto,
+        """SELECT i.id, i.nfe_id, i.codigo_produto, i.descricao,
                   n.emit_cnpj, n.cliente_id, n.grupo_id
              FROM nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id
             WHERE i.id = %s""",
@@ -332,22 +332,28 @@ def api_vincular_produto():
         cod = item['codigo_produto']
         cli = item.get('cliente_id')
         grp = item.get('grupo_id')
+        # Descrição do produto conforme XML
+        descricao_xml = item.get('descricao') or ''
+        # Ramo de atividade do cliente (para escopo da regra global)
+        ramo_id = _get_ramo_cliente(cli)
         # Salva regra para a empresa/grupo específico
         execute_query(
             """INSERT INTO nfe_produto_vinculo
-                   (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
-               VALUES (%s, %s, %s, %s, %s)
-               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
-            (cli, grp, emit_cnpj, cod, produto_id),
+                   (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
+               VALUES (%s, %s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
+                                       descricao_produto_xml = VALUES(descricao_produto_xml)""",
+            (cli, grp, emit_cnpj, cod, descricao_xml, produto_id),
         )
-        # Também salva regra global (sem empresa/grupo) para que outras empresas
-        # com o mesmo fornecedor + código de produto herdem o vínculo automaticamente
+        # Salva regra com escopo de ramo de atividade (evita herança entre setores distintos)
         execute_query(
             """INSERT INTO nfe_produto_vinculo
-                   (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
-               VALUES (NULL, NULL, %s, %s, %s)
-               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
-            (emit_cnpj, cod, produto_id),
+                   (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
+               VALUES (NULL, NULL, %s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
+                                       ramo_atividade_id = VALUES(ramo_atividade_id),
+                                       descricao_produto_xml = VALUES(descricao_produto_xml)""",
+            (ramo_id, emit_cnpj, cod, descricao_xml, produto_id),
         )
 
     # Nome do produto vinculado
@@ -726,13 +732,14 @@ def api_vincular_todos():
         return jsonify({'error': 'NF-e não encontrada'}), 404
 
     itens = execute_query(
-        "SELECT id, codigo_produto FROM nfe_itens WHERE nfe_id = %s",
+        "SELECT id, codigo_produto, descricao FROM nfe_itens WHERE nfe_id = %s",
         (nfe_id,), fetch=True,
     ) or []
 
     emit_cnpj = nota['emit_cnpj']
     cli = nota.get('cliente_id')
     grp = nota.get('grupo_id')
+    ramo_id = _get_ramo_cliente(cli)
 
     for it in itens:
         execute_query(
@@ -740,20 +747,24 @@ def api_vincular_todos():
             (produto_id, it['id']),
         )
         cod = it['codigo_produto']
+        descricao_xml = it.get('descricao') or ''
         if cod:
             execute_query(
                 """INSERT INTO nfe_produto_vinculo
-                       (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
-                   VALUES (%s, %s, %s, %s, %s)
-                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
-                (cli, grp, emit_cnpj, cod, produto_id),
+                       (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
+                   VALUES (%s, %s, %s, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
+                                           descricao_produto_xml = VALUES(descricao_produto_xml)""",
+                (cli, grp, emit_cnpj, cod, descricao_xml, produto_id),
             )
             execute_query(
                 """INSERT INTO nfe_produto_vinculo
-                       (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
-                   VALUES (NULL, NULL, %s, %s, %s)
-                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
-                (emit_cnpj, cod, produto_id),
+                       (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
+                   VALUES (NULL, NULL, %s, %s, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
+                                           ramo_atividade_id = VALUES(ramo_atividade_id),
+                                           descricao_produto_xml = VALUES(descricao_produto_xml)""",
+                (ramo_id, emit_cnpj, cod, descricao_xml, produto_id),
             )
 
     prod = execute_query(
@@ -771,18 +782,27 @@ def api_vincular_todos():
 @login_required
 def memorizacoes():
     rows = execute_query(
-        """SELECT v.id, v.cliente_id, v.grupo_id,
+        """SELECT v.id, v.cliente_id, v.grupo_id, v.ramo_atividade_id,
                   v.emit_cnpj, v.codigo_produto_xml,
+                  COALESCE(v.descricao_produto_xml,
+                      (SELECT i.descricao FROM nfe_itens i
+                         JOIN nfe_importacoes n ON n.id = i.nfe_id
+                        WHERE n.emit_cnpj = v.emit_cnpj
+                          AND i.codigo_produto = v.codigo_produto_xml
+                        LIMIT 1)
+                  ) AS descricao_produto_xml,
                   v.produto_catalogo_id, v.criado_em,
                   p.nome AS produto_nome, p.categoria AS produto_categoria,
                   c.nome_razao_social AS empresa_nome,
                   g.nome AS grupo_nome,
+                  ra.nome AS ramo_nome,
                   (SELECT n.emit_nome FROM nfe_importacoes n
                     WHERE n.emit_cnpj = v.emit_cnpj LIMIT 1) AS fornecedor_nome
              FROM nfe_produto_vinculo v
              LEFT JOIN nfe_produtos_catalogo p ON p.id = v.produto_catalogo_id
              LEFT JOIN clientes c ON c.id = v.cliente_id
              LEFT JOIN grupos_clientes g ON g.id = v.grupo_id
+             LEFT JOIN ramos_atividade ra ON ra.id = v.ramo_atividade_id
             ORDER BY v.emit_cnpj, v.codigo_produto_xml""",
         fetch=True,
     ) or []
@@ -798,6 +818,53 @@ def memorizacoes():
     ) or []
 
     return render_template('escrita_fiscal/memorizacoes.html', rows=rows, catalogo=catalogo)
+
+
+# ---------------------------------------------------------------------------
+# Memorizações — listar empresas que usam a memorização
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/memorizacoes/empresas-vinculadas/<int:vid>')
+@login_required
+def memorizacoes_empresas(vid):
+    vinculo = execute_query(
+        "SELECT emit_cnpj, cliente_id, grupo_id, ramo_atividade_id FROM nfe_produto_vinculo WHERE id = %s",
+        (vid,), fetch=True, fetch_one=True,
+    )
+    if not vinculo:
+        return jsonify({'error': 'Memorização não encontrada'}), 404
+
+    emit_cnpj = vinculo['emit_cnpj']
+
+    if vinculo.get('cliente_id'):
+        # Regra específica para uma empresa
+        empresas = execute_query(
+            "SELECT id, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s",
+            (vinculo['cliente_id'],), fetch=True,
+        ) or []
+    elif vinculo.get('ramo_atividade_id'):
+        # Regra por ramo de atividade — lista clientes do mesmo ramo que importaram desse fornecedor
+        empresas = execute_query(
+            """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
+                 FROM clientes c
+                 JOIN cliente_ramo_atividade_relacao crar ON crar.cliente_id = c.id
+                   AND crar.ramo_atividade_id = %s
+                 JOIN nfe_importacoes n ON n.cliente_id = c.id
+                   AND n.emit_cnpj = %s
+                ORDER BY c.nome_razao_social""",
+            (vinculo['ramo_atividade_id'], emit_cnpj), fetch=True,
+        ) or []
+    else:
+        # Regra global — todas as empresas que já importaram desse fornecedor
+        empresas = execute_query(
+            """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
+                 FROM clientes c
+                 JOIN nfe_importacoes n ON n.cliente_id = c.id
+                   AND n.emit_cnpj = %s
+                ORDER BY c.nome_razao_social""",
+            (emit_cnpj,), fetch=True,
+        ) or []
+
+    return jsonify({'ok': True, 'empresas': [dict(e) for e in empresas]})
 
 
 # ---------------------------------------------------------------------------
@@ -903,19 +970,32 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     return 'ok'
 
 
+def _get_ramo_cliente(cliente_id):
+    """Retorna o primeiro ramo_atividade_id do cliente, ou None."""
+    if not cliente_id:
+        return None
+    row = execute_query(
+        "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s LIMIT 1",
+        (cliente_id,), fetch=True, fetch_one=True,
+    )
+    return row['ramo_atividade_id'] if row else None
+
+
 def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
     """
     Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
-    Busca na ordem: empresa específica → grupo → global.
+    Busca na ordem: empresa específica → grupo → ramo de atividade → global.
     """
     if not emit_cnpj or not codigo_produto:
         return None
 
+    # 1. Empresa/grupo específico
     for cli, grp in [
         (cliente_id, None),
         (None, grupo_id),
-        (None, None),
     ]:
+        if cli is None and grp is None:
+            continue
         cli_cond = '= %s' if cli is not None else 'IS NULL'
         grp_cond = '= %s' if grp is not None else 'IS NULL'
         query = (f"SELECT produto_catalogo_id FROM nfe_produto_vinculo "
@@ -929,5 +1009,35 @@ def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
         row = execute_query(query, tuple(bind), fetch=True, fetch_one=True)
         if row:
             return row['produto_catalogo_id']
+
+    # 2. Ramo de atividade do cliente
+    if cliente_id:
+        ramos = execute_query(
+            "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s",
+            (cliente_id,), fetch=True,
+        ) or []
+        ramo_ids = [r['ramo_atividade_id'] for r in ramos if r.get('ramo_atividade_id')]
+        if ramo_ids:
+            placeholders = ','.join(['%s'] * len(ramo_ids))
+            row = execute_query(
+                f"SELECT produto_catalogo_id FROM nfe_produto_vinculo "
+                f"WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
+                f"AND cliente_id IS NULL AND grupo_id IS NULL "
+                f"AND ramo_atividade_id IN ({placeholders}) LIMIT 1",
+                tuple([emit_cnpj, codigo_produto] + ramo_ids),
+                fetch=True, fetch_one=True,
+            )
+            if row:
+                return row['produto_catalogo_id']
+
+    # 3. Global (sem empresa, grupo ou ramo)
+    row = execute_query(
+        "SELECT produto_catalogo_id FROM nfe_produto_vinculo "
+        "WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
+        "AND cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL LIMIT 1",
+        (emit_cnpj, codigo_produto), fetch=True, fetch_one=True,
+    )
+    if row:
+        return row['produto_catalogo_id']
 
     return None
