@@ -11,6 +11,12 @@ except Exception:
     LancamentoRecebimento = None  # type: ignore
 
 
+@financeiro.route('/financeiro/')
+@login_required
+def index():
+    return render_template('financeiro/index.html')
+
+
 # -----------------------------------------------------------------------
 # Lista de recebimentos (com filtros)
 # -----------------------------------------------------------------------

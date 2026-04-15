@@ -19,7 +19,7 @@
 </head>
 <body>
 
-    <!-- Icon Rail (64px) -->
+    <!-- Icon Rail -->
     <nav class="nav-rail" id="navRail">
         <a href="{{ url_for('dashboard.index') }}" class="rail-logo">
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="rail-logo-img">
@@ -27,31 +27,43 @@
 
         <ul class="rail-nav">
             <li>
-                <a href="{{ url_for('dashboard.index') }}" class="rail-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" title="Dashboard">
+                <a href="{{ url_for('dashboard.index') }}" class="rail-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" title="Início">
                     <i class="fas fa-home"></i>
                     <span>Início</span>
                 </a>
             </li>
             <li>
-                <a href="#" class="rail-link {% if request.endpoint and ('clientes' in request.endpoint or 'grupos' in request.endpoint or 'ramos' in request.endpoint or 'contratos' in request.endpoint) %}active{% endif %}" title="Cadastros" data-section="cadastros">
+                <a href="{{ url_for('modulos.cadastros') }}" class="rail-link {% if request.endpoint and ('clientes' in request.endpoint or 'grupos' in request.endpoint or 'ramos' in request.endpoint or 'contratos' in request.endpoint or 'municipios' in request.endpoint or request.endpoint == 'modulos.cadastros') %}active{% endif %}" title="Cadastros">
                     <i class="fas fa-folder-open"></i>
-                    <span>Pastas</span>
+                    <span>Cadastros</span>
                 </a>
             </li>
             <li>
-                <a href="#" class="rail-link {% if request.endpoint and 'contabil' in request.endpoint %}active{% endif %}" title="Contábil" data-section="contabil">
-                    <i class="fas fa-calculator"></i>
-                    <span>Contábil</span>
-                </a>
-            </li>
-            <li>
-                <a href="#" class="rail-link" title="Escrita Fiscal" data-section="fiscal">
+                <a href="{{ url_for('modulos.escrita_fiscal') }}" class="rail-link {% if request.endpoint == 'modulos.escrita_fiscal' %}active{% endif %}" title="Escrita Fiscal">
                     <i class="fas fa-file-invoice"></i>
                     <span>Fiscal</span>
                 </a>
             </li>
             <li>
-                <a href="#" class="rail-link" title="Financeiro" data-section="financeiro">
+                <a href="{{ url_for('contabil.index') }}" class="rail-link {% if request.endpoint and 'contabil' in request.endpoint %}active{% endif %}" title="Contábil">
+                    <i class="fas fa-calculator"></i>
+                    <span>Contábil</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('modulos.legalizacao') }}" class="rail-link {% if request.endpoint == 'modulos.legalizacao' %}active{% endif %}" title="Legalização">
+                    <i class="fas fa-balance-scale"></i>
+                    <span>Legalização</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('modulos.analise') }}" class="rail-link {% if request.endpoint == 'modulos.analise' %}active{% endif %}" title="Análise">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Análise</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('financeiro.index') }}" class="rail-link {% if request.endpoint and 'financeiro' in request.endpoint %}active{% endif %}" title="Financeiro">
                     <i class="fas fa-dollar-sign"></i>
                     <span>Financeiro</span>
                 </a>
@@ -60,12 +72,6 @@
                 <a href="{{ url_for('relatorios.index') }}" class="rail-link {% if request.endpoint and 'relatorios' in request.endpoint %}active{% endif %}" title="Relatórios">
                     <i class="fas fa-chart-bar"></i>
                     <span>Relatórios</span>
-                </a>
-            </li>
-            <li>
-                <a href="#" class="rail-link" title="Mais">
-                    <i class="fas fa-ellipsis-h"></i>
-                    <span>Mais</span>
                 </a>
             </li>
         </ul>
@@ -78,131 +84,11 @@
         </div>
     </nav>
 
-    <!-- Nav Panel (210px) -->
-    <aside class="nav-panel" id="navPanel">
-        <div class="nav-panel-logo">
-            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="panel-logo-img">
-            <span class="panel-logo-text">Qualicontax</span>
-        </div>
-
-        <nav class="nav-panel-nav">
-
-            <a href="{{ url_for('dashboard.index') }}" class="panel-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
-                <i class="fas fa-home"></i>
-                Dashboard
-            </a>
-
-            <!-- Cadastros -->
-            <div class="panel-section">
-                <button class="panel-section-toggle {% if request.endpoint and ('clientes' in request.endpoint or 'grupos' in request.endpoint or 'ramos' in request.endpoint or 'contratos' in request.endpoint) %}open{% endif %}" data-target="section-cadastros">
-                    <i class="fas fa-folder-open"></i>
-                    Cadastros
-                    <i class="fas fa-chevron-down panel-section-arrow"></i>
-                </button>
-                <ul class="panel-section-items" id="section-cadastros">
-                    <li><a href="{{ url_for('clientes.index') }}" class="panel-sublink {% if 'clientes' in request.endpoint %}active{% endif %}">
-                        <i class="fas fa-user-tie"></i> Clientes
-                    </a></li>
-                    <li><a href="{{ url_for('grupos.index') }}" class="panel-sublink {% if 'grupos' in request.endpoint %}active{% endif %}">
-                        <i class="fas fa-users-cog"></i> Grupos
-                    </a></li>
-                    <li><a href="{{ url_for('ramos_atividade.index') }}" class="panel-sublink {% if 'ramos_atividade' in request.endpoint %}active{% endif %}">
-                        <i class="fas fa-industry"></i> Ramo de Atividade
-                    </a></li>
-                    <li><a href="{{ url_for('contratos.list_contratos') }}" class="panel-sublink {% if 'contratos' in request.endpoint %}active{% endif %}">
-                        <i class="fas fa-file-contract"></i> Contratos
-                    </a></li>
-                    <li><a href="{{ url_for('municipios.index') }}" class="panel-sublink {% if 'municipios' in request.endpoint %}active{% endif %}">
-                        <i class="fas fa-map-marked-alt"></i> Município
-                    </a></li>
-                </ul>
-            </div>
-
-            <a href="#" class="panel-link">
-                <i class="fas fa-file-invoice"></i>
-                Escrita Fiscal
-            </a>
-
-            <!-- Contábil -->
-            <div class="panel-section">
-                <button class="panel-section-toggle {% if request.endpoint and 'contabil' in request.endpoint %}open{% endif %}" data-target="section-contabil">
-                    <i class="fas fa-calculator"></i>
-                    Contábil
-                    <i class="fas fa-chevron-down panel-section-arrow"></i>
-                </button>
-                <ul class="panel-section-items" id="section-contabil">
-                    <li><a href="{{ url_for('contabil.plano_contas') }}" class="panel-sublink {% if request.endpoint == 'contabil.plano_contas' %}active{% endif %}">
-                        <i class="fas fa-sitemap"></i> Plano de Contas
-                    </a></li>
-                    <!-- Conciliação Bancária expandable -->
-                    <li class="panel-subsection">
-                        <button class="panel-subsection-toggle" data-target="section-conciliacao">
-                            <i class="fas fa-file-invoice-dollar"></i>
-                            Conciliação Bancária
-                            <i class="fas fa-chevron-down panel-subsection-arrow"></i>
-                        </button>
-                        <ul class="panel-subsection-items" id="section-conciliacao">
-                            <li><a href="{{ url_for('contabil.contas_correntes') }}" class="panel-sublink {% if request.endpoint == 'contabil.contas_correntes' %}active{% endif %}">
-                                <i class="fas fa-university"></i> Conta Corrente
-                            </a></li>
-                            <li><a href="{{ url_for('contabil.importar_ofx') }}" class="panel-sublink {% if request.endpoint == 'contabil.importar_ofx' %}active{% endif %}">
-                                <i class="fas fa-file-upload"></i> Importar OFX
-                            </a></li>
-                            <li><a href="{{ url_for('contabil.importar_pdf') }}" class="panel-sublink {% if request.endpoint == 'contabil.importar_pdf' %}active{% endif %}">
-                                <i class="fas fa-file-pdf"></i> Importar PDF
-                            </a></li>
-                            <li><a href="{{ url_for('contabil.extrato_conciliacao') }}" class="panel-sublink {% if request.endpoint == 'contabil.extrato_conciliacao' %}active{% endif %}">
-                                <i class="fas fa-chart-line"></i> Extrato
-                            </a></li>
-                            <li><a href="{{ url_for('contabil.memorizacoes') }}" class="panel-sublink {% if request.endpoint == 'contabil.memorizacoes' %}active{% endif %}">
-                                <i class="fas fa-brain"></i> Memorizações
-                            </a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-
-            <a href="#" class="panel-link">
-                <i class="fas fa-balance-scale"></i>
-                Legalização
-            </a>
-
-            <a href="#" class="panel-link">
-                <i class="fas fa-chart-pie"></i>
-                Análise
-            </a>
-
-            <!-- Financeiro -->
-            <div class="panel-section">
-                <button class="panel-section-toggle {% if request.endpoint and 'financeiro' in request.endpoint %}open{% endif %}" data-target="section-financeiro">
-                    <i class="fas fa-dollar-sign"></i>
-                    Financeiro
-                    <i class="fas fa-chevron-down panel-section-arrow"></i>
-                </button>
-                <ul class="panel-section-items" id="section-financeiro">
-                    <li><a href="{{ url_for('financeiro.recebimento_index') }}" class="panel-sublink {% if 'financeiro.recebimento' in (request.endpoint or '') %}active{% endif %}">
-                        <i class="fas fa-hand-holding-dollar"></i> Recebimentos
-                    </a></li>
-                </ul>
-            </div>
-
-            <a href="{{ url_for('relatorios.index') }}" class="panel-link {% if request.endpoint and 'relatorios' in request.endpoint %}active{% endif %}">
-                <i class="fas fa-chart-bar"></i>
-                Relatórios
-            </a>
-
-        </nav>
-    </aside>
-
     <!-- Main Area -->
     <div class="main-area">
 
         <!-- Top Bar -->
         <header class="top-bar">
-            <button class="top-bar-toggle" id="navPanelToggle" title="Menu">
-                <i class="fas fa-bars"></i>
-            </button>
-
             <div class="top-bar-search">
                 <i class="fas fa-search"></i>
                 <input type="text" placeholder="Buscar...">

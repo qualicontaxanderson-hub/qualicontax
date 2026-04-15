@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Escrita Fiscal - Qualicontax{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Escrita Fiscal</h1>
+        <p class="page-subtitle">Apuração de impostos e obrigações acessórias</p>
+    </div>
+</div>
+
+<div class="module-tiles">
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <i class="fas fa-file-invoice"></i>
+        </div>
+        <h3 class="module-tile-title">Notas Fiscais</h3>
+        <p class="module-tile-desc">Escrituração de notas fiscais de entrada e saída</p>
+    </a>
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+            <i class="fas fa-percentage"></i>
+        </div>
+        <h3 class="module-tile-title">Apuração de Impostos</h3>
+        <p class="module-tile-desc">Apuração de ICMS, PIS, COFINS e outros tributos</p>
+    </a>
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+            <i class="fas fa-calendar-check"></i>
+        </div>
+        <h3 class="module-tile-title">Obrigações Acessórias</h3>
+        <p class="module-tile-desc">Controle de SPED, DCTF, ECF e demais obrigações</p>
+    </a>
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+            <i class="fas fa-file-export"></i>
+        </div>
+        <h3 class="module-tile-title">Exportação SPED</h3>
+        <p class="module-tile-desc">Geração dos arquivos SPED Fiscal e SPED Contribuições</p>
+    </a>
+
+</div>
+{% endblock %}
