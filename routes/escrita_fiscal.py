@@ -771,11 +771,14 @@ def api_vincular_todos():
 @login_required
 def memorizacoes():
     rows = execute_query(
-        """SELECT v.id, v.emit_cnpj, v.codigo_produto_xml,
+        """SELECT v.id, v.cliente_id, v.grupo_id,
+                  v.emit_cnpj, v.codigo_produto_xml,
                   v.produto_catalogo_id, v.criado_em,
                   p.nome AS produto_nome, p.categoria AS produto_categoria,
                   c.nome_razao_social AS empresa_nome,
-                  g.nome AS grupo_nome
+                  g.nome AS grupo_nome,
+                  (SELECT n.emit_nome FROM nfe_importacoes n
+                    WHERE n.emit_cnpj = v.emit_cnpj LIMIT 1) AS fornecedor_nome
              FROM nfe_produto_vinculo v
              LEFT JOIN nfe_produtos_catalogo p ON p.id = v.produto_catalogo_id
              LEFT JOIN clientes c ON c.id = v.cliente_id
@@ -788,7 +791,40 @@ def memorizacoes():
         if r.get('criado_em') and hasattr(r['criado_em'], 'isoformat'):
             r['criado_em'] = r['criado_em'].isoformat()
 
-    return render_template('escrita_fiscal/memorizacoes.html', rows=rows)
+    # Catálogo de produtos para o modal de edição
+    catalogo = execute_query(
+        "SELECT id, nome, categoria FROM nfe_produtos_catalogo WHERE ativo = 1 ORDER BY categoria, nome",
+        fetch=True,
+    ) or []
+
+    return render_template('escrita_fiscal/memorizacoes.html', rows=rows, catalogo=catalogo)
+
+
+# ---------------------------------------------------------------------------
+# Memorizações — editar (troca produto vinculado)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/memorizacoes/editar/<int:vid>', methods=['POST'])
+@login_required
+def memorizacoes_editar(vid):
+    data = request.get_json(force=True) or {}
+    produto_id = data.get('produto_id')
+    if not produto_id:
+        return jsonify({'error': 'produto_id obrigatório'}), 400
+
+    execute_query(
+        "UPDATE nfe_produto_vinculo SET produto_catalogo_id = %s WHERE id = %s",
+        (int(produto_id), vid),
+    )
+
+    prod = execute_query(
+        "SELECT nome, categoria FROM nfe_produtos_catalogo WHERE id = %s",
+        (int(produto_id),), fetch=True, fetch_one=True,
+    )
+    return jsonify({
+        'ok': True,
+        'produto_nome': prod['nome'] if prod else '',
+        'produto_categoria': prod['categoria'] if prod else '',
+    })
 
 
 # ---------------------------------------------------------------------------

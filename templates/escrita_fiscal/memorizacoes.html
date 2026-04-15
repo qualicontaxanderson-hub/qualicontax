@@ -5,8 +5,8 @@
 <style>
 .mem-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .mem-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
-.mem-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); }
-table.mem-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.mem-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); overflow-x:auto; }
+table.mem-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:800px; }
 table.mem-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
 table.mem-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
 table.mem-table tr:hover td { background:#f8fafc; }
@@ -16,10 +16,27 @@ table.mem-table tr:hover td { background:#f8fafc; }
 .badge-prod { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
 .btn-del:hover { background:#fee2e2; }
+.btn-edit { background:transparent; border:none; color:#2563eb; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
+.btn-edit:hover { background:#dbeafe; }
 .mem-empty { text-align:center; padding:40px; color:#94a3b8; }
 .mem-stats { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; color:#fff; display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
 .mem-stats span { font-size:13px; font-weight:600; }
 .mem-stats strong { font-size:22px; font-weight:800; margin-right:4px; }
+/* Edit modal */
+.edit-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
+.edit-overlay.open { display:flex; }
+.edit-modal { background:#fff; border-radius:16px; z-index:1000; width:480px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
+.edit-modal-header { background:linear-gradient(135deg,#1e3a5f,#2563eb); padding:16px 22px; display:flex; align-items:center; justify-content:space-between; }
+.edit-modal-header h3 { color:#fff; font-size:15px; font-weight:700; margin:0; }
+.edit-modal-body { padding:22px; }
+.edit-modal-body label { font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.4px; display:block; margin-bottom:6px; }
+.edit-modal-body select { width:100%; padding:9px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; background:#fff; color:#1e293b; }
+.edit-modal-body select:focus { outline:none; border-color:#2563eb; }
+.edit-modal-footer { padding:14px 22px; background:#f8fafc; border-top:1.5px solid #e2e8f0; display:flex; justify-content:flex-end; gap:10px; }
+.edit-info-row { display:flex; gap:14px; margin-bottom:16px; }
+.edit-info-box { flex:1; background:#f1f5f9; border-radius:8px; padding:10px 12px; font-size:11px; }
+.edit-info-box strong { display:block; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
+.edit-info-box span { color:#1e293b; font-weight:600; }
 </style>
 {% endblock %}
 
@@ -50,11 +67,11 @@ table.mem-table tr:hover td { background:#f8fafc; }
     <table class="mem-table">
         <thead>
             <tr>
-                <th>Fornecedor (CNPJ)</th>
+                <th>Empresa (Cliente)</th>
+                <th>Fornecedor</th>
                 <th>Cód. Produto XML</th>
                 <th>Produto Vinculado</th>
                 <th>Categoria</th>
-                <th>Escopo</th>
                 <th>Criado em</th>
                 <th></th>
             </tr>
@@ -69,16 +86,6 @@ table.mem-table tr:hover td { background:#f8fafc; }
         {% else %}
             {% for r in rows %}
             <tr id="row_{{ r.id }}">
-                <td style="font-family:monospace;font-size:12px;">{{ r.emit_cnpj }}</td>
-                <td style="font-family:monospace;font-size:12px;">{{ r.codigo_produto_xml }}</td>
-                <td>
-                    {% if r.produto_nome %}
-                        <span class="badge-prod">{{ r.produto_nome }}</span>
-                    {% else %}
-                        <span style="color:#d1d5db;font-size:11px;">Produto removido</span>
-                    {% endif %}
-                </td>
-                <td style="font-size:11px;color:#64748b;">{{ r.produto_categoria or '—' }}</td>
                 <td>
                     {% if r.empresa_nome %}
                         <span class="badge-empresa"><i class="fas fa-building"></i> {{ r.empresa_nome }}</span>
@@ -88,8 +95,25 @@ table.mem-table tr:hover td { background:#f8fafc; }
                         <span class="badge-global"><i class="fas fa-globe-americas"></i> Global</span>
                     {% endif %}
                 </td>
-                <td style="font-size:11px;color:#64748b;">{{ r.criado_em[:10] if r.criado_em else '—' }}</td>
                 <td>
+                    <div style="font-weight:600;color:#1e293b;">{{ r.fornecedor_nome or '—' }}</div>
+                    <div style="font-family:monospace;font-size:10px;color:#94a3b8;">{{ r.emit_cnpj }}</div>
+                </td>
+                <td style="font-family:monospace;font-size:12px;">{{ r.codigo_produto_xml }}</td>
+                <td id="prod_{{ r.id }}">
+                    {% if r.produto_nome %}
+                        <span class="badge-prod">{{ r.produto_nome }}</span>
+                    {% else %}
+                        <span style="color:#d1d5db;font-size:11px;">Produto removido</span>
+                    {% endif %}
+                </td>
+                <td id="cat_{{ r.id }}" style="font-size:11px;color:#64748b;">{{ r.produto_categoria or '—' }}</td>
+                <td style="font-size:11px;color:#64748b;">{{ r.criado_em[:10] if r.criado_em else '—' }}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn-edit" title="Editar produto vinculado"
+                        onclick="abrirEditar({{ r.id }}, '{{ r.emit_cnpj|e }}', '{{ (r.fornecedor_nome or r.emit_cnpj)|e }}', '{{ r.codigo_produto_xml|e }}', {{ r.produto_catalogo_id or 'null' }})">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
                     <button class="btn-del" onclick="excluirMem({{ r.id }})" title="Excluir memorização">
                         <i class="fas fa-trash-alt"></i>
                     </button>
@@ -100,10 +124,95 @@ table.mem-table tr:hover td { background:#f8fafc; }
         </tbody>
     </table>
 </div>
+
+<!-- Edit Modal -->
+<div class="edit-overlay" id="editOverlay" onclick="fecharEditar()">
+<div class="edit-modal" onclick="event.stopPropagation()">
+    <div class="edit-modal-header">
+        <h3><i class="fas fa-pencil-alt" style="margin-right:8px;"></i>Editar Memorização</h3>
+        <button onclick="fecharEditar()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;">&times;</button>
+    </div>
+    <div class="edit-modal-body">
+        <div class="edit-info-row">
+            <div class="edit-info-box">
+                <strong>Fornecedor</strong>
+                <span id="editFornecedor">—</span>
+            </div>
+            <div class="edit-info-box">
+                <strong>Cód. Produto XML</strong>
+                <span id="editCodigo" style="font-family:monospace;">—</span>
+            </div>
+        </div>
+        <label>Novo Produto Vinculado</label>
+        <select id="editProdSelect">
+            <option value="">— Selecione —</option>
+            {% set last_cat = namespace(v='') %}
+            {% for p in catalogo %}
+                {% if p.categoria != last_cat.v %}
+                    {% if last_cat.v %}</optgroup>{% endif %}
+                    <optgroup label="{{ p.categoria or 'Sem categoria' }}">
+                    {% set last_cat.v = p.categoria %}
+                {% endif %}
+                <option value="{{ p.id }}">{{ p.nome }}</option>
+            {% endfor %}
+            {% if catalogo %}</optgroup>{% endif %}
+        </select>
+    </div>
+    <div class="edit-modal-footer">
+        <button onclick="fecharEditar()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;">
+            Cancelar
+        </button>
+        <button onclick="salvarEditar()"
+                style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-save"></i> Salvar
+        </button>
+    </div>
+</div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+let editId = null;
+
+function abrirEditar(id, cnpj, fornecedor, codigo, produtoId) {
+    editId = id;
+    document.getElementById('editFornecedor').textContent = fornecedor;
+    document.getElementById('editCodigo').textContent = codigo;
+    const sel = document.getElementById('editProdSelect');
+    sel.value = produtoId || '';
+    document.getElementById('editOverlay').classList.add('open');
+}
+
+function fecharEditar() {
+    document.getElementById('editOverlay').classList.remove('open');
+    editId = null;
+}
+
+function salvarEditar() {
+    const produtoId = document.getElementById('editProdSelect').value;
+    if (!produtoId) { alert('Selecione um produto.'); return; }
+    fetch(`/escrita-fiscal/memorizacoes/editar/${editId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({produto_id: parseInt(produtoId)}),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) {
+            const prodCell = document.getElementById('prod_' + editId);
+            const catCell = document.getElementById('cat_' + editId);
+            prodCell.innerHTML = `<span class="badge-prod">${d.produto_nome}</span>`;
+            catCell.textContent = d.produto_categoria || '—';
+            fecharEditar();
+        } else {
+            alert(d.error || 'Erro ao salvar.');
+        }
+    })
+    .catch(() => alert('Erro ao salvar.'));
+}
+
 function excluirMem(id) {
     if (!confirm('Excluir esta memorização? Os vínculos existentes nas NF-es não serão afetados.')) return;
     fetch(`/escrita-fiscal/memorizacoes/excluir/${id}`, {
