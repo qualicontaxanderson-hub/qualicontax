@@ -39,7 +39,7 @@
                 </a>
             </li>
             <li>
-                <a href="{{ url_for('modulos.escrita_fiscal') }}" class="rail-link {% if request.endpoint == 'modulos.escrita_fiscal' %}active{% endif %}" title="Escrita Fiscal">
+                <a href="{{ url_for('escrita_fiscal.index') }}" class="rail-link {% if request.endpoint and 'escrita_fiscal' in request.endpoint %}active{% endif %}" title="Escrita Fiscal">
                     <i class="fas fa-file-invoice"></i>
                     <span>Fiscal</span>
                 </a>

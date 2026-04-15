@@ -38,6 +38,7 @@ from routes.contabil import contabil
 from routes.municipios import municipios
 from routes.financeiro import financeiro
 from routes.modulos import modulos
+from routes.escrita_fiscal import escrita_fiscal as escrita_fiscal_bp
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -53,6 +54,7 @@ app.register_blueprint(contabil)
 app.register_blueprint(municipios)
 app.register_blueprint(financeiro)
 app.register_blueprint(modulos)
+app.register_blueprint(escrita_fiscal_bp)
 
 
 # Template filters
@@ -211,6 +213,61 @@ try:
         )
 except Exception:
     pass
+
+
+# ---- NF-e (Conferência de Compras) ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS nfe_importacoes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome_arquivo VARCHAR(500) NOT NULL,
+        chave_acesso VARCHAR(44) UNIQUE NOT NULL,
+        num_nota VARCHAR(20) DEFAULT '',
+        serie VARCHAR(5) DEFAULT '',
+        data_emissao DATE NULL,
+        emit_cnpj VARCHAR(18) DEFAULT '',
+        emit_nome VARCHAR(255) DEFAULT '',
+        emit_uf VARCHAR(2) DEFAULT '',
+        dest_cnpj VARCHAR(18) DEFAULT '',
+        dest_nome VARCHAR(255) DEFAULT '',
+        valor_total DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_icms DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_pis DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_cofins DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_ipi DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        cfop VARCHAR(10) DEFAULT '',
+        natureza_operacao VARCHAR(255) DEFAULT '',
+        xml_raw MEDIUMTEXT,
+        origem ENUM('UPLOAD','DROPBOX') NOT NULL DEFAULT 'UPLOAD',
+        importado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_chave (chave_acesso),
+        INDEX idx_emit_cnpj (emit_cnpj),
+        INDEX idx_data (data_emissao),
+        INDEX idx_dest_cnpj (dest_cnpj)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS nfe_itens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nfe_id INT NOT NULL,
+        num_item INT NOT NULL DEFAULT 1,
+        codigo_produto VARCHAR(60) DEFAULT '',
+        descricao VARCHAR(255) DEFAULT '',
+        ncm VARCHAR(8) DEFAULT '',
+        cfop VARCHAR(4) DEFAULT '',
+        unidade VARCHAR(6) DEFAULT '',
+        quantidade DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        valor_unitario DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        valor_total DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_icms DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_pis DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        valor_cofins DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        FOREIGN KEY (nfe_id) REFERENCES nfe_importacoes(id) ON DELETE CASCADE,
+        INDEX idx_nfe (nfe_id),
+        INDEX idx_ncm (ncm),
+        INDEX idx_produto (codigo_produto(20))
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
 
 
 if __name__ == '__main__':

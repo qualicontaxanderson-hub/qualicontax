@@ -36,3 +36,8 @@ class Config:
     
     # Pagination
     ITEMS_PER_PAGE = 10
+
+    # Dropbox — Conferência de Compras XML sync
+    # Generate a long-lived token at https://www.dropbox.com/developers/apps
+    DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN', '')
+    DROPBOX_XML_FOLDER = os.getenv('DROPBOX_XML_FOLDER', '/qualicontax/xml-compras')

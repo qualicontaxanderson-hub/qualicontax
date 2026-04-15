@@ -11,12 +11,6 @@ def cadastros():
     return render_template('cadastros/index.html')
 
 
-@modulos.route('/escrita-fiscal/')
-@login_required
-def escrita_fiscal():
-    return render_template('escrita_fiscal/index.html')
-
-
 @modulos.route('/legalizacao/')
 @login_required
 def legalizacao():
