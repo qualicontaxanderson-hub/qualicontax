@@ -105,7 +105,7 @@ class Cliente:
             FROM clientes c
             LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
             LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id
-            {where_clause.replace('WHERE', 'WHERE') if where_clause else ''}
+            {where_clause}
             GROUP BY c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                      c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                      c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes
