@@ -83,16 +83,9 @@ def conf_compras():
         fetch=True,
     ) or []
 
-    # KPIs globais
-    stats = execute_query(
-        """SELECT COUNT(*) AS total_notas,
-                  COALESCE(SUM(valor_total), 0) AS total_valor,
-                  COALESCE(SUM(valor_icms), 0) AS total_icms,
-                  COALESCE(SUM(valor_pis), 0) AS total_pis,
-                  COALESCE(SUM(valor_cofins), 0) AS total_cofins
-             FROM nfe_importacoes""",
-        fetch=True, fetch_one=True,
-    ) or {}
+    # KPIs começam zerados — serão atualizados via JS ao buscar
+    stats = {'total_notas': 0, 'total_valor': 0, 'total_icms': 0,
+             'total_pis': 0, 'total_cofins': 0}
 
     dropbox_ok = dropbox_sync.is_configured()
 
@@ -178,6 +171,16 @@ def api_notas():
     ) or {}
     total = count_row.get('c', 0)
 
+    # KPI aggregates for the current filter
+    kpi_row = execute_query(
+        f"""SELECT COALESCE(SUM(n.valor_total),0) AS total_valor,
+                   COALESCE(SUM(n.valor_icms),0) AS total_icms,
+                   COALESCE(SUM(n.valor_pis),0) AS total_pis,
+                   COALESCE(SUM(n.valor_cofins),0) AS total_cofins
+              FROM nfe_importacoes n {where_sql}""",
+        tuple(params), fetch=True, fetch_one=True,
+    ) or {}
+
     rows = execute_query(
         f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
@@ -205,7 +208,11 @@ def api_notas():
         for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):
             r[k] = float(r.get(k) or 0)
 
-    return jsonify({'total': total, 'page': page, 'per_page': per_page, 'rows': rows})
+    return jsonify({
+        'total': total, 'page': page, 'per_page': per_page, 'rows': rows,
+        'kpi': {k: float(kpi_row.get(k) or 0) for k in
+                ('total_valor', 'total_icms', 'total_pis', 'total_cofins')},
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -325,13 +332,22 @@ def api_vincular_produto():
         cod = item['codigo_produto']
         cli = item.get('cliente_id')
         grp = item.get('grupo_id')
-        # Tenta INSERT; se já existe, atualiza
+        # Salva regra para a empresa/grupo específico
         execute_query(
             """INSERT INTO nfe_produto_vinculo
                    (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
                VALUES (%s, %s, %s, %s, %s)
                ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
             (cli, grp, emit_cnpj, cod, produto_id),
+        )
+        # Também salva regra global (sem empresa/grupo) para que outras empresas
+        # com o mesmo fornecedor + código de produto herdem o vínculo automaticamente
+        execute_query(
+            """INSERT INTO nfe_produto_vinculo
+                   (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
+               VALUES (NULL, NULL, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
+            (emit_cnpj, cod, produto_id),
         )
 
     # Nome do produto vinculado
@@ -687,6 +703,105 @@ def api_produtos_catalogo():
     ) or []
 
     return jsonify(rows)
+
+
+# ---------------------------------------------------------------------------
+# API — vincular todos os itens de uma NF-e ao mesmo produto
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/vincular-todos', methods=['POST'])
+@login_required
+def api_vincular_todos():
+    data = request.get_json(force=True) or {}
+    nfe_id = data.get('nfe_id')
+    produto_id = data.get('produto_id')
+
+    if not nfe_id or not produto_id:
+        return jsonify({'error': 'nfe_id e produto_id são obrigatórios'}), 400
+
+    nota = execute_query(
+        "SELECT id, emit_cnpj, cliente_id, grupo_id FROM nfe_importacoes WHERE id = %s",
+        (nfe_id,), fetch=True, fetch_one=True,
+    )
+    if not nota:
+        return jsonify({'error': 'NF-e não encontrada'}), 404
+
+    itens = execute_query(
+        "SELECT id, codigo_produto FROM nfe_itens WHERE nfe_id = %s",
+        (nfe_id,), fetch=True,
+    ) or []
+
+    emit_cnpj = nota['emit_cnpj']
+    cli = nota.get('cliente_id')
+    grp = nota.get('grupo_id')
+
+    for it in itens:
+        execute_query(
+            "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
+            (produto_id, it['id']),
+        )
+        cod = it['codigo_produto']
+        if cod:
+            execute_query(
+                """INSERT INTO nfe_produto_vinculo
+                       (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
+                   VALUES (%s, %s, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
+                (cli, grp, emit_cnpj, cod, produto_id),
+            )
+            execute_query(
+                """INSERT INTO nfe_produto_vinculo
+                       (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id)
+                   VALUES (NULL, NULL, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id)""",
+                (emit_cnpj, cod, produto_id),
+            )
+
+    prod = execute_query(
+        "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
+        (produto_id,), fetch=True, fetch_one=True,
+    )
+    prod_nome = prod['nome'] if prod else ''
+    return jsonify({'ok': True, 'vinculados': len(itens), 'produto_nome': prod_nome})
+
+
+# ---------------------------------------------------------------------------
+# Memorizações — listagem
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/memorizacoes/')
+@login_required
+def memorizacoes():
+    rows = execute_query(
+        """SELECT v.id, v.emit_cnpj, v.codigo_produto_xml,
+                  v.produto_catalogo_id, v.criado_em,
+                  p.nome AS produto_nome, p.categoria AS produto_categoria,
+                  c.nome_razao_social AS empresa_nome,
+                  g.nome AS grupo_nome
+             FROM nfe_produto_vinculo v
+             LEFT JOIN nfe_produtos_catalogo p ON p.id = v.produto_catalogo_id
+             LEFT JOIN clientes c ON c.id = v.cliente_id
+             LEFT JOIN grupos_clientes g ON g.id = v.grupo_id
+            ORDER BY v.emit_cnpj, v.codigo_produto_xml""",
+        fetch=True,
+    ) or []
+
+    for r in rows:
+        if r.get('criado_em') and hasattr(r['criado_em'], 'isoformat'):
+            r['criado_em'] = r['criado_em'].isoformat()
+
+    return render_template('escrita_fiscal/memorizacoes.html', rows=rows)
+
+
+# ---------------------------------------------------------------------------
+# Memorizações — excluir
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/memorizacoes/excluir/<int:vid>', methods=['POST'])
+@login_required
+def memorizacoes_excluir(vid):
+    execute_query("DELETE FROM nfe_produto_vinculo WHERE id = %s", (vid,))
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True})
+    flash('Memorização excluída.', 'success')
+    return redirect(url_for('escrita_fiscal.memorizacoes'))
 
 
 # ---------------------------------------------------------------------------

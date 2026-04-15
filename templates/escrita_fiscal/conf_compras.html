@@ -87,15 +87,15 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .cc-loading i { animation:spin 1s linear infinite; font-size:22px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
-/* ---- Slide-in panel (itens da NF-e) ---- */
-.cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:999; display:none; }
-.cc-panel-overlay.open { display:block; }
-.cc-panel { position:fixed; top:0; right:0; width:700px; max-width:100vw; height:100vh; background:#fff; z-index:1000; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .25s ease; box-shadow:-6px 0 32px rgba(0,0,0,.15); }
-.cc-panel.open { transform:translateX(0); }
-.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#1e3a5f,#2563eb); }
+/* ---- Overlay + centered modal (itens da NF-e) ---- */
+.cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
+.cc-panel-overlay.open { display:flex; }
+.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:900px; max-width:100%; max-height:90vh; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease, opacity .2s ease; }
+.cc-panel-overlay.open .cc-panel { transform:scale(1); opacity:1; }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:16px 16px 0 0; }
 .cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
 .cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
-.cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; }
+.cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; }
 .panel-nota-info { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; margin-bottom:16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:10px; padding:14px 16px; border:1.5px solid #86efac; }
 .panel-nota-info dt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
 .panel-nota-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0 0 4px; }
@@ -122,6 +122,10 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <h1 style="margin-top:4px;"><i class="fas fa-file-search" style="color:#22c55e;margin-right:8px;"></i>Conferência de Compras</h1>
     </div>
     <div class="cc-actions">
+        <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="btn"
+           style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
+            <i class="fas fa-memory"></i> Memorizações
+        </a>
         <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="btn"
            style="background:#8b5cf6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
             <i class="fas fa-tag"></i> Cadastro de Produtos
@@ -385,11 +389,24 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 </div>
 
 <!-- ===================== PANEL: Itens da NF-e ===================== -->
-<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
-<div class="cc-panel" id="itemPanel">
+<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()">
+<div class="cc-panel" id="itemPanel" onclick="event.stopPropagation()">
     <div class="cc-panel-header">
         <h3 id="panelTitle">Itens da Nota Fiscal</h3>
-        <button onclick="closePanel()" style="background:none;border:none;font-size:20px;color:#6b7280;cursor:pointer;">&times;</button>
+        <button onclick="closePanel()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;line-height:32px;">&times;</button>
+    </div>
+    <!-- Vincular Todos toolbar -->
+    <div id="vincularTodosBar" style="display:none;padding:12px 22px;background:#f0fdf4;border-bottom:1.5px solid #86efac;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#166534;white-space:nowrap;">
+                <i class="fas fa-bolt"></i> Vincular todos os itens:
+            </span>
+            <select id="selVincularTodos" style="flex:1;min-width:200px;padding:6px 10px;border:1.5px solid #86efac;border-radius:7px;font-size:13px;background:#fff;"></select>
+            <button onclick="vincularTodos()"
+                    style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                <i class="fas fa-check-double"></i> Aplicar a Todos
+            </button>
+        </div>
     </div>
     <div class="cc-panel-body" id="panelBody">
         <div id="panelLoading" style="text-align:center;padding:40px;color:#9ca3af;">
@@ -402,6 +419,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </button>
     </div>
 </div>
+</div>
 
 {% endblock %}
 
@@ -413,6 +431,7 @@ let currentPage = 1;
 let currentClienteId = '';
 let currentGrupoId = '';
 let catalogoProdutos = [];
+let currentNfeId = null;
 
 // ---- Empresa / Grupo selector ----
 function onEmpresaChange() {
@@ -426,7 +445,6 @@ function onEmpresaChange() {
     }
     // Sync import selector
     document.getElementById('imp_empresa').value = currentClienteId;
-    applyFilters();
 }
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
@@ -437,7 +455,6 @@ function onGrupoChange() {
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
-    applyFilters();
 }
 function updateScopeBadge(type, label) {
     const b = document.getElementById('scopeBadge');
@@ -455,7 +472,6 @@ function switchTab(tab) {
     });
     document.getElementById('f_descricao_wrap').style.display = tab === 'produto' ? '' : 'none';
     document.getElementById('f_ncm_wrap').style.display = tab === 'produto' ? '' : 'none';
-    applyFilters();
 }
 
 // ---- Filter toggle ----
@@ -525,6 +541,14 @@ function loadNotas() {
         .then(data => {
             hideLoad();
             document.getElementById('tabBadgeNotas').textContent = data.total;
+            // Atualiza KPI cards
+            if (data.kpi) {
+                document.getElementById('kpiNotas').textContent = data.total;
+                document.getElementById('kpiValor').textContent = fmtBRL(data.kpi.total_valor);
+                document.getElementById('kpiICMS').textContent = fmtBRL(data.kpi.total_icms);
+                document.getElementById('kpiPIS').textContent = fmtBRL(data.kpi.total_pis);
+                document.getElementById('kpiCOFINS').textContent = fmtBRL(data.kpi.total_cofins);
+            }
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || data.rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="11" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
@@ -652,16 +676,23 @@ function excluirNfe(id, btn) {
 
 // ---- Panel: Itens da NF-e ----
 function openPanel(nfeId, evt) {
+    currentNfeId = nfeId;
     document.getElementById('panelOverlay').classList.add('open');
-    document.getElementById('itemPanel').classList.add('open');
     document.getElementById('panelBody').innerHTML =
         '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+    document.getElementById('vincularTodosBar').style.display = 'none';
 
     // Load catalog for linking
     const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
     fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
         .then(r => r.json())
-        .then(cats => { catalogoProdutos = cats; });
+        .then(cats => {
+            catalogoProdutos = cats;
+            // Populate "Vincular Todos" select
+            const sel = document.getElementById('selVincularTodos');
+            sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
+            document.getElementById('vincularTodosBar').style.display = '';
+        });
 
     fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`)
         .then(r => r.json())
@@ -732,7 +763,7 @@ function buildProdOpts(selectedId) {
 
 function closePanel() {
     document.getElementById('panelOverlay').classList.remove('open');
-    document.getElementById('itemPanel').classList.remove('open');
+    currentNfeId = null;
 }
 
 function vincularProduto(itemId, clienteId, grupoId) {
@@ -767,7 +798,32 @@ function desvincular(itemId) {
         <button onclick="vincularProduto(${itemId}, null, null)">Vincular</button>`;
 }
 
-// ---- Dropbox Sync ----
+// ---- Vincular Todos os itens da NF-e ao mesmo produto ----
+function vincularTodos() {
+    const sel = document.getElementById('selVincularTodos');
+    const produtoId = sel.value ? parseInt(sel.value) : null;
+    if (!produtoId) { alert('Selecione um produto para vincular.'); return; }
+    if (!currentNfeId) return;
+    if (!confirm('Aplicar este produto a TODOS os itens desta NF-e?')) return;
+    fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nfe_id: currentNfeId, produto_id: produtoId}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            // Refresh modal items
+            openPanel(currentNfeId, null);
+        }
+    })
+    .catch(() => alert('Erro ao vincular todos.'));
+}
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+    // Página inicia zerada — usuário deve selecionar empresa e clicar em Buscar
+});
 function syncDropbox() {
     const btn = document.getElementById('btnDropbox');
     btn.disabled = true;
@@ -813,10 +869,5 @@ function exportarCSV() {
         });
 }
 
-// ---- Init ----
-document.addEventListener('DOMContentLoaded', () => {
-    const total = parseInt(document.getElementById('kpiNotas').textContent || '0');
-    if (total > 0) loadNotas();
-});
 </script>
 {% endblock %}
