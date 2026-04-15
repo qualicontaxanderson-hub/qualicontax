@@ -326,6 +326,22 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
+# Incremental: add ramo_atividade_id and descricao_produto_xml to nfe_produto_vinculo
+for _col_name, _col_def in [
+    ('ramo_atividade_id', 'INT NULL AFTER grupo_id'),
+    ('descricao_produto_xml', 'VARCHAR(500) NULL AFTER codigo_produto_xml'),
+]:
+    _col_exists = _execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_produto_vinculo' AND COLUMN_NAME = %s",
+        (_col_name,), fetch=True, fetch_one=True,
+    ) or {}
+    if _col_exists.get('cnt', 0) == 0:
+        _execute_query(
+            f"ALTER TABLE nfe_produto_vinculo ADD COLUMN {_col_name} {_col_def}",
+            fetch=False,
+        )
 
-if __name__ == '__main__':
+
+
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
