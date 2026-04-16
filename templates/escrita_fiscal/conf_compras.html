@@ -750,8 +750,10 @@ function excluirNfe(id, btn) {
 
 // ---- Panel: Itens da NF-e ----
 function openPanel(nfeId, evt) {
+    if (currentNfeId !== nfeId) {
+        panelModified = false;
+    }
     currentNfeId = nfeId;
-    panelModified = false;
     document.getElementById('panelOverlay').classList.add('open');
     document.getElementById('panelBody').innerHTML =
         '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
