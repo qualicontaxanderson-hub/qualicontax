@@ -342,6 +342,21 @@ for _col_name, _col_def in [
             fetch=False,
         )
 
+# Deduplication: remove duplicate nfe_produto_vinculo rows keeping the most recent (highest id).
+# This is safe to run repeatedly — it removes extras, leaves one row per unique combination.
+_execute_query(
+    """DELETE v_old
+         FROM nfe_produto_vinculo v_old
+         JOIN nfe_produto_vinculo v_new
+           ON v_new.emit_cnpj          = v_old.emit_cnpj
+          AND v_new.codigo_produto_xml  = v_old.codigo_produto_xml
+          AND v_new.cliente_id         <=> v_old.cliente_id
+          AND v_new.grupo_id           <=> v_old.grupo_id
+          AND v_new.ramo_atividade_id  <=> v_old.ramo_atividade_id
+          AND v_new.id > v_old.id""",
+    fetch=False,
+)
+
 
 if __name__ == '__main__':
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
