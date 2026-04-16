@@ -563,7 +563,7 @@ function loadNotas() {
                     <td>${r.data_emissao||'—'}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
                     <td>${empPill}</td>
-                    <td title="${r.emit_cnpj}">${r.emit_nome||r.emit_cnpj||'—'}</td>
+                    <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
                     <td>${r.emit_uf||'—'}</td>
                     <td>${r.cfop||'—'}</td>
                     <td style="text-align:center;">${r.qtd_itens||0}</td>
@@ -599,7 +599,7 @@ function loadEmissor() {
             tbody.innerHTML = data.map(r => `
                 <tr>
                     <td>${r.emit_cnpj||'—'}</td>
-                    <td>${r.emit_nome||'—'}</td>
+                    <td style="text-transform:uppercase;">${r.emit_nome||'—'}</td>
                     <td>${r.emit_uf||'—'}</td>
                     <td class="money">${r.qtd_notas}</td>
                     <td class="money">${fmtBRL(r.total_valor)}</td>
@@ -636,7 +636,7 @@ function loadProduto() {
                     : `<span style="color:#d1d5db;font-size:11px;">Não vinculado</span>`;
                 return `<tr>
                     <td>${r.codigo_produto||'—'}</td>
-                    <td>${r.descricao||'—'}</td>
+                    <td style="text-transform:uppercase;">${r.descricao||'—'}</td>
                     <td>${vincPill}</td>
                     <td>${r.ncm||'—'}</td>
                     <td>${r.cfop||'—'}</td>
@@ -700,11 +700,11 @@ function openPanel(nfeId, evt) {
             if (data.error) { document.getElementById('panelBody').innerHTML = `<p style="color:red">${data.error}</p>`; return; }
             const nota = data.nota;
             document.getElementById('panelTitle').textContent =
-                `NF ${nota.num_nota||'s/n'} — ${nota.emit_nome||nota.emit_cnpj}`;
+                `NF ${nota.num_nota||'s/n'} — ${(nota.emit_nome||nota.emit_cnpj||'').toUpperCase()}`;
 
             let html = `<dl class="panel-nota-info">
-                <div><dt>Emitente</dt><dd>${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
-                <div><dt>Destinatário</dt><dd>${nota.dest_nome||'—'}</dd></div>
+                <div><dt>Emitente</dt><dd style="text-transform:uppercase;">${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
+                <div><dt>Destinatário</dt><dd style="text-transform:uppercase;">${nota.dest_nome||'—'}</dd></div>
                 <div><dt>Data Emissão</dt><dd>${nota.data_emissao||'—'}</dd></div>
             </dl>`;
 
@@ -722,7 +722,7 @@ function openPanel(nfeId, evt) {
                     html += `<tr>
                         <td>${it.num_item}</td>
                         <td>${it.codigo_produto||'—'}</td>
-                        <td>${it.descricao||'—'}</td>
+                        <td style="text-transform:uppercase;">${it.descricao||'—'}</td>
                         <td>${it.ncm||'—'}</td>
                         <td class="r">${fmtNum(it.quantidade,3)} ${it.unidade||''}</td>
                         <td class="r">${fmtBRL(it.valor_unitario)}</td>
