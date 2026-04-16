@@ -1,4 +1,5 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
+import re
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify,
@@ -192,7 +193,13 @@ def api_notas():
                    g.nome AS grupo_nome,
                    (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens
               FROM nfe_importacoes n
-              LEFT JOIN clientes c ON c.id = n.cliente_id
+              LEFT JOIN clientes c ON c.id = COALESCE(
+                  n.cliente_id,
+                  (SELECT c2.id FROM clientes c2
+                    WHERE REPLACE(REPLACE(REPLACE(c2.cpf_cnpj,'.',''),'/',''),'-','')
+                        = REPLACE(REPLACE(REPLACE(n.dest_cnpj,'.',''),'/',''),'-','')
+                    LIMIT 1)
+              )
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
@@ -848,18 +855,29 @@ def memorizacoes_empresas(vid):
                  FROM clientes c
                  JOIN cliente_ramo_atividade_relacao crar ON crar.cliente_id = c.id
                    AND crar.ramo_atividade_id = %s
-                 JOIN nfe_importacoes n ON n.cliente_id = c.id
+                 JOIN nfe_importacoes n ON (
+                     n.cliente_id = c.id
+                     OR (n.cliente_id IS NULL
+                         AND REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')
+                           = REPLACE(REPLACE(REPLACE(n.dest_cnpj,'.',''),'/',''),'-',''))
+                 )
                    AND n.emit_cnpj = %s
                 ORDER BY c.nome_razao_social""",
             (vinculo['ramo_atividade_id'], emit_cnpj), fetch=True,
         ) or []
     else:
         # Regra global — todas as empresas que já importaram desse fornecedor
+        # (considera tanto cliente_id explícito quanto match por dest_cnpj)
         empresas = execute_query(
             """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
                  FROM clientes c
-                 JOIN nfe_importacoes n ON n.cliente_id = c.id
-                   AND n.emit_cnpj = %s
+                 JOIN nfe_importacoes n ON (
+                     n.cliente_id = c.id
+                     OR (n.cliente_id IS NULL
+                         AND REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')
+                           = REPLACE(REPLACE(REPLACE(n.dest_cnpj,'.',''),'/',''),'-',''))
+                 )
+                 WHERE n.emit_cnpj = %s
                 ORDER BY c.nome_razao_social""",
             (emit_cnpj,), fetch=True,
         ) or []
@@ -929,6 +947,18 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     xml_raw_store = xml_raw[:_MAX_XML_SIZE] if xml_raw else ''
     cli = int(cliente_id) if cliente_id else None
     grp = int(grupo_id) if grupo_id else None
+
+    # Auto-detect empresa from dest_cnpj when not explicitly provided
+    if cli is None:
+        dest_cnpj_raw = h.get('dest_cnpj', '')
+        dest_digits = re.sub(r'\D', '', dest_cnpj_raw)
+        if len(dest_digits) >= 11:
+            found = execute_query(
+                "SELECT id FROM clientes WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                (dest_digits,), fetch=True, fetch_one=True,
+            )
+            if found:
+                cli = found['id']
 
     nfe_id = execute_query(
         """INSERT INTO nfe_importacoes
