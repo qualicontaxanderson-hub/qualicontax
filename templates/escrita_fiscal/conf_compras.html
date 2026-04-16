@@ -43,7 +43,7 @@
 .cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
 .cc-filters-head { display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:0; }
 .cc-filters-head h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
-.cc-filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; margin-top:12px; }
+.cc-filter-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
 .cc-filter-grid label { font-size:10px; font-weight:700; color:#94a3b8; display:block; margin-bottom:3px; text-transform:uppercase; }
 .cc-filter-grid input, .cc-filter-grid select {
     width:100%; padding:6px 10px; border:1.5px solid #e2e8f0; border-radius:7px;
@@ -96,9 +96,16 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
 .cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
 .cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; }
-.panel-nota-info { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; margin-bottom:16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:10px; padding:14px 16px; border:1.5px solid #86efac; }
+.panel-nota-info { display:grid; grid-template-columns:1fr auto; gap:4px 20px; margin-bottom:16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:10px; padding:14px 16px; border:1.5px solid #86efac; align-items:center; }
 .panel-nota-info dt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
-.panel-nota-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0 0 4px; }
+.panel-nota-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0; }
+.panel-nota-info .pni-date { text-align:right; }
+/* Vinculo status dots */
+.vinc-dot { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.vinc-dot.verde   { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+.vinc-dot.amarelo { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.2); }
+.vinc-dot.vermelho{ background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.2); }
+.vinc-cell { display:flex; align-items:center; justify-content:center; gap:5px; font-size:11px; font-weight:600; }
 
 /* Item table inside panel */
 table.cc-items-table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:10px; overflow:hidden; }
@@ -280,6 +287,16 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                     <option value="DROPBOX">Dropbox</option>
                 </select>
             </div>
+            <div>
+                <label>Cadastro de Produtos</label>
+                <select id="f_vinc_status">
+                    <option value="">— Todos —</option>
+                    <option value="completo">🟢 Tudo cadastrado</option>
+                    <option value="incompleto">⚠️ Incompleto (parcial + sem)</option>
+                    <option value="parcial">🟡 Cadastro parcial</option>
+                    <option value="sem">🔴 Sem cadastro</option>
+                </select>
+            </div>
             <!-- Produto / Por Produto tab -->
             <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
             <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
@@ -326,6 +343,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                     <th>UF</th>
                     <th>CFOP</th>
                     <th>Itens</th>
+                    <th style="text-align:center;">Cadastro</th>
                     <th style="text-align:right;">Valor R$</th>
                     <th style="text-align:right;">ICMS</th>
                     <th>Origem</th>
@@ -333,7 +351,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                 </tr>
             </thead>
             <tbody id="tbodyNotas">
-                <tr><td colspan="11" class="cc-empty"><i class="fas fa-file-search"></i>Selecione uma empresa e clique em Buscar</td></tr>
+                <tr><td colspan="12" class="cc-empty"><i class="fas fa-file-search"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -489,6 +507,7 @@ function clearFilters() {
     document.getElementById('f_emit_cnpj').value = '';
     document.getElementById('f_emit_uf').value = '';
     document.getElementById('f_origem').value = '';
+    document.getElementById('f_vinc_status').value = '';
     currentPage = 1;
     applyFilters();
 }
@@ -507,6 +526,7 @@ function getFilters() {
         vmin: document.getElementById('f_vmin').value,
         vmax: document.getElementById('f_vmax').value,
         origem: document.getElementById('f_origem').value,
+        vinc_status: document.getElementById('f_vinc_status').value,
         descricao: document.getElementById('f_descricao').value,
         ncm: document.getElementById('f_ncm').value,
     };
@@ -551,7 +571,7 @@ function loadNotas() {
             }
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }
@@ -559,6 +579,13 @@ function loadNotas() {
                 const empPill = r.empresa_nome
                     ? `<span class="cc-empresa-pill">${r.empresa_nome}</span>`
                     : (r.grupo_nome ? `<span class="cc-grupo-pill">${r.grupo_nome}</span>` : '<span style="color:#d1d5db">—</span>');
+                const total = r.qtd_itens || 0;
+                const vinc  = r.itens_vinculados || 0;
+                let dotCls, dotTip;
+                if (total === 0)          { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
+                else if (vinc === 0)      { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
+                else if (vinc === total)  { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
+                else                     { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
                 return `<tr class="cc-row-clickable" onclick="openPanel(${r.id}, event)">
                     <td>${r.data_emissao||'—'}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
@@ -566,7 +593,8 @@ function loadNotas() {
                     <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
                     <td>${r.emit_uf||'—'}</td>
                     <td>${r.cfop||'—'}</td>
-                    <td style="text-align:center;">${r.qtd_itens||0}</td>
+                    <td style="text-align:center;">${total}</td>
+                    <td style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
                     <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
                     <td class="money">${fmtBRL(r.valor_icms)}</td>
                     <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span></td>
@@ -704,8 +732,9 @@ function openPanel(nfeId, evt) {
 
             let html = `<dl class="panel-nota-info">
                 <div><dt>Emitente</dt><dd style="text-transform:uppercase;">${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
+                <div class="pni-date"><dt>Data Emissão</dt><dd>${nota.data_emissao||'—'}</dd></div>
                 <div><dt>Destinatário</dt><dd style="text-transform:uppercase;">${nota.dest_nome||'—'}</dd></div>
-                <div><dt>Data Emissão</dt><dd>${nota.data_emissao||'—'}</dd></div>
+                <div></div>
             </dl>`;
 
             if (!data.itens || data.itens.length === 0) {

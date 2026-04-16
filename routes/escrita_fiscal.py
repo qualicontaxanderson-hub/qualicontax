@@ -182,6 +182,7 @@ def api_notas():
     f_vmin = request.args.get('vmin', '').strip()
     f_vmax = request.args.get('vmax', '').strip()
     f_origem = request.args.get('origem', '').strip()
+    f_vinc_status = request.args.get('vinc_status', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
 
@@ -223,6 +224,24 @@ def api_notas():
     if f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
+    if f_vinc_status == 'completo':
+        where.append(
+            "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
+            " AND EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id)"
+        )
+    elif f_vinc_status == 'parcial':
+        where.append(
+            "EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL)"
+            " AND EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
+        )
+    elif f_vinc_status == 'sem':
+        where.append(
+            "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL)"
+        )
+    elif f_vinc_status == 'incompleto':
+        where.append(
+            "EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
+        )
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
@@ -252,7 +271,8 @@ def api_notas():
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
-                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens
+                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens,
+                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL) AS itens_vinculados
               FROM nfe_importacoes n
               LEFT JOIN clientes c ON c.id = COALESCE(
                   n.cliente_id,
