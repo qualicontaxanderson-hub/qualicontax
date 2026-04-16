@@ -25,7 +25,13 @@ table.mem-table tr:hover td { background:#f8fafc; }
 .mem-stats { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; color:#fff; display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
 .mem-stats span { font-size:13px; font-weight:600; }
 .mem-stats strong { font-size:22px; font-weight:800; margin-right:4px; }
-/* Modals */
+/* Filtros */
+.mem-filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+.mem-filters input[type=text] { flex:1; min-width:200px; padding:8px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; }
+.mem-filters input[type=text]:focus { outline:none; border-color:#2563eb; }
+.mem-filters select { padding:8px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; cursor:pointer; }
+.mem-filters select:focus { outline:none; border-color:#2563eb; }
+.mem-filter-count { font-size:12px; color:#64748b; margin-left:4px; white-space:nowrap; }
 .mem-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
 .mem-overlay.open { display:flex; }
 .mem-modal { background:#fff; border-radius:16px; z-index:1000; width:500px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
@@ -71,6 +77,18 @@ table.mem-table tr:hover td { background:#f8fafc; }
         Cada memorização associa automaticamente um <strong>Fornecedor + Código do Produto</strong> a um produto do catálogo,
         evitando a necessidade de vincular manualmente ao importar novas notas fiscais.
     </div>
+</div>
+
+<div class="mem-filters">
+    <input type="text" id="filterText" placeholder="🔍 Buscar fornecedor, produto, código..." oninput="filtrarTabela()">
+    <select id="filterTipo" onchange="filtrarTabela()">
+        <option value="">Todos os tipos</option>
+        <option value="global">Global</option>
+        <option value="empresa">Empresa</option>
+        <option value="grupo">Grupo</option>
+        <option value="ramo">Ramo</option>
+    </select>
+    <span class="mem-filter-count" id="filterCount"></span>
 </div>
 
 <div class="mem-table-wrap">
@@ -220,6 +238,33 @@ table.mem-table tr:hover td { background:#f8fafc; }
 
 {% block extra_js %}
 <script>
+function filtrarTabela() {
+    const txt = document.getElementById('filterText').value.toLowerCase().trim();
+    const tipo = document.getElementById('filterTipo').value;
+    const rows = document.querySelectorAll('table.mem-table tbody tr[id^="row_"]');
+    let vis = 0;
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const badge = row.querySelector('td:first-child span');
+        const tipoRow = badge ? (badge.className.replace('badge-', '').trim()) : 'global';
+        const matchText = !txt || text.includes(txt);
+        const matchTipo = !tipo || tipoRow === tipo;
+        if (matchText && matchTipo) {
+            row.style.display = '';
+            vis++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    const total = rows.length;
+    const countEl = document.getElementById('filterCount');
+    if (txt || tipo) {
+        countEl.textContent = `${vis} de ${total} resultado(s)`;
+    } else {
+        countEl.textContent = '';
+    }
+}
+
 let editId = null;
 
 function abrirEditar(id, fornecedor, codigo, descricao, produtoId) {

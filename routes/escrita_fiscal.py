@@ -48,6 +48,45 @@ def _get_grupos():
     ) or []
 
 
+def _upsert_vinculo(cliente_id, grupo_id, ramo_atividade_id,
+                    emit_cnpj, codigo_produto_xml,
+                    descricao_produto_xml, produto_catalogo_id):
+    """Insert-or-update nfe_produto_vinculo usando operador NULL-safe (<=>).
+    O ON DUPLICATE KEY UPDATE padrão não funciona quando cliente_id/grupo_id
+    são NULL porque MySQL permite múltiplas linhas (NULL, NULL, ...) no índice UNIQUE.
+    """
+    existing = execute_query(
+        """SELECT id FROM nfe_produto_vinculo
+            WHERE cliente_id        <=> %s
+              AND grupo_id          <=> %s
+              AND ramo_atividade_id <=> %s
+              AND emit_cnpj         =   %s
+              AND codigo_produto_xml=   %s
+            LIMIT 1""",
+        (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml),
+        fetch=True, fetch_one=True,
+    )
+    if existing:
+        execute_query(
+            """UPDATE nfe_produto_vinculo
+                  SET produto_catalogo_id    = %s,
+                      descricao_produto_xml  = %s
+                WHERE id = %s""",
+            (produto_catalogo_id, descricao_produto_xml, existing['id']),
+        )
+    else:
+        execute_query(
+            """INSERT INTO nfe_produto_vinculo
+                   (cliente_id, grupo_id, ramo_atividade_id,
+                    emit_cnpj, codigo_produto_xml,
+                    descricao_produto_xml, produto_catalogo_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (cliente_id, grupo_id, ramo_atividade_id,
+             emit_cnpj, codigo_produto_xml,
+             descricao_produto_xml, produto_catalogo_id),
+        )
+
+
 def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
     """Retorna fragmento WHERE + params list para filtro empresa/grupo.
 
@@ -366,24 +405,9 @@ def api_vincular_produto():
         # Ramo de atividade do cliente (para escopo da regra global)
         ramo_id = _get_ramo_cliente(cli)
         # Salva regra para a empresa/grupo específico
-        execute_query(
-            """INSERT INTO nfe_produto_vinculo
-                   (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
-               VALUES (%s, %s, %s, %s, %s, %s)
-               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
-                                       descricao_produto_xml = VALUES(descricao_produto_xml)""",
-            (cli, grp, emit_cnpj, cod, descricao_xml, produto_id),
-        )
-        # Salva regra com escopo de ramo de atividade (evita herança entre setores distintos)
-        execute_query(
-            """INSERT INTO nfe_produto_vinculo
-                   (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
-               VALUES (NULL, NULL, %s, %s, %s, %s, %s)
-               ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
-                                       ramo_atividade_id = VALUES(ramo_atividade_id),
-                                       descricao_produto_xml = VALUES(descricao_produto_xml)""",
-            (ramo_id, emit_cnpj, cod, descricao_xml, produto_id),
-        )
+        _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
+        # Salva regra com escopo de ramo de atividade
+        _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
 
     # Nome do produto vinculado
     prod_nome = None
@@ -778,23 +802,8 @@ def api_vincular_todos():
         cod = it['codigo_produto']
         descricao_xml = it.get('descricao') or ''
         if cod:
-            execute_query(
-                """INSERT INTO nfe_produto_vinculo
-                       (cliente_id, grupo_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
-                   VALUES (%s, %s, %s, %s, %s, %s)
-                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
-                                           descricao_produto_xml = VALUES(descricao_produto_xml)""",
-                (cli, grp, emit_cnpj, cod, descricao_xml, produto_id),
-            )
-            execute_query(
-                """INSERT INTO nfe_produto_vinculo
-                       (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
-                   VALUES (NULL, NULL, %s, %s, %s, %s, %s)
-                   ON DUPLICATE KEY UPDATE produto_catalogo_id = VALUES(produto_catalogo_id),
-                                           ramo_atividade_id = VALUES(ramo_atividade_id),
-                                           descricao_produto_xml = VALUES(descricao_produto_xml)""",
-                (ramo_id, emit_cnpj, cod, descricao_xml, produto_id),
-            )
+                _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
+                _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
 
     prod = execute_query(
         "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
