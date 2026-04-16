@@ -654,7 +654,7 @@ def produtos_catalogo():
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     produtos = execute_query(
-        f"""SELECT p.id, p.codigo, p.nome, p.categoria, p.subcategoria, p.unidade,
+        f"""SELECT p.id, p.codigo, p.nome, p.categoria, p.subcategoria, p.tipo_uso, p.unidade,
                    p.ativo, p.cliente_id, p.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome
@@ -694,6 +694,7 @@ def produtos_catalogo_salvar():
     nome = request.form.get('nome', '').strip()
     categoria = request.form.get('categoria', '').strip()
     subcategoria = request.form.get('subcategoria', '').strip()
+    tipo_uso = request.form.get('tipo_uso', '').strip() or None
     unidade = request.form.get('unidade', '').strip()
     ativo = 1 if request.form.get('ativo') else 0
 
@@ -705,17 +706,17 @@ def produtos_catalogo_salvar():
         execute_query(
             """UPDATE nfe_produtos_catalogo
                   SET cliente_id=%s, grupo_id=%s, codigo=%s, nome=%s,
-                      categoria=%s, subcategoria=%s, unidade=%s, ativo=%s
+                      categoria=%s, subcategoria=%s, tipo_uso=%s, unidade=%s, ativo=%s
                 WHERE id=%s""",
-            (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, unidade, ativo, int(pid)),
+            (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, tipo_uso, unidade, ativo, int(pid)),
         )
         flash('Produto atualizado.', 'success')
     else:
         execute_query(
             """INSERT INTO nfe_produtos_catalogo
-                   (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, unidade, ativo)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, unidade, ativo),
+                   (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, tipo_uso, unidade, ativo)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (cliente_id, grupo_id, codigo, nome, categoria, subcategoria, tipo_uso, unidade, ativo),
         )
         flash('Produto cadastrado.', 'success')
 

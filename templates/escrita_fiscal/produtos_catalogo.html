@@ -18,6 +18,10 @@ table.pc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-wei
 table.pc-table td { padding:10px 14px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
 table.pc-table tr:hover td { background:#f8fafc; }
 .cat-badge { background:#e2e8f0; color:#475569; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-revenda  { background:#dcfce7; color:#16a34a; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-consumo  { background:#fef3c7; color:#b45309; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-ativo    { background:#dbeafe; color:#1d4ed8; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-outros   { background:#f3e8ff; color:#7c3aed; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
 .ativo-yes { color:#16a34a; font-weight:700; }
 .ativo-no  { color:#dc2626; }
 
@@ -87,6 +91,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
                 <th>Nome</th>
                 <th>Categoria</th>
                 <th>Subcategoria</th>
+                <th>Tipo de Entrada</th>
                 <th>Unid.</th>
                 <th>Empresa / Grupo</th>
                 <th>Ativo</th>
@@ -101,6 +106,19 @@ table.pc-table tr:hover td { background:#f8fafc; }
                 <td><strong>{{ p.nome }}</strong></td>
                 <td><span class="cat-badge">{{ p.categoria or '—' }}</span></td>
                 <td>{{ p.subcategoria or '—' }}</td>
+                <td>
+                    {% if p.tipo_uso == 'Compra para Revenda' %}
+                        <span class="uso-revenda"><i class="fas fa-store"></i> Revenda</span>
+                    {% elif p.tipo_uso == 'Compra para Consumo' %}
+                        <span class="uso-consumo"><i class="fas fa-industry"></i> Consumo</span>
+                    {% elif p.tipo_uso == 'Ativo Imobilizado' %}
+                        <span class="uso-ativo"><i class="fas fa-building"></i> Ativo Imob.</span>
+                    {% elif p.tipo_uso %}
+                        <span class="uso-outros">{{ p.tipo_uso }}</span>
+                    {% else %}
+                        <span style="color:#9ca3af;font-size:11px;">—</span>
+                    {% endif %}
+                </td>
                 <td>{{ p.unidade or '—' }}</td>
                 <td>
                     {% if p.empresa_nome %}
@@ -179,6 +197,18 @@ table.pc-table tr:hover td { background:#f8fafc; }
                         <option value="">— Selecione —</option>
                     </select>
                 </div>
+                <div class="form-group full">
+                    <label>Tipo de Entrada / Uso <span style="color:#dc2626;">*</span></label>
+                    <select name="tipo_uso" id="m_tipo_uso">
+                        <option value="">— Não definido —</option>
+                        <option value="Compra para Revenda">🏪 Compra para Revenda</option>
+                        <option value="Compra para Consumo">🏭 Compra para Consumo / Uso e Consumo</option>
+                        <option value="Ativo Imobilizado">🏗️ Ativo Imobilizado</option>
+                    </select>
+                    <small style="color:#64748b;font-size:11px;margin-top:3px;display:block;">
+                        Define o tratamento fiscal da entrada. Ex.: Posto de Gasolina = <strong>Revenda</strong>; Transportadora = <strong>Consumo</strong>.
+                    </small>
+                </div>
                 <div class="form-group">
                     <label>Unidade</label>
                     <input type="text" name="unidade" id="m_unidade" placeholder="Ex: L, UN, KG">
@@ -233,6 +263,7 @@ function openModal() {
     document.getElementById('m_nome').value = '';
     document.getElementById('m_categoria').value = '';
     document.getElementById('m_subcategoria').innerHTML = '<option value="">— Selecione —</option>';
+    document.getElementById('m_tipo_uso').value = '';
     document.getElementById('m_unidade').value = '';
     document.getElementById('m_cliente_id').value = '';
     document.getElementById('m_grupo_id').value = '';
@@ -247,6 +278,7 @@ function editModal(p) {
     document.getElementById('m_nome').value = p.nome || '';
     document.getElementById('m_categoria').value = p.categoria || '';
     updateSubcat(p.subcategoria);
+    document.getElementById('m_tipo_uso').value = p.tipo_uso || '';
     document.getElementById('m_unidade').value = p.unidade || '';
     document.getElementById('m_cliente_id').value = p.cliente_id || '';
     document.getElementById('m_grupo_id').value = p.grupo_id || '';
@@ -275,17 +307,17 @@ function updateSubcat(selected) {
 
 function seedCombustiveis() {
     const produtos = [
-        {nome:'Gasolina Comum', categoria:'Combustíveis', subcategoria:'Gasolina Comum', unidade:'L'},
-        {nome:'Gasolina Aditivada', categoria:'Combustíveis', subcategoria:'Gasolina Aditivada', unidade:'L'},
-        {nome:'Etanol Comum', categoria:'Combustíveis', subcategoria:'Etanol Comum', unidade:'L'},
-        {nome:'Etanol Aditivado', categoria:'Combustíveis', subcategoria:'Etanol Aditivado', unidade:'L'},
-        {nome:'Diesel S-500 Comum', categoria:'Combustíveis', subcategoria:'Diesel S-500 Comum', unidade:'L'},
-        {nome:'Diesel S-500 Aditivado', categoria:'Combustíveis', subcategoria:'Diesel S-500 Aditivado', unidade:'L'},
-        {nome:'Diesel S10 Comum', categoria:'Combustíveis', subcategoria:'Diesel S10 Comum', unidade:'L'},
-        {nome:'Diesel S10 Aditivado', categoria:'Combustíveis', subcategoria:'Diesel S10 Aditivado', unidade:'L'},
-        {nome:'Loja de Conveniência', categoria:'Loja de Conveniência', subcategoria:'', unidade:'UN'},
-        {nome:'Lubrificantes e Aditivos', categoria:'Lubrificantes e Aditivos', subcategoria:'', unidade:'UN'},
-        {nome:'Insumos e Despesas', categoria:'Insumos e Despesas', subcategoria:'', unidade:'UN'},
+        {nome:'Gasolina Comum', categoria:'Combustíveis', subcategoria:'Gasolina Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Gasolina Aditivada', categoria:'Combustíveis', subcategoria:'Gasolina Aditivada', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Etanol Comum', categoria:'Combustíveis', subcategoria:'Etanol Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Etanol Aditivado', categoria:'Combustíveis', subcategoria:'Etanol Aditivado', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S-500 Comum', categoria:'Combustíveis', subcategoria:'Diesel S-500 Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S-500 Aditivado', categoria:'Combustíveis', subcategoria:'Diesel S-500 Aditivado', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S10 Comum', categoria:'Combustíveis', subcategoria:'Diesel S10 Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S10 Aditivado', categoria:'Combustíveis', subcategoria:'Diesel S10 Aditivado', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Loja de Conveniência', categoria:'Loja de Conveniência', subcategoria:'', tipo_uso:'Compra para Revenda', unidade:'UN'},
+        {nome:'Lubrificantes e Aditivos', categoria:'Lubrificantes e Aditivos', subcategoria:'', tipo_uso:'Compra para Revenda', unidade:'UN'},
+        {nome:'Insumos e Despesas', categoria:'Insumos e Despesas', subcategoria:'', tipo_uso:'Compra para Consumo', unidade:'UN'},
     ];
     const sends = produtos.map(p => {
         const fd = new FormData();
