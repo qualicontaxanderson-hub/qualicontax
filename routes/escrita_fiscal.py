@@ -49,13 +49,25 @@ def _get_grupos():
 
 
 def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
-    """Retorna fragmento WHERE + params list para filtro empresa/grupo."""
+    """Retorna fragmento WHERE + params list para filtro empresa/grupo.
+
+    Para notas importadas sem empresa definida (cliente_id IS NULL),
+    faz fallback por dest_cnpj comparado ao cpf_cnpj do cliente selecionado.
+    """
     if params is None:
         params = []
     clauses = []
     if f_cliente_id:
-        clauses.append(f'{alias}.cliente_id = %s')
-        params.append(int(f_cliente_id))
+        cid = int(f_cliente_id)
+        clauses.append(
+            f"({alias}.cliente_id = %s"
+            f" OR ({alias}.cliente_id IS NULL"
+            f"     AND REPLACE(REPLACE(REPLACE({alias}.dest_cnpj,'.',''),'/',''),'-','')"
+            f"       = (SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','')"
+            f"            FROM clientes WHERE id = %s)))"
+        )
+        params.append(cid)
+        params.append(cid)
     if f_grupo_id:
         clauses.append(f'{alias}.grupo_id = %s')
         params.append(int(f_grupo_id))
