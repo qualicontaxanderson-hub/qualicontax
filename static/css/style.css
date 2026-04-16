@@ -121,50 +121,61 @@ body {
     background-color: rgba(34, 197, 94, 0.06);
 }
 
-/* ── Per-department colors ─────────────────────────────── */
+/* ── Per-department colors (always visible) ────────────── */
 /* Início — green (brand default) */
+.rail-inicio                           { color: #22C55E; }
 .rail-inicio:hover                     { color: #22C55E; background-color: rgba(34,197,94,0.08); }
-.rail-inicio.active                    { color: #22C55E; border-left-color: #22C55E; background-color: rgba(34,197,94,0.08); }
+.rail-inicio.active                    { color: #22C55E; border-left-color: #22C55E; background-color: rgba(34,197,94,0.12); }
 
 /* Cadastros — blue */
+.rail-cadastros                        { color: #3B82F6; }
 .rail-cadastros:hover                  { color: #3B82F6; background-color: rgba(59,130,246,0.08); }
-.rail-cadastros.active                 { color: #3B82F6; border-left-color: #3B82F6; background-color: rgba(59,130,246,0.08); }
+.rail-cadastros.active                 { color: #3B82F6; border-left-color: #3B82F6; background-color: rgba(59,130,246,0.12); }
 
 /* Comercial — orange */
+.rail-comercial                        { color: #F97316; }
 .rail-comercial:hover                  { color: #F97316; background-color: rgba(249,115,22,0.08); }
-.rail-comercial.active                 { color: #F97316; border-left-color: #F97316; background-color: rgba(249,115,22,0.08); }
+.rail-comercial.active                 { color: #F97316; border-left-color: #F97316; background-color: rgba(249,115,22,0.12); }
 
 /* Contábil — purple */
+.rail-contabil                         { color: #8B5CF6; }
 .rail-contabil:hover                   { color: #8B5CF6; background-color: rgba(139,92,246,0.08); }
-.rail-contabil.active                  { color: #8B5CF6; border-left-color: #8B5CF6; background-color: rgba(139,92,246,0.08); }
+.rail-contabil.active                  { color: #8B5CF6; border-left-color: #8B5CF6; background-color: rgba(139,92,246,0.12); }
 
 /* Fiscal — teal */
+.rail-fiscal                           { color: #14B8A6; }
 .rail-fiscal:hover                     { color: #14B8A6; background-color: rgba(20,184,166,0.08); }
-.rail-fiscal.active                    { color: #14B8A6; border-left-color: #14B8A6; background-color: rgba(20,184,166,0.08); }
+.rail-fiscal.active                    { color: #14B8A6; border-left-color: #14B8A6; background-color: rgba(20,184,166,0.12); }
 
 /* DP — pink */
+.rail-dp                               { color: #EC4899; }
 .rail-dp:hover                         { color: #EC4899; background-color: rgba(236,72,153,0.08); }
-.rail-dp.active                        { color: #EC4899; border-left-color: #EC4899; background-color: rgba(236,72,153,0.08); }
+.rail-dp.active                        { color: #EC4899; border-left-color: #EC4899; background-color: rgba(236,72,153,0.12); }
 
 /* Legalização — indigo */
+.rail-legalizacao                      { color: #6366F1; }
 .rail-legalizacao:hover                { color: #6366F1; background-color: rgba(99,102,241,0.08); }
-.rail-legalizacao.active               { color: #6366F1; border-left-color: #6366F1; background-color: rgba(99,102,241,0.08); }
+.rail-legalizacao.active               { color: #6366F1; border-left-color: #6366F1; background-color: rgba(99,102,241,0.12); }
 
 /* Financeiro — emerald */
+.rail-financeiro                       { color: #10B981; }
 .rail-financeiro:hover                 { color: #10B981; background-color: rgba(16,185,129,0.08); }
-.rail-financeiro.active                { color: #10B981; border-left-color: #10B981; background-color: rgba(16,185,129,0.08); }
+.rail-financeiro.active                { color: #10B981; border-left-color: #10B981; background-color: rgba(16,185,129,0.12); }
 
 /* Análise — amber */
+.rail-analise                          { color: #F59E0B; }
 .rail-analise:hover                    { color: #F59E0B; background-color: rgba(245,158,11,0.08); }
-.rail-analise.active                   { color: #F59E0B; border-left-color: #F59E0B; background-color: rgba(245,158,11,0.08); }
+.rail-analise.active                   { color: #F59E0B; border-left-color: #F59E0B; background-color: rgba(245,158,11,0.12); }
 
 /* Relatórios — cyan */
+.rail-relatorios                       { color: #06B6D4; }
 .rail-relatorios:hover                 { color: #06B6D4; background-color: rgba(6,182,212,0.08); }
-.rail-relatorios.active                { color: #06B6D4; border-left-color: #06B6D4; background-color: rgba(6,182,212,0.08); }
+.rail-relatorios.active                { color: #06B6D4; border-left-color: #06B6D4; background-color: rgba(6,182,212,0.12); }
 
 /* Config. — slate */
+.rail-config                           { color: #64748B; }
 .rail-config:hover                     { color: #64748B; background-color: rgba(100,116,139,0.08); }
-.rail-config.active                    { color: #64748B; border-left-color: #64748B; background-color: rgba(100,116,139,0.08); }
+.rail-config.active                    { color: #64748B; border-left-color: #64748B; background-color: rgba(100,116,139,0.12); }
 /* ───────────────────────────────────────────────────────── */
 
 .rail-bottom {
