@@ -6,12 +6,20 @@ import os
 # Cria Blueprint primeiro (antes de importar models)
 contabil = Blueprint('contabil', __name__, url_prefix='/contabil')
 
+# Valores válidos para importação do Plano de Contas via CSV
+_TIPOS_PLANO_VALIDOS = {'ANALITICA', 'SINTETICA'}
+_NATUREZAS_PLANO_VALIDAS = {'DEVEDORA', 'CREDORA'}
+_GRUPOS_PLANO_VALIDOS = {'ATIVO', 'PASSIVO', 'PATRIMONIO_LIQUIDO', 'RECEITA', 'DESPESA'}
+_CSV_HEADER_PLANO = ['codigo', 'descricao', 'tipo', 'natureza', 'grupo_contabil']
+
 # Try to import models with error handling
 try:
     from models.conciliacao_bancaria import ConciliacaoBancaria
     from models.memorizacao_conciliacao import MemorizacaoConciliacao
     from models.cliente import Cliente
     from models.grupo_cliente import GrupoCliente
+    from models.plano_contas import PlanoConta, PlanoContaItem
+    from models.conta_corrente import ContaCorrente
     print("✅ Contabil: Models imported successfully")
     MODELS_LOADED = True
 except Exception as e:
@@ -42,6 +50,42 @@ except Exception as e:
         @staticmethod
         def get_all(*args, **kwargs):
             return []
+    class PlanoConta:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
+        @staticmethod
+        def get_by_id(*args, **kwargs):
+            return None
+        @staticmethod
+        def create(*args, **kwargs):
+            return None
+        @staticmethod
+        def delete(*args, **kwargs):
+            return None
+    class PlanoContaItem:
+        @staticmethod
+        def get_all_by_plano(*args, **kwargs):
+            return []
+        @staticmethod
+        def create(*args, **kwargs):
+            return None
+        @staticmethod
+        def import_batch(*args, **kwargs):
+            return False
+        @staticmethod
+        def delete(*args, **kwargs):
+            return None
+    class ContaCorrente:
+        @staticmethod
+        def get_all(*args, **kwargs):
+            return []
+        @staticmethod
+        def create(*args, **kwargs):
+            return None
+        @staticmethod
+        def set_ativa(*args, **kwargs):
+            return None
 
 
 @contabil.route('/')
@@ -49,6 +93,223 @@ except Exception as e:
 def index():
     """Página principal do módulo contábil"""
     return render_template('contabil/index.html')
+
+
+@contabil.route('/plano_contas')
+@login_required
+def plano_contas():
+    """Lista grupos/planos de contas"""
+    grupo_id = request.args.get('grupo_id')
+    planos = PlanoConta.get_all(grupo_id=grupo_id)
+    grupos = GrupoCliente.get_all()
+    return render_template('contabil/plano_contas.html',
+                           planos=planos,
+                           grupos=grupos,
+                           filtro_grupo_id=grupo_id)
+
+
+@contabil.route('/plano_contas/criar', methods=['POST'])
+@login_required
+def criar_plano_contas():
+    """Cria novo grupo do plano de contas"""
+    nome = request.form.get('nome', '').strip()
+    descricao = request.form.get('descricao', '').strip() or None
+    grupo_id = request.form.get('grupo_id') or None
+
+    if not nome:
+        flash('Nome é obrigatório.', 'danger')
+        return redirect(url_for('contabil.plano_contas'))
+
+    resultado = PlanoConta.create(nome=nome, descricao=descricao, grupo_id=grupo_id)
+    if resultado:
+        flash('Plano de Contas criado com sucesso!', 'success')
+        return redirect(url_for('contabil.ver_plano_contas', plano_id=resultado))
+    else:
+        flash('Erro ao criar Plano de Contas.', 'danger')
+        return redirect(url_for('contabil.plano_contas'))
+
+
+@contabil.route('/plano_contas/<int:plano_id>')
+@login_required
+def ver_plano_contas(plano_id):
+    """Exibe contas de um plano"""
+    plano = PlanoConta.get_by_id(plano_id)
+    if not plano:
+        flash('Plano de Contas não encontrado.', 'danger')
+        return redirect(url_for('contabil.plano_contas'))
+    itens = PlanoContaItem.get_all_by_plano(plano_id)
+    grupos = GrupoCliente.get_all()
+    return render_template('contabil/plano_contas_detalhe.html',
+                           plano=plano,
+                           itens=itens,
+                           grupos=grupos)
+
+
+@contabil.route('/plano_contas/<int:plano_id>/nova_conta', methods=['POST'])
+@login_required
+def nova_conta_plano(plano_id):
+    """Adiciona nova conta ao plano"""
+    plano = PlanoConta.get_by_id(plano_id)
+    if not plano:
+        flash('Plano de Contas não encontrado.', 'danger')
+        return redirect(url_for('contabil.plano_contas'))
+
+    codigo = request.form.get('codigo', '').strip()
+    descricao = request.form.get('descricao', '').strip()
+    tipo = request.form.get('tipo', '').strip()
+    natureza = request.form.get('natureza', '').strip()
+    grupo_contabil = request.form.get('grupo_contabil', '').strip()
+
+    if not all([codigo, descricao, tipo, natureza, grupo_contabil]):
+        flash('Preencha todos os campos obrigatórios.', 'danger')
+        return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+    resultado = PlanoContaItem.create(
+        plano_id=plano_id,
+        codigo=codigo,
+        descricao=descricao,
+        tipo=tipo,
+        natureza=natureza,
+        grupo_contabil=grupo_contabil,
+    )
+    if resultado:
+        flash('Conta adicionada com sucesso!', 'success')
+    else:
+        flash('Erro ao adicionar conta.', 'danger')
+    return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+
+@contabil.route('/plano_contas/<int:plano_id>/excluir_conta/<int:item_id>', methods=['POST'])
+@login_required
+def excluir_conta_plano(plano_id, item_id):
+    """Exclui uma conta do plano"""
+    PlanoContaItem.delete(item_id)
+    flash('Conta removida com sucesso.', 'success')
+    return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+
+@contabil.route('/plano_contas/<int:plano_id>/excluir', methods=['POST'])
+@login_required
+def excluir_plano_contas(plano_id):
+    """Exclui plano de contas e todos os seus itens"""
+    PlanoConta.delete(plano_id)
+    flash('Plano de Contas excluído com sucesso.', 'success')
+    return redirect(url_for('contabil.plano_contas'))
+
+
+@contabil.route('/plano_contas/template_csv')
+@login_required
+def template_csv_plano_contas():
+    """Download do modelo CSV para preenchimento e importação posterior"""
+    import csv
+    import io
+    from flask import make_response
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(_CSV_HEADER_PLANO)
+    # Exemplos de contas para orientar o usuário
+    writer.writerow(['1', 'ATIVO', 'SINTETICA', 'DEVEDORA', 'ATIVO'])
+    writer.writerow(['1.1', 'ATIVO CIRCULANTE', 'SINTETICA', 'DEVEDORA', 'ATIVO'])
+    writer.writerow(['1.1.001', 'CAIXA', 'ANALITICA', 'DEVEDORA', 'ATIVO'])
+    writer.writerow(['1.1.002', 'BANCOS CONTA MOVIMENTO', 'ANALITICA', 'DEVEDORA', 'ATIVO'])
+    writer.writerow(['2', 'PASSIVO', 'SINTETICA', 'CREDORA', 'PASSIVO'])
+    writer.writerow(['2.1', 'PASSIVO CIRCULANTE', 'SINTETICA', 'CREDORA', 'PASSIVO'])
+    writer.writerow(['2.1.001', 'FORNECEDORES', 'ANALITICA', 'CREDORA', 'PASSIVO'])
+    writer.writerow(['3', 'PATRIMÔNIO LÍQUIDO', 'SINTETICA', 'CREDORA', 'PATRIMONIO_LIQUIDO'])
+    writer.writerow(['3.1.001', 'CAPITAL SOCIAL', 'ANALITICA', 'CREDORA', 'PATRIMONIO_LIQUIDO'])
+    writer.writerow(['4', 'RECEITAS', 'SINTETICA', 'CREDORA', 'RECEITA'])
+    writer.writerow(['4.1.001', 'RECEITA BRUTA DE VENDAS', 'ANALITICA', 'CREDORA', 'RECEITA'])
+    writer.writerow(['5', 'DESPESAS', 'SINTETICA', 'DEVEDORA', 'DESPESA'])
+    writer.writerow(['5.1.001', 'SALÁRIOS E ORDENADOS', 'ANALITICA', 'DEVEDORA', 'DESPESA'])
+
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = 'attachment; filename=modelo_plano_contas.csv'
+    return response
+
+
+@contabil.route('/plano_contas/<int:plano_id>/importar', methods=['POST'])
+@login_required
+def importar_plano_contas(plano_id):
+    """Importa contas de um arquivo CSV para o plano"""
+    import csv
+    import io
+
+    plano = PlanoConta.get_by_id(plano_id)
+    if not plano:
+        flash('Plano de Contas não encontrado.', 'danger')
+        return redirect(url_for('contabil.plano_contas'))
+
+    arquivo = request.files.get('arquivo_csv')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione um arquivo CSV.', 'danger')
+        return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+    if not arquivo.filename.lower().endswith('.csv'):
+        flash('Apenas arquivos .csv são aceitos.', 'danger')
+        return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+    try:
+        conteudo = arquivo.read().decode('utf-8-sig')  # utf-8-sig ignora BOM do Excel
+        reader = csv.DictReader(io.StringIO(conteudo))
+
+        tipos_validos = _TIPOS_PLANO_VALIDOS
+        naturezas_validas = _NATUREZAS_PLANO_VALIDAS
+        grupos_validos = _GRUPOS_PLANO_VALIDOS
+
+        itens = []
+        erros = []
+
+        for i, row in enumerate(reader, start=2):  # linha 1 é o cabeçalho
+            codigo = (row.get('codigo') or '').strip()
+            descricao = (row.get('descricao') or '').strip()
+            tipo = (row.get('tipo') or '').strip().upper()
+            natureza = (row.get('natureza') or '').strip().upper()
+            grupo_contabil = (row.get('grupo_contabil') or '').strip().upper()
+
+            if not codigo or not descricao:
+                erros.append(f"Linha {i}: 'codigo' e 'descricao' são obrigatórios")
+                continue
+            if tipo not in tipos_validos:
+                erros.append(f"Linha {i}: tipo '{tipo}' inválido (use ANALITICA ou SINTETICA)")
+                continue
+            if natureza not in naturezas_validas:
+                erros.append(f"Linha {i}: natureza '{natureza}' inválida (use DEVEDORA ou CREDORA)")
+                continue
+            if grupo_contabil not in grupos_validos:
+                erros.append(
+                    f"Linha {i}: grupo_contabil '{grupo_contabil}' inválido "
+                    "(use ATIVO, PASSIVO, PATRIMONIO_LIQUIDO, RECEITA ou DESPESA)"
+                )
+                continue
+
+            itens.append({
+                'codigo': codigo,
+                'descricao': descricao,
+                'tipo': tipo,
+                'natureza': natureza,
+                'grupo_contabil': grupo_contabil,
+            })
+
+        if erros:
+            flash('Erros no arquivo: ' + ' | '.join(erros[:5]), 'danger')
+            return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+        if not itens:
+            flash('Nenhum dado válido encontrado no arquivo.', 'warning')
+            return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
+
+        sucesso = PlanoContaItem.import_batch(plano_id, itens)
+        if sucesso:
+            flash(f'{len(itens)} conta(s) importada(s) com sucesso!', 'success')
+        else:
+            flash('Erro ao importar contas.', 'danger')
+
+    except Exception as e:
+        flash(f'Erro ao processar arquivo: {str(e)}', 'danger')
+
+    return redirect(url_for('contabil.ver_plano_contas', plano_id=plano_id))
 
 
 @contabil.route('/conciliacoes')
@@ -110,19 +371,69 @@ def ver_conciliacao(conciliacao_id):
                          transacoes=transacoes)
 
 
-@contabil.route('/contas_correntes')
+@contabil.route('/contas_correntes', methods=['GET', 'POST'])
 @login_required
 def contas_correntes():
     """Cadastro e gestão de contas correntes bancárias"""
-    # TODO: Implementar busca de contas do banco de dados
-    contas = []  # Placeholder
-    # get_all() returns a paginated dict; extract the list
+    if request.method == 'POST':
+        cliente_id = request.form.get('cliente_id')
+        banco_nome = request.form.get('banco_nome', '').strip()
+        banco_codigo = request.form.get('banco_codigo', '').strip()
+        agencia = request.form.get('agencia', '').strip()
+        agencia_digito = request.form.get('agencia_digito', '').strip()
+        numero_conta = request.form.get('numero_conta', '').strip()
+        conta_digito = request.form.get('conta_digito', '').strip()
+        tipo = request.form.get('tipo', '').strip()
+        saldo_inicial = request.form.get('saldo_inicial', '0') or '0'
+
+        if not all([cliente_id, banco_nome, banco_codigo, agencia, numero_conta, conta_digito, tipo]):
+            flash('Preencha todos os campos obrigatórios.', 'danger')
+        else:
+            try:
+                saldo = float(saldo_inicial)
+            except ValueError:
+                saldo = 0.00
+
+            resultado = ContaCorrente.create(
+                cliente_id=int(cliente_id),
+                banco_nome=banco_nome,
+                banco_codigo=banco_codigo,
+                agencia=agencia,
+                agencia_digito=agencia_digito,
+                numero_conta=numero_conta,
+                conta_digito=conta_digito,
+                tipo=tipo,
+                saldo_inicial=saldo,
+            )
+            if resultado:
+                flash('Conta corrente cadastrada com sucesso!', 'success')
+            else:
+                flash('Erro ao cadastrar conta corrente. Tente novamente.', 'danger')
+
+        return redirect(url_for('contabil.contas_correntes'))
+
+    # GET
+    cliente_id_filtro = request.args.get('cliente_id')
+    banco_filtro = request.args.get('banco')
+    status_filtro = request.args.get('status')
+
+    ativa = None
+    if status_filtro == 'ativa':
+        ativa = True
+    elif status_filtro == 'inativa':
+        ativa = False
+
+    contas = ContaCorrente.get_all(
+        cliente_id=cliente_id_filtro,
+        banco=banco_filtro,
+        ativa=ativa,
+    )
     clientes_result = Cliente.get_all()
     clientes = clientes_result.get('clientes', []) if isinstance(clientes_result, dict) else (clientes_result or [])
 
     return render_template('contabil/contas_correntes.html',
-                         contas=contas,
-                         clientes=clientes)
+                           contas=contas,
+                           clientes=clientes)
 
 
 @contabil.route('/importar_ofx')

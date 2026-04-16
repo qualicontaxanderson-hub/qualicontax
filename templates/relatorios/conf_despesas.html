@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Conferência de Despesas - Qualicontax{% endblock %}
+
+{% block content %}
+<style>
+/* ── report-specific styles ── */
+.conf-despesas-page .report-table-wrapper {
+    overflow-x: auto;
+}
+.conf-despesas-page table.conf-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+.conf-despesas-page table.conf-table th,
+.conf-despesas-page table.conf-table td {
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+.conf-despesas-page table.conf-table thead th {
+    background: #1e3a5f;
+    color: #fff;
+    text-align: center;
+    font-weight: 600;
+}
+.conf-despesas-page table.conf-table thead th:first-child {
+    text-align: left;
+}
+/* section header row */
+.conf-despesas-page tr.row-section td {
+    background: #1e3a5f;
+    color: #fff;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: right;
+}
+.conf-despesas-page tr.row-section td:first-child {
+    text-align: left;
+}
+/* section total row */
+.conf-despesas-page tr.row-section-total td {
+    background: #d0dff0;
+    font-weight: 700;
+    text-align: right;
+    border-top: 2px solid #1e3a5f;
+}
+.conf-despesas-page tr.row-section-total td:first-child {
+    text-align: left;
+}
+/* category row */
+.conf-despesas-page tr.row-category td {
+    background: #fff;
+    text-align: right;
+}
+.conf-despesas-page tr.row-category td:first-child {
+    text-align: left;
+    font-weight: 600;
+}
+/* subcategory row */
+.conf-despesas-page tr.row-subcategory td {
+    background: #f8f9fa;
+    text-align: right;
+    color: #555;
+}
+.conf-despesas-page tr.row-subcategory td:first-child {
+    text-align: left;
+    padding-left: 24px;
+}
+/* grand total row */
+.conf-despesas-page tr.row-grand-total td {
+    background: #1e3a5f;
+    color: #fff;
+    font-weight: 700;
+    text-align: right;
+    border-top: 3px solid #0d2240;
+}
+.conf-despesas-page tr.row-grand-total td:first-child {
+    text-align: left;
+}
+/* dash for zero/null values */
+.dash { color: #aaa; }
+/* negative values */
+.neg { color: #c0392b; }
+</style>
+
+<div class="conf-despesas-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Conferência de Despesas</h1>
+            <p class="page-subtitle">Despesas por categoria e mês — dados em tempo real</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('relatorios.index') }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Voltar
+            </a>
+            <button class="btn btn-outline" onclick="window.print()">
+                <i class="fas fa-print"></i>
+                Imprimir
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('relatorios.conf_despesas') }}" class="filters-form">
+                <div class="filters-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end;">
+                    <div class="form-group" style="min-width:140px;">
+                        <label for="data_inicio">Data Início</label>
+                        <input type="date" id="data_inicio" name="data_inicio"
+                               class="form-control"
+                               value="{{ filtros.data_inicio }}">
+                    </div>
+                    <div class="form-group" style="min-width:140px;">
+                        <label for="data_fim">Data Fim</label>
+                        <input type="date" id="data_fim" name="data_fim"
+                               class="form-control"
+                               value="{{ filtros.data_fim }}">
+                    </div>
+                    {% if empresas %}
+                    <div class="form-group" style="min-width:200px;">
+                        <label for="empresa_ids">Empresa</label>
+                        <select id="empresa_ids" name="empresa_ids[]"
+                                class="form-control" multiple size="1">
+                            {% for emp in empresas %}
+                            <option value="{{ emp.id }}"
+                                {% if emp.id|string in filtros.empresa_ids|map('string')|list %}selected{% endif %}>
+                                {{ emp.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Report Table -->
+    <div class="card">
+        <div class="card-body report-table-wrapper" style="padding:0;">
+            {% if sections %}
+            <table class="conf-table">
+                <thead>
+                    <tr>
+                        <th style="min-width:260px;">CATEGORIA</th>
+                        {% for ym in months %}
+                        <th style="min-width:100px;">{{ month_labels[ym] }}</th>
+                        {% endfor %}
+                        <th style="min-width:110px;">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for section in sections %}
+                    {# ── Section header ── #}
+                    <tr class="row-section">
+                        <td>&#9679; {{ section.name }}</td>
+                        {% for ym in months %}
+                        <td>
+                            {% set v = section.monthly_totals.get(ym, 0) %}
+                            {% if v %}
+                                {% if v < 0 %}<span class="neg">{{ v | format_currency }}</span>
+                                {% else %}{{ v | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                        {% endfor %}
+                        <td>
+                            {% if section.total %}
+                                {% if section.total < 0 %}<span class="neg">{{ section.total | format_currency }}</span>
+                                {% else %}{{ section.total | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                    </tr>
+
+                    {# ── Categories ── #}
+                    {% for cat in section.categories %}
+                    <tr class="row-category">
+                        <td>{{ cat.name }}</td>
+                        {% for ym in months %}
+                        <td>
+                            {% set v = cat.monthly_totals.get(ym, 0) %}
+                            {% if v %}
+                                {% if v < 0 %}<span class="neg">{{ v | format_currency }}</span>
+                                {% else %}{{ v | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                        {% endfor %}
+                        <td>
+                            {% if cat.total %}
+                                {% if cat.total < 0 %}<span class="neg">{{ cat.total | format_currency }}</span>
+                                {% else %}{{ cat.total | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                    </tr>
+
+                    {# ── Sub-categories ── #}
+                    {% for sub in cat.subcategories %}
+                    <tr class="row-subcategory">
+                        <td>&#8627; {{ sub.name }}</td>
+                        {% for ym in months %}
+                        <td>
+                            {% set v = sub.monthly_totals.get(ym, 0) %}
+                            {% if v %}
+                                {% if v < 0 %}<span class="neg">{{ v | format_currency }}</span>
+                                {% else %}{{ v | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                        {% endfor %}
+                        <td>
+                            {% if sub.total %}
+                                {% if sub.total < 0 %}<span class="neg">{{ sub.total | format_currency }}</span>
+                                {% else %}{{ sub.total | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+
+                    {# ── Section total row ── #}
+                    <tr class="row-section-total">
+                        <td>TOTAL {{ section.name }}</td>
+                        {% for ym in months %}
+                        <td>
+                            {% set v = section.monthly_totals.get(ym, 0) %}
+                            {% if v %}
+                                {% if v < 0 %}<span class="neg">{{ v | format_currency }}</span>
+                                {% else %}{{ v | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                        {% endfor %}
+                        <td>
+                            {% if section.total %}
+                                {% if section.total < 0 %}<span class="neg">{{ section.total | format_currency }}</span>
+                                {% else %}{{ section.total | format_currency }}{% endif %}
+                            {% else %}<span class="dash">—</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+
+                {# ── Grand total ── #}
+                <tr class="row-grand-total">
+                    <td>TOTAL GERAL</td>
+                    {% for ym in months %}
+                    <td>
+                        {% set v = overall_monthly.get(ym, 0) %}
+                        {% if v %}
+                            {% if v < 0 %}<span style="color:#ffa0a0;">{{ v | format_currency }}</span>
+                            {% else %}{{ v | format_currency }}{% endif %}
+                        {% else %}<span class="dash" style="color:#999;">—</span>{% endif %}
+                    </td>
+                    {% endfor %}
+                    <td>
+                        {% if grand_total %}
+                            {% if grand_total < 0 %}<span style="color:#ffa0a0;">{{ grand_total | format_currency }}</span>
+                            {% else %}{{ grand_total | format_currency }}{% endif %}
+                        {% else %}<span class="dash" style="color:#999;">—</span>{% endif %}
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            {% else %}
+            <div style="padding:40px;text-align:center;color:#888;">
+                <i class="fas fa-inbox fa-2x" style="margin-bottom:12px;display:block;"></i>
+                Nenhuma despesa encontrada para o período e filtros selecionados.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

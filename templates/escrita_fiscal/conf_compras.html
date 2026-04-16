@@ -1,0 +1,1112 @@
+{% extends "base.html" %}
+{% block title %}Conferência de Compras - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ---- Layout ---- */
+.cc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.cc-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.cc-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ---- Empresa selector bar ---- */
+.cc-empresa-bar { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(37,99,235,.25); }
+.cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
+.cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
+.cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
+.cc-scope-badge.empresa { background:#bfdbfe; color:#1d4ed8; }
+.cc-scope-badge.grupo   { background:#e9d5ff; color:#7c3aed; }
+.cc-scope-badge.global  { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+
+/* ---- KPI cards ---- */
+.cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+.cc-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.cc-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
+.cc-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.cc-kpi:nth-child(3) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.cc-kpi:nth-child(4) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.cc-kpi:nth-child(5) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.cc-kpi-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
+.cc-kpi-value { font-size:20px; font-weight:800; color:#fff; margin-top:4px; }
+.cc-kpi-value.green,.cc-kpi-value.blue,.cc-kpi-value.amber,.cc-kpi-value.red { color:#fff; }
+
+/* ---- Import card ---- */
+.cc-import-card { background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #86efac; border-radius:12px; padding:16px 20px; margin-bottom:14px; box-shadow:0 2px 8px rgba(34,197,94,.1); }
+.cc-import-card h3 { font-size:13px; font-weight:700; color:#166534; margin:0 0 10px; }
+.cc-import-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.cc-import-row label { font-size:11px; font-weight:600; color:#374151; display:block; margin-bottom:3px; }
+
+/* ---- Dropbox modal ---- */
+.dbx-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:1100; display:none; align-items:center; justify-content:center; padding:20px; }
+.dbx-modal-overlay.open { display:flex; }
+.dbx-modal { background:#fff; border-radius:16px; width:520px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease,opacity .2s ease; }
+.dbx-modal-overlay.open .dbx-modal { transform:scale(1); opacity:1; }
+.dbx-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; background:linear-gradient(135deg,#0061ff,#2563eb); border-radius:16px 16px 0 0; }
+.dbx-modal-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
+.dbx-modal-body { padding:22px; }
+.dbx-modal-body label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; display:block; margin-bottom:4px; letter-spacing:.4px; }
+.dbx-modal-body select { width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; color:#1e293b; background:#f8fafc; margin-bottom:14px; }
+.dbx-modal-body select:focus { border-color:#2563eb; outline:none; background:#fff; }
+.dbx-modal-footer { padding:14px 22px; border-top:1.5px solid #e2e8f0; display:flex; gap:10px; justify-content:flex-end; }
+#dbxResult { margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px; display:none; }
+#dbxResult.ok { background:#f0fdf4; border:1px solid #86efac; color:#166534; }
+#dbxResult.err { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; }
+#dbxResult.info { background:#eff6ff; border:1px solid #93c5fd; color:#1d4ed8; }
+
+/* ---- Filters ---- */
+.cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+.cc-filters-head { display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:0; }
+.cc-filters-head h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
+.cc-filter-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+.cc-filter-grid label { font-size:10px; font-weight:700; color:#94a3b8; display:block; margin-bottom:3px; text-transform:uppercase; }
+.cc-filter-grid input, .cc-filter-grid select {
+    width:100%; padding:6px 10px; border:1.5px solid #e2e8f0; border-radius:7px;
+    font-size:13px; color:#1e293b; background:#f8fafc;
+}
+.cc-filter-grid input:focus, .cc-filter-grid select:focus { border-color:#2563eb; outline:none; background:#fff; }
+.cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
+
+/* ---- Tabs ---- */
+.cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; }
+.cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
+.cc-tab:hover { color:#1e293b; background:#f1f5f9; }
+.cc-tab.active { color:#16a34a; border-bottom-color:#22c55e; background:#f0fdf4; }
+
+/* ---- Table ---- */
+.cc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); }
+table.cc-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.cc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+table.cc-table tr.cc-row-clickable:hover td { background:#f0fdf4; cursor:pointer; }
+table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:#166534; }
+.badge-upload  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.cc-empresa-pill { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+.cc-grupo-pill   { background:#e9d5ff; color:#7c3aed; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+
+/* Delete button */
+.btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
+.btn-del:hover { background:#fee2e2; }
+
+/* ---- Pagination ---- */
+.cc-pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; padding:4px 0; }
+.cc-pagination button { padding:5px 14px; border:1.5px solid #e2e8f0; border-radius:7px; background:#fff; cursor:pointer; font-weight:600; color:#374151; }
+.cc-pagination button:hover { background:#f1f5f9; }
+.cc-pagination button:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ---- Empty / Loading ---- */
+.cc-empty { text-align:center; padding:40px 20px; color:#94a3b8; }
+.cc-empty i { font-size:36px; margin-bottom:10px; display:block; }
+.cc-loading { text-align:center; padding:30px; color:#64748b; display:none; }
+.cc-loading i { animation:spin 1s linear infinite; font-size:22px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ---- Overlay + centered modal (itens da NF-e) ---- */
+.cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
+.cc-panel-overlay.open { display:flex; }
+.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:900px; max-width:100%; max-height:90vh; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease, opacity .2s ease; }
+.cc-panel-overlay.open .cc-panel { transform:scale(1); opacity:1; }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:16px 16px 0 0; }
+.cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
+.cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
+.cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; }
+.panel-nota-info { display:grid; grid-template-columns:1fr auto; gap:4px 20px; margin-bottom:16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:10px; padding:14px 16px; border:1.5px solid #86efac; align-items:center; }
+.panel-nota-info dt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
+.panel-nota-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0; }
+.panel-nota-info .pni-date { text-align:right; }
+/* Vinculo status dots */
+.vinc-dot { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.vinc-dot.verde   { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+.vinc-dot.amarelo { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.2); }
+.vinc-dot.vermelho{ background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.2); }
+.vinc-cell { display:flex; align-items:center; justify-content:center; gap:5px; font-size:11px; font-weight:600; }
+/* Chaves XML tab */
+.chave-cell { font-family:monospace; font-size:11px; color:#374151; word-break:break-all; max-width:380px; }
+.btn-copy-chave { background:transparent; border:1px solid #d1d5db; color:#374151; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; white-space:nowrap; transition:background .15s; }
+.btn-copy-chave:hover { background:#f0fdf4; border-color:#86efac; color:#166534; }
+.btn-copy-chave.copied { background:#dcfce7; border-color:#86efac; color:#166534; }
+.cc-chaves-toolbar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f8fafc; border-bottom:1.5px solid #e2e8f0; gap:10px; flex-wrap:wrap; }
+.cc-chaves-count { font-size:12px; color:#64748b; font-weight:600; }
+
+/* Item table inside panel */
+table.cc-items-table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:10px; overflow:hidden; }
+table.cc-items-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; padding:8px 10px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-items-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; color:#334155; }
+table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
+.prod-vinculo { display:flex; align-items:center; gap:6px; }
+.prod-vinculo select { flex:1; padding:4px 8px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:12px; background:#f8fafc; }
+.prod-vinculo button { padding:5px 10px; border-radius:6px; border:none; background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(34,197,94,.3); }
+.prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
+.vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cc-header">
+    <div>
+        <a href="{{ url_for('escrita_fiscal.index') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
+            <i class="fas fa-arrow-left"></i> Escrita Fiscal
+        </a>
+        <h1 style="margin-top:4px;"><i class="fas fa-file-search" style="color:#22c55e;margin-right:8px;"></i>Conferência de Compras</h1>
+    </div>
+    <div class="cc-actions">
+        <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="btn"
+           style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
+            <i class="fas fa-memory"></i> Memorizações
+        </a>
+        <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="btn"
+           style="background:#8b5cf6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
+            <i class="fas fa-tag"></i> Cadastro de Produtos
+        </a>
+        <button onclick="exportarCSV()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">
+            <i class="fas fa-download"></i> CSV
+        </button>
+    </div>
+</div>
+
+<!-- Seletor empresa / grupo -->
+<div class="cc-empresa-bar">
+    <label><i class="fas fa-building"></i> Visualizar por</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="sel_empresa" onchange="onEmpresaChange()">
+            <option value="">— Todas as Empresas —</option>
+            {% for e in empresas %}
+            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+            {% endfor %}
+        </select>
+        <span style="color:#d1d5db;font-size:11px;">OU</span>
+        <select id="sel_grupo" onchange="onGrupoChange()">
+            <option value="">— Todos os Grupos —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+    <button onclick="openDbxModal()"
+            style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+        <i class="fas fa-cloud-download-alt"></i> Importar do Dropbox
+    </button>
+</div>
+
+<!-- KPIs -->
+<div class="cc-kpis">
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Total de Notas</div>
+        <div class="cc-kpi-value" id="kpiNotas">{{ stats.total_notas or 0 }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Valor Total</div>
+        <div class="cc-kpi-value green" id="kpiValor">{{ stats.total_valor | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">ICMS</div>
+        <div class="cc-kpi-value blue" id="kpiICMS">{{ stats.total_icms | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">PIS</div>
+        <div class="cc-kpi-value amber" id="kpiPIS">{{ stats.total_pis | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">COFINS</div>
+        <div class="cc-kpi-value red" id="kpiCOFINS">{{ stats.total_cofins | default(0) | format_currency }}</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="cc-filters">
+    <div class="cc-filters-head" onclick="toggleFilters()">
+        <h3><i class="fas fa-filter" style="color:#22c55e;margin-right:4px;"></i>Filtros</h3>
+        <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
+    </div>
+    <div id="filterBody">
+        <div class="cc-filter-grid">
+            <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
+            <div>
+                <label>Emitente (CNPJ)</label>
+                <select id="f_emit_cnpj" style="text-transform:uppercase;">
+                    <option value="">— Todos —</option>
+                    {% for e in emitentes %}
+                    <option value="{{ e.emit_cnpj }}" style="text-transform:uppercase;">{{ e.emit_nome }} ({{ e.emit_cnpj }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>UF Emitente</label>
+                <select id="f_emit_uf">
+                    <option value="">— Todos —</option>
+                    {% for uf in uf_list %}
+                    <option value="{{ uf }}">{{ uf }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div><label>Nº da Nota</label><input type="text" id="f_num_nota" placeholder="Ex: 000123"></div>
+            <div><label>CFOP</label><input type="text" id="f_cfop" placeholder="Ex: 1102"></div>
+            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
+            <div><label>CNPJ Destinatário</label><input type="text" id="f_dest_cnpj" placeholder="Ex: 12.345.678/0001-95"></div>
+            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
+            <div>
+                <label>Origem</label>
+                <select id="f_origem">
+                    <option value="">— Todos —</option>
+                    <option value="UPLOAD">Upload Manual</option>
+                    <option value="DROPBOX">Dropbox</option>
+                </select>
+            </div>
+            <div>
+                <label>Cadastro de Produtos</label>
+                <select id="f_vinc_status">
+                    <option value="">— Todos —</option>
+                    <option value="completo">🟢 Tudo cadastrado</option>
+                    <option value="incompleto">⚠️ Incompleto (parcial + sem)</option>
+                    <option value="parcial">🟡 Cadastro parcial</option>
+                    <option value="sem">🔴 Sem cadastro</option>
+                </select>
+            </div>
+            <!-- Produto / Por Produto tab -->
+            <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
+            <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
+        </div>
+        <div class="cc-filter-actions">
+            <button onclick="applyFilters()"
+                    style="background:#22c55e;color:#fff;border:none;padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+            <button onclick="clearFilters()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;">
+                <i class="fas fa-times"></i> Limpar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="cc-tabs">
+    <div class="cc-tab active" data-tab="notas" onclick="switchTab('notas')">
+        <i class="fas fa-file-alt"></i> Notas Fiscais
+        <span id="tabBadgeNotas" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+    <div class="cc-tab" data-tab="emissor" onclick="switchTab('emissor')">
+        <i class="fas fa-building"></i> Por Emissor
+    </div>
+    <div class="cc-tab" data-tab="produto" onclick="switchTab('produto')">
+        <i class="fas fa-box-open"></i> Por Produto
+    </div>
+    <div class="cc-tab" data-tab="chaves" onclick="switchTab('chaves')">
+        <i class="fas fa-key"></i> Chaves XML
+        <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+</div>
+
+<div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
+
+<!-- Tab: Notas Fiscais -->
+<div id="tab-notas">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Nº / Série</th>
+                    <th>Empresa</th>
+                    <th>Emitente</th>
+                    <th>UF</th>
+                    <th>CFOP</th>
+                    <th>Itens</th>
+                    <th style="text-align:center;">Cadastro</th>
+                    <th style="text-align:right;">Valor R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                    <th>Origem</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="tbodyNotas">
+                <tr><td colspan="12" class="cc-empty"><i class="fas fa-file-search"></i>Selecione uma empresa e clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationNotas"></div>
+</div>
+
+<!-- Tab: Por Emissor -->
+<div id="tab-emissor" style="display:none;">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>CNPJ Emitente</th>
+                    <th>Nome Emitente</th>
+                    <th>UF</th>
+                    <th style="text-align:right;">Qtd. Notas</th>
+                    <th style="text-align:right;">Total R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                    <th style="text-align:right;">PIS</th>
+                    <th style="text-align:right;">COFINS</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyEmissor">
+                <tr><td colspan="8" class="cc-empty"><i class="fas fa-building"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Por Produto -->
+<div id="tab-produto" style="display:none;">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descrição XML</th>
+                    <th>Produto Vinculado</th>
+                    <th>NCM</th>
+                    <th>CFOP</th>
+                    <th>Unid.</th>
+                    <th style="text-align:right;">Qtd. Notas</th>
+                    <th style="text-align:right;">Qtd. Total</th>
+                    <th style="text-align:right;">Total R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyProduto">
+                <tr><td colspan="10" class="cc-empty"><i class="fas fa-box-open"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Chaves XML -->
+<div id="tab-chaves" style="display:none;">
+    <div class="cc-table-wrap">
+        <div class="cc-chaves-toolbar">
+            <span class="cc-chaves-count" id="chavesCount">0 chave(s)</span>
+            <button onclick="copiarTodasChaves()"
+                    style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-copy"></i> Copiar Todas
+            </button>
+        </div>
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Empresa</th>
+                    <th>Emitente</th>
+                    <th>Chave de Acesso XML</th>
+                    <th style="text-align:center;">Copiar</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyChaves">
+                <tr><td colspan="5" class="cc-empty"><i class="fas fa-key"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationChaves"></div>
+</div>
+
+<!-- ===================== PANEL: Itens da NF-e ===================== -->
+<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()">
+<div class="cc-panel" id="itemPanel" onclick="event.stopPropagation()">
+    <div class="cc-panel-header">
+        <h3 id="panelTitle">Itens da Nota Fiscal</h3>
+        <button onclick="closePanel()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;line-height:32px;">&times;</button>
+    </div>
+    <!-- Vincular Todos toolbar -->
+    <div id="vincularTodosBar" style="display:none;padding:12px 22px;background:#f0fdf4;border-bottom:1.5px solid #86efac;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#166534;white-space:nowrap;">
+                <i class="fas fa-bolt"></i> Vincular todos os itens:
+            </span>
+            <select id="selVincularTodos" style="flex:1;min-width:200px;padding:6px 10px;border:1.5px solid #86efac;border-radius:7px;font-size:13px;background:#fff;"></select>
+            <button onclick="vincularTodos()"
+                    style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                <i class="fas fa-check-double"></i> Aplicar a Todos
+            </button>
+        </div>
+    </div>
+    <div class="cc-panel-body" id="panelBody">
+        <div id="panelLoading" style="text-align:center;padding:40px;color:#9ca3af;">
+            <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
+        </div>
+    </div>
+    <div class="cc-panel-footer">
+        <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+            Fechar
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Importar do Dropbox ===================== -->
+<div class="dbx-modal-overlay" id="dbxModalOverlay" onclick="closeDbxModal()">
+<div class="dbx-modal" onclick="event.stopPropagation()">
+    <div class="dbx-modal-header">
+        <h3><i class="fas fa-cloud-download-alt" style="margin-right:8px;"></i>Importar do Dropbox</h3>
+        <button onclick="closeDbxModal()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;">&times;</button>
+    </div>
+    <div class="dbx-modal-body">
+        <label>Departamento</label>
+        <select id="dbxDepartamento">
+            <option value="">— Selecione o departamento —</option>
+            <option value="qualicontax-contabil">Contábil</option>
+            <option value="qualicontax-fiscal">Fiscal</option>
+            <option value="qualicontax-dp">Departamento Pessoal</option>
+            <option value="qualicontax-financeiro">Financeiro</option>
+            <option value="qualicontax-legalizacao">Legalização</option>
+            <option value="qualicontax-comercial">Comercial</option>
+        </select>
+
+        <label>Empresa (opcional)</label>
+        <select id="dbxEmpresa">
+            <option value="">— Sem empresa específica —</option>
+            {% for e in empresas %}
+            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Grupo (opcional)</label>
+        <select id="dbxGrupo">
+            <option value="">— Sem grupo —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+
+        <p style="font-size:11px;color:#94a3b8;margin:0 0 4px;">
+            <i class="fas fa-info-circle"></i>
+            O sistema lê os XMLs da pasta <strong>/{departamento}/NOVO/</strong>, importa e move para
+            <strong>IMPORTADOS</strong> ou <strong>ERROS</strong> automaticamente.
+        </p>
+
+        <div id="dbxResult"></div>
+    </div>
+    <div class="dbx-modal-footer">
+        <button onclick="closeDbxModal()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+            Fechar
+        </button>
+        <button id="btnDbxImportar" onclick="executarImportacaoDropbox()"
+                style="background:linear-gradient(135deg,#0061ff,#2563eb);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-cloud-download-alt"></i> Importar
+        </button>
+    </div>
+</div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ---- global state ----
+let currentTab = 'notas';
+let currentPage = 1;
+let currentClienteId = '';
+let currentGrupoId = '';
+let catalogoProdutos = [];
+let currentNfeId = null;
+let panelModified = false;
+
+// ---- Empresa / Grupo selector ----
+function onEmpresaChange() {
+    currentClienteId = document.getElementById('sel_empresa').value;
+    if (currentClienteId) {
+        document.getElementById('sel_grupo').value = '';
+        currentGrupoId = '';
+        updateScopeBadge('empresa', document.getElementById('sel_empresa').options[document.getElementById('sel_empresa').selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    // Sync import selector
+    if (document.getElementById('imp_empresa')) document.getElementById('imp_empresa').value = currentClienteId;
+}
+function onGrupoChange() {
+    currentGrupoId = document.getElementById('sel_grupo').value;
+    if (currentGrupoId) {
+        document.getElementById('sel_empresa').value = '';
+        currentClienteId = '';
+        updateScopeBadge('grupo', document.getElementById('sel_grupo').options[document.getElementById('sel_grupo').selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+}
+function updateScopeBadge(type, label) {
+    const b = document.getElementById('scopeBadge');
+    b.className = 'cc-scope-badge ' + type;
+    const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
+    b.innerHTML = `<i class="${icons[type]}"></i> ${label}`;
+}
+
+// ---- Tabs ----
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.cc-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    ['notas','emissor','produto','chaves'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
+    });
+    document.getElementById('f_descricao_wrap').style.display = tab === 'produto' ? '' : 'none';
+    document.getElementById('f_ncm_wrap').style.display = tab === 'produto' ? '' : 'none';
+}
+
+// ---- Filter toggle ----
+function toggleFilters() {
+    const b = document.getElementById('filterBody');
+    const c = document.getElementById('filterChevron');
+    const hidden = b.style.display === 'none';
+    b.style.display = hidden ? '' : 'none';
+    c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
+}
+function clearFilters() {
+    ['f_data_ini','f_data_fim','f_num_nota','f_cfop','f_chave','f_dest_cnpj','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('f_emit_cnpj').value = '';
+    document.getElementById('f_emit_uf').value = '';
+    document.getElementById('f_origem').value = '';
+    document.getElementById('f_vinc_status').value = '';
+    currentPage = 1;
+    applyFilters();
+}
+function getFilters() {
+    return {
+        cliente_id: currentClienteId,
+        grupo_id: currentGrupoId,
+        data_ini: document.getElementById('f_data_ini').value,
+        data_fim: document.getElementById('f_data_fim').value,
+        emit_cnpj: document.getElementById('f_emit_cnpj').value,
+        emit_uf: document.getElementById('f_emit_uf').value,
+        num_nota: document.getElementById('f_num_nota').value,
+        cfop: document.getElementById('f_cfop').value,
+        chave: document.getElementById('f_chave').value,
+        dest_cnpj: document.getElementById('f_dest_cnpj').value,
+        vmin: document.getElementById('f_vmin').value,
+        vmax: document.getElementById('f_vmax').value,
+        origem: document.getElementById('f_origem').value,
+        vinc_status: document.getElementById('f_vinc_status').value,
+        descricao: document.getElementById('f_descricao').value,
+        ncm: document.getElementById('f_ncm').value,
+    };
+}
+function applyFilters() {
+    currentPage = 1;
+    if (currentTab === 'notas') loadNotas();
+    else if (currentTab === 'emissor') loadEmissor();
+    else if (currentTab === 'chaves') loadChaves();
+    else loadProduto();
+}
+
+// ---- Formatters ----
+function fmtBRL(v) {
+    return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtNum(v,d) {
+    return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||2,maximumFractionDigits:d||4});
+}
+
+// ---- Loading ----
+function showLoad() { document.getElementById('loadingIndicator').style.display='block'; }
+function hideLoad() { document.getElementById('loadingIndicator').style.display='none'; }
+
+// ---- Load Notas ----
+function loadNotas() {
+    const f = getFilters();
+    const params = new URLSearchParams({...f, page: currentPage});
+    showLoad();
+    document.getElementById('tbodyNotas').innerHTML = '';
+    fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            document.getElementById('tabBadgeNotas').textContent = data.total;
+            // Atualiza KPI cards
+            if (data.kpi) {
+                document.getElementById('kpiNotas').textContent = data.total;
+                document.getElementById('kpiValor').textContent = fmtBRL(data.kpi.total_valor);
+                document.getElementById('kpiICMS').textContent = fmtBRL(data.kpi.total_icms);
+                document.getElementById('kpiPIS').textContent = fmtBRL(data.kpi.total_pis);
+                document.getElementById('kpiCOFINS').textContent = fmtBRL(data.kpi.total_cofins);
+            }
+            const tbody = document.getElementById('tbodyNotas');
+            if (!data.rows || data.rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
+                document.getElementById('paginationNotas').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = data.rows.map(r => {
+                const empPill = r.empresa_nome
+                    ? `<span class="cc-empresa-pill">${r.empresa_nome}</span>`
+                    : (r.grupo_nome ? `<span class="cc-grupo-pill">${r.grupo_nome}</span>` : '<span style="color:#d1d5db">—</span>');
+                const total = r.qtd_itens || 0;
+                const vinc  = r.itens_vinculados || 0;
+                let dotCls, dotTip;
+                if (total === 0)          { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
+                else if (vinc === 0)      { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
+                else if (vinc === total)  { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
+                else                     { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
+                return `<tr class="cc-row-clickable" onclick="openPanel(${r.id}, event)">
+                    <td>${r.data_emissao||'—'}</td>
+                    <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
+                    <td>${empPill}</td>
+                    <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
+                    <td>${r.emit_uf||'—'}</td>
+                    <td>${r.cfop||'—'}</td>
+                    <td style="text-align:center;">${total}</td>
+                    <td style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
+                    <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
+                    <td class="money">${fmtBRL(r.valor_icms)}</td>
+                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span></td>
+                    <td onclick="event.stopPropagation()">
+                        <button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            renderPagination('paginationNotas', data.total, data.per_page, data.page);
+        })
+        .catch(() => hideLoad());
+}
+
+// ---- Load Por Emissor ----
+function loadEmissor() {
+    const f = getFilters();
+    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});
+    showLoad();
+    fetch('{{ url_for("escrita_fiscal.api_por_emissor") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const tbody = document.getElementById('tbodyEmissor');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="cc-empty"><i class="fas fa-building"></i><br>Nenhum emissor encontrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td>${r.emit_cnpj||'—'}</td>
+                    <td style="text-transform:uppercase;">${r.emit_nome||'—'}</td>
+                    <td>${r.emit_uf||'—'}</td>
+                    <td class="money">${r.qtd_notas}</td>
+                    <td class="money">${fmtBRL(r.total_valor)}</td>
+                    <td class="money">${fmtBRL(r.total_icms)}</td>
+                    <td class="money">${fmtBRL(r.total_pis)}</td>
+                    <td class="money">${fmtBRL(r.total_cofins)}</td>
+                </tr>
+            `).join('');
+        })
+        .catch(() => hideLoad());
+}
+
+// ---- Load Por Produto ----
+function loadProduto() {
+    const f = getFilters();
+    const params = new URLSearchParams({
+        cliente_id:f.cliente_id, grupo_id:f.grupo_id,
+        data_ini:f.data_ini, data_fim:f.data_fim,
+        emit_cnpj:f.emit_cnpj, ncm:f.ncm, descricao:f.descricao,
+    });
+    showLoad();
+    fetch('{{ url_for("escrita_fiscal.api_por_produto") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const tbody = document.getElementById('tbodyProduto');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="cc-empty"><i class="fas fa-box-open"></i><br>Nenhum produto encontrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => {
+                const vincPill = r.produto_catalogo_nome
+                    ? `<span class="vinculado-badge">${r.produto_catalogo_nome}</span>`
+                    : `<span style="color:#d1d5db;font-size:11px;">Não vinculado</span>`;
+                return `<tr>
+                    <td>${r.codigo_produto||'—'}</td>
+                    <td style="text-transform:uppercase;">${r.descricao||'—'}</td>
+                    <td>${vincPill}</td>
+                    <td>${r.ncm||'—'}</td>
+                    <td>${r.cfop||'—'}</td>
+                    <td>${r.unidade||'—'}</td>
+                    <td class="money">${r.qtd_notas}</td>
+                    <td class="money">${fmtNum(r.total_qtd,2)}</td>
+                    <td class="money">${fmtBRL(r.total_valor)}</td>
+                    <td class="money">${fmtBRL(r.total_icms)}</td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(() => hideLoad());
+}
+
+// ---- Pagination ----
+function renderPagination(id, total, perPage, page) {
+    const pages = Math.ceil(total / perPage);
+    const el = document.getElementById(id);
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button onclick="goPage(${page-1})" ${page<=1?'disabled':''}><i class="fas fa-chevron-left"></i></button>
+        <span>Página ${page} de ${pages} &nbsp;|&nbsp; ${total} registro(s)</span>
+        <button onclick="goPage(${page+1})" ${page>=pages?'disabled':''}><i class="fas fa-chevron-right"></i></button>
+    `;
+}
+function goPage(p) {
+    currentPage = p;
+    chavesCurrentPage = p;
+    if (currentTab === 'chaves') loadChaves();
+    else loadNotas();
+}
+
+// ---- Delete NF-e ----
+function excluirNfe(id, btn) {
+    if (!confirm('Excluir esta nota fiscal e todos os seus itens?')) return;
+    fetch(`/escrita-fiscal/conf-compras/excluir/${id}`,
+        { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'} })
+        .then(r => r.json())
+        .then(() => { btn.closest('tr').remove(); applyFilters(); })
+        .catch(() => alert('Erro ao excluir.'));
+}
+
+// ---- Panel: Itens da NF-e ----
+function openPanel(nfeId, evt) {
+    if (currentNfeId !== nfeId) {
+        panelModified = false;
+    }
+    currentNfeId = nfeId;
+    document.getElementById('panelOverlay').classList.add('open');
+    document.getElementById('panelBody').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+    document.getElementById('vincularTodosBar').style.display = 'none';
+
+    // Load catalog for linking
+    const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
+    fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
+        .then(r => r.json())
+        .then(cats => {
+            catalogoProdutos = cats;
+            // Populate "Vincular Todos" select
+            const sel = document.getElementById('selVincularTodos');
+            sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
+            document.getElementById('vincularTodosBar').style.display = '';
+        });
+
+    fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { document.getElementById('panelBody').innerHTML = `<p style="color:red">${data.error}</p>`; return; }
+            const nota = data.nota;
+            document.getElementById('panelTitle').textContent =
+                `NF ${nota.num_nota||'s/n'} — ${(nota.emit_nome||nota.emit_cnpj||'').toUpperCase()}`;
+
+            let html = `<dl class="panel-nota-info">
+                <div><dt>Emitente</dt><dd style="text-transform:uppercase;">${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
+                <div class="pni-date"><dt>Data Emissão</dt><dd>${nota.data_emissao||'—'}</dd></div>
+                <div><dt>Destinatário</dt><dd style="text-transform:uppercase;">${nota.dest_nome||'—'}</dd></div>
+                <div></div>
+            </dl>`;
+
+            if (!data.itens || data.itens.length === 0) {
+                html += '<p style="color:#9ca3af;text-align:center;">Nenhum item encontrado nesta NF-e.</p>';
+            } else {
+                html += `<table class="cc-items-table">
+                    <thead><tr>
+                        <th>#</th><th>Código</th><th>Descrição</th><th>NCM</th>
+                        <th class="r">Qtd.</th><th class="r">Vl.Unit</th><th class="r">Total R$</th>
+                        <th>Produto Vinculado</th>
+                    </tr></thead><tbody>`;
+                data.itens.forEach(it => {
+                    const cid = nota.cliente_id||'null', gid = nota.grupo_id||'null';
+                    let vinculoHtml;
+                    if (it.produto_catalogo_id && it.produto_catalogo_nome) {
+                        vinculoHtml = `<span class="vinculado-badge">${it.produto_catalogo_nome}</span>
+                            <button onclick="desvincular(${it.id})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+                    } else {
+                        const opts = buildProdOpts(it.produto_catalogo_id);
+                        vinculoHtml = `<select id="sel_prod_${it.id}">${opts}</select>
+                            <button onclick="vincularProduto(${it.id}, ${cid}, ${gid})">Vincular</button>`;
+                    }
+                    html += `<tr>
+                        <td>${it.num_item}</td>
+                        <td>${it.codigo_produto||'—'}</td>
+                        <td style="text-transform:uppercase;">${it.descricao||'—'}</td>
+                        <td>${it.ncm||'—'}</td>
+                        <td class="r">${fmtNum(it.quantidade,3)} ${it.unidade||''}</td>
+                        <td class="r">${fmtBRL(it.valor_unitario)}</td>
+                        <td class="r"><strong>${fmtBRL(it.valor_total)}</strong></td>
+                        <td>
+                            <div class="prod-vinculo" id="vinculo_${it.id}">
+                                ${vinculoHtml}
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            document.getElementById('panelBody').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('panelBody').innerHTML = '<p style="color:red">Erro ao carregar itens.</p>';
+        });
+}
+
+function buildProdOpts(selectedId) {
+    let opts = '<option value="">— Sem vínculo —</option>';
+    let lastCat = '';
+    catalogoProdutos.forEach(p => {
+        if (p.categoria !== lastCat) {
+            if (lastCat) opts += '</optgroup>';
+            opts += `<optgroup label="${p.categoria||'Sem categoria'}">`;
+            lastCat = p.categoria;
+        }
+        opts += `<option value="${p.id}" ${p.id == selectedId ? 'selected':''}>${p.nome}</option>`;
+    });
+    if (lastCat) opts += '</optgroup>';
+    return opts;
+}
+
+function closePanel() {
+    document.getElementById('panelOverlay').classList.remove('open');
+    currentNfeId = null;
+    if (panelModified) {
+        panelModified = false;
+        applyFilters();
+    }
+}
+
+function vincularProduto(itemId, clienteId, grupoId) {
+    const sel = document.getElementById('sel_prod_' + itemId);
+    const produtoId = sel.value ? parseInt(sel.value) : null;
+    fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            panelModified = true;
+            const wrap = document.getElementById('vinculo_' + itemId);
+            if (produtoId && data.produto_nome) {
+                wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
+                    <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+            } else {
+                // Rebuild with fresh select
+                const opts = buildProdOpts(null);
+                wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+                    <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+            }
+        }
+    });
+}
+
+function desvincular(itemId) {
+    const wrap = document.getElementById('vinculo_' + itemId);
+    const opts = buildProdOpts(null);
+    wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+        <button onclick="vincularProduto(${itemId}, null, null)">Vincular</button>`;
+}
+
+// ---- Vincular Todos os itens da NF-e ao mesmo produto ----
+function vincularTodos() {
+    const sel = document.getElementById('selVincularTodos');
+    const produtoId = sel.value ? parseInt(sel.value) : null;
+    if (!produtoId) { alert('Selecione um produto para vincular.'); return; }
+    if (!currentNfeId) return;
+    if (!confirm('Aplicar este produto a TODOS os itens desta NF-e?')) return;
+    fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nfe_id: currentNfeId, produto_id: produtoId}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            panelModified = true;
+            // Refresh modal items
+            openPanel(currentNfeId, null);
+        }
+    })
+    .catch(() => alert('Erro ao vincular todos.'));
+}
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+    // Página inicia zerada — usuário deve selecionar empresa e clicar em Buscar
+});
+function syncDropbox() {
+    const btn = document.getElementById('btnDropbox');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+    fetch('{{ url_for("escrita_fiscal.sync_dropbox") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({cliente_id: currentClienteId||null, grupo_id: currentGrupoId||null}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar';
+        document.getElementById('dropboxMsg').textContent = data.msg || data.error || '';
+        if (data.ok > 0) applyFilters();
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar';
+    });
+}
+
+// ---- CSV Export ----
+function exportarCSV() {
+    const f = getFilters();
+    const params = new URLSearchParams({...f, page:1, per_page:99999});
+    fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.rows || !data.rows.length) { alert('Nenhuma nota para exportar.'); return; }
+            const cols = ['data_emissao','num_nota','serie','emit_cnpj','emit_nome','emit_uf',
+                          'dest_cnpj','dest_nome','empresa_nome','cfop','natureza_operacao',
+                          'valor_total','valor_icms','valor_pis','valor_cofins','valor_ipi','origem','chave_acesso'];
+            let csv = cols.join(';') + '\n';
+            data.rows.forEach(r => {
+                csv += cols.map(c => JSON.stringify(r[c]??'')).join(';') + '\n';
+            });
+            const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'conf_compras.csv';
+            a.click();
+        });
+}
+
+// ---- Load Chaves XML ----
+let chavesData = []; // store all rows for copy-all
+let chavesCurrentPage = 1;
+const chavesPerPage = 100;
+
+function loadChaves() {
+    const f = getFilters();
+    // use api_notas but grab all rows up to 5000 (enough for copy-all)
+    const params = new URLSearchParams({...f, page: chavesCurrentPage, per_page: chavesPerPage});
+    showLoad();
+    document.getElementById('tbodyChaves').innerHTML = '';
+    fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const rows = data.rows || [];
+            chavesData = rows;
+            document.getElementById('tabBadgeChaves').textContent = data.total || 0;
+            document.getElementById('chavesCount').textContent = (data.total || 0) + ' chave(s)';
+            const tbody = document.getElementById('tbodyChaves');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="cc-empty"><i class="fas fa-key"></i><br>Nenhuma nota encontrada</td></tr>';
+                document.getElementById('paginationChaves').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = rows.map((r, idx) => {
+                const emp = r.empresa_nome || r.grupo_nome || '—';
+                const chave = r.chave_acesso || '—';
+                return `<tr>
+                    <td style="white-space:nowrap;">${r.data_emissao||'—'}</td>
+                    <td>${emp}</td>
+                    <td style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
+                    <td class="chave-cell">${chave}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-copy-chave" onclick="copiarChave(this, '${chave.replace(/'/g,"\\'")}')">
+                            <i class="fas fa-copy"></i> Copiar
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            renderPagination('paginationChaves', data.total, data.per_page || chavesPerPage, data.page || chavesCurrentPage);
+        })
+        .catch(() => { hideLoad(); });
+}
+
+function copiarChave(btn, chave) {
+    navigator.clipboard.writeText(chave).then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiada';
+        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '<i class="fas fa-copy"></i> Copiar'; }, 2000);
+    });
+}
+
+function copiarTodasChaves() {
+    if (!chavesData.length) { alert('Nenhuma chave disponível. Clique em Buscar primeiro.'); return; }
+    const texto = chavesData.map(r => r.chave_acesso||'').filter(Boolean).join('\n');
+    navigator.clipboard.writeText(texto).then(() => {
+        const btn = event.currentTarget;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiadas!';
+        btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2500);
+    });
+}
+
+// ---- Modal Dropbox ----
+function openDbxModal() {
+    const overlay = document.getElementById('dbxModalOverlay');
+    overlay.classList.add('open');
+    // Pre-seleciona empresa/grupo da barra principal
+    const emp = document.getElementById('dbxEmpresa');
+    const grp = document.getElementById('dbxGrupo');
+    if (emp && currentClienteId) emp.value = currentClienteId;
+    if (grp && currentGrupoId) grp.value = currentGrupoId;
+    // Pre-seleciona fiscal como padrão
+    const dept = document.getElementById('dbxDepartamento');
+    if (dept && !dept.value) dept.value = 'qualicontax-fiscal';
+    document.getElementById('dbxResult').style.display = 'none';
+}
+
+function closeDbxModal() {
+    document.getElementById('dbxModalOverlay').classList.remove('open');
+}
+
+function executarImportacaoDropbox() {
+    const departamento = document.getElementById('dbxDepartamento').value;
+    if (!departamento) { alert('Selecione o departamento.'); return; }
+
+    const cliente_id = document.getElementById('dbxEmpresa').value || null;
+    const grupo_id = document.getElementById('dbxGrupo').value || null;
+
+    const btn = document.getElementById('btnDbxImportar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+
+    const result = document.getElementById('dbxResult');
+    result.style.display = 'none';
+
+    fetch('{{ url_for("escrita_fiscal.api_importar_dropbox") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({departamento, cliente_id, grupo_id}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+        result.style.display = 'block';
+        if (data.error) {
+            result.className = 'err';
+            result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
+        } else {
+            result.className = data.err > 0 ? 'err' : 'ok';
+            let html = '<strong>' + (data.msg || '') + '</strong>';
+            if (data.details && data.details.length) {
+                html += '<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;">';
+                data.details.forEach(d => { html += '<li>' + d + '</li>'; });
+                html += '</ul>';
+            }
+            result.innerHTML = html;
+            if (data.ok > 0) applyFilters();
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+        result.style.display = 'block';
+        result.className = 'err';
+        result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão.';
+    });
+}
+
+</script>
+{% endblock %}

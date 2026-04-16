@@ -36,3 +36,12 @@ class Config:
     
     # Pagination
     ITEMS_PER_PAGE = 10
+
+    # Dropbox — OAuth2 com refresh token (recomendado)
+    DROPBOX_APP_KEY = os.getenv('DROPBOX_APP_KEY', '')
+    DROPBOX_APP_SECRET = os.getenv('DROPBOX_APP_SECRET', '')
+    DROPBOX_REDIRECT_URI = os.getenv('DROPBOX_REDIRECT_URI', '')
+    DROPBOX_REFRESH_TOKEN = os.getenv('DROPBOX_REFRESH_TOKEN', '')
+    # Legado — access token de longa duração (mantido para compatibilidade)
+    DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN', '')
+    DROPBOX_XML_FOLDER = os.getenv('DROPBOX_XML_FOLDER', '/qualicontax/xml-compras')

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Financeiro - Qualicontax{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Financeiro</h1>
+        <p class="page-subtitle">Controle de recebimentos, pagamentos e fluxo de caixa</p>
+    </div>
+</div>
+
+<div class="module-tiles">
+
+    <a href="{{ url_for('financeiro.recebimento_index') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+            <i class="fas fa-hand-holding-dollar"></i>
+        </div>
+        <h3 class="module-tile-title">Recebimentos</h3>
+        <p class="module-tile-desc">Lançamentos de recebimentos e honorários dos clientes</p>
+        <span class="module-tile-action"><i class="fas fa-plus-circle"></i> Novo Recebimento</span>
+    </a>
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+            <i class="fas fa-file-invoice-dollar"></i>
+        </div>
+        <h3 class="module-tile-title">Contas a Pagar</h3>
+        <p class="module-tile-desc">Controle de despesas e contas a pagar do escritório</p>
+    </a>
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+            <i class="fas fa-university"></i>
+        </div>
+        <h3 class="module-tile-title">Contas Bancárias</h3>
+        <p class="module-tile-desc">Saldos e movimentações das contas bancárias do escritório</p>
+    </a>
+
+    <a href="#" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <i class="fas fa-chart-area"></i>
+        </div>
+        <h3 class="module-tile-title">Fluxo de Caixa</h3>
+        <p class="module-tile-desc">Projeção e controle do fluxo de caixa mensal</p>
+    </a>
+
+</div>
+{% endblock %}

@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+{% block title %}Cadastro de Produtos - Conferência de Compras{% endblock %}
+
+{% block extra_css %}
+<style>
+.pc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.pc-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+
+/* Filter bar */
+.pc-filterbar { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; box-shadow:0 1px 6px rgba(0,0,0,.05); }
+.pc-filterbar label { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; display:block; margin-bottom:3px; letter-spacing:.4px; }
+.pc-filterbar select { padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; min-width:180px; background:#f8fafc; }
+
+/* Table */
+.pc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); }
+table.pc-table { width:100%; border-collapse:collapse; font-size:13px; }
+table.pc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; padding:10px 14px; border-bottom:2px solid #e2e8f0; white-space:nowrap; letter-spacing:.4px; }
+table.pc-table td { padding:10px 14px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+table.pc-table tr:hover td { background:#f8fafc; }
+.cat-badge { background:#e2e8f0; color:#475569; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-revenda  { background:#dcfce7; color:#16a34a; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-consumo  { background:#fef3c7; color:#b45309; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-ativo    { background:#dbeafe; color:#1d4ed8; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.uso-outros   { background:#f3e8ff; color:#7c3aed; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.ativo-yes { color:#16a34a; font-weight:700; }
+.ativo-no  { color:#dc2626; }
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:1000; align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal-box { background:#fff; border-radius:14px; padding:28px; width:540px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.18); }
+.modal-box h3 { font-size:16px; font-weight:700; margin:0 0 18px; color:#1e293b; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-grid .full { grid-column:1/-1; }
+.form-group label { font-size:11px; font-weight:700; color:#64748b; display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.3px; }
+.form-group input, .form-group select, .form-group textarea {
+    width:100%; padding:8px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; box-sizing:border-box; background:#f8fafc;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:#8b5cf6; outline:none; background:#fff; }
+.modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:22px; }
+
+/* Empty */
+.pc-empty { text-align:center; padding:48px 20px; color:#94a3b8; }
+.pc-empty i { font-size:40px; margin-bottom:10px; display:block; }
+
+/* Categorias modal */
+.cat-mgmt-box { width:680px; }
+.cat-section { border:1.5px solid #e2e8f0; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+.cat-section-head { background:#f8fafc; padding:10px 14px; font-weight:700; font-size:13px; color:#1e293b; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e2e8f0; }
+.sub-list { padding:8px 14px; display:flex; flex-wrap:wrap; gap:6px; }
+.sub-tag { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:99px; padding:3px 10px; font-size:12px; color:#475569; display:flex; align-items:center; gap:5px; }
+.sub-tag button { background:none; border:none; color:#dc2626; cursor:pointer; font-size:11px; padding:0; line-height:1; }
+.cat-add-row { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px dashed #e2e8f0; }
+.cat-add-row input { flex:1; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; background:#fff; }
+.cat-add-row button { background:#8b5cf6; color:#fff; border:none; padding:7px 14px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.new-cat-row { display:flex; gap:8px; margin-top:12px; }
+.new-cat-row input { flex:1; padding:9px 12px; border:1.5px solid #8b5cf6; border-radius:8px; font-size:13px; }
+.new-cat-row button { background:#8b5cf6; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+.del-cat-btn { background:#fee2e2; border:none; color:#dc2626; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pc-header">
+    <div>
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
+            <i class="fas fa-arrow-left"></i> Conferência de Compras
+        </a>
+        <h1 style="margin-top:4px;"><i class="fas fa-tag" style="color:#8b5cf6;margin-right:8px;"></i>Cadastro de Produtos</h1>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <button onclick="openCatModal()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-folder-open"></i> Gerenciar Categorias
+        </button>
+        <button onclick="openModal()" style="background:#8b5cf6;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-plus"></i> Novo Produto
+        </button>
+    </div>
+</div>
+
+<!-- Filter bar -->
+<form method="GET" action="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="pc-filterbar">
+    <div>
+        <label>Empresa</label>
+        <select name="cliente_id" onchange="this.form.submit()">
+            <option value="">— Todas —</option>
+            {% for e in empresas %}
+            <option value="{{ e.id }}" {% if f_cliente_id == e.id|string %}selected{% endif %}>{{ e.nome_razao_social }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label>Grupo</label>
+        <select name="grupo_id" onchange="this.form.submit()">
+            <option value="">— Todos —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}" {% if f_grupo_id == g.id|string %}selected{% endif %}>{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+<!-- Table -->
+{% if produtos %}
+<div class="pc-table-wrap">
+    <table class="pc-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Subcategoria</th>
+                <th>Tipo de Entrada</th>
+                <th>Unid.</th>
+                <th>Empresa / Grupo</th>
+                <th>Ativo</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in produtos %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.codigo or '—' }}</td>
+                <td><strong>{{ p.nome }}</strong></td>
+                <td><span class="cat-badge">{{ p.categoria or '—' }}</span></td>
+                <td>{{ p.subcategoria or '—' }}</td>
+                <td>
+                    {% if p.tipo_uso == 'Compra para Revenda' %}
+                        <span class="uso-revenda"><i class="fas fa-store"></i> Revenda</span>
+                    {% elif p.tipo_uso == 'Compra para Consumo' %}
+                        <span class="uso-consumo"><i class="fas fa-industry"></i> Consumo</span>
+                    {% elif p.tipo_uso == 'Ativo Imobilizado' %}
+                        <span class="uso-ativo"><i class="fas fa-building"></i> Ativo Imob.</span>
+                    {% elif p.tipo_uso %}
+                        <span class="uso-outros">{{ p.tipo_uso }}</span>
+                    {% else %}
+                        <span style="color:#9ca3af;font-size:11px;">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ p.unidade or '—' }}</td>
+                <td>
+                    {% if p.empresa_nome %}
+                        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">{{ p.empresa_nome }}</span>
+                    {% elif p.grupo_nome %}
+                        <span style="background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">{{ p.grupo_nome }}</span>
+                    {% else %}
+                        <span style="color:#9ca3af;font-size:11px;">Global</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if p.ativo %}
+                        <span class="ativo-yes"><i class="fas fa-check"></i></span>
+                    {% else %}
+                        <span class="ativo-no"><i class="fas fa-times"></i></span>
+                    {% endif %}
+                </td>
+                <td style="display:flex;gap:6px;">
+                    <button onclick='editModal({{ p | tojson }})'
+                            style="background:#f3f4f6;border:1px solid #d1d5db;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <form method="POST" action="{{ url_for('escrita_fiscal.produtos_catalogo_excluir', pid=p.id) }}"
+                          onsubmit="return confirm('Excluir este produto?')">
+                        <button type="submit" style="background:#fee2e2;border:none;color:#dc2626;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="pc-empty">
+    <i class="fas fa-tag"></i>
+    <p>Nenhum produto cadastrado.</p>
+    <p style="font-size:13px;">
+        Cadastre os produtos para vinculá-los às notas fiscais importadas.<br>
+        Para Postos de Combustíveis, sugerimos começar pelos combustíveis abaixo:
+    </p>
+    <button onclick="seedCombustiveis()" style="background:#22c55e;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">
+        <i class="fas fa-gas-pump"></i> Cadastrar Produtos Padrão (Combustíveis)
+    </button>
+</div>
+{% endif %}
+
+<!-- Modal Cadastro / Edição de Produto -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+        <h3 id="modalTitle">Novo Produto</h3>
+        <form method="POST" action="{{ url_for('escrita_fiscal.produtos_catalogo_salvar') }}">
+            <input type="hidden" name="id" id="m_id">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Código</label>
+                    <input type="text" name="codigo" id="m_codigo" placeholder="Código interno (opcional)">
+                </div>
+                <div class="form-group">
+                    <label>Nome *</label>
+                    <input type="text" name="nome" id="m_nome" required placeholder="Ex: Gasolina Comum">
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select name="categoria" id="m_categoria" onchange="updateSubcat()">
+                        <option value="">— Selecione —</option>
+                        {% for cat, subs in categorias %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Subcategoria</label>
+                    <select name="subcategoria" id="m_subcategoria">
+                        <option value="">— Selecione —</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label>Tipo de Entrada / Uso <span style="color:#dc2626;">*</span></label>
+                    <select name="tipo_uso" id="m_tipo_uso">
+                        <option value="">— Não definido —</option>
+                        <option value="Compra para Revenda">🏪 Compra para Revenda</option>
+                        <option value="Compra para Consumo">🏭 Compra para Consumo / Uso e Consumo</option>
+                        <option value="Ativo Imobilizado">🏗️ Ativo Imobilizado</option>
+                    </select>
+                    <small style="color:#64748b;font-size:11px;margin-top:3px;display:block;">
+                        Define o tratamento fiscal da entrada. Ex.: Posto de Gasolina = <strong>Revenda</strong>; Transportadora = <strong>Consumo</strong>.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label>Unidade</label>
+                    <input type="text" name="unidade" id="m_unidade" placeholder="Ex: L, UN, KG">
+                </div>
+                <div class="form-group">
+                    <label>Empresa</label>
+                    <select name="cliente_id" id="m_cliente_id">
+                        <option value="">— Global (todas) —</option>
+                        {% for e in empresas %}
+                        <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Grupo</label>
+                    <select name="grupo_id" id="m_grupo_id">
+                        <option value="">— Nenhum —</option>
+                        {% for g in grupos %}
+                        <option value="{{ g.id }}">{{ g.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:22px;">
+                    <input type="checkbox" name="ativo" id="m_ativo" value="1" checked style="width:16px;height:16px;">
+                    <label for="m_ativo" style="font-size:13px;color:#374151;text-transform:none;margin:0;">Ativo</label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" onclick="closeModal()"
+                        style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+                    Cancelar
+                </button>
+                <button type="submit"
+                        style="background:#8b5cf6;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Gerenciar Categorias -->
+<div class="modal-overlay" id="catModalOverlay">
+    <div class="modal-box cat-mgmt-box">
+        <h3><i class="fas fa-folder-open" style="color:#8b5cf6;margin-right:8px;"></i>Gerenciar Categorias e Sub-Categorias</h3>
+
+        <div id="catList">
+            {% for cat in cats_db %}
+            <div class="cat-section" id="catSection{{ cat.id }}">
+                <div class="cat-section-head">
+                    <span><i class="fas fa-layer-group" style="color:#8b5cf6;margin-right:6px;"></i>{{ cat.nome }}</span>
+                    <form method="POST" action="{{ url_for('escrita_fiscal.categoria_excluir', cid=cat.id) }}"
+                          onsubmit="return confirm('Excluir a categoria {{ cat.nome }}? Todas as sub-categorias também serão removidas.')">
+                        <button type="submit" class="del-cat-btn"><i class="fas fa-trash-alt"></i> Excluir</button>
+                    </form>
+                </div>
+                <div class="sub-list">
+                    {% set cat_subs = subs_db | selectattr('categoria_id', 'equalto', cat.id) | list %}
+                    {% if cat_subs %}
+                        {% for s in cat_subs %}
+                        <span class="sub-tag">
+                            {{ s.nome }}
+                            <form method="POST" action="{{ url_for('escrita_fiscal.subcategoria_excluir', sid=s.id) }}"
+                                  onsubmit="return confirm('Excluir sub-categoria {{ s.nome }}?')" style="display:inline;">
+                                <button type="submit" title="Excluir sub-categoria"><i class="fas fa-times"></i></button>
+                            </form>
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <span style="color:#9ca3af;font-size:12px;font-style:italic;">Nenhuma sub-categoria</span>
+                    {% endif %}
+                </div>
+                <div class="cat-add-row">
+                    <form method="POST" action="{{ url_for('escrita_fiscal.subcategoria_criar') }}" style="display:flex;gap:8px;width:100%;">
+                        <input type="hidden" name="categoria_id" value="{{ cat.id }}">
+                        <input type="text" name="nome" placeholder="Nova sub-categoria..." required>
+                        <button type="submit"><i class="fas fa-plus"></i> Adicionar</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">Nenhuma categoria cadastrada ainda.</p>
+            {% endfor %}
+        </div>
+
+        <div class="new-cat-row">
+            <form method="POST" action="{{ url_for('escrita_fiscal.categoria_criar') }}" style="display:flex;gap:8px;width:100%;">
+                <input type="text" name="nome" placeholder="Nome da nova categoria..." required>
+                <button type="submit"><i class="fas fa-folder-plus"></i> Nova Categoria</button>
+            </form>
+        </div>
+
+        <div class="modal-actions" style="margin-top:18px;">
+            <button type="button" onclick="closeCatModal()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+                Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const categorias = {{ categorias | tojson }};
+
+function openModal() {
+    document.getElementById('modalTitle').textContent = 'Novo Produto';
+    document.getElementById('m_id').value = '';
+    document.getElementById('m_codigo').value = '';
+    document.getElementById('m_nome').value = '';
+    document.getElementById('m_categoria').value = '';
+    document.getElementById('m_subcategoria').innerHTML = '<option value="">— Selecione —</option>';
+    document.getElementById('m_tipo_uso').value = '';
+    document.getElementById('m_unidade').value = '';
+    document.getElementById('m_cliente_id').value = '';
+    document.getElementById('m_grupo_id').value = '';
+    document.getElementById('m_ativo').checked = true;
+    document.getElementById('modalOverlay').classList.add('open');
+}
+
+function editModal(p) {
+    document.getElementById('modalTitle').textContent = 'Editar Produto';
+    document.getElementById('m_id').value = p.id;
+    document.getElementById('m_codigo').value = p.codigo || '';
+    document.getElementById('m_nome').value = p.nome || '';
+    document.getElementById('m_categoria').value = p.categoria || '';
+    updateSubcat(p.subcategoria);
+    document.getElementById('m_tipo_uso').value = p.tipo_uso || '';
+    document.getElementById('m_unidade').value = p.unidade || '';
+    document.getElementById('m_cliente_id').value = p.cliente_id || '';
+    document.getElementById('m_grupo_id').value = p.grupo_id || '';
+    document.getElementById('m_ativo').checked = !!p.ativo;
+    document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function openCatModal() {
+    document.getElementById('catModalOverlay').classList.add('open');
+}
+
+function closeCatModal() {
+    document.getElementById('catModalOverlay').classList.remove('open');
+}
+
+function updateSubcat(selected) {
+    const cat = document.getElementById('m_categoria').value;
+    const sel = document.getElementById('m_subcategoria');
+    sel.innerHTML = '<option value="">— Selecione —</option>';
+    const entry = categorias.find(c => c[0] === cat);
+    if (entry && entry[1].length) {
+        entry[1].forEach(s => {
+            const o = document.createElement('option');
+            o.value = s; o.textContent = s;
+            if (s === selected) o.selected = true;
+            sel.appendChild(o);
+        });
+    }
+}
+
+function seedCombustiveis() {
+    const produtos = [
+        {nome:'Gasolina Comum', categoria:'Combustíveis', subcategoria:'Gasolina Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Gasolina Aditivada', categoria:'Combustíveis', subcategoria:'Gasolina Aditivada', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Etanol Comum', categoria:'Combustíveis', subcategoria:'Etanol Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Etanol Aditivado', categoria:'Combustíveis', subcategoria:'Etanol Aditivado', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S-500 Comum', categoria:'Combustíveis', subcategoria:'Diesel S-500 Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S-500 Aditivado', categoria:'Combustíveis', subcategoria:'Diesel S-500 Aditivado', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S10 Comum', categoria:'Combustíveis', subcategoria:'Diesel S10 Comum', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Diesel S10 Aditivado', categoria:'Combustíveis', subcategoria:'Diesel S10 Aditivado', tipo_uso:'Compra para Revenda', unidade:'L'},
+        {nome:'Loja de Conveniência', categoria:'Loja de Conveniência', subcategoria:'', tipo_uso:'Compra para Revenda', unidade:'UN'},
+        {nome:'Lubrificantes e Aditivos', categoria:'Lubrificantes e Aditivos', subcategoria:'', tipo_uso:'Compra para Revenda', unidade:'UN'},
+        {nome:'Insumos e Despesas', categoria:'Insumos e Despesas', subcategoria:'', tipo_uso:'Compra para Consumo', unidade:'UN'},
+    ];
+    const sends = produtos.map(p => {
+        const fd = new FormData();
+        Object.entries(p).forEach(([k,v]) => fd.append(k,v));
+        fd.append('ativo','1');
+        return fetch('{{ url_for("escrita_fiscal.produtos_catalogo_salvar") }}', {method:'POST',body:fd});
+    });
+    Promise.all(sends).then(() => location.reload());
+}
+
+document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+document.getElementById('catModalOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('catModalOverlay')) closeCatModal();
+});
+</script>
+{% endblock %}
+
