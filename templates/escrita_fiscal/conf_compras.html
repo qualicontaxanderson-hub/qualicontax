@@ -489,6 +489,7 @@ let currentClienteId = '';
 let currentGrupoId = '';
 let catalogoProdutos = [];
 let currentNfeId = null;
+let panelModified = false;
 
 // ---- Empresa / Grupo selector ----
 function onEmpresaChange() {
@@ -750,6 +751,7 @@ function excluirNfe(id, btn) {
 // ---- Panel: Itens da NF-e ----
 function openPanel(nfeId, evt) {
     currentNfeId = nfeId;
+    panelModified = false;
     document.getElementById('panelOverlay').classList.add('open');
     document.getElementById('panelBody').innerHTML =
         '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
@@ -844,6 +846,10 @@ function buildProdOpts(selectedId) {
 function closePanel() {
     document.getElementById('panelOverlay').classList.remove('open');
     currentNfeId = null;
+    if (panelModified) {
+        panelModified = false;
+        applyFilters();
+    }
 }
 
 function vincularProduto(itemId, clienteId, grupoId) {
@@ -857,6 +863,7 @@ function vincularProduto(itemId, clienteId, grupoId) {
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
+            panelModified = true;
             const wrap = document.getElementById('vinculo_' + itemId);
             if (produtoId && data.produto_nome) {
                 wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
@@ -893,6 +900,7 @@ function vincularTodos() {
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
+            panelModified = true;
             // Refresh modal items
             openPanel(currentNfeId, null);
         }
