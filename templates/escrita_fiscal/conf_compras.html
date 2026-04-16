@@ -250,10 +250,10 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
             <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
             <div>
                 <label>Emitente (CNPJ)</label>
-                <select id="f_emit_cnpj">
+                <select id="f_emit_cnpj" style="text-transform:uppercase;">
                     <option value="">— Todos —</option>
                     {% for e in emitentes %}
-                    <option value="{{ e.emit_cnpj }}">{{ e.emit_nome }} ({{ e.emit_cnpj }})</option>
+                    <option value="{{ e.emit_cnpj }}" style="text-transform:uppercase;">{{ e.emit_nome }} ({{ e.emit_cnpj }})</option>
                     {% endfor %}
                 </select>
             </div>
