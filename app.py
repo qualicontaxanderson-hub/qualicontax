@@ -303,6 +303,7 @@ _execute_query("""
         nome VARCHAR(255) NOT NULL,
         categoria VARCHAR(100) DEFAULT '',
         subcategoria VARCHAR(100) DEFAULT '',
+        tipo_uso VARCHAR(50) NULL DEFAULT NULL,
         unidade VARCHAR(6) DEFAULT '',
         ativo TINYINT(1) NOT NULL DEFAULT 1,
         criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -310,6 +311,18 @@ _execute_query("""
         INDEX idx_grp (grupo_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
+
+# Incremental: add tipo_uso to nfe_produtos_catalogo (column missing from initial CREATE TABLE)
+_col_exists = _execute_query(
+    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_produtos_catalogo' AND COLUMN_NAME = 'tipo_uso'",
+    fetch=True, fetch_one=True,
+) or {}
+if _col_exists.get('cnt', 0) == 0:
+    _execute_query(
+        "ALTER TABLE nfe_produtos_catalogo ADD COLUMN tipo_uso VARCHAR(50) NULL DEFAULT NULL AFTER subcategoria",
+        fetch=False,
+    )
 
 # ---- Regras de vínculo automático (emit_cnpj + cod_xml → produto_catalogo) ----
 _execute_query("""
