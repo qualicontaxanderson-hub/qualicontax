@@ -1,4 +1,5 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
+import logging
 import re
 from datetime import datetime
 from flask import (
@@ -10,6 +11,8 @@ from utils.db_helper import execute_query
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 _MAX_XML_SIZE = 16_000_000  # MEDIUMTEXT max is 16 MB
 
@@ -729,6 +732,12 @@ def api_importar_dropbox():
 
     svc = dropbox_sync._service
 
+    # Logs diagnósticos: varremos a raiz e as subpastas para validar paths reais
+    logger.info('=== DROPBOX DIAGNÓSTICO (departamento=%r) ===', departamento)
+    logger.info('Raiz APP FOLDER: %r', svc.list_folder(''))
+    logger.info('list_folder("/%s"): %r', departamento, svc.list_folder(f'/{departamento}'))
+    logger.info('list_folder("/%s/NOVO"): %r', departamento, svc.list_folder(f'/{departamento}/NOVO'))
+
     # Descobre o nome da empresa/grupo para as pastas de destino
     empresa_nome = 'GLOBAL'
     if cliente_id:
@@ -747,6 +756,7 @@ def api_importar_dropbox():
             empresa_nome = g['nome']
 
     pasta_novo = svc.pasta_novo(departamento)
+    logger.info('Buscando XMLs em: %r', pasta_novo)
     files = svc.list_xml_files(pasta_novo)
 
     if not files:

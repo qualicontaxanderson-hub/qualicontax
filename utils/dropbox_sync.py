@@ -13,6 +13,14 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 DEPARTAMENTOS = [
+    # Nomes usados na APP FOLDER do Dropbox (caminhos relativos à raiz do app)
+    'Fiscal',
+    'Contabil',
+    'DP',
+    'Financeiro',
+    'Legalizacao',
+    'Comercial',
+    # Nomes legados — mantidos para compatibilidade com importações antigas
     'qualicontax-contabil',
     'qualicontax-fiscal',
     'qualicontax-dp',
@@ -75,10 +83,12 @@ class DropboxService:
         """Lista todos os itens de uma pasta (arquivos e sub-pastas)."""
         dbx = self._client()
         if not dbx:
+            logger.error('list_folder(%s): cliente Dropbox não disponível (token não configurado?)', path)
             return []
         entries = []
         try:
             import dropbox as dropbox_sdk
+            logger.info('Dropbox list_folder: path=%r', path)
             result = dbx.files_list_folder(path)
             while True:
                 for entry in result.entries:
@@ -92,16 +102,22 @@ class DropboxService:
                 if not result.has_more:
                     break
                 result = dbx.files_list_folder_continue(result.cursor)
+            logger.info('Dropbox list_folder(%r): %d item(s) encontrado(s): %s',
+                        path, len(entries), [e['name'] for e in entries])
         except Exception as exc:
-            logger.error('Erro ao listar pasta Dropbox %s: %s', path, exc)
+            logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
         return entries
 
     def list_xml_files(self, path: str) -> list:
         """Lista apenas arquivos .xml de uma pasta."""
-        return [
-            f for f in self.list_folder(path)
+        all_files = self.list_folder(path)
+        xml_files = [
+            f for f in all_files
             if f.get('is_file') and f['name'].lower().endswith('.xml')
         ]
+        logger.info('Dropbox list_xml_files(%r): %d arquivo(s) .xml de %d item(s)',
+                    path, len(xml_files), len(all_files))
+        return xml_files
 
     def download_file(self, path: str):
         """Baixa um arquivo e retorna seu conteúdo como bytes, ou None em caso de erro."""
