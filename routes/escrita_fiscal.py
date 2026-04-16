@@ -453,7 +453,8 @@ def api_vincular_produto():
         (produto_id, item_id),
     )
 
-    # Salva regra de auto-vínculo
+    # Salva regra de auto-vínculo e aplica retroativamente em todos os itens históricos
+    retroativos = 0
     if salvar_regra and produto_id:
         emit_cnpj = item['emit_cnpj']
         cod = item['codigo_produto']
@@ -468,6 +469,32 @@ def api_vincular_produto():
         # Salva regra com escopo de ramo de atividade
         _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
 
+        # Aplica retroativamente em todos os itens históricos do mesmo
+        # emit_cnpj + codigo_produto que ainda estão sem vínculo (exceto o item atual,
+        # que já foi atualizado acima).
+        if emit_cnpj and cod:
+            execute_query(
+                """UPDATE nfe_itens i
+                      JOIN nfe_importacoes n ON n.id = i.nfe_id
+                   SET i.produto_catalogo_id = %s
+                   WHERE i.produto_catalogo_id IS NULL
+                     AND n.emit_cnpj = %s
+                     AND i.codigo_produto = %s
+                     AND i.id != %s""",
+                (produto_id, emit_cnpj, cod, item_id),
+            )
+            row = execute_query(
+                """SELECT COUNT(*) AS c FROM nfe_itens i
+                      JOIN nfe_importacoes n ON n.id = i.nfe_id
+                   WHERE i.produto_catalogo_id = %s
+                     AND n.emit_cnpj = %s
+                     AND i.codigo_produto = %s
+                     AND i.id != %s""",
+                (produto_id, emit_cnpj, cod, item_id),
+                fetch=True, fetch_one=True,
+            ) or {}
+            retroativos = row.get('c', 0)
+
     # Nome do produto vinculado
     prod_nome = None
     if produto_id:
@@ -478,7 +505,7 @@ def api_vincular_produto():
         if p:
             prod_nome = p['nome']
 
-    return jsonify({'ok': True, 'produto_nome': prod_nome})
+    return jsonify({'ok': True, 'produto_nome': prod_nome, 'retroativos': retroativos})
 
 
 # ---------------------------------------------------------------------------
@@ -971,6 +998,7 @@ def api_vincular_todos():
     grp = nota.get('grupo_id')
     ramo_id = _get_ramo_cliente(cli)
 
+    item_ids = [it['id'] for it in itens]
     for it in itens:
         execute_query(
             "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
@@ -979,8 +1007,23 @@ def api_vincular_todos():
         cod = it['codigo_produto']
         descricao_xml = it.get('descricao') or ''
         if cod:
-                _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
-                _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+            _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
+            _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+
+            # Aplica retroativamente em itens históricos sem vínculo do mesmo
+            # emit_cnpj + codigo_produto, fora desta NF
+            if emit_cnpj:
+                placeholders = ','.join(['%s'] * len(item_ids))
+                execute_query(
+                    f"""UPDATE nfe_itens i
+                          JOIN nfe_importacoes n ON n.id = i.nfe_id
+                       SET i.produto_catalogo_id = %s
+                       WHERE i.produto_catalogo_id IS NULL
+                         AND n.emit_cnpj = %s
+                         AND i.codigo_produto = %s
+                         AND i.id NOT IN ({placeholders})""",
+                    tuple([produto_id, emit_cnpj, cod] + item_ids),
+                )
 
     prod = execute_query(
         "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
