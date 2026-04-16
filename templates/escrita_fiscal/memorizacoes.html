@@ -95,7 +95,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
     <table class="mem-table">
         <thead>
             <tr>
-                <th>Ramo / Empresa</th>
+                <th>Âmbito</th>
                 <th>Fornecedor</th>
                 <th>Produto XML (Cod + Descrição)</th>
                 <th>Produto Vinculado</th>
@@ -126,13 +126,13 @@ table.mem-table tr:hover td { background:#f8fafc; }
                     {% endif %}
                 </td>
                 <td>
-                    <div style="font-weight:600;color:#1e293b;">{{ r.fornecedor_nome or '—' }}</div>
+                    <div style="font-weight:600;color:#1e293b;text-transform:uppercase;">{{ r.fornecedor_nome or '—' }}</div>
                     <div style="font-family:monospace;font-size:10px;color:#94a3b8;">{{ r.emit_cnpj }}</div>
                 </td>
                 <td>
-                    <div style="font-family:monospace;font-size:11px;color:#64748b;">{{ r.codigo_produto_xml }}</div>
+                    <div style="font-family:monospace;font-size:11px;color:#64748b;text-transform:uppercase;">{{ r.codigo_produto_xml }}</div>
                     {% if r.descricao_produto_xml %}
-                        <div style="font-size:12px;color:#334155;margin-top:2px;">{{ r.descricao_produto_xml }}</div>
+                        <div style="font-size:12px;color:#334155;margin-top:2px;text-transform:uppercase;">{{ r.descricao_produto_xml }}</div>
                     {% endif %}
                 </td>
                 <td id="prod_{{ r.id }}">
