@@ -37,6 +37,7 @@ from routes.api import api
 from routes.contabil import contabil
 from routes.municipios import municipios
 from routes.financeiro import financeiro
+from routes.dropbox import dropbox_bp
 from routes.modulos import modulos
 from routes.escrita_fiscal import escrita_fiscal as escrita_fiscal_bp
 
@@ -53,6 +54,7 @@ app.register_blueprint(api)
 app.register_blueprint(contabil)
 app.register_blueprint(municipios)
 app.register_blueprint(financeiro)
+app.register_blueprint(dropbox_bp)
 app.register_blueprint(modulos)
 app.register_blueprint(escrita_fiscal_bp)
 
