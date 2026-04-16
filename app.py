@@ -324,6 +324,55 @@ if _col_exists.get('cnt', 0) == 0:
         fetch=False,
     )
 
+# ---- Categorias e Sub-Categorias de Produtos ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS nfe_produto_categorias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(100) NOT NULL,
+        ordem INT NOT NULL DEFAULT 0,
+        UNIQUE KEY uk_cat_nome (nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS nfe_produto_subcategorias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        categoria_id INT NOT NULL,
+        nome VARCHAR(100) NOT NULL,
+        ordem INT NOT NULL DEFAULT 0,
+        UNIQUE KEY uk_subcat (categoria_id, nome),
+        FOREIGN KEY (categoria_id) REFERENCES nfe_produto_categorias(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Seed das categorias/subcategorias padrão (apenas se a tabela estiver vazia)
+_cat_count = _execute_query(
+    "SELECT COUNT(*) AS cnt FROM nfe_produto_categorias",
+    fetch=True, fetch_one=True,
+) or {}
+if _cat_count.get('cnt', 0) == 0:
+    _DEFAULT_CATS = [
+        ('Combustíveis', 0, [
+            'Gasolina Comum', 'Gasolina Aditivada',
+            'Etanol Comum', 'Etanol Aditivado',
+            'Diesel S-500 Comum', 'Diesel S-500 Aditivado',
+            'Diesel S10 Comum', 'Diesel S10 Aditivado',
+        ]),
+        ('Loja de Conveniência', 1, ['Cigarros', 'Sorvetes', 'Salgados', 'Outros']),
+        ('Lubrificantes e Aditivos', 2, ['Lubrificantes', 'Aditivos', 'Outros']),
+        ('Insumos e Despesas', 3, []),
+    ]
+    for _cat_nome, _cat_ordem, _subs in _DEFAULT_CATS:
+        _cat_id = _execute_query(
+            "INSERT INTO nfe_produto_categorias (nome, ordem) VALUES (%s, %s)",
+            (_cat_nome, _cat_ordem),
+        )
+        for _sub_i, _sub_nome in enumerate(_subs):
+            _execute_query(
+                "INSERT INTO nfe_produto_subcategorias (categoria_id, nome, ordem) VALUES (%s, %s, %s)",
+                (_cat_id, _sub_nome, _sub_i),
+            )
+
 # ---- Regras de vínculo automático (emit_cnpj + cod_xml → produto_catalogo) ----
 _execute_query("""
     CREATE TABLE IF NOT EXISTS nfe_produto_vinculo (

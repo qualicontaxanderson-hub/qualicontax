@@ -42,6 +42,21 @@ table.pc-table tr:hover td { background:#f8fafc; }
 /* Empty */
 .pc-empty { text-align:center; padding:48px 20px; color:#94a3b8; }
 .pc-empty i { font-size:40px; margin-bottom:10px; display:block; }
+
+/* Categorias modal */
+.cat-mgmt-box { width:680px; }
+.cat-section { border:1.5px solid #e2e8f0; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+.cat-section-head { background:#f8fafc; padding:10px 14px; font-weight:700; font-size:13px; color:#1e293b; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e2e8f0; }
+.sub-list { padding:8px 14px; display:flex; flex-wrap:wrap; gap:6px; }
+.sub-tag { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:99px; padding:3px 10px; font-size:12px; color:#475569; display:flex; align-items:center; gap:5px; }
+.sub-tag button { background:none; border:none; color:#dc2626; cursor:pointer; font-size:11px; padding:0; line-height:1; }
+.cat-add-row { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px dashed #e2e8f0; }
+.cat-add-row input { flex:1; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; background:#fff; }
+.cat-add-row button { background:#8b5cf6; color:#fff; border:none; padding:7px 14px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.new-cat-row { display:flex; gap:8px; margin-top:12px; }
+.new-cat-row input { flex:1; padding:9px 12px; border:1.5px solid #8b5cf6; border-radius:8px; font-size:13px; }
+.new-cat-row button { background:#8b5cf6; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+.del-cat-btn { background:#fee2e2; border:none; color:#dc2626; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; }
 </style>
 {% endblock %}
 
@@ -53,9 +68,14 @@ table.pc-table tr:hover td { background:#f8fafc; }
         </a>
         <h1 style="margin-top:4px;"><i class="fas fa-tag" style="color:#8b5cf6;margin-right:8px;"></i>Cadastro de Produtos</h1>
     </div>
-    <button onclick="openModal()" style="background:#8b5cf6;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-        <i class="fas fa-plus"></i> Novo Produto
-    </button>
+    <div style="display:flex;gap:8px;">
+        <button onclick="openCatModal()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-folder-open"></i> Gerenciar Categorias
+        </button>
+        <button onclick="openModal()" style="background:#8b5cf6;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-plus"></i> Novo Produto
+        </button>
+    </div>
 </div>
 
 <!-- Filter bar -->
@@ -167,7 +187,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
 </div>
 {% endif %}
 
-<!-- Modal Cadastro / Edição -->
+<!-- Modal Cadastro / Edição de Produto -->
 <div class="modal-overlay" id="modalOverlay">
     <div class="modal-box">
         <h3 id="modalTitle">Novo Produto</h3>
@@ -250,6 +270,66 @@ table.pc-table tr:hover td { background:#f8fafc; }
     </div>
 </div>
 
+<!-- Modal Gerenciar Categorias -->
+<div class="modal-overlay" id="catModalOverlay">
+    <div class="modal-box cat-mgmt-box">
+        <h3><i class="fas fa-folder-open" style="color:#8b5cf6;margin-right:8px;"></i>Gerenciar Categorias e Sub-Categorias</h3>
+
+        <div id="catList">
+            {% for cat in cats_db %}
+            <div class="cat-section" id="catSection{{ cat.id }}">
+                <div class="cat-section-head">
+                    <span><i class="fas fa-layer-group" style="color:#8b5cf6;margin-right:6px;"></i>{{ cat.nome }}</span>
+                    <form method="POST" action="{{ url_for('escrita_fiscal.categoria_excluir', cid=cat.id) }}"
+                          onsubmit="return confirm('Excluir a categoria {{ cat.nome }}? Todas as sub-categorias também serão removidas.')">
+                        <button type="submit" class="del-cat-btn"><i class="fas fa-trash-alt"></i> Excluir</button>
+                    </form>
+                </div>
+                <div class="sub-list">
+                    {% set cat_subs = subs_db | selectattr('categoria_id', 'equalto', cat.id) | list %}
+                    {% if cat_subs %}
+                        {% for s in cat_subs %}
+                        <span class="sub-tag">
+                            {{ s.nome }}
+                            <form method="POST" action="{{ url_for('escrita_fiscal.subcategoria_excluir', sid=s.id) }}"
+                                  onsubmit="return confirm('Excluir sub-categoria {{ s.nome }}?')" style="display:inline;">
+                                <button type="submit" title="Excluir sub-categoria"><i class="fas fa-times"></i></button>
+                            </form>
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <span style="color:#9ca3af;font-size:12px;font-style:italic;">Nenhuma sub-categoria</span>
+                    {% endif %}
+                </div>
+                <div class="cat-add-row">
+                    <form method="POST" action="{{ url_for('escrita_fiscal.subcategoria_criar') }}" style="display:flex;gap:8px;width:100%;">
+                        <input type="hidden" name="categoria_id" value="{{ cat.id }}">
+                        <input type="text" name="nome" placeholder="Nova sub-categoria..." required>
+                        <button type="submit"><i class="fas fa-plus"></i> Adicionar</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">Nenhuma categoria cadastrada ainda.</p>
+            {% endfor %}
+        </div>
+
+        <div class="new-cat-row">
+            <form method="POST" action="{{ url_for('escrita_fiscal.categoria_criar') }}" style="display:flex;gap:8px;width:100%;">
+                <input type="text" name="nome" placeholder="Nome da nova categoria..." required>
+                <button type="submit"><i class="fas fa-folder-plus"></i> Nova Categoria</button>
+            </form>
+        </div>
+
+        <div class="modal-actions" style="margin-top:18px;">
+            <button type="button" onclick="closeCatModal()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+                Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -288,6 +368,14 @@ function editModal(p) {
 
 function closeModal() {
     document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function openCatModal() {
+    document.getElementById('catModalOverlay').classList.add('open');
+}
+
+function closeCatModal() {
+    document.getElementById('catModalOverlay').classList.remove('open');
 }
 
 function updateSubcat(selected) {
@@ -331,5 +419,9 @@ function seedCombustiveis() {
 document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === document.getElementById('modalOverlay')) closeModal();
 });
+document.getElementById('catModalOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('catModalOverlay')) closeCatModal();
+});
 </script>
 {% endblock %}
+

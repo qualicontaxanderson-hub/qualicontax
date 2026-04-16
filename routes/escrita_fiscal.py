@@ -48,6 +48,25 @@ def _get_grupos():
     ) or []
 
 
+def _get_categorias():
+    """Retorna categorias e suas subcategorias do banco."""
+    cats = execute_query(
+        "SELECT id, nome FROM nfe_produto_categorias ORDER BY ordem, nome",
+        fetch=True,
+    ) or []
+    subs = execute_query(
+        "SELECT categoria_id, nome FROM nfe_produto_subcategorias ORDER BY ordem, nome",
+        fetch=True,
+    ) or []
+    subs_map = {}
+    for s in subs:
+        subs_map.setdefault(s['categoria_id'], []).append(s['nome'])
+    return [(c['nome'], subs_map.get(c['id'], [])) for c in cats]
+
+
+
+
+
 def _upsert_vinculo(cliente_id, grupo_id, ramo_atividade_id,
                     emit_cnpj, codigo_produto_xml,
                     descricao_produto_xml, produto_catalogo_id):
@@ -709,6 +728,17 @@ def produtos_catalogo():
 
     empresas = _get_empresas()
     grupos = _get_grupos()
+    categorias = _get_categorias()
+
+    # Fetch full category objects (id + nome) for the management modal
+    cats_db = execute_query(
+        "SELECT id, nome FROM nfe_produto_categorias ORDER BY ordem, nome",
+        fetch=True,
+    ) or []
+    subs_db = execute_query(
+        "SELECT id, categoria_id, nome FROM nfe_produto_subcategorias ORDER BY ordem, nome",
+        fetch=True,
+    ) or []
 
     return render_template(
         'escrita_fiscal/produtos_catalogo.html',
@@ -717,7 +747,9 @@ def produtos_catalogo():
         grupos=grupos,
         f_cliente_id=f_cliente_id,
         f_grupo_id=f_grupo_id,
-        categorias=CATEGORIAS_COMBUSTIVEL,
+        categorias=categorias,
+        cats_db=cats_db,
+        subs_db=subs_db,
     )
 
 
@@ -775,8 +807,112 @@ def produtos_catalogo_excluir(pid):
 
 
 # ---------------------------------------------------------------------------
-# API — lista produtos do catálogo (para dropdowns)
+# Categorias — criar
 # ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/categorias/criar', methods=['POST'])
+@login_required
+def categoria_criar():
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        flash('Nome da categoria é obrigatório.', 'danger')
+        return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+    existing = execute_query(
+        "SELECT id FROM nfe_produto_categorias WHERE nome = %s", (nome,), fetch=True, fetch_one=True,
+    )
+    if existing:
+        flash('Já existe uma categoria com esse nome.', 'warning')
+    else:
+        max_ordem = execute_query(
+            "SELECT COALESCE(MAX(ordem),0)+1 AS o FROM nfe_produto_categorias", fetch=True, fetch_one=True,
+        ) or {}
+        execute_query(
+            "INSERT INTO nfe_produto_categorias (nome, ordem) VALUES (%s, %s)",
+            (nome, max_ordem.get('o', 0)),
+        )
+        flash(f'Categoria "{nome}" criada.', 'success')
+    return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+
+# ---------------------------------------------------------------------------
+# Categorias — excluir
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/categorias/excluir/<int:cid>', methods=['POST'])
+@login_required
+def categoria_excluir(cid):
+    cat = execute_query(
+        "SELECT nome FROM nfe_produto_categorias WHERE id = %s", (cid,), fetch=True, fetch_one=True,
+    )
+    if not cat:
+        flash('Categoria não encontrada.', 'danger')
+        return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+    in_use = execute_query(
+        "SELECT COUNT(*) AS cnt FROM nfe_produtos_catalogo WHERE categoria = %s",
+        (cat['nome'],), fetch=True, fetch_one=True,
+    ) or {}
+    if in_use.get('cnt', 0) > 0:
+        flash(f'A categoria "{cat["nome"]}" está em uso por produtos e não pode ser excluída.', 'danger')
+    else:
+        execute_query("DELETE FROM nfe_produto_categorias WHERE id = %s", (cid,))
+        flash(f'Categoria "{cat["nome"]}" excluída.', 'success')
+    return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+
+# ---------------------------------------------------------------------------
+# Sub-Categorias — criar
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/subcategorias/criar', methods=['POST'])
+@login_required
+def subcategoria_criar():
+    categoria_id = request.form.get('categoria_id', '').strip()
+    nome = request.form.get('nome', '').strip()
+    if not categoria_id or not nome:
+        flash('Categoria e nome da sub-categoria são obrigatórios.', 'danger')
+        return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+    existing = execute_query(
+        "SELECT id FROM nfe_produto_subcategorias WHERE categoria_id = %s AND nome = %s",
+        (int(categoria_id), nome), fetch=True, fetch_one=True,
+    )
+    if existing:
+        flash('Já existe uma sub-categoria com esse nome nessa categoria.', 'warning')
+    else:
+        max_ordem = execute_query(
+            "SELECT COALESCE(MAX(ordem),0)+1 AS o FROM nfe_produto_subcategorias WHERE categoria_id = %s",
+            (int(categoria_id),), fetch=True, fetch_one=True,
+        ) or {}
+        execute_query(
+            "INSERT INTO nfe_produto_subcategorias (categoria_id, nome, ordem) VALUES (%s, %s, %s)",
+            (int(categoria_id), nome, max_ordem.get('o', 0)),
+        )
+        flash(f'Sub-categoria "{nome}" criada.', 'success')
+    return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+
+# ---------------------------------------------------------------------------
+# Sub-Categorias — excluir
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/produtos-catalogo/subcategorias/excluir/<int:sid>', methods=['POST'])
+@login_required
+def subcategoria_excluir(sid):
+    sub = execute_query(
+        "SELECT s.nome, c.nome AS cat_nome FROM nfe_produto_subcategorias s "
+        "JOIN nfe_produto_categorias c ON c.id = s.categoria_id WHERE s.id = %s",
+        (sid,), fetch=True, fetch_one=True,
+    )
+    if not sub:
+        flash('Sub-categoria não encontrada.', 'danger')
+        return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+    in_use = execute_query(
+        "SELECT COUNT(*) AS cnt FROM nfe_produtos_catalogo WHERE subcategoria = %s",
+        (sub['nome'],), fetch=True, fetch_one=True,
+    ) or {}
+    if in_use.get('cnt', 0) > 0:
+        flash(f'A sub-categoria "{sub["nome"]}" está em uso e não pode ser excluída.', 'danger')
+    else:
+        execute_query("DELETE FROM nfe_produto_subcategorias WHERE id = %s", (sid,))
+        flash(f'Sub-categoria "{sub["nome"]}" excluída.', 'success')
+    return redirect(url_for('escrita_fiscal.produtos_catalogo'))
+
+
 @escrita_fiscal.route('/conf-compras/api/produtos-catalogo')
 @login_required
 def api_produtos_catalogo():
