@@ -69,8 +69,18 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
         params.append(cid)
         params.append(cid)
     if f_grupo_id:
-        clauses.append(f'{alias}.grupo_id = %s')
-        params.append(int(f_grupo_id))
+        gid = int(f_grupo_id)
+        clauses.append(
+            f"({alias}.grupo_id = %s"
+            f" OR ({alias}.grupo_id IS NULL"
+            f"     AND REPLACE(REPLACE(REPLACE({alias}.dest_cnpj,'.',''),'/',''),'-','')"
+            f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
+            f"             FROM clientes c"
+            f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
+            f"             WHERE cgr.grupo_id = %s)))"
+        )
+        params.append(gid)
+        params.append(gid)
     return clauses, params
 
 
