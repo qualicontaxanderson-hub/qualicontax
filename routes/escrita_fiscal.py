@@ -1,5 +1,6 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
 import re
+from datetime import datetime
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify,
@@ -705,6 +706,106 @@ def sync_dropbox():
     return jsonify({
         'ok': ok, 'dup': dup, 'err': err,
         'msg': f'{total} arquivo(s) lido(s). {ok} importado(s), {dup} duplicado(s), {err} erro(s).',
+    })
+
+
+# ---------------------------------------------------------------------------
+# Importar XML — sincronização com Dropbox por departamento
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/importar-dropbox', methods=['POST'])
+@login_required
+def api_importar_dropbox():
+    """Lê arquivos da pasta NOVO do departamento, importa e move para IMPORTADOS ou ERROS."""
+    if not dropbox_sync.is_configured():
+        return jsonify({'error': 'Dropbox não configurado. Defina DROPBOX_APP_KEY e DROPBOX_REFRESH_TOKEN.'}), 400
+
+    data = request.get_json(force=True) or {}
+    departamento = data.get('departamento', '').strip()
+    cliente_id = data.get('cliente_id') or None
+    grupo_id = data.get('grupo_id') or None
+
+    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
+        return jsonify({'error': 'Departamento inválido.'}), 400
+
+    svc = dropbox_sync._service
+
+    # Descobre o nome da empresa/grupo para as pastas de destino
+    empresa_nome = 'GLOBAL'
+    if cliente_id:
+        c = execute_query(
+            "SELECT nome_razao_social FROM clientes WHERE id = %s",
+            (int(cliente_id),), fetch=True, fetch_one=True,
+        )
+        if c:
+            empresa_nome = c['nome_razao_social']
+    elif grupo_id:
+        g = execute_query(
+            "SELECT nome FROM grupos_clientes WHERE id = %s",
+            (int(grupo_id),), fetch=True, fetch_one=True,
+        )
+        if g:
+            empresa_nome = g['nome']
+
+    pasta_novo = svc.pasta_novo(departamento)
+    files = svc.list_xml_files(pasta_novo)
+
+    if not files:
+        return jsonify({
+            'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0,
+            'msg': 'Nenhum arquivo XML encontrado na pasta NOVO.',
+        }), 200
+
+    now = datetime.now()
+    pasta_imp = svc.pasta_importados(departamento, empresa_nome, now)
+    pasta_err = svc.pasta_erros(departamento, empresa_nome, now)
+    svc.ensure_folder(pasta_imp)
+    svc.ensure_folder(pasta_err)
+
+    ok, dup, err, moved_ok, moved_err = 0, 0, 0, 0, 0
+    details = []
+
+    for info in files:
+        raw = svc.download_file(info['path'])
+        if raw is None:
+            err += 1
+            details.append(f"{info['name']}: falha ao baixar do Dropbox")
+            if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                moved_err += 1
+            continue
+
+        try:
+            content = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            content = raw.decode('latin-1', errors='replace')
+
+        try:
+            parsed = parse_nfe_xml(content)
+            result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
+                               cliente_id=cliente_id, grupo_id=grupo_id)
+            if result == 'dup':
+                dup += 1
+            else:
+                ok += 1
+            # Sucesso (incluindo duplicata) → move para IMPORTADOS
+            if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                moved_ok += 1
+        except Exception as exc:
+            err += 1
+            details.append(f"{info['name']}: {exc}")
+            if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                moved_err += 1
+
+    total = len(files)
+    msg = (f'{total} arquivo(s) lido(s). {ok} importado(s), '
+           f'{dup} duplicado(s), {err} com erro.')
+    if moved_ok or moved_err:
+        msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
+
+    return jsonify({
+        'ok': ok, 'dup': dup, 'err': err,
+        'moved_ok': moved_ok, 'moved_err': moved_err,
+        'msg': msg,
+        'details': details[:10],
     })
 
 

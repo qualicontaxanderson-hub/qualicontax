@@ -35,9 +35,22 @@
 .cc-import-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
 .cc-import-row label { font-size:11px; font-weight:600; color:#374151; display:block; margin-bottom:3px; }
 
-/* ---- Dropbox card ---- */
-.cc-dropbox-card { background:linear-gradient(135deg,#eff6ff,#dbeafe); border:1.5px solid #93c5fd; border-radius:12px; padding:16px 20px; margin-bottom:14px; box-shadow:0 2px 8px rgba(37,99,235,.1); }
-.cc-dropbox-card h3 { font-size:13px; font-weight:700; color:#1d4ed8; margin:0 0 8px; }
+/* ---- Dropbox modal ---- */
+.dbx-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:1100; display:none; align-items:center; justify-content:center; padding:20px; }
+.dbx-modal-overlay.open { display:flex; }
+.dbx-modal { background:#fff; border-radius:16px; width:520px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease,opacity .2s ease; }
+.dbx-modal-overlay.open .dbx-modal { transform:scale(1); opacity:1; }
+.dbx-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; background:linear-gradient(135deg,#0061ff,#2563eb); border-radius:16px 16px 0 0; }
+.dbx-modal-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
+.dbx-modal-body { padding:22px; }
+.dbx-modal-body label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; display:block; margin-bottom:4px; letter-spacing:.4px; }
+.dbx-modal-body select { width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; color:#1e293b; background:#f8fafc; margin-bottom:14px; }
+.dbx-modal-body select:focus { border-color:#2563eb; outline:none; background:#fff; }
+.dbx-modal-footer { padding:14px 22px; border-top:1.5px solid #e2e8f0; display:flex; gap:10px; justify-content:flex-end; }
+#dbxResult { margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px; display:none; }
+#dbxResult.ok { background:#f0fdf4; border:1px solid #86efac; color:#166534; }
+#dbxResult.err { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; }
+#dbxResult.info { background:#eff6ff; border:1px solid #93c5fd; color:#1d4ed8; }
 
 /* ---- Filters ---- */
 .cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
@@ -170,6 +183,10 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </select>
     </div>
     <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+    <button onclick="openDbxModal()"
+            style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+        <i class="fas fa-cloud-download-alt"></i> Importar do Dropbox
+    </button>
 </div>
 
 <!-- KPIs -->
@@ -195,62 +212,6 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <div class="cc-kpi-value red" id="kpiCOFINS">{{ stats.total_cofins | default(0) | format_currency }}</div>
     </div>
 </div>
-
-<!-- Import via Upload -->
-<div class="cc-import-card">
-    <h3><i class="fas fa-upload"></i> Importar XMLs de NF-e</h3>
-    <form method="POST" action="{{ url_for('escrita_fiscal.importar_xml') }}" enctype="multipart/form-data">
-        <div class="cc-import-row">
-            <div>
-                <label>Empresa</label>
-                <select name="cliente_id" id="imp_empresa" style="min-width:200px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
-                    <option value="">— Sem empresa específica —</option>
-                    {% for e in empresas %}
-                    <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label>Grupo</label>
-                <select name="grupo_id" style="min-width:160px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
-                    <option value="">— Sem grupo —</option>
-                    {% for g in grupos %}
-                    <option value="{{ g.id }}">{{ g.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label>Arquivo(s) .xml</label>
-                <input type="file" name="xml_files" accept=".xml" multiple
-                       style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;background:#fff;font-size:13px;">
-            </div>
-            <button type="submit"
-                    style="background:#22c55e;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-end;">
-                <i class="fas fa-file-import"></i> Importar
-            </button>
-        </div>
-    </form>
-</div>
-
-<!-- Dropbox Sync -->
-{% if dropbox_configured %}
-<div class="cc-dropbox-card">
-    <h3><i class="fas fa-cloud-download-alt"></i> Sincronizar com Dropbox</h3>
-    <p style="font-size:12px;color:#374151;margin-bottom:8px;">Pasta: <strong>{{ dropbox_folder }}</strong></p>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <button id="btnDropbox" onclick="syncDropbox()"
-                style="background:#2563eb;color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-            <i class="fas fa-sync-alt"></i> Sincronizar
-        </button>
-        <span id="dropboxMsg" style="font-size:13px;color:#374151;"></span>
-    </div>
-</div>
-{% else %}
-<div class="cc-dropbox-card" style="background:#fffbeb;border-color:#fde68a;">
-    <h3 style="color:#92400e;"><i class="fas fa-cloud"></i> Integração Dropbox</h3>
-    <p style="color:#92400e;font-size:12px;">Configure <code>DROPBOX_ACCESS_TOKEN</code> e <code>DROPBOX_XML_FOLDER</code> para sincronização automática.</p>
-</div>
-{% endif %}
 
 <!-- Filters -->
 <div class="cc-filters">
@@ -478,6 +439,62 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 </div>
 </div>
 
+<!-- ===================== MODAL: Importar do Dropbox ===================== -->
+<div class="dbx-modal-overlay" id="dbxModalOverlay" onclick="closeDbxModal()">
+<div class="dbx-modal" onclick="event.stopPropagation()">
+    <div class="dbx-modal-header">
+        <h3><i class="fas fa-cloud-download-alt" style="margin-right:8px;"></i>Importar do Dropbox</h3>
+        <button onclick="closeDbxModal()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;">&times;</button>
+    </div>
+    <div class="dbx-modal-body">
+        <label>Departamento</label>
+        <select id="dbxDepartamento">
+            <option value="">— Selecione o departamento —</option>
+            <option value="qualicontax-contabil">Contábil</option>
+            <option value="qualicontax-fiscal">Fiscal</option>
+            <option value="qualicontax-dp">Departamento Pessoal</option>
+            <option value="qualicontax-financeiro">Financeiro</option>
+            <option value="qualicontax-legalizacao">Legalização</option>
+            <option value="qualicontax-comercial">Comercial</option>
+        </select>
+
+        <label>Empresa (opcional)</label>
+        <select id="dbxEmpresa">
+            <option value="">— Sem empresa específica —</option>
+            {% for e in empresas %}
+            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Grupo (opcional)</label>
+        <select id="dbxGrupo">
+            <option value="">— Sem grupo —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+
+        <p style="font-size:11px;color:#94a3b8;margin:0 0 4px;">
+            <i class="fas fa-info-circle"></i>
+            O sistema lê os XMLs da pasta <strong>/{departamento}/NOVO/</strong>, importa e move para
+            <strong>IMPORTADOS</strong> ou <strong>ERROS</strong> automaticamente.
+        </p>
+
+        <div id="dbxResult"></div>
+    </div>
+    <div class="dbx-modal-footer">
+        <button onclick="closeDbxModal()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+            Fechar
+        </button>
+        <button id="btnDbxImportar" onclick="executarImportacaoDropbox()"
+                style="background:linear-gradient(135deg,#0061ff,#2563eb);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-cloud-download-alt"></i> Importar
+        </button>
+    </div>
+</div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -502,7 +519,7 @@ function onEmpresaChange() {
         updateScopeBadge('global', 'Visão Global');
     }
     // Sync import selector
-    document.getElementById('imp_empresa').value = currentClienteId;
+    if (document.getElementById('imp_empresa')) document.getElementById('imp_empresa').value = currentClienteId;
 }
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
@@ -1021,6 +1038,73 @@ function copiarTodasChaves() {
         btn.innerHTML = '<i class="fas fa-check"></i> Copiadas!';
         btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
         setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2500);
+    });
+}
+
+// ---- Modal Dropbox ----
+function openDbxModal() {
+    const overlay = document.getElementById('dbxModalOverlay');
+    overlay.classList.add('open');
+    // Pre-seleciona empresa/grupo da barra principal
+    const emp = document.getElementById('dbxEmpresa');
+    const grp = document.getElementById('dbxGrupo');
+    if (emp && currentClienteId) emp.value = currentClienteId;
+    if (grp && currentGrupoId) grp.value = currentGrupoId;
+    // Pre-seleciona fiscal como padrão
+    const dept = document.getElementById('dbxDepartamento');
+    if (dept && !dept.value) dept.value = 'qualicontax-fiscal';
+    document.getElementById('dbxResult').style.display = 'none';
+}
+
+function closeDbxModal() {
+    document.getElementById('dbxModalOverlay').classList.remove('open');
+}
+
+function executarImportacaoDropbox() {
+    const departamento = document.getElementById('dbxDepartamento').value;
+    if (!departamento) { alert('Selecione o departamento.'); return; }
+
+    const cliente_id = document.getElementById('dbxEmpresa').value || null;
+    const grupo_id = document.getElementById('dbxGrupo').value || null;
+
+    const btn = document.getElementById('btnDbxImportar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+
+    const result = document.getElementById('dbxResult');
+    result.style.display = 'none';
+
+    fetch('{{ url_for("escrita_fiscal.api_importar_dropbox") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({departamento, cliente_id, grupo_id}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+        result.style.display = 'block';
+        if (data.error) {
+            result.className = 'err';
+            result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
+        } else {
+            result.className = data.err > 0 ? 'err' : 'ok';
+            let html = '<strong>' + (data.msg || '') + '</strong>';
+            if (data.details && data.details.length) {
+                html += '<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;">';
+                data.details.forEach(d => { html += '<li>' + d + '</li>'; });
+                html += '</ul>';
+            }
+            result.innerHTML = html;
+            if (data.ok > 0) applyFilters();
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+        result.style.display = 'block';
+        result.className = 'err';
+        result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão.';
     });
 }
 
