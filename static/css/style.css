@@ -372,7 +372,7 @@ body {
    ========================================== */
 .top-bar {
     height: var(--top-bar-height);
-    background: var(--primary-green);
+    background: #16A34A;
     border-bottom: none;
     position: sticky;
     top: 0;

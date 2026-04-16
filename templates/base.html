@@ -95,33 +95,6 @@
             </div>
 
             <div class="top-bar-actions">
-                <button class="top-bar-icon" id="notificationsToggle" title="Notificações">
-                    <i class="fas fa-bell"></i>
-                    <span class="badge">3</span>
-                </button>
-
-                <div class="profile-dropdown">
-                    <button class="profile-toggle" id="profileToggle">
-                        <img src="{{ url_for('static', filename='images/avatar.png') }}" alt="Profile" class="profile-img">
-                        <span class="profile-name">{{ current_user.name if current_user.is_authenticated else 'Usuário' }}</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                    <div class="dropdown-menu" id="profileMenu">
-                        <a href="#" class="dropdown-item">
-                            <i class="fas fa-user"></i>
-                            Perfil
-                        </a>
-                        <a href="#" class="dropdown-item">
-                            <i class="fas fa-cog"></i>
-                            Configurações
-                        </a>
-                        <hr class="dropdown-divider">
-                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item">
-                            <i class="fas fa-sign-out-alt"></i>
-                            Sair
-                        </a>
-                    </div>
-                </div>
             </div>
         </header>
 
