@@ -314,6 +314,26 @@ def api_itens(nfe_id):
         (nfe_id,), fetch=True,
     ) or []
 
+    # Auto-aplicar regras memorizadas nos itens ainda sem vínculo
+    emit_cnpj = nota.get('emit_cnpj', '')
+    cliente_id = nota.get('cliente_id')
+    grupo_id = nota.get('grupo_id')
+    for it in itens:
+        if it.get('produto_catalogo_id') is None and it.get('codigo_produto'):
+            pid = _auto_vincular(emit_cnpj, it['codigo_produto'], cliente_id, grupo_id)
+            if pid:
+                execute_query(
+                    "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
+                    (pid, it['id']),
+                )
+                prod = execute_query(
+                    "SELECT nome, categoria FROM nfe_produtos_catalogo WHERE id = %s",
+                    (pid,), fetch=True, fetch_one=True,
+                )
+                it['produto_catalogo_id'] = pid
+                it['produto_catalogo_nome'] = prod['nome'] if prod else None
+                it['produto_categoria'] = prod['categoria'] if prod else None
+
     for it in itens:
         for k in ('quantidade', 'valor_unitario', 'valor_total',
                   'valor_icms', 'valor_pis', 'valor_cofins'):
