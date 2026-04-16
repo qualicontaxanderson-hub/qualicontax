@@ -39,9 +39,9 @@
                 </a>
             </li>
             <li>
-                <a href="{{ url_for('escrita_fiscal.index') }}" class="rail-link {% if request.endpoint and 'escrita_fiscal' in request.endpoint %}active{% endif %}" title="Escrita Fiscal">
-                    <i class="fas fa-file-invoice"></i>
-                    <span>Fiscal</span>
+                <a href="{{ url_for('modulos.comercial') }}" class="rail-link {% if request.endpoint == 'modulos.comercial' %}active{% endif %}" title="Comercial">
+                    <i class="fas fa-handshake"></i>
+                    <span>Comercial</span>
                 </a>
             </li>
             <li>
@@ -51,15 +51,21 @@
                 </a>
             </li>
             <li>
-                <a href="{{ url_for('modulos.legalizacao') }}" class="rail-link {% if request.endpoint == 'modulos.legalizacao' %}active{% endif %}" title="Legalização">
-                    <i class="fas fa-balance-scale"></i>
-                    <span>Legalização</span>
+                <a href="{{ url_for('escrita_fiscal.index') }}" class="rail-link {% if request.endpoint and 'escrita_fiscal' in request.endpoint %}active{% endif %}" title="Escrita Fiscal">
+                    <i class="fas fa-file-invoice"></i>
+                    <span>Fiscal</span>
                 </a>
             </li>
             <li>
-                <a href="{{ url_for('modulos.analise') }}" class="rail-link {% if request.endpoint == 'modulos.analise' %}active{% endif %}" title="Análise">
-                    <i class="fas fa-chart-pie"></i>
-                    <span>Análise</span>
+                <a href="{{ url_for('modulos.dp') }}" class="rail-link {% if request.endpoint == 'modulos.dp' %}active{% endif %}" title="Departamento Pessoal">
+                    <i class="fas fa-id-badge"></i>
+                    <span>DP</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('modulos.legalizacao') }}" class="rail-link {% if request.endpoint == 'modulos.legalizacao' %}active{% endif %}" title="Legalização">
+                    <i class="fas fa-balance-scale"></i>
+                    <span>Legalização</span>
                 </a>
             </li>
             <li>
@@ -69,9 +75,21 @@
                 </a>
             </li>
             <li>
+                <a href="{{ url_for('modulos.analise') }}" class="rail-link {% if request.endpoint == 'modulos.analise' %}active{% endif %}" title="Análise">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Análise</span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ url_for('relatorios.index') }}" class="rail-link {% if request.endpoint and 'relatorios' in request.endpoint %}active{% endif %}" title="Relatórios">
                     <i class="fas fa-chart-bar"></i>
                     <span>Relatórios</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('modulos.configuracoes') }}" class="rail-link {% if request.endpoint == 'modulos.configuracoes' %}active{% endif %}" title="Configurações">
+                    <i class="fas fa-cog"></i>
+                    <span>Config.</span>
                 </a>
             </li>
         </ul>
