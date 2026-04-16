@@ -718,7 +718,16 @@ function openPanel(nfeId, evt) {
                         <th>Produto Vinculado</th>
                     </tr></thead><tbody>`;
                 data.itens.forEach(it => {
-                    const opts = buildProdOpts(it.produto_catalogo_id);
+                    const cid = nota.cliente_id||'null', gid = nota.grupo_id||'null';
+                    let vinculoHtml;
+                    if (it.produto_catalogo_id && it.produto_catalogo_nome) {
+                        vinculoHtml = `<span class="vinculado-badge">${it.produto_catalogo_nome}</span>
+                            <button onclick="desvincular(${it.id})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+                    } else {
+                        const opts = buildProdOpts(it.produto_catalogo_id);
+                        vinculoHtml = `<select id="sel_prod_${it.id}">${opts}</select>
+                            <button onclick="vincularProduto(${it.id}, ${cid}, ${gid})">Vincular</button>`;
+                    }
                     html += `<tr>
                         <td>${it.num_item}</td>
                         <td>${it.codigo_produto||'—'}</td>
@@ -729,10 +738,7 @@ function openPanel(nfeId, evt) {
                         <td class="r"><strong>${fmtBRL(it.valor_total)}</strong></td>
                         <td>
                             <div class="prod-vinculo" id="vinculo_${it.id}">
-                                <select id="sel_prod_${it.id}">${opts}</select>
-                                <button onclick="vincularProduto(${it.id}, ${nota.cliente_id||'null'}, ${nota.grupo_id||'null'})">
-                                    Vincular
-                                </button>
+                                ${vinculoHtml}
                             </div>
                         </td>
                     </tr>`;
@@ -780,7 +786,7 @@ function vincularProduto(itemId, clienteId, grupoId) {
             const wrap = document.getElementById('vinculo_' + itemId);
             if (produtoId && data.produto_nome) {
                 wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
-                    <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;font-size:11px;cursor:pointer;">Alterar</button>`;
+                    <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
             } else {
                 // Rebuild with fresh select
                 const opts = buildProdOpts(null);
