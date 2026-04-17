@@ -12,6 +12,11 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# NF-e access keys are exactly 44 digits; files are normally saved as
+# "{44digits}.xml" but browsers (Edge, Chrome) sometimes strip the extension
+# or save as ".html".  We accept any file whose name starts with 44 digits.
+_NFE_KEY_RE = re.compile(r'^\d{44}')
+
 DEPARTAMENTOS = [
     # Nomes usados na APP FOLDER do Dropbox (caminhos relativos à raiz do app)
     'Fiscal',
@@ -109,13 +114,21 @@ class DropboxService:
         return entries
 
     def list_xml_files(self, path: str) -> list:
-        """Lista apenas arquivos .xml de uma pasta."""
+        """Lista arquivos .xml e arquivos cujo nome começa com a chave NF-e (44 dígitos).
+
+        Navegadores como Edge/Chrome às vezes salvam arquivos XML de NF-e sem a
+        extensão .xml (ou com .html).  Para não perder esses arquivos, também
+        incluímos qualquer arquivo cujo nome inicie com 44 dígitos consecutivos.
+        """
         all_files = self.list_folder(path)
         xml_files = [
             f for f in all_files
-            if f.get('is_file') and f['name'].lower().endswith('.xml')
+            if f.get('is_file') and (
+                f['name'].lower().endswith('.xml')
+                or _NFE_KEY_RE.match(f['name'])
+            )
         ]
-        logger.info('Dropbox list_xml_files(%r): %d arquivo(s) .xml de %d item(s)',
+        logger.info('Dropbox list_xml_files(%r): %d arquivo(s) xml/nfe de %d item(s)',
                     path, len(xml_files), len(all_files))
         return xml_files
 
