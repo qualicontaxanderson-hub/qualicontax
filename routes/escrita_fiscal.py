@@ -739,6 +739,11 @@ def api_importar_dropbox():
 
     # Logs diagnósticos: varremos a raiz e as subpastas para validar paths reais
     logger.info('=== DROPBOX DIAGNÓSTICO (departamento=%r) ===', departamento)
+    logger.info('DROPBOX_APP_KEY:       %s', 'CONFIGURADO' if Config.DROPBOX_APP_KEY else 'NÃO CONFIGURADO')
+    logger.info('DROPBOX_APP_SECRET:    %s', 'CONFIGURADO' if Config.DROPBOX_APP_SECRET else 'NÃO CONFIGURADO')
+    logger.info('DROPBOX_REFRESH_TOKEN: %s', 'CONFIGURADO' if Config.DROPBOX_REFRESH_TOKEN else 'NÃO CONFIGURADO')
+    logger.info('DROPBOX_ACCESS_TOKEN (legado): %s', 'CONFIGURADO' if Config.DROPBOX_ACCESS_TOKEN else 'NÃO CONFIGURADO')
+    logger.info('Path para busca de XMLs: /Fiscal/NOVO (via pasta_novo("Fiscal"))')
     try:
         logger.info('Raiz APP FOLDER: %r', svc.list_folder(''))
         logger.info('list_folder("/%s"): %r', departamento, svc.list_folder(f'/{departamento}'))
