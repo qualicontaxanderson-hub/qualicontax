@@ -12,6 +12,10 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
+class DropboxAuthError(Exception):
+    """Raised when Dropbox returns an authentication/authorization error."""
+
 # NF-e access keys are exactly 44 digits; files are normally saved as
 # "{44digits}.xml" but browsers (Edge, Chrome) sometimes strip the extension
 # or save as ".html".  We accept any file whose name starts with 44 digits.
@@ -84,6 +88,14 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Operações de arquivo
     # ------------------------------------------------------------------
+    def _is_auth_error(self, exc: Exception) -> bool:
+        """Retorna True se a exceção é um erro de autenticação do Dropbox."""
+        return (
+            'AuthError' in type(exc).__name__
+            or 'invalid_access_token' in str(exc)
+            or 'expired_access_token' in str(exc)
+        )
+
     def list_folder(self, path: str) -> list:
         """Lista todos os itens de uma pasta (arquivos e sub-pastas)."""
         dbx = self._client()
@@ -111,6 +123,12 @@ class DropboxService:
                         path, len(entries), [e['name'] for e in entries])
         except Exception as exc:
             logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
+            if self._is_auth_error(exc):
+                self._dbx = None  # Limpa cache para tentar renovar token na próxima chamada
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas. '
+                    'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                ) from exc
         return entries
 
     def list_xml_files(self, path: str) -> list:
@@ -142,6 +160,11 @@ class DropboxService:
             return response.content
         except Exception as exc:
             logger.error('Erro ao baixar Dropbox %s: %s', path, exc)
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas.'
+                ) from exc
             return None
 
     def ensure_folder(self, path: str) -> None:
@@ -153,6 +176,11 @@ class DropboxService:
             dbx.files_create_folder_v2(path)
             logger.info('Pasta criada no Dropbox: %s', path)
         except Exception as exc:
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas.'
+                ) from exc
             if 'path/conflict' not in str(exc):
                 logger.warning('Falha ao criar pasta %s: %s', path, exc)
 
@@ -167,6 +195,11 @@ class DropboxService:
             return True
         except Exception as exc:
             logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas.'
+                ) from exc
             return False
 
     # ------------------------------------------------------------------

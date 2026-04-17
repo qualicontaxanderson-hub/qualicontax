@@ -10,6 +10,7 @@ from utils.auth_helper import login_required
 from utils.db_helper import execute_query
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
+from utils.dropbox_sync import DropboxAuthError
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -734,9 +735,12 @@ def api_importar_dropbox():
 
     # Logs diagnósticos: varremos a raiz e as subpastas para validar paths reais
     logger.info('=== DROPBOX DIAGNÓSTICO (departamento=%r) ===', departamento)
-    logger.info('Raiz APP FOLDER: %r', svc.list_folder(''))
-    logger.info('list_folder("/%s"): %r', departamento, svc.list_folder(f'/{departamento}'))
-    logger.info('list_folder("/%s/NOVO"): %r', departamento, svc.list_folder(f'/{departamento}/NOVO'))
+    try:
+        logger.info('Raiz APP FOLDER: %r', svc.list_folder(''))
+        logger.info('list_folder("/%s"): %r', departamento, svc.list_folder(f'/{departamento}'))
+        logger.info('list_folder("/%s/NOVO"): %r', departamento, svc.list_folder(f'/{departamento}/NOVO'))
+    except DropboxAuthError as exc:
+        return jsonify({'error': str(exc)}), 401
 
     # Descobre o nome da empresa/grupo para as pastas de destino
     empresa_nome = 'GLOBAL'
@@ -757,7 +761,10 @@ def api_importar_dropbox():
 
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('Buscando XMLs em: %r', pasta_novo)
-    files = svc.list_xml_files(pasta_novo)
+    try:
+        files = svc.list_xml_files(pasta_novo)
+    except DropboxAuthError as exc:
+        return jsonify({'error': str(exc)}), 401
 
     if not files:
         return jsonify({
@@ -768,19 +775,28 @@ def api_importar_dropbox():
     now = datetime.now()
     pasta_imp = svc.pasta_importados(departamento, empresa_nome, now)
     pasta_err = svc.pasta_erros(departamento, empresa_nome, now)
-    svc.ensure_folder(pasta_imp)
-    svc.ensure_folder(pasta_err)
+    try:
+        svc.ensure_folder(pasta_imp)
+        svc.ensure_folder(pasta_err)
+    except DropboxAuthError as exc:
+        return jsonify({'error': str(exc)}), 401
 
     ok, dup, err, moved_ok, moved_err = 0, 0, 0, 0, 0
     details = []
 
     for info in files:
-        raw = svc.download_file(info['path'])
+        try:
+            raw = svc.download_file(info['path'])
+        except DropboxAuthError as exc:
+            return jsonify({'error': str(exc)}), 401
         if raw is None:
             err += 1
             details.append(f"{info['name']}: falha ao baixar do Dropbox")
-            if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                moved_err += 1
+            try:
+                if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                    moved_err += 1
+            except DropboxAuthError:
+                pass
             continue
 
         try:
@@ -797,13 +813,21 @@ def api_importar_dropbox():
             else:
                 ok += 1
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
-            if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
-                moved_ok += 1
+            try:
+                if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                    moved_ok += 1
+            except DropboxAuthError:
+                pass
+        except DropboxAuthError as exc:
+            return jsonify({'error': str(exc)}), 401
         except Exception as exc:
             err += 1
             details.append(f"{info['name']}: {exc}")
-            if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                moved_err += 1
+            try:
+                if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                    moved_err += 1
+            except DropboxAuthError:
+                pass
 
     total = len(files)
     msg = (f'{total} arquivo(s) lido(s). {ok} importado(s), '
