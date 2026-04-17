@@ -18,8 +18,8 @@ class DropboxAuthError(Exception):
 
 # NF-e access keys are exactly 44 digits; files are normally saved as
 # "{44digits}.xml" but browsers (Edge, Chrome) sometimes strip the extension
-# or save as ".html".  We accept any file whose name starts with 44 digits.
-_NFE_KEY_RE = re.compile(r'^\d{44}')
+# or save as ".html".  We accept any file whose name starts with exactly 44 digits.
+_NFE_KEY_RE = re.compile(r'^\d{44}(?:\D|$)')
 
 DEPARTAMENTOS = [
     # Nomes usados na APP FOLDER do Dropbox (caminhos relativos à raiz do app)
