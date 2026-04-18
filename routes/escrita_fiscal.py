@@ -772,6 +772,13 @@ def api_importar_dropbox():
             'msg': 'Nenhum arquivo XML encontrado na pasta NOVO.',
         }), 200
 
+    # Processa no máximo 50 arquivos por chamada para evitar timeout do worker.
+    # Se houver mais arquivos, o front-end deve chamar novamente até receber
+    # has_more=False ou msg indicando que não há mais arquivos.
+    _BATCH_LIMIT = 50
+    has_more = len(files) > _BATCH_LIMIT
+    files = files[:_BATCH_LIMIT]
+
     now = datetime.now()
     pasta_imp = svc.pasta_importados(departamento, empresa_nome, now, empresa_numero=empresa_numero)
     pasta_err = svc.pasta_erros(departamento, empresa_nome, now, empresa_numero=empresa_numero)
@@ -834,10 +841,13 @@ def api_importar_dropbox():
            f'{dup} duplicado(s), {err} com erro.')
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
+    if has_more:
+        msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
 
     return jsonify({
         'ok': ok, 'dup': dup, 'err': err,
         'moved_ok': moved_ok, 'moved_err': moved_err,
+        'has_more': has_more,
         'msg': msg,
         'details': details[:10],
     })

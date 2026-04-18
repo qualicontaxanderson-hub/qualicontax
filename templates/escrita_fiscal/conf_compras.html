@@ -1061,9 +1061,9 @@ function executarImportacaoDropbox() {
     .then(r => r.json())
     .then(data => {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
         result.style.display = 'block';
         if (data.error) {
+            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
             result.className = 'err';
             result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
         } else {
@@ -1076,6 +1076,12 @@ function executarImportacaoDropbox() {
             }
             result.innerHTML = html;
             if (data.ok > 0) applyFilters();
+            if (data.has_more) {
+                // Ainda há arquivos na fila — mantém o botão habilitado para nova chamada
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Continuar';
+            } else {
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+            }
         }
     })
     .catch(() => {
