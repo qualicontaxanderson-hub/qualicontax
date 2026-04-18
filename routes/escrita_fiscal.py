@@ -751,15 +751,17 @@ def api_importar_dropbox():
     except DropboxAuthError:
         return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
 
-    # Descobre o nome da empresa/grupo para as pastas de destino
+    # Descobre o nome/número da empresa/grupo para as pastas de destino
     empresa_nome = 'GLOBAL'
+    empresa_numero = None
     if cliente_id:
         c = execute_query(
-            "SELECT nome_razao_social FROM clientes WHERE id = %s",
+            "SELECT numero_cliente, nome_razao_social FROM clientes WHERE id = %s",
             (int(cliente_id),), fetch=True, fetch_one=True,
         )
         if c:
             empresa_nome = c['nome_razao_social']
+            empresa_numero = c.get('numero_cliente') or None
     elif grupo_id:
         g = execute_query(
             "SELECT nome FROM grupos_clientes WHERE id = %s",
@@ -782,8 +784,8 @@ def api_importar_dropbox():
         }), 200
 
     now = datetime.now()
-    pasta_imp = svc.pasta_importados(departamento, empresa_nome, now)
-    pasta_err = svc.pasta_erros(departamento, empresa_nome, now)
+    pasta_imp = svc.pasta_importados(departamento, empresa_nome, now, empresa_numero=empresa_numero)
+    pasta_err = svc.pasta_erros(departamento, empresa_nome, now, empresa_numero=empresa_numero)
     try:
         svc.ensure_folder(pasta_imp)
         svc.ensure_folder(pasta_err)

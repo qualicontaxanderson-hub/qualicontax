@@ -44,6 +44,20 @@ def _sanitize_folder_name(name: str) -> str:
     return re.sub(r'[/\\:*?"<>|]', '_', name).strip() or 'SEM_NOME'
 
 
+def _build_empresa_folder(numero: str | None, nome: str) -> str:
+    """Constrói o nome da pasta da empresa para o Dropbox.
+
+    Quando o cliente possui ``numero_cliente``, o resultado é
+    ``{numero} - {nome}`` (ex.: ``001 - PADARIA BELA VISTA``).
+    Sem número, retorna apenas o nome sanitizado.
+    """
+    nome_san = _sanitize_folder_name(nome)
+    if numero:
+        num_san = _sanitize_folder_name(str(numero))
+        return f'{num_san} - {nome_san}'
+    return nome_san
+
+
 class DropboxService:
     """Serviço Dropbox com OAuth2 refresh token e suporte a pastas por departamento."""
 
@@ -209,16 +223,16 @@ class DropboxService:
         return f'/{departamento}/NOVO'
 
     def pasta_importados(self, departamento: str, empresa_nome: str,
-                         dt: datetime = None) -> str:
+                         dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
-        nome = _sanitize_folder_name(empresa_nome)
-        return f'/{departamento}/IMPORTADOS/{nome}/{dt.year}/{dt.month:02d}'
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        return f'/{departamento}/IMPORTADOS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
-                    dt: datetime = None) -> str:
+                    dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
-        nome = _sanitize_folder_name(empresa_nome)
-        return f'/{departamento}/ERROS/{nome}/{dt.year}/{dt.month:02d}'
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        return f'/{departamento}/ERROS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
 
 
 # ---------------------------------------------------------------------------
