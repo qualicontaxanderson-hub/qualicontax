@@ -740,24 +740,26 @@ def api_importar_dropbox():
     logger.info('Importar Dropbox: departamento=%r cliente_id=%r grupo_id=%r',
                 departamento, cliente_id, grupo_id)
 
-    # Descobre o nome/número da empresa/grupo para as pastas de destino
-    empresa_nome = 'GLOBAL'
-    empresa_numero = None
+    # Resolve empresa fixa quando cliente_id ou grupo_id são fornecidos pelo front-end.
+    # Quando nenhum dos dois é fornecido, a empresa é detectada arquivo a arquivo
+    # a partir do dest_cnpj do XML (ver loop abaixo).
+    empresa_nome_fixo = None
+    empresa_numero_fixo = None
     if cliente_id:
         c = execute_query(
             "SELECT numero_cliente, nome_razao_social FROM clientes WHERE id = %s",
             (int(cliente_id),), fetch=True, fetch_one=True,
         )
         if c:
-            empresa_nome = c['nome_razao_social']
-            empresa_numero = c.get('numero_cliente') or None
+            empresa_nome_fixo = c['nome_razao_social']
+            empresa_numero_fixo = c.get('numero_cliente') or None
     elif grupo_id:
         g = execute_query(
             "SELECT nome FROM grupos_clientes WHERE id = %s",
             (int(grupo_id),), fetch=True, fetch_one=True,
         )
         if g:
-            empresa_nome = g['nome']
+            empresa_nome_fixo = g['nome']
 
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('Buscando XMLs em: %r', pasta_novo)
@@ -780,13 +782,14 @@ def api_importar_dropbox():
     files = files[:_BATCH_LIMIT]
 
     now = datetime.now()
-    pasta_imp = svc.pasta_importados(departamento, empresa_nome, now, empresa_numero=empresa_numero)
-    pasta_err = svc.pasta_erros(departamento, empresa_nome, now, empresa_numero=empresa_numero)
-    try:
-        svc.ensure_folder(pasta_imp)
-        svc.ensure_folder(pasta_err)
-    except DropboxAuthError:
-        return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
+    # Cache de pastas já criadas no Dropbox para evitar chamadas redundantes.
+    _pastas_criadas: set = set()
+
+    def _get_or_create_pasta(path: str) -> str:
+        if path not in _pastas_criadas:
+            svc.ensure_folder(path)
+            _pastas_criadas.add(path)
+        return path
 
     ok, dup, err, moved_ok, moved_err = 0, 0, 0, 0, 0
     details = []
@@ -799,7 +802,13 @@ def api_importar_dropbox():
         if raw is None:
             err += 1
             details.append(f"{info['name']}: falha ao baixar do Dropbox")
+            # Sem XML válido usa empresa/data padrão para a pasta de erros
+            _dt = now
+            _nome = empresa_nome_fixo or 'GLOBAL'
+            _num = empresa_numero_fixo
             try:
+                pasta_err = _get_or_create_pasta(
+                    svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
             except DropboxAuthError:
@@ -813,6 +822,34 @@ def api_importar_dropbox():
 
         try:
             parsed = parse_nfe_xml(content)
+
+            # Determina empresa para a pasta: usa a seleção explícita do usuário;
+            # caso não tenha, tenta detectar pelo dest_cnpj do XML.
+            _nome = empresa_nome_fixo
+            _num = empresa_numero_fixo
+            if _nome is None:
+                dest_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+                if len(dest_digits) >= 11:
+                    found = execute_query(
+                        "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                        (dest_digits,), fetch=True, fetch_one=True,
+                    )
+                    if found:
+                        _nome = found['nome_razao_social']
+                        _num = found.get('numero_cliente') or None
+                if _nome is None:
+                    _nome = 'GLOBAL'
+
+            # Usa a data de emissão do XML para o mês/ano da pasta;
+            # cai de volta para a data atual se o campo não estiver disponível.
+            _dt = parsed['header'].get('data_emissao') or now
+
+            pasta_imp = _get_or_create_pasta(
+                svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+            pasta_err = _get_or_create_pasta(
+                svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
+
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
                                cliente_id=cliente_id, grupo_id=grupo_id)
             if result == 'dup':
@@ -830,7 +867,12 @@ def api_importar_dropbox():
         except Exception as exc:
             err += 1
             details.append(f"{info['name']}: {exc}")
+            _dt = now
+            _nome = empresa_nome_fixo or 'GLOBAL'
+            _num = empresa_numero_fixo
             try:
+                pasta_err = _get_or_create_pasta(
+                    svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
             except DropboxAuthError:
