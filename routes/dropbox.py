@@ -21,9 +21,9 @@ def dropbox_callback():
     if not code:
         return '<h2>Código de autorização não recebido.</h2>', 400
 
-    app_key = os.environ.get('DROPBOX_APP_KEY')
-    app_secret = os.environ.get('DROPBOX_APP_SECRET')
-    redirect_uri = os.environ.get('DROPBOX_REDIRECT_URI')
+    app_key = os.environ.get('DROPBOX_APP_KEY', '').strip()
+    app_secret = os.environ.get('DROPBOX_APP_SECRET', '').strip()
+    redirect_uri = os.environ.get('DROPBOX_REDIRECT_URI', '').strip()
 
     response = requests.post(DROPBOX_TOKEN_URL, data={
         'code': code,
@@ -37,6 +37,7 @@ def dropbox_callback():
     data = response.json()
     refresh_token = data.get('refresh_token', '')
     account_id = data.get('account_id', '')
+    scope = data.get('scope', '(não retornado)')
 
     return f'''
     <html>
@@ -53,6 +54,7 @@ def dropbox_callback():
     <body>
     <h2>&#x2705; Dropbox Autorizado com Sucesso!</h2>
     <p>Account ID: <strong>{account_id}</strong></p>
+    <p>Scopes concedidos: <code>{scope}</code></p>
     <div class="box">
         <strong>DROPBOX_REFRESH_TOKEN (copie e salve no Railway):</strong><br><br>
         <div class="token">{refresh_token}</div>
@@ -70,13 +72,47 @@ def dropbox_callback():
 @login_required
 def dropbox_auth_url():
     """Redireciona para a URL de autorização OAuth do Dropbox"""
-    app_key = os.environ.get('DROPBOX_APP_KEY')
-    redirect_uri = os.environ.get('DROPBOX_REDIRECT_URI')
+    app_key = os.environ.get('DROPBOX_APP_KEY', '').strip()
+    redirect_uri = os.environ.get('DROPBOX_REDIRECT_URI', '').strip()
     url = (
         f'https://www.dropbox.com/oauth2/authorize'
         f'?client_id={app_key}'
         f'&token_access_type=offline'
         f'&response_type=code'
         f'&redirect_uri={redirect_uri}'
+        f'&scope=files.metadata.read+files.content.read+files.content.write+files.metadata.write'
     )
     return redirect(url)
+
+
+@dropbox_bp.route('/dropbox/test')
+@login_required
+def dropbox_test():
+    """Testa a conexão com o Dropbox e retorna diagnóstico detalhado."""
+    from utils.dropbox_sync import _service
+    app_key = os.environ.get('DROPBOX_APP_KEY', '').strip()
+    app_secret = os.environ.get('DROPBOX_APP_SECRET', '').strip()
+    refresh_token = os.environ.get('DROPBOX_REFRESH_TOKEN', '').strip()
+
+    diag = {
+        'DROPBOX_APP_KEY': 'CONFIGURADO' if app_key else 'NÃO CONFIGURADO',
+        'DROPBOX_APP_SECRET': 'CONFIGURADO' if app_secret else 'NÃO CONFIGURADO',
+        'DROPBOX_REFRESH_TOKEN': f'CONFIGURADO ({len(refresh_token)} chars)' if refresh_token else 'NÃO CONFIGURADO',
+    }
+
+    try:
+        _service._dbx = None  # Força nova conexão
+        dbx = _service._client()
+        if not dbx:
+            diag['resultado'] = 'FALHA: cliente Dropbox não pôde ser criado (variáveis não configuradas?)'
+            return jsonify(diag), 400
+        account = dbx.users_get_current_account()
+        diag['resultado'] = 'OK'
+        diag['conta'] = account.name.display_name
+        diag['email'] = account.email
+        return jsonify(diag), 200
+    except Exception as exc:
+        diag['resultado'] = 'ERRO'
+        diag['erro_tipo'] = type(exc).__name__
+        diag['erro_detalhe'] = str(exc)
+        return jsonify(diag), 401

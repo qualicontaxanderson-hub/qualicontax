@@ -104,11 +104,17 @@ class DropboxService:
     # Operações de arquivo
     # ------------------------------------------------------------------
     def _is_auth_error(self, exc: Exception) -> bool:
-        """Retorna True se a exceção é um erro de autenticação do Dropbox."""
+        """Retorna True se a exceção é um erro de autenticação/autorização do Dropbox."""
+        exc_type = type(exc).__name__
+        exc_str = str(exc)
         return (
-            'AuthError' in type(exc).__name__
-            or 'invalid_access_token' in str(exc)
-            or 'expired_access_token' in str(exc)
+            'AuthError' in exc_type
+            or 'BadInputError' in exc_type
+            or 'invalid_access_token' in exc_str
+            or 'expired_access_token' in exc_str
+            or 'invalid_grant' in exc_str
+            or 'missing_scope' in exc_str
+            or 'insufficient_scope' in exc_str
         )
 
     def list_folder(self, path: str) -> list:
