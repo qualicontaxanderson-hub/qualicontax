@@ -9,6 +9,7 @@ Estrutura de pastas por departamento:
 import logging
 import re
 from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def _sanitize_folder_name(name: str) -> str:
     return re.sub(r'[/\\:*?"<>|]', '_', name).strip() or 'SEM_NOME'
 
 
-def _build_empresa_folder(numero: str | None, nome: str) -> str:
+def _build_empresa_folder(numero: Optional[str], nome: str) -> str:
     """Constrói o nome da pasta da empresa para o Dropbox.
 
     Quando o cliente possui ``numero_cliente``, o resultado é
