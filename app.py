@@ -430,5 +430,24 @@ _execute_query(
 )
 
 
+# ---- Contratos ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS contratos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente_id INT NOT NULL,
+        numero_contrato VARCHAR(50) NOT NULL,
+        tipo_servico VARCHAR(100) NOT NULL,
+        valor_mensal DECIMAL(10,2) NULL,
+        data_inicio DATE NULL,
+        data_fim DATE NULL,
+        situacao VARCHAR(20) NOT NULL DEFAULT 'Ativo',
+        observacoes TEXT NULL,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_cliente_id (cliente_id),
+        INDEX idx_situacao (situacao)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+
 if __name__ == '__main__':
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
