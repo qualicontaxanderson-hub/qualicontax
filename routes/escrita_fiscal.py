@@ -824,26 +824,41 @@ def api_importar_dropbox():
             parsed = parse_nfe_xml(content)
 
             # Determina empresa para a pasta: usa a seleção explícita do usuário;
-            # caso não tenha, tenta detectar pelo dest_cnpj do XML.
+            # caso não tenha, tenta detectar pelo CNPJ do XML.
+            # Prioridade: dest_cnpj (empresa compradora) → emit_cnpj (empresa vendedora).
             _nome = empresa_nome_fixo
             _num = empresa_numero_fixo
             if _nome is None:
-                dest_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
-                if len(dest_digits) >= 11:
-                    found = execute_query(
-                        "SELECT id, numero_cliente, nome_razao_social FROM clientes "
-                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                        (dest_digits,), fetch=True, fetch_one=True,
-                    )
-                    if found:
-                        _nome = found['nome_razao_social']
-                        _num = found.get('numero_cliente') or None
+                for _cnpj_field in ('dest_cnpj', 'emit_cnpj'):
+                    _cnpj_digits = re.sub(r'\D', '', parsed['header'].get(_cnpj_field, ''))
+                    if len(_cnpj_digits) >= 11:
+                        found = execute_query(
+                            "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                            "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                            (_cnpj_digits,), fetch=True, fetch_one=True,
+                        )
+                        if found:
+                            _nome = found['nome_razao_social']
+                            _num = found.get('numero_cliente') or None
+                            logger.info(
+                                '%s: empresa detectada por %s → %s',
+                                info['name'], _cnpj_field, _nome,
+                            )
+                            break
                 if _nome is None:
                     _nome = 'GLOBAL'
+                    logger.warning(
+                        '%s: empresa não detectada (dest_cnpj=%r emit_cnpj=%r) → GLOBAL',
+                        info['name'],
+                        parsed['header'].get('dest_cnpj', ''),
+                        parsed['header'].get('emit_cnpj', ''),
+                    )
 
             # Usa a data de emissão do XML para o mês/ano da pasta;
             # cai de volta para a data atual se o campo não estiver disponível.
             _dt = parsed['header'].get('data_emissao') or now
+            if _dt is now:
+                logger.warning('%s: data_emissao ausente no XML, usando data atual', info['name'])
 
             pasta_imp = _get_or_create_pasta(
                 svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
