@@ -202,7 +202,7 @@ class DropboxService:
                 raise DropboxAuthError(
                     'Credenciais Dropbox inválidas ou expiradas.'
                 ) from exc
-            if 'path/conflict' not in str(exc):
+            if 'conflict' not in str(exc):
                 logger.warning('Falha ao criar pasta %s: %s', path, exc)
 
     def move_file(self, from_path: str, to_path: str) -> bool:
