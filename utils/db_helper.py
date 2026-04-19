@@ -1,37 +1,48 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import mysql.connector
-from mysql.connector import Error
+from mysql.connector import Error, pooling
 from config import Config
 import logging
 
 # Configurar logging
 logger = logging.getLogger(__name__)
 
+# Pool de conexões reutilizadas entre requisições – elimina o overhead de
+# abrir/fechar uma conexão TCP+autenticação MySQL a cada query.
+_pool: pooling.MySQLConnectionPool | None = None
 
-def get_db_connection():
-    """
-    Cria e retorna uma conexão com o banco de dados MySQL.
-    
-    Returns:
-        connection: Objeto de conexão MySQL ou None em caso de erro
-    """
-    try:
-        connection = mysql.connector.connect(
+
+def _get_pool() -> pooling.MySQLConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = pooling.MySQLConnectionPool(
+            pool_name='qualicontax_pool',
+            pool_size=10,
+            pool_reset_session=True,
             host=Config.DB_HOST,
             port=Config.DB_PORT,
             database=Config.DB_NAME,
             user=Config.DB_USER,
             password=Config.DB_PASSWORD,
             charset='utf8mb4',
-            collation='utf8mb4_unicode_ci'
+            collation='utf8mb4_unicode_ci',
         )
-        
-        if connection.is_connected():
-            return connection
-            
+    return _pool
+
+
+def get_db_connection():
+    """
+    Retorna uma conexão do pool MySQL.
+    Chamar .close() na conexão a devolve ao pool (não fecha de verdade).
+
+    Returns:
+        connection: Objeto de conexão MySQL ou None em caso de erro
+    """
+    try:
+        return _get_pool().get_connection()
     except Error as e:
-        logger.error(f"Erro ao conectar ao MySQL: {e}")
-        print(f"Erro ao conectar ao MySQL: {e}")
+        logger.error(f"Erro ao obter conexão do pool MySQL: {e}")
+        print(f"Erro ao obter conexão do pool MySQL: {e}")
         return None
 
 
