@@ -924,6 +924,79 @@ def excluir_nfe(nfe_id):
 
 
 # ---------------------------------------------------------------------------
+# API — exclusão em lote (por filtros ativos)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/excluir-lote', methods=['POST'])
+@login_required
+def excluir_lote():
+    data = request.get_json(silent=True) or {}
+    f_cliente_id = str(data.get('cliente_id', '')).strip()
+    f_grupo_id   = str(data.get('grupo_id', '')).strip()
+    f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
+    f_data_ini   = str(data.get('data_ini', '')).strip()
+    f_data_fim   = str(data.get('data_fim', '')).strip()
+    f_chave      = str(data.get('chave', '')).strip()
+    f_num_nota   = str(data.get('num_nota', '')).strip()
+    f_cfop       = str(data.get('cfop', '')).strip()
+    f_emit_uf    = str(data.get('emit_uf', '')).strip()
+    f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
+    f_vmin       = str(data.get('vmin', '')).strip()
+    f_vmax       = str(data.get('vmax', '')).strip()
+    f_origem     = str(data.get('origem', '')).strip()
+
+    where, params = [], []
+    extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra_clauses)
+
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj = %s')
+        params.append(f_emit_cnpj)
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_nota:
+        where.append('n.num_nota = %s')
+        params.append(f_num_nota)
+    if f_cfop:
+        where.append('n.cfop LIKE %s')
+        params.append(f'{f_cfop}%')
+    if f_emit_uf:
+        where.append('n.emit_uf = %s')
+        params.append(f_emit_uf)
+    if f_dest_cnpj:
+        where.append('n.dest_cnpj LIKE %s')
+        params.append(f'%{f_dest_cnpj}%')
+    if f_vmin:
+        where.append('n.valor_total >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_total <= %s')
+        params.append(float(f_vmax))
+    if f_origem:
+        where.append('n.origem = %s')
+        params.append(f_origem)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    count_row = execute_query(
+        f"SELECT COUNT(*) AS total FROM nfe_importacoes n {where_sql}",
+        params, fetch=True, fetch_one=True,
+    ) or {}
+    total = int(count_row.get('total', 0))
+
+    execute_query(
+        f"DELETE n FROM nfe_importacoes n {where_sql}",
+        params,
+    )
+    return jsonify({'ok': True, 'deleted': total})
+
+
+# ---------------------------------------------------------------------------
 # Catálogo de Produtos — listagem
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/produtos-catalogo/')

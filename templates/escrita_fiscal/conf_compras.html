@@ -304,6 +304,12 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 
 <!-- Tab: Notas Fiscais -->
 <div id="tab-notas">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button onclick="excluirLote()"
+                style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-trash-alt"></i> Excluir em Lote
+        </button>
+    </div>
     <div class="cc-table-wrap">
         <table class="cc-table">
             <thead>
@@ -753,6 +759,29 @@ function excluirNfe(id, btn) {
         .then(r => r.json())
         .then(() => { btn.closest('tr').remove(); applyFilters(); })
         .catch(() => alert('Erro ao excluir.'));
+}
+
+// ---- Bulk delete NF-e (by active filters) ----
+function excluirLote() {
+    const total = parseInt(document.getElementById('tabBadgeNotas').textContent) || 0;
+    if (total === 0) { alert('Nenhuma nota encontrada com os filtros atuais.'); return; }
+    if (!confirm(`Excluir TODAS as ${total} nota(s) fiscal(is) encontradas com os filtros atuais?\n\nEsta ação não pode ser desfeita.`)) return;
+    const f = getFilters();
+    fetch('/escrita-fiscal/conf-compras/excluir-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(f),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            alert(`${data.deleted} nota(s) excluída(s) com sucesso.`);
+            applyFilters();
+        } else {
+            alert('Erro ao excluir em lote.');
+        }
+    })
+    .catch(() => alert('Erro ao excluir em lote.'));
 }
 
 // ---- Panel: Itens da NF-e ----
