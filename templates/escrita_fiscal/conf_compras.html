@@ -12,6 +12,17 @@
 .cc-empresa-bar { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(37,99,235,.25); }
 .cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
 .cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
+/* Autocomplete empresa */
+.cc-empresa-ac { position:relative; min-width:220px; }
+.cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
+.cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
+.cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
+.cc-ac-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:9999; max-height:260px; overflow-y:auto; }
+.cc-ac-item { padding:8px 12px; font-size:13px; color:#1e293b; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+.cc-ac-item:last-child { border-bottom:none; }
+.cc-ac-item:hover, .cc-ac-item.active { background:#eff6ff; color:#1d4ed8; }
+.cc-ac-item.all { color:#64748b; font-style:italic; }
+.cc-ac-empty { padding:10px 12px; font-size:12px; color:#94a3b8; text-align:center; }
 .cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
 .cc-scope-badge.empresa { background:#bfdbfe; color:#1d4ed8; }
 .cc-scope-badge.grupo   { background:#e9d5ff; color:#7c3aed; }
@@ -168,12 +179,13 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 <div class="cc-empresa-bar">
     <label><i class="fas fa-building"></i> Visualizar por</label>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select id="sel_empresa" onchange="onEmpresaChange()">
-            <option value="">— Todas as Empresas —</option>
-            {% for e in empresas %}
-            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
-            {% endfor %}
-        </select>
+        <div class="cc-empresa-ac" id="empresaAcWrap">
+            <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
+                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onkeydown="onEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="sel_empresa" value="">
+            <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
+        </div>
         <span style="color:#d1d5db;font-size:11px;">OU</span>
         <select id="sel_grupo" onchange="onGrupoChange()">
             <option value="">— Todos os Grupos —</option>
@@ -497,13 +509,89 @@ let catalogoProdutos = [];
 let currentNfeId = null;
 let panelModified = false;
 
+// ---- Empresa autocomplete data ----
+const empresasData = [
+    {id: '', nome: '— Todas as Empresas —'},
+    {% for e in empresas %}
+    {id: '{{ e.id }}', nome: '{{ e.nome_razao_social | replace("'", "\\'") }}'},
+    {% endfor %}
+];
+let acActiveIndex = -1;
+
+function onEmpresaInput() {
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+    document.getElementById('sel_empresa_clear').style.display = q ? '' : 'none';
+}
+function onEmpresaFocus() {
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+}
+function renderEmpresaDropdown(q) {
+    const list = document.getElementById('empresaAcList');
+    acActiveIndex = -1;
+    let filtered;
+    if (!q) {
+        filtered = empresasData;
+    } else {
+        filtered = empresasData.filter(e => e.nome.toLowerCase().includes(q));
+    }
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.map((e, i) =>
+            `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`
+        ).join('');
+    }
+    list.style.display = '';
+}
+function onEmpresaKeydown(e) {
+    const list = document.getElementById('empresaAcList');
+    const items = list.querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') {
+        acActiveIndex = Math.min(acActiveIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        acActiveIndex = Math.max(acActiveIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        if (acActiveIndex >= 0 && items[acActiveIndex]) {
+            const el = items[acActiveIndex];
+            selectEmpresa(el.dataset.id, el.dataset.nome);
+        }
+        e.preventDefault();
+    } else if (e.key === 'Escape') {
+        closeEmpresaDropdown();
+    }
+}
+function selectEmpresa(id, nome) {
+    document.getElementById('sel_empresa').value = id;
+    document.getElementById('sel_empresa_input').value = id ? nome : '';
+    document.getElementById('sel_empresa_clear').style.display = id ? '' : 'none';
+    closeEmpresaDropdown();
+    onEmpresaChange();
+}
+function clearEmpresa() {
+    selectEmpresa('', '');
+}
+function closeEmpresaDropdown() {
+    document.getElementById('empresaAcList').style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+    if (!document.getElementById('empresaAcWrap').contains(e.target)) {
+        closeEmpresaDropdown();
+    }
+});
+
 // ---- Empresa / Grupo selector ----
 function onEmpresaChange() {
     currentClienteId = document.getElementById('sel_empresa').value;
     if (currentClienteId) {
         document.getElementById('sel_grupo').value = '';
         currentGrupoId = '';
-        updateScopeBadge('empresa', document.getElementById('sel_empresa').options[document.getElementById('sel_empresa').selectedIndex].text);
+        updateScopeBadge('empresa', document.getElementById('sel_empresa_input').value);
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
@@ -514,6 +602,8 @@ function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
     if (currentGrupoId) {
         document.getElementById('sel_empresa').value = '';
+        document.getElementById('sel_empresa_input').value = '';
+        document.getElementById('sel_empresa_clear').style.display = 'none';
         currentClienteId = '';
         updateScopeBadge('grupo', document.getElementById('sel_grupo').options[document.getElementById('sel_grupo').selectedIndex].text);
     } else {
