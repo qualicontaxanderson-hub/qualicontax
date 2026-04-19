@@ -59,7 +59,7 @@
                             <option value="">Escolha um cliente...</option>
                             {% for cliente in clientes_disponiveis %}
                             <option value="{{ cliente.id }}">
-                                {{ cliente.nome_razao_social }} - {{ cliente.cpf_cnpj }}
+                                {% if cliente.numero_cliente %}#{{ cliente.numero_cliente }} - {% endif %}{{ cliente.nome_razao_social }}
                             </option>
                             {% endfor %}
                         </select>
@@ -87,6 +87,7 @@
                 <table class="table">
                     <thead>
                         <tr>
+                            <th>Nº Cliente</th>
                             <th>Nome</th>
                             <th>CPF/CNPJ</th>
                             <th>Email</th>
@@ -100,6 +101,7 @@
                         {% if clientes %}
                             {% for cliente in clientes %}
                             <tr>
+                                <td><strong style="color: #22C55E;">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}-{% endif %}</strong></td>
                                 <td>
                                     <div class="table-user">
                                         <div class="table-user-avatar">
@@ -135,7 +137,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="text-center">
+                                <td colspan="8" class="text-center">
                                     <div class="empty-state">
                                         <i class="fas fa-users"></i>
                                         <p>Nenhum cliente neste grupo ainda</p>

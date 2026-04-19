@@ -36,7 +36,7 @@
                                     {% for cliente in clientes %}
                                     <option value="{{ cliente.id }}"
                                         {% if cliente_id is defined and cliente_id == cliente.id|string %}selected{% endif %}>
-                                        {{ cliente.nome_razao_social or cliente.razao_social or cliente.id }}
+                                        {% if cliente.numero_cliente %}#{{ cliente.numero_cliente }} - {% endif %}{{ cliente.nome_razao_social }}
                                     </option>
                                     {% endfor %}
                                 {% endif %}

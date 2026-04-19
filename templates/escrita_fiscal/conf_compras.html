@@ -469,7 +469,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <select id="dbxEmpresa">
             <option value="">— Sem empresa específica —</option>
             {% for e in empresas %}
-            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+            <option value="{{ e.id }}">{% if e.numero_cliente %}#{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social }}</option>
             {% endfor %}
         </select>
 
@@ -513,7 +513,7 @@ let panelModified = false;
 const empresasData = [
     {id: '', nome: '— Todas as Empresas —'},
     {% for e in empresas %}
-    {id: '{{ e.id }}', nome: '{{ e.nome_razao_social | replace("'", "\\'") }}'},
+    {id: '{{ e.id }}', nome: '{% if e.numero_cliente %}#{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social | replace("'", "\\'") }}'},
     {% endfor %}
 ];
 let acActiveIndex = -1;

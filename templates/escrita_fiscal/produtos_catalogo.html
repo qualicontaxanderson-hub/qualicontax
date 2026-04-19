@@ -85,7 +85,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
         <select name="cliente_id" onchange="this.form.submit()">
             <option value="">— Todas —</option>
             {% for e in empresas %}
-            <option value="{{ e.id }}" {% if f_cliente_id == e.id|string %}selected{% endif %}>{{ e.nome_razao_social }}</option>
+            <option value="{{ e.id }}" {% if f_cliente_id == e.id|string %}selected{% endif %}>{% if e.numero_cliente %}#{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social }}</option>
             {% endfor %}
         </select>
     </div>
@@ -238,7 +238,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
                     <select name="cliente_id" id="m_cliente_id">
                         <option value="">— Global (todas) —</option>
                         {% for e in empresas %}
-                        <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
+                        <option value="{{ e.id }}">{% if e.numero_cliente %}#{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social }}</option>
                         {% endfor %}
                     </select>
                 </div>

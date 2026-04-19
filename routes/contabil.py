@@ -328,7 +328,7 @@ def conciliacoes():
     )
     
     # Busca clientes e grupos para filtros
-    clientes = Cliente.get_all()
+    clientes = Cliente.get_all(per_page=1000).get('clientes', [])
     grupos = GrupoCliente.get_all()
     
     return render_template('contabil/conciliacoes.html',
@@ -347,7 +347,7 @@ def conciliacoes():
 def nova_conciliacao():
     """Página para criar nova conciliação (importar OFX)"""
     # Busca clientes para seleção
-    clientes = Cliente.get_all()
+    clientes = Cliente.get_all(per_page=1000).get('clientes', [])
     
     return render_template('contabil/nova_conciliacao.html',
                          clientes=clientes)
@@ -443,7 +443,7 @@ def importar_ofx():
     # Buscar contas correntes para seleção
     # TODO: Implementar busca de contas do banco
     contas = []  # Placeholder
-    clientes = Cliente.get_all()
+    clientes = Cliente.get_all(per_page=1000).get('clientes', [])
     
     return render_template('contabil/importar_ofx.html',
                          contas=contas,

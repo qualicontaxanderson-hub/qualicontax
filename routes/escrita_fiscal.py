@@ -45,7 +45,7 @@ escrita_fiscal = Blueprint('escrita_fiscal', __name__, url_prefix='/escrita-fisc
 # ---------------------------------------------------------------------------
 def _get_empresas():
     return execute_query(
-        "SELECT id, nome_razao_social, cpf_cnpj FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
         fetch=True,
     ) or []
 
@@ -1371,13 +1371,13 @@ def memorizacoes_empresas(vid):
     if vinculo.get('cliente_id'):
         # Regra específica para uma empresa
         empresas = execute_query(
-            "SELECT id, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s",
+            "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s",
             (vinculo['cliente_id'],), fetch=True,
         ) or []
     elif vinculo.get('ramo_atividade_id'):
         # Regra por ramo de atividade — lista clientes do mesmo ramo que importaram desse fornecedor
         empresas = execute_query(
-            """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
+            """SELECT DISTINCT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj
                  FROM clientes c
                  JOIN cliente_ramo_atividade_relacao crar ON crar.cliente_id = c.id
                    AND crar.ramo_atividade_id = %s
@@ -1395,7 +1395,7 @@ def memorizacoes_empresas(vid):
         # Regra global — todas as empresas que já importaram desse fornecedor
         # (considera tanto cliente_id explícito quanto match por dest_cnpj)
         empresas = execute_query(
-            """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
+            """SELECT DISTINCT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj
                  FROM clientes c
                  JOIN nfe_importacoes n ON (
                      n.cliente_id = c.id

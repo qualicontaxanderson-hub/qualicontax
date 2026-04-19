@@ -36,7 +36,7 @@
                             <option value="">Todos os clientes</option>
                             {% for cliente in clientes %}
                             <option value="{{ cliente.id }}" {% if request.args.get('cliente_id')|string == cliente.id|string %}selected{% endif %}>
-                                {{ cliente.nome_razao_social }}
+                                {% if cliente.numero_cliente %}#{{ cliente.numero_cliente }} - {% endif %}{{ cliente.nome_razao_social }}
                             </option>
                             {% endfor %}
                         </select>
@@ -156,7 +156,7 @@
                     <select name="cliente_id" id="modal_cliente_id" class="form-control" required>
                         <option value="">Selecione o cliente...</option>
                         {% for cliente in clientes %}
-                        <option value="{{ cliente.id }}">{{ cliente.nome_razao_social }}</option>
+                        <option value="{{ cliente.id }}">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }} - {% endif %}{{ cliente.nome_razao_social }}</option>
                         {% endfor %}
                     </select>
                 </div>
