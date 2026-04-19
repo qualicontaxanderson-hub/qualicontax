@@ -534,14 +534,15 @@ function renderEmpresaDropdown(q) {
     if (!q) {
         filtered = empresasData;
     } else {
-        filtered = empresasData.filter(e => e.nome.toLowerCase().includes(q));
+        filtered = empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
     }
     if (filtered.length === 0) {
         list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
     } else {
-        list.innerHTML = filtered.map((e, i) =>
-            `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`
-        ).join('');
+        list.innerHTML = filtered.map((e, i) => {
+            const label = e.id ? `<span style="color:#94a3b8;font-size:11px;margin-right:5px;">#${e.id}</span>${e.nome}` : e.nome;
+            return `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${label}</div>`;
+        }).join('');
     }
     list.style.display = '';
 }
