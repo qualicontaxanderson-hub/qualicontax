@@ -740,26 +740,34 @@ def api_importar_dropbox():
     logger.info('Importar Dropbox: departamento=%r cliente_id=%r grupo_id=%r',
                 departamento, cliente_id, grupo_id)
 
-    # Resolve empresa fixa quando cliente_id ou grupo_id são fornecidos pelo front-end.
-    # Quando nenhum dos dois é fornecido, a empresa é detectada arquivo a arquivo
-    # a partir do dest_cnpj do XML (ver loop abaixo).
-    empresa_nome_fixo = None
-    empresa_numero_fixo = None
+    # ------------------------------------------------------------------
+    # Monta conjunto de CNPJs aceitos como filtro (digits only, sem pontuação).
+    # None = aceitar todos.  Quando cliente_id ou grupo_id é fornecido pelo
+    # front-end, apenas XMLs cujo dest_cnpj bata com esse conjunto são
+    # processados; os demais são IGNORADOS (ficam na pasta NOVO intocados).
+    # A empresa salva no banco é sempre determinada pelo dest_cnpj do XML —
+    # NUNCA pelo cliente_id/grupo_id do filtro — para garantir fidedignidade.
+    # ------------------------------------------------------------------
+    filter_cnpjs: set | None = None  # set de strings de dígitos
     if cliente_id:
         c = execute_query(
-            "SELECT numero_cliente, nome_razao_social FROM clientes WHERE id = %s",
+            "SELECT cpf_cnpj FROM clientes WHERE id = %s",
             (int(cliente_id),), fetch=True, fetch_one=True,
         )
         if c:
-            empresa_nome_fixo = c['nome_razao_social']
-            empresa_numero_fixo = c.get('numero_cliente') or None
+            _d = re.sub(r'\D', '', c['cpf_cnpj'] or '')
+            if _d:
+                filter_cnpjs = {_d}
     elif grupo_id:
-        g = execute_query(
-            "SELECT nome FROM grupos_clientes WHERE id = %s",
-            (int(grupo_id),), fetch=True, fetch_one=True,
-        )
-        if g:
-            empresa_nome_fixo = g['nome']
+        members = execute_query(
+            "SELECT c.cpf_cnpj FROM clientes c "
+            "JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id "
+            "WHERE cgr.grupo_id = %s",
+            (int(grupo_id),), fetch=True,
+        ) or []
+        filter_cnpjs = {re.sub(r'\D', '', m['cpf_cnpj'] or '') for m in members} - {''}
+        if not filter_cnpjs:
+            filter_cnpjs = None  # grupo vazio → sem filtro
 
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('Buscando XMLs em: %r', pasta_novo)
@@ -791,7 +799,7 @@ def api_importar_dropbox():
             _pastas_criadas.add(path)
         return path
 
-    ok, dup, err, moved_ok, moved_err = 0, 0, 0, 0, 0
+    ok, dup, err, moved_ok, moved_err, skipped = 0, 0, 0, 0, 0, 0
     details = []
 
     for info in files:
@@ -802,13 +810,10 @@ def api_importar_dropbox():
         if raw is None:
             err += 1
             details.append(f"{info['name']}: falha ao baixar do Dropbox")
-            # Sem XML válido usa empresa/data padrão para a pasta de erros
-            _dt = now
-            _nome = empresa_nome_fixo or 'GLOBAL'
-            _num = empresa_numero_fixo
+            # Sem XML válido usa pasta de erros global
             try:
                 pasta_err = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
+                    svc.pasta_erros(departamento, 'GLOBAL', now))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
             except DropboxAuthError:
@@ -823,36 +828,45 @@ def api_importar_dropbox():
         try:
             parsed = parse_nfe_xml(content)
 
-            # Determina empresa para a pasta: usa a seleção explícita do usuário;
-            # caso não tenha, tenta detectar pelo CNPJ do XML.
-            # Prioridade: dest_cnpj (empresa compradora) → emit_cnpj (empresa vendedora).
-            _nome = empresa_nome_fixo
-            _num = empresa_numero_fixo
+            # ----------------------------------------------------------
+            # Detecta empresa SEMPRE pelo dest_cnpj do XML.
+            # A seleção do modal (cliente_id / grupo_id) é usada apenas
+            # como filtro — nunca para sobrescrever a empresa do XML.
+            # ----------------------------------------------------------
+            _nome = None
+            _num = None
+            _cli = None
+            _dt = now
+            dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+            if len(dest_cnpj_digits) >= 11:
+                found = execute_query(
+                    "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                    "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                    (dest_cnpj_digits,), fetch=True, fetch_one=True,
+                )
+                if found:
+                    _cli = found['id']
+                    _nome = found['nome_razao_social']
+                    _num = found.get('numero_cliente') or None
+                    logger.info('%s: empresa detectada por dest_cnpj → %s', info['name'], _nome)
+
             if _nome is None:
-                for _cnpj_field in ('dest_cnpj', 'emit_cnpj'):
-                    _cnpj_digits = re.sub(r'\D', '', parsed['header'].get(_cnpj_field, ''))
-                    if len(_cnpj_digits) >= 11:
-                        found = execute_query(
-                            "SELECT id, numero_cliente, nome_razao_social FROM clientes "
-                            "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                            (_cnpj_digits,), fetch=True, fetch_one=True,
-                        )
-                        if found:
-                            _nome = found['nome_razao_social']
-                            _num = found.get('numero_cliente') or None
-                            logger.info(
-                                '%s: empresa detectada por %s → %s',
-                                info['name'], _cnpj_field, _nome,
-                            )
-                            break
-                if _nome is None:
-                    _nome = 'GLOBAL'
-                    logger.warning(
-                        '%s: empresa não detectada (dest_cnpj=%r emit_cnpj=%r) → GLOBAL',
-                        info['name'],
-                        parsed['header'].get('dest_cnpj', ''),
-                        parsed['header'].get('emit_cnpj', ''),
-                    )
+                _nome = 'GLOBAL'
+                logger.warning(
+                    '%s: empresa não detectada (dest_cnpj=%r) → GLOBAL',
+                    info['name'], parsed['header'].get('dest_cnpj', ''),
+                )
+
+            # Aplica filtro: se empresa/grupo foi selecionado e o dest_cnpj
+            # do XML não pertence a esse conjunto, ignora o arquivo (deixa na
+            # pasta NOVO para não perder dados de outras empresas).
+            if filter_cnpjs is not None and dest_cnpj_digits not in filter_cnpjs:
+                skipped += 1
+                logger.info(
+                    '%s: dest_cnpj=%r não pertence ao filtro, ignorado',
+                    info['name'], dest_cnpj_digits,
+                )
+                continue
 
             # Usa a data de emissão do XML para o mês/ano da pasta;
             # cai de volta para a data atual se o campo não estiver disponível.
@@ -865,8 +879,9 @@ def api_importar_dropbox():
             pasta_err = _get_or_create_pasta(
                 svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
 
+            # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                               cliente_id=cliente_id, grupo_id=grupo_id)
+                               cliente_id=_cli, grupo_id=grupo_id if _cli is None else None)
             if result == 'dup':
                 dup += 1
             else:
@@ -882,20 +897,23 @@ def api_importar_dropbox():
         except Exception as exc:
             err += 1
             details.append(f"{info['name']}: {exc}")
-            _dt = now
-            _nome = empresa_nome_fixo or 'GLOBAL'
-            _num = empresa_numero_fixo
             try:
+                _err_nome = _nome if _nome else 'GLOBAL'
+                _err_num = _num if _num else None
+                _err_dt = _dt if _dt else now
                 pasta_err = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
+                    svc.pasta_erros(departamento, _err_nome, _err_dt, empresa_numero=_err_num))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
             except DropboxAuthError:
                 logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
 
     total = len(files)
-    msg = (f'{total} arquivo(s) lido(s). {ok} importado(s), '
+    processed = ok + dup + err
+    msg = (f'{total} arquivo(s) analisado(s). {ok} importado(s), '
            f'{dup} duplicado(s), {err} com erro.')
+    if skipped:
+        msg += f' {skipped} ignorado(s) (não pertencem à empresa/grupo selecionado).'
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
     if has_more:
