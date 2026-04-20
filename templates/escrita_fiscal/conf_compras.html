@@ -558,9 +558,9 @@ function onEmpresaKeydown(e) {
         items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
         e.preventDefault();
     } else if (e.key === 'Enter') {
-        if (acActiveIndex >= 0 && items[acActiveIndex]) {
-            const el = items[acActiveIndex];
-            selectEmpresa(el.dataset.id, el.dataset.nome);
+        const target = acActiveIndex >= 0 ? items[acActiveIndex] : items[0];
+        if (target) {
+            selectEmpresa(target.dataset.id, target.dataset.nome);
         }
         e.preventDefault();
     } else if (e.key === 'Escape') {
