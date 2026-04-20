@@ -1297,13 +1297,17 @@ function executarImportacaoDropbox() {
             result.className = 'err';
             result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
         } else {
-            const totalOk  = data.ok  || 0;
-            const totalErr = data.err || 0;
-            if (totalOk === 0 && totalErr === 0) {
+            const totalOk      = data.ok      || 0;
+            const totalErr     = data.err     || 0;
+            const totalDup     = data.dup     || 0;
+            const totalSkipped = data.skipped || 0;
+            const nothingHappened = totalOk === 0 && totalErr === 0 && totalDup === 0 && totalSkipped === 0;
+            if (nothingHappened) {
                 result.className = 'info';
-                result.innerHTML = '<i class="fas fa-info-circle"></i> Nenhum arquivo novo encontrado.';
+                result.innerHTML = '<i class="fas fa-info-circle"></i> ' + (data.msg || 'Nenhum arquivo novo encontrado.');
             } else {
-                result.className = totalErr > 0 ? 'err' : 'ok';
+                // se só teve duplicatas/ignorados (nenhum novo importado e nenhum erro) usa 'info'
+                result.className = totalErr > 0 ? 'err' : (totalOk > 0 ? 'ok' : 'info');
                 let msg = data.msg || (totalOk > 0 ? `${totalOk} arquivo(s) importado(s) com sucesso.` : 'Importação concluída.');
                 let html = '<strong>' + msg + '</strong>';
                 if (data.details && data.details.length) {

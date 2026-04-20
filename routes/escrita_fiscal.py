@@ -920,7 +920,7 @@ def api_importar_dropbox():
         msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
 
     return jsonify({
-        'ok': ok, 'dup': dup, 'err': err,
+        'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
         'moved_ok': moved_ok, 'moved_err': moved_err,
         'has_more': has_more,
         'msg': msg,
