@@ -33,7 +33,7 @@
                     <select name="cliente_id" id="cliente_id" class="form-control" required>
                         <option value="">Selecione o cliente</option>
                         {% for cliente in clientes %}
-                        <option value="{{ cliente.id }}">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }} - {% endif %}{{ cliente.nome_razao_social }}</option>
+                        <option value="{{ cliente.id }}">{% if cliente.numero_cliente %}{{ cliente.numero_cliente }} - {% endif %}{{ cliente.nome_razao_social }}</option>
                         {% endfor %}
                     </select>
                 </div>
