@@ -540,7 +540,7 @@ function renderEmpresaDropdown(q) {
         list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
     } else {
         list.innerHTML = filtered.map((e, i) => {
-            const label = e.id ? `<span style="color:#94a3b8;font-size:11px;margin-right:5px;">#${e.id}</span>${e.nome}` : e.nome;
+            const label = e.nome;
             return `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${label}</div>`;
         }).join('');
     }
