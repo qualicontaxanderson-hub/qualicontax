@@ -181,7 +181,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <div class="cc-empresa-ac" id="empresaAcWrap">
             <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
-                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onkeydown="onEmpresaKeydown(event)">
+                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
             <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
             <input type="hidden" id="sel_empresa" value="">
             <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
@@ -524,8 +524,24 @@ function onEmpresaInput() {
     document.getElementById('sel_empresa_clear').style.display = q ? '' : 'none';
 }
 function onEmpresaFocus() {
+    const currentId = document.getElementById('sel_empresa').value;
+    if (currentId) {
+        // Clear display text so user can type a new search immediately
+        document.getElementById('sel_empresa_input').value = '';
+    }
     const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
     renderEmpresaDropdown(q);
+}
+function onEmpresaBlur() {
+    // If user didn't pick a new company, restore the displayed name of the current selection
+    setTimeout(function() {
+        const currentId = document.getElementById('sel_empresa').value;
+        const input = document.getElementById('sel_empresa_input');
+        if (currentId && input.value === '') {
+            const found = empresasData.find(e => e.id == currentId);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
 }
 function renderEmpresaDropdown(q) {
     const list = document.getElementById('empresaAcList');
