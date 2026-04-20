@@ -1297,14 +1297,22 @@ function executarImportacaoDropbox() {
             result.className = 'err';
             result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
         } else {
-            result.className = data.err > 0 ? 'err' : 'ok';
-            let html = '<strong>' + (data.msg || '') + '</strong>';
-            if (data.details && data.details.length) {
-                html += '<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;">';
-                data.details.forEach(d => { html += '<li>' + d + '</li>'; });
-                html += '</ul>';
+            const totalOk  = data.ok  || 0;
+            const totalErr = data.err || 0;
+            if (totalOk === 0 && totalErr === 0) {
+                result.className = 'info';
+                result.innerHTML = '<i class="fas fa-info-circle"></i> Nenhum arquivo novo encontrado.';
+            } else {
+                result.className = totalErr > 0 ? 'err' : 'ok';
+                let msg = data.msg || (totalOk > 0 ? `${totalOk} arquivo(s) importado(s) com sucesso.` : 'Importação concluída.');
+                let html = '<strong>' + msg + '</strong>';
+                if (data.details && data.details.length) {
+                    html += '<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;">';
+                    data.details.forEach(d => { html += '<li>' + d + '</li>'; });
+                    html += '</ul>';
+                }
+                result.innerHTML = html;
             }
-            result.innerHTML = html;
             if (data.ok > 0) applyFilters();
             if (data.has_more) {
                 // Ainda há arquivos na fila — mantém o botão habilitado para nova chamada
