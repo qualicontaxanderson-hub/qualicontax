@@ -17,6 +17,9 @@
 .cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
 .cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
 .cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
+/* Modal autocomplete empresa overrides */
+.dbx-empresa-ac { min-width:100%; }
+.dbx-empresa-ac input[type=text] { border:1.5px solid #d1d5db; background:#fff; color:#1e293b; }
 .cc-ac-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:9999; max-height:260px; overflow-y:auto; }
 .cc-ac-item { padding:8px 12px; font-size:13px; color:#1e293b; cursor:pointer; border-bottom:1px solid #f1f5f9; }
 .cc-ac-item:last-child { border-bottom:none; }
@@ -197,7 +200,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
     <button onclick="openDbxModal()"
             style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-        <i class="fab fa-dropbox"></i> Importar
+        <i class="fab fa-dropbox"></i> Importar XML
     </button>
 </div>
 
@@ -461,17 +464,18 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 <div class="dbx-modal-overlay" id="dbxModalOverlay" onclick="closeDbxModal()">
 <div class="dbx-modal" onclick="event.stopPropagation()">
     <div class="dbx-modal-header">
-        <h3><i class="fab fa-dropbox" style="margin-right:8px;"></i>Importar</h3>
+        <h3><i class="fab fa-dropbox" style="margin-right:8px;"></i>Importar XML</h3>
         <button onclick="closeDbxModal()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;">&times;</button>
     </div>
     <div class="dbx-modal-body">
         <label>Empresa (opcional)</label>
-        <select id="dbxEmpresa">
-            <option value="">— Sem empresa específica —</option>
-            {% for e in empresas %}
-            <option value="{{ e.id }}">{% if e.numero_cliente %}{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social }}</option>
-            {% endfor %}
-        </select>
+        <div class="cc-empresa-ac dbx-empresa-ac" id="dbxEmpresaAcWrap">
+            <input type="text" id="dbxEmpresaInput" placeholder="— Sem empresa específica —"
+                   autocomplete="off" oninput="onDbxEmpresaInput()" onfocus="onDbxEmpresaFocus()" onblur="onDbxEmpresaBlur()" onkeydown="onDbxEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="dbxEmpresaClear" onclick="clearDbxEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="dbxEmpresa" value="">
+            <div class="cc-ac-dropdown" id="dbxEmpresaAcList" style="display:none;"></div>
+        </div>
 
         <label>Grupo (opcional)</label>
         <select id="dbxGrupo">
@@ -490,7 +494,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </button>
         <button id="btnDbxImportar" onclick="executarImportacaoDropbox()"
                 style="background:linear-gradient(135deg,#0061ff,#2563eb);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-            <i class="fas fa-cloud-download-alt"></i> Importar
+            <i class="fas fa-cloud-download-alt"></i> Importar XML
         </button>
     </div>
 </div>
@@ -600,7 +604,85 @@ document.addEventListener('click', function(e) {
     if (!document.getElementById('empresaAcWrap').contains(e.target)) {
         closeEmpresaDropdown();
     }
+    if (!document.getElementById('dbxEmpresaAcWrap').contains(e.target)) {
+        closeDbxEmpresaDropdown();
+    }
 });
+
+// ---- Autocomplete dbxEmpresa (modal) ----
+let dbxAcActiveIndex = -1;
+function onDbxEmpresaInput() {
+    const q = document.getElementById('dbxEmpresaInput').value.trim().toLowerCase();
+    renderDbxEmpresaDropdown(q);
+    document.getElementById('dbxEmpresaClear').style.display = q ? '' : 'none';
+}
+function onDbxEmpresaFocus() {
+    const currentId = document.getElementById('dbxEmpresa').value;
+    if (currentId) {
+        document.getElementById('dbxEmpresaInput').value = '';
+    }
+    const q = document.getElementById('dbxEmpresaInput').value.trim().toLowerCase();
+    renderDbxEmpresaDropdown(q);
+}
+function onDbxEmpresaBlur() {
+    setTimeout(function() {
+        const currentId = document.getElementById('dbxEmpresa').value;
+        const input = document.getElementById('dbxEmpresaInput');
+        if (currentId && input.value === '') {
+            const found = empresasData.find(e => e.id == currentId);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
+}
+function renderDbxEmpresaDropdown(q) {
+    const list = document.getElementById('dbxEmpresaAcList');
+    dbxAcActiveIndex = -1;
+    let filtered;
+    if (!q) {
+        filtered = empresasData;
+    } else {
+        filtered = empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    }
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.map(e =>
+            `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectDbxEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`
+        ).join('');
+    }
+    list.style.display = '';
+}
+function onDbxEmpresaKeydown(e) {
+    const list = document.getElementById('dbxEmpresaAcList');
+    const items = list.querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') {
+        dbxAcActiveIndex = Math.min(dbxAcActiveIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === dbxAcActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        dbxAcActiveIndex = Math.max(dbxAcActiveIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === dbxAcActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        const target = dbxAcActiveIndex >= 0 ? items[dbxAcActiveIndex] : items[0];
+        if (target) selectDbxEmpresa(target.dataset.id, target.dataset.nome);
+        e.preventDefault();
+    } else if (e.key === 'Escape') {
+        closeDbxEmpresaDropdown();
+    }
+}
+function selectDbxEmpresa(id, nome) {
+    document.getElementById('dbxEmpresa').value = id;
+    document.getElementById('dbxEmpresaInput').value = id ? nome : '';
+    document.getElementById('dbxEmpresaClear').style.display = id ? '' : 'none';
+    closeDbxEmpresaDropdown();
+}
+function clearDbxEmpresa() {
+    selectDbxEmpresa('', '');
+}
+function closeDbxEmpresaDropdown() {
+    document.getElementById('dbxEmpresaAcList').style.display = 'none';
+}
 
 // ---- Empresa / Grupo selector ----
 function onEmpresaChange() {
@@ -1173,9 +1255,13 @@ function openDbxModal() {
     const overlay = document.getElementById('dbxModalOverlay');
     overlay.classList.add('open');
     // Pre-seleciona empresa/grupo da barra principal
-    const emp = document.getElementById('dbxEmpresa');
+    if (currentClienteId) {
+        const found = empresasData.find(e => e.id == currentClienteId);
+        selectDbxEmpresa(currentClienteId, found ? found.nome : '');
+    } else {
+        selectDbxEmpresa('', '');
+    }
     const grp = document.getElementById('dbxGrupo');
-    if (emp && currentClienteId) emp.value = currentClienteId;
     if (grp && currentGrupoId) grp.value = currentGrupoId;
     document.getElementById('dbxResult').style.display = 'none';
 }
@@ -1207,7 +1293,7 @@ function executarImportacaoDropbox() {
         btn.disabled = false;
         result.style.display = 'block';
         if (data.error) {
-            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
             result.className = 'err';
             result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
         } else {
@@ -1224,13 +1310,13 @@ function executarImportacaoDropbox() {
                 // Ainda há arquivos na fila — mantém o botão habilitado para nova chamada
                 btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Continuar';
             } else {
-                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
             }
         }
     })
     .catch(() => {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
+        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
         result.style.display = 'block';
         result.className = 'err';
         result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão.';
