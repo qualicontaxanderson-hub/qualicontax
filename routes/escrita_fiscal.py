@@ -1487,6 +1487,39 @@ def memorizacoes_excluir(vid):
     return redirect(url_for('escrita_fiscal.memorizacoes'))
 
 
+def _lookup_vinculo(codigo_produto: str, cliente_id, grupo_id,
+                    prefetch_rows: list, cli_ramos: set):
+    """
+    In-memory vinculos lookup using pre-fetched rows.
+    Priority order matches _auto_vincular_db: empresa → grupo → ramo → global.
+    """
+    if not codigo_produto:
+        return None
+    rows = [r for r in prefetch_rows if r['codigo_produto_xml'] == codigo_produto]
+    # 1. Empresa específica
+    if cliente_id is not None:
+        for r in rows:
+            if r['cliente_id'] == cliente_id and r['grupo_id'] is None:
+                return r['produto_catalogo_id']
+    # 2. Grupo
+    if grupo_id is not None:
+        for r in rows:
+            if r['grupo_id'] == grupo_id and r['cliente_id'] is None:
+                return r['produto_catalogo_id']
+    # 3. Ramo de atividade
+    if cli_ramos:
+        for r in rows:
+            if (r['cliente_id'] is None and r['grupo_id'] is None
+                    and r.get('ramo_atividade_id') in cli_ramos):
+                return r['produto_catalogo_id']
+    # 4. Global
+    for r in rows:
+        if (r['cliente_id'] is None and r['grupo_id'] is None
+                and r.get('ramo_atividade_id') is None):
+            return r['produto_catalogo_id']
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
@@ -1540,10 +1573,42 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         ),
     )
 
+    # Pre-fetch all vinculos for this emit_cnpj in ONE query (avoids N×4 queries
+    # per item, which caused gunicorn worker timeouts on large batches).
+    # Results are shared via vinculos_cache across NF-es from the same emitente.
+    _emit_cnpj = h['emit_cnpj']
+    _vkey = f'__vrows__{_emit_cnpj}'
+    if vinculos_cache is not None and _vkey in vinculos_cache:
+        _vrows = vinculos_cache[_vkey]
+    else:
+        _vrows = execute_query(
+            "SELECT codigo_produto_xml, cliente_id, grupo_id, ramo_atividade_id, "
+            "produto_catalogo_id FROM nfe_produto_vinculo WHERE emit_cnpj = %s",
+            (_emit_cnpj,), fetch=True,
+        ) or []
+        if vinculos_cache is not None:
+            vinculos_cache[_vkey] = _vrows
+
+    # Pre-fetch ramos for this client (one query per unique client per batch).
+    _rkey = f'__ramos__{cli}'
+    if vinculos_cache is not None and _rkey in vinculos_cache:
+        _cli_ramos = vinculos_cache[_rkey]
+    else:
+        _cli_ramos = set()
+        if cli:
+            _ramo_rows = execute_query(
+                "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao "
+                "WHERE cliente_id = %s",
+                (cli,), fetch=True,
+            ) or []
+            _cli_ramos = {r['ramo_atividade_id'] for r in _ramo_rows
+                          if r.get('ramo_atividade_id')}
+        if vinculos_cache is not None:
+            vinculos_cache[_rkey] = _cli_ramos
+
     for item in parsed.get('itens', []):
-        # Tenta auto-vincular produto pelo emit_cnpj + codigo_produto
-        prod_id = _auto_vincular(h['emit_cnpj'], item['codigo_produto'], cli, grp,
-                                 cache=vinculos_cache)
+        # In-memory priority lookup: empresa → grupo → ramo → global.
+        prod_id = _lookup_vinculo(item['codigo_produto'], cli, grp, _vrows, _cli_ramos)
 
         execute_query(
             """INSERT INTO nfe_itens
