@@ -7,7 +7,7 @@ from flask import (
     flash, jsonify,
 )
 from utils.auth_helper import login_required
-from utils.db_helper import execute_query
+from utils.db_helper import execute_query, execute_many
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
 from utils.dropbox_sync import DropboxAuthError, DropboxError
@@ -22,10 +22,10 @@ _DROPBOX_AUTH_ERROR_MSG = (
 )
 # Máximo de arquivos processados por chamada ao endpoint importar-dropbox.
 # Cada arquivo exige download Dropbox + 2 queries DB + move Dropbox (operações
-# de rede dominam). 50 arquivos fica bem dentro do timeout de 300 s do gunicorn;
+# de rede dominam). 20 arquivos fica bem dentro do timeout de 300 s do gunicorn;
 # o frontend faz auto-continue quando has_more=True, garantindo importação
 # completa sem interação do usuário.
-_DROPBOX_BATCH_LIMIT = 50
+_DROPBOX_BATCH_LIMIT = 20
 
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
@@ -1608,23 +1608,26 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         if vinculos_cache is not None:
             vinculos_cache[_rkey] = _cli_ramos
 
+    items_data = []
     for item in parsed.get('itens', []):
         # In-memory priority lookup: empresa → grupo → ramo → global.
         prod_id = _lookup_vinculo(item['codigo_produto'], cli, grp, _vrows, _cli_ramos)
+        items_data.append((
+            nfe_id, item['num_item'], item['codigo_produto'],
+            item['descricao'], item['ncm'], item['cfop'],
+            item['unidade'], item['quantidade'], item['valor_unitario'],
+            item['valor_total'], item['valor_icms'],
+            item['valor_pis'], item['valor_cofins'], prod_id,
+        ))
 
-        execute_query(
+    if items_data:
+        execute_many(
             """INSERT INTO nfe_itens
                    (nfe_id, num_item, codigo_produto, descricao, ncm, cfop,
                     unidade, quantidade, valor_unitario, valor_total,
                     valor_icms, valor_pis, valor_cofins, produto_catalogo_id)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (
-                nfe_id, item['num_item'], item['codigo_produto'],
-                item['descricao'], item['ncm'], item['cfop'],
-                item['unidade'], item['quantidade'], item['valor_unitario'],
-                item['valor_total'], item['valor_icms'],
-                item['valor_pis'], item['valor_cofins'], prod_id,
-            ),
+            items_data,
         )
 
     return 'ok'

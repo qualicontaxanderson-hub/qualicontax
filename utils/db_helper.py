@@ -68,6 +68,7 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         logger.error("Não foi possível obter conexão com o banco de dados")
         return None
         
+    cursor = None
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute(query, params or ())
@@ -96,13 +97,20 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         print(f"Query: {query}")
         if params:
             print(f"Params: {params}")
-        connection.rollback()
+        try:
+            connection.rollback()
+        except Exception:
+            pass
         return None
         
     finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
+        try:
+            if cursor is not None:
+                cursor.close()
+            if connection.is_connected():
+                connection.close()
+        except Exception:
+            pass
 
 
 def execute_many(query, data_list):
@@ -120,6 +128,7 @@ def execute_many(query, data_list):
     if not connection:
         return False
         
+    cursor = None
     try:
         cursor = connection.cursor()
         cursor.executemany(query, data_list)
@@ -128,10 +137,17 @@ def execute_many(query, data_list):
         
     except Error as e:
         print(f"Erro ao executar múltiplas queries: {e}")
-        connection.rollback()
+        try:
+            connection.rollback()
+        except Exception:
+            pass
         return False
         
     finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
+        try:
+            if cursor is not None:
+                cursor.close()
+            if connection.is_connected():
+                connection.close()
+        except Exception:
+            pass
