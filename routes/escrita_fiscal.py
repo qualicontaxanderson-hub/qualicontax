@@ -836,6 +836,14 @@ def api_importar_dropbox():
         except UnicodeDecodeError:
             content = raw.decode('latin-1', errors='replace')
 
+        # Inicializa variáveis de contexto antes do try para que o bloco
+        # except sempre possa referenciá-las sem risco de NameError
+        # (ocorre quando parse_nfe_xml lança exceção antes de atribuí-las).
+        _nome = None
+        _num = None
+        _cli = None
+        _dt = now
+
         try:
             parsed = parse_nfe_xml(content)
 
@@ -844,10 +852,6 @@ def api_importar_dropbox():
             # A seleção do modal (cliente_id / grupo_id) é usada apenas
             # como filtro — nunca para sobrescrever a empresa do XML.
             # ----------------------------------------------------------
-            _nome = None
-            _num = None
-            _cli = None
-            _dt = now
             dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
             if len(dest_cnpj_digits) >= 11:
                 if dest_cnpj_digits in _cnpj_cliente_cache:
@@ -913,12 +917,10 @@ def api_importar_dropbox():
         except Exception as exc:
             err += 1
             details.append(f"{info['name']}: {exc}")
+            logger.exception('Erro ao processar %s', info['name'])
             try:
-                _err_nome = _nome if _nome else 'GLOBAL'
-                _err_num = _num if _num else None
-                _err_dt = _dt if _dt else now
                 pasta_err = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, _err_nome, _err_dt, empresa_numero=_err_num))
+                    svc.pasta_erros(departamento, _nome or 'GLOBAL', _dt, empresa_numero=_num))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
             except DropboxAuthError:
