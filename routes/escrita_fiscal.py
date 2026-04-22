@@ -10,7 +10,7 @@ from utils.auth_helper import login_required
 from utils.db_helper import execute_query
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
-from utils.dropbox_sync import DropboxAuthError
+from utils.dropbox_sync import DropboxAuthError, DropboxError
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,10 @@ _DROPBOX_AUTH_ERROR_MSG = (
     'Credenciais Dropbox inválidas ou expiradas. '
     'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
 )
+# Máximo de arquivos processados por chamada ao endpoint importar-dropbox.
+# Cada arquivo exige download + DB + move no Dropbox; 20 arquivos cabe
+# confortavelmente dentro do timeout de 300 s do gunicorn.
+_DROPBOX_BATCH_LIMIT = 20
 
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
@@ -775,6 +779,9 @@ def api_importar_dropbox():
         files = svc.list_xml_files(pasta_novo)
     except DropboxAuthError:
         return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
+    except DropboxError:
+        logger.exception('Erro ao listar pasta Dropbox %r', pasta_novo)
+        return jsonify({'error': 'Erro ao conectar ao Dropbox. Verifique as credenciais e a conexão.'}), 502
 
     if not files:
         return jsonify({
@@ -782,12 +789,11 @@ def api_importar_dropbox():
             'msg': 'Nenhum arquivo XML encontrado na pasta NOVO.',
         }), 200
 
-    # Processa no máximo 50 arquivos por chamada para evitar timeout do worker.
+    # Processa no máximo _DROPBOX_BATCH_LIMIT arquivos por chamada para evitar timeout do worker.
     # Se houver mais arquivos, o front-end deve chamar novamente até receber
     # has_more=False ou msg indicando que não há mais arquivos.
-    _BATCH_LIMIT = 50
-    has_more = len(files) > _BATCH_LIMIT
-    files = files[:_BATCH_LIMIT]
+    has_more = len(files) > _DROPBOX_BATCH_LIMIT
+    files = files[:_DROPBOX_BATCH_LIMIT]
 
     now = datetime.now()
     # Cache de pastas já criadas no Dropbox para evitar chamadas redundantes.

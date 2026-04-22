@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 class DropboxAuthError(Exception):
     """Raised when Dropbox returns an authentication/authorization error."""
 
+
+class DropboxError(Exception):
+    """Raised when a Dropbox operation fails for reasons other than auth (network, API error, etc.)."""
+
 # NF-e access keys are exactly 44 digits; files are normally saved as
 # "{44digits}.xml" but browsers (Edge, Chrome) sometimes strip the extension
 # or save as ".html".  We accept any file whose name starts with exactly 44 digits.
@@ -118,11 +122,18 @@ class DropboxService:
         )
 
     def list_folder(self, path: str) -> list:
-        """Lista todos os itens de uma pasta (arquivos e sub-pastas)."""
+        """Lista todos os itens de uma pasta (arquivos e sub-pastas).
+
+        Raises:
+            DropboxAuthError: credenciais inválidas/expiradas.
+            DropboxError: qualquer outro erro (rede, API, token não configurado).
+        """
         dbx = self._client()
         if not dbx:
-            logger.error('list_folder(%s): cliente Dropbox não disponível (token não configurado?)', path)
-            return []
+            raise DropboxError(
+                'Cliente Dropbox não disponível. '
+                'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+            )
         entries = []
         try:
             import dropbox as dropbox_sdk
@@ -142,6 +153,8 @@ class DropboxService:
                 result = dbx.files_list_folder_continue(result.cursor)
             logger.info('Dropbox list_folder(%r): %d item(s) encontrado(s): %s',
                         path, len(entries), [e['name'] for e in entries])
+        except (DropboxAuthError, DropboxError):
+            raise
         except Exception as exc:
             logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
             if self._is_auth_error(exc):
@@ -150,6 +163,7 @@ class DropboxService:
                     'Credenciais Dropbox inválidas ou expiradas. '
                     'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
                 ) from exc
+            raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
         return entries
 
     def list_xml_files(self, path: str) -> list:
