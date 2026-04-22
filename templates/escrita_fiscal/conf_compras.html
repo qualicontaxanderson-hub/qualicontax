@@ -1319,8 +1319,9 @@ function executarImportacaoDropbox() {
             }
             if (data.ok > 0) applyFilters();
             if (data.has_more) {
-                // Ainda há arquivos na fila — mantém o botão habilitado para nova chamada
-                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Continuar';
+                // Ainda há arquivos na fila — continua automaticamente sem necessitar clique
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+                setTimeout(() => executarImportacaoDropbox(), 300);
             } else {
                 btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
             }
