@@ -21,9 +21,11 @@ _DROPBOX_AUTH_ERROR_MSG = (
     'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
 )
 # Máximo de arquivos processados por chamada ao endpoint importar-dropbox.
-# Com o pre-fetch de vínculos, cada arquivo exige 2 queries fixas (vs N×4
-# antes); 200 arquivos cabe confortavelmente dentro do timeout de 300 s do gunicorn.
-_DROPBOX_BATCH_LIMIT = 200
+# Cada arquivo exige download Dropbox + 2 queries DB + move Dropbox (operações
+# de rede dominam). 50 arquivos fica bem dentro do timeout de 300 s do gunicorn;
+# o frontend faz auto-continue quando has_more=True, garantindo importação
+# completa sem interação do usuário.
+_DROPBOX_BATCH_LIMIT = 50
 
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
