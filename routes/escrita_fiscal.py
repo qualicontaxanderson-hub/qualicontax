@@ -792,6 +792,11 @@ def api_importar_dropbox():
     now = datetime.now()
     # Cache de pastas já criadas no Dropbox para evitar chamadas redundantes.
     _pastas_criadas: set = set()
+    # Cache de vínculos de produto para evitar N×M consultas DB por lote.
+    # Chave: (emit_cnpj, codigo_produto, cli, grp) → produto_catalogo_id | None
+    _vinculos_cache: dict = {}
+    # Cache de dest_cnpj → cliente para evitar repetir a mesma lookup por arquivo.
+    _cnpj_cliente_cache: dict = {}
 
     def _get_or_create_pasta(path: str) -> str:
         if path not in _pastas_criadas:
@@ -839,11 +844,15 @@ def api_importar_dropbox():
             _dt = now
             dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
             if len(dest_cnpj_digits) >= 11:
-                found = execute_query(
-                    "SELECT id, numero_cliente, nome_razao_social FROM clientes "
-                    "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                    (dest_cnpj_digits,), fetch=True, fetch_one=True,
-                )
+                if dest_cnpj_digits in _cnpj_cliente_cache:
+                    found = _cnpj_cliente_cache[dest_cnpj_digits]
+                else:
+                    found = execute_query(
+                        "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                        (dest_cnpj_digits,), fetch=True, fetch_one=True,
+                    )
+                    _cnpj_cliente_cache[dest_cnpj_digits] = found
                 if found:
                     _cli = found['id']
                     _nome = found['nome_razao_social']
@@ -881,7 +890,8 @@ def api_importar_dropbox():
 
             # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                               cliente_id=_cli, grupo_id=grupo_id if _cli is None else None)
+                               cliente_id=_cli, grupo_id=grupo_id if _cli is None else None,
+                               vinculos_cache=_vinculos_cache)
             if result == 'dup':
                 dup += 1
             else:
@@ -1473,7 +1483,7 @@ def memorizacoes_excluir(vid):
 # Helpers internos
 # ---------------------------------------------------------------------------
 def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
-              cliente_id=None, grupo_id=None):
+              cliente_id=None, grupo_id=None, vinculos_cache: dict | None = None):
     """
     Salva NF-e parseada no banco.
     Returns: 'ok' ou 'dup'
@@ -1524,7 +1534,8 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
 
     for item in parsed.get('itens', []):
         # Tenta auto-vincular produto pelo emit_cnpj + codigo_produto
-        prod_id = _auto_vincular(h['emit_cnpj'], item['codigo_produto'], cli, grp)
+        prod_id = _auto_vincular(h['emit_cnpj'], item['codigo_produto'], cli, grp,
+                                 cache=vinculos_cache)
 
         execute_query(
             """INSERT INTO nfe_itens
@@ -1555,7 +1566,29 @@ def _get_ramo_cliente(cliente_id):
     return row['ramo_atividade_id'] if row else None
 
 
-def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
+def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id,
+                   cache: dict | None = None):
+    """
+    Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
+    Busca na ordem: empresa específica → grupo → ramo de atividade → global.
+    O parâmetro `cache` (dict mutável) permite reutilizar resultados dentro de um lote
+    de importação, eliminando consultas DB repetidas para o mesmo par.
+    """
+    if not emit_cnpj or not codigo_produto:
+        return None
+
+    cache_key = (emit_cnpj, codigo_produto, cliente_id, grupo_id)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
+    result = _auto_vincular_db(emit_cnpj, codigo_produto, cliente_id, grupo_id)
+
+    if cache is not None:
+        cache[cache_key] = result
+    return result
+
+
+def _auto_vincular_db(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
     """
     Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
     Busca na ordem: empresa específica → grupo → ramo de atividade → global.
