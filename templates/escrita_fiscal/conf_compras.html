@@ -1339,11 +1339,11 @@ function executarImportacaoDropbox() {
                 result.innerHTML = html;
             }
             if (data.ok > 0) applyFilters();
-            // Só continua automaticamente se algum arquivo foi realmente movido
-            // (importado, duplicado ou erro). Caso contrário — ex.: todos os arquivos
-            // são de empresas não cadastradas — os arquivos ficam na pasta NOVO e
-            // continuar geraria um loop infinito listando os mesmos arquivos.
-            const filesWereMoved = ((data.ok || 0) + (data.dup || 0) + (data.err || 0)) > 0;
+            // Só continua automaticamente se algum arquivo foi fisicamente movido
+            // para fora de NOVO (moved_ok + moved_err). Usar ok+dup+err causaria
+            // loop infinito: XMLs de evento sem empresa identificada incrementam
+            // err mas ficam em NOVO, então o loop nunca termina.
+            const filesWereMoved = ((data.moved_ok || 0) + (data.moved_err || 0)) > 0;
             if (data.has_more && filesWereMoved) {
                 // Ainda há arquivos na fila — continua automaticamente sem necessitar clique
                 btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
