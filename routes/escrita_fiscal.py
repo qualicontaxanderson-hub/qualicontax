@@ -890,6 +890,33 @@ def api_importar_dropbox():
                 if _ev_rec:
                     _ev_nome = _ev_rec['nome_razao_social']
                     _ev_num = _ev_rec.get('numero_cliente') or None
+            # Se a busca por chNFe falhou, tenta pelo CNPJ direto no XML do evento.
+            # Exemplos: <CNPJ> em infEvento (procEventoNFe/envEvento) ou
+            # <CNPJDest> em retEvento — presentes em confirmações, ciências, etc.
+            if not _ev_nome:
+                for _cnpj_xpath in [
+                    f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                    f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
+                ]:
+                    _el = _ev_root.find(_cnpj_xpath)
+                    if _el is not None and _el.text:
+                        _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
+                        if len(_ev_cnpj_dig) >= 11:
+                            if _ev_cnpj_dig in _cnpj_cliente_cache:
+                                _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
+                            else:
+                                _ev_found = execute_query(
+                                    "SELECT id, nome_razao_social, numero_cliente FROM clientes "
+                                    "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                                    (_ev_cnpj_dig,), fetch=True, fetch_one=True,
+                                )
+                                _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                            if _ev_found:
+                                _ev_nome = _ev_found['nome_razao_social']
+                                _ev_num = _ev_found.get('numero_cliente') or None
+                                logger.info('%s: empresa de evento detectada por CNPJ (%s) → %s',
+                                            info['name'], _ev_cnpj_dig, _ev_nome)
+                                break
             if _ev_nome:
                 try:
                     pasta_err = _get_or_create_pasta(
@@ -899,21 +926,22 @@ def api_importar_dropbox():
                 except DropboxAuthError:
                     logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
             else:
-                # Empresa não identificada — move para ERROS/EMPRESA_NAO_IDENTIFICADA
-                # para não bloquear a fila de importação.
-                # Se deixarmos em NOVO o arquivo reaparece em todos os lotes
-                # seguintes causando loop infinito.
+                # Empresa não identificada — deixa em NOVO para revisão manual.
+                # NUNCA criar pasta genérica: só mover quando a empresa for identificada.
+                # Extrai CNPJ do XML para informar o usuário.
+                _ev_cnpj_warn = ''
+                for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                             f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
+                    _el = _ev_root.find(_cx)
+                    if _el is not None and _el.text:
+                        _ev_cnpj_warn = re.sub(r'\D', '', _el.text.strip())
+                        break
+                _unreg_key = _ev_cnpj_warn or info['name']
+                unregistered[_unreg_key] = _ev_cnpj_warn or 'CNPJ não identificado'
                 logger.warning(
-                    '%s: XML de evento, empresa não identificada (chNFe=%r) → movendo para ERROS',
-                    info['name'], _ch_nfe,
+                    '%s: XML de evento, empresa não cadastrada (CNPJ=%r) → deixado em NOVO',
+                    info['name'], _ev_cnpj_warn,
                 )
-                try:
-                    pasta_err = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, 'EMPRESA_NAO_IDENTIFICADA', now))
-                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                        moved_err += 1
-                except DropboxAuthError:
-                    logger.warning('Falha de autenticação ao mover evento sem empresa %s para erros', info['name'])
             continue
 
         try:
