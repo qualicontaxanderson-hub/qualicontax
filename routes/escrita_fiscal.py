@@ -814,6 +814,9 @@ def api_importar_dropbox():
 
     ok, dup, err, moved_ok, moved_err, skipped = 0, 0, 0, 0, 0, 0
     details = []
+    # Empresas detectadas nos XMLs que não têm cadastro no sistema.
+    # Chave: CNPJ dígitos (ou nome do arquivo), Valor: nome da empresa do XML.
+    unregistered: dict = {}
 
     for info in files:
         try:
@@ -872,11 +875,17 @@ def api_importar_dropbox():
                     logger.info('%s: empresa detectada por dest_cnpj → %s', info['name'], _nome)
 
             if _nome is None:
-                _nome = 'GLOBAL'
+                # Empresa não cadastrada — não importar; registrar para aviso ao usuário.
+                _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
+                _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+                _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
+                _unreg_label = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
+                unregistered[_unreg_key] = _unreg_label
                 logger.warning(
-                    '%s: empresa não detectada (dest_cnpj=%r) → GLOBAL',
-                    info['name'], parsed['header'].get('dest_cnpj', ''),
+                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → ignorado',
+                    info['name'], _raw_dest_cnpj, _dest_nome_xml,
                 )
+                continue
 
             # Aplica filtro: se empresa/grupo foi selecionado e o dest_cnpj
             # do XML não pertence a esse conjunto, ignora o arquivo (deixa na
@@ -929,20 +938,26 @@ def api_importar_dropbox():
                 logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
 
     total = len(files)
-    processed = ok + dup + err
     msg = (f'{total} arquivo(s) analisado(s). {ok} importado(s), '
            f'{dup} duplicado(s), {err} com erro.')
     if skipped:
         msg += f' {skipped} ignorado(s) (não pertencem à empresa/grupo selecionado).'
+    if unregistered:
+        msg += (f' {len(unregistered)} empresa(s) não cadastrada(s) — XMLs não importados.'
+                ' Cadastre as empresas listadas abaixo e importe novamente.')
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
     if has_more:
         msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
 
+    # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
+    unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
+
     return jsonify({
         'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
         'moved_ok': moved_ok, 'moved_err': moved_err,
         'has_more': has_more,
+        'unregistered_companies': unreg_list,
         'msg': msg,
         'details': details[:10],
     })
