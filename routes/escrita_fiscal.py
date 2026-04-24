@@ -899,11 +899,21 @@ def api_importar_dropbox():
                 except DropboxAuthError:
                     logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
             else:
-                # Empresa não identificada — deixa em NOVO para revisão manual.
+                # Empresa não identificada — move para ERROS/EMPRESA_NAO_IDENTIFICADA
+                # para não bloquear a fila de importação.
+                # Se deixarmos em NOVO o arquivo reaparece em todos os lotes
+                # seguintes causando loop infinito.
                 logger.warning(
-                    '%s: XML de evento, empresa não identificada (chNFe=%r) → deixado em NOVO',
+                    '%s: XML de evento, empresa não identificada (chNFe=%r) → movendo para ERROS',
                     info['name'], _ch_nfe,
                 )
+                try:
+                    pasta_err = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, 'EMPRESA_NAO_IDENTIFICADA', now))
+                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                        moved_err += 1
+                except DropboxAuthError:
+                    logger.warning('Falha de autenticação ao mover evento sem empresa %s para erros', info['name'])
             continue
 
         try:
