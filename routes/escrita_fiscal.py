@@ -1,6 +1,7 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
 import logging
 import re
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
@@ -26,6 +27,15 @@ _DROPBOX_AUTH_ERROR_MSG = (
 # o frontend faz auto-continue quando has_more=True, garantindo importação
 # completa sem interação do usuário.
 _DROPBOX_BATCH_LIMIT = 20
+
+# Namespace NF-e (usado para detecção de XMLs de evento)
+_NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
+# Tags raiz de XMLs de evento NF-e: carta de correção, cancelamento, etc.
+# Esses arquivos não são NF-e padrão e não devem ser importados como notas.
+_NFE_EVENT_ROOT_TAGS = frozenset({
+    'procEventoNFe', 'envEvento', 'retEnvEvento',
+    'resNFe', 'retCancNFe', 'procCancNFe',
+})
 
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
@@ -826,14 +836,9 @@ def api_importar_dropbox():
         if raw is None:
             err += 1
             details.append(f"{info['name']}: falha ao baixar do Dropbox")
-            # Sem XML válido usa pasta de erros global
-            try:
-                pasta_err = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, 'GLOBAL', now))
-                if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                    moved_err += 1
-            except DropboxAuthError:
-                logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
+            # Arquivo deixado em NOVO para reprocessamento automático.
+            # Não criamos pasta GLOBAL — sem o conteúdo do XML não é possível
+            # identificar a empresa nem garantir a organização correta.
             continue
 
         try:
@@ -848,6 +853,58 @@ def api_importar_dropbox():
         _num = None
         _cli = None
         _dt = now
+
+        # ------------------------------------------------------------------
+        # Detecta XMLs de evento (carta de correção, cancelamento,
+        # confirmação) ANTES de tentar parsear como NF-e.
+        # Esses documentos não têm <NFe>/<infNFe> e nunca devem ser
+        # importados como nota fiscal; são movidos para ERROS.
+        # ------------------------------------------------------------------
+        try:
+            _ev_root = ET.fromstring(content)
+            _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
+        except ET.ParseError:
+            _ev_tag = ''
+
+        if _ev_tag in _NFE_EVENT_ROOT_TAGS:
+            err += 1
+            details.append(f"{info['name']}: XML de evento ({_ev_tag}), não é uma NF-e")
+            logger.info('%s: XML de evento detectado (%s)', info['name'], _ev_tag)
+            # Tenta identificar a empresa pelo chNFe → consulta nfe_importacoes
+            _ev_nome = None
+            _ev_num = None
+            _ch_nfe = ''
+            for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
+                _el = _ev_root.find(_path)
+                if _el is not None and _el.text:
+                    _ch_nfe = re.sub(r'\D', '', _el.text.strip())
+                    break
+            if _ch_nfe:
+                _ev_rec = execute_query(
+                    "SELECT c.nome_razao_social, c.numero_cliente "
+                    "FROM nfe_importacoes n "
+                    "JOIN clientes c ON c.id = n.cliente_id "
+                    "WHERE n.chave_acesso = %s LIMIT 1",
+                    (_ch_nfe,), fetch=True, fetch_one=True,
+                )
+                if _ev_rec:
+                    _ev_nome = _ev_rec['nome_razao_social']
+                    _ev_num = _ev_rec.get('numero_cliente') or None
+            if _ev_nome:
+                try:
+                    pasta_err = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _ev_nome, now, empresa_numero=_ev_num))
+                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                        moved_err += 1
+                except DropboxAuthError:
+                    logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
+            else:
+                # Empresa não identificada — deixa em NOVO para revisão manual.
+                logger.warning(
+                    '%s: XML de evento, empresa não identificada (chNFe=%r) → deixado em NOVO',
+                    info['name'], _ch_nfe,
+                )
+            continue
 
         try:
             parsed = parse_nfe_xml(content)
@@ -904,11 +961,6 @@ def api_importar_dropbox():
             if _dt is now:
                 logger.warning('%s: data_emissao ausente no XML, usando data atual', info['name'])
 
-            pasta_imp = _get_or_create_pasta(
-                svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
-            pasta_err = _get_or_create_pasta(
-                svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
-
             # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
                                cliente_id=_cli, grupo_id=grupo_id if _cli is None else None,
@@ -918,7 +970,10 @@ def api_importar_dropbox():
             else:
                 ok += 1
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
+            # (pasta criada apenas neste momento, não antecipadamente)
             try:
+                pasta_imp = _get_or_create_pasta(
+                    svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
                 if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
                     moved_ok += 1
             except DropboxAuthError:
@@ -929,13 +984,19 @@ def api_importar_dropbox():
             err += 1
             details.append(f"{info['name']}: {exc}")
             logger.exception('Erro ao processar %s', info['name'])
-            try:
-                pasta_err = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, _nome or 'GLOBAL', _dt, empresa_numero=_num))
-                if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                    moved_err += 1
-            except DropboxAuthError:
-                logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
+            # Move para ERROS somente quando a empresa foi identificada.
+            # Se _nome for None, deixamos o arquivo em NOVO para revisão manual
+            # — criar uma pasta GLOBAL seria enganoso e causa confusão.
+            if _nome:
+                try:
+                    pasta_err = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
+                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                        moved_err += 1
+                except DropboxAuthError:
+                    logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
+            else:
+                logger.warning('%s: empresa não identificada no erro, arquivo deixado em NOVO', info['name'])
 
     total = len(files)
     msg = (f'{total} arquivo(s) analisado(s). {ok} importado(s), '
