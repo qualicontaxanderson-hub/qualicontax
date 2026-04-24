@@ -947,8 +947,18 @@ def api_importar_dropbox():
                 ' Cadastre as empresas listadas abaixo e importe novamente.')
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
+
+    # Segurança: se nenhum arquivo foi efetivamente movido (ok+dup+err == 0) e todos os
+    # arquivos do lote eram de empresas não cadastradas, desliga has_more para evitar
+    # que o front-end entre em loop infinito re-listando os mesmos arquivos.
+    files_moved = ok + dup + err
+    if has_more and files_moved == 0:
+        has_more = False
+
     if has_more:
         msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
+    elif unregistered and files_moved == 0:
+        msg += ' Cadastre as empresas e importe novamente para continuar.'
 
     # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
     unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
