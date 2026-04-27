@@ -1317,7 +1317,11 @@ function closeDbxModal() {
     document.getElementById('dbxModalOverlay').classList.remove('open');
 }
 
-function executarImportacaoDropbox() {
+function executarImportacaoDropbox(_retryCount) {
+    _retryCount = _retryCount || 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [3000, 8000, 15000]; // ms between retry attempts
+
     const departamento = 'Fiscal';
 
     const cliente_id = document.getElementById('dbxEmpresa').value || null;
@@ -1470,11 +1474,22 @@ function executarImportacaoDropbox() {
         }
     })
     .catch(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
-        result.style.display = 'block';
-        result.className = 'err';
-        result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão.';
+        if (_retryCount < MAX_RETRIES) {
+            const attempt = _retryCount + 1;
+            const delay   = RETRY_DELAYS[_retryCount];
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Importando...`;
+            result.style.display = 'block';
+            result.className = 'warn';
+            result.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Erro de conexão — reconectando... (tentativa ${attempt}/${MAX_RETRIES})`;
+            setTimeout(() => executarImportacaoDropbox(attempt), delay);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+            result.style.display = 'block';
+            result.className = 'err';
+            result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão. Verifique sua internet e tente novamente.';
+        }
     });
 }
 
