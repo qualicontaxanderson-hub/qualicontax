@@ -965,6 +965,15 @@ def api_importar_dropbox():
         try:
             parsed = parse_nfe_xml(content)
 
+            # Extrai data de emissão imediatamente após o parse para que esteja
+            # disponível mesmo se uma exceção ocorrer mais adiante — o bloco
+            # except usa _dt ao mover o arquivo para a pasta ERROS, e sem essa
+            # atribuição antecipada ele usaria `now` (data atual) em vez da data
+            # real do XML.
+            _dt = parsed['header'].get('data_emissao') or now
+            if _dt is now:
+                logger.warning('%s: data_emissao ausente no XML, usando data atual', info['name'])
+
             # ----------------------------------------------------------
             # Detecta empresa SEMPRE pelo dest_cnpj do XML.
             # A seleção do modal (cliente_id / grupo_id) é usada apenas
@@ -1011,12 +1020,6 @@ def api_importar_dropbox():
                     info['name'], _raw_dest_cnpj, _dest_nome_xml,
                 )
                 continue
-
-            # Usa a data de emissão do XML para o mês/ano da pasta;
-            # cai de volta para a data atual se o campo não estiver disponível.
-            _dt = parsed['header'].get('data_emissao') or now
-            if _dt is now:
-                logger.warning('%s: data_emissao ausente no XML, usando data atual', info['name'])
 
             # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
