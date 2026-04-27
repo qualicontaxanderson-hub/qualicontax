@@ -827,6 +827,8 @@ def api_importar_dropbox():
     # Empresas detectadas nos XMLs que não têm cadastro no sistema.
     # Chave: CNPJ dígitos (ou nome do arquivo), Valor: nome da empresa do XML.
     unregistered: dict = {}
+    # Sumário de empresas/períodos importados: (numero, nome) → set of (year, month)
+    _imported_companies: dict = {}
 
     for info in files:
         try:
@@ -867,6 +869,22 @@ def api_importar_dropbox():
             _ev_tag = ''
 
         if _ev_tag in _NFE_EVENT_ROOT_TAGS:
+            # Extrai CNPJ do evento para aplicar filtro antes de qualquer processamento.
+            _ev_dest_cnpj_filter = ''
+            for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                        f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
+                _el = _ev_root.find(_cx)
+                if _el is not None and _el.text:
+                    _ev_dest_cnpj_filter = re.sub(r'\D', '', _el.text.strip())
+                    if _ev_dest_cnpj_filter:
+                        break
+            # Se houver filtro ativo e o CNPJ do evento não pertencer ao conjunto, ignora.
+            if filter_cnpjs is not None and _ev_dest_cnpj_filter not in filter_cnpjs:
+                skipped += 1
+                logger.info('%s: XML de evento, CNPJ=%r não pertence ao filtro, ignorado',
+                            info['name'], _ev_dest_cnpj_filter)
+                continue
+
             err += 1
             details.append(f"{info['name']}: XML de evento ({_ev_tag}), não é uma NF-e")
             logger.info('%s: XML de evento detectado (%s)', info['name'], _ev_tag)
@@ -953,6 +971,18 @@ def api_importar_dropbox():
             # como filtro — nunca para sobrescrever a empresa do XML.
             # ----------------------------------------------------------
             dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+
+            # Aplica filtro ANTES de verificar cadastro: quando empresa/grupo
+            # está selecionado, XMLs de outras empresas são silenciosamente
+            # ignorados (ficam em NOVO). Isso evita que apareçam na lista de
+            # "empresas não cadastradas" quando o usuário filtra por uma empresa.
+            if filter_cnpjs is not None:
+                if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
+                    skipped += 1
+                    logger.info('%s: dest_cnpj=%r não pertence ao filtro, ignorado',
+                                info['name'], dest_cnpj_digits)
+                    continue
+
             if len(dest_cnpj_digits) >= 11:
                 if dest_cnpj_digits in _cnpj_cliente_cache:
                     found = _cnpj_cliente_cache[dest_cnpj_digits]
@@ -982,17 +1012,6 @@ def api_importar_dropbox():
                 )
                 continue
 
-            # Aplica filtro: se empresa/grupo foi selecionado e o dest_cnpj
-            # do XML não pertence a esse conjunto, ignora o arquivo (deixa na
-            # pasta NOVO para não perder dados de outras empresas).
-            if filter_cnpjs is not None and dest_cnpj_digits not in filter_cnpjs:
-                skipped += 1
-                logger.info(
-                    '%s: dest_cnpj=%r não pertence ao filtro, ignorado',
-                    info['name'], dest_cnpj_digits,
-                )
-                continue
-
             # Usa a data de emissão do XML para o mês/ano da pasta;
             # cai de volta para a data atual se o campo não estiver disponível.
             _dt = parsed['header'].get('data_emissao') or now
@@ -1007,6 +1026,16 @@ def api_importar_dropbox():
                 dup += 1
             else:
                 ok += 1
+            # Registra empresa/período para o sumário do resultado.
+            try:
+                _period_y = _dt.year if hasattr(_dt, 'year') else now.year
+                _period_m = _dt.month if hasattr(_dt, 'month') else now.month
+                _co_key = (str(_num or ''), _nome)
+                if _co_key not in _imported_companies:
+                    _imported_companies[_co_key] = set()
+                _imported_companies[_co_key].add((_period_y, _period_m))
+            except Exception:
+                pass
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
             # (pasta criada apenas neste momento, não antecipadamente)
             try:
@@ -1063,11 +1092,22 @@ def api_importar_dropbox():
     # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
     unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
 
+    # Sumário de empresas importadas com períodos cobertos, ordenado por nome.
+    imported_companies_list = []
+    for (num, nome), periods in sorted(_imported_companies.items(), key=lambda x: x[0][1] or ''):
+        sorted_periods = sorted(periods)
+        imported_companies_list.append({
+            'numero': num,
+            'nome': nome,
+            'periodos': [f'{m:02d}/{y}' for (y, m) in sorted_periods],
+        })
+
     return jsonify({
         'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
         'moved_ok': moved_ok, 'moved_err': moved_err,
         'has_more': has_more,
         'unregistered_companies': unreg_list,
+        'imported_companies': imported_companies_list,
         'msg': msg,
         'details': details[:10],
     })
