@@ -886,7 +886,8 @@ def api_importar_dropbox():
                 continue
 
             err += 1
-            details.append(f"{info['name']}: XML de evento ({_ev_tag}), não é uma NF-e")
+            # details será preenchido depois do lookup de empresa para incluir o nome.
+            _ev_detail_base = f"{info['name']}: XML de evento ({_ev_tag}), não é uma NF-e"
             logger.info('%s: XML de evento detectado (%s)', info['name'], _ev_tag)
             # Tenta identificar a empresa pelo chNFe → consulta nfe_importacoes
             _ev_nome = None
@@ -935,10 +936,27 @@ def api_importar_dropbox():
                                 logger.info('%s: empresa de evento detectada por CNPJ (%s) → %s',
                                             info['name'], _ev_cnpj_dig, _ev_nome)
                                 break
+            # Extrai data do evento (dhEvento / dhRegEvento) para organizar a pasta
+            # ERROS no mês/ano correto do evento — não na data atual de processamento.
+            _ev_dt = now
+            for _date_xpath in [
+                f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
+                f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
+            ]:
+                _date_el = _ev_root.find(_date_xpath)
+                if _date_el is not None and _date_el is not None and _date_el.text:
+                    try:
+                        _ev_dt = datetime.fromisoformat(
+                            _date_el.text.strip().replace('Z', '+00:00')
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+                    break
             if _ev_nome:
+                details.append(f"{_ev_detail_base} — empresa: {_ev_nome}")
                 try:
                     pasta_err = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _ev_nome, now, empresa_numero=_ev_num))
+                        svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
                     if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                         moved_err += 1
                 except DropboxAuthError:
@@ -956,6 +974,7 @@ def api_importar_dropbox():
                         break
                 _unreg_key = _ev_cnpj_warn or info['name']
                 unregistered[_unreg_key] = _ev_cnpj_warn or 'CNPJ não identificado'
+                details.append(_ev_detail_base)
                 logger.warning(
                     '%s: XML de evento, empresa não cadastrada (CNPJ=%r) → deixado em NOVO',
                     info['name'], _ev_cnpj_warn,
