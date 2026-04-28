@@ -747,6 +747,10 @@ def api_importar_dropbox():
     departamento = data.get('departamento', '').strip()
     cliente_id = data.get('cliente_id') or None
     grupo_id = data.get('grupo_id') or None
+    # Cursor para paginação filtrada: nome do último arquivo analisado na chamada anterior.
+    # Usado quando um filtro de empresa/grupo está ativo para avançar pelo diretório NOVO
+    # sem re-processar os mesmos arquivos que foram pulados (skipped) em batches anteriores.
+    last_scanned = (data.get('last_scanned') or '').strip()
 
     if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
         return jsonify({'error': 'Departamento inválido.'}), 400
@@ -801,11 +805,45 @@ def api_importar_dropbox():
             'msg': 'Nenhum arquivo XML encontrado na pasta NOVO.',
         }), 200
 
+    # ------------------------------------------------------------------
+    # Paginação por cursor quando filtro de empresa/grupo está ativo.
+    # Arquivos pulados (skipped) permanecem em NOVO na mesma posição
+    # alfabética, então sem cursor cada chamada re-processaria o mesmo
+    # lote sem nunca alcançar os arquivos da empresa selecionada.
+    # O cursor (last_scanned) é o nome do último arquivo analisado na
+    # chamada anterior; avançamos para o arquivo imediatamente seguinte
+    # na lista ordenada pelo Dropbox.
+    # ------------------------------------------------------------------
+    if filter_cnpjs is not None and last_scanned:
+        cursor_lower = last_scanned.lower()
+        _cursor_applied = False
+        for _ci, _cf in enumerate(files):
+            if _cf['name'].lower() > cursor_lower:
+                files = files[_ci:]
+                _cursor_applied = True
+                break
+        if not _cursor_applied:
+            # Cursor aponta para além do último arquivo — toda a pasta foi varrida.
+            files = []
+
+    if not files and last_scanned:
+        # Pasta totalmente varrida com filtro ativo.
+        return jsonify({
+            'ok': 0, 'dup': 0, 'err': 0, 'skipped': 0,
+            'moved_ok': 0, 'moved_err': 0, 'has_more': False,
+            'last_scanned': None, 'unregistered_companies': [],
+            'imported_companies': [], 'details': [],
+            'msg': 'Todos os arquivos da pasta NOVO foram analisados.',
+        }), 200
+
     # Processa no máximo _DROPBOX_BATCH_LIMIT arquivos por chamada para evitar timeout do worker.
     # Se houver mais arquivos, o front-end deve chamar novamente até receber
     # has_more=False ou msg indicando que não há mais arquivos.
     has_more = len(files) > _DROPBOX_BATCH_LIMIT
     files = files[:_DROPBOX_BATCH_LIMIT]
+
+    # Registra o nome do último arquivo deste lote para uso como cursor na próxima chamada.
+    last_scanned_out = files[-1]['name'] if files else None
 
     now = datetime.now()
     # Cache de pastas já criadas no Dropbox para evitar chamadas redundantes.
@@ -1102,9 +1140,13 @@ def api_importar_dropbox():
     # desliga has_more para evitar que o front-end entre em loop infinito
     # re-listando os mesmos arquivos (p.ex. XMLs de evento sem empresa identificada
     # que ficam em NOVO e incrementam err sem sair do lugar).
+    # EXCEÇÃO: quando um filtro de empresa/grupo está ativo e houve arquivos pulados
+    # (skipped), o cursor last_scanned avança para um novo bloco de arquivos na próxima
+    # chamada — não há risco de loop infinito, então has_more deve permanecer True.
     files_physically_moved = moved_ok + moved_err
     if has_more and files_physically_moved == 0:
-        has_more = False
+        if filter_cnpjs is None or skipped == 0:
+            has_more = False
 
     if has_more:
         msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
@@ -1128,6 +1170,7 @@ def api_importar_dropbox():
         'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
         'moved_ok': moved_ok, 'moved_err': moved_err,
         'has_more': has_more,
+        'last_scanned': last_scanned_out,
         'unregistered_companies': unreg_list,
         'imported_companies': imported_companies_list,
         'msg': msg,

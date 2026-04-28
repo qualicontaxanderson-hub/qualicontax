@@ -1448,9 +1448,11 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
     // Accumulated totals across all has_more batches.
     // impCos: {key: {numero, nome, periodosSet}}
     // unreg: {cnpj_or_name: {cnpj, nome}}
+    // lastScanned: cursor (last filename analysed) for filter-mode pagination.
     const acc = _accumulated || {
         ok: 0, dup: 0, err: 0, skipped: 0, moved_ok: 0, moved_err: 0,
         impCos: {}, unreg: {}, details: [],
+        lastScanned: null,
     };
 
     const departamento = 'Fiscal';
@@ -1468,7 +1470,7 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
     fetch('{{ url_for("escrita_fiscal.api_importar_dropbox") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({departamento, cliente_id, grupo_id}),
+        body: JSON.stringify({departamento, cliente_id, grupo_id, last_scanned: acc.lastScanned}),
     })
     .then(r => r.json())
     .then(data => {
@@ -1490,6 +1492,12 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
             acc.skipped  += data.skipped  || 0;
             acc.moved_ok += data.moved_ok || 0;
             acc.moved_err+= data.moved_err|| 0;
+
+            // --- Update cursor for filter-mode pagination ---
+            // last_scanned is the last filename analysed in this batch; the next
+            // call will start from the file immediately after it in the folder.
+            if (data.last_scanned) acc.lastScanned = data.last_scanned;
+            if (!data.has_more) acc.lastScanned = null; // reset when scan completes
 
             // --- Accumulate imported companies (merge periods from each batch) ---
             (data.imported_companies || []).forEach(c => {
@@ -1513,12 +1521,15 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
 
             if (data.ok > 0) applyFilters();
 
-            // Só continua automaticamente se algum arquivo foi fisicamente movido
-            // para fora de NOVO (moved_ok + moved_err). Usar ok+dup+err causaria
-            // loop infinito: XMLs de evento sem empresa identificada incrementam
-            // err mas ficam em NOVO, então o loop nunca termina.
+            // Continua automaticamente quando:
+            // (a) arquivos foram fisicamente movidos (fluxo normal), OU
+            // (b) filtro ativo pulou arquivos e o cursor avançou (há arquivos da
+            //     empresa selecionada mais adiante na pasta).
+            // Usar somente ok+dup+err causaria loop infinito: XMLs de evento sem
+            // empresa identificada incrementam err mas ficam em NOVO.
             const filesWereMoved = ((data.moved_ok || 0) + (data.moved_err || 0)) > 0;
-            if (data.has_more && filesWereMoved) {
+            const filterSkipsAdvancing = !!(data.skipped > 0 && data.has_more && data.last_scanned);
+            if (data.has_more && (filesWereMoved || filterSkipsAdvancing)) {
                 // Show running totals while more batches are pending.
                 _renderImportResult(acc);
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
@@ -1527,7 +1538,7 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
             } else {
                 btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
                 _renderImportResult(acc);
-                if (data.has_more && !filesWereMoved) {
+                if (data.has_more && !filesWereMoved && !filterSkipsAdvancing) {
                     result.innerHTML += `<div class="dbx-more-msg"><i class="fas fa-info-circle"></i> Há mais arquivos na pasta. Cadastre as empresas acima e importe novamente.</div>`;
                 }
             }
