@@ -1317,10 +1317,141 @@ function closeDbxModal() {
     document.getElementById('dbxModalOverlay').classList.remove('open');
 }
 
-function executarImportacaoDropbox(_retryCount) {
+// Helper: format CNPJ 00.000.000/0000-00
+function fmtCNPJ(s) {
+    if (!s || s.length < 14) return s || '';
+    const d = s.replace(/\D/g,'');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+    return s;
+}
+
+// Renders accumulated import results and updates the result div.
+function _renderImportResult(acc) {
+    const result = document.getElementById('dbxResult');
+    result.style.display = 'block';
+
+    const totalOk      = acc.ok;
+    const totalErr     = acc.err;
+    const totalDup     = acc.dup;
+    const totalSkipped = acc.skipped;
+    const unreg        = Object.values(acc.unreg);   // [{cnpj, nome}]
+
+    const nothingHappened = totalOk === 0 && totalErr === 0 && totalDup === 0 && totalSkipped === 0 && unreg.length === 0;
+
+    if (nothingHappened) {
+        result.className = 'info';
+        result.innerHTML = `
+          <div class="dbx-res-head">
+            <div class="dbx-res-icon"><i class="fas fa-info-circle"></i></div>
+            <div class="dbx-res-text"><strong>Nenhum arquivo novo</strong><span>Nenhum arquivo novo encontrado na pasta NOVO.</span></div>
+          </div>`;
+        return;
+    }
+
+    // Determine skin
+    let skin = 'ok';
+    let icon = 'fas fa-check-circle';
+    let headTitle = 'Importação concluída';
+    if (unreg.length > 0 && totalOk === 0 && totalErr === 0) {
+        skin = 'warn'; icon = 'fas fa-exclamation-triangle';
+        headTitle = 'Empresas não cadastradas';
+    } else if (totalErr > 0 && totalOk === 0) {
+        skin = 'err'; icon = 'fas fa-times-circle';
+        headTitle = 'Importação com erros';
+    } else if (totalOk > 0) {
+        skin = 'ok'; icon = 'fas fa-check-circle';
+        headTitle = 'Importação concluída';
+    } else {
+        skin = 'info'; icon = 'fas fa-info-circle';
+        headTitle = 'Importação concluída';
+    }
+
+    // Build summary sentence from accumulated totals (never from per-batch data.msg).
+    const parts = [];
+    const totalFiles = totalOk + totalDup + totalErr + totalSkipped;
+    if (totalFiles > 0) parts.push(`${totalFiles} arquivo(s) analisado(s).`);
+    if (totalOk > 0)      parts.push(`${totalOk} importado(s).`);
+    if (totalDup > 0)     parts.push(`${totalDup} duplicado(s).`);
+    if (totalErr > 0)     parts.push(`${totalErr} com erro.`);
+    if (totalSkipped > 0) parts.push(`${totalSkipped} ignorado(s).`);
+    if (acc.moved_ok > 0 || acc.moved_err > 0) {
+        parts.push(`${acc.moved_ok} movido(s) para IMPORTADOS, ${acc.moved_err} movido(s) para ERROS.`);
+    }
+    if (unreg.length > 0) parts.push(`${unreg.length} empresa(s) não cadastrada(s).`);
+    const headSub = parts.join(' ');
+
+    result.className = skin;
+    let html = `<div class="dbx-res-head">
+      <div class="dbx-res-icon"><i class="${icon}"></i></div>
+      <div class="dbx-res-text"><strong>${headTitle}</strong><span>${headSub}</span></div>
+    </div>`;
+
+    // Stats chips
+    const chips = [];
+    if (totalOk > 0)      chips.push(`<span class="dbx-stat s-ok"><i class="fas fa-check"></i>${totalOk} importado(s)</span>`);
+    if (totalDup > 0)     chips.push(`<span class="dbx-stat s-dup"><i class="fas fa-copy"></i>${totalDup} duplicado(s)</span>`);
+    if (totalErr > 0)     chips.push(`<span class="dbx-stat s-err"><i class="fas fa-times"></i>${totalErr} com erro</span>`);
+    if (totalSkipped > 0) chips.push(`<span class="dbx-stat s-skip"><i class="fas fa-forward"></i>${totalSkipped} ignorado(s)</span>`);
+    if (chips.length)     html += `<div class="dbx-stats">${chips.join('')}</div>`;
+
+    // Imported companies summary (with all periods accumulated across batches)
+    const impCos = Object.values(acc.impCos);
+    if (impCos.length > 0) {
+        impCos.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        html += `<div class="dbx-imp">
+          <div class="dbx-imp-head"><i class="fas fa-check-circle"></i> Empresas importadas (${impCos.length})</div>
+          <div class="dbx-imp-list">`;
+        impCos.forEach(c => {
+            const label = (c.numero ? c.numero + ' — ' : '') + c.nome;
+            const sortedPeriodos = Array.from(c.periodosSet).sort();
+            const periodos = sortedPeriodos.map(p => `<span class="dbx-imp-periodo">${p}</span>`).join('');
+            html += `<div class="dbx-imp-item">
+              <div class="dbx-imp-name">${label}</div>
+              ${periodos ? `<div class="dbx-imp-periodos">${periodos}</div>` : ''}
+            </div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Unregistered companies card
+    if (unreg.length > 0) {
+        html += `<div class="dbx-unreg">
+          <div class="dbx-unreg-head"><i class="fas fa-building"></i> Empresas não cadastradas (${unreg.length})</div>
+          <div class="dbx-unreg-list">`;
+        unreg.forEach(c => {
+            html += `<div class="dbx-unreg-item">
+              <i class="fas fa-store" style="opacity:.6;font-size:11px;flex-shrink:0;"></i>
+              <span style="flex:1;font-weight:600;">${c.nome}</span>
+              ${c.cnpj && c.cnpj !== c.nome ? `<span class="dbx-unreg-cnpj">${fmtCNPJ(c.cnpj)}</span>` : ''}
+            </div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Error details (all batches accumulated)
+    if (acc.details.length > 0) {
+        html += `<div class="dbx-unreg" style="background:#fef2f2;">
+          <div class="dbx-unreg-head" style="background:#fecaca;color:#991b1b;"><i class="fas fa-list"></i> Detalhes dos erros</div>
+          <div class="dbx-unreg-list" style="background:#fff1f2;color:#7f1d1d;">`;
+        acc.details.forEach(d => { html += `<div class="dbx-unreg-item"><i class="fas fa-dot-circle" style="opacity:.5;font-size:10px;"></i>${d}</div>`; });
+        html += `</div></div>`;
+    }
+
+    result.innerHTML = html;
+}
+
+function executarImportacaoDropbox(_retryCount, _accumulated) {
     _retryCount = _retryCount || 0;
     const MAX_RETRIES = 3;
     const RETRY_DELAYS = [3000, 8000, 15000]; // ms between retry attempts
+
+    // Accumulated totals across all has_more batches.
+    // impCos: {key: {numero, nome, periodosSet}}
+    // unreg: {cnpj_or_name: {cnpj, nome}}
+    const acc = _accumulated || {
+        ok: 0, dup: 0, err: 0, skipped: 0, moved_ok: 0, moved_err: 0,
+        impCos: {}, unreg: {}, details: [],
+    };
 
     const departamento = 'Fiscal';
 
@@ -1352,121 +1483,50 @@ function executarImportacaoDropbox(_retryCount) {
                 <div class="dbx-res-text"><strong>Erro na importação</strong><span>${data.error}</span></div>
               </div>`;
         } else {
-            const totalOk      = data.ok      || 0;
-            const totalErr     = data.err     || 0;
-            const totalDup     = data.dup     || 0;
-            const totalSkipped = data.skipped || 0;
-            const unreg        = data.unregistered_companies || [];
-            const nothingHappened = totalOk === 0 && totalErr === 0 && totalDup === 0 && totalSkipped === 0 && unreg.length === 0;
+            // --- Accumulate numeric counters ---
+            acc.ok       += data.ok       || 0;
+            acc.dup      += data.dup      || 0;
+            acc.err      += data.err      || 0;
+            acc.skipped  += data.skipped  || 0;
+            acc.moved_ok += data.moved_ok || 0;
+            acc.moved_err+= data.moved_err|| 0;
 
-            // helper to format CNPJ 00.000.000/0000-00
-            function fmtCNPJ(s) {
-                if (!s || s.length < 14) return s || '';
-                const d = s.replace(/\D/g,'');
-                if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
-                return s;
-            }
-
-            if (nothingHappened) {
-                result.className = 'info';
-                result.innerHTML = `
-                  <div class="dbx-res-head">
-                    <div class="dbx-res-icon"><i class="fas fa-info-circle"></i></div>
-                    <div class="dbx-res-text"><strong>Nenhum arquivo novo</strong><span>${data.msg || 'Nenhum arquivo novo encontrado na pasta NOVO.'}</span></div>
-                  </div>`;
-            } else {
-                // Determine skin
-                let skin = 'ok';
-                let icon = 'fas fa-check-circle';
-                let headTitle = 'Importação concluída';
-                let headSub   = data.msg || '';
-                if (unreg.length > 0 && totalOk === 0 && totalErr === 0) {
-                    skin = 'warn'; icon = 'fas fa-exclamation-triangle';
-                    headTitle = 'Empresas não cadastradas';
-                    headSub = `${unreg.length} empresa(s) não cadastrada(s) — XMLs aguardando cadastro.`;
-                } else if (totalErr > 0 && totalOk === 0) {
-                    skin = 'err'; icon = 'fas fa-times-circle';
-                    headTitle = 'Importação com erros';
-                    headSub = headSub || `${totalErr} arquivo(s) com erro.`;
-                } else if (totalOk > 0) {
-                    skin = 'ok'; icon = 'fas fa-check-circle';
-                    headTitle = 'Importação concluída';
-                    headSub = headSub || `${totalOk} arquivo(s) importado(s) com sucesso.`;
-                } else {
-                    skin = 'info'; icon = 'fas fa-info-circle';
-                    headTitle = 'Importação concluída';
-                    headSub = headSub || 'Nenhum arquivo novo importado.';
+            // --- Accumulate imported companies (merge periods from each batch) ---
+            (data.imported_companies || []).forEach(c => {
+                const key = (c.numero || '') + '|' + (c.nome || '');
+                if (!acc.impCos[key]) {
+                    acc.impCos[key] = {numero: c.numero, nome: c.nome, periodosSet: new Set()};
                 }
+                (c.periodos || []).forEach(p => acc.impCos[key].periodosSet.add(p));
+            });
 
-                result.className = skin;
-                let html = `<div class="dbx-res-head">
-                  <div class="dbx-res-icon"><i class="${icon}"></i></div>
-                  <div class="dbx-res-text"><strong>${headTitle}</strong><span>${headSub}</span></div>
-                </div>`;
+            // --- Accumulate unregistered companies ---
+            (data.unregistered_companies || []).forEach(c => {
+                const key = c.cnpj || c.nome;
+                acc.unreg[key] = c;
+            });
 
-                // Stats chips
-                const chips = [];
-                if (totalOk > 0)      chips.push(`<span class="dbx-stat s-ok"><i class="fas fa-check"></i>${totalOk} importado(s)</span>`);
-                if (totalDup > 0)     chips.push(`<span class="dbx-stat s-dup"><i class="fas fa-copy"></i>${totalDup} duplicado(s)</span>`);
-                if (totalErr > 0)     chips.push(`<span class="dbx-stat s-err"><i class="fas fa-times"></i>${totalErr} com erro</span>`);
-                if (totalSkipped > 0) chips.push(`<span class="dbx-stat s-skip"><i class="fas fa-forward"></i>${totalSkipped} ignorado(s)</span>`);
-                if (chips.length)     html += `<div class="dbx-stats">${chips.join('')}</div>`;
-
-                // Imported companies summary (with periods)
-                const impCos = data.imported_companies || [];
-                if (impCos.length > 0) {
-                    html += `<div class="dbx-imp">
-                      <div class="dbx-imp-head"><i class="fas fa-check-circle"></i> Empresas importadas (${impCos.length})</div>
-                      <div class="dbx-imp-list">`;
-                    impCos.forEach(c => {
-                        const label = (c.numero ? c.numero + ' — ' : '') + c.nome;
-                        const periodos = (c.periodos || []).map(p => `<span class="dbx-imp-periodo">${p}</span>`).join('');
-                        html += `<div class="dbx-imp-item">
-                          <div class="dbx-imp-name">${label}</div>
-                          ${periodos ? `<div class="dbx-imp-periodos">${periodos}</div>` : ''}
-                        </div>`;
-                    });
-                    html += `</div></div>`;
-                }
-
-                // Unregistered companies card
-                if (unreg.length > 0) {
-                    html += `<div class="dbx-unreg">
-                      <div class="dbx-unreg-head"><i class="fas fa-building"></i> Empresas não cadastradas (${unreg.length})</div>
-                      <div class="dbx-unreg-list">`;
-                    unreg.forEach(c => {
-                        html += `<div class="dbx-unreg-item">
-                          <i class="fas fa-store" style="opacity:.6;font-size:11px;flex-shrink:0;"></i>
-                          <span style="flex:1;font-weight:600;">${c.nome}</span>
-                          ${c.cnpj && c.cnpj !== c.nome ? `<span class="dbx-unreg-cnpj">${fmtCNPJ(c.cnpj)}</span>` : ''}
-                        </div>`;
-                    });
-                    html += `</div></div>`;
-                }
-
-                // Error details
-                if (data.details && data.details.length) {
-                    html += `<div class="dbx-unreg" style="background:#fef2f2;">
-                      <div class="dbx-unreg-head" style="background:#fecaca;color:#991b1b;"><i class="fas fa-list"></i> Detalhes dos erros</div>
-                      <div class="dbx-unreg-list" style="background:#fff1f2;color:#7f1d1d;">`;
-                    data.details.forEach(d => { html += `<div class="dbx-unreg-item"><i class="fas fa-dot-circle" style="opacity:.5;font-size:10px;"></i>${d}</div>`; });
-                    html += `</div></div>`;
-                }
-
-                result.innerHTML = html;
-            }
+            // --- Accumulate error details (cap at 50 total to avoid huge DOM) ---
+            (data.details || []).forEach(d => {
+                if (acc.details.length < 50) acc.details.push(d);
+            });
 
             if (data.ok > 0) applyFilters();
+
             // Só continua automaticamente se algum arquivo foi fisicamente movido
             // para fora de NOVO (moved_ok + moved_err). Usar ok+dup+err causaria
             // loop infinito: XMLs de evento sem empresa identificada incrementam
             // err mas ficam em NOVO, então o loop nunca termina.
             const filesWereMoved = ((data.moved_ok || 0) + (data.moved_err || 0)) > 0;
             if (data.has_more && filesWereMoved) {
-                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
-                setTimeout(() => executarImportacaoDropbox(), 300);
+                // Show running totals while more batches are pending.
+                _renderImportResult(acc);
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+                btn.disabled = true;
+                setTimeout(() => executarImportacaoDropbox(0, acc), 300);
             } else {
                 btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+                _renderImportResult(acc);
                 if (data.has_more && !filesWereMoved) {
                     result.innerHTML += `<div class="dbx-more-msg"><i class="fas fa-info-circle"></i> Há mais arquivos na pasta. Cadastre as empresas acima e importe novamente.</div>`;
                 }
@@ -1482,7 +1542,7 @@ function executarImportacaoDropbox(_retryCount) {
             result.style.display = 'block';
             result.className = 'warn';
             result.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Erro de conexão — reconectando... (tentativa ${attempt}/${MAX_RETRIES})`;
-            setTimeout(() => executarImportacaoDropbox(attempt), delay);
+            setTimeout(() => executarImportacaoDropbox(attempt, acc), delay);
         } else {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
