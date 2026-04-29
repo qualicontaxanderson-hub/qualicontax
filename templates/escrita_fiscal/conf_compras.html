@@ -13,7 +13,7 @@
 .cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
 .cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
 /* Autocomplete empresa */
-.cc-empresa-ac { position:relative; min-width:220px; }
+.cc-empresa-ac { position:relative; min-width:320px; }
 .cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
 .cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
 .cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
@@ -818,11 +818,21 @@ function getFilters() {
     };
 }
 function applyFilters() {
+    if (!currentClienteId && !currentGrupoId) {
+        // Destaca visualmente o seletor de empresa
+        const inp = document.getElementById('sel_empresa_input');
+        inp.style.borderColor = '#ef4444';
+        inp.style.boxShadow = '0 0 0 3px rgba(239,68,68,.2)';
+        setTimeout(() => { inp.style.borderColor = ''; inp.style.boxShadow = ''; }, 2500);
+        alert('Selecione uma Empresa ou um Grupo antes de buscar.');
+        return;
+    }
     currentPage = 1;
-    if (currentTab === 'notas') { loadNotas(); }
-    else if (currentTab === 'emissor') loadEmissor();
-    else if (currentTab === 'chaves') loadChaves();
-    else loadProduto();
+    chavesCurrentPage = 1;
+    loadNotas();
+    loadEmissor();
+    loadProduto();
+    loadChaves();
 }
 
 // ---- Formatters ----
