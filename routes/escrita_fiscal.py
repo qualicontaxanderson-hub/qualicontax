@@ -1235,19 +1235,18 @@ def api_importar_dropbox():
             err += 1
             details.append(f"{info['name']}: {exc}")
             logger.exception('Erro ao processar %s', info['name'])
-            # Move para ERROS somente quando a empresa foi identificada.
-            # Se _nome for None, deixamos o arquivo em NOVO para revisão manual
-            # — criar uma pasta GLOBAL seria enganoso e causa confusão.
-            if _nome:
-                try:
-                    pasta_err = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _nome, _dt, empresa_numero=_num))
-                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                        moved_err += 1
-                except DropboxAuthError:
-                    logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
-            else:
-                logger.warning('%s: empresa não identificada no erro, arquivo deixado em NOVO', info['name'])
+            # Move para ERROS sempre que ocorre uma exceção.
+            # Quando a empresa foi identificada usa a pasta da empresa; caso
+            # contrário usa DESCONHECIDO para não deixar o arquivo em NOVO.
+            _err_empresa = _nome or 'DESCONHECIDO'
+            _err_num = _num if _nome else None
+            try:
+                pasta_err = _get_or_create_pasta(
+                    svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
+                if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                    moved_err += 1
+            except DropboxAuthError:
+                logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
 
     total = len(files)
     msg = (f'{total} arquivo(s) analisado(s). {ok} importado(s), '
