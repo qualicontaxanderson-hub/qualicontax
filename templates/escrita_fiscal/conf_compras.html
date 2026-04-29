@@ -1139,27 +1139,26 @@ function closePanel() {
 function vincularProduto(itemId, clienteId, grupoId) {
     const sel = document.getElementById('sel_prod_' + itemId);
     const produtoId = sel.value ? parseInt(sel.value) : null;
+    // Look up product name from the already-loaded catalog (no extra DB round-trip needed)
+    const prodObj = produtoId ? catalogoProdutos.find(p => p.id === produtoId) : null;
+    const prodNome = prodObj ? prodObj.nome : null;
+    // Update the UI immediately — fire-and-forget the save to the server
+    const wrap = document.getElementById('vinculo_' + itemId);
+    if (produtoId && prodNome) {
+        wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
+            <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+        panelModified = true;
+    } else if (!produtoId) {
+        const opts = buildProdOpts(null);
+        wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+            <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+        panelModified = true;
+    }
     fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            panelModified = true;
-            const wrap = document.getElementById('vinculo_' + itemId);
-            if (produtoId && data.produto_nome) {
-                wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
-                    <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
-            } else {
-                // Rebuild with fresh select
-                const opts = buildProdOpts(null);
-                wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
-                    <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
-            }
-        }
-    });
+    }).catch(() => {/* silent: UI already updated, rule-save failure is non-critical */});
 }
 
 function desvincular(itemId) {

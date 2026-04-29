@@ -2,6 +2,7 @@
 import logging
 import re
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from datetime import datetime
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
@@ -230,9 +231,8 @@ def api_notas():
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
 
-    where, params = [], []
     extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where.extend(extra_clauses)
+    where = extra_clauses
 
     if f_emit_cnpj:
         where.append('n.emit_cnpj = %s')
@@ -289,23 +289,9 @@ def api_notas():
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
 
-    count_row = execute_query(
-        f"SELECT COUNT(*) AS c FROM nfe_importacoes n {where_sql}",
-        tuple(params), fetch=True, fetch_one=True,
-    ) or {}
-    total = count_row.get('c', 0)
-
-    # KPI aggregates for the current filter
-    kpi_row = execute_query(
-        f"""SELECT COALESCE(SUM(n.valor_total),0) AS total_valor,
-                   COALESCE(SUM(n.valor_icms),0) AS total_icms,
-                   COALESCE(SUM(n.valor_pis),0) AS total_pis,
-                   COALESCE(SUM(n.valor_cofins),0) AS total_cofins
-              FROM nfe_importacoes n {where_sql}""",
-        tuple(params), fetch=True, fetch_one=True,
-    ) or {}
-
-    rows = execute_query(
+    # Single query: window functions supply total count + KPI aggregates while
+    # LIMIT/OFFSET pages the rows — avoids 3 separate round-trips to the DB.
+    all_rows = execute_query(
         f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
                    n.dest_cnpj, n.dest_nome,
@@ -315,7 +301,12 @@ def api_notas():
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
                    COALESCE(ic.qtd_itens, 0) AS qtd_itens,
-                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados
+                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados,
+                   COUNT(*) OVER() AS _total,
+                   COALESCE(SUM(n.valor_total) OVER(), 0) AS _kpi_valor,
+                   COALESCE(SUM(n.valor_icms)  OVER(), 0) AS _kpi_icms,
+                   COALESCE(SUM(n.valor_pis)   OVER(), 0) AS _kpi_pis,
+                   COALESCE(SUM(n.valor_cofins) OVER(), 0) AS _kpi_cofins
               FROM nfe_importacoes n
               LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
@@ -333,17 +324,35 @@ def api_notas():
         fetch=True,
     ) or []
 
-    for r in rows:
+    # Extract window-function values from the first row (same for all rows)
+    first = all_rows[0] if all_rows else {}
+    total = int(first.get('_total') or 0)
+    kpi = {
+        'total_valor': float(first.get('_kpi_valor') or 0),
+        'total_icms':  float(first.get('_kpi_icms')  or 0),
+        'total_pis':   float(first.get('_kpi_pis')   or 0),
+        'total_cofins':float(first.get('_kpi_cofins') or 0),
+    }
+
+    # Handle empty result: total/kpi must still be valid (window cols absent)
+    if not all_rows:
+        total = 0
+        kpi = {'total_valor': 0, 'total_icms': 0, 'total_pis': 0, 'total_cofins': 0}
+
+    rows = []
+    _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
+    for r in all_rows:
+        row = {k: v for k, v in r.items() if k not in _window_cols}
         for k in ('data_emissao', 'importado_em'):
-            if r.get(k) and hasattr(r[k], 'isoformat'):
-                r[k] = r[k].isoformat()
+            if row.get(k) and hasattr(row[k], 'isoformat'):
+                row[k] = row[k].isoformat()
         for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):
-            r[k] = float(r.get(k) or 0)
+            row[k] = float(row.get(k) or 0)
+        rows.append(row)
 
     return jsonify({
         'total': total, 'page': page, 'per_page': per_page, 'rows': rows,
-        'kpi': {k: float(kpi_row.get(k) or 0) for k in
-                ('total_valor', 'total_icms', 'total_pis', 'total_cofins')},
+        'kpi': kpi,
     })
 
 
@@ -398,12 +407,16 @@ def api_itens(nfe_id):
             # Collect updates to apply in one batch
             updates = [(mapa[it['codigo_produto']], it['id'])
                        for it in unlinked if it['codigo_produto'] in mapa]
-            if updates:
-                for pid, item_id in updates:
-                    execute_query(
-                        "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
-                        (pid, item_id),
-                    )
+            # Batch UPDATE: group items by product ID to minimize DB round-trips
+            by_product: dict = defaultdict(list)
+            for pid, item_id in updates:
+                by_product[pid].append(item_id)
+            for pid, ids in by_product.items():
+                ph = ','.join(['%s'] * len(ids))
+                execute_query(
+                    f"UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id IN ({ph})",
+                    tuple([pid] + ids),
+                )
             # Update in-memory objects
             for it in unlinked:
                 pid = mapa.get(it['codigo_produto'])
@@ -494,7 +507,6 @@ def api_vincular_produto():
     )
 
     # Salva regra de auto-vínculo e aplica retroativamente em todos os itens históricos
-    retroativos = 0
     if salvar_regra and produto_id:
         emit_cnpj = item['emit_cnpj']
         cod = item['codigo_produto']
@@ -523,19 +535,8 @@ def api_vincular_produto():
                      AND i.id != %s""",
                 (produto_id, emit_cnpj, cod, item_id),
             )
-            row = execute_query(
-                """SELECT COUNT(*) AS c FROM nfe_itens i
-                      JOIN nfe_importacoes n ON n.id = i.nfe_id
-                   WHERE i.produto_catalogo_id = %s
-                     AND n.emit_cnpj = %s
-                     AND i.codigo_produto = %s
-                     AND i.id != %s""",
-                (produto_id, emit_cnpj, cod, item_id),
-                fetch=True, fetch_one=True,
-            ) or {}
-            retroativos = row.get('c', 0)
 
-    # Nome do produto vinculado
+    # Nome do produto vinculado — returned so the caller can update the UI
     prod_nome = None
     if produto_id:
         p = execute_query(
@@ -545,7 +546,7 @@ def api_vincular_produto():
         if p:
             prod_nome = p['nome']
 
-    return jsonify({'ok': True, 'produto_nome': prod_nome, 'retroativos': retroativos})
+    return jsonify({'ok': True, 'produto_nome': prod_nome})
 
 
 # ---------------------------------------------------------------------------
