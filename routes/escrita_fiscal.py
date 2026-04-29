@@ -231,7 +231,6 @@ def api_notas():
     per_page = 50
 
     where, params = [], []
-    _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=params)
     extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
     where.extend(extra_clauses)
 

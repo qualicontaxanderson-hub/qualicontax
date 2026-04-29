@@ -860,7 +860,7 @@ function getFilters() {
 }
 function applyFilters() {
     currentPage = 1;
-    if (currentTab === 'notas') loadNotas();
+    if (currentTab === 'notas') { loadNotas(); loadResumoProdutos(); }
     else if (currentTab === 'emissor') loadEmissor();
     else if (currentTab === 'chaves') loadChaves();
     else loadProduto();
@@ -941,7 +941,6 @@ function loadNotas() {
                 </tr>`;
             }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page);
-            loadResumoProdutos();
         })
         .catch(() => hideLoad());
 }
