@@ -317,13 +317,7 @@ def api_notas():
                    (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens,
                    (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL) AS itens_vinculados
               FROM nfe_importacoes n
-              LEFT JOIN clientes c ON c.id = COALESCE(
-                  n.cliente_id,
-                  (SELECT c2.id FROM clientes c2
-                    WHERE REPLACE(REPLACE(REPLACE(c2.cpf_cnpj,'.',''),'/',''),'-','')
-                        = REPLACE(REPLACE(REPLACE(n.dest_cnpj,'.',''),'/',''),'-','')
-                    LIMIT 1)
-              )
+              LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
@@ -377,25 +371,40 @@ def api_itens(nfe_id):
         (nfe_id,), fetch=True,
     ) or []
 
-    # Auto-aplicar regras memorizadas nos itens ainda sem vínculo
+    # Auto-aplicar regras memorizadas nos itens ainda sem vínculo (batch)
     emit_cnpj = nota.get('emit_cnpj', '')
     cliente_id = nota.get('cliente_id')
     grupo_id = nota.get('grupo_id')
-    for it in itens:
-        if it.get('produto_catalogo_id') is None and it.get('codigo_produto'):
-            pid = _auto_vincular(emit_cnpj, it['codigo_produto'], cliente_id, grupo_id)
-            if pid:
-                execute_query(
-                    "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
-                    (pid, it['id']),
-                )
-                prod = execute_query(
-                    "SELECT nome, categoria FROM nfe_produtos_catalogo WHERE id = %s",
-                    (pid,), fetch=True, fetch_one=True,
-                )
-                it['produto_catalogo_id'] = pid
-                it['produto_catalogo_nome'] = prod['nome'] if prod else None
-                it['produto_categoria'] = prod['categoria'] if prod else None
+    unlinked = [it for it in itens if it.get('produto_catalogo_id') is None and it.get('codigo_produto')]
+    if unlinked:
+        codigos = list({it['codigo_produto'] for it in unlinked})
+        mapa = _auto_vincular_batch(emit_cnpj, codigos, cliente_id, grupo_id)
+        if mapa:
+            # Collect unique pids to fetch names in one query
+            pids = list(set(mapa.values()))
+            placeholders_p = ','.join(['%s'] * len(pids))
+            prod_rows = execute_query(
+                f"SELECT id, nome, categoria FROM nfe_produtos_catalogo WHERE id IN ({placeholders_p})",
+                tuple(pids), fetch=True,
+            ) or []
+            prod_map = {r['id']: r for r in prod_rows}
+            # Collect updates to apply in one batch
+            updates = [(mapa[it['codigo_produto']], it['id'])
+                       for it in unlinked if it['codigo_produto'] in mapa]
+            if updates:
+                for pid, item_id in updates:
+                    execute_query(
+                        "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
+                        (pid, item_id),
+                    )
+            # Update in-memory objects
+            for it in unlinked:
+                pid = mapa.get(it['codigo_produto'])
+                if pid:
+                    prod = prod_map.get(pid)
+                    it['produto_catalogo_id'] = pid
+                    it['produto_catalogo_nome'] = prod['nome'] if prod else None
+                    it['produto_categoria'] = prod['categoria'] if prod else None
 
     for it in itens:
         for k in ('quantidade', 'valor_unitario', 'valor_total',
@@ -2079,3 +2088,78 @@ def _auto_vincular_db(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id)
         return row['produto_catalogo_id']
 
     return None
+
+
+def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id) -> dict:
+    """
+    Versão batch de _auto_vincular_db: recebe uma lista de codigos_produto e
+    retorna um dict {codigo_produto: produto_catalogo_id} em poucas queries ao invés
+    de disparar N queries individuais.
+    Respeita a mesma prioridade: empresa → grupo → ramo → global.
+    """
+    if not emit_cnpj or not codigos:
+        return {}
+
+    result: dict = {}
+    remaining = list(codigos)
+
+    def _batch_lookup(extra_where: str, extra_params: list) -> None:
+        if not remaining:
+            return
+        ph = ','.join(['%s'] * len(remaining))
+        rows = execute_query(
+            f"SELECT codigo_produto_xml, produto_catalogo_id FROM nfe_produto_vinculo "
+            f"WHERE emit_cnpj = %s AND codigo_produto_xml IN ({ph}) {extra_where}",
+            tuple([emit_cnpj] + remaining + extra_params),
+            fetch=True,
+        ) or []
+        for r in rows:
+            cod = r['codigo_produto_xml']
+            if cod not in result and r.get('produto_catalogo_id'):
+                result[cod] = r['produto_catalogo_id']
+        for cod in list(result.keys()):
+            if cod in remaining:
+                remaining.remove(cod)
+
+    # 1. Empresa específica
+    if cliente_id:
+        _batch_lookup("AND cliente_id = %s AND grupo_id IS NULL", [cliente_id])
+
+    # 2. Grupo específico
+    if remaining and grupo_id:
+        _batch_lookup("AND grupo_id = %s AND cliente_id IS NULL", [grupo_id])
+
+    # 3. Ramo de atividade do cliente
+    if remaining and cliente_id:
+        ramos = execute_query(
+            "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s",
+            (cliente_id,), fetch=True,
+        ) or []
+        ramo_ids = [r['ramo_atividade_id'] for r in ramos if r.get('ramo_atividade_id')]
+        if ramo_ids:
+            ph_r = ','.join(['%s'] * len(ramo_ids))
+            ph_c = ','.join(['%s'] * len(remaining))
+            rows = execute_query(
+                f"SELECT codigo_produto_xml, produto_catalogo_id FROM nfe_produto_vinculo "
+                f"WHERE emit_cnpj = %s AND codigo_produto_xml IN ({ph_c}) "
+                f"AND cliente_id IS NULL AND grupo_id IS NULL "
+                f"AND ramo_atividade_id IN ({ph_r})",
+                tuple([emit_cnpj] + remaining + ramo_ids),
+                fetch=True,
+            ) or []
+            for r in rows:
+                cod = r['codigo_produto_xml']
+                if cod not in result and r.get('produto_catalogo_id'):
+                    result[cod] = r['produto_catalogo_id']
+            for cod in list(result.keys()):
+                if cod in remaining:
+                    remaining.remove(cod)
+
+    # 4. Global
+    if remaining:
+        _batch_lookup(
+            "AND cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
+            [],
+        )
+
+    return result
