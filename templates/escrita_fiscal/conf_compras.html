@@ -880,7 +880,7 @@ function loadNotas() {
                 else if (vinc === 0)      { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
                 else if (vinc === total)  { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
                 else                     { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
-                return `<tr class="cc-row-clickable" onclick="openPanel(${r.id}, event)">
+                return `<tr class="cc-row-clickable" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
                     <td>${empPill}</td>
@@ -1139,12 +1139,27 @@ function buildProdOpts(selectedId) {
 }
 
 function closePanel() {
+    if (panelModified && currentNfeId) {
+        // Update only the vinculation dot for this NF-e row in-place.
+        // This avoids a full applyFilters() → api_notas round-trip (which was
+        // slow because the retroactive UPDATE may still hold DB locks, and the
+        // api_notas window-function query over the full table is expensive).
+        const totalWraps = document.querySelectorAll('[id^="vinculo_"]').length;
+        const vincWraps  = document.querySelectorAll('[id^="vinculo_"] .vinculado-badge').length;
+        const row = document.querySelector(`tr[data-nfeid="${currentNfeId}"]`);
+        if (row) {
+            let dotCls, dotTip;
+            if (totalWraps === 0)             { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
+            else if (vincWraps === 0)          { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
+            else if (vincWraps === totalWraps) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
+            else                              { dotCls = 'amarelo';   dotTip = `Parcial (${vincWraps}/${totalWraps})`; }
+            const dotCell = row.querySelector('.vinc-cell');
+            if (dotCell) dotCell.innerHTML = `<span class="vinc-dot ${dotCls}" title="${dotTip}"></span>`;
+        }
+        panelModified = false;
+    }
     document.getElementById('panelOverlay').classList.remove('open');
     currentNfeId = null;
-    if (panelModified) {
-        panelModified = false;
-        applyFilters();
-    }
 }
 
 function vincularProduto(itemId, clienteId, grupoId) {
