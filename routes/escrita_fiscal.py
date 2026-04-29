@@ -132,6 +132,63 @@ def _upsert_vinculo(cliente_id, grupo_id, ramo_atividade_id,
         )
 
 
+def _upsert_vinculo_batch(cliente_id, grupo_id, ramo_atividade_id,
+                          emit_cnpj, codigo_desc_map: dict, produto_catalogo_id):
+    """Batch version of _upsert_vinculo for multiple product codes at once.
+
+    codigo_desc_map: {codigo_produto_xml: descricao_produto_xml}
+
+    Performs 3 queries (SELECT + UPDATE + INSERT) instead of 2×N queries,
+    reducing 40-second "Aplicar a Todos" to sub-second for any NF-e size.
+    """
+    if not codigo_desc_map or not emit_cnpj:
+        return
+
+    codigos = list(codigo_desc_map.keys())
+    ph = ','.join(['%s'] * len(codigos))
+
+    existing_rows = execute_query(
+        f"""SELECT id, codigo_produto_xml FROM nfe_produto_vinculo
+             WHERE cliente_id        <=> %s
+               AND grupo_id          <=> %s
+               AND ramo_atividade_id <=> %s
+               AND emit_cnpj         =   %s
+               AND codigo_produto_xml IN ({ph})""",
+        (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, *codigos),
+        fetch=True,
+    ) or []
+
+    existing_map = {r['codigo_produto_xml']: r['id'] for r in existing_rows}
+
+    # Batch UPDATE existing rows (all get the same produto_catalogo_id)
+    if existing_map:
+        id_list = list(existing_map.values())
+        id_ph = ','.join(['%s'] * len(id_list))
+        execute_query(
+            f"UPDATE nfe_produto_vinculo SET produto_catalogo_id = %s WHERE id IN ({id_ph})",
+            tuple([produto_catalogo_id] + id_list),
+        )
+
+    # Batch INSERT new rows
+    new_codes = [cod for cod in codigos if cod not in existing_map]
+    if new_codes:
+        values_ph = ','.join(['(%s,%s,%s,%s,%s,%s,%s)'] * len(new_codes))
+        params: list = []
+        for cod in new_codes:
+            params.extend([
+                cliente_id, grupo_id, ramo_atividade_id,
+                emit_cnpj, cod, codigo_desc_map[cod], produto_catalogo_id,
+            ])
+        execute_query(
+            f"""INSERT INTO nfe_produto_vinculo
+                   (cliente_id, grupo_id, ramo_atividade_id,
+                    emit_cnpj, codigo_produto_xml,
+                    descricao_produto_xml, produto_catalogo_id)
+               VALUES {values_ph}""",
+            tuple(params),
+        )
+
+
 def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
     """Retorna fragmento WHERE + params list para filtro empresa/grupo.
 
@@ -1703,9 +1760,9 @@ def api_vincular_todos():
     unique_codes = {it['codigo_produto']: it.get('descricao') or ''
                     for it in itens if it.get('codigo_produto')}
 
-    for cod, descricao_xml in unique_codes.items():
-        _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
-        _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+    # Batch upsert rules for all unique codes: 6 queries instead of N×4
+    _upsert_vinculo_batch(cli, grp, None, emit_cnpj, unique_codes, produto_id)
+    _upsert_vinculo_batch(None, None, ramo_id, emit_cnpj, unique_codes, produto_id)
 
     # Retroactive apply: single batch UPDATE covering all historical items for all unique codes
     if emit_cnpj and unique_codes:

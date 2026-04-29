@@ -1205,6 +1205,21 @@ function vincularTodos() {
     if (!produtoId) { alert('Selecione um produto para vincular.'); return; }
     if (!currentNfeId) return;
     if (!confirm('Aplicar este produto a TODOS os itens desta NF-e?')) return;
+
+    // Look up product name from in-memory catalog (already loaded by Promise.all in openPanel)
+    const prodObj = catalogoProdutos.find(p => p.id === produtoId);
+    const prodNome = prodObj ? prodObj.nome : null;
+
+    // Optimistic UI: update all visible item rows instantly
+    if (prodNome) {
+        document.querySelectorAll('[id^="vinculo_"]').forEach(wrap => {
+            const itemId = parseInt(wrap.id.replace('vinculo_', ''));
+            wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
+                <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+        });
+        panelModified = true;
+    }
+
     fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -1214,8 +1229,14 @@ function vincularTodos() {
     .then(data => {
         if (data.ok) {
             panelModified = true;
-            // Refresh modal items
-            openPanel(currentNfeId, null);
+            // If we didn't have the name locally, fall back to server response and re-render
+            if (!prodNome && data.produto_nome) {
+                document.querySelectorAll('[id^="vinculo_"]').forEach(wrap => {
+                    const itemId = parseInt(wrap.id.replace('vinculo_', ''));
+                    wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
+                        <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+                });
+            }
         }
     })
     .catch(() => alert('Erro ao vincular todos.'));
