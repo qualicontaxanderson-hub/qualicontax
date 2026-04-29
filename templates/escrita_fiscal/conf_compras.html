@@ -1025,6 +1025,7 @@ function excluirLote() {
 
 // ---- Panel: Itens da NF-e ----
 function openPanel(nfeId, evt) {
+    if (nfeId == null) return;
     if (currentNfeId !== nfeId) {
         panelModified = false;
     }

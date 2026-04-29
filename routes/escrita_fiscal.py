@@ -314,11 +314,18 @@ def api_notas():
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
-                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens,
-                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL) AS itens_vinculados
+                   COALESCE(ic.qtd_itens, 0) AS qtd_itens,
+                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados
               FROM nfe_importacoes n
               LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
+              LEFT JOIN (
+                  SELECT nfe_id,
+                         COUNT(*) AS qtd_itens,
+                         COUNT(produto_catalogo_id) AS itens_vinculados
+                    FROM nfe_itens
+                   GROUP BY nfe_id
+              ) ic ON ic.nfe_id = n.id
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
@@ -1699,20 +1706,20 @@ def api_vincular_todos():
         _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
         _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
 
-    # Retroactive apply: one UPDATE per unique code covering all historical items
+    # Retroactive apply: single batch UPDATE covering all historical items for all unique codes
     if emit_cnpj and unique_codes:
         item_ids_ph = ','.join(['%s'] * len(item_ids))
-        for cod in unique_codes:
-            execute_query(
-                f"""UPDATE nfe_itens i
-                      JOIN nfe_importacoes n ON n.id = i.nfe_id
-                   SET i.produto_catalogo_id = %s
-                   WHERE i.produto_catalogo_id IS NULL
-                     AND n.emit_cnpj = %s
-                     AND i.codigo_produto = %s
-                     AND i.id NOT IN ({item_ids_ph})""",
-                tuple([produto_id, emit_cnpj, cod] + item_ids),
-            )
+        cod_ph = ','.join(['%s'] * len(unique_codes))
+        execute_query(
+            f"""UPDATE nfe_itens i
+                  JOIN nfe_importacoes n ON n.id = i.nfe_id
+               SET i.produto_catalogo_id = %s
+               WHERE i.produto_catalogo_id IS NULL
+                 AND n.emit_cnpj = %s
+                 AND i.codigo_produto IN ({cod_ph})
+                 AND i.id NOT IN ({item_ids_ph})""",
+            tuple([produto_id, emit_cnpj] + list(unique_codes.keys()) + item_ids),
+        )
 
     prod = execute_query(
         "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
