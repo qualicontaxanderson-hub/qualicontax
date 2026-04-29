@@ -900,15 +900,16 @@ function loadNotas() {
                 </tr>`;
             }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page);
-            // Pre-warm catalog in background while user browses the list,
-            // so the panel opens instantly when they click a row.
+            // Pre-warm catalog in background while user browses the list.
+            // Store the Promise itself (not the resolved array) so that openPanel
+            // can reuse the same in-flight request — preventing a duplicate fetch
+            // when the user clicks a row before the pre-warm has resolved.
             const _catKey = (currentClienteId||'')+':'+(currentGrupoId||'');
             if (!catalogoCache[_catKey]) {
                 const _catP = new URLSearchParams({cliente_id: currentClienteId||'', grupo_id: currentGrupoId||''});
-                fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + _catP)
+                catalogoCache[_catKey] = fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + _catP)
                     .then(r => r.json())
-                    .then(cats => { catalogoCache[_catKey] = cats; })
-                    .catch(() => {});
+                    .catch(() => []);
             }
         })
         .catch(() => hideLoad());
@@ -1045,16 +1046,17 @@ function openPanel(nfeId, evt) {
         '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
     document.getElementById('vincularTodosBar').style.display = 'none';
 
-    // Load catalog only when scope changes (cached by cliente_id:grupo_id)
+    // Load catalog only when scope changes (cached by cliente_id:grupo_id).
+    // The cache holds a Promise so that both the pre-warm fetch and openPanel
+    // share the same in-flight request — no duplicate catalog downloads.
     const catKey = (currentClienteId || '') + ':' + (currentGrupoId || '');
-    const catPromise = catalogoCache[catKey]
-        ? Promise.resolve(catalogoCache[catKey])
-        : (() => {
-            const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
-            return fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
-                .then(r => r.json())
-                .then(cats => { catalogoCache[catKey] = cats; return cats; });
-        })();
+    if (!catalogoCache[catKey]) {
+        const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
+        catalogoCache[catKey] = fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
+            .then(r => r.json())
+            .catch(() => []);
+    }
+    const catPromise = catalogoCache[catKey];
 
     const itensPromise = fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`).then(r => r.json());
 
