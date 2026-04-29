@@ -1377,9 +1377,227 @@ def api_importar_dropbox():
     })
 
 
-# ---------------------------------------------------------------------------
-# Excluir NF-e
-# ---------------------------------------------------------------------------
+def importar_departamento_background(departamento: str) -> dict:
+    """Executa a importação completa de um departamento sem contexto HTTP.
+
+    Processa todos os arquivos XML da pasta NOVO do departamento, fazendo
+    múltiplas passagens (lotes de ``_DROPBOX_BATCH_LIMIT``) até que não haja
+    mais arquivos a processar.  Não aplica filtro de empresa/grupo.
+
+    Retorna um dict com o sumário: ok, dup, err, moved_ok, moved_err, skipped.
+    Pensado para uso por tarefas agendadas (scheduler).
+    """
+    if not dropbox_sync.is_configured():
+        logger.warning('importar_departamento_background: Dropbox não configurado, abortando.')
+        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+
+    if departamento not in dropbox_sync.DEPARTAMENTOS:
+        logger.warning('importar_departamento_background: departamento inválido %r', departamento)
+        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+
+    svc = dropbox_sync._service
+    pasta_novo = svc.pasta_novo(departamento)
+    logger.info('[agendado] Importando departamento=%r, pasta=%r', departamento, pasta_novo)
+
+    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+    _vinculos_cache: dict = {}
+    _cnpj_cliente_cache: dict = {}
+    _pastas_criadas: set = set()
+
+    def _get_or_create_pasta(path: str) -> str:
+        if path not in _pastas_criadas:
+            svc.ensure_folder(path)
+            _pastas_criadas.add(path)
+        return path
+
+    # Loop de lotes — continua enquanto houver arquivos e progresso real (arquivos movidos)
+    max_iterations = 1000  # guarda-chuva contra loop infinito
+    iteration = 0
+    while iteration < max_iterations:
+        iteration += 1
+        try:
+            files = svc.list_xml_files(pasta_novo)
+        except (DropboxAuthError, DropboxError) as exc:
+            logger.error('[agendado] Erro ao listar %r: %s', pasta_novo, exc)
+            break
+
+        if not files:
+            logger.info('[agendado] Nenhum arquivo em %r — concluído.', pasta_novo)
+            break
+
+        batch = files[:_DROPBOX_BATCH_LIMIT]
+        now = datetime.now()
+        batch_moved = 0
+
+        for info in batch:
+            _nome = None
+            _num = None
+            _cli = None
+            _dt = now
+
+            try:
+                raw = svc.download_file(info['path'])
+            except DropboxAuthError as exc:
+                logger.error('[agendado] Falha de auth ao baixar %s: %s', info['name'], exc)
+                break
+            if raw is None:
+                totals['err'] += 1
+                logger.warning('[agendado] %s: falha ao baixar, deixado em NOVO', info['name'])
+                continue
+
+            try:
+                content = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                content = raw.decode('latin-1', errors='replace')
+
+            # Detecção de XML de evento (cancelamento, CCe, etc.)
+            try:
+                _ev_root = ET.fromstring(content)
+                _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
+            except ET.ParseError:
+                _ev_tag = ''
+
+            if _ev_tag in _NFE_EVENT_ROOT_TAGS:
+                logger.info('[agendado] %s: XML de evento (%s) — não é NF-e de compra',
+                            info['name'], _ev_tag)
+                # Tenta identificar empresa pelo CNPJ ou chave NF-e para mover para ERROS.
+                _ev_nome = None
+                _ev_num = None
+                _ch_nfe = ''
+                for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
+                    _el = _ev_root.find(_path)
+                    if _el is not None and _el.text:
+                        _ch_nfe = re.sub(r'\D', '', _el.text.strip())
+                        break
+                if _ch_nfe:
+                    _ev_rec = execute_query(
+                        "SELECT c.nome_razao_social, c.numero_cliente "
+                        "FROM nfe_importacoes n "
+                        "JOIN clientes c ON c.id = n.cliente_id "
+                        "WHERE n.chave_acesso = %s LIMIT 1",
+                        (_ch_nfe,), fetch=True, fetch_one=True,
+                    )
+                    if _ev_rec:
+                        _ev_nome = _ev_rec['nome_razao_social']
+                        _ev_num = _ev_rec.get('numero_cliente') or None
+                if not _ev_nome:
+                    for _cnpj_xpath in [
+                        f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                        f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
+                    ]:
+                        _el = _ev_root.find(_cnpj_xpath)
+                        if _el is not None and _el.text:
+                            _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
+                            if len(_ev_cnpj_dig) >= 11:
+                                if _ev_cnpj_dig in _cnpj_cliente_cache:
+                                    _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
+                                else:
+                                    _ev_found = execute_query(
+                                        "SELECT id, nome_razao_social, numero_cliente FROM clientes "
+                                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                                        (_ev_cnpj_dig,), fetch=True, fetch_one=True,
+                                    )
+                                    _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                                if _ev_found:
+                                    _ev_nome = _ev_found['nome_razao_social']
+                                    _ev_num = _ev_found.get('numero_cliente') or None
+                                    break
+                _ev_dt = now
+                for _date_xpath in [
+                    f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
+                    f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
+                ]:
+                    _date_el = _ev_root.find(_date_xpath)
+                    if _date_el is not None and _date_el.text:
+                        try:
+                            _ev_dt = datetime.fromisoformat(
+                                _date_el.text.strip().replace('Z', '+00:00'))
+                        except (ValueError, AttributeError):
+                            pass
+                        break
+                if _ev_nome:
+                    totals['err'] += 1
+                    try:
+                        pasta_err_ev = _get_or_create_pasta(
+                            svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
+                        if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                            totals['moved_err'] += 1
+                            batch_moved += 1
+                    except DropboxAuthError:
+                        logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
+                continue
+
+            try:
+                parsed = parse_nfe_xml(content)
+                _dt = parsed['header'].get('data_emissao') or now
+                dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+
+                if len(dest_cnpj_digits) >= 11:
+                    if dest_cnpj_digits in _cnpj_cliente_cache:
+                        found = _cnpj_cliente_cache[dest_cnpj_digits]
+                    else:
+                        found = execute_query(
+                            "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                            "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                            (dest_cnpj_digits,), fetch=True, fetch_one=True,
+                        )
+                        _cnpj_cliente_cache[dest_cnpj_digits] = found
+                    if found:
+                        _cli = found['id']
+                        _nome = found['nome_razao_social']
+                        _num = found.get('numero_cliente') or None
+
+                if _nome is None:
+                    _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
+                    _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+                    logger.info('[agendado] %s: empresa não cadastrada (dest_cnpj=%r, nome=%r) → NOVO',
+                                info['name'], _raw_dest_cnpj, _dest_nome_xml)
+                    totals['skipped'] += 1
+                    continue
+
+                result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
+                                   cliente_id=_cli, vinculos_cache=_vinculos_cache)
+                if result == 'dup':
+                    totals['dup'] += 1
+                else:
+                    totals['ok'] += 1
+
+                try:
+                    pasta_imp = _get_or_create_pasta(
+                        svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                    if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                        totals['moved_ok'] += 1
+                        batch_moved += 1
+                except DropboxAuthError:
+                    logger.warning('[agendado] Falha de auth ao mover %s para importados', info['name'])
+
+            except DropboxAuthError as exc:
+                logger.error('[agendado] Falha de auth ao processar %s: %s', info['name'], exc)
+                break
+            except Exception as exc:
+                totals['err'] += 1
+                logger.exception('[agendado] Erro ao processar %s: %s', info['name'], exc)
+                _err_empresa = _nome or 'DESCONHECIDO'
+                _err_num = _num if _nome else None
+                try:
+                    pasta_err = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
+                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                        totals['moved_err'] += 1
+                        batch_moved += 1
+                except DropboxAuthError:
+                    logger.warning('[agendado] Falha de auth ao mover %s para erros', info['name'])
+
+        # Sem progresso neste lote (nenhum arquivo movido) → para para evitar loop infinito.
+        # Isso acontece quando todos os arquivos restantes são de empresas não cadastradas.
+        if batch_moved == 0:
+            logger.info('[agendado] Nenhum arquivo movido neste lote — encerrando loop.')
+            break
+
+    logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
+    return totals
+
+
 @escrita_fiscal.route('/conf-compras/excluir/<int:nfe_id>', methods=['POST'])
 @login_required
 def excluir_nfe(nfe_id):

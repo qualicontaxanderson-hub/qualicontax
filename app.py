@@ -461,5 +461,16 @@ _execute_query("""
 """, fetch=False)
 
 
+# Inicia o scheduler de tarefas agendadas (importação automática às 23:59).
+# A função init_scheduler usa um lock de arquivo para garantir que apenas um
+# dos workers do gunicorn execute o scheduler.
+try:
+    from utils.scheduler import init_scheduler
+    init_scheduler(app)
+except Exception:
+    import logging as _logging
+    _logging.getLogger(__name__).exception('Falha ao iniciar o scheduler.')
+
+
 if __name__ == '__main__':
     app.run(debug=Config.DEBUG, host='0.0.0.0', port=5000)
