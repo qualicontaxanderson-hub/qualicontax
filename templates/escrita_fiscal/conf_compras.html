@@ -1493,7 +1493,7 @@ function _renderImportResult(acc) {
     // Unregistered companies card
     if (unreg.length > 0) {
         html += `<div class="dbx-unreg">
-          <div class="dbx-unreg-head"><i class="fas fa-building"></i> Empresas não cadastradas — XMLs movidos para ERROS (${unreg.length})</div>
+          <div class="dbx-unreg-head"><i class="fas fa-building"></i> Empresas não cadastradas (${unreg.length})</div>
           <div class="dbx-unreg-list">`;
         unreg.forEach(c => {
             html += `<div class="dbx-unreg-item">
@@ -1622,7 +1622,7 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
                 btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
                 _renderImportResult(acc);
                 if (data.has_more && !filesWereMoved && !filterSkipsAdvancing) {
-                    result.innerHTML += `<div class="dbx-more-msg"><i class="fas fa-info-circle"></i> Há mais arquivos na pasta. Cadastre as empresas acima, mova os arquivos de ERROS para NOVO e importe novamente.</div>`;
+                    result.innerHTML += `<div class="dbx-more-msg"><i class="fas fa-info-circle"></i> Há mais arquivos na pasta. Cadastre as empresas acima e importe novamente.</div>`;
                 }
             }
         }

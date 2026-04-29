@@ -1137,11 +1137,10 @@ def api_importar_dropbox():
                 continue
 
             # XMLs de evento (procEventoNFe, cancelamento, etc.) não são NF-e de compra.
-            # Contabilizamos como "ignorado" (não como erro) e movemos para IMPORTADOS
-            # para manter a pasta NOVO limpa sem gerar mensagens de erro na UI.
-            skipped += 1
-            logger.info('%s: XML de evento (%s) — ignorado (não é NF-e de compra)', info['name'], _ev_tag)
-            # Tenta identificar a empresa para mover para a pasta IMPORTADOS correta.
+            # Se a empresa for identificada, movemos para ERROS (arquivo inválido para
+            # importação). Se a empresa não for identificada, deixamos em NOVO.
+            logger.info('%s: XML de evento (%s) — não é NF-e de compra', info['name'], _ev_tag)
+            # Tenta identificar a empresa para mover para a pasta ERROS correta.
             _ev_nome = None
             _ev_num = None
             _ch_nfe = ''
@@ -1188,7 +1187,7 @@ def api_importar_dropbox():
                                 logger.info('%s: empresa de evento detectada por CNPJ (%s) → %s',
                                             info['name'], _ev_cnpj_dig, _ev_nome)
                                 break
-            # Extrai data do evento para organizar a pasta IMPORTADOS pelo mês correto.
+            # Extrai data do evento para organizar a pasta ERROS pelo mês correto.
             _ev_dt = now
             for _date_xpath in [
                 f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
@@ -1204,14 +1203,16 @@ def api_importar_dropbox():
                         pass
                     break
             if _ev_nome:
-                # Empresa identificada: move para IMPORTADOS para limpar NOVO.
+                # Empresa identificada: arquivo de evento é inválido para importação
+                # → move para ERROS para manter NOVO limpo.
+                err += 1
                 try:
-                    pasta_imp = _get_or_create_pasta(
-                        svc.pasta_importados(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
-                    if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
-                        moved_ok += 1
+                    pasta_err_ev = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
+                    if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                        moved_err += 1
                 except DropboxAuthError:
-                    logger.warning('Falha de autenticação ao mover evento %s para importados', info['name'])
+                    logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
             else:
                 # Empresa não identificada — deixa em NOVO para revisão manual.
                 logger.info('%s: XML de evento, empresa não identificada — deixado em NOVO', info['name'])
@@ -1265,26 +1266,16 @@ def api_importar_dropbox():
 
             if _nome is None:
                 # Empresa não cadastrada — não importar; registrar para aviso ao usuário.
+                # O arquivo permanece em NOVO até que a empresa seja cadastrada.
                 _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
                 _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
                 _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
                 _unreg_label = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
                 unregistered[_unreg_key] = _unreg_label
                 logger.warning(
-                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → movendo para ERROS',
+                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → deixado em NOVO',
                     info['name'], _raw_dest_cnpj, _dest_nome_xml,
                 )
-                # Empresa não cadastrada: move para ERROS para manter NOVO limpo.
-                # O usuário pode cadastrar a empresa e mover o arquivo de volta para NOVO.
-                _err_empresa_unreg = _dest_nome_xml or 'DESCONHECIDO'
-                try:
-                    pasta_err_unreg = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _err_empresa_unreg, _dt))
-                    if svc.move_file(info['path'], f"{pasta_err_unreg}/{info['name']}"):
-                        moved_err += 1
-                except DropboxAuthError:
-                    logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
-                err += 1
                 continue
 
             # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
@@ -1339,8 +1330,8 @@ def api_importar_dropbox():
     if skipped:
         msg += f' {skipped} ignorado(s) (não pertencem à empresa/grupo selecionado).'
     if unregistered:
-        msg += (f' {len(unregistered)} empresa(s) não cadastrada(s) — XMLs movidos para ERROS.'
-                ' Cadastre as empresas, mova os arquivos de ERROS para NOVO e importe novamente.')
+        msg += (f' {len(unregistered)} empresa(s) não cadastrada(s) — XMLs não importados.'
+                ' Cadastre as empresas listadas abaixo e importe novamente.')
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
 
@@ -1358,6 +1349,8 @@ def api_importar_dropbox():
 
     if has_more:
         msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
+    elif unregistered and files_physically_moved == 0:
+        msg += ' Cadastre as empresas e importe novamente para continuar.'
 
     # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
     unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
