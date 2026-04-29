@@ -900,6 +900,16 @@ function loadNotas() {
                 </tr>`;
             }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page);
+            // Pre-warm catalog in background while user browses the list,
+            // so the panel opens instantly when they click a row.
+            const _catKey = (currentClienteId||'')+':'+(currentGrupoId||'');
+            if (!catalogoCache[_catKey]) {
+                const _catP = new URLSearchParams({cliente_id: currentClienteId||'', grupo_id: currentGrupoId||''});
+                fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + _catP)
+                    .then(r => r.json())
+                    .then(cats => { catalogoCache[_catKey] = cats; })
+                    .catch(() => {});
+            }
         })
         .catch(() => hideLoad());
 }
@@ -1046,16 +1056,17 @@ function openPanel(nfeId, evt) {
                 .then(cats => { catalogoCache[catKey] = cats; return cats; });
         })();
 
-    catPromise.then(cats => {
-        catalogoProdutos = cats;
-        const sel = document.getElementById('selVincularTodos');
-        sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
-        document.getElementById('vincularTodosBar').style.display = '';
-    });
+    const itensPromise = fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`).then(r => r.json());
 
-    fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`)
-        .then(r => r.json())
-        .then(data => {
+    // Render the panel only after BOTH catalog and items are ready so selects are always populated
+    Promise.all([catPromise, itensPromise])
+        .then(([cats, data]) => {
+            catalogoProdutos = cats;
+            // Update "vincular todos" bar
+            const sel = document.getElementById('selVincularTodos');
+            sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
+            document.getElementById('vincularTodosBar').style.display = '';
+
             if (data.error) { document.getElementById('panelBody').innerHTML = `<p style="color:red">${data.error}</p>`; return; }
             const nota = data.nota;
             document.getElementById('panelTitle').textContent =
@@ -1139,26 +1150,45 @@ function closePanel() {
 function vincularProduto(itemId, clienteId, grupoId) {
     const sel = document.getElementById('sel_prod_' + itemId);
     const produtoId = sel.value ? parseInt(sel.value) : null;
-    // Look up product name from the already-loaded catalog (no extra DB round-trip needed)
+    // Look up product name from the already-loaded catalog (guaranteed populated by Promise.all in openPanel)
     const prodObj = produtoId ? catalogoProdutos.find(p => p.id === produtoId) : null;
     const prodNome = prodObj ? prodObj.nome : null;
-    // Update the UI immediately — fire-and-forget the save to the server
+
     const wrap = document.getElementById('vinculo_' + itemId);
+
     if (produtoId && prodNome) {
+        // Update the UI immediately — fire-and-forget the save to the server
         wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
             <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
         panelModified = true;
+        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
+        }).catch(() => {/* silent: UI already updated */});
+    } else if (produtoId && !prodNome) {
+        // Catalog not ready (shouldn't happen after Promise.all, but handle defensively)
+        const btn = wrap.querySelector('button');
+        if (btn) { btn.disabled = true; btn.textContent = '⌛'; }
+        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
+        }).then(r => r.json()).then(data => {
+            if (data.ok && data.produto_nome) {
+                wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
+                    <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+                panelModified = true;
+            }
+        }).catch(() => {
+            if (btn) { btn.disabled = false; btn.textContent = 'Vincular'; }
+        });
     } else if (!produtoId) {
         const opts = buildProdOpts(null);
         wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
             <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
         panelModified = true;
     }
-    fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
-    }).catch(() => {/* silent: UI already updated, rule-save failure is non-critical */});
 }
 
 function desvincular(itemId) {

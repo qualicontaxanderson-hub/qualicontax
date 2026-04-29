@@ -2115,73 +2115,71 @@ def _auto_vincular_db(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id)
 def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id) -> dict:
     """
     Versão batch de _auto_vincular_db: recebe uma lista de codigos_produto e
-    retorna um dict {codigo_produto: produto_catalogo_id} em poucas queries ao invés
-    de disparar N queries individuais.
-    Respeita a mesma prioridade: empresa → grupo → ramo → global.
+    retorna um dict {codigo_produto: produto_catalogo_id} em 2 queries ao invés
+    de disparar até 5 queries sequenciais.
+    Respeita a mesma prioridade: empresa(1) → grupo(2) → ramo(3) → global(4).
     """
     if not emit_cnpj or not codigos:
         return {}
 
-    result: dict = {}
-    remaining = list(codigos)
-
-    def _batch_lookup(extra_where: str, extra_params: list) -> None:
-        if not remaining:
-            return
-        ph = ','.join(['%s'] * len(remaining))
-        rows = execute_query(
-            f"SELECT codigo_produto_xml, produto_catalogo_id FROM nfe_produto_vinculo "
-            f"WHERE emit_cnpj = %s AND codigo_produto_xml IN ({ph}) {extra_where}",
-            tuple([emit_cnpj] + remaining + extra_params),
-            fetch=True,
-        ) or []
-        for r in rows:
-            cod = r['codigo_produto_xml']
-            if cod not in result and r.get('produto_catalogo_id'):
-                result[cod] = r['produto_catalogo_id']
-        for cod in list(result.keys()):
-            if cod in remaining:
-                remaining.remove(cod)
-
-    # 1. Empresa específica
+    # Query 1 (only when needed): fetch ramo_ids for this client
+    ramo_ids: list = []
     if cliente_id:
-        _batch_lookup("AND cliente_id = %s AND grupo_id IS NULL", [cliente_id])
-
-    # 2. Grupo específico
-    if remaining and grupo_id:
-        _batch_lookup("AND grupo_id = %s AND cliente_id IS NULL", [grupo_id])
-
-    # 3. Ramo de atividade do cliente
-    if remaining and cliente_id:
         ramos = execute_query(
             "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s",
             (cliente_id,), fetch=True,
         ) or []
         ramo_ids = [r['ramo_atividade_id'] for r in ramos if r.get('ramo_atividade_id')]
-        if ramo_ids:
-            ph_r = ','.join(['%s'] * len(ramo_ids))
-            ph_c = ','.join(['%s'] * len(remaining))
-            rows = execute_query(
-                f"SELECT codigo_produto_xml, produto_catalogo_id FROM nfe_produto_vinculo "
-                f"WHERE emit_cnpj = %s AND codigo_produto_xml IN ({ph_c}) "
-                f"AND cliente_id IS NULL AND grupo_id IS NULL "
-                f"AND ramo_atividade_id IN ({ph_r})",
-                tuple([emit_cnpj] + remaining + ramo_ids),
-                fetch=True,
-            ) or []
-            for r in rows:
-                cod = r['codigo_produto_xml']
-                if cod not in result and r.get('produto_catalogo_id'):
-                    result[cod] = r['produto_catalogo_id']
-            for cod in list(result.keys()):
-                if cod in remaining:
-                    remaining.remove(cod)
 
-    # 4. Global
-    if remaining:
-        _batch_lookup(
-            "AND cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
-            [],
+    # Query 2: single combined lookup with all 4 scopes as OR, priority via CASE
+    ph_c = ','.join(['%s'] * len(codigos))
+    params: list = [emit_cnpj] + list(codigos)
+
+    scope_or_parts = []
+    case_parts = []
+
+    if cliente_id:
+        scope_or_parts.append("(cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
+        case_parts.append("WHEN cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL THEN 1")
+        params += [cliente_id, cliente_id]
+
+    if grupo_id:
+        scope_or_parts.append("(grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL)")
+        case_parts.append("WHEN grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL THEN 2")
+        params += [grupo_id, grupo_id]
+
+    if ramo_ids:
+        ph_r = ','.join(['%s'] * len(ramo_ids))
+        scope_or_parts.append(
+            f"(ramo_atividade_id IN ({ph_r}) AND cliente_id IS NULL AND grupo_id IS NULL)"
         )
+        case_parts.append(
+            f"WHEN ramo_atividade_id IN ({ph_r}) AND cliente_id IS NULL AND grupo_id IS NULL THEN 3"
+        )
+        params += ramo_ids + ramo_ids  # once for OR, once for CASE
+
+    # Always include global scope
+    scope_or_parts.append("(cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
+
+    case_sql = "CASE " + " ".join(case_parts) + " ELSE 4 END" if case_parts else "4"
+    scope_sql = " OR ".join(scope_or_parts)
+
+    rows = execute_query(
+        f"SELECT codigo_produto_xml, produto_catalogo_id, {case_sql} AS priority "
+        f"FROM nfe_produto_vinculo "
+        f"WHERE emit_cnpj = %s AND codigo_produto_xml IN ({ph_c}) "
+        f"AND produto_catalogo_id IS NOT NULL "
+        f"AND ({scope_sql}) "
+        f"ORDER BY priority",
+        tuple(params),
+        fetch=True,
+    ) or []
+
+    # Keep highest-priority (lowest number) match per codigo
+    result: dict = {}
+    for r in rows:
+        cod = r['codigo_produto_xml']
+        if cod not in result:
+            result[cod] = r['produto_catalogo_id']
 
     return result
