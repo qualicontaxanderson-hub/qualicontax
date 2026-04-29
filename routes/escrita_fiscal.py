@@ -1640,7 +1640,9 @@ def api_produtos_catalogo():
         fetch=True,
     ) or []
 
-    return jsonify(rows)
+    resp = jsonify(rows)
+    resp.headers['Cache-Control'] = 'private, max-age=300'
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -1673,32 +1675,44 @@ def api_vincular_todos():
     grp = nota.get('grupo_id')
     ramo_id = _get_ramo_cliente(cli)
 
-    item_ids = [it['id'] for it in itens]
-    for it in itens:
-        execute_query(
-            "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
-            (produto_id, it['id']),
+    if not itens:
+        prod = execute_query(
+            "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
+            (produto_id,), fetch=True, fetch_one=True,
         )
-        cod = it['codigo_produto']
-        descricao_xml = it.get('descricao') or ''
-        if cod:
-            _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
-            _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+        return jsonify({'ok': True, 'vinculados': 0, 'produto_nome': prod['nome'] if prod else ''})
 
-            # Aplica retroativamente em itens históricos sem vínculo do mesmo
-            # emit_cnpj + codigo_produto, fora desta NF
-            if emit_cnpj:
-                placeholders = ','.join(['%s'] * len(item_ids))
-                execute_query(
-                    f"""UPDATE nfe_itens i
-                          JOIN nfe_importacoes n ON n.id = i.nfe_id
-                       SET i.produto_catalogo_id = %s
-                       WHERE i.produto_catalogo_id IS NULL
-                         AND n.emit_cnpj = %s
-                         AND i.codigo_produto = %s
-                         AND i.id NOT IN ({placeholders})""",
-                    tuple([produto_id, emit_cnpj, cod] + item_ids),
-                )
+    item_ids = [it['id'] for it in itens]
+
+    # Batch UPDATE all items of this NF-e at once
+    ph = ','.join(['%s'] * len(item_ids))
+    execute_query(
+        f"UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id IN ({ph})",
+        tuple([produto_id] + item_ids),
+    )
+
+    # Collect unique codes for rule upserts and retroactive apply
+    unique_codes = {it['codigo_produto']: it.get('descricao') or ''
+                    for it in itens if it.get('codigo_produto')}
+
+    for cod, descricao_xml in unique_codes.items():
+        _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
+        _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+
+    # Retroactive apply: one UPDATE per unique code covering all historical items
+    if emit_cnpj and unique_codes:
+        item_ids_ph = ','.join(['%s'] * len(item_ids))
+        for cod in unique_codes:
+            execute_query(
+                f"""UPDATE nfe_itens i
+                      JOIN nfe_importacoes n ON n.id = i.nfe_id
+                   SET i.produto_catalogo_id = %s
+                   WHERE i.produto_catalogo_id IS NULL
+                     AND n.emit_cnpj = %s
+                     AND i.codigo_produto = %s
+                     AND i.id NOT IN ({item_ids_ph})""",
+                tuple([produto_id, emit_cnpj, cod] + item_ids),
+            )
 
     prod = execute_query(
         "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",

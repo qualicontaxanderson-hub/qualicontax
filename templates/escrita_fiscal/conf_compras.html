@@ -558,6 +558,7 @@ let currentPage = 1;
 let currentClienteId = '';
 let currentGrupoId = '';
 let catalogoProdutos = [];
+let catalogoCache = {};   // key: "cli:grp" → array of products
 let currentNfeId = null;
 let panelModified = false;
 
@@ -744,6 +745,7 @@ function onEmpresaChange() {
     }
     // Sync import selector
     if (document.getElementById('imp_empresa')) document.getElementById('imp_empresa').value = currentClienteId;
+    catalogoCache = {};  // invalidate catalog cache on scope change
 }
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
@@ -756,6 +758,7 @@ function onGrupoChange() {
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
+    catalogoCache = {};  // invalidate catalog cache on scope change
 }
 function updateScopeBadge(type, label) {
     const b = document.getElementById('scopeBadge');
@@ -1031,17 +1034,23 @@ function openPanel(nfeId, evt) {
         '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
     document.getElementById('vincularTodosBar').style.display = 'none';
 
-    // Load catalog for linking
-    const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
-    fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
-        .then(r => r.json())
-        .then(cats => {
-            catalogoProdutos = cats;
-            // Populate "Vincular Todos" select
-            const sel = document.getElementById('selVincularTodos');
-            sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
-            document.getElementById('vincularTodosBar').style.display = '';
-        });
+    // Load catalog only when scope changes (cached by cliente_id:grupo_id)
+    const catKey = (currentClienteId || '') + ':' + (currentGrupoId || '');
+    const catPromise = catalogoCache[catKey]
+        ? Promise.resolve(catalogoCache[catKey])
+        : (() => {
+            const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
+            return fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
+                .then(r => r.json())
+                .then(cats => { catalogoCache[catKey] = cats; return cats; });
+        })();
+
+    catPromise.then(cats => {
+        catalogoProdutos = cats;
+        const sel = document.getElementById('selVincularTodos');
+        sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
+        document.getElementById('vincularTodosBar').style.display = '';
+    });
 
     fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`)
         .then(r => r.json())

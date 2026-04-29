@@ -303,6 +303,18 @@ _pcat_exists = _execute_query(
 if _pcat_exists.get('cnt', 0) == 0:
     _execute_query("ALTER TABLE nfe_itens ADD COLUMN produto_catalogo_id INT NULL", fetch=False)
 
+# Incremental: add composite index (nfe_id, produto_catalogo_id) for vinc_status filters
+_idx_vinc_exists = _execute_query(
+    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_itens' AND INDEX_NAME = 'idx_nfe_pcat'",
+    fetch=True, fetch_one=True,
+) or {}
+if _idx_vinc_exists.get('cnt', 0) == 0:
+    _execute_query(
+        "ALTER TABLE nfe_itens ADD INDEX idx_nfe_pcat (nfe_id, produto_catalogo_id)",
+        fetch=False,
+    )
+
 # ---- Catálogo de Produtos (por empresa/grupo) ----
 _execute_query("""
     CREATE TABLE IF NOT EXISTS nfe_produtos_catalogo (

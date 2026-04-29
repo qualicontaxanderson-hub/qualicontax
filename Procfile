@@ -1,1 +1,1 @@
-web: gunicorn app:app --timeout 300
+web: gunicorn app:app --timeout 120 --worker-class gthread --workers 2 --threads 8
