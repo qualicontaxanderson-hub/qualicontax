@@ -52,13 +52,13 @@
 /* ---- Dropbox modal ---- */
 .dbx-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:1100; display:none; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); }
 .dbx-modal-overlay.open { display:flex; }
-.dbx-modal { background:#fff; border-radius:20px; width:660px; max-width:100%; box-shadow:0 32px 80px rgba(0,0,0,.28); transform:scale(.96); opacity:0; transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s ease; }
+.dbx-modal { background:#fff; border-radius:20px; width:660px; max-width:100%; max-height:calc(100vh - 60px); display:flex; flex-direction:column; overflow:hidden; box-shadow:0 32px 80px rgba(0,0,0,.28); transform:scale(.96); opacity:0; transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s ease; }
 .dbx-modal-overlay.open .dbx-modal { transform:scale(1); opacity:1; }
 .dbx-modal-header { display:flex; align-items:center; justify-content:space-between; padding:18px 26px; background:linear-gradient(135deg,#0052cc,#2563eb 60%,#1d9bf0); border-radius:20px 20px 0 0; }
 .dbx-modal-header h3 { font-size:16px; font-weight:700; color:#fff; margin:0; letter-spacing:.2px; }
 .dbx-modal-header .dbx-close-btn { background:rgba(255,255,255,.18); border:none; font-size:18px; color:#fff; cursor:pointer; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
 .dbx-modal-header .dbx-close-btn:hover { background:rgba(255,255,255,.32); }
-.dbx-modal-body { padding:26px; }
+.dbx-modal-body { padding:26px; overflow-y:auto; flex:1; }
 .dbx-modal-body label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; display:block; margin-bottom:5px; letter-spacing:.5px; }
 .dbx-modal-body select { width:100%; padding:9px 13px; border:1.5px solid #e2e8f0; border-radius:10px; font-size:13px; color:#1e293b; background:#f8fafc; margin-bottom:16px; }
 .dbx-modal-body select:focus { border-color:#2563eb; outline:none; background:#fff; }
@@ -79,7 +79,7 @@
 #dbxResult .dbx-stat.s-skip{ background:#f1f5f9; color:#475569; }
 #dbxResult .dbx-unreg { margin:0 12px 14px; border-radius:10px; overflow:hidden; }
 #dbxResult .dbx-unreg-head { display:flex; align-items:center; gap:7px; padding:9px 13px; font-size:12px; font-weight:700; }
-#dbxResult .dbx-unreg-list { padding:4px 13px 10px; }
+#dbxResult .dbx-unreg-list { padding:4px 13px 10px; max-height:220px; overflow-y:auto; }
 #dbxResult .dbx-unreg-item { display:flex; align-items:center; gap:7px; padding:5px 0; border-bottom:1px solid rgba(0,0,0,.05); font-size:12.5px; }
 #dbxResult .dbx-unreg-item:last-child { border-bottom:none; }
 #dbxResult .dbx-unreg-cnpj { font-family:monospace; font-size:11.5px; background:rgba(0,0,0,.07); padding:2px 7px; border-radius:5px; }
@@ -1430,10 +1430,16 @@ function _renderImportResult(acc) {
 
     // Error details (all batches accumulated)
     if (acc.details.length > 0) {
+        const MAX_DETAILS = 30;
+        const shown = acc.details.slice(0, MAX_DETAILS);
+        const extra = acc.details.length - shown.length;
         html += `<div class="dbx-unreg" style="background:#fef2f2;">
-          <div class="dbx-unreg-head" style="background:#fecaca;color:#991b1b;"><i class="fas fa-list"></i> Detalhes dos erros</div>
+          <div class="dbx-unreg-head" style="background:#fecaca;color:#991b1b;"><i class="fas fa-list"></i> Detalhes dos erros (${acc.details.length})</div>
           <div class="dbx-unreg-list" style="background:#fff1f2;color:#7f1d1d;">`;
-        acc.details.forEach(d => { html += `<div class="dbx-unreg-item"><i class="fas fa-dot-circle" style="opacity:.5;font-size:10px;"></i>${d}</div>`; });
+        shown.forEach(d => { html += `<div class="dbx-unreg-item"><i class="fas fa-dot-circle" style="opacity:.5;font-size:10px;"></i>${d}</div>`; });
+        if (extra > 0) {
+            html += `<div class="dbx-unreg-item" style="color:#991b1b;font-style:italic;">... e mais ${extra} mensagem(ns) no log.</div>`;
+        }
         html += `</div></div>`;
     }
 

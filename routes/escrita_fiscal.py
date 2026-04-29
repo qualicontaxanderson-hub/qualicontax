@@ -923,11 +923,12 @@ def api_importar_dropbox():
                             info['name'], _ev_dest_cnpj_filter)
                 continue
 
-            err += 1
-            # details será preenchido depois do lookup de empresa para incluir o nome.
-            _ev_detail_base = f"{info['name']}: XML de evento ({_ev_tag}), não é uma NF-e"
-            logger.info('%s: XML de evento detectado (%s)', info['name'], _ev_tag)
-            # Tenta identificar a empresa pelo chNFe → consulta nfe_importacoes
+            # XMLs de evento (procEventoNFe, cancelamento, etc.) não são NF-e de compra.
+            # Contabilizamos como "ignorado" (não como erro) e movemos para IMPORTADOS
+            # para manter a pasta NOVO limpa sem gerar mensagens de erro na UI.
+            skipped += 1
+            logger.info('%s: XML de evento (%s) — ignorado (não é NF-e de compra)', info['name'], _ev_tag)
+            # Tenta identificar a empresa para mover para a pasta IMPORTADOS correta.
             _ev_nome = None
             _ev_num = None
             _ch_nfe = ''
@@ -974,15 +975,14 @@ def api_importar_dropbox():
                                 logger.info('%s: empresa de evento detectada por CNPJ (%s) → %s',
                                             info['name'], _ev_cnpj_dig, _ev_nome)
                                 break
-            # Extrai data do evento (dhEvento / dhRegEvento) para organizar a pasta
-            # ERROS no mês/ano correto do evento — não na data atual de processamento.
+            # Extrai data do evento para organizar a pasta IMPORTADOS pelo mês correto.
             _ev_dt = now
             for _date_xpath in [
                 f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
                 f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
             ]:
                 _date_el = _ev_root.find(_date_xpath)
-                if _date_el is not None and _date_el is not None and _date_el.text:
+                if _date_el is not None and _date_el.text:
                     try:
                         _ev_dt = datetime.fromisoformat(
                             _date_el.text.strip().replace('Z', '+00:00')
@@ -991,32 +991,17 @@ def api_importar_dropbox():
                         pass
                     break
             if _ev_nome:
-                details.append(f"{_ev_detail_base} — empresa: {_ev_nome}")
+                # Empresa identificada: move para IMPORTADOS para limpar NOVO.
                 try:
-                    pasta_err = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
-                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                        moved_err += 1
+                    pasta_imp = _get_or_create_pasta(
+                        svc.pasta_importados(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
+                    if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                        moved_ok += 1
                 except DropboxAuthError:
-                    logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
+                    logger.warning('Falha de autenticação ao mover evento %s para importados', info['name'])
             else:
                 # Empresa não identificada — deixa em NOVO para revisão manual.
-                # NUNCA criar pasta genérica: só mover quando a empresa for identificada.
-                # Extrai CNPJ do XML para informar o usuário.
-                _ev_cnpj_warn = ''
-                for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
-                             f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
-                    _el = _ev_root.find(_cx)
-                    if _el is not None and _el.text:
-                        _ev_cnpj_warn = re.sub(r'\D', '', _el.text.strip())
-                        break
-                _unreg_key = _ev_cnpj_warn or info['name']
-                unregistered[_unreg_key] = _ev_cnpj_warn or 'CNPJ não identificado'
-                details.append(_ev_detail_base)
-                logger.warning(
-                    '%s: XML de evento, empresa não cadastrada (CNPJ=%r) → deixado em NOVO',
-                    info['name'], _ev_cnpj_warn,
-                )
+                logger.info('%s: XML de evento, empresa não identificada — deixado em NOVO', info['name'])
             continue
 
         try:
