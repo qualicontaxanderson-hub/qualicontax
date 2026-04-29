@@ -196,6 +196,33 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 .prod-vinculo button { padding:5px 10px; border-radius:6px; border:none; background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(34,197,94,.3); }
 .prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
 .vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
+
+/* ---- Resumo de Produtos (painel de totais) ---- */
+#resumoProdutosPanel { margin-top:22px; }
+#resumoProdutosPanel .rp-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+#resumoProdutosPanel .rp-header h3 { font-size:15px; font-weight:700; color:#1e293b; margin:0; flex:1; }
+#resumoProdutosPanel .rp-header span.rp-badge { background:#dcfce7; color:#166534; padding:3px 10px; border-radius:99px; font-size:11px; font-weight:700; }
+.rp-cat-card { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; margin-bottom:10px; overflow:hidden; box-shadow:0 1px 5px rgba(0,0,0,.05); }
+.rp-cat-header { display:flex; align-items:center; gap:12px; padding:13px 18px; cursor:pointer; user-select:none; border-radius:12px; transition:background .15s; }
+.rp-cat-card.open .rp-cat-header { border-radius:12px 12px 0 0; }
+.rp-cat-header:hover { background:#f0fdf4; }
+.rp-cat-icon { font-size:18px; width:32px; text-align:center; flex-shrink:0; }
+.rp-cat-name { font-size:14px; font-weight:700; color:#1e293b; flex:1; }
+.rp-cat-total { font-size:14px; font-weight:800; color:#166534; white-space:nowrap; }
+.rp-cat-notes { font-size:11px; color:#64748b; white-space:nowrap; }
+.rp-cat-arrow { font-size:12px; color:#94a3b8; transition:transform .2s; }
+.rp-cat-card.open .rp-cat-arrow { transform:rotate(180deg); }
+.rp-cat-body { display:none; border-top:1.5px solid #e2e8f0; }
+.rp-cat-card.open .rp-cat-body { display:block; }
+.rp-sub-header { padding:8px 18px; background:#f8fafc; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9; }
+table.rp-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.rp-table th { background:#f8fafc; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; padding:8px 16px; border-bottom:1.5px solid #e2e8f0; white-space:nowrap; }
+table.rp-table td { padding:9px 16px; border-bottom:1px solid #f8fafc; color:#334155; vertical-align:middle; }
+table.rp-table tr:last-child td { border-bottom:none; }
+table.rp-table td.r { text-align:right; font-weight:600; color:#166534; font-variant-numeric:tabular-nums; }
+table.rp-table tr:hover td { background:#f0fdf4; }
+.rp-empty { text-align:center; padding:30px; color:#94a3b8; font-size:13px; }
+.rp-loading { text-align:center; padding:30px; color:#64748b; font-size:13px; }
 </style>
 {% endblock %}
 
@@ -394,6 +421,24 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </table>
     </div>
     <div class="cc-pagination" id="paginationNotas"></div>
+
+    <!-- ===================== PAINEL: Resumo de Produtos ===================== -->
+    <div id="resumoProdutosPanel" style="display:none;">
+        <div class="rp-header">
+            <h3><i class="fas fa-chart-bar" style="color:#22c55e;margin-right:8px;"></i>Resumo por Produto</h3>
+            <span class="rp-badge" id="rpBadge">—</span>
+        </div>
+        <div id="rpBody">
+            <div class="rp-loading" id="rpLoading" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i> Carregando resumo…
+            </div>
+            <div class="rp-empty" id="rpEmpty" style="display:none;">
+                <i class="fas fa-box-open" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+                Nenhum produto encontrado nos filtros selecionados.
+            </div>
+            <div id="rpCards"></div>
+        </div>
+    </div>
 </div>
 
 <!-- Tab: Por Emissor -->
@@ -896,11 +941,119 @@ function loadNotas() {
                 </tr>`;
             }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page);
+            loadResumoProdutos();
         })
         .catch(() => hideLoad());
 }
 
-// ---- Load Por Emissor ----
+// ---- Load Resumo Produtos ----
+const CAT_ICONS = {
+    'Combustíveis':            '⛽',
+    'Lubrificantes e Aditivos':'🛢️',
+    'Loja de Conveniência':    '🛒',
+    'Insumos e Despesas':      '🔧',
+    '— Sem vínculo —':         '❓',
+    '— Sem categoria —':       '📦',
+};
+function rpIcon(cat) { return CAT_ICONS[cat] || '📦'; }
+
+function loadResumoProdutos() {
+    const f = getFilters();
+    const panel = document.getElementById('resumoProdutosPanel');
+    const rpCards = document.getElementById('rpCards');
+    const rpLoading = document.getElementById('rpLoading');
+    const rpEmpty = document.getElementById('rpEmpty');
+    const rpBadge = document.getElementById('rpBadge');
+
+    // Only show when a company/group is selected or filters are set
+    if (!f.cliente_id && !f.grupo_id && !f.data_ini && !f.data_fim) {
+        panel.style.display = 'none';
+        return;
+    }
+    panel.style.display = 'block';
+    rpLoading.style.display = 'block';
+    rpEmpty.style.display = 'none';
+    rpCards.innerHTML = '';
+
+    const params = new URLSearchParams({
+        cliente_id: f.cliente_id || '',
+        grupo_id:   f.grupo_id   || '',
+        data_ini:   f.data_ini   || '',
+        data_fim:   f.data_fim   || '',
+        emit_cnpj:  f.emit_cnpj  || '',
+        emit_uf:    f.emit_uf    || '',
+    });
+
+    fetch('{{ url_for("escrita_fiscal.api_resumo_produtos") }}?' + params)
+        .then(r => r.json())
+        .then(cats => {
+            rpLoading.style.display = 'none';
+            if (!cats || cats.length === 0) {
+                rpEmpty.style.display = 'block';
+                rpBadge.textContent = '0 categorias';
+                return;
+            }
+            rpBadge.textContent = cats.length + ' categoria' + (cats.length > 1 ? 's' : '');
+            rpCards.innerHTML = cats.map((cat, ci) => {
+                const icon = rpIcon(cat.categoria);
+                const subcatsHtml = cat.subcats.map(sub => {
+                    const subHeader = sub.nome
+                        ? `<div class="rp-sub-header">${sub.nome}</div>`
+                        : '';
+                    const rows = sub.produtos.map(p => {
+                        const unid = p.unidade || '';
+                        const qtdFmt = parseFloat(p.total_qtd).toLocaleString('pt-BR', {minimumFractionDigits:3, maximumFractionDigits:3});
+                        const vmedio = p.total_qtd > 0 ? p.total_valor / p.total_qtd : 0;
+                        return `<tr>
+                            <td>${p.nome}</td>
+                            <td style="text-align:center;">${unid}</td>
+                            <td class="r">${qtdFmt}</td>
+                            <td class="r">${fmtBRL(vmedio)}</td>
+                            <td class="r">${fmtBRL(p.total_valor)}</td>
+                            <td class="r">${fmtBRL(p.total_icms)}</td>
+                            <td style="text-align:center;color:#64748b;">${p.qtd_notas}</td>
+                        </tr>`;
+                    }).join('');
+                    return `${subHeader}
+                        <table class="rp-table">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th style="text-align:center;">Unid.</th>
+                                    <th style="text-align:right;">Quantidade</th>
+                                    <th style="text-align:right;">Vlr. Médio</th>
+                                    <th style="text-align:right;">Total R$</th>
+                                    <th style="text-align:right;">ICMS</th>
+                                    <th style="text-align:center;">Notas</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>`;
+                }).join('');
+
+                // Auto-expand first category
+                const openCls = ci === 0 ? ' open' : '';
+                return `<div class="rp-cat-card${openCls}" id="rpCat${ci}">
+                    <div class="rp-cat-header" onclick="rpToggle(${ci})">
+                        <span class="rp-cat-icon">${icon}</span>
+                        <span class="rp-cat-name">${cat.categoria}</span>
+                        <span class="rp-cat-notes">${cat.qtd_notas} nota(s)</span>
+                        <span class="rp-cat-total">${fmtBRL(cat.total_valor)}</span>
+                        <span class="rp-cat-arrow"><i class="fas fa-chevron-down"></i></span>
+                    </div>
+                    <div class="rp-cat-body">${subcatsHtml}</div>
+                </div>`;
+            }).join('');
+        })
+        .catch(() => { rpLoading.style.display = 'none'; });
+}
+
+function rpToggle(idx) {
+    const card = document.getElementById('rpCat' + idx);
+    if (card) card.classList.toggle('open');
+}
+
+
 function loadEmissor() {
     const f = getFilters();
     const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});

@@ -640,6 +640,146 @@ def api_por_produto():
 
 
 # ---------------------------------------------------------------------------
+# API — Resumo de produtos para o painel de totais (todos os registros do filtro)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/resumo-produtos')
+@login_required
+def api_resumo_produtos():
+    """Retorna totais agregados por categoria → produto para todos os registros
+    que correspondam ao filtro atual (sem paginação).  Inclui também os itens
+    ainda sem vínculo agrupados numa categoria especial."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id   = request.args.get('grupo_id', '').strip()
+    f_data_ini   = request.args.get('data_ini', '').strip()
+    f_data_fim   = request.args.get('data_fim', '').strip()
+    f_emit_cnpj  = request.args.get('emit_cnpj', '').strip()
+    f_emit_uf    = request.args.get('emit_uf', '').strip()
+
+    where, params = [], []
+    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj = %s')
+        params.append(f_emit_cnpj)
+    if f_emit_uf:
+        where.append('n.emit_uf = %s')
+        params.append(f_emit_uf)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    # Agrega por produto_catalogo_id (vinculados) ou por código/descrição (sem vínculo)
+    rows = execute_query(
+        f"""SELECT
+               p.categoria                          AS categoria,
+               p.subcategoria                       AS subcategoria,
+               p.id                                 AS produto_id,
+               p.nome                               AS produto_nome,
+               p.unidade                            AS produto_unidade,
+               COALESCE(SUM(i.quantidade), 0)       AS total_qtd,
+               COALESCE(SUM(i.valor_total), 0)      AS total_valor,
+               COALESCE(SUM(i.valor_icms), 0)       AS total_icms,
+               COUNT(DISTINCT n.id)                 AS qtd_notas
+           FROM nfe_itens i
+           JOIN nfe_importacoes n ON n.id = i.nfe_id
+           JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
+           {where_sql}
+           GROUP BY p.categoria, p.subcategoria, p.id, p.nome, p.unidade
+           ORDER BY p.categoria, p.subcategoria, total_valor DESC""",
+        tuple(params), fetch=True,
+    ) or []
+
+    # Itens sem vínculo — agrupados pelo descrição normalizada do XML
+    unlinked = execute_query(
+        f"""SELECT
+               i.descricao                          AS produto_nome,
+               i.unidade                            AS produto_unidade,
+               COALESCE(SUM(i.quantidade), 0)       AS total_qtd,
+               COALESCE(SUM(i.valor_total), 0)      AS total_valor,
+               COALESCE(SUM(i.valor_icms), 0)       AS total_icms,
+               COUNT(DISTINCT n.id)                 AS qtd_notas
+           FROM nfe_itens i
+           JOIN nfe_importacoes n ON n.id = i.nfe_id
+           {where_sql}
+               {'AND' if where_sql else 'WHERE'} i.produto_catalogo_id IS NULL
+           GROUP BY i.descricao, i.unidade
+           ORDER BY total_valor DESC
+           LIMIT 200""",
+        tuple(params), fetch=True,
+    ) or []
+
+    # Converte decimais
+    for r in rows:
+        for k in ('total_qtd', 'total_valor', 'total_icms'):
+            r[k] = float(r.get(k) or 0)
+
+    for r in unlinked:
+        for k in ('total_qtd', 'total_valor', 'total_icms'):
+            r[k] = float(r.get(k) or 0)
+        r['categoria']       = '— Sem vínculo —'
+        r['subcategoria']    = None
+        r['produto_id']      = None
+
+    # Monta estrutura hierárquica: { categoria: { subcategoria: [produtos] } }
+    from collections import OrderedDict
+    cats = OrderedDict()
+
+    def _add(cat, subcat, row):
+        if cat not in cats:
+            cats[cat] = {'total_valor': 0, 'total_qtd': 0, 'total_icms': 0, 'qtd_notas': 0, 'subcats': OrderedDict()}
+        c = cats[cat]
+        c['total_valor'] += row['total_valor']
+        c['total_icms']  += row['total_icms']
+        c['qtd_notas']   += row.get('qtd_notas', 0)
+        sub_key = subcat or ''
+        if sub_key not in c['subcats']:
+            c['subcats'][sub_key] = {'total_valor': 0, 'total_qtd': 0, 'total_icms': 0, 'produtos': []}
+        s = c['subcats'][sub_key]
+        s['total_valor'] += row['total_valor']
+        s['total_icms']  += row['total_icms']
+        s['produtos'].append({
+            'id':       row.get('produto_id'),
+            'nome':     row.get('produto_nome') or '—',
+            'unidade':  row.get('produto_unidade') or '',
+            'total_qtd':   row['total_qtd'],
+            'total_valor': row['total_valor'],
+            'total_icms':  row['total_icms'],
+            'qtd_notas':   row.get('qtd_notas', 0),
+        })
+
+    for r in rows:
+        _add(r.get('categoria') or '— Sem categoria —', r.get('subcategoria'), r)
+    for r in unlinked:
+        _add(r['categoria'], r.get('subcategoria'), r)
+
+    # Serializa preservando ordem
+    result = []
+    for cat_nome, cat_data in cats.items():
+        subcats_list = []
+        for sub_nome, sub_data in cat_data['subcats'].items():
+            subcats_list.append({
+                'nome':        sub_nome,
+                'total_valor': round(sub_data['total_valor'], 2),
+                'total_icms':  round(sub_data['total_icms'],  2),
+                'produtos':    sub_data['produtos'],
+            })
+        result.append({
+            'categoria':   cat_nome,
+            'total_valor': round(cat_data['total_valor'], 2),
+            'total_icms':  round(cat_data['total_icms'],  2),
+            'qtd_notas':   cat_data['qtd_notas'],
+            'subcats':     subcats_list,
+        })
+
+    return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
 # Importar XML — upload manual
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/importar', methods=['POST'])
