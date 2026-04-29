@@ -1271,9 +1271,20 @@ def api_importar_dropbox():
                 _unreg_label = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
                 unregistered[_unreg_key] = _unreg_label
                 logger.warning(
-                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → ignorado',
+                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → movendo para ERROS',
                     info['name'], _raw_dest_cnpj, _dest_nome_xml,
                 )
+                # Empresa não cadastrada: move para ERROS para manter NOVO limpo.
+                # O usuário pode cadastrar a empresa e mover o arquivo de volta para NOVO.
+                _err_empresa_unreg = _dest_nome_xml or 'DESCONHECIDO'
+                try:
+                    pasta_err_unreg = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _err_empresa_unreg, _dt))
+                    if svc.move_file(info['path'], f"{pasta_err_unreg}/{info['name']}"):
+                        moved_err += 1
+                except DropboxAuthError:
+                    logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
+                err += 1
                 continue
 
             # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
@@ -1328,8 +1339,8 @@ def api_importar_dropbox():
     if skipped:
         msg += f' {skipped} ignorado(s) (não pertencem à empresa/grupo selecionado).'
     if unregistered:
-        msg += (f' {len(unregistered)} empresa(s) não cadastrada(s) — XMLs não importados.'
-                ' Cadastre as empresas listadas abaixo e importe novamente.')
+        msg += (f' {len(unregistered)} empresa(s) não cadastrada(s) — XMLs movidos para ERROS.'
+                ' Cadastre as empresas, mova os arquivos de ERROS para NOVO e importe novamente.')
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
 
@@ -1347,8 +1358,6 @@ def api_importar_dropbox():
 
     if has_more:
         msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
-    elif unregistered and files_physically_moved == 0:
-        msg += ' Cadastre as empresas e importe novamente para continuar.'
 
     # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
     unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
