@@ -232,7 +232,7 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
 @escrita_fiscal.route('/')
 @login_required
 def index():
-    return render_template('escrita_fiscal/index.html')
+    return render_template('escrita_fiscal/index.html', is_admin=current_user.is_admin())
 
 
 # ---------------------------------------------------------------------------
