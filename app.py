@@ -512,7 +512,7 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
-execute_query("""
+_execute_query("""
     CREATE TABLE IF NOT EXISTS scheduler_import_log (
         id          INT AUTO_INCREMENT PRIMARY KEY,
         iniciado_em DATETIME NOT NULL,
@@ -531,7 +531,7 @@ execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
-execute_query("""
+_execute_query("""
     CREATE TABLE IF NOT EXISTS app_config (
         chave   VARCHAR(100) PRIMARY KEY,
         valor   TEXT NOT NULL,
