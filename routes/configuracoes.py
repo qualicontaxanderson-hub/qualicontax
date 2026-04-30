@@ -106,7 +106,8 @@ def usuario_novo():
         return redirect(url_for('configuracoes.usuarios'))
 
     return render_template('configuracoes/usuario_form.html',
-                           perfis=perfis, clientes=clientes, usuario=None)
+                           perfis=perfis, clientes=clientes, usuario=None,
+                           perfis_usuario=set(), empresas_usuario=set())
 
 
 @configuracoes.route('/usuarios/<int:uid>/editar', methods=['GET', 'POST'])
