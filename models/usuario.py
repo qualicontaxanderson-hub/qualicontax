@@ -8,10 +8,11 @@ class Usuario(UserMixin):
     
     def __init__(self, id, nome, email, senha_hash, tipo_usuario='ASSISTENTE', situacao='ATIVO', 
                  cpf=None, telefone=None, departamento_id=None, cargo=None, 
-                 capacidade_tarefas=10, data_admissao=None, foto_perfil=None):
+                 capacidade_tarefas=10, data_admissao=None, foto_perfil=None, login=None):
         self.id = id
         self.nome = nome
         self.email = email
+        self.login = login
         self.senha_hash = senha_hash
         self.tipo_usuario = tipo_usuario
         self.situacao = situacao
@@ -88,7 +89,7 @@ class Usuario(UserMixin):
             Usuario: Objeto Usuario ou None
         """
         query = """
-            SELECT id, nome, email, senha_hash, tipo_usuario, situacao,
+            SELECT id, nome, email, login, senha_hash, tipo_usuario, situacao,
                    cpf, telefone, departamento_id, cargo, capacidade_tarefas,
                    data_admissao, foto_perfil
             FROM usuarios
@@ -101,6 +102,7 @@ class Usuario(UserMixin):
                 id=result['id'],
                 nome=result['nome'],
                 email=result['email'],
+                login=result.get('login'),
                 senha_hash=result['senha_hash'],
                 tipo_usuario=result.get('tipo_usuario', 'ASSISTENTE'),
                 situacao=result.get('situacao', 'ATIVO'),
@@ -126,7 +128,7 @@ class Usuario(UserMixin):
             Usuario: Objeto Usuario ou None
         """
         query = """
-            SELECT id, nome, email, senha_hash, tipo_usuario, situacao,
+            SELECT id, nome, email, login, senha_hash, tipo_usuario, situacao,
                    cpf, telefone, departamento_id, cargo, capacidade_tarefas,
                    data_admissao, foto_perfil
             FROM usuarios
@@ -139,6 +141,46 @@ class Usuario(UserMixin):
                 id=result['id'],
                 nome=result['nome'],
                 email=result['email'],
+                login=result.get('login'),
+                senha_hash=result['senha_hash'],
+                tipo_usuario=result.get('tipo_usuario', 'ASSISTENTE'),
+                situacao=result.get('situacao', 'ATIVO'),
+                cpf=result.get('cpf'),
+                telefone=result.get('telefone'),
+                departamento_id=result.get('departamento_id'),
+                cargo=result.get('cargo'),
+                capacidade_tarefas=result.get('capacidade_tarefas', 10),
+                data_admissao=result.get('data_admissao'),
+                foto_perfil=result.get('foto_perfil')
+            )
+        return None
+    
+    @staticmethod
+    def get_by_login(login):
+        """
+        Busca usuário pelo nome de login.
+
+        Args:
+            login (str): Login do usuário
+
+        Returns:
+            Usuario: Objeto Usuario ou None
+        """
+        query = """
+            SELECT id, nome, email, login, senha_hash, tipo_usuario, situacao,
+                   cpf, telefone, departamento_id, cargo, capacidade_tarefas,
+                   data_admissao, foto_perfil
+            FROM usuarios
+            WHERE login = %s
+        """
+        result = execute_query(query, (login,), fetch=True, fetch_one=True)
+
+        if result:
+            return Usuario(
+                id=result['id'],
+                nome=result['nome'],
+                email=result['email'],
+                login=result.get('login'),
                 senha_hash=result['senha_hash'],
                 tipo_usuario=result.get('tipo_usuario', 'ASSISTENTE'),
                 situacao=result.get('situacao', 'ATIVO'),

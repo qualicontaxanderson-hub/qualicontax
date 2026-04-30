@@ -26,7 +26,7 @@ def index():
 @admin_required
 def usuarios():
     rows = execute_query(
-        """SELECT u.id, u.nome, u.email, u.tipo_usuario, u.situacao, u.cargo,
+        """SELECT u.id, u.nome, u.login, u.email, u.tipo_usuario, u.situacao, u.cargo,
                   GROUP_CONCAT(pa.nome ORDER BY pa.nome SEPARATOR ', ') AS perfis
              FROM usuarios u
              LEFT JOIN usuario_perfis up ON up.usuario_id = u.id
@@ -52,6 +52,7 @@ def usuario_novo():
 
     if request.method == 'POST':
         nome     = request.form.get('nome', '').strip()
+        login    = request.form.get('login', '').strip().lower().replace(' ', '')
         email    = request.form.get('email', '').strip().lower()
         senha    = request.form.get('senha', '').strip()
         tipo     = request.form.get('tipo_usuario', 'ASSISTENTE')
@@ -60,8 +61,18 @@ def usuario_novo():
         perfis_sel = request.form.getlist('perfis')
         empresas_sel = request.form.getlist('empresas')
 
-        if not nome or not email or not senha:
-            flash('Nome, e-mail e senha são obrigatórios.', 'danger')
+        if not nome or not login or not email or not senha:
+            flash('Nome, login, e-mail e senha são obrigatórios.', 'danger')
+            return render_template('configuracoes/usuario_form.html',
+                                   perfis=perfis, clientes=clientes, usuario=None,
+                                   perfis_usuario=set(), empresas_usuario=set())
+
+        # Verifica login duplicado
+        existe_login = execute_query(
+            "SELECT id FROM usuarios WHERE login = %s", (login,), fetch=True, fetch_one=True
+        )
+        if existe_login:
+            flash('Já existe um usuário com este login.', 'danger')
             return render_template('configuracoes/usuario_form.html',
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
@@ -77,9 +88,9 @@ def usuario_novo():
                                    perfis_usuario=set(), empresas_usuario=set())
 
         uid = execute_query(
-            """INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, situacao, cargo, telefone)
-               VALUES (%s, %s, %s, %s, 'ATIVO', %s, %s)""",
-            (nome, email, hash_password(senha), tipo, cargo, telefone),
+            """INSERT INTO usuarios (nome, login, email, senha_hash, tipo_usuario, situacao, cargo, telefone)
+               VALUES (%s, %s, %s, %s, %s, 'ATIVO', %s, %s)""",
+            (nome, login, email, hash_password(senha), tipo, cargo, telefone),
         )
 
         if not uid:
@@ -144,6 +155,7 @@ def usuario_editar(uid):
 
     if request.method == 'POST':
         nome     = request.form.get('nome', '').strip()
+        login    = request.form.get('login', '').strip().lower().replace(' ', '')
         email    = request.form.get('email', '').strip().lower()
         tipo     = request.form.get('tipo_usuario', 'ASSISTENTE')
         cargo    = request.form.get('cargo', '').strip()
@@ -153,8 +165,20 @@ def usuario_editar(uid):
         perfis_sel   = request.form.getlist('perfis')
         empresas_sel = request.form.getlist('empresas')
 
-        if not nome or not email:
-            flash('Nome e e-mail são obrigatórios.', 'danger')
+        if not nome or not login or not email:
+            flash('Nome, login e e-mail são obrigatórios.', 'danger')
+            return render_template('configuracoes/usuario_form.html',
+                                   perfis=perfis, clientes=clientes, usuario=usuario,
+                                   perfis_usuario=perfis_usuario,
+                                   empresas_usuario=empresas_usuario)
+
+        # Verifica login duplicado (excluindo o próprio)
+        existe_login = execute_query(
+            "SELECT id FROM usuarios WHERE login = %s AND id != %s",
+            (login, uid), fetch=True, fetch_one=True,
+        )
+        if existe_login:
+            flash('Já existe outro usuário com este login.', 'danger')
             return render_template('configuracoes/usuario_form.html',
                                    perfis=perfis, clientes=clientes, usuario=usuario,
                                    perfis_usuario=perfis_usuario,
@@ -174,18 +198,18 @@ def usuario_editar(uid):
 
         if nova_senha:
             execute_query(
-                """UPDATE usuarios SET nome=%s, email=%s, senha_hash=%s, tipo_usuario=%s,
+                """UPDATE usuarios SET nome=%s, login=%s, email=%s, senha_hash=%s, tipo_usuario=%s,
                                        situacao=%s, cargo=%s, telefone=%s
                     WHERE id=%s""",
-                (nome, email, hash_password(nova_senha), tipo, situacao, cargo, telefone, uid),
+                (nome, login, email, hash_password(nova_senha), tipo, situacao, cargo, telefone, uid),
                 fetch=False,
             )
         else:
             execute_query(
-                """UPDATE usuarios SET nome=%s, email=%s, tipo_usuario=%s,
+                """UPDATE usuarios SET nome=%s, login=%s, email=%s, tipo_usuario=%s,
                                        situacao=%s, cargo=%s, telefone=%s
                     WHERE id=%s""",
-                (nome, email, tipo, situacao, cargo, telefone, uid),
+                (nome, login, email, tipo, situacao, cargo, telefone, uid),
                 fetch=False,
             )
 

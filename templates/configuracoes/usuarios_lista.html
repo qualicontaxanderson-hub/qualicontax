@@ -20,6 +20,7 @@
             <thead>
                 <tr>
                     <th>Nome</th>
+                    <th>Login</th>
                     <th>E-mail</th>
                     <th>Tipo</th>
                     <th>Perfis de Acesso</th>
@@ -31,6 +32,7 @@
                 {% for u in usuarios %}
                 <tr>
                     <td><strong>{{ u.nome }}</strong></td>
+                    <td><code>{{ u.login or '—' }}</code></td>
                     <td>{{ u.email }}</td>
                     <td>
                         <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
@@ -63,7 +65,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">Nenhum usuário cadastrado.</td>
+                    <td colspan="7" class="text-center text-muted py-4">Nenhum usuário cadastrado.</td>
                 </tr>
                 {% endfor %}
             </tbody>

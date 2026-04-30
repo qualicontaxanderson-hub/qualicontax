@@ -130,6 +130,7 @@ for _col_name, _col_def in [
     ('situacao',          "ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO'"),
     ('criado_em',         'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'),
     ('atualizado_em',     'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
+    ('login',             'VARCHAR(100) NULL'),
 ]:
     try:
         _col_exists = _execute_query(
@@ -145,7 +146,31 @@ for _col_name, _col_def in [
     except Exception:
         pass
 
-# Tabelas do módulo Plano de Contas
+# Unique index on login (added after the column migration loop)
+try:
+    _idx_exists = _execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND INDEX_NAME = 'idx_login'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _idx_exists.get('cnt', 0) == 0:
+        _execute_query(
+            "ALTER TABLE usuarios ADD UNIQUE INDEX idx_login (login)",
+            fetch=False,
+        )
+except Exception:
+    pass
+
+# Backfill: garante que o admin padrão tenha login='admin' se login estiver NULL
+try:
+    _execute_query(
+        "UPDATE usuarios SET login='admin' WHERE tipo_usuario='ADMIN' AND (login IS NULL OR login='')",
+        fetch=False,
+    )
+except Exception:
+    pass
+
+
 _execute_query("""
     CREATE TABLE IF NOT EXISTS planos_contas (
         id INT AUTO_INCREMENT PRIMARY KEY,

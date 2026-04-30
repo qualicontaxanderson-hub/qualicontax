@@ -29,13 +29,14 @@ def create_admin_user():
     admin_hash = hash_password(admin_password)
 
     insert_query = """
-        INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, situacao)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO usuarios (nome, login, email, senha_hash, tipo_usuario, situacao)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """
-    result = execute_query(insert_query, ("Administrador", admin_email, admin_hash, "ADMIN", "ATIVO"))
+    result = execute_query(insert_query, ("Administrador", "admin", admin_email, admin_hash, "ADMIN", "ATIVO"))
 
     if result:
         print("\n✓ Usuário admin criado com sucesso!")
+        print(f"  Login: admin")
         print(f"  Email: {admin_email}")
         print(f"  Senha: {admin_password}")
         print("\n  ⚠️  IMPORTANTE: Altere a senha após o primeiro login!")

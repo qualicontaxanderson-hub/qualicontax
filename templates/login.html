@@ -36,11 +36,11 @@
                 {{ form.hidden_tag() if form }}
                 
                 <div class="form-group">
-                    <label for="email">
-                        <i class="fas fa-envelope"></i>
-                        E-mail
+                    <label for="login">
+                        <i class="fas fa-user"></i>
+                        Usuário
                     </label>
-                    <input type="email" id="email" name="email" class="form-control" placeholder="seu@email.com" required>
+                    <input type="text" id="login" name="login" class="form-control" placeholder="seu.usuario" required autocomplete="username">
                 </div>
 
                 <div class="form-group">
