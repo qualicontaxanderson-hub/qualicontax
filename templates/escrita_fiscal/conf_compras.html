@@ -676,7 +676,7 @@ let panelModified = false;
 const empresasData = [
     {id: '', nome: '— Todas as Empresas —'},
     {% for e in empresas %}
-    {id: '{{ e.id }}', nome: '{% if e.numero_cliente %}{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social | replace("'", "\\'") }}'},
+    {id: {{ e.id | tojson }}, nome: {{ ((e.numero_cliente|string + ' - ' + e.nome_razao_social) if e.numero_cliente else e.nome_razao_social) | tojson }}},
     {% endfor %}
 ];
 let acActiveIndex = -1;
