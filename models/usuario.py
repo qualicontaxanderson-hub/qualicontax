@@ -22,6 +22,8 @@ class Usuario(UserMixin):
         self.capacidade_tarefas = capacidade_tarefas
         self.data_admissao = data_admissao
         self.foto_perfil = foto_perfil
+        # Cached permission set – populated lazily
+        self._permissoes = None
     
     def is_admin(self):
         """Verifica se o usuário é admin"""
@@ -34,6 +36,45 @@ class Usuario(UserMixin):
     def get_id(self):
         """Retorna o ID do usuário (requerido pelo Flask-Login)"""
         return str(self.id)
+
+    # ------------------------------------------------------------------
+    # Permissões
+    # ------------------------------------------------------------------
+
+    def get_permissoes(self):
+        """Retorna set de codigos de permissão do usuário (via perfis)."""
+        if self._permissoes is None:
+            rows = execute_query(
+                """SELECT pp.permissao_codigo
+                     FROM usuario_perfis up
+                     JOIN perfil_permissoes pp ON pp.perfil_id = up.perfil_id
+                    WHERE up.usuario_id = %s""",
+                (self.id,), fetch=True,
+            ) or []
+            self._permissoes = {r['permissao_codigo'] for r in rows}
+        return self._permissoes
+
+    def has_permission(self, codigo):
+        """Retorna True se o usuário tem a permissão informada.
+        
+        ADMINs sempre têm acesso total.
+        """
+        if self.is_admin():
+            return True
+        return codigo in self.get_permissoes()
+
+    def get_empresas_permitidas(self):
+        """Retorna set de cliente_ids que o usuário pode visualizar.
+        
+        Retorna None quando sem restrições (vê todas as empresas).
+        """
+        rows = execute_query(
+            "SELECT cliente_id FROM usuario_empresas_permitidas WHERE usuario_id = %s",
+            (self.id,), fetch=True,
+        ) or []
+        if not rows:
+            return None  # sem restrição
+        return {r['cliente_id'] for r in rows}
     
     @staticmethod
     def get_by_id(user_id):

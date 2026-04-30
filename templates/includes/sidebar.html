@@ -113,7 +113,7 @@
 
             <!-- Configurações -->
             <li class="nav-item">
-                <a href="{{ url_for('modulos.configuracoes') }}" class="nav-link {% if request.endpoint == 'modulos.configuracoes' %}active{% endif %}">
+                <a href="{{ url_for('configuracoes.index') }}" class="nav-link {% if 'configuracoes' in request.endpoint %}active{% endif %}">
                     <i class="fas fa-cog"></i>
                     <span>Config.</span>
                 </a>

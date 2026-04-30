@@ -40,6 +40,7 @@ from routes.financeiro import financeiro
 from routes.dropbox import dropbox_bp
 from routes.modulos import modulos
 from routes.escrita_fiscal import escrita_fiscal as escrita_fiscal_bp
+from routes.configuracoes import configuracoes as configuracoes_bp
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -57,6 +58,7 @@ app.register_blueprint(financeiro)
 app.register_blueprint(dropbox_bp)
 app.register_blueprint(modulos)
 app.register_blueprint(escrita_fiscal_bp)
+app.register_blueprint(configuracoes_bp)
 
 
 # Template filters
@@ -457,6 +459,56 @@ _execute_query("""
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_cliente_id (cliente_id),
         INDEX idx_situacao (situacao)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+
+# ---- Controle de Acesso ----
+
+# Perfis de acesso (roles)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS perfis_acesso (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(100) NOT NULL,
+        descricao TEXT NULL,
+        situacao ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_perfil_nome (nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Permissões por perfil
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS perfil_permissoes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        perfil_id INT NOT NULL,
+        permissao_codigo VARCHAR(100) NOT NULL,
+        FOREIGN KEY (perfil_id) REFERENCES perfis_acesso(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_perm (perfil_id, permissao_codigo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Vínculo usuário ↔ perfil (many-to-many)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS usuario_perfis (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        perfil_id INT NOT NULL,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (perfil_id) REFERENCES perfis_acesso(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_usuario_perfil (usuario_id, perfil_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Whitelist de empresas por usuário (vazio = acesso a todas)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS usuario_empresas_permitidas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        cliente_id INT NOT NULL,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_usuario_empresa (usuario_id, cliente_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 

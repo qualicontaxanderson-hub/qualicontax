@@ -87,7 +87,7 @@
                 </a>
             </li>
             <li>
-                <a href="{{ url_for('modulos.configuracoes') }}" class="rail-link rail-config {% if request.endpoint == 'modulos.configuracoes' %}active{% endif %}" title="Configurações">
+                <a href="{{ url_for('configuracoes.index') }}" class="rail-link rail-config {% if 'configuracoes' in request.endpoint %}active{% endif %}" title="Configurações">
                     <i class="fas fa-cog"></i>
                     <span>Config.</span>
                 </a>

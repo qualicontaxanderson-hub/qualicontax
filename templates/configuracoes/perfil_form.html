@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if perfil else 'Novo' }} Perfil de Acesso{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.perfis') }}" class="back-link">← Perfis de Acesso</a>
+        <h1 class="page-title">{{ 'Editar Perfil' if perfil else 'Novo Perfil de Acesso' }}</h1>
+        <p class="page-subtitle">Marque as permissões que este perfil terá acesso</p>
+    </div>
+</div>
+
+<form method="POST">
+<div class="card mb-4">
+    <div class="card-header"><strong>Identificação</strong></div>
+    <div class="card-body">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label class="form-label">Nome do Perfil *</label>
+                <input type="text" name="nome" class="form-control"
+                       value="{{ perfil.nome if perfil else '' }}"
+                       placeholder="Ex: Fiscal, Contábil Sênior, Apenas Leitura"
+                       required>
+            </div>
+            {% if perfil %}
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <select name="situacao" class="form-control">
+                    <option value="ATIVO"   {{ 'selected' if perfil.situacao == 'ATIVO' }}>ATIVO</option>
+                    <option value="INATIVO" {{ 'selected' if perfil.situacao == 'INATIVO' }}>INATIVO</option>
+                </select>
+            </div>
+            {% endif %}
+        </div>
+        <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <textarea name="descricao" class="form-control" rows="2"
+                      placeholder="Descreva o objetivo deste perfil">{{ perfil.descricao if perfil else '' }}</textarea>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Permissões</strong>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(true)">Marcar todas</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(false)">Desmarcar todas</button>
+        </div>
+    </div>
+    <div class="card-body perm-body">
+        {% for grupo, items in catalog.items() %}
+        <div class="perm-group mb-4">
+            <div class="perm-group-header d-flex align-items-center gap-2 mb-2">
+                <strong>{{ grupo }}</strong>
+                <button type="button" class="btn btn-xs btn-light"
+                        onclick="marcarGrupo(this, true)">Marcar</button>
+                <button type="button" class="btn btn-xs btn-light"
+                        onclick="marcarGrupo(this, false)">Desmarcar</button>
+            </div>
+            <div class="perm-items">
+                {% for cod, label in items.items() %}
+                <label class="perm-item">
+                    <input type="checkbox" name="permissoes" value="{{ cod }}"
+                           {{ 'checked' if cod in perms_perfil }}>
+                    <div class="perm-item-content">
+                        <span class="perm-label">{{ label }}</span>
+                        <span class="perm-code">{{ cod }}</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Salvar Perfil
+    </button>
+    <a href="{{ url_for('configuracoes.perfis') }}" class="btn btn-secondary">Cancelar</a>
+</div>
+</form>
+
+<style>
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.perm-body { padding: 20px; }
+.perm-group { background: #f9fafb; border-radius: 10px; padding: 16px; border: 1px solid #e5e7eb; }
+.perm-group-header { border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; }
+.perm-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.perm-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: #fff;
+             border-radius: 8px; border: 1px solid #e5e7eb; cursor: pointer; transition: all .15s; }
+.perm-item:hover { background: #eff6ff; border-color: #93c5fd; }
+.perm-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; }
+.perm-item-content { display: flex; flex-direction: column; }
+.perm-label { font-size: 0.875rem; font-weight: 500; color: #1f2937; }
+.perm-code  { font-size: 0.7rem; color: #9ca3af; font-family: monospace; }
+.btn-xs { padding: 2px 8px; font-size: 0.75rem; }
+.d-flex { display: flex; }
+.align-items-center { align-items: center; }
+.justify-content-between { justify-content: space-between; }
+.gap-2 { gap: 8px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-4 { margin-bottom: 16px; }
+.form-actions { display: flex; gap: 12px; margin-top: 24px; }
+</style>
+
+<script>
+function marcarTodas(v) {
+    document.querySelectorAll('input[name="permissoes"]').forEach(c => c.checked = v);
+}
+function marcarGrupo(btn, v) {
+    btn.closest('.perm-group').querySelectorAll('input[name="permissoes"]').forEach(c => c.checked = v);
+}
+</script>
+{% endblock %}

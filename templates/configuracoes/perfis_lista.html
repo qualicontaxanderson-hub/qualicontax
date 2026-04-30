@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Perfis de Acesso – Configurações{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
+        <h1 class="page-title">Perfis de Acesso</h1>
+        <p class="page-subtitle">Crie perfis com conjuntos de permissões e atribua-os aos usuários</p>
+    </div>
+    <div>
+        <a href="{{ url_for('configuracoes.perfil_novo') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Perfil
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th>Permissões</th>
+                    <th>Usuários</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in perfis %}
+                <tr>
+                    <td><strong>{{ p.nome }}</strong></td>
+                    <td>{{ p.descricao or '—' }}</td>
+                    <td><span class="badge badge-info">{{ p.qtd_permissoes }}</span></td>
+                    <td><span class="badge badge-secondary">{{ p.qtd_usuarios }}</span></td>
+                    <td>
+                        <span class="status-badge status-{{ 'ativo' if p.situacao == 'ATIVO' else 'inativo' }}">
+                            {{ p.situacao }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}"
+                           class="btn btn-sm btn-secondary" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('configuracoes.perfil_excluir', pid=p.id) }}"
+                              style="display:inline"
+                              onsubmit="return confirm('Excluir o perfil \"{{ p.nome }}\"? Esta ação não pode ser desfeita.')">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar o primeiro perfil</a>.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

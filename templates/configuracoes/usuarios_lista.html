@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Usuários – Configurações{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
+        <h1 class="page-title">Usuários</h1>
+        <p class="page-subtitle">Gerencie os usuários e seus acessos ao sistema</p>
+    </div>
+    <div>
+        <a href="{{ url_for('configuracoes.usuario_novo') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Usuário
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>E-mail</th>
+                    <th>Tipo</th>
+                    <th>Perfis de Acesso</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in usuarios %}
+                <tr>
+                    <td><strong>{{ u.nome }}</strong></td>
+                    <td>{{ u.email }}</td>
+                    <td>
+                        <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
+                            {{ u.tipo_usuario }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if u.perfis %}
+                            {{ u.perfis }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-badge status-{{ 'ativo' if u.situacao == 'ATIVO' else 'inativo' }}">
+                            {{ u.situacao }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
+                           class="btn btn-sm btn-secondary" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <button class="btn btn-sm btn-{{ 'warning' if u.situacao == 'ATIVO' else 'success' }}"
+                                title="{{ 'Desativar' if u.situacao == 'ATIVO' else 'Ativar' }}"
+                                onclick="toggleUsuario({{ u.id }}, this)">
+                            <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">Nenhum usuário cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function toggleUsuario(id, btn) {
+    if (!confirm('Confirmar alteração de status do usuário?')) return;
+    fetch(`/configuracoes/usuarios/${id}/toggle`, {method:'POST',
+        headers:{'X-CSRFToken': document.cookie.match(/csrf_token=([^;]+)/)?.[1]||''}})
+    .then(r=>r.json()).then(d=>{
+        if (d.ok) location.reload();
+        else alert(d.msg || 'Erro ao alterar status.');
+    });
+}
+</script>
+{% endblock %}

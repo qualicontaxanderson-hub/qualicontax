@@ -33,9 +33,3 @@ def legalizacao():
 @login_required
 def analise():
     return render_template('analise/index.html')
-
-
-@modulos.route('/configuracoes/')
-@login_required
-def configuracoes():
-    return render_template('configuracoes/index.html')
