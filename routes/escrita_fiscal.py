@@ -1684,9 +1684,9 @@ def api_executar_importacao_agendada():
                 'skipped': result['skipped'],
                 'log_id': result.get('log_id'),
             }
-        except Exception as exc:
+        except Exception:
             logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
-            erros.append(f'{dep}: {exc}')
+            erros.append(f'Erro ao processar departamento {dep}. Consulte os logs do servidor.')
 
     total_ok = sum(r['ok'] for r in resumo.values())
     total_dup = sum(r['dup'] for r in resumo.values())
