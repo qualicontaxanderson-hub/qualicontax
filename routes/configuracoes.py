@@ -63,7 +63,8 @@ def usuario_novo():
         if not nome or not email or not senha:
             flash('Nome, e-mail e senha são obrigatórios.', 'danger')
             return render_template('configuracoes/usuario_form.html',
-                                   perfis=perfis, clientes=clientes, usuario=None)
+                                   perfis=perfis, clientes=clientes, usuario=None,
+                                   perfis_usuario=set(), empresas_usuario=set())
 
         # Verifica e-mail duplicado
         existe = execute_query(
@@ -72,13 +73,20 @@ def usuario_novo():
         if existe:
             flash('Já existe um usuário com este e-mail.', 'danger')
             return render_template('configuracoes/usuario_form.html',
-                                   perfis=perfis, clientes=clientes, usuario=None)
+                                   perfis=perfis, clientes=clientes, usuario=None,
+                                   perfis_usuario=set(), empresas_usuario=set())
 
         uid = execute_query(
             """INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, situacao, cargo, telefone)
                VALUES (%s, %s, %s, %s, 'ATIVO', %s, %s)""",
             (nome, email, hash_password(senha), tipo, cargo, telefone),
         )
+
+        if not uid:
+            flash('Erro ao criar o usuário. Verifique os dados e tente novamente.', 'danger')
+            return render_template('configuracoes/usuario_form.html',
+                                   perfis=perfis, clientes=clientes, usuario=None,
+                                   perfis_usuario=set(), empresas_usuario=set())
 
         # Perfis
         for pid in perfis_sel:

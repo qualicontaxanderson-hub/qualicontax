@@ -91,6 +91,58 @@ os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
 # Garante que as tabelas necessárias existem (cria se necessário)
 from utils.db_helper import execute_query as _execute_query
 
+# ---- Tabela principal de Usuários ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        senha_hash VARCHAR(512) NOT NULL,
+        tipo_usuario ENUM('ADMIN','GERENTE','CONTADOR','ASSISTENTE','ESTAGIARIO') NOT NULL DEFAULT 'ASSISTENTE',
+        situacao ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO',
+        cpf VARCHAR(14) NULL,
+        telefone VARCHAR(20) NULL,
+        departamento_id INT NULL,
+        cargo VARCHAR(100) NULL,
+        capacidade_tarefas INT NOT NULL DEFAULT 10,
+        data_admissao DATE NULL,
+        foto_perfil VARCHAR(500) NULL,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_email (email),
+        INDEX idx_tipo (tipo_usuario),
+        INDEX idx_situacao (situacao)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Incremental: garante colunas que podem estar ausentes em DBs mais antigos
+for _col_name, _col_def in [
+    ('cpf',               'VARCHAR(14) NULL'),
+    ('telefone',          'VARCHAR(20) NULL'),
+    ('departamento_id',   'INT NULL'),
+    ('cargo',             'VARCHAR(100) NULL'),
+    ('capacidade_tarefas','INT NOT NULL DEFAULT 10'),
+    ('data_admissao',     'DATE NULL'),
+    ('foto_perfil',       'VARCHAR(500) NULL'),
+    ('tipo_usuario',      "ENUM('ADMIN','GERENTE','CONTADOR','ASSISTENTE','ESTAGIARIO') NOT NULL DEFAULT 'ASSISTENTE'"),
+    ('situacao',          "ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO'"),
+    ('criado_em',         'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'),
+    ('atualizado_em',     'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
+]:
+    try:
+        _col_exists = _execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = %s",
+            (_col_name,), fetch=True, fetch_one=True,
+        ) or {}
+        if _col_exists.get('cnt', 0) == 0:
+            _execute_query(
+                f"ALTER TABLE usuarios ADD COLUMN {_col_name} {_col_def}",
+                fetch=False,
+            )
+    except Exception:
+        pass
+
 # Tabelas do módulo Plano de Contas
 _execute_query("""
     CREATE TABLE IF NOT EXISTS planos_contas (
