@@ -1745,6 +1745,47 @@ def api_log_importacoes():
         r['iniciado_em'] = str(r['iniciado_em']) if r.get('iniciado_em') else None
         r['concluido_em'] = str(r['concluido_em']) if r.get('concluido_em') else None
     return jsonify({'rows': rows})
+
+
+@escrita_fiscal.route('/conf-compras/api/horario-agendado', methods=['GET'])
+@login_required
+def api_horario_agendado():
+    """Retorna o horário atual do job de importação automática."""
+    from utils.scheduler import get_scheduled_time
+    return jsonify(get_scheduled_time())
+
+
+@escrita_fiscal.route('/conf-compras/api/horario-agendado', methods=['POST'])
+@login_required
+def api_configurar_horario_agendado():
+    """Atualiza o horário do job de importação automática (somente administradores).
+
+    Body JSON: {"hora": 0-23, "minuto": 0-59}
+    """
+    usuario = current_user
+    if not usuario.is_authenticated or not usuario.is_admin():
+        return jsonify({'error': 'Acesso restrito a administradores.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        hora = int(data.get('hora', -1))
+        minuto = int(data.get('minuto', -1))
+        if not (0 <= hora <= 23 and 0 <= minuto <= 59):
+            raise ValueError()
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Hora (0-23) e minuto (0-59) são obrigatórios e devem ser válidos.'}), 400
+
+    from utils.scheduler import reschedule
+    try:
+        reschedule(hora, minuto)
+    except Exception as exc:
+        logger.exception('api_configurar_horario_agendado: erro ao reagendar')
+        return jsonify({'error': str(exc)}), 500
+
+    logger.info('Horário do scheduler atualizado para %02d:%02d por usuário %s', hora, minuto, usuario.id)
+    return jsonify({'ok': True, 'hora': hora, 'minuto': minuto, 'texto': f'{hora:02d}:{minuto:02d}'})
+
+
 @login_required
 def excluir_nfe(nfe_id):
     execute_query("DELETE FROM nfe_importacoes WHERE id = %s", (nfe_id,))

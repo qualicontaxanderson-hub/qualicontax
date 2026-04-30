@@ -531,6 +531,14 @@ execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
+execute_query("""
+    CREATE TABLE IF NOT EXISTS app_config (
+        chave   VARCHAR(100) PRIMARY KEY,
+        valor   TEXT NOT NULL,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
 
 # Inicia o scheduler de tarefas agendadas (importação automática às 23:59).
 # A função init_scheduler usa um lock de arquivo para garantir que apenas um
