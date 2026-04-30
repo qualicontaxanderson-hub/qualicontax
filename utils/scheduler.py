@@ -1,9 +1,10 @@
-"""Tarefas agendadas — importação automática de XMLs do Dropbox às 23:59.
+"""Tarefas agendadas — importação automática de XMLs do Dropbox em horário configurável.
 
 Utiliza APScheduler com BackgroundScheduler.  Para evitar que o scheduler
 seja iniciado em todos os workers do gunicorn (o que causaria execuções
 duplicadas), usamos um arquivo de trava (lock file) no sistema de ficheiros.
 O primeiro processo que adquirir o lock será o único a inicializar o scheduler.
+O horário padrão é 23:59 (BRT) e pode ser alterado pela interface administrativa.
 """
 import fcntl
 import logging

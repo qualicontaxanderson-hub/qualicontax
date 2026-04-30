@@ -1775,14 +1775,16 @@ def api_configurar_horario_agendado():
     except (TypeError, ValueError):
         return jsonify({'error': 'Hora (0-23) e minuto (0-59) são obrigatórios e devem ser válidos.'}), 400
 
-    from utils.scheduler import reschedule
+    from utils.scheduler import reschedule, get_scheduled_time
+    horario_anterior = get_scheduled_time().get('texto', '—')
     try:
         reschedule(hora, minuto)
-    except Exception as exc:
+    except Exception:
         logger.exception('api_configurar_horario_agendado: erro ao reagendar')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Erro interno ao atualizar o horário. Tente novamente.'}), 500
 
-    logger.info('Horário do scheduler atualizado para %02d:%02d por usuário %s', hora, minuto, usuario.id)
+    logger.info('Horário do scheduler atualizado de %s para %02d:%02d por usuário %s',
+                horario_anterior, hora, minuto, usuario.id)
     return jsonify({'ok': True, 'hora': hora, 'minuto': minuto, 'texto': f'{hora:02d}:{minuto:02d}'})
 
 
