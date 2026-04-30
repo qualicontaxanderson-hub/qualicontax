@@ -75,7 +75,7 @@
                 {% for p in perfis %}
                 <label class="checkbox-item">
                     <input type="checkbox" name="perfis" value="{{ p.id }}"
-                           {{ 'checked' if p.id in (perfis_usuario or set()) }}>
+                           {{ 'checked' if p.id in perfis_usuario }}>
                     <span>{{ p.nome }}</span>
                 </label>
                 {% else %}
@@ -100,7 +100,7 @@
             {% for c in clientes %}
             <label class="checkbox-item">
                 <input type="checkbox" name="empresas" value="{{ c.id }}" class="emp-check"
-                       {{ 'checked' if c.id in (empresas_usuario or set()) }}>
+                       {{ 'checked' if c.id in empresas_usuario }}>
                 <span>{{ c.nome_razao_social }}</span>
             </label>
             {% else %}
