@@ -248,6 +248,16 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
             style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
         <i class="fab fa-dropbox"></i> Importar XML
     </button>
+    <button onclick="openLogModal()"
+            title="Ver histórico de importações agendadas"
+            style="background:rgba(100,116,139,.12);color:#475569;border:1.5px solid rgba(100,116,139,.25);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <i class="fas fa-history"></i> Log
+    </button>
+    <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
+            title="Executa agora o mesmo processo que roda às 23:59 (somente administradores)"
+            style="background:rgba(5,150,105,.9);color:#fff;border:1.5px solid rgba(255,255,255,.2);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <i class="fas fa-play-circle"></i> Executar Agora
+    </button>
 </div>
 
 <!-- KPIs -->
@@ -548,9 +558,59 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 </div>
 </div>
 
-{% endblock %}
+<!-- ===================== MODAL: Log de Importações ===================== -->
+<div id="logModalOverlay" onclick="closeLogModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,900px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1e293b;"><i class="fas fa-history" style="margin-right:8px;color:#6366f1;"></i>Log de Importações</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="carregarLog()" id="btnRecarregarLog"
+                    style="background:#f1f5f9;border:1px solid #e2e8f0;padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:#475569;">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button onclick="closeLogModal()"
+                    style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+        </div>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="logTableWrap">
+        <p style="color:#94a3b8;text-align:center;margin-top:40px;">Carregando...</p>
+    </div>
+</div>
+</div>
 
-{% block extra_js %}
+<!-- ===================== MODAL: Detalhe de uma importação ===================== -->
+<div id="logDetalheOverlay" onclick="closeLogDetalhe()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9100;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,820px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 id="logDetalheTitle" style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"><i class="fas fa-file-alt" style="margin-right:8px;color:#6366f1;"></i>Detalhe da Importação</h3>
+        <button onclick="closeLogDetalhe()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="logDetalheBody">
+        <p style="color:#94a3b8;text-align:center;">Carregando detalhes...</p>
+    </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Resultado Executar Agora ===================== -->
+<div id="execAgendadaOverlay" onclick="closeExecAgendada()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9200;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,700px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"><i class="fas fa-play-circle" style="margin-right:8px;color:#059669;"></i>Resultado da Importação</h3>
+        <button onclick="closeExecAgendada()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="execAgendadaBody">
+        <p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando...</p>
+    </div>
+</div>
+</div>
+
+{% endblock %}
 <script>
 // ---- global state ----
 let currentTab = 'notas';
@@ -1654,6 +1714,221 @@ function executarImportacaoDropbox(_retryCount, _accumulated) {
             result.className = 'err';
             result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão. Verifique sua internet e tente novamente.';
         }
+    });
+}
+
+// ---- Log de Importações ----
+function openLogModal() {
+    document.getElementById('logModalOverlay').style.display = 'flex';
+    carregarLog();
+}
+function closeLogModal() {
+    document.getElementById('logModalOverlay').style.display = 'none';
+}
+function closeLogDetalhe() {
+    document.getElementById('logDetalheOverlay').style.display = 'none';
+}
+function closeExecAgendada() {
+    document.getElementById('execAgendadaOverlay').style.display = 'none';
+}
+
+const _RESULTADO_LABEL = {
+    importado: {label:'Importado', color:'#059669', bg:'#d1fae5'},
+    duplicata: {label:'Duplicata', color:'#d97706', bg:'#fef3c7'},
+    erro:      {label:'Erro',      color:'#dc2626', bg:'#fee2e2'},
+    ignorado:  {label:'Ignorado',  color:'#6b7280', bg:'#f3f4f6'},
+    evento:    {label:'Evento',    color:'#7c3aed', bg:'#ede9fe'},
+};
+
+function _badgeRes(r) {
+    const s = _RESULTADO_LABEL[r] || {label: r, color:'#64748b', bg:'#f1f5f9'};
+    return `<span style="background:${s.bg};color:${s.color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${s.label}</span>`;
+}
+
+function carregarLog() {
+    document.getElementById('logTableWrap').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:40px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
+    fetch('{{ url_for("escrita_fiscal.api_log_importacoes") }}?limit=60')
+        .then(r => r.json())
+        .then(data => {
+            const rows = data.rows || [];
+            if (!rows.length) {
+                document.getElementById('logTableWrap').innerHTML =
+                    '<p style="color:#94a3b8;text-align:center;margin-top:40px;">Nenhum registro encontrado.</p>';
+                return;
+            }
+            const _origemColor = {agendado:'#6366f1', manual:'#059669'};
+            let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Data/Hora</th>
+                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Dept.</th>
+                <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">Origem</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">Duração</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;"></th>
+              </tr></thead><tbody>`;
+            rows.forEach(r => {
+                const dur = (r.iniciado_em && r.concluido_em)
+                    ? (() => {
+                        const s = Math.round((new Date(r.concluido_em) - new Date(r.iniciado_em)) / 1000);
+                        return s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
+                      })()
+                    : '—';
+                const oc = _origemColor[r.origem] || '#64748b';
+                html += `<tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                  <td style="padding:8px 10px;color:#475569;">${(r.iniciado_em||'').replace('T',' ').slice(0,16)}</td>
+                  <td style="padding:8px 10px;font-weight:600;">${r.departamento}</td>
+                  <td style="padding:8px 6px;text-align:center;">
+                    <span style="background:${oc}22;color:${oc};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${r.origem}</span>
+                  </td>
+                  <td style="padding:8px 6px;text-align:center;color:#059669;font-weight:700;">${r.ok}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#d97706;">${r.dup}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#dc2626;">${r.err}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#6b7280;">${r.skipped}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#94a3b8;font-size:11px;">${dur}</td>
+                  <td style="padding:8px 6px;text-align:center;">
+                    <button onclick="abrirDetalhe(${r.id})" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer;color:#4f46e5;font-weight:600;">
+                      <i class="fas fa-search"></i> Ver
+                    </button>
+                  </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('logTableWrap').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('logTableWrap').innerHTML =
+                '<p style="color:#dc2626;text-align:center;">Erro ao carregar log.</p>';
+        });
+}
+
+function abrirDetalhe(logId) {
+    document.getElementById('logDetalheTitle').innerHTML =
+        `<i class="fas fa-file-alt" style="margin-right:8px;color:#6366f1;"></i>Detalhe — Log #${logId}`;
+    document.getElementById('logDetalheBody').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
+    document.getElementById('logDetalheOverlay').style.display = 'flex';
+    fetch(`{{ url_for("escrita_fiscal.api_log_importacoes") }}?log_id=${logId}`)
+        .then(r => r.json())
+        .then(data => {
+            const row = data.row || {};
+            const files = Array.isArray(row.detalhes) ? row.detalhes : [];
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px;">
+              <div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#059669;">${row.ok||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Importados</div>
+              </div>
+              <div style="background:#fffbeb;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#d97706;">${row.dup||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Duplicatas</div>
+              </div>
+              <div style="background:#fef2f2;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#dc2626;">${row.err||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Erros</div>
+              </div>
+              <div style="background:#f9fafb;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#6b7280;">${row.skipped||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Ignorados</div>
+              </div>
+            </div>`;
+            if (!files.length) {
+                html += '<p style="color:#94a3b8;text-align:center;">Sem detalhes por arquivo disponíveis.</p>';
+            } else {
+                html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+                    <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Arquivo</th>
+                    <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Empresa</th>
+                    <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">Resultado</th>
+                    <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Detalhe</th>
+                  </tr></thead><tbody>`;
+                files.forEach(f => {
+                    html += `<tr style="border-bottom:1px solid #f3f4f6;">
+                      <td style="padding:5px 8px;font-family:monospace;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.arquivo||''}">${(f.arquivo||'').slice(0,32)}${(f.arquivo||'').length>32?'…':''}</td>
+                      <td style="padding:5px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.empresa||''}">${f.empresa||''}</td>
+                      <td style="padding:5px 8px;text-align:center;">${_badgeRes(f.resultado)}</td>
+                      <td style="padding:5px 8px;color:#6b7280;font-size:11px;">${f.detalhe||''}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            document.getElementById('logDetalheBody').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('logDetalheBody').innerHTML =
+                '<p style="color:#dc2626;text-align:center;">Erro ao carregar detalhes.</p>';
+        });
+}
+
+// ---- Executar Importação Agora ----
+function executarImportacaoAgendada() {
+    const btn = document.getElementById('btnExecAgendada');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    document.getElementById('execAgendadaBody').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando todos os departamentos... isso pode levar alguns minutos.</p>';
+    document.getElementById('execAgendadaOverlay').style.display = 'flex';
+
+    fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+        if (data.error) {
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<div style="background:#fef2f2;border-radius:10px;padding:16px;color:#dc2626;font-weight:600;">${data.error}</div>`;
+            return;
+        }
+        const resumo = data.resumo || {};
+        const deps = Object.keys(resumo).filter(d => resumo[d].ok + resumo[d].dup + resumo[d].err + resumo[d].skipped > 0);
+        let html = `<div style="background:#f0fdf4;border-radius:10px;padding:12px 16px;margin-bottom:16px;color:#15803d;font-weight:600;font-size:13px;">
+            <i class="fas fa-check-circle"></i> ${data.msg || 'Concluído.'}
+        </div>`;
+        if (deps.length) {
+            html += `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Departamento</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">Log</th>
+              </tr></thead><tbody>`;
+            deps.forEach(d => {
+                const r = resumo[d];
+                html += `<tr style="border-bottom:1px solid #f1f5f9;">
+                  <td style="padding:7px 10px;font-weight:600;">${d}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#059669;font-weight:700;">${r.ok}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#d97706;">${r.dup}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#dc2626;">${r.err}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#6b7280;">${r.skipped}</td>
+                  <td style="padding:7px 6px;text-align:center;">
+                    ${r.log_id ? `<button onclick="abrirDetalhe(${r.log_id})" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer;color:#4f46e5;font-weight:600;"><i class="fas fa-search"></i> Ver</button>` : '—'}
+                  </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p style="color:#94a3b8;text-align:center;">Nenhum arquivo processado (pastas NOVO vazias).</p>';
+        }
+        if (data.erros && data.erros.length) {
+            html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
+                <strong>Erros:</strong> ${data.erros.join('<br>')}
+            </div>`;
+        }
+        document.getElementById('execAgendadaBody').innerHTML = html;
+        applyFilters();
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+        document.getElementById('execAgendadaBody').innerHTML =
+            '<p style="color:#dc2626;text-align:center;">Erro de conexão.</p>';
     });
 }
 

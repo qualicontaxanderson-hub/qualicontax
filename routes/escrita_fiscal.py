@@ -8,6 +8,7 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify,
 )
+from flask_login import current_user
 from utils.auth_helper import login_required
 from utils.db_helper import execute_query, execute_many
 from utils.nfe_parser import parse_nfe_xml
@@ -1377,23 +1378,41 @@ def api_importar_dropbox():
     })
 
 
-def importar_departamento_background(departamento: str) -> dict:
+def importar_departamento_background(departamento: str, origem: str = 'agendado',
+                                      usuario_id: int = None) -> dict:
     """Executa a importação completa de um departamento sem contexto HTTP.
 
     Processa todos os arquivos XML da pasta NOVO do departamento, fazendo
     múltiplas passagens (lotes de ``_DROPBOX_BATCH_LIMIT``) até que não haja
     mais arquivos a processar.  Não aplica filtro de empresa/grupo.
 
-    Retorna um dict com o sumário: ok, dup, err, moved_ok, moved_err, skipped.
-    Pensado para uso por tarefas agendadas (scheduler).
+    Retorna um dict com o sumário: ok, dup, err, moved_ok, moved_err, skipped,
+    log_id (id do registro em scheduler_import_log), file_logs (lista de detalhes).
+    Pensado para uso por tarefas agendadas (scheduler) e execução manual.
     """
+    import json as _json
+
     if not dropbox_sync.is_configured():
         logger.warning('importar_departamento_background: Dropbox não configurado, abortando.')
-        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
 
     if departamento not in dropbox_sync.DEPARTAMENTOS:
         logger.warning('importar_departamento_background: departamento inválido %r', departamento)
-        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
+
+    # Cria registro de auditoria antes de iniciar
+    iniciado_em = datetime.now()
+    log_id = None
+    try:
+        log_id = execute_query(
+            "INSERT INTO scheduler_import_log (iniciado_em, departamento, origem, usuario_id) "
+            "VALUES (%s, %s, %s, %s)",
+            (iniciado_em, departamento, origem, usuario_id), fetch=False,
+        )
+    except Exception:
+        logger.exception('[agendado] Falha ao criar registro de log para %r', departamento)
+
+    file_logs: list = []  # [{arquivo, resultado, empresa, detalhe}]
 
     svc = dropbox_sync._service
     pasta_novo = svc.pasta_novo(departamento)
@@ -1517,6 +1536,8 @@ def importar_departamento_background(departamento: str) -> dict:
                         break
                 if _ev_nome:
                     totals['err'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
+                                      'empresa': _ev_nome or '', 'detalhe': f'XML de evento: {_ev_tag}'})
                     try:
                         pasta_err_ev = _get_or_create_pasta(
                             svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
@@ -1525,6 +1546,9 @@ def importar_departamento_background(departamento: str) -> dict:
                             batch_moved += 1
                     except DropboxAuthError:
                         logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
+                else:
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
+                                      'empresa': '', 'detalhe': f'XML de evento sem empresa identificada: {_ev_tag} — mantido em NOVO'})
                 continue
 
             try:
@@ -1553,14 +1577,21 @@ def importar_departamento_background(departamento: str) -> dict:
                     logger.info('[agendado] %s: empresa não cadastrada (dest_cnpj=%r, nome=%r) → NOVO',
                                 info['name'], _raw_dest_cnpj, _dest_nome_xml)
                     totals['skipped'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
+                                      'empresa': _dest_nome_xml or _raw_dest_cnpj,
+                                      'detalhe': f'Empresa não cadastrada (CNPJ: {_raw_dest_cnpj})'})
                     continue
 
                 result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
                                    cliente_id=_cli, vinculos_cache=_vinculos_cache)
                 if result == 'dup':
                     totals['dup'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'duplicata',
+                                      'empresa': _nome, 'detalhe': 'NF-e já importada anteriormente'})
                 else:
                     totals['ok'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
+                                      'empresa': _nome, 'detalhe': 'Importado com sucesso → IMPORTADOS'})
 
                 try:
                     pasta_imp = _get_or_create_pasta(
@@ -1576,9 +1607,12 @@ def importar_departamento_background(departamento: str) -> dict:
                 break
             except Exception as exc:
                 totals['err'] += 1
+                _detalhe_err = str(exc)[:200]
                 logger.exception('[agendado] Erro ao processar %s: %s', info['name'], exc)
                 _err_empresa = _nome or 'DESCONHECIDO'
                 _err_num = _num if _nome else None
+                file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
+                                  'empresa': _err_empresa, 'detalhe': _detalhe_err})
                 try:
                     pasta_err = _get_or_create_pasta(
                         svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
@@ -1595,10 +1629,122 @@ def importar_departamento_background(departamento: str) -> dict:
             break
 
     logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
+
+    # Persiste resultado no log de auditoria
+    concluido_em = datetime.now()
+    try:
+        execute_query(
+            "UPDATE scheduler_import_log SET concluido_em=%s, ok=%s, dup=%s, err=%s, "
+            "moved_ok=%s, moved_err=%s, skipped=%s, detalhes=%s WHERE id=%s",
+            (concluido_em, totals['ok'], totals['dup'], totals['err'],
+             totals['moved_ok'], totals['moved_err'], totals['skipped'],
+             _json.dumps(file_logs, default=str, ensure_ascii=False),
+             log_id),
+            fetch=False,
+        )
+    except Exception:
+        logger.exception('[agendado] Falha ao atualizar log_id=%s', log_id)
+
+    totals['log_id'] = log_id
+    totals['file_logs'] = file_logs
     return totals
 
 
-@escrita_fiscal.route('/conf-compras/excluir/<int:nfe_id>', methods=['POST'])
+# ---------------------------------------------------------------------------
+# Execução manual do job de importação (para testes / auditoria)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
+@login_required
+def api_executar_importacao_agendada():
+    """Dispara imediatamente a importação de todos os departamentos (equivale ao job das 23:59).
+
+    Restrito a usuários administradores.  A resposta inclui o sumário por
+    departamento e o log_id de cada execução para consulta posterior.
+    """
+    usuario = current_user
+    if not usuario.is_authenticated or not usuario.is_admin():
+        return jsonify({'error': 'Acesso restrito a administradores.'}), 403
+
+    if not dropbox_sync.is_configured():
+        return jsonify({'error': 'Dropbox não configurado.'}), 400
+
+    usuario_id = getattr(usuario, 'id', None)
+    resumo = {}
+    erros = []
+
+    for dep in dropbox_sync.DEPARTAMENTOS:
+        try:
+            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
+            resumo[dep] = {
+                'ok': result['ok'],
+                'dup': result['dup'],
+                'err': result['err'],
+                'moved_ok': result['moved_ok'],
+                'moved_err': result['moved_err'],
+                'skipped': result['skipped'],
+                'log_id': result.get('log_id'),
+            }
+        except Exception as exc:
+            logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
+            erros.append(f'{dep}: {exc}')
+
+    total_ok = sum(r['ok'] for r in resumo.values())
+    total_dup = sum(r['dup'] for r in resumo.values())
+    total_err = sum(r['err'] for r in resumo.values())
+    total_skipped = sum(r['skipped'] for r in resumo.values())
+
+    return jsonify({
+        'ok': True,
+        'resumo': resumo,
+        'erros': erros,
+        'msg': (
+            f'{total_ok} importado(s), {total_dup} duplicata(s), '
+            f'{total_err} erro(s), {total_skipped} ignorado(s) '
+            f'em {len(dropbox_sync.DEPARTAMENTOS)} departamento(s).'
+        ),
+    })
+
+
+@escrita_fiscal.route('/conf-compras/api/log-importacoes')
+@login_required
+def api_log_importacoes():
+    """Retorna os últimos registros do log de importação agendada/manual.
+
+    Parâmetros opcionais: limit (padrão 50), log_id (para buscar detalhes de uma entrada específica).
+    """
+    import json as _json
+
+    log_id = request.args.get('log_id', type=int)
+    if log_id:
+        row = execute_query(
+            "SELECT id, iniciado_em, concluido_em, departamento, origem, usuario_id, "
+            "ok, dup, err, moved_ok, moved_err, skipped, detalhes "
+            "FROM scheduler_import_log WHERE id = %s",
+            (log_id,), fetch=True, fetch_one=True,
+        )
+        if not row:
+            return jsonify({'error': 'Log não encontrado'}), 404
+        if row.get('detalhes') and isinstance(row['detalhes'], str):
+            try:
+                row['detalhes'] = _json.loads(row['detalhes'])
+            except Exception:
+                pass
+        row['iniciado_em'] = str(row['iniciado_em']) if row.get('iniciado_em') else None
+        row['concluido_em'] = str(row['concluido_em']) if row.get('concluido_em') else None
+        return jsonify({'row': row})
+
+    limit = min(request.args.get('limit', 50, type=int), 200)
+    rows = execute_query(
+        "SELECT id, iniciado_em, concluido_em, departamento, origem, "
+        "ok, dup, err, moved_ok, moved_err, skipped "
+        "FROM scheduler_import_log "
+        "ORDER BY iniciado_em DESC LIMIT %s",
+        (limit,), fetch=True,
+    ) or []
+    for r in rows:
+        r['iniciado_em'] = str(r['iniciado_em']) if r.get('iniciado_em') else None
+        r['concluido_em'] = str(r['concluido_em']) if r.get('concluido_em') else None
+    return jsonify({'rows': rows})
 @login_required
 def excluir_nfe(nfe_id):
     execute_query("DELETE FROM nfe_importacoes WHERE id = %s", (nfe_id,))

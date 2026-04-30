@@ -512,6 +512,25 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
+execute_query("""
+    CREATE TABLE IF NOT EXISTS scheduler_import_log (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        iniciado_em DATETIME NOT NULL,
+        concluido_em DATETIME,
+        departamento VARCHAR(60) NOT NULL,
+        origem      VARCHAR(20) NOT NULL DEFAULT 'agendado',
+        usuario_id  INT,
+        ok          INT NOT NULL DEFAULT 0,
+        dup         INT NOT NULL DEFAULT 0,
+        err         INT NOT NULL DEFAULT 0,
+        moved_ok    INT NOT NULL DEFAULT 0,
+        moved_err   INT NOT NULL DEFAULT 0,
+        skipped     INT NOT NULL DEFAULT 0,
+        detalhes    LONGTEXT,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
 
 # Inicia o scheduler de tarefas agendadas (importação automática às 23:59).
 # A função init_scheduler usa um lock de arquivo para garantir que apenas um
