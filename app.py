@@ -115,7 +115,9 @@ _execute_query("""
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 """, fetch=False)
 
-# Incremental: garante colunas que podem estar ausentes em DBs mais antigos
+# Incremental: garante colunas que podem estar ausentes em DBs mais antigos.
+# NOTA: _col_name e _col_def são sempre valores literais da lista abaixo (nunca
+# vêm de entrada externa), portanto o uso de f-string no ALTER TABLE é seguro.
 for _col_name, _col_def in [
     ('cpf',               'VARCHAR(14) NULL'),
     ('telefone',          'VARCHAR(20) NULL'),
