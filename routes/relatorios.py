@@ -1,6 +1,6 @@
 """Rotas de Relatórios"""
 from flask import Blueprint, render_template, request
-from utils.auth_helper import login_required
+from utils.auth_helper import login_required, permission_required
 from utils.db_helper import execute_query
 from collections import defaultdict
 from datetime import datetime
@@ -105,14 +105,14 @@ def _build_despesas_tree(rows):
 
 
 @relatorios.route('/relatorios')
-@login_required
+@permission_required('relatorios.index')
 def index():
     """Página principal de relatórios"""
     return render_template('relatorios/index.html')
 
 
 @relatorios.route('/relatorios/clientes')
-@login_required
+@permission_required('relatorios.clientes')
 def clientes_report():
     """Relatório de clientes"""
     # Filtros
@@ -287,7 +287,7 @@ def obrigacoes_report():
 
 
 @relatorios.route('/relatorios/conf_despesas')
-@login_required
+@permission_required('relatorios.conf_despesas')
 def conf_despesas():
     """Relatório de Conferência de Despesas por Categoria — sempre consulta dados ao vivo."""
     today = datetime.today()

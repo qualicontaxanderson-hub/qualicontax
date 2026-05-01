@@ -59,3 +59,24 @@ def admin_required(f):
             return redirect(url_for('dashboard.index'))
         return f(*args, **kwargs)
     return decorated_function
+
+
+def permission_required(codigo):
+    """
+    Decorator para proteger rotas que requerem uma permissão específica.
+
+    ADMINs sempre têm acesso total; para os demais o código de permissão
+    deve constar nos perfis vinculados ao usuário.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Por favor, faça login para acessar esta página.', 'warning')
+                return redirect(url_for('auth.login'))
+            if not current_user.has_permission(codigo):
+                flash('Você não tem permissão para acessar esta página.', 'danger')
+                return redirect(url_for('dashboard.index'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator

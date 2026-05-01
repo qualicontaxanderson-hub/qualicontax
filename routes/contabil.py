@@ -1,6 +1,7 @@
 """Rotas para o módulo Contábil - Conciliação Bancária"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from utils.auth_helper import permission_required
 import os
 
 # Cria Blueprint primeiro (antes de importar models)
@@ -89,14 +90,14 @@ except Exception as e:
 
 
 @contabil.route('/')
-@login_required
+@permission_required('contabil.index')
 def index():
     """Página principal do módulo contábil"""
     return render_template('contabil/index.html')
 
 
 @contabil.route('/plano_contas')
-@login_required
+@permission_required('contabil.plano_contas')
 def plano_contas():
     """Lista grupos/planos de contas"""
     grupo_id = request.args.get('grupo_id')
@@ -313,7 +314,7 @@ def importar_plano_contas(plano_id):
 
 
 @contabil.route('/conciliacoes')
-@login_required
+@permission_required('contabil.conciliacoes')
 def conciliacoes():
     """Lista todas as conciliações bancárias"""
     cliente_id = request.args.get('cliente_id')

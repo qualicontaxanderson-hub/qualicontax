@@ -1,7 +1,7 @@
 """Rotas de Grupos de Clientes - CRUD completo"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
-from utils.auth_helper import login_required
+from utils.auth_helper import login_required, permission_required
 from models.grupo_cliente import GrupoCliente
 from models.cliente import Cliente
 
@@ -9,7 +9,7 @@ grupos = Blueprint('grupos', __name__)
 
 
 @grupos.route('/grupos')
-@login_required
+@permission_required('grupos.index')
 def index():
     """Lista todos os grupos"""
     try:

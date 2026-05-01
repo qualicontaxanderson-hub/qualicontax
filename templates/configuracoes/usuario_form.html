@@ -51,8 +51,8 @@
             <div class="form-group">
                 <label class="form-label">Tipo de Usuário</label>
                 <select name="tipo_usuario" class="form-control">
-                    {% for t in ['ADMIN','GERENTE','CONTADOR','ASSISTENTE','ESTAGIARIO'] %}
-                    <option value="{{ t }}" {{ 'selected' if usuario and usuario.tipo_usuario == t }}>{{ t }}</option>
+                    {% for t in ['ASSISTENTE','ESTAGIARIO','CONTADOR','GERENTE','ADMIN'] %}
+                    <option value="{{ t }}" {{ 'selected' if (usuario and usuario.tipo_usuario == t) or (not usuario and t == 'ASSISTENTE') }}>{{ t }}</option>
                     {% endfor %}
                 </select>
                 <small class="form-text text-muted">ADMIN tem acesso total e ignora perfis de permissão.</small>

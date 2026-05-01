@@ -1,35 +1,35 @@
 """Rotas das páginas iniciais dos módulos sem blueprint próprio."""
 from flask import Blueprint, render_template
-from utils.auth_helper import login_required
+from utils.auth_helper import login_required, permission_required
 
 modulos = Blueprint('modulos', __name__)
 
 
 @modulos.route('/cadastros/')
-@login_required
+@permission_required('clientes.index')
 def cadastros():
     return render_template('cadastros/index.html')
 
 
 @modulos.route('/comercial/')
-@login_required
+@permission_required('modulos.comercial')
 def comercial():
     return render_template('comercial/index.html')
 
 
 @modulos.route('/dp/')
-@login_required
+@permission_required('modulos.dp')
 def dp():
     return render_template('dp/index.html')
 
 
 @modulos.route('/legalizacao/')
-@login_required
+@permission_required('modulos.legalizacao')
 def legalizacao():
     return render_template('legalizacao/index.html')
 
 
 @modulos.route('/analise/')
-@login_required
+@permission_required('modulos.analise')
 def analise():
     return render_template('analise/index.html')

@@ -1,6 +1,6 @@
 """Rotas de Contratos"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from utils.auth_helper import login_required
+from utils.auth_helper import login_required, permission_required
 from utils.db_helper import execute_query
 from models.cliente import Cliente
 
@@ -8,7 +8,7 @@ contratos = Blueprint('contratos', __name__)
 
 
 @contratos.route('/contratos')
-@login_required
+@permission_required('contratos.list_contratos')
 def list_contratos():
     """Lista contratos"""
     page = request.args.get('page', 1, type=int)

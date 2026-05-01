@@ -9,8 +9,7 @@ from flask import (
     flash, jsonify,
 )
 from flask_login import current_user
-from utils.auth_helper import login_required
-from utils.db_helper import execute_query, execute_many
+from utils.auth_helper import login_required, permission_required
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
 from utils.dropbox_sync import DropboxAuthError, DropboxError
@@ -230,7 +229,7 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
 # Landing page
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/')
-@login_required
+@permission_required('escrita_fiscal.index')
 def index():
     return render_template('escrita_fiscal/index.html', is_admin=current_user.is_admin())
 
@@ -239,7 +238,7 @@ def index():
 # Conferência de Compras — página principal
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/')
-@login_required
+@permission_required('escrita_fiscal.conf_compras')
 def conf_compras():
     empresas = _get_empresas()
     grupos = _get_grupos()
@@ -1874,7 +1873,7 @@ def excluir_lote():
 # Catálogo de Produtos — listagem
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/produtos-catalogo/')
-@login_required
+@permission_required('escrita_fiscal.produtos_catalogo')
 def produtos_catalogo():
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
@@ -2200,7 +2199,7 @@ def api_vincular_todos():
 # Memorizações — listagem
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/memorizacoes/')
-@login_required
+@permission_required('escrita_fiscal.memorizacoes')
 def memorizacoes():
     rows = execute_query(
         """SELECT v.id, v.cliente_id, v.grupo_id, v.ramo_atividade_id,

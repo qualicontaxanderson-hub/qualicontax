@@ -1,9 +1,8 @@
 """Rotas do módulo Configurações — Usuários e Perfis de Acesso"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
-from utils.auth_helper import login_required, admin_required
+from utils.auth_helper import login_required, admin_required, permission_required, hash_password
 from utils.db_helper import execute_query
-from utils.auth_helper import hash_password
 from utils.permissions import PERMISSION_CATALOG
 
 configuracoes = Blueprint('configuracoes', __name__, url_prefix='/configuracoes')
@@ -13,7 +12,7 @@ configuracoes = Blueprint('configuracoes', __name__, url_prefix='/configuracoes'
 # Index
 # ---------------------------------------------------------------------------
 @configuracoes.route('/')
-@login_required
+@permission_required('configuracoes.index')
 def index():
     return render_template('configuracoes/index.html')
 

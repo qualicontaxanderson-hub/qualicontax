@@ -1,7 +1,7 @@
 """Rotas de Clientes - CRUD completo"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
-from utils.auth_helper import login_required
+from utils.auth_helper import login_required, permission_required
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente
@@ -12,7 +12,7 @@ clientes = Blueprint('clientes', __name__)
 
 
 @clientes.route('/clientes')
-@login_required
+@permission_required('clientes.index')
 def index():
     """Lista todos os clientes com filtros e paginação"""
     try:
