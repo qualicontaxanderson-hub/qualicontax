@@ -10,6 +10,7 @@ from flask import (
 )
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
+from utils.db_helper import execute_query, execute_many
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
 from utils.dropbox_sync import DropboxAuthError, DropboxError
