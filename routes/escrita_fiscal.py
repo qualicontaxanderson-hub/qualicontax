@@ -3,7 +3,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
@@ -238,7 +238,7 @@ def index():
     return render_template(
         'escrita_fiscal/index.html',
         is_admin=current_user.is_admin(),
-        schedule_texto=schedule.get('texto', '23:59'),
+        schedule_texto=schedule.get('texto', ''),
     )
 
 
@@ -1408,7 +1408,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
         return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
 
     # Cria registro de auditoria antes de iniciar
-    iniciado_em = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    iniciado_em = datetime.now(timezone.utc)
     log_id = None
     try:
         log_id = execute_query(
@@ -1638,7 +1638,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
 
     # Persiste resultado no log de auditoria
-    concluido_em = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    concluido_em = datetime.now(timezone.utc)
     try:
         execute_query(
             "UPDATE scheduler_import_log SET concluido_em=%s, ok=%s, dup=%s, err=%s, "
@@ -1724,16 +1724,26 @@ def api_log_importacoes():
     _brt = ZoneInfo('America/Sao_Paulo')
 
     def _fmt_ts(v):
+        """Converte timestamp UTC (datetime ou string) para horário de Brasília."""
         if v is None:
             return None
         if isinstance(v, datetime):
             if v.tzinfo is None:
+                # naive datetime stored as UTC — convert to BRT
                 v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
             else:
                 v = v.astimezone(_brt)
             return v.strftime('%Y-%m-%d %H:%M')
-        s = str(v).replace('T', ' ')
-        return s[:16]
+        # String fallback: parse as UTC and convert to BRT
+        try:
+            s = str(v).strip().replace('T', ' ')
+            if len(s) < 19:
+                return s[:16]
+            dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
+            dt = dt.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            return dt.strftime('%Y-%m-%d %H:%M')
+        except (ValueError, Exception):
+            return str(v).replace('T', ' ')[:16]
 
     log_id = request.args.get('log_id', type=int)
     if log_id:
@@ -1762,22 +1772,6 @@ def api_log_importacoes():
         "ORDER BY iniciado_em DESC LIMIT %s",
         (limit,), fetch=True,
     ) or []
-
-    _brt = ZoneInfo('America/Sao_Paulo')
-
-    def _fmt_ts(v):
-        if v is None:
-            return None
-        if isinstance(v, datetime):
-            if v.tzinfo is None:
-                # legacy naive timestamps stored as UTC — convert to BRT
-                v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
-            else:
-                v = v.astimezone(_brt)
-            return v.strftime('%Y-%m-%d %H:%M')
-        # string fallback: strip timezone suffix, keep YYYY-MM-DD HH:MM
-        s = str(v).replace('T', ' ')
-        return s[:16]
 
     for r in rows:
         r['iniciado_em'] = _fmt_ts(r.get('iniciado_em'))

@@ -16,7 +16,7 @@
         <button onclick="openHorarioModal()" id="btnHorario"
                 title="Configurar o horário da importação automática"
                 style="background:#f1f5f9;color:#6366f1;border:1.5px solid #c7d2fe;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
-            <i class="fas fa-clock"></i> <span id="btnHorarioText">{{ schedule_texto }}</span>
+            <i class="fas fa-clock"></i> <span id="btnHorarioText">{{ schedule_texto or 'Carregando...' }}</span>
         </button>
     </div>
     {% endif %}
