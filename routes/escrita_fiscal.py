@@ -4,6 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify,
@@ -232,7 +233,13 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
 @escrita_fiscal.route('/')
 @permission_required('escrita_fiscal.index')
 def index():
-    return render_template('escrita_fiscal/index.html', is_admin=current_user.is_admin())
+    from utils.scheduler import get_scheduled_time
+    schedule = get_scheduled_time() if current_user.is_admin() else {}
+    return render_template(
+        'escrita_fiscal/index.html',
+        is_admin=current_user.is_admin(),
+        schedule_texto=schedule.get('texto', '23:59'),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1401,7 +1408,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
         return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
 
     # Cria registro de auditoria antes de iniciar
-    iniciado_em = datetime.now()
+    iniciado_em = datetime.now(ZoneInfo('America/Sao_Paulo'))
     log_id = None
     try:
         log_id = execute_query(
@@ -1445,7 +1452,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             break
 
         batch = files[:_DROPBOX_BATCH_LIMIT]
-        now = datetime.now()
+        now = datetime.now(ZoneInfo('America/Sao_Paulo'))
         batch_moved = 0
 
         for info in batch:
@@ -1631,7 +1638,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
 
     # Persiste resultado no log de auditoria
-    concluido_em = datetime.now()
+    concluido_em = datetime.now(ZoneInfo('America/Sao_Paulo'))
     try:
         execute_query(
             "UPDATE scheduler_import_log SET concluido_em=%s, ok=%s, dup=%s, err=%s, "
@@ -1714,6 +1721,20 @@ def api_log_importacoes():
     """
     import json as _json
 
+    _brt = ZoneInfo('America/Sao_Paulo')
+
+    def _fmt_ts(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            else:
+                v = v.astimezone(_brt)
+            return v.strftime('%Y-%m-%d %H:%M')
+        s = str(v).replace('T', ' ')
+        return s[:16]
+
     log_id = request.args.get('log_id', type=int)
     if log_id:
         row = execute_query(
@@ -1729,8 +1750,8 @@ def api_log_importacoes():
                 row['detalhes'] = _json.loads(row['detalhes'])
             except Exception:
                 pass
-        row['iniciado_em'] = str(row['iniciado_em']) if row.get('iniciado_em') else None
-        row['concluido_em'] = str(row['concluido_em']) if row.get('concluido_em') else None
+        row['iniciado_em'] = _fmt_ts(row.get('iniciado_em'))
+        row['concluido_em'] = _fmt_ts(row.get('concluido_em'))
         return jsonify({'row': row})
 
     limit = min(request.args.get('limit', 50, type=int), 200)
@@ -1741,9 +1762,26 @@ def api_log_importacoes():
         "ORDER BY iniciado_em DESC LIMIT %s",
         (limit,), fetch=True,
     ) or []
+
+    _brt = ZoneInfo('America/Sao_Paulo')
+
+    def _fmt_ts(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                # legacy naive timestamps stored as UTC — convert to BRT
+                v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            else:
+                v = v.astimezone(_brt)
+            return v.strftime('%Y-%m-%d %H:%M')
+        # string fallback: strip timezone suffix, keep YYYY-MM-DD HH:MM
+        s = str(v).replace('T', ' ')
+        return s[:16]
+
     for r in rows:
-        r['iniciado_em'] = str(r['iniciado_em']) if r.get('iniciado_em') else None
-        r['concluido_em'] = str(r['concluido_em']) if r.get('concluido_em') else None
+        r['iniciado_em'] = _fmt_ts(r.get('iniciado_em'))
+        r['concluido_em'] = _fmt_ts(r.get('concluido_em'))
     return jsonify({'rows': rows})
 
 
