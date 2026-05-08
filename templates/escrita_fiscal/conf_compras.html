@@ -622,7 +622,7 @@ function _fetchWithAbort(type, url) {
     });
 }
 function _isAbort(err) {
-    return err && (err.name === 'AbortError' || String(err).toLowerCase().includes('abort'));
+    return err && err.name === 'AbortError';
 }
 function loadActiveTab() {
     if (currentTab === 'emissor') return loadEmissor();
