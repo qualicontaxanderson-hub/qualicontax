@@ -78,7 +78,7 @@ app.jinja_env.filters['format_date'] = format_date
 
 # Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens
 if not Config.DEBUG:
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31_536_000  # 1 ano em segundos
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 365 * 24 * 60 * 60  # 1 ano em segundos
 
 
 # Error handlers
