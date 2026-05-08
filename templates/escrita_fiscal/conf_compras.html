@@ -605,6 +605,31 @@ let catalogoProdutos = [];
 let catalogoCache = {};   // key: "cli:grp" → array of products
 let currentNfeId = null;
 let panelModified = false;
+let hasSearched = false;
+let requestControllers = {notas: null, emissor: null, produto: null, chaves: null};
+
+function _abortRequest(type) {
+    const ctrl = requestControllers[type];
+    if (ctrl) ctrl.abort();
+    requestControllers[type] = null;
+}
+function _fetchWithAbort(type, url) {
+    _abortRequest(type);
+    const ctrl = new AbortController();
+    requestControllers[type] = ctrl;
+    return fetch(url, {signal: ctrl.signal}).finally(() => {
+        if (requestControllers[type] === ctrl) requestControllers[type] = null;
+    });
+}
+function _isAbort(err) {
+    return err && (err.name === 'AbortError' || String(err).toLowerCase().includes('abort'));
+}
+function loadActiveTab() {
+    if (currentTab === 'emissor') return loadEmissor();
+    if (currentTab === 'produto') return loadProduto();
+    if (currentTab === 'chaves') return loadChaves();
+    return loadNotas();
+}
 
 // ---- Empresa autocomplete data ----
 const empresasData = [
@@ -820,6 +845,9 @@ function switchTab(tab) {
     });
     document.getElementById('f_descricao_wrap').style.display = tab === 'produto' ? '' : 'none';
     document.getElementById('f_ncm_wrap').style.display = tab === 'produto' ? '' : 'none';
+    if (hasSearched && (currentClienteId || currentGrupoId)) {
+        loadActiveTab();
+    }
 }
 
 // ---- Filter toggle ----
@@ -873,10 +901,8 @@ function applyFilters() {
     }
     currentPage = 1;
     chavesCurrentPage = 1;
-    loadNotas();
-    loadEmissor();
-    loadProduto();
-    loadChaves();
+    hasSearched = true;
+    loadActiveTab();
 }
 
 // ---- Formatters ----
@@ -904,7 +930,7 @@ function loadNotas() {
     const params = new URLSearchParams({...f, page: currentPage});
     showLoad();
     document.getElementById('tbodyNotas').innerHTML = '';
-    fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
+    _fetchWithAbort('notas', '{{ url_for("escrita_fiscal.api_notas") }}?' + params)
         .then(r => r.json())
         .then(data => {
             hideLoad();
@@ -966,14 +992,17 @@ function loadNotas() {
                     .catch(() => []);
             }
         })
-        .catch(() => hideLoad());
+        .catch((err) => {
+            if (_isAbort(err)) return;
+            hideLoad();
+        });
 }
 
 function loadEmissor() {
     const f = getFilters();
     const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});
     showLoad();
-    fetch('{{ url_for("escrita_fiscal.api_por_emissor") }}?' + params)
+    _fetchWithAbort('emissor', '{{ url_for("escrita_fiscal.api_por_emissor") }}?' + params)
         .then(r => r.json())
         .then(data => {
             hideLoad();
@@ -995,7 +1024,10 @@ function loadEmissor() {
                 </tr>
             `).join('');
         })
-        .catch(() => hideLoad());
+        .catch((err) => {
+            if (_isAbort(err)) return;
+            hideLoad();
+        });
 }
 
 // ---- Load Por Produto ----
@@ -1007,7 +1039,7 @@ function loadProduto() {
         emit_cnpj:f.emit_cnpj, ncm:f.ncm, descricao:f.descricao,
     });
     showLoad();
-    fetch('{{ url_for("escrita_fiscal.api_por_produto") }}?' + params)
+    _fetchWithAbort('produto', '{{ url_for("escrita_fiscal.api_por_produto") }}?' + params)
         .then(r => r.json())
         .then(data => {
             hideLoad();
@@ -1034,7 +1066,10 @@ function loadProduto() {
                 </tr>`;
             }).join('');
         })
-        .catch(() => hideLoad());
+        .catch((err) => {
+            if (_isAbort(err)) return;
+            hideLoad();
+        });
 }
 
 // ---- Pagination ----
@@ -1374,7 +1409,7 @@ function loadChaves() {
     const params = new URLSearchParams({...f, page: chavesCurrentPage, per_page: chavesPerPage});
     showLoad();
     document.getElementById('tbodyChaves').innerHTML = '';
-    fetch('{{ url_for("escrita_fiscal.api_notas") }}?' + params)
+    _fetchWithAbort('chaves', '{{ url_for("escrita_fiscal.api_notas") }}?' + params)
         .then(r => r.json())
         .then(data => {
             hideLoad();
@@ -1405,7 +1440,10 @@ function loadChaves() {
             }).join('');
             renderPagination('paginationChaves', data.total, data.per_page || chavesPerPage, data.page || chavesCurrentPage);
         })
-        .catch(() => { hideLoad(); });
+        .catch((err) => {
+            if (_isAbort(err)) return;
+            hideLoad();
+        });
 }
 
 function copiarChave(btn, chave) {
