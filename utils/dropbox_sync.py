@@ -9,10 +9,32 @@ Estrutura de pastas por departamento:
 import logging
 import re
 from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+
+class DropboxAuthError(Exception):
+    """Raised when Dropbox returns an authentication/authorization error."""
+
+
+class DropboxError(Exception):
+    """Raised when a Dropbox operation fails for reasons other than auth (network, API error, etc.)."""
+
+# NF-e access keys are exactly 44 digits; files are normally saved as
+# "{44digits}.xml" but browsers (Edge, Chrome) sometimes strip the extension
+# or save as ".html".  We accept any file whose name starts with exactly 44 digits.
+_NFE_KEY_RE = re.compile(r'^\d{44}(?:\D|$)')
+
 DEPARTAMENTOS = [
+    # Nomes usados na APP FOLDER do Dropbox (caminhos relativos à raiz do app)
+    'Fiscal',
+    'Contabil',
+    'DP',
+    'Financeiro',
+    'Legalizacao',
+    'Comercial',
+    # Nomes legados — mantidos para compatibilidade com importações antigas
     'qualicontax-contabil',
     'qualicontax-fiscal',
     'qualicontax-dp',
@@ -25,6 +47,20 @@ DEPARTAMENTOS = [
 def _sanitize_folder_name(name: str) -> str:
     """Remove caracteres inválidos para nome de pasta no Dropbox."""
     return re.sub(r'[/\\:*?"<>|]', '_', name).strip() or 'SEM_NOME'
+
+
+def _build_empresa_folder(numero: Optional[str], nome: str) -> str:
+    """Constrói o nome da pasta da empresa para o Dropbox.
+
+    Quando o cliente possui ``numero_cliente``, o resultado é
+    ``{numero} - {nome}`` (ex.: ``001 - PADARIA BELA VISTA``).
+    Sem número, retorna apenas o nome sanitizado.
+    """
+    nome_san = _sanitize_folder_name(nome)
+    if numero:
+        num_san = _sanitize_folder_name(str(numero))
+        return f'{num_san} - {nome_san}'
+    return nome_san
 
 
 class DropboxService:
@@ -71,14 +107,37 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Operações de arquivo
     # ------------------------------------------------------------------
+    def _is_auth_error(self, exc: Exception) -> bool:
+        """Retorna True se a exceção é um erro de autenticação/autorização do Dropbox."""
+        exc_type = type(exc).__name__
+        exc_str = str(exc)
+        return (
+            'AuthError' in exc_type
+            or 'BadInputError' in exc_type
+            or 'invalid_access_token' in exc_str
+            or 'expired_access_token' in exc_str
+            or 'invalid_grant' in exc_str
+            or 'missing_scope' in exc_str
+            or 'insufficient_scope' in exc_str
+        )
+
     def list_folder(self, path: str) -> list:
-        """Lista todos os itens de uma pasta (arquivos e sub-pastas)."""
+        """Lista todos os itens de uma pasta (arquivos e sub-pastas).
+
+        Raises:
+            DropboxAuthError: credenciais inválidas/expiradas.
+            DropboxError: qualquer outro erro (rede, API, token não configurado).
+        """
         dbx = self._client()
         if not dbx:
-            return []
+            raise DropboxError(
+                'Cliente Dropbox não disponível. '
+                'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+            )
         entries = []
         try:
             import dropbox as dropbox_sdk
+            logger.info('Dropbox list_folder: path=%r', path)
             result = dbx.files_list_folder(path)
             while True:
                 for entry in result.entries:
@@ -92,16 +151,39 @@ class DropboxService:
                 if not result.has_more:
                     break
                 result = dbx.files_list_folder_continue(result.cursor)
+            logger.info('Dropbox list_folder(%r): %d item(s) encontrado(s): %s',
+                        path, len(entries), [e['name'] for e in entries])
+        except (DropboxAuthError, DropboxError):
+            raise
         except Exception as exc:
-            logger.error('Erro ao listar pasta Dropbox %s: %s', path, exc)
+            logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
+            if self._is_auth_error(exc):
+                self._dbx = None  # Limpa cache para tentar renovar token na próxima chamada
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas. '
+                    'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                ) from exc
+            raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
         return entries
 
     def list_xml_files(self, path: str) -> list:
-        """Lista apenas arquivos .xml de uma pasta."""
-        return [
-            f for f in self.list_folder(path)
-            if f.get('is_file') and f['name'].lower().endswith('.xml')
+        """Lista arquivos .xml e arquivos cujo nome começa com a chave NF-e (44 dígitos).
+
+        Navegadores como Edge/Chrome às vezes salvam arquivos XML de NF-e sem a
+        extensão .xml (ou com .html).  Para não perder esses arquivos, também
+        incluímos qualquer arquivo cujo nome inicie com 44 dígitos consecutivos.
+        """
+        all_files = self.list_folder(path)
+        xml_files = [
+            f for f in all_files
+            if f.get('is_file') and (
+                f['name'].lower().endswith('.xml')
+                or _NFE_KEY_RE.match(f['name'])
+            )
         ]
+        logger.info('Dropbox list_xml_files(%r): %d arquivo(s) xml/nfe de %d item(s)',
+                    path, len(xml_files), len(all_files))
+        return xml_files
 
     def download_file(self, path: str):
         """Baixa um arquivo e retorna seu conteúdo como bytes, ou None em caso de erro."""
@@ -113,6 +195,11 @@ class DropboxService:
             return response.content
         except Exception as exc:
             logger.error('Erro ao baixar Dropbox %s: %s', path, exc)
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas.'
+                ) from exc
             return None
 
     def ensure_folder(self, path: str) -> None:
@@ -124,7 +211,12 @@ class DropboxService:
             dbx.files_create_folder_v2(path)
             logger.info('Pasta criada no Dropbox: %s', path)
         except Exception as exc:
-            if 'path/conflict' not in str(exc):
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas.'
+                ) from exc
+            if 'conflict' not in str(exc):
                 logger.warning('Falha ao criar pasta %s: %s', path, exc)
 
     def move_file(self, from_path: str, to_path: str) -> bool:
@@ -138,6 +230,11 @@ class DropboxService:
             return True
         except Exception as exc:
             logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas.'
+                ) from exc
             return False
 
     # ------------------------------------------------------------------
@@ -147,16 +244,16 @@ class DropboxService:
         return f'/{departamento}/NOVO'
 
     def pasta_importados(self, departamento: str, empresa_nome: str,
-                         dt: datetime = None) -> str:
+                         dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
-        nome = _sanitize_folder_name(empresa_nome)
-        return f'/{departamento}/IMPORTADOS/{nome}/{dt.year}/{dt.month:02d}'
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        return f'/{departamento}/IMPORTADOS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
-                    dt: datetime = None) -> str:
+                    dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
-        nome = _sanitize_folder_name(empresa_nome)
-        return f'/{departamento}/ERROS/{nome}/{dt.year}/{dt.month:02d}'
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        return f'/{departamento}/ERROS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
 
 
 # ---------------------------------------------------------------------------

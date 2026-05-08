@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário – Configurações{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.usuarios') }}" class="back-link">← Usuários</a>
+        <h1 class="page-title">{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}</h1>
+    </div>
+</div>
+
+<form method="POST" autocomplete="off">
+<div class="card mb-4">
+    <div class="card-header"><strong>Dados Pessoais</strong></div>
+    <div class="card-body">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label class="form-label">Nome *</label>
+                <input type="text" name="nome" class="form-control"
+                       value="{{ usuario.nome if usuario else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Login *</label>
+                <input type="text" name="login" class="form-control"
+                       value="{{ usuario.login if usuario else '' }}" required
+                       placeholder="nome.usuario" autocomplete="off">
+                <small class="form-text text-muted">Usado para entrar no sistema. Sem espaços.</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">E-mail *</label>
+                <input type="email" name="email" class="form-control"
+                       value="{{ usuario.email if usuario else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Telefone</label>
+                <input type="text" name="telefone" class="form-control"
+                       value="{{ usuario.telefone if usuario else '' }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Cargo</label>
+                <input type="text" name="cargo" class="form-control"
+                       value="{{ usuario.cargo if usuario else '' }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><strong>Acesso ao Sistema</strong></div>
+    <div class="card-body">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label class="form-label">Tipo de Usuário</label>
+                <select name="tipo_usuario" class="form-control">
+                    {% for t in ['ASSISTENTE','ESTAGIARIO','CONTADOR','GERENTE','ADMIN'] %}
+                    <option value="{{ t }}" {{ 'selected' if (usuario and usuario.tipo_usuario == t) or (not usuario and t == 'ASSISTENTE') }}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+                <small class="form-text text-muted">ADMIN tem acesso total e ignora perfis de permissão.</small>
+            </div>
+            {% if usuario %}
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <select name="situacao" class="form-control">
+                    <option value="ATIVO"   {{ 'selected' if usuario.situacao == 'ATIVO' }}>ATIVO</option>
+                    <option value="INATIVO" {{ 'selected' if usuario.situacao == 'INATIVO' }}>INATIVO</option>
+                </select>
+            </div>
+            {% endif %}
+            <div class="form-group">
+                <label class="form-label">{{ 'Nova Senha (deixe em branco para manter)' if usuario else 'Senha *' }}</label>
+                <input type="password" name="{{ 'nova_senha' if usuario else 'senha' }}"
+                       class="form-control" {{ 'required' if not usuario }}>
+            </div>
+        </div>
+
+        <div class="form-group mt-3">
+            <label class="form-label">Perfis de Acesso</label>
+            <small class="d-block text-muted mb-2">
+                Selecione um ou mais perfis. As permissões são a união de todos os perfis atribuídos.
+            </small>
+            <div class="checkbox-grid">
+                {% for p in perfis %}
+                <label class="checkbox-item">
+                    <input type="checkbox" name="perfis" value="{{ p.id }}"
+                           {{ 'checked' if p.id in perfis_usuario }}>
+                    <span>{{ p.nome }}</span>
+                </label>
+                {% else %}
+                <span class="text-muted">Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar perfil</a>.</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <strong>Empresas Permitidas</strong>
+        <small class="text-muted ms-2">— se nenhuma for marcada, o usuário vê TODAS as empresas</small>
+    </div>
+    <div class="card-body">
+        <div class="mb-2 d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(true)">Marcar todas</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(false)">Desmarcar todas</button>
+        </div>
+        <div class="checkbox-grid-empresas">
+            {% for c in clientes %}
+            <label class="checkbox-item">
+                <input type="checkbox" name="empresas" value="{{ c.id }}" class="emp-check"
+                       {{ 'checked' if c.id in empresas_usuario }}>
+                <span>{{ c.nome_razao_social }}</span>
+            </label>
+            {% else %}
+            <span class="text-muted">Nenhum cliente/empresa cadastrado.</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Salvar
+    </button>
+    <a href="{{ url_for('configuracoes.usuarios') }}" class="btn btn-secondary">Cancelar</a>
+</div>
+</form>
+
+<style>
+.checkbox-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.checkbox-grid-empresas { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 6px; max-height: 320px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+.checkbox-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer; background: #f9fafb; border: 1px solid #e5e7eb; font-size: 0.875rem; }
+.checkbox-item:hover { background: #eff6ff; border-color: #bfdbfe; }
+.checkbox-item input { cursor: pointer; }
+.form-actions { display: flex; gap: 12px; margin-top: 24px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.gap-2 { gap: 8px; }
+.ms-2 { margin-left: 8px; }
+.d-flex { display: flex; }
+.mb-2 { margin-bottom: 8px; }
+</style>
+
+<script>
+function marcarTodas(v) {
+    document.querySelectorAll('.emp-check').forEach(c => c.checked = v);
+}
+</script>
+{% endblock %}

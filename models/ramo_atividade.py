@@ -157,7 +157,7 @@ class RamoAtividade:
             list: Lista de clientes
         """
         query = """
-            SELECT c.id, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, 
+            SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, 
                    c.email, c.telefone, c.celular, c.situacao
             FROM clientes c
             INNER JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id

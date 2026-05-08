@@ -40,6 +40,7 @@ from routes.financeiro import financeiro
 from routes.dropbox import dropbox_bp
 from routes.modulos import modulos
 from routes.escrita_fiscal import escrita_fiscal as escrita_fiscal_bp
+from routes.configuracoes import configuracoes as configuracoes_bp
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -57,6 +58,7 @@ app.register_blueprint(financeiro)
 app.register_blueprint(dropbox_bp)
 app.register_blueprint(modulos)
 app.register_blueprint(escrita_fiscal_bp)
+app.register_blueprint(configuracoes_bp)
 
 
 # Template filters
@@ -89,7 +91,86 @@ os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
 # Garante que as tabelas necessárias existem (cria se necessário)
 from utils.db_helper import execute_query as _execute_query
 
-# Tabelas do módulo Plano de Contas
+# ---- Tabela principal de Usuários ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        senha_hash VARCHAR(512) NOT NULL,
+        tipo_usuario ENUM('ADMIN','GERENTE','CONTADOR','ASSISTENTE','ESTAGIARIO') NOT NULL DEFAULT 'ASSISTENTE',
+        situacao ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO',
+        cpf VARCHAR(14) NULL,
+        telefone VARCHAR(20) NULL,
+        departamento_id INT NULL,
+        cargo VARCHAR(100) NULL,
+        capacidade_tarefas INT NOT NULL DEFAULT 10,
+        data_admissao DATE NULL,
+        foto_perfil VARCHAR(500) NULL,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_email (email),
+        INDEX idx_tipo (tipo_usuario),
+        INDEX idx_situacao (situacao)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Incremental: garante colunas que podem estar ausentes em DBs mais antigos.
+# NOTA: _col_name e _col_def são sempre valores literais da lista abaixo (nunca
+# vêm de entrada externa), portanto o uso de f-string no ALTER TABLE é seguro.
+for _col_name, _col_def in [
+    ('cpf',               'VARCHAR(14) NULL'),
+    ('telefone',          'VARCHAR(20) NULL'),
+    ('departamento_id',   'INT NULL'),
+    ('cargo',             'VARCHAR(100) NULL'),
+    ('capacidade_tarefas','INT NOT NULL DEFAULT 10'),
+    ('data_admissao',     'DATE NULL'),
+    ('foto_perfil',       'VARCHAR(500) NULL'),
+    ('tipo_usuario',      "ENUM('ADMIN','GERENTE','CONTADOR','ASSISTENTE','ESTAGIARIO') NOT NULL DEFAULT 'ASSISTENTE'"),
+    ('situacao',          "ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO'"),
+    ('criado_em',         'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'),
+    ('atualizado_em',     'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
+    ('login',             'VARCHAR(100) NULL'),
+]:
+    try:
+        _col_exists = _execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = %s",
+            (_col_name,), fetch=True, fetch_one=True,
+        ) or {}
+        if _col_exists.get('cnt', 0) == 0:
+            _execute_query(
+                f"ALTER TABLE usuarios ADD COLUMN {_col_name} {_col_def}",
+                fetch=False,
+            )
+    except Exception:
+        pass
+
+# Unique index on login (added after the column migration loop)
+try:
+    _idx_exists = _execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND INDEX_NAME = 'idx_login'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _idx_exists.get('cnt', 0) == 0:
+        _execute_query(
+            "ALTER TABLE usuarios ADD UNIQUE INDEX idx_login (login)",
+            fetch=False,
+        )
+except Exception:
+    pass
+
+# Backfill: garante que o admin padrão tenha login='admin' se login estiver NULL
+try:
+    _execute_query(
+        "UPDATE usuarios SET login='admin' WHERE tipo_usuario='ADMIN' AND (login IS NULL OR login='')",
+        fetch=False,
+    )
+except Exception:
+    pass
+
+
 _execute_query("""
     CREATE TABLE IF NOT EXISTS planos_contas (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -198,21 +279,29 @@ for _col_name, _col_def in _CONTAS_CORRENTES_COLS:
 # Migração incremental: adicionar empresa_id em conciliacoes_bancarias
 # para suportar o relatório de conferência de despesas por empresa.
 try:
-    _emp_col_exists = _execute_query(
-        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+    _tbl_exists = _execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
         "WHERE TABLE_SCHEMA = DATABASE() "
-        "AND TABLE_NAME = 'conciliacoes_bancarias' "
-        "AND COLUMN_NAME = 'empresa_id'",
+        "AND TABLE_NAME = 'conciliacoes_bancarias'",
         fetch=True,
         fetch_one=True,
     )
-    if _emp_col_exists and _emp_col_exists.get('cnt', 0) == 0:
-        _execute_query(
-            "ALTER TABLE conciliacoes_bancarias "
-            "ADD COLUMN empresa_id INT NULL, "
-            "ADD INDEX idx_empresa (empresa_id)",
-            fetch=False,
+    if _tbl_exists and _tbl_exists.get('cnt', 0) > 0:
+        _emp_col_exists = _execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'conciliacoes_bancarias' "
+            "AND COLUMN_NAME = 'empresa_id'",
+            fetch=True,
+            fetch_one=True,
         )
+        if _emp_col_exists and _emp_col_exists.get('cnt', 0) == 0:
+            _execute_query(
+                "ALTER TABLE conciliacoes_bancarias "
+                "ADD COLUMN empresa_id INT NULL, "
+                "ADD INDEX idx_empresa (empresa_id)",
+                fetch=False,
+            )
 except Exception:
     pass
 
@@ -294,6 +383,18 @@ _pcat_exists = _execute_query(
 ) or {}
 if _pcat_exists.get('cnt', 0) == 0:
     _execute_query("ALTER TABLE nfe_itens ADD COLUMN produto_catalogo_id INT NULL", fetch=False)
+
+# Incremental: add composite index (nfe_id, produto_catalogo_id) for vinc_status filters
+_idx_vinc_exists = _execute_query(
+    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_itens' AND INDEX_NAME = 'idx_nfe_pcat'",
+    fetch=True, fetch_one=True,
+) or {}
+if _idx_vinc_exists.get('cnt', 0) == 0:
+    _execute_query(
+        "ALTER TABLE nfe_itens ADD INDEX idx_nfe_pcat (nfe_id, produto_catalogo_id)",
+        fetch=False,
+    )
 
 # ---- Catálogo de Produtos (por empresa/grupo) ----
 _execute_query("""
@@ -420,6 +521,113 @@ _execute_query(
           AND v_new.id > v_old.id""",
     fetch=False,
 )
+
+
+# ---- Contratos ----
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS contratos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente_id INT NOT NULL,
+        numero_contrato VARCHAR(50) NOT NULL,
+        tipo_servico VARCHAR(100) NOT NULL,
+        valor_mensal DECIMAL(10,2) NULL,
+        data_inicio DATE NULL,
+        data_fim DATE NULL,
+        situacao VARCHAR(20) NOT NULL DEFAULT 'Ativo',
+        observacoes TEXT NULL,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_cliente_id (cliente_id),
+        INDEX idx_situacao (situacao)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+
+# ---- Controle de Acesso ----
+
+# Perfis de acesso (roles)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS perfis_acesso (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(100) NOT NULL,
+        descricao TEXT NULL,
+        situacao ENUM('ATIVO','INATIVO') NOT NULL DEFAULT 'ATIVO',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_perfil_nome (nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Permissões por perfil
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS perfil_permissoes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        perfil_id INT NOT NULL,
+        permissao_codigo VARCHAR(100) NOT NULL,
+        FOREIGN KEY (perfil_id) REFERENCES perfis_acesso(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_perm (perfil_id, permissao_codigo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Vínculo usuário ↔ perfil (many-to-many)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS usuario_perfis (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        perfil_id INT NOT NULL,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (perfil_id) REFERENCES perfis_acesso(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_usuario_perfil (usuario_id, perfil_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+# Whitelist de empresas por usuário (vazio = acesso a todas)
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS usuario_empresas_permitidas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        cliente_id INT NOT NULL,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_usuario_empresa (usuario_id, cliente_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS scheduler_import_log (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        iniciado_em DATETIME NOT NULL,
+        concluido_em DATETIME,
+        departamento VARCHAR(60) NOT NULL,
+        origem      VARCHAR(20) NOT NULL DEFAULT 'agendado',
+        usuario_id  INT,
+        ok          INT NOT NULL DEFAULT 0,
+        dup         INT NOT NULL DEFAULT 0,
+        err         INT NOT NULL DEFAULT 0,
+        moved_ok    INT NOT NULL DEFAULT 0,
+        moved_err   INT NOT NULL DEFAULT 0,
+        skipped     INT NOT NULL DEFAULT 0,
+        detalhes    LONGTEXT,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+_execute_query("""
+    CREATE TABLE IF NOT EXISTS app_config (
+        chave   VARCHAR(100) PRIMARY KEY,
+        valor   TEXT NOT NULL,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""", fetch=False)
+
+
+# Inicia o scheduler de tarefas agendadas (importação automática às 23:59).
+# A função init_scheduler usa um lock de arquivo para garantir que apenas um
+# dos workers do gunicorn execute o scheduler.
+try:
+    from utils.scheduler import init_scheduler
+    init_scheduler(app)
+except Exception:
+    import logging as _logging
+    _logging.getLogger(__name__).exception('Falha ao iniciar o scheduler.')
 
 
 if __name__ == '__main__':

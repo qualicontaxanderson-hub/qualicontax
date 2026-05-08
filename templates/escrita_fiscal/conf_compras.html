@@ -12,6 +12,20 @@
 .cc-empresa-bar { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(37,99,235,.25); }
 .cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
 .cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
+/* Autocomplete empresa */
+.cc-empresa-ac { position:relative; min-width:320px; }
+.cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
+.cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
+.cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
+/* Modal autocomplete empresa overrides */
+.dbx-empresa-ac { min-width:100%; }
+.dbx-empresa-ac input[type=text] { border:1.5px solid #d1d5db; background:#fff; color:#1e293b; }
+.cc-ac-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:9999; max-height:260px; overflow-y:auto; }
+.cc-ac-item { padding:8px 12px; font-size:13px; color:#1e293b; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+.cc-ac-item:last-child { border-bottom:none; }
+.cc-ac-item:hover, .cc-ac-item.active { background:#eff6ff; color:#1d4ed8; }
+.cc-ac-item.all { color:#64748b; font-style:italic; }
+.cc-ac-empty { padding:10px 12px; font-size:12px; color:#94a3b8; text-align:center; }
 .cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
 .cc-scope-badge.empresa { background:#bfdbfe; color:#1d4ed8; }
 .cc-scope-badge.grupo   { background:#e9d5ff; color:#7c3aed; }
@@ -36,21 +50,66 @@
 .cc-import-row label { font-size:11px; font-weight:600; color:#374151; display:block; margin-bottom:3px; }
 
 /* ---- Dropbox modal ---- */
-.dbx-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:1100; display:none; align-items:center; justify-content:center; padding:20px; }
+.dbx-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:1100; display:none; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); }
 .dbx-modal-overlay.open { display:flex; }
-.dbx-modal { background:#fff; border-radius:16px; width:520px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease,opacity .2s ease; }
+.dbx-modal { background:#fff; border-radius:20px; width:660px; max-width:100%; max-height:calc(100vh - 60px); display:flex; flex-direction:column; overflow:hidden; box-shadow:0 32px 80px rgba(0,0,0,.28); transform:scale(.96); opacity:0; transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s ease; }
 .dbx-modal-overlay.open .dbx-modal { transform:scale(1); opacity:1; }
-.dbx-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; background:linear-gradient(135deg,#0061ff,#2563eb); border-radius:16px 16px 0 0; }
-.dbx-modal-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
-.dbx-modal-body { padding:22px; }
-.dbx-modal-body label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; display:block; margin-bottom:4px; letter-spacing:.4px; }
-.dbx-modal-body select { width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; color:#1e293b; background:#f8fafc; margin-bottom:14px; }
+.dbx-modal-header { display:flex; align-items:center; justify-content:space-between; padding:18px 26px; background:linear-gradient(135deg,#0052cc,#2563eb 60%,#1d9bf0); border-radius:20px 20px 0 0; }
+.dbx-modal-header h3 { font-size:16px; font-weight:700; color:#fff; margin:0; letter-spacing:.2px; }
+.dbx-modal-header .dbx-close-btn { background:rgba(255,255,255,.18); border:none; font-size:18px; color:#fff; cursor:pointer; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+.dbx-modal-header .dbx-close-btn:hover { background:rgba(255,255,255,.32); }
+.dbx-modal-body { padding:26px; overflow-y:auto; flex:1; }
+.dbx-modal-body label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; display:block; margin-bottom:5px; letter-spacing:.5px; }
+.dbx-modal-body select { width:100%; padding:9px 13px; border:1.5px solid #e2e8f0; border-radius:10px; font-size:13px; color:#1e293b; background:#f8fafc; margin-bottom:16px; }
 .dbx-modal-body select:focus { border-color:#2563eb; outline:none; background:#fff; }
-.dbx-modal-footer { padding:14px 22px; border-top:1.5px solid #e2e8f0; display:flex; gap:10px; justify-content:flex-end; }
-#dbxResult { margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px; display:none; }
-#dbxResult.ok { background:#f0fdf4; border:1px solid #86efac; color:#166534; }
-#dbxResult.err { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; }
-#dbxResult.info { background:#eff6ff; border:1px solid #93c5fd; color:#1d4ed8; }
+.dbx-modal-footer { padding:16px 26px; border-top:1.5px solid #e2e8f0; display:flex; gap:10px; justify-content:flex-end; border-radius:0 0 20px 20px; }
+
+/* ---- Import result box ---- */
+#dbxResult { margin-top:16px; border-radius:14px; font-size:13px; display:none; overflow:hidden; }
+#dbxResult .dbx-res-head { display:flex; align-items:flex-start; gap:12px; padding:14px 16px 12px; }
+#dbxResult .dbx-res-icon { flex-shrink:0; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; }
+#dbxResult .dbx-res-text { flex:1; min-width:0; }
+#dbxResult .dbx-res-text strong { display:block; font-size:13.5px; font-weight:700; margin-bottom:2px; }
+#dbxResult .dbx-res-text span { font-size:12px; opacity:.85; }
+#dbxResult .dbx-stats { display:flex; flex-wrap:wrap; gap:7px; padding:0 16px 14px; }
+#dbxResult .dbx-stat { display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:99px; font-size:11.5px; font-weight:700; }
+#dbxResult .dbx-stat.s-ok  { background:#dcfce7; color:#166534; }
+#dbxResult .dbx-stat.s-dup { background:#e0f2fe; color:#075985; }
+#dbxResult .dbx-stat.s-err { background:#fee2e2; color:#991b1b; }
+#dbxResult .dbx-stat.s-skip{ background:#f1f5f9; color:#475569; }
+#dbxResult .dbx-unreg { margin:0 12px 14px; border-radius:10px; overflow:hidden; }
+#dbxResult .dbx-unreg-head { display:flex; align-items:center; gap:7px; padding:9px 13px; font-size:12px; font-weight:700; }
+#dbxResult .dbx-unreg-list { padding:4px 13px 10px; max-height:220px; overflow-y:auto; }
+#dbxResult .dbx-unreg-item { display:flex; align-items:center; gap:7px; padding:5px 0; border-bottom:1px solid rgba(0,0,0,.05); font-size:12.5px; }
+#dbxResult .dbx-unreg-item:last-child { border-bottom:none; }
+#dbxResult .dbx-unreg-cnpj { font-family:monospace; font-size:11.5px; background:rgba(0,0,0,.07); padding:2px 7px; border-radius:5px; }
+#dbxResult .dbx-more-msg { margin:0 12px 12px; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:600; }
+/* state skins */
+#dbxResult.ok  { border:1.5px solid #86efac; background:#f0fdf4; }
+#dbxResult.ok  .dbx-res-icon { background:#dcfce7; color:#16a34a; }
+#dbxResult.ok  .dbx-res-text { color:#166534; }
+#dbxResult.err { border:1.5px solid #fca5a5; background:#fef2f2; }
+#dbxResult.err .dbx-res-icon { background:#fee2e2; color:#dc2626; }
+#dbxResult.err .dbx-res-text { color:#991b1b; }
+#dbxResult.info{ border:1.5px solid #93c5fd; background:#eff6ff; }
+#dbxResult.info .dbx-res-icon { background:#dbeafe; color:#2563eb; }
+#dbxResult.info .dbx-res-text { color:#1d4ed8; }
+#dbxResult.warn{ border:1.5px solid #fbbf24; background:#fffbeb; }
+#dbxResult.warn .dbx-res-icon { background:#fef3c7; color:#d97706; }
+#dbxResult.warn .dbx-res-text { color:#92400e; }
+#dbxResult.warn .dbx-unreg  { background:#fef3c7; }
+#dbxResult.warn .dbx-unreg-head { background:#fde68a; color:#78350f; }
+#dbxResult.warn .dbx-unreg-list { background:#fef9c3; color:#713f12; }
+#dbxResult.warn .dbx-more-msg { background:#fde68a; color:#78350f; }
+/* imported companies summary card */
+#dbxResult .dbx-imp { margin:0 12px 14px; border-radius:10px; overflow:hidden; }
+#dbxResult .dbx-imp-head { display:flex; align-items:center; gap:7px; padding:9px 13px; font-size:12px; font-weight:700; background:#bbf7d0; color:#14532d; }
+#dbxResult .dbx-imp-list { background:#f0fdf4; padding:4px 13px 10px; }
+#dbxResult .dbx-imp-item { padding:6px 0; border-bottom:1px solid rgba(0,0,0,.05); }
+#dbxResult .dbx-imp-item:last-child { border-bottom:none; }
+#dbxResult .dbx-imp-name { font-size:13px; font-weight:700; color:#166534; }
+#dbxResult .dbx-imp-periodos { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+#dbxResult .dbx-imp-periodo { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
 
 /* ---- Filters ---- */
 .cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
@@ -66,7 +125,7 @@
 .cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
 
 /* ---- Tabs ---- */
-.cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; }
+.cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; align-items:center; justify-content:space-between; }
 .cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
 .cc-tab:hover { color:#1e293b; background:#f1f5f9; }
 .cc-tab.active { color:#16a34a; border-bottom-color:#22c55e; background:#f0fdf4; }
@@ -103,7 +162,7 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 /* ---- Overlay + centered modal (itens da NF-e) ---- */
 .cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
 .cc-panel-overlay.open { display:flex; }
-.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:900px; max-width:100%; max-height:90vh; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease, opacity .2s ease; }
+.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:1100px; max-width:100%; max-height:92vh; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease, opacity .2s ease; }
 .cc-panel-overlay.open .cc-panel { transform:scale(1); opacity:1; }
 .cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:16px 16px 0 0; }
 .cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
@@ -137,6 +196,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 .prod-vinculo button { padding:5px 10px; border-radius:6px; border:none; background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(34,197,94,.3); }
 .prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
 .vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
+
 </style>
 {% endblock %}
 
@@ -168,12 +228,13 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 <div class="cc-empresa-bar">
     <label><i class="fas fa-building"></i> Visualizar por</label>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select id="sel_empresa" onchange="onEmpresaChange()">
-            <option value="">— Todas as Empresas —</option>
-            {% for e in empresas %}
-            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
-            {% endfor %}
-        </select>
+        <div class="cc-empresa-ac" id="empresaAcWrap">
+            <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
+                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="sel_empresa" value="">
+            <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
+        </div>
         <span style="color:#d1d5db;font-size:11px;">OU</span>
         <select id="sel_grupo" onchange="onGrupoChange()">
             <option value="">— Todos os Grupos —</option>
@@ -185,7 +246,12 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
     <button onclick="openDbxModal()"
             style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-        <i class="fas fa-cloud-download-alt"></i> Importar do Dropbox
+        <i class="fab fa-dropbox"></i> Importar XML
+    </button>
+    <button onclick="openLogModal()"
+            title="Ver histórico de importações agendadas"
+            style="background:rgba(100,116,139,.12);color:#475569;border:1.5px solid rgba(100,116,139,.25);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <i class="fas fa-history"></i> Log
     </button>
 </div>
 
@@ -297,6 +363,12 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     <div class="cc-tab" data-tab="chaves" onclick="switchTab('chaves')">
         <i class="fas fa-key"></i> Chaves XML
         <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+    <div style="margin-left:auto;">
+        <button onclick="excluirLote()"
+                style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-trash-alt"></i> Excluir em Lote
+        </button>
     </div>
 </div>
 
@@ -443,28 +515,18 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 <div class="dbx-modal-overlay" id="dbxModalOverlay" onclick="closeDbxModal()">
 <div class="dbx-modal" onclick="event.stopPropagation()">
     <div class="dbx-modal-header">
-        <h3><i class="fas fa-cloud-download-alt" style="margin-right:8px;"></i>Importar do Dropbox</h3>
-        <button onclick="closeDbxModal()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;">&times;</button>
+        <h3><i class="fab fa-dropbox" style="margin-right:8px;"></i>Importar XML</h3>
+        <button onclick="closeDbxModal()" class="dbx-close-btn">&times;</button>
     </div>
     <div class="dbx-modal-body">
-        <label>Departamento</label>
-        <select id="dbxDepartamento">
-            <option value="">— Selecione o departamento —</option>
-            <option value="qualicontax-contabil">Contábil</option>
-            <option value="qualicontax-fiscal">Fiscal</option>
-            <option value="qualicontax-dp">Departamento Pessoal</option>
-            <option value="qualicontax-financeiro">Financeiro</option>
-            <option value="qualicontax-legalizacao">Legalização</option>
-            <option value="qualicontax-comercial">Comercial</option>
-        </select>
-
         <label>Empresa (opcional)</label>
-        <select id="dbxEmpresa">
-            <option value="">— Sem empresa específica —</option>
-            {% for e in empresas %}
-            <option value="{{ e.id }}">{{ e.nome_razao_social }}</option>
-            {% endfor %}
-        </select>
+        <div class="cc-empresa-ac dbx-empresa-ac" id="dbxEmpresaAcWrap">
+            <input type="text" id="dbxEmpresaInput" placeholder="— Sem empresa específica —"
+                   autocomplete="off" oninput="onDbxEmpresaInput()" onfocus="onDbxEmpresaFocus()" onblur="onDbxEmpresaBlur()" onkeydown="onDbxEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="dbxEmpresaClear" onclick="clearDbxEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="dbxEmpresa" value="">
+            <div class="cc-ac-dropdown" id="dbxEmpresaAcList" style="display:none;"></div>
+        </div>
 
         <label>Grupo (opcional)</label>
         <select id="dbxGrupo">
@@ -474,39 +536,246 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
             {% endfor %}
         </select>
 
-        <p style="font-size:11px;color:#94a3b8;margin:0 0 4px;">
-            <i class="fas fa-info-circle"></i>
-            O sistema lê os XMLs da pasta <strong>/{departamento}/NOVO/</strong>, importa e move para
-            <strong>IMPORTADOS</strong> ou <strong>ERROS</strong> automaticamente.
-        </p>
-
         <div id="dbxResult"></div>
     </div>
     <div class="dbx-modal-footer">
         <button onclick="closeDbxModal()"
-                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+                style="background:#f8fafc;border:1.5px solid #e2e8f0;padding:9px 22px;border-radius:10px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;transition:background .15s;"
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
             Fechar
         </button>
-        <button id="btnDbxImportar" onclick="executarImportacaoDropbox()"
-                style="background:linear-gradient(135deg,#0061ff,#2563eb);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-            <i class="fas fa-cloud-download-alt"></i> Importar
+        <button id="btnDbxParar" onclick="pararImportacao()" style="display:none;background:#ef4444;color:#fff;border:none;padding:9px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(239,68,68,.35);transition:opacity .15s;"
+                onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <i class="fas fa-stop-circle"></i> Parar Importação
         </button>
+        <button id="btnDbxImportar" onclick="executarImportacaoDropbox()"
+                style="background:linear-gradient(135deg,#0052cc,#2563eb);color:#fff;border:none;padding:9px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.35);transition:opacity .15s;"
+                onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
+            <i class="fas fa-cloud-download-alt"></i> Importar XML
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Log de Importações ===================== -->
+<div id="logModalOverlay" onclick="closeLogModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,900px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1e293b;"><i class="fas fa-history" style="margin-right:8px;color:#6366f1;"></i>Log de Importações</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="carregarLog()" id="btnRecarregarLog"
+                    style="background:#f1f5f9;border:1px solid #e2e8f0;padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:#475569;">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <button onclick="closeLogModal()"
+                    style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+        </div>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="logTableWrap">
+        <p style="color:#94a3b8;text-align:center;margin-top:40px;">Carregando...</p>
+    </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Detalhe de uma importação ===================== -->
+<div id="logDetalheOverlay" onclick="closeLogDetalhe()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9100;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,820px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 id="logDetalheTitle" style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"><i class="fas fa-file-alt" style="margin-right:8px;color:#6366f1;"></i>Detalhe da Importação</h3>
+        <button onclick="closeLogDetalhe()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="logDetalheBody">
+        <p style="color:#94a3b8;text-align:center;">Carregando detalhes...</p>
     </div>
 </div>
 </div>
 
 {% endblock %}
-
 {% block extra_js %}
 <script>
-// ---- global state ----
 let currentTab = 'notas';
 let currentPage = 1;
 let currentClienteId = '';
 let currentGrupoId = '';
 let catalogoProdutos = [];
+let catalogoCache = {};   // key: "cli:grp" → array of products
 let currentNfeId = null;
 let panelModified = false;
+
+// ---- Empresa autocomplete data ----
+const empresasData = [
+    {id: '', nome: '— Todas as Empresas —'},
+    {% for e in empresas %}
+    {id: {{ e.id | tojson }}, nome: {{ ((e.numero_cliente|string + ' - ' + e.nome_razao_social) if e.numero_cliente else e.nome_razao_social) | tojson }}},
+    {% endfor %}
+];
+let acActiveIndex = -1;
+
+function onEmpresaInput() {
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+    document.getElementById('sel_empresa_clear').style.display = q ? '' : 'none';
+}
+function onEmpresaFocus() {
+    const currentId = document.getElementById('sel_empresa').value;
+    if (currentId) {
+        // Clear display text so user can type a new search immediately
+        document.getElementById('sel_empresa_input').value = '';
+    }
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+}
+function onEmpresaBlur() {
+    // If user didn't pick a new company, restore the displayed name of the current selection
+    setTimeout(function() {
+        const currentId = document.getElementById('sel_empresa').value;
+        const input = document.getElementById('sel_empresa_input');
+        if (currentId && input.value === '') {
+            const found = empresasData.find(e => e.id == currentId);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
+}
+function renderEmpresaDropdown(q) {
+    const list = document.getElementById('empresaAcList');
+    acActiveIndex = -1;
+    let filtered;
+    if (!q) {
+        filtered = empresasData;
+    } else {
+        filtered = empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    }
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.map((e, i) => {
+            const label = e.nome;
+            return `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${label}</div>`;
+        }).join('');
+    }
+    list.style.display = '';
+}
+function onEmpresaKeydown(e) {
+    const list = document.getElementById('empresaAcList');
+    const items = list.querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') {
+        acActiveIndex = Math.min(acActiveIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        acActiveIndex = Math.max(acActiveIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        const target = acActiveIndex >= 0 ? items[acActiveIndex] : items[0];
+        if (target) {
+            selectEmpresa(target.dataset.id, target.dataset.nome);
+        }
+        e.preventDefault();
+    } else if (e.key === 'Escape') {
+        closeEmpresaDropdown();
+    }
+}
+function selectEmpresa(id, nome) {
+    document.getElementById('sel_empresa').value = id;
+    document.getElementById('sel_empresa_input').value = id ? nome : '';
+    document.getElementById('sel_empresa_clear').style.display = id ? '' : 'none';
+    closeEmpresaDropdown();
+    onEmpresaChange();
+}
+function clearEmpresa() {
+    selectEmpresa('', '');
+}
+function closeEmpresaDropdown() {
+    document.getElementById('empresaAcList').style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+    if (!document.getElementById('empresaAcWrap').contains(e.target)) {
+        closeEmpresaDropdown();
+    }
+    if (!document.getElementById('dbxEmpresaAcWrap').contains(e.target)) {
+        closeDbxEmpresaDropdown();
+    }
+});
+
+// ---- Autocomplete dbxEmpresa (modal) ----
+let dbxAcActiveIndex = -1;
+function onDbxEmpresaInput() {
+    const q = document.getElementById('dbxEmpresaInput').value.trim().toLowerCase();
+    renderDbxEmpresaDropdown(q);
+    document.getElementById('dbxEmpresaClear').style.display = q ? '' : 'none';
+}
+function onDbxEmpresaFocus() {
+    const currentId = document.getElementById('dbxEmpresa').value;
+    if (currentId) {
+        document.getElementById('dbxEmpresaInput').value = '';
+    }
+    const q = document.getElementById('dbxEmpresaInput').value.trim().toLowerCase();
+    renderDbxEmpresaDropdown(q);
+}
+function onDbxEmpresaBlur() {
+    setTimeout(function() {
+        const currentId = document.getElementById('dbxEmpresa').value;
+        const input = document.getElementById('dbxEmpresaInput');
+        if (currentId && input.value === '') {
+            const found = empresasData.find(e => e.id == currentId);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
+}
+function renderDbxEmpresaDropdown(q) {
+    const list = document.getElementById('dbxEmpresaAcList');
+    dbxAcActiveIndex = -1;
+    let filtered;
+    if (!q) {
+        filtered = empresasData;
+    } else {
+        filtered = empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    }
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.map(e =>
+            `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectDbxEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`
+        ).join('');
+    }
+    list.style.display = '';
+}
+function onDbxEmpresaKeydown(e) {
+    const list = document.getElementById('dbxEmpresaAcList');
+    const items = list.querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') {
+        dbxAcActiveIndex = Math.min(dbxAcActiveIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === dbxAcActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        dbxAcActiveIndex = Math.max(dbxAcActiveIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === dbxAcActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        const target = dbxAcActiveIndex >= 0 ? items[dbxAcActiveIndex] : items[0];
+        if (target) selectDbxEmpresa(target.dataset.id, target.dataset.nome);
+        e.preventDefault();
+    } else if (e.key === 'Escape') {
+        closeDbxEmpresaDropdown();
+    }
+}
+function selectDbxEmpresa(id, nome) {
+    document.getElementById('dbxEmpresa').value = id;
+    document.getElementById('dbxEmpresaInput').value = id ? nome : '';
+    document.getElementById('dbxEmpresaClear').style.display = id ? '' : 'none';
+    closeDbxEmpresaDropdown();
+}
+function clearDbxEmpresa() {
+    selectDbxEmpresa('', '');
+}
+function closeDbxEmpresaDropdown() {
+    document.getElementById('dbxEmpresaAcList').style.display = 'none';
+}
 
 // ---- Empresa / Grupo selector ----
 function onEmpresaChange() {
@@ -514,22 +783,26 @@ function onEmpresaChange() {
     if (currentClienteId) {
         document.getElementById('sel_grupo').value = '';
         currentGrupoId = '';
-        updateScopeBadge('empresa', document.getElementById('sel_empresa').options[document.getElementById('sel_empresa').selectedIndex].text);
+        updateScopeBadge('empresa', document.getElementById('sel_empresa_input').value);
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
     // Sync import selector
     if (document.getElementById('imp_empresa')) document.getElementById('imp_empresa').value = currentClienteId;
+    catalogoCache = {};  // invalidate catalog cache on scope change
 }
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
     if (currentGrupoId) {
         document.getElementById('sel_empresa').value = '';
+        document.getElementById('sel_empresa_input').value = '';
+        document.getElementById('sel_empresa_clear').style.display = 'none';
         currentClienteId = '';
         updateScopeBadge('grupo', document.getElementById('sel_grupo').options[document.getElementById('sel_grupo').selectedIndex].text);
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
+    catalogoCache = {};  // invalidate catalog cache on scope change
 }
 function updateScopeBadge(type, label) {
     const b = document.getElementById('scopeBadge');
@@ -589,11 +862,21 @@ function getFilters() {
     };
 }
 function applyFilters() {
+    if (!currentClienteId && !currentGrupoId) {
+        // Destaca visualmente o seletor de empresa
+        const inp = document.getElementById('sel_empresa_input');
+        inp.style.borderColor = '#ef4444';
+        inp.style.boxShadow = '0 0 0 3px rgba(239,68,68,.2)';
+        setTimeout(() => { inp.style.borderColor = ''; inp.style.boxShadow = ''; }, 2500);
+        alert('Selecione uma Empresa ou um Grupo antes de buscar.');
+        return;
+    }
     currentPage = 1;
-    if (currentTab === 'notas') loadNotas();
-    else if (currentTab === 'emissor') loadEmissor();
-    else if (currentTab === 'chaves') loadChaves();
-    else loadProduto();
+    chavesCurrentPage = 1;
+    loadNotas();
+    loadEmissor();
+    loadProduto();
+    loadChaves();
 }
 
 // ---- Formatters ----
@@ -602,6 +885,13 @@ function fmtBRL(v) {
 }
 function fmtNum(v,d) {
     return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||2,maximumFractionDigits:d||4});
+}
+function fmtDate(v) {
+    if (!v) return '—';
+    // Aceita YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SS
+    const parts = v.toString().substring(0, 10).split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return v;
 }
 
 // ---- Loading ----
@@ -644,8 +934,8 @@ function loadNotas() {
                 else if (vinc === 0)      { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
                 else if (vinc === total)  { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
                 else                     { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
-                return `<tr class="cc-row-clickable" onclick="openPanel(${r.id}, event)">
-                    <td>${r.data_emissao||'—'}</td>
+                return `<tr class="cc-row-clickable" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
+                    <td>${fmtDate(r.data_emissao)}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
                     <td>${empPill}</td>
                     <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
@@ -664,11 +954,21 @@ function loadNotas() {
                 </tr>`;
             }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page);
+            // Pre-warm catalog in background while user browses the list.
+            // Store the Promise itself (not the resolved array) so that openPanel
+            // can reuse the same in-flight request — preventing a duplicate fetch
+            // when the user clicks a row before the pre-warm has resolved.
+            const _catKey = (currentClienteId||'')+':'+(currentGrupoId||'');
+            if (!catalogoCache[_catKey]) {
+                const _catP = new URLSearchParams({cliente_id: currentClienteId||'', grupo_id: currentGrupoId||''});
+                catalogoCache[_catKey] = fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + _catP)
+                    .then(r => r.json())
+                    .catch(() => []);
+            }
         })
         .catch(() => hideLoad());
 }
 
-// ---- Load Por Emissor ----
 function loadEmissor() {
     const f = getFilters();
     const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});
@@ -765,8 +1065,32 @@ function excluirNfe(id, btn) {
         .catch(() => alert('Erro ao excluir.'));
 }
 
+// ---- Bulk delete NF-e (by active filters) ----
+function excluirLote() {
+    const total = parseInt(document.getElementById('tabBadgeNotas').textContent) || 0;
+    if (total === 0) { alert('Nenhuma nota encontrada com os filtros atuais.'); return; }
+    if (!confirm(`Excluir TODAS as ${total} nota(s) fiscal(is) encontradas com os filtros atuais?\n\nEsta ação não pode ser desfeita.`)) return;
+    const f = getFilters();
+    fetch('/escrita-fiscal/conf-compras/excluir-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(f),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            alert(`${data.deleted} nota(s) excluída(s) com sucesso.`);
+            applyFilters();
+        } else {
+            alert('Erro ao excluir em lote.');
+        }
+    })
+    .catch(() => alert('Erro ao excluir em lote.'));
+}
+
 // ---- Panel: Itens da NF-e ----
 function openPanel(nfeId, evt) {
+    if (nfeId == null) return;
     if (currentNfeId !== nfeId) {
         panelModified = false;
     }
@@ -776,21 +1100,29 @@ function openPanel(nfeId, evt) {
         '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
     document.getElementById('vincularTodosBar').style.display = 'none';
 
-    // Load catalog for linking
-    const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
-    fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
-        .then(r => r.json())
-        .then(cats => {
+    // Load catalog only when scope changes (cached by cliente_id:grupo_id).
+    // The cache holds a Promise so that both the pre-warm fetch and openPanel
+    // share the same in-flight request — no duplicate catalog downloads.
+    const catKey = (currentClienteId || '') + ':' + (currentGrupoId || '');
+    if (!catalogoCache[catKey]) {
+        const cat_params = new URLSearchParams({cliente_id: currentClienteId, grupo_id: currentGrupoId});
+        catalogoCache[catKey] = fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cat_params)
+            .then(r => r.json())
+            .catch(() => []);
+    }
+    const catPromise = catalogoCache[catKey];
+
+    const itensPromise = fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`).then(r => r.json());
+
+    // Render the panel only after BOTH catalog and items are ready so selects are always populated
+    Promise.all([catPromise, itensPromise])
+        .then(([cats, data]) => {
             catalogoProdutos = cats;
-            // Populate "Vincular Todos" select
+            // Update "vincular todos" bar
             const sel = document.getElementById('selVincularTodos');
             sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
             document.getElementById('vincularTodosBar').style.display = '';
-        });
 
-    fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`)
-        .then(r => r.json())
-        .then(data => {
             if (data.error) { document.getElementById('panelBody').innerHTML = `<p style="color:red">${data.error}</p>`; return; }
             const nota = data.nota;
             document.getElementById('panelTitle').textContent =
@@ -798,7 +1130,7 @@ function openPanel(nfeId, evt) {
 
             let html = `<dl class="panel-nota-info">
                 <div><dt>Emitente</dt><dd style="text-transform:uppercase;">${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
-                <div class="pni-date"><dt>Data Emissão</dt><dd>${nota.data_emissao||'—'}</dd></div>
+                <div class="pni-date"><dt>Data Emissão</dt><dd>${fmtDate(nota.data_emissao)}</dd></div>
                 <div><dt>Destinatário</dt><dd style="text-transform:uppercase;">${nota.dest_nome||'—'}</dd></div>
                 <div></div>
             </dl>`;
@@ -863,38 +1195,71 @@ function buildProdOpts(selectedId) {
 }
 
 function closePanel() {
+    if (panelModified && currentNfeId) {
+        // Update only the vinculation dot for this NF-e row in-place.
+        // This avoids a full applyFilters() → api_notas round-trip (which was
+        // slow because the retroactive UPDATE may still hold DB locks, and the
+        // api_notas window-function query over the full table is expensive).
+        const totalWraps = document.querySelectorAll('[id^="vinculo_"]').length;
+        const vincWraps  = document.querySelectorAll('[id^="vinculo_"] .vinculado-badge').length;
+        const row = document.querySelector(`tr[data-nfeid="${currentNfeId}"]`);
+        if (row) {
+            let dotCls, dotTip;
+            if (totalWraps === 0)             { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
+            else if (vincWraps === 0)          { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
+            else if (vincWraps === totalWraps) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
+            else                              { dotCls = 'amarelo';   dotTip = `Parcial (${vincWraps}/${totalWraps})`; }
+            const dotCell = row.querySelector('.vinc-cell');
+            if (dotCell) dotCell.innerHTML = `<span class="vinc-dot ${dotCls}" title="${dotTip}"></span>`;
+        }
+        panelModified = false;
+    }
     document.getElementById('panelOverlay').classList.remove('open');
     currentNfeId = null;
-    if (panelModified) {
-        panelModified = false;
-        applyFilters();
-    }
 }
 
 function vincularProduto(itemId, clienteId, grupoId) {
     const sel = document.getElementById('sel_prod_' + itemId);
     const produtoId = sel.value ? parseInt(sel.value) : null;
-    fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            panelModified = true;
-            const wrap = document.getElementById('vinculo_' + itemId);
-            if (produtoId && data.produto_nome) {
+    // Look up product name from the already-loaded catalog (guaranteed populated by Promise.all in openPanel)
+    const prodObj = produtoId ? catalogoProdutos.find(p => p.id === produtoId) : null;
+    const prodNome = prodObj ? prodObj.nome : null;
+
+    const wrap = document.getElementById('vinculo_' + itemId);
+
+    if (produtoId && prodNome) {
+        // Update the UI immediately — fire-and-forget the save to the server
+        wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
+            <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+        panelModified = true;
+        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
+        }).catch(() => {/* silent: UI already updated */});
+    } else if (produtoId && !prodNome) {
+        // Catalog not ready (shouldn't happen after Promise.all, but handle defensively)
+        const btn = wrap.querySelector('button');
+        if (btn) { btn.disabled = true; btn.textContent = '⌛'; }
+        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
+        }).then(r => r.json()).then(data => {
+            if (data.ok && data.produto_nome) {
                 wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
                     <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
-            } else {
-                // Rebuild with fresh select
-                const opts = buildProdOpts(null);
-                wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
-                    <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+                panelModified = true;
             }
-        }
-    });
+        }).catch(() => {
+            if (btn) { btn.disabled = false; btn.textContent = 'Vincular'; }
+        });
+    } else if (!produtoId) {
+        const opts = buildProdOpts(null);
+        wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+            <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+        panelModified = true;
+    }
 }
 
 function desvincular(itemId) {
@@ -911,6 +1276,21 @@ function vincularTodos() {
     if (!produtoId) { alert('Selecione um produto para vincular.'); return; }
     if (!currentNfeId) return;
     if (!confirm('Aplicar este produto a TODOS os itens desta NF-e?')) return;
+
+    // Look up product name from in-memory catalog (already loaded by Promise.all in openPanel)
+    const prodObj = catalogoProdutos.find(p => p.id === produtoId);
+    const prodNome = prodObj ? prodObj.nome : null;
+
+    // Optimistic UI: update all visible item rows instantly
+    if (prodNome) {
+        document.querySelectorAll('[id^="vinculo_"]').forEach(wrap => {
+            const itemId = parseInt(wrap.id.replace('vinculo_', ''));
+            wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
+                <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+        });
+        panelModified = true;
+    }
+
     fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -920,8 +1300,14 @@ function vincularTodos() {
     .then(data => {
         if (data.ok) {
             panelModified = true;
-            // Refresh modal items
-            openPanel(currentNfeId, null);
+            // If we didn't have the name locally, fall back to server response and re-render
+            if (!prodNome && data.produto_nome) {
+                document.querySelectorAll('[id^="vinculo_"]').forEach(wrap => {
+                    const itemId = parseInt(wrap.id.replace('vinculo_', ''));
+                    wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
+                        <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+                });
+            }
         }
     })
     .catch(() => alert('Erro ao vincular todos.'));
@@ -966,7 +1352,8 @@ function exportarCSV() {
                           'valor_total','valor_icms','valor_pis','valor_cofins','valor_ipi','origem','chave_acesso'];
             let csv = cols.join(';') + '\n';
             data.rows.forEach(r => {
-                csv += cols.map(c => JSON.stringify(r[c]??'')).join(';') + '\n';
+                const row = {...r, data_emissao: fmtDate(r.data_emissao)};
+                csv += cols.map(c => JSON.stringify(row[c]??'')).join(';') + '\n';
             });
             const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
             const a = document.createElement('a');
@@ -1005,7 +1392,7 @@ function loadChaves() {
                 const emp = r.empresa_nome || r.grupo_nome || '—';
                 const chave = r.chave_acesso || '—';
                 return `<tr>
-                    <td style="white-space:nowrap;">${r.data_emissao||'—'}</td>
+                    <td style="white-space:nowrap;">${fmtDate(r.data_emissao)}</td>
                     <td>${emp}</td>
                     <td style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
                     <td class="chave-cell">${chave}</td>
@@ -1046,13 +1433,14 @@ function openDbxModal() {
     const overlay = document.getElementById('dbxModalOverlay');
     overlay.classList.add('open');
     // Pre-seleciona empresa/grupo da barra principal
-    const emp = document.getElementById('dbxEmpresa');
+    if (currentClienteId) {
+        const found = empresasData.find(e => e.id == currentClienteId);
+        selectDbxEmpresa(currentClienteId, found ? found.nome : '');
+    } else {
+        selectDbxEmpresa('', '');
+    }
     const grp = document.getElementById('dbxGrupo');
-    if (emp && currentClienteId) emp.value = currentClienteId;
     if (grp && currentGrupoId) grp.value = currentGrupoId;
-    // Pre-seleciona fiscal como padrão
-    const dept = document.getElementById('dbxDepartamento');
-    if (dept && !dept.value) dept.value = 'qualicontax-fiscal';
     document.getElementById('dbxResult').style.display = 'none';
 }
 
@@ -1060,9 +1448,169 @@ function closeDbxModal() {
     document.getElementById('dbxModalOverlay').classList.remove('open');
 }
 
-function executarImportacaoDropbox() {
-    const departamento = document.getElementById('dbxDepartamento').value;
-    if (!departamento) { alert('Selecione o departamento.'); return; }
+// Helper: format CNPJ 00.000.000/0000-00
+function fmtCNPJ(s) {
+    if (!s || s.length < 14) return s || '';
+    const d = s.replace(/\D/g,'');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+    return s;
+}
+
+// Renders accumulated import results and updates the result div.
+function _renderImportResult(acc) {
+    const result = document.getElementById('dbxResult');
+    result.style.display = 'block';
+
+    const totalOk      = acc.ok;
+    const totalErr     = acc.err;
+    const totalDup     = acc.dup;
+    const totalSkipped = acc.skipped;
+    const unreg        = Object.values(acc.unreg);   // [{cnpj, nome}]
+
+    const nothingHappened = totalOk === 0 && totalErr === 0 && totalDup === 0 && totalSkipped === 0 && unreg.length === 0;
+
+    if (nothingHappened) {
+        result.className = 'info';
+        result.innerHTML = `
+          <div class="dbx-res-head">
+            <div class="dbx-res-icon"><i class="fas fa-info-circle"></i></div>
+            <div class="dbx-res-text"><strong>Nenhum arquivo novo</strong><span>Nenhum arquivo novo encontrado na pasta NOVO.</span></div>
+          </div>`;
+        return;
+    }
+
+    // Determine skin
+    let skin = 'ok';
+    let icon = 'fas fa-check-circle';
+    let headTitle = 'Importação concluída';
+    if (unreg.length > 0 && totalOk === 0 && totalErr === 0) {
+        skin = 'warn'; icon = 'fas fa-exclamation-triangle';
+        headTitle = 'Empresas não cadastradas';
+    } else if (totalErr > 0 && totalOk === 0) {
+        skin = 'err'; icon = 'fas fa-times-circle';
+        headTitle = 'Importação com erros';
+    } else if (totalOk > 0) {
+        skin = 'ok'; icon = 'fas fa-check-circle';
+        headTitle = 'Importação concluída';
+    } else {
+        skin = 'info'; icon = 'fas fa-info-circle';
+        headTitle = 'Importação concluída';
+    }
+
+    // Build summary sentence from accumulated totals (never from per-batch data.msg).
+    const parts = [];
+    const totalFiles = totalOk + totalDup + totalErr + totalSkipped;
+    if (totalFiles > 0) parts.push(`${totalFiles} arquivo(s) analisado(s).`);
+    if (totalOk > 0)      parts.push(`${totalOk} importado(s).`);
+    if (totalDup > 0)     parts.push(`${totalDup} duplicado(s).`);
+    if (totalErr > 0)     parts.push(`${totalErr} com erro.`);
+    if (totalSkipped > 0) parts.push(`${totalSkipped} ignorado(s).`);
+    if (acc.moved_ok > 0 || acc.moved_err > 0) {
+        parts.push(`${acc.moved_ok} movido(s) para IMPORTADOS, ${acc.moved_err} movido(s) para ERROS.`);
+    }
+    if (unreg.length > 0) parts.push(`${unreg.length} empresa(s) não cadastrada(s).`);
+    const headSub = parts.join(' ');
+
+    result.className = skin;
+    let html = `<div class="dbx-res-head">
+      <div class="dbx-res-icon"><i class="${icon}"></i></div>
+      <div class="dbx-res-text"><strong>${headTitle}</strong><span>${headSub}</span></div>
+    </div>`;
+
+    // Stats chips
+    const chips = [];
+    if (totalOk > 0)      chips.push(`<span class="dbx-stat s-ok"><i class="fas fa-check"></i>${totalOk} importado(s)</span>`);
+    if (totalDup > 0)     chips.push(`<span class="dbx-stat s-dup"><i class="fas fa-copy"></i>${totalDup} duplicado(s)</span>`);
+    if (totalErr > 0)     chips.push(`<span class="dbx-stat s-err"><i class="fas fa-times"></i>${totalErr} com erro</span>`);
+    if (totalSkipped > 0) chips.push(`<span class="dbx-stat s-skip"><i class="fas fa-forward"></i>${totalSkipped} ignorado(s)</span>`);
+    if (chips.length)     html += `<div class="dbx-stats">${chips.join('')}</div>`;
+
+    // Imported companies summary (with all periods accumulated across batches)
+    const impCos = Object.values(acc.impCos);
+    if (impCos.length > 0) {
+        impCos.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        html += `<div class="dbx-imp">
+          <div class="dbx-imp-head"><i class="fas fa-check-circle"></i> Empresas importadas (${impCos.length})</div>
+          <div class="dbx-imp-list">`;
+        impCos.forEach(c => {
+            const label = (c.numero ? c.numero + ' — ' : '') + c.nome;
+            const sortedPeriodos = Array.from(c.periodosSet).sort();
+            const periodos = sortedPeriodos.map(p => `<span class="dbx-imp-periodo">${p}</span>`).join('');
+            html += `<div class="dbx-imp-item">
+              <div class="dbx-imp-name">${label}</div>
+              ${periodos ? `<div class="dbx-imp-periodos">${periodos}</div>` : ''}
+            </div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Unregistered companies card
+    if (unreg.length > 0) {
+        html += `<div class="dbx-unreg">
+          <div class="dbx-unreg-head"><i class="fas fa-building"></i> Empresas não cadastradas (${unreg.length})</div>
+          <div class="dbx-unreg-list">`;
+        unreg.forEach(c => {
+            html += `<div class="dbx-unreg-item">
+              <i class="fas fa-store" style="opacity:.6;font-size:11px;flex-shrink:0;"></i>
+              <span style="flex:1;font-weight:600;">${c.nome}</span>
+              ${c.cnpj && c.cnpj !== c.nome ? `<span class="dbx-unreg-cnpj">${fmtCNPJ(c.cnpj)}</span>` : ''}
+            </div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Error details (all batches accumulated)
+    if (acc.details.length > 0) {
+        const MAX_DETAILS = 30;
+        const shown = acc.details.slice(0, MAX_DETAILS);
+        const extra = acc.details.length - shown.length;
+        html += `<div class="dbx-unreg" style="background:#fef2f2;">
+          <div class="dbx-unreg-head" style="background:#fecaca;color:#991b1b;"><i class="fas fa-list"></i> Detalhes dos erros (${acc.details.length})</div>
+          <div class="dbx-unreg-list" style="background:#fff1f2;color:#7f1d1d;">`;
+        shown.forEach(d => { html += `<div class="dbx-unreg-item"><i class="fas fa-dot-circle" style="opacity:.5;font-size:10px;"></i>${d}</div>`; });
+        if (extra > 0) {
+            html += `<div class="dbx-unreg-item" style="color:#991b1b;font-style:italic;">... e mais ${extra} mensagem(ns) no log.</div>`;
+        }
+        html += `</div></div>`;
+    }
+
+    result.innerHTML = html;
+}
+
+let _importAborted = false;
+
+function pararImportacao() {
+    _importAborted = true;
+    const btnParar = document.getElementById('btnDbxParar');
+    btnParar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Parando...';
+    btnParar.disabled = true;
+}
+
+function executarImportacaoDropbox(_retryCount, _accumulated) {
+    _retryCount = _retryCount || 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [3000, 8000, 15000]; // ms between retry attempts
+
+    // First call: reset abort flag and show stop button.
+    if (!_accumulated) {
+        _importAborted = false;
+        const btnParar = document.getElementById('btnDbxParar');
+        btnParar.style.display = '';
+        btnParar.disabled = false;
+        btnParar.innerHTML = '<i class="fas fa-stop-circle"></i> Parar Importação';
+    }
+
+    // Accumulated totals across all has_more batches.
+    // impCos: {key: {numero, nome, periodosSet}}
+    // unreg: {cnpj_or_name: {cnpj, nome}}
+    // lastScanned: cursor (last filename analysed) for filter-mode pagination.
+    const acc = _accumulated || {
+        ok: 0, dup: 0, err: 0, skipped: 0, moved_ok: 0, moved_err: 0,
+        impCos: {}, unreg: {}, details: [],
+        lastScanned: null,
+    };
+
+    const departamento = 'Fiscal';
 
     const cliente_id = document.getElementById('dbxEmpresa').value || null;
     const grupo_id = document.getElementById('dbxGrupo').value || null;
@@ -1077,35 +1625,254 @@ function executarImportacaoDropbox() {
     fetch('{{ url_for("escrita_fiscal.api_importar_dropbox") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({departamento, cliente_id, grupo_id}),
+        body: JSON.stringify({departamento, cliente_id, grupo_id, last_scanned: acc.lastScanned}),
     })
     .then(r => r.json())
     .then(data => {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
         result.style.display = 'block';
         if (data.error) {
+            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+            document.getElementById('btnDbxParar').style.display = 'none';
             result.className = 'err';
-            result.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.error;
+            result.innerHTML = `
+              <div class="dbx-res-head">
+                <div class="dbx-res-icon"><i class="fas fa-times-circle"></i></div>
+                <div class="dbx-res-text"><strong>Erro na importação</strong><span>${data.error}</span></div>
+              </div>`;
         } else {
-            result.className = data.err > 0 ? 'err' : 'ok';
-            let html = '<strong>' + (data.msg || '') + '</strong>';
-            if (data.details && data.details.length) {
-                html += '<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;">';
-                data.details.forEach(d => { html += '<li>' + d + '</li>'; });
-                html += '</ul>';
+            // --- Accumulate numeric counters ---
+            acc.ok       += data.ok       || 0;
+            acc.dup      += data.dup      || 0;
+            acc.err      += data.err      || 0;
+            acc.skipped  += data.skipped  || 0;
+            acc.moved_ok += data.moved_ok || 0;
+            acc.moved_err+= data.moved_err|| 0;
+
+            // --- Update cursor for filter-mode pagination ---
+            // last_scanned is the last filename analysed in this batch; the next
+            // call will start from the file immediately after it in the folder.
+            if (data.last_scanned) acc.lastScanned = data.last_scanned;
+            if (!data.has_more) acc.lastScanned = null; // reset when scan completes
+
+            // --- Accumulate imported companies (merge periods from each batch) ---
+            (data.imported_companies || []).forEach(c => {
+                const key = (c.numero || '') + '|' + (c.nome || '');
+                if (!acc.impCos[key]) {
+                    acc.impCos[key] = {numero: c.numero, nome: c.nome, periodosSet: new Set()};
+                }
+                (c.periodos || []).forEach(p => acc.impCos[key].periodosSet.add(p));
+            });
+
+            // --- Accumulate unregistered companies ---
+            (data.unregistered_companies || []).forEach(c => {
+                const key = c.cnpj || c.nome;
+                acc.unreg[key] = c;
+            });
+
+            // --- Accumulate error details (cap at 50 total to avoid huge DOM) ---
+            (data.details || []).forEach(d => {
+                if (acc.details.length < 50) acc.details.push(d);
+            });
+
+            if (data.ok > 0 && (currentClienteId || currentGrupoId)) applyFilters();
+
+            // Continua automaticamente quando:
+            // (a) arquivos foram fisicamente movidos (fluxo normal), OU
+            // (b) filtro ativo pulou arquivos e o cursor avançou (há arquivos da
+            //     empresa selecionada mais adiante na pasta).
+            // Usar somente ok+dup+err causaria loop infinito: XMLs de evento sem
+            // empresa identificada incrementam err mas ficam em NOVO.
+            const filesWereMoved = ((data.moved_ok || 0) + (data.moved_err || 0)) > 0;
+            const filterSkipsAdvancing = !!(data.skipped > 0 && data.has_more && data.last_scanned);
+            if (data.has_more && (filesWereMoved || filterSkipsAdvancing)) {
+                // Check if user requested stop before scheduling next batch.
+                if (_importAborted) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+                    document.getElementById('btnDbxParar').style.display = 'none';
+                    result.style.display = 'block';
+                    _renderImportResult(acc);
+                    result.innerHTML += `<div class="dbx-more-msg" style="background:#fef9c3;color:#854d0e;border-color:#fde68a;"><i class="fas fa-stop-circle"></i> Importação interrompida pelo usuário. Há mais arquivos na pasta — clique em Importar XML para continuar.</div>`;
+                    return;
+                }
+                // Show running totals while more batches are pending.
+                _renderImportResult(acc);
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+                btn.disabled = true;
+                setTimeout(() => executarImportacaoDropbox(0, acc), 300);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+                document.getElementById('btnDbxParar').style.display = 'none';
+                _renderImportResult(acc);
+                if (data.has_more && !filesWereMoved && !filterSkipsAdvancing) {
+                    result.innerHTML += `<div class="dbx-more-msg"><i class="fas fa-info-circle"></i> Há mais arquivos na pasta. Cadastre as empresas acima e importe novamente.</div>`;
+                }
             }
-            result.innerHTML = html;
-            if (data.ok > 0) applyFilters();
         }
     })
     .catch(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar';
-        result.style.display = 'block';
-        result.className = 'err';
-        result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão.';
+        if (_retryCount < MAX_RETRIES) {
+            const attempt = _retryCount + 1;
+            const delay   = RETRY_DELAYS[_retryCount];
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Importando...`;
+            result.style.display = 'block';
+            result.className = 'warn';
+            result.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Erro de conexão — reconectando... (tentativa ${attempt}/${MAX_RETRIES})`;
+            setTimeout(() => executarImportacaoDropbox(attempt, acc), delay);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+            document.getElementById('btnDbxParar').style.display = 'none';
+            result.style.display = 'block';
+            result.className = 'err';
+            result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão. Verifique sua internet e tente novamente.';
+        }
     });
+}
+
+// ---- Log de Importações ----
+function openLogModal() {
+    document.getElementById('logModalOverlay').style.display = 'flex';
+    carregarLog();
+}
+function closeLogModal() {
+    document.getElementById('logModalOverlay').style.display = 'none';
+}
+function closeLogDetalhe() {
+    document.getElementById('logDetalheOverlay').style.display = 'none';
+}
+
+const _RESULTADO_LABEL = {
+    importado: {label:'Importado', color:'#059669', bg:'#d1fae5'},
+    duplicata: {label:'Duplicata', color:'#d97706', bg:'#fef3c7'},
+    erro:      {label:'Erro',      color:'#dc2626', bg:'#fee2e2'},
+    ignorado:  {label:'Ignorado',  color:'#6b7280', bg:'#f3f4f6'},
+    evento:    {label:'Evento',    color:'#7c3aed', bg:'#ede9fe'},
+};
+
+function _badgeRes(r) {
+    const s = _RESULTADO_LABEL[r] || {label: r, color:'#64748b', bg:'#f1f5f9'};
+    return `<span style="background:${s.bg};color:${s.color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${s.label}</span>`;
+}
+
+function carregarLog() {
+    document.getElementById('logTableWrap').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:40px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
+    fetch('{{ url_for("escrita_fiscal.api_log_importacoes") }}?limit=60')
+        .then(r => r.json())
+        .then(data => {
+            const rows = data.rows || [];
+            if (!rows.length) {
+                document.getElementById('logTableWrap').innerHTML =
+                    '<p style="color:#94a3b8;text-align:center;margin-top:40px;">Nenhum registro encontrado.</p>';
+                return;
+            }
+            const _origemColor = {agendado:'#6366f1', manual:'#059669'};
+            let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Data/Hora</th>
+                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Dept.</th>
+                <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">Origem</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">Duração</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;"></th>
+              </tr></thead><tbody>`;
+            rows.forEach(r => {
+                const dur = (r.iniciado_em && r.concluido_em)
+                    ? (() => {
+                        const s = Math.round((new Date(r.concluido_em) - new Date(r.iniciado_em)) / 1000);
+                        return s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
+                      })()
+                    : '—';
+                const oc = _origemColor[r.origem] || '#64748b';
+                html += `<tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                  <td style="padding:8px 10px;color:#475569;">${(r.iniciado_em||'')}</td>
+                  <td style="padding:8px 10px;font-weight:600;">${r.departamento}</td>
+                  <td style="padding:8px 6px;text-align:center;">
+                    <span style="background:${oc}22;color:${oc};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${r.origem}</span>
+                  </td>
+                  <td style="padding:8px 6px;text-align:center;color:#059669;font-weight:700;">${r.ok}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#d97706;">${r.dup}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#dc2626;">${r.err}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#6b7280;">${r.skipped}</td>
+                  <td style="padding:8px 6px;text-align:center;color:#94a3b8;font-size:11px;">${dur}</td>
+                  <td style="padding:8px 6px;text-align:center;">
+                    <button onclick="abrirDetalhe(${r.id})" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer;color:#4f46e5;font-weight:600;">
+                      <i class="fas fa-search"></i> Ver
+                    </button>
+                  </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('logTableWrap').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('logTableWrap').innerHTML =
+                '<p style="color:#dc2626;text-align:center;">Erro ao carregar log.</p>';
+        });
+}
+
+function abrirDetalhe(logId) {
+    document.getElementById('logDetalheTitle').innerHTML =
+        `<i class="fas fa-file-alt" style="margin-right:8px;color:#6366f1;"></i>Detalhe — Log #${logId}`;
+    document.getElementById('logDetalheBody').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
+    document.getElementById('logDetalheOverlay').style.display = 'flex';
+    fetch(`{{ url_for("escrita_fiscal.api_log_importacoes") }}?log_id=${logId}`)
+        .then(r => r.json())
+        .then(data => {
+            const row = data.row || {};
+            const files = Array.isArray(row.detalhes) ? row.detalhes : [];
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px;">
+              <div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#059669;">${row.ok||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Importados</div>
+              </div>
+              <div style="background:#fffbeb;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#d97706;">${row.dup||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Duplicatas</div>
+              </div>
+              <div style="background:#fef2f2;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#dc2626;">${row.err||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Erros</div>
+              </div>
+              <div style="background:#f9fafb;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:#6b7280;">${row.skipped||0}</div>
+                <div style="font-size:11px;color:#6b7280;">Ignorados</div>
+              </div>
+            </div>`;
+            if (!files.length) {
+                html += '<p style="color:#94a3b8;text-align:center;">Sem detalhes por arquivo disponíveis.</p>';
+            } else {
+                html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+                    <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Arquivo</th>
+                    <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Empresa</th>
+                    <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">Resultado</th>
+                    <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Detalhe</th>
+                  </tr></thead><tbody>`;
+                files.forEach(f => {
+                    html += `<tr style="border-bottom:1px solid #f3f4f6;">
+                      <td style="padding:5px 8px;font-family:monospace;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.arquivo||''}">${(f.arquivo||'').slice(0,32)}${(f.arquivo||'').length>32?'…':''}</td>
+                      <td style="padding:5px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.empresa||''}">${f.empresa||''}</td>
+                      <td style="padding:5px 8px;text-align:center;">${_badgeRes(f.resultado)}</td>
+                      <td style="padding:5px 8px;color:#6b7280;font-size:11px;">${f.detalhe||''}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            document.getElementById('logDetalheBody').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('logDetalheBody').innerHTML =
+                '<p style="color:#dc2626;text-align:center;">Erro ao carregar detalhes.</p>';
+        });
 }
 
 </script>

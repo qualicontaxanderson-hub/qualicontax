@@ -160,7 +160,7 @@ class GrupoCliente:
             list: Lista de clientes do grupo
         """
         query = """
-            SELECT c.id, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj,
+            SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj,
                    c.email, c.telefone, c.situacao
             FROM clientes c
             INNER JOIN cliente_grupo_relacao cgr ON c.id = cgr.cliente_id

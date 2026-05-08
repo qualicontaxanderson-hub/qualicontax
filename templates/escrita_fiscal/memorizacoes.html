@@ -326,10 +326,11 @@ function verEmpresas(id, fornecedor, codigo) {
             }
             const html = d.empresas.map(e => {
                 const ini = (e.nome_razao_social || '?')[0].toUpperCase();
+                const numCli = e.numero_cliente ? `<span style="color:#22C55E;font-weight:700;">#${e.numero_cliente}</span> — ` : '';
                 return `<div class="emp-item">
                     <div class="emp-avatar">${ini}</div>
                     <div>
-                        <div class="emp-name">${e.nome_razao_social || '—'}</div>
+                        <div class="emp-name">${numCli}${e.nome_razao_social || '—'}</div>
                         <div class="emp-cnpj">${e.cpf_cnpj || ''}</div>
                     </div>
                 </div>`;

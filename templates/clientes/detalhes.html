@@ -7,7 +7,12 @@
     <!-- Page Header -->
     <div class="page-header">
         <div>
-            <h1 class="page-title">{{ cliente.nome_razao_social }}</h1>
+            <h1 class="page-title">
+                {% if cliente.numero_cliente %}
+                <span style="color: #22C55E; margin-right: 8px;">#{{ cliente.numero_cliente }}</span>
+                {% endif %}
+                {{ cliente.nome_razao_social }}
+            </h1>
             <p class="page-subtitle">
                 <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
                     {{ cliente.situacao }}
@@ -95,6 +100,12 @@
                     </div>
                     <div class="card-body">
                         <div class="info-grid">
+                            {% if cliente.numero_cliente %}
+                            <div class="info-item">
+                                <label>Nº Cliente</label>
+                                <span><strong style="color: #22C55E;">#{{ cliente.numero_cliente }}</strong></span>
+                            </div>
+                            {% endif %}
                             <div class="info-item">
                                 <label>Tipo de Pessoa</label>
                                 <span>{{ 'Pessoa Física' if cliente.tipo_pessoa == 'PF' else 'Pessoa Jurídica' }}</span>

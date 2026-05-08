@@ -1,17 +1,44 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
+import logging
 import re
-from datetime import datetime
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify,
 )
-from utils.auth_helper import login_required
-from utils.db_helper import execute_query
+from flask_login import current_user
+from utils.auth_helper import login_required, permission_required
+from utils.db_helper import execute_query, execute_many
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
+from utils.dropbox_sync import DropboxAuthError, DropboxError
 from config import Config
 
+logger = logging.getLogger(__name__)
+
 _MAX_XML_SIZE = 16_000_000  # MEDIUMTEXT max is 16 MB
+_DROPBOX_AUTH_ERROR_MSG = (
+    'Credenciais Dropbox inválidas ou expiradas. '
+    'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+)
+# Máximo de arquivos processados por chamada ao endpoint importar-dropbox.
+# Cada arquivo exige download Dropbox + 2 queries DB + move Dropbox (operações
+# de rede dominam). 20 arquivos fica bem dentro do timeout de 300 s do gunicorn;
+# o frontend faz auto-continue quando has_more=True, garantindo importação
+# completa sem interação do usuário.
+_DROPBOX_BATCH_LIMIT = 20
+
+# Namespace NF-e (usado para detecção de XMLs de evento)
+_NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
+# Tags raiz de XMLs de evento NF-e: carta de correção, cancelamento, etc.
+# Esses arquivos não são NF-e padrão e não devem ser importados como notas.
+_NFE_EVENT_ROOT_TAGS = frozenset({
+    'procEventoNFe', 'envEvento', 'retEnvEvento',
+    'resNFe', 'retCancNFe', 'procCancNFe',
+})
 
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
@@ -37,7 +64,7 @@ escrita_fiscal = Blueprint('escrita_fiscal', __name__, url_prefix='/escrita-fisc
 # ---------------------------------------------------------------------------
 def _get_empresas():
     return execute_query(
-        "SELECT id, nome_razao_social, cpf_cnpj FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
         fetch=True,
     ) or []
 
@@ -107,6 +134,63 @@ def _upsert_vinculo(cliente_id, grupo_id, ramo_atividade_id,
         )
 
 
+def _upsert_vinculo_batch(cliente_id, grupo_id, ramo_atividade_id,
+                          emit_cnpj, codigo_desc_map: dict, produto_catalogo_id):
+    """Batch version of _upsert_vinculo for multiple product codes at once.
+
+    codigo_desc_map: {codigo_produto_xml: descricao_produto_xml}
+
+    Performs 3 queries (SELECT + UPDATE + INSERT) instead of 2×N queries,
+    reducing 40-second "Aplicar a Todos" to sub-second for any NF-e size.
+    """
+    if not codigo_desc_map or not emit_cnpj:
+        return
+
+    codigos = list(codigo_desc_map.keys())
+    ph = ','.join(['%s'] * len(codigos))
+
+    existing_rows = execute_query(
+        f"""SELECT id, codigo_produto_xml FROM nfe_produto_vinculo
+             WHERE cliente_id        <=> %s
+               AND grupo_id          <=> %s
+               AND ramo_atividade_id <=> %s
+               AND emit_cnpj         =   %s
+               AND codigo_produto_xml IN ({ph})""",
+        (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, *codigos),
+        fetch=True,
+    ) or []
+
+    existing_map = {r['codigo_produto_xml']: r['id'] for r in existing_rows}
+
+    # Batch UPDATE existing rows (all get the same produto_catalogo_id)
+    if existing_map:
+        id_list = list(existing_map.values())
+        id_ph = ','.join(['%s'] * len(id_list))
+        execute_query(
+            f"UPDATE nfe_produto_vinculo SET produto_catalogo_id = %s WHERE id IN ({id_ph})",
+            tuple([produto_catalogo_id] + id_list),
+        )
+
+    # Batch INSERT new rows
+    new_codes = [cod for cod in codigos if cod not in existing_map]
+    if new_codes:
+        values_ph = ','.join(['(%s,%s,%s,%s,%s,%s,%s)'] * len(new_codes))
+        params: list = []
+        for cod in new_codes:
+            params.extend([
+                cliente_id, grupo_id, ramo_atividade_id,
+                emit_cnpj, cod, codigo_desc_map[cod], produto_catalogo_id,
+            ])
+        execute_query(
+            f"""INSERT INTO nfe_produto_vinculo
+                   (cliente_id, grupo_id, ramo_atividade_id,
+                    emit_cnpj, codigo_produto_xml,
+                    descricao_produto_xml, produto_catalogo_id)
+               VALUES {values_ph}""",
+            tuple(params),
+        )
+
+
 def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
     """Retorna fragmento WHERE + params list para filtro empresa/grupo.
 
@@ -147,16 +231,22 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
 # Landing page
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/')
-@login_required
+@permission_required('escrita_fiscal.index')
 def index():
-    return render_template('escrita_fiscal/index.html')
+    from utils.scheduler import get_scheduled_time
+    schedule = get_scheduled_time() if current_user.is_admin() else {}
+    return render_template(
+        'escrita_fiscal/index.html',
+        is_admin=current_user.is_admin(),
+        schedule_texto=schedule.get('texto', ''),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Conferência de Compras — página principal
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/')
-@login_required
+@permission_required('escrita_fiscal.conf_compras')
 def conf_compras():
     empresas = _get_empresas()
     grupos = _get_grupos()
@@ -206,10 +296,8 @@ def api_notas():
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
 
-    where, params = [], []
-    _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=params)
     extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where.extend(extra_clauses)
+    where = extra_clauses
 
     if f_emit_cnpj:
         where.append('n.emit_cnpj = %s')
@@ -266,23 +354,9 @@ def api_notas():
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
 
-    count_row = execute_query(
-        f"SELECT COUNT(*) AS c FROM nfe_importacoes n {where_sql}",
-        tuple(params), fetch=True, fetch_one=True,
-    ) or {}
-    total = count_row.get('c', 0)
-
-    # KPI aggregates for the current filter
-    kpi_row = execute_query(
-        f"""SELECT COALESCE(SUM(n.valor_total),0) AS total_valor,
-                   COALESCE(SUM(n.valor_icms),0) AS total_icms,
-                   COALESCE(SUM(n.valor_pis),0) AS total_pis,
-                   COALESCE(SUM(n.valor_cofins),0) AS total_cofins
-              FROM nfe_importacoes n {where_sql}""",
-        tuple(params), fetch=True, fetch_one=True,
-    ) or {}
-
-    rows = execute_query(
+    # Single query: window functions supply total count + KPI aggregates while
+    # LIMIT/OFFSET pages the rows — avoids 3 separate round-trips to the DB.
+    all_rows = execute_query(
         f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
                    n.dest_cnpj, n.dest_nome,
@@ -291,17 +365,23 @@ def api_notas():
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
-                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id) AS qtd_itens,
-                   (SELECT COUNT(*) FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL) AS itens_vinculados
+                   COALESCE(ic.qtd_itens, 0) AS qtd_itens,
+                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados,
+                   COUNT(*) OVER() AS _total,
+                   COALESCE(SUM(n.valor_total) OVER(), 0) AS _kpi_valor,
+                   COALESCE(SUM(n.valor_icms)  OVER(), 0) AS _kpi_icms,
+                   COALESCE(SUM(n.valor_pis)   OVER(), 0) AS _kpi_pis,
+                   COALESCE(SUM(n.valor_cofins) OVER(), 0) AS _kpi_cofins
               FROM nfe_importacoes n
-              LEFT JOIN clientes c ON c.id = COALESCE(
-                  n.cliente_id,
-                  (SELECT c2.id FROM clientes c2
-                    WHERE REPLACE(REPLACE(REPLACE(c2.cpf_cnpj,'.',''),'/',''),'-','')
-                        = REPLACE(REPLACE(REPLACE(n.dest_cnpj,'.',''),'/',''),'-','')
-                    LIMIT 1)
-              )
+              LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
+              LEFT JOIN (
+                  SELECT nfe_id,
+                         COUNT(*) AS qtd_itens,
+                         COUNT(produto_catalogo_id) AS itens_vinculados
+                    FROM nfe_itens
+                   GROUP BY nfe_id
+              ) ic ON ic.nfe_id = n.id
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
@@ -309,17 +389,35 @@ def api_notas():
         fetch=True,
     ) or []
 
-    for r in rows:
+    # Extract window-function values from the first row (same for all rows)
+    first = all_rows[0] if all_rows else {}
+    total = int(first.get('_total') or 0)
+    kpi = {
+        'total_valor': float(first.get('_kpi_valor') or 0),
+        'total_icms':  float(first.get('_kpi_icms')  or 0),
+        'total_pis':   float(first.get('_kpi_pis')   or 0),
+        'total_cofins':float(first.get('_kpi_cofins') or 0),
+    }
+
+    # Handle empty result: total/kpi must still be valid (window cols absent)
+    if not all_rows:
+        total = 0
+        kpi = {'total_valor': 0, 'total_icms': 0, 'total_pis': 0, 'total_cofins': 0}
+
+    rows = []
+    _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
+    for r in all_rows:
+        row = {k: v for k, v in r.items() if k not in _window_cols}
         for k in ('data_emissao', 'importado_em'):
-            if r.get(k) and hasattr(r[k], 'isoformat'):
-                r[k] = r[k].isoformat()
+            if row.get(k) and hasattr(row[k], 'isoformat'):
+                row[k] = row[k].isoformat()
         for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):
-            r[k] = float(r.get(k) or 0)
+            row[k] = float(row.get(k) or 0)
+        rows.append(row)
 
     return jsonify({
         'total': total, 'page': page, 'per_page': per_page, 'rows': rows,
-        'kpi': {k: float(kpi_row.get(k) or 0) for k in
-                ('total_valor', 'total_icms', 'total_pis', 'total_cofins')},
+        'kpi': kpi,
     })
 
 
@@ -354,25 +452,44 @@ def api_itens(nfe_id):
         (nfe_id,), fetch=True,
     ) or []
 
-    # Auto-aplicar regras memorizadas nos itens ainda sem vínculo
+    # Auto-aplicar regras memorizadas nos itens ainda sem vínculo (batch)
     emit_cnpj = nota.get('emit_cnpj', '')
     cliente_id = nota.get('cliente_id')
     grupo_id = nota.get('grupo_id')
-    for it in itens:
-        if it.get('produto_catalogo_id') is None and it.get('codigo_produto'):
-            pid = _auto_vincular(emit_cnpj, it['codigo_produto'], cliente_id, grupo_id)
-            if pid:
+    unlinked = [it for it in itens if it.get('produto_catalogo_id') is None and it.get('codigo_produto')]
+    if unlinked:
+        codigos = list({it['codigo_produto'] for it in unlinked})
+        mapa = _auto_vincular_batch(emit_cnpj, codigos, cliente_id, grupo_id)
+        if mapa:
+            # Collect unique pids to fetch names in one query
+            pids = list(set(mapa.values()))
+            placeholders_p = ','.join(['%s'] * len(pids))
+            prod_rows = execute_query(
+                f"SELECT id, nome, categoria FROM nfe_produtos_catalogo WHERE id IN ({placeholders_p})",
+                tuple(pids), fetch=True,
+            ) or []
+            prod_map = {r['id']: r for r in prod_rows}
+            # Collect updates to apply in one batch
+            updates = [(mapa[it['codigo_produto']], it['id'])
+                       for it in unlinked if it['codigo_produto'] in mapa]
+            # Batch UPDATE: group items by product ID to minimize DB round-trips
+            by_product: dict = defaultdict(list)
+            for pid, item_id in updates:
+                by_product[pid].append(item_id)
+            for pid, ids in by_product.items():
+                ph = ','.join(['%s'] * len(ids))
                 execute_query(
-                    "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
-                    (pid, it['id']),
+                    f"UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id IN ({ph})",
+                    tuple([pid] + ids),
                 )
-                prod = execute_query(
-                    "SELECT nome, categoria FROM nfe_produtos_catalogo WHERE id = %s",
-                    (pid,), fetch=True, fetch_one=True,
-                )
-                it['produto_catalogo_id'] = pid
-                it['produto_catalogo_nome'] = prod['nome'] if prod else None
-                it['produto_categoria'] = prod['categoria'] if prod else None
+            # Update in-memory objects
+            for it in unlinked:
+                pid = mapa.get(it['codigo_produto'])
+                if pid:
+                    prod = prod_map.get(pid)
+                    it['produto_catalogo_id'] = pid
+                    it['produto_catalogo_nome'] = prod['nome'] if prod else None
+                    it['produto_categoria'] = prod['categoria'] if prod else None
 
     for it in itens:
         for k in ('quantidade', 'valor_unitario', 'valor_total',
@@ -455,7 +572,6 @@ def api_vincular_produto():
     )
 
     # Salva regra de auto-vínculo e aplica retroativamente em todos os itens históricos
-    retroativos = 0
     if salvar_regra and produto_id:
         emit_cnpj = item['emit_cnpj']
         cod = item['codigo_produto']
@@ -484,19 +600,8 @@ def api_vincular_produto():
                      AND i.id != %s""",
                 (produto_id, emit_cnpj, cod, item_id),
             )
-            row = execute_query(
-                """SELECT COUNT(*) AS c FROM nfe_itens i
-                      JOIN nfe_importacoes n ON n.id = i.nfe_id
-                   WHERE i.produto_catalogo_id = %s
-                     AND n.emit_cnpj = %s
-                     AND i.codigo_produto = %s
-                     AND i.id != %s""",
-                (produto_id, emit_cnpj, cod, item_id),
-                fetch=True, fetch_one=True,
-            ) or {}
-            retroativos = row.get('c', 0)
 
-    # Nome do produto vinculado
+    # Nome do produto vinculado — returned so the caller can update the UI
     prod_nome = None
     if produto_id:
         p = execute_query(
@@ -506,7 +611,7 @@ def api_vincular_produto():
         if p:
             prod_nome = p['nome']
 
-    return jsonify({'ok': True, 'produto_nome': prod_nome, 'retroativos': retroativos})
+    return jsonify({'ok': True, 'produto_nome': prod_nome})
 
 
 # ---------------------------------------------------------------------------
@@ -613,6 +718,146 @@ def api_por_produto():
             r[k] = float(r.get(k) or 0)
 
     return jsonify(rows)
+
+
+# ---------------------------------------------------------------------------
+# API — Resumo de produtos para o painel de totais (todos os registros do filtro)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/api/resumo-produtos')
+@login_required
+def api_resumo_produtos():
+    """Retorna totais agregados por categoria → produto para todos os registros
+    que correspondam ao filtro atual (sem paginação).  Inclui também os itens
+    ainda sem vínculo agrupados numa categoria especial."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id   = request.args.get('grupo_id', '').strip()
+    f_data_ini   = request.args.get('data_ini', '').strip()
+    f_data_fim   = request.args.get('data_fim', '').strip()
+    f_emit_cnpj  = request.args.get('emit_cnpj', '').strip()
+    f_emit_uf    = request.args.get('emit_uf', '').strip()
+
+    where, params = [], []
+    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj = %s')
+        params.append(f_emit_cnpj)
+    if f_emit_uf:
+        where.append('n.emit_uf = %s')
+        params.append(f_emit_uf)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    # Agrega por produto_catalogo_id (vinculados) ou por código/descrição (sem vínculo)
+    rows = execute_query(
+        f"""SELECT
+               p.categoria                          AS categoria,
+               p.subcategoria                       AS subcategoria,
+               p.id                                 AS produto_id,
+               p.nome                               AS produto_nome,
+               p.unidade                            AS produto_unidade,
+               COALESCE(SUM(i.quantidade), 0)       AS total_qtd,
+               COALESCE(SUM(i.valor_total), 0)      AS total_valor,
+               COALESCE(SUM(i.valor_icms), 0)       AS total_icms,
+               COUNT(DISTINCT n.id)                 AS qtd_notas
+           FROM nfe_itens i
+           JOIN nfe_importacoes n ON n.id = i.nfe_id
+           JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
+           {where_sql}
+           GROUP BY p.categoria, p.subcategoria, p.id, p.nome, p.unidade
+           ORDER BY p.categoria, p.subcategoria, total_valor DESC""",
+        tuple(params), fetch=True,
+    ) or []
+
+    # Itens sem vínculo — agrupados pelo descrição normalizada do XML
+    unlinked = execute_query(
+        f"""SELECT
+               i.descricao                          AS produto_nome,
+               i.unidade                            AS produto_unidade,
+               COALESCE(SUM(i.quantidade), 0)       AS total_qtd,
+               COALESCE(SUM(i.valor_total), 0)      AS total_valor,
+               COALESCE(SUM(i.valor_icms), 0)       AS total_icms,
+               COUNT(DISTINCT n.id)                 AS qtd_notas
+           FROM nfe_itens i
+           JOIN nfe_importacoes n ON n.id = i.nfe_id
+           {where_sql}
+               {'AND' if where_sql else 'WHERE'} i.produto_catalogo_id IS NULL
+           GROUP BY i.descricao, i.unidade
+           ORDER BY total_valor DESC
+           LIMIT 200""",
+        tuple(params), fetch=True,
+    ) or []
+
+    # Converte decimais
+    for r in rows:
+        for k in ('total_qtd', 'total_valor', 'total_icms'):
+            r[k] = float(r.get(k) or 0)
+
+    for r in unlinked:
+        for k in ('total_qtd', 'total_valor', 'total_icms'):
+            r[k] = float(r.get(k) or 0)
+        r['categoria']       = '— Sem vínculo —'
+        r['subcategoria']    = None
+        r['produto_id']      = None
+
+    # Monta estrutura hierárquica: { categoria: { subcategoria: [produtos] } }
+    from collections import OrderedDict
+    cats = OrderedDict()
+
+    def _add(cat, subcat, row):
+        if cat not in cats:
+            cats[cat] = {'total_valor': 0, 'total_qtd': 0, 'total_icms': 0, 'qtd_notas': 0, 'subcats': OrderedDict()}
+        c = cats[cat]
+        c['total_valor'] += row['total_valor']
+        c['total_icms']  += row['total_icms']
+        c['qtd_notas']   += row.get('qtd_notas', 0)
+        sub_key = subcat or ''
+        if sub_key not in c['subcats']:
+            c['subcats'][sub_key] = {'total_valor': 0, 'total_qtd': 0, 'total_icms': 0, 'produtos': []}
+        s = c['subcats'][sub_key]
+        s['total_valor'] += row['total_valor']
+        s['total_icms']  += row['total_icms']
+        s['produtos'].append({
+            'id':       row.get('produto_id'),
+            'nome':     row.get('produto_nome') or '—',
+            'unidade':  row.get('produto_unidade') or '',
+            'total_qtd':   row['total_qtd'],
+            'total_valor': row['total_valor'],
+            'total_icms':  row['total_icms'],
+            'qtd_notas':   row.get('qtd_notas', 0),
+        })
+
+    for r in rows:
+        _add(r.get('categoria') or '— Sem categoria —', r.get('subcategoria'), r)
+    for r in unlinked:
+        _add(r['categoria'], r.get('subcategoria'), r)
+
+    # Serializa preservando ordem
+    result = []
+    for cat_nome, cat_data in cats.items():
+        subcats_list = []
+        for sub_nome, sub_data in cat_data['subcats'].items():
+            subcats_list.append({
+                'nome':        sub_nome,
+                'total_valor': round(sub_data['total_valor'], 2),
+                'total_icms':  round(sub_data['total_icms'],  2),
+                'produtos':    sub_data['produtos'],
+            })
+        result.append({
+            'categoria':   cat_nome,
+            'total_valor': round(cat_data['total_valor'], 2),
+            'total_icms':  round(cat_data['total_icms'],  2),
+            'qtd_notas':   cat_data['qtd_notas'],
+            'subcats':     subcats_list,
+        })
+
+    return jsonify(result)
 
 
 # ---------------------------------------------------------------------------
@@ -723,31 +968,57 @@ def api_importar_dropbox():
     departamento = data.get('departamento', '').strip()
     cliente_id = data.get('cliente_id') or None
     grupo_id = data.get('grupo_id') or None
+    # Cursor para paginação filtrada: nome do último arquivo analisado na chamada anterior.
+    # Usado quando um filtro de empresa/grupo está ativo para avançar pelo diretório NOVO
+    # sem re-processar os mesmos arquivos que foram pulados (skipped) em batches anteriores.
+    last_scanned = (data.get('last_scanned') or '').strip()
 
     if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
         return jsonify({'error': 'Departamento inválido.'}), 400
 
     svc = dropbox_sync._service
 
-    # Descobre o nome da empresa/grupo para as pastas de destino
-    empresa_nome = 'GLOBAL'
+    logger.info('Importar Dropbox: departamento=%r cliente_id=%r grupo_id=%r',
+                departamento, cliente_id, grupo_id)
+
+    # ------------------------------------------------------------------
+    # Monta conjunto de CNPJs aceitos como filtro (digits only, sem pontuação).
+    # None = aceitar todos.  Quando cliente_id ou grupo_id é fornecido pelo
+    # front-end, apenas XMLs cujo dest_cnpj bata com esse conjunto são
+    # processados; os demais são IGNORADOS (ficam na pasta NOVO intocados).
+    # A empresa salva no banco é sempre determinada pelo dest_cnpj do XML —
+    # NUNCA pelo cliente_id/grupo_id do filtro — para garantir fidedignidade.
+    # ------------------------------------------------------------------
+    filter_cnpjs: set | None = None  # set de strings de dígitos
     if cliente_id:
         c = execute_query(
-            "SELECT nome_razao_social FROM clientes WHERE id = %s",
+            "SELECT cpf_cnpj FROM clientes WHERE id = %s",
             (int(cliente_id),), fetch=True, fetch_one=True,
         )
         if c:
-            empresa_nome = c['nome_razao_social']
+            _d = re.sub(r'\D', '', c['cpf_cnpj'] or '')
+            if _d:
+                filter_cnpjs = {_d}
     elif grupo_id:
-        g = execute_query(
-            "SELECT nome FROM grupos_clientes WHERE id = %s",
-            (int(grupo_id),), fetch=True, fetch_one=True,
-        )
-        if g:
-            empresa_nome = g['nome']
+        members = execute_query(
+            "SELECT c.cpf_cnpj FROM clientes c "
+            "JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id "
+            "WHERE cgr.grupo_id = %s",
+            (int(grupo_id),), fetch=True,
+        ) or []
+        filter_cnpjs = {re.sub(r'\D', '', m['cpf_cnpj'] or '') for m in members} - {''}
+        if not filter_cnpjs:
+            filter_cnpjs = None  # grupo vazio → sem filtro
 
     pasta_novo = svc.pasta_novo(departamento)
-    files = svc.list_xml_files(pasta_novo)
+    logger.info('Buscando XMLs em: %r', pasta_novo)
+    try:
+        files = svc.list_xml_files(pasta_novo)
+    except DropboxAuthError:
+        return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
+    except DropboxError:
+        logger.exception('Erro ao listar pasta Dropbox %r', pasta_novo)
+        return jsonify({'error': 'Erro ao conectar ao Dropbox. Verifique as credenciais e a conexão.'}), 502
 
     if not files:
         return jsonify({
@@ -755,22 +1026,80 @@ def api_importar_dropbox():
             'msg': 'Nenhum arquivo XML encontrado na pasta NOVO.',
         }), 200
 
-    now = datetime.now()
-    pasta_imp = svc.pasta_importados(departamento, empresa_nome, now)
-    pasta_err = svc.pasta_erros(departamento, empresa_nome, now)
-    svc.ensure_folder(pasta_imp)
-    svc.ensure_folder(pasta_err)
+    # ------------------------------------------------------------------
+    # Paginação por cursor quando filtro de empresa/grupo está ativo.
+    # Arquivos pulados (skipped) permanecem em NOVO na mesma posição
+    # alfabética, então sem cursor cada chamada re-processaria o mesmo
+    # lote sem nunca alcançar os arquivos da empresa selecionada.
+    # O cursor (last_scanned) é o nome do último arquivo analisado na
+    # chamada anterior; avançamos para o arquivo imediatamente seguinte
+    # na lista ordenada pelo Dropbox.
+    # ------------------------------------------------------------------
+    if filter_cnpjs is not None and last_scanned:
+        cursor_lower = last_scanned.lower()
+        _cursor_applied = False
+        for _ci, _cf in enumerate(files):
+            if _cf['name'].lower() > cursor_lower:
+                files = files[_ci:]
+                _cursor_applied = True
+                break
+        if not _cursor_applied:
+            # Cursor aponta para além do último arquivo — toda a pasta foi varrida.
+            files = []
 
-    ok, dup, err, moved_ok, moved_err = 0, 0, 0, 0, 0
+    if not files and last_scanned:
+        # Pasta totalmente varrida com filtro ativo.
+        return jsonify({
+            'ok': 0, 'dup': 0, 'err': 0, 'skipped': 0,
+            'moved_ok': 0, 'moved_err': 0, 'has_more': False,
+            'last_scanned': None, 'unregistered_companies': [],
+            'imported_companies': [], 'details': [],
+            'msg': 'Todos os arquivos da pasta NOVO foram analisados.',
+        }), 200
+
+    # Processa no máximo _DROPBOX_BATCH_LIMIT arquivos por chamada para evitar timeout do worker.
+    # Se houver mais arquivos, o front-end deve chamar novamente até receber
+    # has_more=False ou msg indicando que não há mais arquivos.
+    has_more = len(files) > _DROPBOX_BATCH_LIMIT
+    files = files[:_DROPBOX_BATCH_LIMIT]
+
+    # Registra o nome do último arquivo deste lote para uso como cursor na próxima chamada.
+    last_scanned_out = files[-1]['name'] if files else None
+
+    now = datetime.now()
+    # Cache de pastas já criadas no Dropbox para evitar chamadas redundantes.
+    _pastas_criadas: set = set()
+    # Cache de vínculos de produto para evitar N×M consultas DB por lote.
+    # Chave: (emit_cnpj, codigo_produto, cli, grp) → produto_catalogo_id | None
+    _vinculos_cache: dict = {}
+    # Cache de dest_cnpj → cliente para evitar repetir a mesma lookup por arquivo.
+    _cnpj_cliente_cache: dict = {}
+
+    def _get_or_create_pasta(path: str) -> str:
+        if path not in _pastas_criadas:
+            svc.ensure_folder(path)
+            _pastas_criadas.add(path)
+        return path
+
+    ok, dup, err, moved_ok, moved_err, skipped = 0, 0, 0, 0, 0, 0
     details = []
+    # Empresas detectadas nos XMLs que não têm cadastro no sistema.
+    # Chave: CNPJ dígitos (ou nome do arquivo), Valor: nome da empresa do XML.
+    unregistered: dict = {}
+    # Sumário de empresas/períodos importados: (numero, nome) → set of (year, month)
+    _imported_companies: dict = {}
 
     for info in files:
-        raw = svc.download_file(info['path'])
+        try:
+            raw = svc.download_file(info['path'])
+        except DropboxAuthError:
+            return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
         if raw is None:
             err += 1
             details.append(f"{info['name']}: falha ao baixar do Dropbox")
-            if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                moved_err += 1
+            # Arquivo deixado em NOVO para reprocessamento automático.
+            # Não criamos pasta GLOBAL — sem o conteúdo do XML não é possível
+            # identificar a empresa nem garantir a organização correta.
             continue
 
         try:
@@ -778,41 +1107,719 @@ def api_importar_dropbox():
         except UnicodeDecodeError:
             content = raw.decode('latin-1', errors='replace')
 
+        # Inicializa variáveis de contexto antes do try para que o bloco
+        # except sempre possa referenciá-las sem risco de NameError
+        # (ocorre quando parse_nfe_xml lança exceção antes de atribuí-las).
+        _nome = None
+        _num = None
+        _cli = None
+        _dt = now
+
+        # ------------------------------------------------------------------
+        # Detecta XMLs de evento (carta de correção, cancelamento,
+        # confirmação) ANTES de tentar parsear como NF-e.
+        # Esses documentos não têm <NFe>/<infNFe> e nunca devem ser
+        # importados como nota fiscal; são movidos para ERROS.
+        # ------------------------------------------------------------------
+        try:
+            _ev_root = ET.fromstring(content)
+            _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
+        except ET.ParseError:
+            _ev_tag = ''
+
+        if _ev_tag in _NFE_EVENT_ROOT_TAGS:
+            # Extrai CNPJ do evento para aplicar filtro antes de qualquer processamento.
+            _ev_dest_cnpj_filter = ''
+            for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                        f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
+                _el = _ev_root.find(_cx)
+                if _el is not None and _el.text:
+                    _ev_dest_cnpj_filter = re.sub(r'\D', '', _el.text.strip())
+                    if _ev_dest_cnpj_filter:
+                        break
+            # Se houver filtro ativo e o CNPJ do evento não pertencer ao conjunto, ignora.
+            if filter_cnpjs is not None and _ev_dest_cnpj_filter not in filter_cnpjs:
+                skipped += 1
+                logger.info('%s: XML de evento, CNPJ=%r não pertence ao filtro, ignorado',
+                            info['name'], _ev_dest_cnpj_filter)
+                continue
+
+            # XMLs de evento (procEventoNFe, cancelamento, etc.) não são NF-e de compra.
+            # Se a empresa for identificada, movemos para ERROS (arquivo inválido para
+            # importação). Se a empresa não for identificada, deixamos em NOVO.
+            logger.info('%s: XML de evento (%s) — não é NF-e de compra', info['name'], _ev_tag)
+            # Tenta identificar a empresa para mover para a pasta ERROS correta.
+            _ev_nome = None
+            _ev_num = None
+            _ch_nfe = ''
+            for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
+                _el = _ev_root.find(_path)
+                if _el is not None and _el.text:
+                    _ch_nfe = re.sub(r'\D', '', _el.text.strip())
+                    break
+            if _ch_nfe:
+                _ev_rec = execute_query(
+                    "SELECT c.nome_razao_social, c.numero_cliente "
+                    "FROM nfe_importacoes n "
+                    "JOIN clientes c ON c.id = n.cliente_id "
+                    "WHERE n.chave_acesso = %s LIMIT 1",
+                    (_ch_nfe,), fetch=True, fetch_one=True,
+                )
+                if _ev_rec:
+                    _ev_nome = _ev_rec['nome_razao_social']
+                    _ev_num = _ev_rec.get('numero_cliente') or None
+            # Se a busca por chNFe falhou, tenta pelo CNPJ direto no XML do evento.
+            # Exemplos: <CNPJ> em infEvento (procEventoNFe/envEvento) ou
+            # <CNPJDest> em retEvento — presentes em confirmações, ciências, etc.
+            if not _ev_nome:
+                for _cnpj_xpath in [
+                    f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                    f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
+                ]:
+                    _el = _ev_root.find(_cnpj_xpath)
+                    if _el is not None and _el.text:
+                        _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
+                        if len(_ev_cnpj_dig) >= 11:
+                            if _ev_cnpj_dig in _cnpj_cliente_cache:
+                                _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
+                            else:
+                                _ev_found = execute_query(
+                                    "SELECT id, nome_razao_social, numero_cliente FROM clientes "
+                                    "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                                    (_ev_cnpj_dig,), fetch=True, fetch_one=True,
+                                )
+                                _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                            if _ev_found:
+                                _ev_nome = _ev_found['nome_razao_social']
+                                _ev_num = _ev_found.get('numero_cliente') or None
+                                logger.info('%s: empresa de evento detectada por CNPJ (%s) → %s',
+                                            info['name'], _ev_cnpj_dig, _ev_nome)
+                                break
+            # Extrai data do evento para organizar a pasta ERROS pelo mês correto.
+            _ev_dt = now
+            for _date_xpath in [
+                f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
+                f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
+            ]:
+                _date_el = _ev_root.find(_date_xpath)
+                if _date_el is not None and _date_el.text:
+                    try:
+                        _ev_dt = datetime.fromisoformat(
+                            _date_el.text.strip().replace('Z', '+00:00')
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+                    break
+            if _ev_nome:
+                # Empresa identificada: arquivo de evento é inválido para importação
+                # → move para ERROS para manter NOVO limpo.
+                err += 1
+                try:
+                    pasta_err_ev = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
+                    if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                        moved_err += 1
+                except DropboxAuthError:
+                    logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
+            else:
+                # Empresa não identificada — deixa em NOVO para revisão manual.
+                logger.info('%s: XML de evento, empresa não identificada — deixado em NOVO', info['name'])
+            continue
+
         try:
             parsed = parse_nfe_xml(content)
+
+            # Extrai data de emissão imediatamente após o parse para que esteja
+            # disponível mesmo se uma exceção ocorrer mais adiante — o bloco
+            # except usa _dt ao mover o arquivo para a pasta ERROS, e sem essa
+            # atribuição antecipada ele usaria `now` (data atual) em vez da data
+            # real do XML.
+            _dt = parsed['header'].get('data_emissao') or now
+            if _dt is now:
+                logger.warning('%s: data_emissao ausente no XML, usando data atual', info['name'])
+
+            # ----------------------------------------------------------
+            # Detecta empresa SEMPRE pelo dest_cnpj do XML.
+            # A seleção do modal (cliente_id / grupo_id) é usada apenas
+            # como filtro — nunca para sobrescrever a empresa do XML.
+            # ----------------------------------------------------------
+            dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+
+            # Aplica filtro ANTES de verificar cadastro: quando empresa/grupo
+            # está selecionado, XMLs de outras empresas são silenciosamente
+            # ignorados (ficam em NOVO). Isso evita que apareçam na lista de
+            # "empresas não cadastradas" quando o usuário filtra por uma empresa.
+            if filter_cnpjs is not None:
+                if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
+                    skipped += 1
+                    logger.info('%s: dest_cnpj=%r não pertence ao filtro, ignorado',
+                                info['name'], dest_cnpj_digits)
+                    continue
+
+            if len(dest_cnpj_digits) >= 11:
+                if dest_cnpj_digits in _cnpj_cliente_cache:
+                    found = _cnpj_cliente_cache[dest_cnpj_digits]
+                else:
+                    found = execute_query(
+                        "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                        (dest_cnpj_digits,), fetch=True, fetch_one=True,
+                    )
+                    _cnpj_cliente_cache[dest_cnpj_digits] = found
+                if found:
+                    _cli = found['id']
+                    _nome = found['nome_razao_social']
+                    _num = found.get('numero_cliente') or None
+                    logger.info('%s: empresa detectada por dest_cnpj → %s', info['name'], _nome)
+
+            if _nome is None:
+                # Empresa não cadastrada — não importar; registrar para aviso ao usuário.
+                # O arquivo permanece em NOVO até que a empresa seja cadastrada.
+                _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
+                _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+                _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
+                _unreg_label = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
+                unregistered[_unreg_key] = _unreg_label
+                logger.warning(
+                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → deixado em NOVO',
+                    info['name'], _raw_dest_cnpj, _dest_nome_xml,
+                )
+                continue
+
+            # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                               cliente_id=cliente_id, grupo_id=grupo_id)
+                               cliente_id=_cli, grupo_id=grupo_id if _cli is None else None,
+                               vinculos_cache=_vinculos_cache)
             if result == 'dup':
                 dup += 1
             else:
                 ok += 1
+            # Registra empresa/período para o sumário do resultado.
+            try:
+                _period_y = _dt.year if hasattr(_dt, 'year') else now.year
+                _period_m = _dt.month if hasattr(_dt, 'month') else now.month
+                _co_key = (str(_num or ''), _nome)
+                if _co_key not in _imported_companies:
+                    _imported_companies[_co_key] = set()
+                _imported_companies[_co_key].add((_period_y, _period_m))
+            except Exception:
+                pass
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
-            if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
-                moved_ok += 1
+            # (pasta criada apenas neste momento, não antecipadamente)
+            try:
+                pasta_imp = _get_or_create_pasta(
+                    svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                    moved_ok += 1
+            except DropboxAuthError:
+                logger.warning('Falha de autenticação ao mover %s para importados', info['name'])
+        except DropboxAuthError:
+            return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
         except Exception as exc:
             err += 1
             details.append(f"{info['name']}: {exc}")
-            if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                moved_err += 1
+            logger.exception('Erro ao processar %s', info['name'])
+            # Move para ERROS sempre que ocorre uma exceção.
+            # Quando a empresa foi identificada usa a pasta da empresa; caso
+            # contrário usa DESCONHECIDO para não deixar o arquivo em NOVO.
+            _err_empresa = _nome or 'DESCONHECIDO'
+            _err_num = _num if _nome else None
+            try:
+                pasta_err = _get_or_create_pasta(
+                    svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
+                if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                    moved_err += 1
+            except DropboxAuthError:
+                logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
 
     total = len(files)
-    msg = (f'{total} arquivo(s) lido(s). {ok} importado(s), '
+    msg = (f'{total} arquivo(s) analisado(s). {ok} importado(s), '
            f'{dup} duplicado(s), {err} com erro.')
+    if skipped:
+        msg += f' {skipped} ignorado(s) (não pertencem à empresa/grupo selecionado).'
+    if unregistered:
+        msg += (f' {len(unregistered)} empresa(s) não cadastrada(s) — XMLs não importados.'
+                ' Cadastre as empresas listadas abaixo e importe novamente.')
     if moved_ok or moved_err:
         msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
 
+    # Segurança: se nenhum arquivo foi fisicamente movido para fora da pasta NOVO,
+    # desliga has_more para evitar que o front-end entre em loop infinito
+    # re-listando os mesmos arquivos (p.ex. XMLs de evento sem empresa identificada
+    # que ficam em NOVO e incrementam err sem sair do lugar).
+    # EXCEÇÃO: quando um filtro de empresa/grupo está ativo e houve arquivos pulados
+    # (skipped), o cursor last_scanned avança para um novo bloco de arquivos na próxima
+    # chamada — não há risco de loop infinito, então has_more deve permanecer True.
+    files_physically_moved = moved_ok + moved_err
+    if has_more and files_physically_moved == 0:
+        if filter_cnpjs is None or skipped == 0:
+            has_more = False
+
+    if has_more:
+        msg += ' Há mais arquivos na fila — clique em Importar novamente para continuar.'
+    elif unregistered and files_physically_moved == 0:
+        msg += ' Cadastre as empresas e importe novamente para continuar.'
+
+    # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
+    unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
+
+    # Sumário de empresas importadas com períodos cobertos, ordenado por nome.
+    imported_companies_list = []
+    for (num, nome), periods in sorted(_imported_companies.items(), key=lambda x: x[0][1] or ''):
+        sorted_periods = sorted(periods)
+        imported_companies_list.append({
+            'numero': num,
+            'nome': nome,
+            'periodos': [f'{m:02d}/{y}' for (y, m) in sorted_periods],
+        })
+
     return jsonify({
-        'ok': ok, 'dup': dup, 'err': err,
+        'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
         'moved_ok': moved_ok, 'moved_err': moved_err,
+        'has_more': has_more,
+        'last_scanned': last_scanned_out,
+        'unregistered_companies': unreg_list,
+        'imported_companies': imported_companies_list,
         'msg': msg,
         'details': details[:10],
     })
 
 
+def importar_departamento_background(departamento: str, origem: str = 'agendado',
+                                      usuario_id: int = None) -> dict:
+    """Executa a importação completa de um departamento sem contexto HTTP.
+
+    Processa todos os arquivos XML da pasta NOVO do departamento, fazendo
+    múltiplas passagens (lotes de ``_DROPBOX_BATCH_LIMIT``) até que não haja
+    mais arquivos a processar.  Não aplica filtro de empresa/grupo.
+
+    Retorna um dict com o sumário: ok, dup, err, moved_ok, moved_err, skipped,
+    log_id (id do registro em scheduler_import_log), file_logs (lista de detalhes).
+    Pensado para uso por tarefas agendadas (scheduler) e execução manual.
+    """
+    import json as _json
+
+    if not dropbox_sync.is_configured():
+        logger.warning('importar_departamento_background: Dropbox não configurado, abortando.')
+        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
+
+    if departamento not in dropbox_sync.DEPARTAMENTOS:
+        logger.warning('importar_departamento_background: departamento inválido %r', departamento)
+        return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
+
+    # Cria registro de auditoria antes de iniciar
+    iniciado_em = datetime.now(timezone.utc)
+    log_id = None
+    try:
+        log_id = execute_query(
+            "INSERT INTO scheduler_import_log (iniciado_em, departamento, origem, usuario_id) "
+            "VALUES (%s, %s, %s, %s)",
+            (iniciado_em, departamento, origem, usuario_id), fetch=False,
+        )
+    except Exception:
+        logger.exception('[agendado] Falha ao criar registro de log para %r', departamento)
+
+    file_logs: list = []  # [{arquivo, resultado, empresa, detalhe}]
+
+    svc = dropbox_sync._service
+    pasta_novo = svc.pasta_novo(departamento)
+    logger.info('[agendado] Importando departamento=%r, pasta=%r', departamento, pasta_novo)
+
+    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+    _vinculos_cache: dict = {}
+    _cnpj_cliente_cache: dict = {}
+    _pastas_criadas: set = set()
+
+    def _get_or_create_pasta(path: str) -> str:
+        if path not in _pastas_criadas:
+            svc.ensure_folder(path)
+            _pastas_criadas.add(path)
+        return path
+
+    # Loop de lotes — continua enquanto houver arquivos e progresso real (arquivos movidos)
+    max_iterations = 1000  # guarda-chuva contra loop infinito
+    iteration = 0
+    while iteration < max_iterations:
+        iteration += 1
+        try:
+            files = svc.list_xml_files(pasta_novo)
+        except (DropboxAuthError, DropboxError) as exc:
+            logger.error('[agendado] Erro ao listar %r: %s', pasta_novo, exc)
+            break
+
+        if not files:
+            logger.info('[agendado] Nenhum arquivo em %r — concluído.', pasta_novo)
+            break
+
+        batch = files[:_DROPBOX_BATCH_LIMIT]
+        now = datetime.now(ZoneInfo('America/Sao_Paulo'))
+        batch_moved = 0
+
+        for info in batch:
+            _nome = None
+            _num = None
+            _cli = None
+            _dt = now
+
+            try:
+                raw = svc.download_file(info['path'])
+            except DropboxAuthError as exc:
+                logger.error('[agendado] Falha de auth ao baixar %s: %s', info['name'], exc)
+                break
+            if raw is None:
+                totals['err'] += 1
+                logger.warning('[agendado] %s: falha ao baixar, deixado em NOVO', info['name'])
+                continue
+
+            try:
+                content = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                content = raw.decode('latin-1', errors='replace')
+
+            # Detecção de XML de evento (cancelamento, CCe, etc.)
+            try:
+                _ev_root = ET.fromstring(content)
+                _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
+            except ET.ParseError:
+                _ev_tag = ''
+
+            if _ev_tag in _NFE_EVENT_ROOT_TAGS:
+                logger.info('[agendado] %s: XML de evento (%s) — não é NF-e de compra',
+                            info['name'], _ev_tag)
+                # Tenta identificar empresa pelo CNPJ ou chave NF-e para mover para ERROS.
+                _ev_nome = None
+                _ev_num = None
+                _ch_nfe = ''
+                for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
+                    _el = _ev_root.find(_path)
+                    if _el is not None and _el.text:
+                        _ch_nfe = re.sub(r'\D', '', _el.text.strip())
+                        break
+                if _ch_nfe:
+                    _ev_rec = execute_query(
+                        "SELECT c.nome_razao_social, c.numero_cliente "
+                        "FROM nfe_importacoes n "
+                        "JOIN clientes c ON c.id = n.cliente_id "
+                        "WHERE n.chave_acesso = %s LIMIT 1",
+                        (_ch_nfe,), fetch=True, fetch_one=True,
+                    )
+                    if _ev_rec:
+                        _ev_nome = _ev_rec['nome_razao_social']
+                        _ev_num = _ev_rec.get('numero_cliente') or None
+                if not _ev_nome:
+                    for _cnpj_xpath in [
+                        f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                        f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
+                    ]:
+                        _el = _ev_root.find(_cnpj_xpath)
+                        if _el is not None and _el.text:
+                            _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
+                            if len(_ev_cnpj_dig) >= 11:
+                                if _ev_cnpj_dig in _cnpj_cliente_cache:
+                                    _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
+                                else:
+                                    _ev_found = execute_query(
+                                        "SELECT id, nome_razao_social, numero_cliente FROM clientes "
+                                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                                        (_ev_cnpj_dig,), fetch=True, fetch_one=True,
+                                    )
+                                    _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                                if _ev_found:
+                                    _ev_nome = _ev_found['nome_razao_social']
+                                    _ev_num = _ev_found.get('numero_cliente') or None
+                                    break
+                _ev_dt = now
+                for _date_xpath in [
+                    f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
+                    f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
+                ]:
+                    _date_el = _ev_root.find(_date_xpath)
+                    if _date_el is not None and _date_el.text:
+                        try:
+                            _ev_dt = datetime.fromisoformat(
+                                _date_el.text.strip().replace('Z', '+00:00'))
+                        except (ValueError, AttributeError):
+                            pass
+                        break
+                if _ev_nome:
+                    totals['err'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
+                                      'empresa': _ev_nome or '', 'detalhe': f'XML de evento: {_ev_tag}'})
+                    try:
+                        pasta_err_ev = _get_or_create_pasta(
+                            svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
+                        if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                            totals['moved_err'] += 1
+                            batch_moved += 1
+                    except DropboxAuthError:
+                        logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
+                else:
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
+                                      'empresa': '', 'detalhe': f'XML de evento sem empresa identificada: {_ev_tag} — mantido em NOVO'})
+                continue
+
+            try:
+                parsed = parse_nfe_xml(content)
+                _dt = parsed['header'].get('data_emissao') or now
+                dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+
+                if len(dest_cnpj_digits) >= 11:
+                    if dest_cnpj_digits in _cnpj_cliente_cache:
+                        found = _cnpj_cliente_cache[dest_cnpj_digits]
+                    else:
+                        found = execute_query(
+                            "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                            "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                            (dest_cnpj_digits,), fetch=True, fetch_one=True,
+                        )
+                        _cnpj_cliente_cache[dest_cnpj_digits] = found
+                    if found:
+                        _cli = found['id']
+                        _nome = found['nome_razao_social']
+                        _num = found.get('numero_cliente') or None
+
+                if _nome is None:
+                    _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
+                    _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+                    logger.info('[agendado] %s: empresa não cadastrada (dest_cnpj=%r, nome=%r) → NOVO',
+                                info['name'], _raw_dest_cnpj, _dest_nome_xml)
+                    totals['skipped'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
+                                      'empresa': _dest_nome_xml or _raw_dest_cnpj,
+                                      'detalhe': f'Empresa não cadastrada (CNPJ: {_raw_dest_cnpj})'})
+                    continue
+
+                result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
+                                   cliente_id=_cli, vinculos_cache=_vinculos_cache)
+                if result == 'dup':
+                    totals['dup'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'duplicata',
+                                      'empresa': _nome, 'detalhe': 'NF-e já importada anteriormente'})
+                else:
+                    totals['ok'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
+                                      'empresa': _nome, 'detalhe': 'Importado com sucesso → IMPORTADOS'})
+
+                try:
+                    pasta_imp = _get_or_create_pasta(
+                        svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                    if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                        totals['moved_ok'] += 1
+                        batch_moved += 1
+                except DropboxAuthError:
+                    logger.warning('[agendado] Falha de auth ao mover %s para importados', info['name'])
+
+            except DropboxAuthError as exc:
+                logger.error('[agendado] Falha de auth ao processar %s: %s', info['name'], exc)
+                break
+            except Exception as exc:
+                totals['err'] += 1
+                _detalhe_err = str(exc)[:200]
+                logger.exception('[agendado] Erro ao processar %s: %s', info['name'], exc)
+                _err_empresa = _nome or 'DESCONHECIDO'
+                _err_num = _num if _nome else None
+                file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
+                                  'empresa': _err_empresa, 'detalhe': _detalhe_err})
+                try:
+                    pasta_err = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
+                    if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                        totals['moved_err'] += 1
+                        batch_moved += 1
+                except DropboxAuthError:
+                    logger.warning('[agendado] Falha de auth ao mover %s para erros', info['name'])
+
+        # Sem progresso neste lote (nenhum arquivo movido) → para para evitar loop infinito.
+        # Isso acontece quando todos os arquivos restantes são de empresas não cadastradas.
+        if batch_moved == 0:
+            logger.info('[agendado] Nenhum arquivo movido neste lote — encerrando loop.')
+            break
+
+    logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
+
+    # Persiste resultado no log de auditoria
+    concluido_em = datetime.now(timezone.utc)
+    try:
+        execute_query(
+            "UPDATE scheduler_import_log SET concluido_em=%s, ok=%s, dup=%s, err=%s, "
+            "moved_ok=%s, moved_err=%s, skipped=%s, detalhes=%s WHERE id=%s",
+            (concluido_em, totals['ok'], totals['dup'], totals['err'],
+             totals['moved_ok'], totals['moved_err'], totals['skipped'],
+             _json.dumps(file_logs, default=str, ensure_ascii=False),
+             log_id),
+            fetch=False,
+        )
+    except Exception:
+        logger.exception('[agendado] Falha ao atualizar log_id=%s', log_id)
+
+    totals['log_id'] = log_id
+    totals['file_logs'] = file_logs
+    return totals
+
+
 # ---------------------------------------------------------------------------
-# Excluir NF-e
+# Execução manual do job de importação (para testes / auditoria)
 # ---------------------------------------------------------------------------
-@escrita_fiscal.route('/conf-compras/excluir/<int:nfe_id>', methods=['POST'])
+@escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
+@login_required
+def api_executar_importacao_agendada():
+    """Dispara imediatamente a importação de todos os departamentos (equivale ao job das 23:59).
+
+    Restrito a usuários administradores.  A resposta inclui o sumário por
+    departamento e o log_id de cada execução para consulta posterior.
+    """
+    usuario = current_user
+    if not usuario.is_authenticated or not usuario.is_admin():
+        return jsonify({'error': 'Acesso restrito a administradores.'}), 403
+
+    if not dropbox_sync.is_configured():
+        return jsonify({'error': 'Dropbox não configurado.'}), 400
+
+    usuario_id = getattr(usuario, 'id', None)
+    resumo = {}
+    erros = []
+
+    for dep in dropbox_sync.DEPARTAMENTOS:
+        try:
+            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
+            resumo[dep] = {
+                'ok': result['ok'],
+                'dup': result['dup'],
+                'err': result['err'],
+                'moved_ok': result['moved_ok'],
+                'moved_err': result['moved_err'],
+                'skipped': result['skipped'],
+                'log_id': result.get('log_id'),
+            }
+        except Exception:
+            logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
+            erros.append(f'Erro ao processar departamento {dep}. Consulte os logs do servidor.')
+
+    total_ok = sum(r['ok'] for r in resumo.values())
+    total_dup = sum(r['dup'] for r in resumo.values())
+    total_err = sum(r['err'] for r in resumo.values())
+    total_skipped = sum(r['skipped'] for r in resumo.values())
+
+    return jsonify({
+        'ok': True,
+        'resumo': resumo,
+        'erros': erros,
+        'msg': (
+            f'{total_ok} importado(s), {total_dup} duplicata(s), '
+            f'{total_err} erro(s), {total_skipped} ignorado(s) '
+            f'em {len(dropbox_sync.DEPARTAMENTOS)} departamento(s).'
+        ),
+    })
+
+
+@escrita_fiscal.route('/conf-compras/api/log-importacoes')
+@login_required
+def api_log_importacoes():
+    """Retorna os últimos registros do log de importação agendada/manual.
+
+    Parâmetros opcionais: limit (padrão 50), log_id (para buscar detalhes de uma entrada específica).
+    """
+    import json as _json
+
+    _brt = ZoneInfo('America/Sao_Paulo')
+
+    def _fmt_ts(v):
+        """Converte timestamp UTC (datetime ou string) para horário de Brasília."""
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                # naive datetime stored as UTC — convert to BRT
+                v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            else:
+                v = v.astimezone(_brt)
+            return v.strftime('%Y-%m-%d %H:%M')
+        # String fallback: parse as UTC and convert to BRT
+        try:
+            s = str(v).strip().replace('T', ' ')
+            if len(s) < 19:
+                return s[:16]
+            dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
+            dt = dt.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            return dt.strftime('%Y-%m-%d %H:%M')
+        except (ValueError, Exception):
+            return str(v).replace('T', ' ')[:16]
+
+    log_id = request.args.get('log_id', type=int)
+    if log_id:
+        row = execute_query(
+            "SELECT id, iniciado_em, concluido_em, departamento, origem, usuario_id, "
+            "ok, dup, err, moved_ok, moved_err, skipped, detalhes "
+            "FROM scheduler_import_log WHERE id = %s",
+            (log_id,), fetch=True, fetch_one=True,
+        )
+        if not row:
+            return jsonify({'error': 'Log não encontrado'}), 404
+        if row.get('detalhes') and isinstance(row['detalhes'], str):
+            try:
+                row['detalhes'] = _json.loads(row['detalhes'])
+            except Exception:
+                pass
+        row['iniciado_em'] = _fmt_ts(row.get('iniciado_em'))
+        row['concluido_em'] = _fmt_ts(row.get('concluido_em'))
+        return jsonify({'row': row})
+
+    limit = min(request.args.get('limit', 50, type=int), 200)
+    rows = execute_query(
+        "SELECT id, iniciado_em, concluido_em, departamento, origem, "
+        "ok, dup, err, moved_ok, moved_err, skipped "
+        "FROM scheduler_import_log "
+        "ORDER BY iniciado_em DESC LIMIT %s",
+        (limit,), fetch=True,
+    ) or []
+
+    for r in rows:
+        r['iniciado_em'] = _fmt_ts(r.get('iniciado_em'))
+        r['concluido_em'] = _fmt_ts(r.get('concluido_em'))
+    return jsonify({'rows': rows})
+
+
+@escrita_fiscal.route('/conf-compras/api/horario-agendado', methods=['GET'])
+@login_required
+def api_horario_agendado():
+    """Retorna o horário atual do job de importação automática."""
+    from utils.scheduler import get_scheduled_time
+    return jsonify(get_scheduled_time())
+
+
+@escrita_fiscal.route('/conf-compras/api/horario-agendado', methods=['POST'])
+@login_required
+def api_configurar_horario_agendado():
+    """Atualiza o horário do job de importação automática (somente administradores).
+
+    Body JSON: {"hora": 0-23, "minuto": 0-59}
+    """
+    usuario = current_user
+    if not usuario.is_authenticated or not usuario.is_admin():
+        return jsonify({'error': 'Acesso restrito a administradores.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        hora = int(data.get('hora', -1))
+        minuto = int(data.get('minuto', -1))
+        if not (0 <= hora <= 23 and 0 <= minuto <= 59):
+            raise ValueError()
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Hora (0-23) e minuto (0-59) são obrigatórios e devem ser válidos.'}), 400
+
+    from utils.scheduler import reschedule, get_scheduled_time
+    horario_anterior = get_scheduled_time().get('texto', '—')
+    try:
+        reschedule(hora, minuto)
+    except Exception:
+        logger.exception('api_configurar_horario_agendado: erro ao reagendar')
+        return jsonify({'error': 'Erro interno ao atualizar o horário. Tente novamente.'}), 500
+
+    logger.info('Horário do scheduler atualizado de %s para %02d:%02d por usuário %s',
+                horario_anterior, hora, minuto, usuario.id)
+    return jsonify({'ok': True, 'hora': hora, 'minuto': minuto, 'texto': f'{hora:02d}:{minuto:02d}'})
+
+
 @login_required
 def excluir_nfe(nfe_id):
     execute_query("DELETE FROM nfe_importacoes WHERE id = %s", (nfe_id,))
@@ -823,10 +1830,83 @@ def excluir_nfe(nfe_id):
 
 
 # ---------------------------------------------------------------------------
+# API — exclusão em lote (por filtros ativos)
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/conf-compras/excluir-lote', methods=['POST'])
+@login_required
+def excluir_lote():
+    data = request.get_json(silent=True) or {}
+    f_cliente_id = str(data.get('cliente_id', '')).strip()
+    f_grupo_id   = str(data.get('grupo_id', '')).strip()
+    f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
+    f_data_ini   = str(data.get('data_ini', '')).strip()
+    f_data_fim   = str(data.get('data_fim', '')).strip()
+    f_chave      = str(data.get('chave', '')).strip()
+    f_num_nota   = str(data.get('num_nota', '')).strip()
+    f_cfop       = str(data.get('cfop', '')).strip()
+    f_emit_uf    = str(data.get('emit_uf', '')).strip()
+    f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
+    f_vmin       = str(data.get('vmin', '')).strip()
+    f_vmax       = str(data.get('vmax', '')).strip()
+    f_origem     = str(data.get('origem', '')).strip()
+
+    where, params = [], []
+    extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra_clauses)
+
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj = %s')
+        params.append(f_emit_cnpj)
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_nota:
+        where.append('n.num_nota = %s')
+        params.append(f_num_nota)
+    if f_cfop:
+        where.append('n.cfop LIKE %s')
+        params.append(f'{f_cfop}%')
+    if f_emit_uf:
+        where.append('n.emit_uf = %s')
+        params.append(f_emit_uf)
+    if f_dest_cnpj:
+        where.append('n.dest_cnpj LIKE %s')
+        params.append(f'%{f_dest_cnpj}%')
+    if f_vmin:
+        where.append('n.valor_total >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_total <= %s')
+        params.append(float(f_vmax))
+    if f_origem:
+        where.append('n.origem = %s')
+        params.append(f_origem)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    count_row = execute_query(
+        f"SELECT COUNT(*) AS total FROM nfe_importacoes n {where_sql}",
+        params, fetch=True, fetch_one=True,
+    ) or {}
+    total = int(count_row.get('total', 0))
+
+    execute_query(
+        f"DELETE n FROM nfe_importacoes n {where_sql}",
+        params,
+    )
+    return jsonify({'ok': True, 'deleted': total})
+
+
+# ---------------------------------------------------------------------------
 # Catálogo de Produtos — listagem
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/produtos-catalogo/')
-@login_required
+@permission_required('escrita_fiscal.produtos_catalogo')
 def produtos_catalogo():
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
@@ -1066,7 +2146,9 @@ def api_produtos_catalogo():
         fetch=True,
     ) or []
 
-    return jsonify(rows)
+    resp = jsonify(rows)
+    resp.headers['Cache-Control'] = 'private, max-age=300'
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -1099,32 +2181,44 @@ def api_vincular_todos():
     grp = nota.get('grupo_id')
     ramo_id = _get_ramo_cliente(cli)
 
-    item_ids = [it['id'] for it in itens]
-    for it in itens:
-        execute_query(
-            "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
-            (produto_id, it['id']),
+    if not itens:
+        prod = execute_query(
+            "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
+            (produto_id,), fetch=True, fetch_one=True,
         )
-        cod = it['codigo_produto']
-        descricao_xml = it.get('descricao') or ''
-        if cod:
-            _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
-            _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+        return jsonify({'ok': True, 'vinculados': 0, 'produto_nome': prod['nome'] if prod else ''})
 
-            # Aplica retroativamente em itens históricos sem vínculo do mesmo
-            # emit_cnpj + codigo_produto, fora desta NF
-            if emit_cnpj:
-                placeholders = ','.join(['%s'] * len(item_ids))
-                execute_query(
-                    f"""UPDATE nfe_itens i
-                          JOIN nfe_importacoes n ON n.id = i.nfe_id
-                       SET i.produto_catalogo_id = %s
-                       WHERE i.produto_catalogo_id IS NULL
-                         AND n.emit_cnpj = %s
-                         AND i.codigo_produto = %s
-                         AND i.id NOT IN ({placeholders})""",
-                    tuple([produto_id, emit_cnpj, cod] + item_ids),
-                )
+    item_ids = [it['id'] for it in itens]
+
+    # Batch UPDATE all items of this NF-e at once
+    ph = ','.join(['%s'] * len(item_ids))
+    execute_query(
+        f"UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id IN ({ph})",
+        tuple([produto_id] + item_ids),
+    )
+
+    # Collect unique codes for rule upserts and retroactive apply
+    unique_codes = {it['codigo_produto']: it.get('descricao') or ''
+                    for it in itens if it.get('codigo_produto')}
+
+    # Batch upsert rules for all unique codes: 6 queries instead of N×4
+    _upsert_vinculo_batch(cli, grp, None, emit_cnpj, unique_codes, produto_id)
+    _upsert_vinculo_batch(None, None, ramo_id, emit_cnpj, unique_codes, produto_id)
+
+    # Retroactive apply: single batch UPDATE covering all historical items for all unique codes
+    if emit_cnpj and unique_codes:
+        item_ids_ph = ','.join(['%s'] * len(item_ids))
+        cod_ph = ','.join(['%s'] * len(unique_codes))
+        execute_query(
+            f"""UPDATE nfe_itens i
+                  JOIN nfe_importacoes n ON n.id = i.nfe_id
+               SET i.produto_catalogo_id = %s
+               WHERE i.produto_catalogo_id IS NULL
+                 AND n.emit_cnpj = %s
+                 AND i.codigo_produto IN ({cod_ph})
+                 AND i.id NOT IN ({item_ids_ph})""",
+            tuple([produto_id, emit_cnpj] + list(unique_codes.keys()) + item_ids),
+        )
 
     prod = execute_query(
         "SELECT nome FROM nfe_produtos_catalogo WHERE id = %s",
@@ -1138,7 +2232,7 @@ def api_vincular_todos():
 # Memorizações — listagem
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/memorizacoes/')
-@login_required
+@permission_required('escrita_fiscal.memorizacoes')
 def memorizacoes():
     rows = execute_query(
         """SELECT v.id, v.cliente_id, v.grupo_id, v.ramo_atividade_id,
@@ -1197,13 +2291,13 @@ def memorizacoes_empresas(vid):
     if vinculo.get('cliente_id'):
         # Regra específica para uma empresa
         empresas = execute_query(
-            "SELECT id, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s",
+            "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s",
             (vinculo['cliente_id'],), fetch=True,
         ) or []
     elif vinculo.get('ramo_atividade_id'):
         # Regra por ramo de atividade — lista clientes do mesmo ramo que importaram desse fornecedor
         empresas = execute_query(
-            """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
+            """SELECT DISTINCT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj
                  FROM clientes c
                  JOIN cliente_ramo_atividade_relacao crar ON crar.cliente_id = c.id
                    AND crar.ramo_atividade_id = %s
@@ -1221,7 +2315,7 @@ def memorizacoes_empresas(vid):
         # Regra global — todas as empresas que já importaram desse fornecedor
         # (considera tanto cliente_id explícito quanto match por dest_cnpj)
         empresas = execute_query(
-            """SELECT DISTINCT c.id, c.nome_razao_social, c.cpf_cnpj
+            """SELECT DISTINCT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj
                  FROM clientes c
                  JOIN nfe_importacoes n ON (
                      n.cliente_id = c.id
@@ -1277,11 +2371,44 @@ def memorizacoes_excluir(vid):
     return redirect(url_for('escrita_fiscal.memorizacoes'))
 
 
+def _lookup_vinculo(codigo_produto: str, cliente_id, grupo_id,
+                    prefetch_rows: list, cli_ramos: set):
+    """
+    In-memory vinculos lookup using pre-fetched rows.
+    Priority order matches _auto_vincular_db: empresa → grupo → ramo → global.
+    """
+    if not codigo_produto:
+        return None
+    rows = [r for r in prefetch_rows if r['codigo_produto_xml'] == codigo_produto]
+    # 1. Empresa específica
+    if cliente_id is not None:
+        for r in rows:
+            if r['cliente_id'] == cliente_id and r['grupo_id'] is None:
+                return r['produto_catalogo_id']
+    # 2. Grupo
+    if grupo_id is not None:
+        for r in rows:
+            if r['grupo_id'] == grupo_id and r['cliente_id'] is None:
+                return r['produto_catalogo_id']
+    # 3. Ramo de atividade
+    if cli_ramos:
+        for r in rows:
+            if (r['cliente_id'] is None and r['grupo_id'] is None
+                    and r.get('ramo_atividade_id') in cli_ramos):
+                return r['produto_catalogo_id']
+    # 4. Global
+    for r in rows:
+        if (r['cliente_id'] is None and r['grupo_id'] is None
+                and r.get('ramo_atividade_id') is None):
+            return r['produto_catalogo_id']
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
 def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
-              cliente_id=None, grupo_id=None):
+              cliente_id=None, grupo_id=None, vinculos_cache: dict | None = None):
     """
     Salva NF-e parseada no banco.
     Returns: 'ok' ou 'dup'
@@ -1330,23 +2457,59 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         ),
     )
 
-    for item in parsed.get('itens', []):
-        # Tenta auto-vincular produto pelo emit_cnpj + codigo_produto
-        prod_id = _auto_vincular(h['emit_cnpj'], item['codigo_produto'], cli, grp)
+    # Pre-fetch all vinculos for this emit_cnpj in ONE query (avoids N×4 queries
+    # per item, which caused gunicorn worker timeouts on large batches).
+    # Results are shared via vinculos_cache across NF-es from the same emitente.
+    _emit_cnpj = h['emit_cnpj']
+    _vkey = f'__vrows__{_emit_cnpj}'
+    if vinculos_cache is not None and _vkey in vinculos_cache:
+        _vrows = vinculos_cache[_vkey]
+    else:
+        _vrows = execute_query(
+            "SELECT codigo_produto_xml, cliente_id, grupo_id, ramo_atividade_id, "
+            "produto_catalogo_id FROM nfe_produto_vinculo WHERE emit_cnpj = %s",
+            (_emit_cnpj,), fetch=True,
+        ) or []
+        if vinculos_cache is not None:
+            vinculos_cache[_vkey] = _vrows
 
-        execute_query(
+    # Pre-fetch ramos for this client (one query per unique client per batch).
+    _rkey = f'__ramos__{cli}'
+    if vinculos_cache is not None and _rkey in vinculos_cache:
+        _cli_ramos = vinculos_cache[_rkey]
+    else:
+        _cli_ramos = set()
+        if cli:
+            _ramo_rows = execute_query(
+                "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao "
+                "WHERE cliente_id = %s",
+                (cli,), fetch=True,
+            ) or []
+            _cli_ramos = {r['ramo_atividade_id'] for r in _ramo_rows
+                          if r.get('ramo_atividade_id')}
+        if vinculos_cache is not None:
+            vinculos_cache[_rkey] = _cli_ramos
+
+    items_data = []
+    for item in parsed.get('itens', []):
+        # In-memory priority lookup: empresa → grupo → ramo → global.
+        prod_id = _lookup_vinculo(item['codigo_produto'], cli, grp, _vrows, _cli_ramos)
+        items_data.append((
+            nfe_id, item['num_item'], item['codigo_produto'],
+            item['descricao'], item['ncm'], item['cfop'],
+            item['unidade'], item['quantidade'], item['valor_unitario'],
+            item['valor_total'], item['valor_icms'],
+            item['valor_pis'], item['valor_cofins'], prod_id,
+        ))
+
+    if items_data:
+        execute_many(
             """INSERT INTO nfe_itens
                    (nfe_id, num_item, codigo_produto, descricao, ncm, cfop,
                     unidade, quantidade, valor_unitario, valor_total,
                     valor_icms, valor_pis, valor_cofins, produto_catalogo_id)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (
-                nfe_id, item['num_item'], item['codigo_produto'],
-                item['descricao'], item['ncm'], item['cfop'],
-                item['unidade'], item['quantidade'], item['valor_unitario'],
-                item['valor_total'], item['valor_icms'],
-                item['valor_pis'], item['valor_cofins'], prod_id,
-            ),
+            items_data,
         )
 
     return 'ok'
@@ -1363,7 +2526,29 @@ def _get_ramo_cliente(cliente_id):
     return row['ramo_atividade_id'] if row else None
 
 
-def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
+def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id,
+                   cache: dict | None = None):
+    """
+    Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
+    Busca na ordem: empresa específica → grupo → ramo de atividade → global.
+    O parâmetro `cache` (dict mutável) permite reutilizar resultados dentro de um lote
+    de importação, eliminando consultas DB repetidas para o mesmo par.
+    """
+    if not emit_cnpj or not codigo_produto:
+        return None
+
+    cache_key = (emit_cnpj, codigo_produto, cliente_id, grupo_id)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
+    result = _auto_vincular_db(emit_cnpj, codigo_produto, cliente_id, grupo_id)
+
+    if cache is not None:
+        cache[cache_key] = result
+    return result
+
+
+def _auto_vincular_db(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
     """
     Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
     Busca na ordem: empresa específica → grupo → ramo de atividade → global.
@@ -1423,3 +2608,76 @@ def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
         return row['produto_catalogo_id']
 
     return None
+
+
+def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id) -> dict:
+    """
+    Versão batch de _auto_vincular_db: recebe uma lista de codigos_produto e
+    retorna um dict {codigo_produto: produto_catalogo_id} em 2 queries ao invés
+    de disparar até 5 queries sequenciais.
+    Respeita a mesma prioridade: empresa(1) → grupo(2) → ramo(3) → global(4).
+    """
+    if not emit_cnpj or not codigos:
+        return {}
+
+    # Query 1 (only when needed): fetch ramo_ids for this client
+    ramo_ids: list = []
+    if cliente_id:
+        ramos = execute_query(
+            "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s",
+            (cliente_id,), fetch=True,
+        ) or []
+        ramo_ids = [r['ramo_atividade_id'] for r in ramos if r.get('ramo_atividade_id')]
+
+    # Query 2: single combined lookup with all 4 scopes as OR, priority via CASE
+    ph_c = ','.join(['%s'] * len(codigos))
+    params: list = [emit_cnpj] + list(codigos)
+
+    scope_or_parts = []
+    case_parts = []
+
+    if cliente_id:
+        scope_or_parts.append("(cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
+        case_parts.append("WHEN cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL THEN 1")
+        params += [cliente_id, cliente_id]
+
+    if grupo_id:
+        scope_or_parts.append("(grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL)")
+        case_parts.append("WHEN grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL THEN 2")
+        params += [grupo_id, grupo_id]
+
+    if ramo_ids:
+        ph_r = ','.join(['%s'] * len(ramo_ids))
+        scope_or_parts.append(
+            f"(ramo_atividade_id IN ({ph_r}) AND cliente_id IS NULL AND grupo_id IS NULL)"
+        )
+        case_parts.append(
+            f"WHEN ramo_atividade_id IN ({ph_r}) AND cliente_id IS NULL AND grupo_id IS NULL THEN 3"
+        )
+        params += ramo_ids + ramo_ids  # once for OR, once for CASE
+
+    # Always include global scope
+    scope_or_parts.append("(cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
+
+    case_sql = "CASE " + " ".join(case_parts) + " ELSE 4 END" if case_parts else "4"
+    scope_sql = " OR ".join(scope_or_parts)
+
+    rows = execute_query(
+        f"SELECT codigo_produto_xml, produto_catalogo_id, {case_sql} AS priority "
+        f"FROM nfe_produto_vinculo "
+        f"WHERE emit_cnpj = %s AND codigo_produto_xml IN ({ph_c}) "
+        f"AND produto_catalogo_id IS NOT NULL "
+        f"AND ({scope_sql}) "
+        f"ORDER BY priority",
+        tuple(params),
+        fetch=True,
+    ) or []
+
+    # Keep highest-priority (lowest number) match per codigo
+    result: dict = {}
+    for r in rows:
+        cod = r['codigo_produto_xml']
+        if cod not in result:
+            result[cod] = r['produto_catalogo_id']
+
+    return result

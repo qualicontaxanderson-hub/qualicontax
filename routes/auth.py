@@ -15,17 +15,17 @@ def login():
         return redirect(url_for('dashboard.index'))
     
     if request.method == 'POST':
-        email = request.form.get('email')
+        login_name = request.form.get('login', '').strip()
         password = request.form.get('password')
         remember = request.form.get('remember', False)
         
         # Validações
-        if not email or not password:
+        if not login_name or not password:
             flash('Por favor, preencha todos os campos.', 'danger')
             return render_template('login.html')
         
-        # Busca usuário
-        user = Usuario.get_by_email(email)
+        # Busca usuário pelo login
+        user = Usuario.get_by_login(login_name)
         
         if user and verify_password(user.senha_hash, password):
             if not user.is_active():
@@ -40,7 +40,7 @@ def login():
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('dashboard.index'))
         else:
-            flash('Email ou senha incorretos.', 'danger')
+            flash('Login ou senha incorretos.', 'danger')
     
     return render_template('login.html')
 

@@ -3,6 +3,117 @@
 {% block title %}Dashboard - Qualicontax{% endblock %}
 
 {% block content %}
-<div class="dashboard">
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Visão geral do escritório</p>
+    </div>
 </div>
+
+<!-- Stats -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+        <div class="stat-icon bg-primary"><i class="fas fa-users"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statClientes">—</div>
+            <p class="stat-label">Clientes cadastrados</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-success"><i class="fas fa-user-check"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statAtivos">—</div>
+            <p class="stat-label">Clientes ativos</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-info"><i class="fas fa-file-contract"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statContratos">—</div>
+            <p class="stat-label">Contratos ativos</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-warning"><i class="fas fa-tasks"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statProcessos">—</div>
+            <p class="stat-label">Processos em andamento</p>
+        </div>
+    </div>
+</div>
+
+<!-- Acesso rápido -->
+<div class="page-header" style="margin-top: 10px;">
+    <div>
+        <h2 class="page-title" style="font-size: 18px;">Acesso rápido</h2>
+    </div>
+</div>
+
+<div class="module-tiles">
+
+    <a href="{{ url_for('modulos.cadastros') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+            <i class="fas fa-folder-open"></i>
+        </div>
+        <h3 class="module-tile-title">Cadastros</h3>
+        <p class="module-tile-desc">Clientes, grupos, contratos e tabelas auxiliares</p>
+    </a>
+
+    <a href="{{ url_for('escrita_fiscal.index') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <i class="fas fa-file-invoice"></i>
+        </div>
+        <h3 class="module-tile-title">Fiscal</h3>
+        <p class="module-tile-desc">Escrita fiscal, apuração de impostos e obrigações</p>
+    </a>
+
+    <a href="{{ url_for('contabil.index') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+            <i class="fas fa-calculator"></i>
+        </div>
+        <h3 class="module-tile-title">Contábil</h3>
+        <p class="module-tile-desc">Lançamentos, balancetes e demonstrações contábeis</p>
+    </a>
+
+    <a href="{{ url_for('financeiro.index') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+            <i class="fas fa-dollar-sign"></i>
+        </div>
+        <h3 class="module-tile-title">Financeiro</h3>
+        <p class="module-tile-desc">Contas a pagar, receber e conciliação bancária</p>
+    </a>
+
+    <a href="{{ url_for('relatorios.index') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+            <i class="fas fa-chart-bar"></i>
+        </div>
+        <h3 class="module-tile-title">Relatórios</h3>
+        <p class="module-tile-desc">Relatórios gerenciais e análises do escritório</p>
+    </a>
+
+    <a href="{{ url_for('clientes.index') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+            <i class="fas fa-user-tie"></i>
+        </div>
+        <h3 class="module-tile-title">Clientes</h3>
+        <p class="module-tile-desc">Cadastro completo de clientes pessoa física e jurídica</p>
+        <span class="module-tile-action"><i class="fas fa-plus-circle"></i> Novo Cliente</span>
+    </a>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/stats').then(r => r.json()).then(data => {
+    document.getElementById('statClientes').textContent  = data.clientes  ? data.clientes.total   : '0';
+    document.getElementById('statAtivos').textContent    = data.clientes  ? data.clientes.ativos   : '0';
+    document.getElementById('statContratos').textContent = data.contratos ? data.contratos.total   : '0';
+    document.getElementById('statProcessos').textContent = data.processos ? data.processos.em_andamento : '0';
+}).catch(() => {
+    ['statClientes','statAtivos','statContratos','statProcessos'].forEach(id => {
+        document.getElementById(id).textContent = '—';
+    });
+});
+</script>
 {% endblock %}

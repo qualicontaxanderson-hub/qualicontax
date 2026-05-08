@@ -8,10 +8,11 @@ class Usuario(UserMixin):
     
     def __init__(self, id, nome, email, senha_hash, tipo_usuario='ASSISTENTE', situacao='ATIVO', 
                  cpf=None, telefone=None, departamento_id=None, cargo=None, 
-                 capacidade_tarefas=10, data_admissao=None, foto_perfil=None):
+                 capacidade_tarefas=10, data_admissao=None, foto_perfil=None, login=None):
         self.id = id
         self.nome = nome
         self.email = email
+        self.login = login
         self.senha_hash = senha_hash
         self.tipo_usuario = tipo_usuario
         self.situacao = situacao
@@ -22,6 +23,8 @@ class Usuario(UserMixin):
         self.capacidade_tarefas = capacidade_tarefas
         self.data_admissao = data_admissao
         self.foto_perfil = foto_perfil
+        # Cached permission set – populated lazily
+        self._permissoes = None
     
     def is_admin(self):
         """Verifica se o usuário é admin"""
@@ -34,6 +37,45 @@ class Usuario(UserMixin):
     def get_id(self):
         """Retorna o ID do usuário (requerido pelo Flask-Login)"""
         return str(self.id)
+
+    # ------------------------------------------------------------------
+    # Permissões
+    # ------------------------------------------------------------------
+
+    def get_permissoes(self):
+        """Retorna set de codigos de permissão do usuário (via perfis)."""
+        if self._permissoes is None:
+            rows = execute_query(
+                """SELECT pp.permissao_codigo
+                     FROM usuario_perfis up
+                     JOIN perfil_permissoes pp ON pp.perfil_id = up.perfil_id
+                    WHERE up.usuario_id = %s""",
+                (self.id,), fetch=True,
+            ) or []
+            self._permissoes = {r['permissao_codigo'] for r in rows}
+        return self._permissoes
+
+    def has_permission(self, codigo):
+        """Retorna True se o usuário tem a permissão informada.
+        
+        ADMINs sempre têm acesso total.
+        """
+        if self.is_admin():
+            return True
+        return codigo in self.get_permissoes()
+
+    def get_empresas_permitidas(self):
+        """Retorna set de cliente_ids que o usuário pode visualizar.
+        
+        Retorna None quando sem restrições (vê todas as empresas).
+        """
+        rows = execute_query(
+            "SELECT cliente_id FROM usuario_empresas_permitidas WHERE usuario_id = %s",
+            (self.id,), fetch=True,
+        ) or []
+        if not rows:
+            return None  # sem restrição
+        return {r['cliente_id'] for r in rows}
     
     @staticmethod
     def get_by_id(user_id):
@@ -47,7 +89,7 @@ class Usuario(UserMixin):
             Usuario: Objeto Usuario ou None
         """
         query = """
-            SELECT id, nome, email, senha_hash, tipo_usuario, situacao,
+            SELECT id, nome, email, login, senha_hash, tipo_usuario, situacao,
                    cpf, telefone, departamento_id, cargo, capacidade_tarefas,
                    data_admissao, foto_perfil
             FROM usuarios
@@ -60,6 +102,7 @@ class Usuario(UserMixin):
                 id=result['id'],
                 nome=result['nome'],
                 email=result['email'],
+                login=result.get('login'),
                 senha_hash=result['senha_hash'],
                 tipo_usuario=result.get('tipo_usuario', 'ASSISTENTE'),
                 situacao=result.get('situacao', 'ATIVO'),
@@ -85,7 +128,7 @@ class Usuario(UserMixin):
             Usuario: Objeto Usuario ou None
         """
         query = """
-            SELECT id, nome, email, senha_hash, tipo_usuario, situacao,
+            SELECT id, nome, email, login, senha_hash, tipo_usuario, situacao,
                    cpf, telefone, departamento_id, cargo, capacidade_tarefas,
                    data_admissao, foto_perfil
             FROM usuarios
@@ -98,6 +141,46 @@ class Usuario(UserMixin):
                 id=result['id'],
                 nome=result['nome'],
                 email=result['email'],
+                login=result.get('login'),
+                senha_hash=result['senha_hash'],
+                tipo_usuario=result.get('tipo_usuario', 'ASSISTENTE'),
+                situacao=result.get('situacao', 'ATIVO'),
+                cpf=result.get('cpf'),
+                telefone=result.get('telefone'),
+                departamento_id=result.get('departamento_id'),
+                cargo=result.get('cargo'),
+                capacidade_tarefas=result.get('capacidade_tarefas', 10),
+                data_admissao=result.get('data_admissao'),
+                foto_perfil=result.get('foto_perfil')
+            )
+        return None
+    
+    @staticmethod
+    def get_by_login(login):
+        """
+        Busca usuário pelo nome de login.
+
+        Args:
+            login (str): Login do usuário
+
+        Returns:
+            Usuario: Objeto Usuario ou None
+        """
+        query = """
+            SELECT id, nome, email, login, senha_hash, tipo_usuario, situacao,
+                   cpf, telefone, departamento_id, cargo, capacidade_tarefas,
+                   data_admissao, foto_perfil
+            FROM usuarios
+            WHERE login = %s
+        """
+        result = execute_query(query, (login,), fetch=True, fetch_one=True)
+
+        if result:
+            return Usuario(
+                id=result['id'],
+                nome=result['nome'],
+                email=result['email'],
+                login=result.get('login'),
                 senha_hash=result['senha_hash'],
                 tipo_usuario=result.get('tipo_usuario', 'ASSISTENTE'),
                 situacao=result.get('situacao', 'ATIVO'),

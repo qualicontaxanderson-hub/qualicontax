@@ -1,6 +1,6 @@
 """Rotas do módulo Financeiro — Recebimentos"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from utils.auth_helper import login_required
+from utils.auth_helper import login_required, permission_required
 
 financeiro = Blueprint('financeiro', __name__)
 
@@ -12,7 +12,7 @@ except Exception:
 
 
 @financeiro.route('/financeiro/')
-@login_required
+@permission_required('financeiro.index')
 def index():
     return render_template('financeiro/index.html')
 
@@ -21,7 +21,7 @@ def index():
 # Lista de recebimentos (com filtros)
 # -----------------------------------------------------------------------
 @financeiro.route('/financeiro/recebimento/')
-@login_required
+@permission_required('financeiro.recebimento')
 def recebimento_index():
     """Lista lançamentos de recebimento com filtros."""
     empresa_id          = request.args.get('empresa_id')

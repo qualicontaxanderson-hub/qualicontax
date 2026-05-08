@@ -6,6 +6,20 @@
         <h1 class="page-title">Escrita Fiscal</h1>
         <p class="page-subtitle">Apuração de impostos e obrigações acessórias</p>
     </div>
+    {% if is_admin %}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
+                title="Executa agora o mesmo processo automático de importação de XMLs para todos os departamentos Fiscais"
+                style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);">
+            <i class="fas fa-play-circle"></i> Executar Agora
+        </button>
+        <button onclick="openHorarioModal()" id="btnHorario"
+                title="Configurar o horário da importação automática"
+                style="background:#f1f5f9;color:#6366f1;border:1.5px solid #c7d2fe;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-clock"></i> <span id="btnHorarioText">{{ schedule_texto or 'Carregando...' }}</span>
+        </button>
+    </div>
+    {% endif %}
 </div>
 
 <div class="module-tiles">
@@ -70,4 +84,212 @@
     </a>
 
 </div>
+
+{% if is_admin %}
+<!-- ===================== MODAL: Resultado Executar Agora ===================== -->
+<div id="execAgendadaOverlay" onclick="closeExecAgendada()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9200;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,700px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"><i class="fas fa-play-circle" style="margin-right:8px;color:#059669;"></i>Resultado da Importação</h3>
+        <button onclick="closeExecAgendada()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="execAgendadaBody">
+        <p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando...</p>
+    </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Configurar Horário do Agendamento ===================== -->
+<div id="horarioModalOverlay" onclick="closeHorarioModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9300;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,420px);display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b;">
+            <i class="fas fa-clock" style="margin-right:8px;color:#6366f1;"></i>Horário da Importação Automática
+        </h3>
+        <button onclick="closeHorarioModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="padding:20px 24px;">
+        <p style="font-size:13px;color:#64748b;margin:0 0 16px 0;line-height:1.5;">
+            Define a hora em que o sistema executará automaticamente a importação de XMLs do Dropbox todos os dias para todos os departamentos Fiscais.
+            Use <strong>Executar Agora</strong> para um teste imediato sem alterar o horário agendado.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+            <div style="flex:1;">
+                <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Hora (0–23)</label>
+                <input type="number" id="horarioHora" min="0" max="23" value="23"
+                       style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;font-weight:700;text-align:center;">
+            </div>
+            <div style="font-size:22px;font-weight:800;color:#6366f1;padding-top:18px;">:</div>
+            <div style="flex:1;">
+                <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Minuto (0–59)</label>
+                <input type="number" id="horarioMinuto" min="0" max="59" value="59"
+                       style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;font-weight:700;text-align:center;">
+            </div>
+        </div>
+        <div id="horarioMsg" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;"></div>
+        <div style="display:flex;gap:10px;">
+            <button onclick="salvarHorario()" id="btnSalvarHorario"
+                    style="flex:1;background:#6366f1;color:#fff;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-save"></i> Salvar Horário
+            </button>
+            <button onclick="closeHorarioModal()"
+                    style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if is_admin %}
+<script>
+function closeExecAgendada() {
+    document.getElementById('execAgendadaOverlay').style.display = 'none';
+}
+function executarImportacaoAgendada() {
+    const btn = document.getElementById('btnExecAgendada');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    document.getElementById('execAgendadaBody').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando todos os departamentos... isso pode levar alguns minutos.</p>';
+    document.getElementById('execAgendadaOverlay').style.display = 'flex';
+
+    fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+        if (data.error) {
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<div style="background:#fef2f2;border-radius:10px;padding:16px;color:#dc2626;font-weight:600;">${data.error}</div>`;
+            return;
+        }
+        const resumo = data.resumo || {};
+        const deps = Object.keys(resumo).filter(d => resumo[d].ok + resumo[d].dup + resumo[d].err + resumo[d].skipped > 0);
+        let html = `<div style="background:#f0fdf4;border-radius:10px;padding:12px 16px;margin-bottom:16px;color:#15803d;font-weight:600;font-size:13px;">
+            <i class="fas fa-check-circle"></i> ${data.msg || 'Concluído.'}
+        </div>`;
+        if (deps.length) {
+            html += `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Departamento</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
+              </tr></thead><tbody>`;
+            deps.forEach(d => {
+                const r = resumo[d];
+                html += `<tr style="border-bottom:1px solid #f1f5f9;">
+                  <td style="padding:7px 10px;font-weight:600;">${d}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#059669;font-weight:700;">${r.ok}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#d97706;">${r.dup}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#dc2626;">${r.err}</td>
+                  <td style="padding:7px 6px;text-align:center;color:#6b7280;">${r.skipped}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p style="color:#94a3b8;text-align:center;">Nenhum arquivo processado (pastas NOVO vazias).</p>';
+        }
+        if (data.erros && data.erros.length) {
+            html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
+                <strong>Erros:</strong> ${data.erros.join('<br>')}
+            </div>`;
+        }
+        document.getElementById('execAgendadaBody').innerHTML = html;
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+        document.getElementById('execAgendadaBody').innerHTML =
+            '<p style="color:#dc2626;text-align:center;">Erro de conexão.</p>';
+    });
+}
+
+function openHorarioModal() {
+    fetch('{{ url_for("escrita_fiscal.api_horario_agendado") }}')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('horarioHora').value = data.hora != null ? data.hora : 23;
+            document.getElementById('horarioMinuto').value = data.minuto != null ? data.minuto : 59;
+        })
+        .catch(() => {});
+    document.getElementById('horarioMsg').style.display = 'none';
+    document.getElementById('horarioModalOverlay').style.display = 'flex';
+}
+function closeHorarioModal() {
+    document.getElementById('horarioModalOverlay').style.display = 'none';
+}
+function salvarHorario() {
+    const hora = parseInt(document.getElementById('horarioHora').value, 10);
+    const minuto = parseInt(document.getElementById('horarioMinuto').value, 10);
+    const msg = document.getElementById('horarioMsg');
+    if (isNaN(hora) || hora < 0 || hora > 23 || isNaN(minuto) || minuto < 0 || minuto > 59) {
+        msg.style.display = 'block';
+        msg.style.background = '#fef2f2';
+        msg.style.color = '#dc2626';
+        msg.innerHTML = '<i class="fas fa-exclamation-circle"></i> Hora deve ser 0–23 e minuto 0–59.';
+        return;
+    }
+    const btn = document.getElementById('btnSalvarHorario');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    fetch('{{ url_for("escrita_fiscal.api_configurar_horario_agendado") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hora, minuto}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Horário';
+        if (data.error) {
+            msg.style.display = 'block';
+            msg.style.background = '#fef2f2';
+            msg.style.color = '#dc2626';
+            msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${data.error}`;
+        } else {
+            msg.style.display = 'block';
+            msg.style.background = '#f0fdf4';
+            msg.style.color = '#15803d';
+            msg.innerHTML = `<i class="fas fa-check-circle"></i> Horário salvo! A importação automática rodará todos os dias às <strong>${data.texto}</strong>.`;
+            document.getElementById('btnHorarioText').textContent = data.texto;
+            setTimeout(closeHorarioModal, 2500);
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Horário';
+        msg.style.display = 'block';
+        msg.style.background = '#fef2f2';
+        msg.style.color = '#dc2626';
+        msg.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão.';
+    });
+}
+
+// Load current schedule time to show on button
+(function() {
+    fetch('{{ url_for("escrita_fiscal.api_horario_agendado") }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.texto) {
+                document.getElementById('btnHorarioText').textContent = data.texto;
+            }
+        })
+        .catch(() => {});
+})();
+</script>
+{% endif %}
 {% endblock %}
