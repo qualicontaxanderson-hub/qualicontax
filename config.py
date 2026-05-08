@@ -21,7 +21,7 @@ class Config:
     # SQLAlchemy
     SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ECHO = DEBUG
+    SQLALCHEMY_ECHO = False  # nunca logar SQL em produção
     
     # Session
     SESSION_COOKIE_SECURE = FLASK_ENV == 'production'

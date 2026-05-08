@@ -1,6 +1,7 @@
 """Aplicação principal Flask - Qualicontax"""
 from flask import Flask, render_template
 from flask_login import LoginManager
+from flask_compress import Compress
 from config import Config
 from models.usuario import Usuario
 import os
@@ -8,6 +9,10 @@ import os
 # Inicializa Flask app
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Compressão gzip de respostas (reduz tráfego ~70% para HTML/CSS/JSON)
+compress = Compress()
+compress.init_app(app)
 
 # Inicializa Flask-Login
 login_manager = LoginManager()
@@ -69,6 +74,11 @@ app.jinja_env.filters['format_cnpj'] = format_cnpj
 app.jinja_env.filters['format_phone'] = format_phone
 app.jinja_env.filters['format_currency'] = format_currency
 app.jinja_env.filters['format_date'] = format_date
+
+
+# Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens
+if not Config.DEBUG:
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31_536_000  # 1 ano em segundos
 
 
 # Error handlers

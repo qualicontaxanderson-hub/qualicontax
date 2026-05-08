@@ -170,6 +170,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Chart.js carregado apenas nas páginas que usam gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('clientesChart').getContext('2d');
