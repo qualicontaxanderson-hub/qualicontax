@@ -104,9 +104,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Chart.js carregado apenas nas páginas que usam gráficos -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <script>
 fetch('/stats').then(r => r.json()).then(data => {
     document.getElementById('statClientes').textContent  = data.clientes  ? data.clientes.total   : '0';
