@@ -4,6 +4,7 @@
 
 {% block content %}
 <div class="clientes-page">
+
     <!-- Page Header -->
     <div class="page-header">
         <div>
@@ -25,45 +26,35 @@
     <!-- Statistics Cards -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-icon bg-primary">
-                <i class="fas fa-users"></i>
-            </div>
+            <div class="stat-icon bg-primary"><i class="fas fa-users"></i></div>
             <div class="stat-content">
                 <h3 class="stat-value">{{ stats.total or 0 }}</h3>
                 <p class="stat-label">Total de Clientes</p>
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon bg-success">
-                <i class="fas fa-check-circle"></i>
-            </div>
+            <div class="stat-icon bg-success"><i class="fas fa-check-circle"></i></div>
             <div class="stat-content">
                 <h3 class="stat-value">{{ stats.ativos or 0 }}</h3>
                 <p class="stat-label">Clientes Ativos</p>
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon bg-danger">
-                <i class="fas fa-times-circle"></i>
-            </div>
+            <div class="stat-icon bg-danger"><i class="fas fa-times-circle"></i></div>
             <div class="stat-content">
                 <h3 class="stat-value">{{ stats.inativos or 0 }}</h3>
                 <p class="stat-label">Clientes Inativos</p>
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon bg-info">
-                <i class="fas fa-user"></i>
-            </div>
+            <div class="stat-icon bg-info"><i class="fas fa-user"></i></div>
             <div class="stat-content">
                 <h3 class="stat-value">{{ stats.pf or 0 }}</h3>
                 <p class="stat-label">Pessoa Física</p>
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon bg-warning">
-                <i class="fas fa-building"></i>
-            </div>
+            <div class="stat-icon bg-warning"><i class="fas fa-building"></i></div>
             <div class="stat-content">
                 <h3 class="stat-value">{{ stats.pj or 0 }}</h3>
                 <p class="stat-label">Pessoa Jurídica</p>
@@ -78,7 +69,8 @@
                 <div class="filters-row">
                     <div class="form-group">
                         <label for="busca">Buscar</label>
-                        <input type="text" id="busca" name="busca" class="form-control" placeholder="Nome, CPF/CNPJ, Email..." value="{{ filtros.busca }}">
+                        <input type="text" id="busca" name="busca" class="form-control"
+                               placeholder="Nome, CPF/CNPJ, Email..." value="{{ filtros.busca }}">
                     </div>
                     <div class="form-group">
                         <label for="tipo_pessoa">Tipo</label>
@@ -92,9 +84,9 @@
                         <label for="situacao">Situação</label>
                         <select id="situacao" name="situacao" class="form-control">
                             <option value="">Todos</option>
-                            <option value="ATIVO" {% if filtros.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
-                            <option value="INATIVO" {% if filtros.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
-                            <option value="SUSPENSO" {% if filtros.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
+                            <option value="ATIVO"     {% if filtros.situacao == 'ATIVO'     %}selected{% endif %}>Ativo</option>
+                            <option value="INATIVO"   {% if filtros.situacao == 'INATIVO'   %}selected{% endif %}>Inativo</option>
+                            <option value="SUSPENSO"  {% if filtros.situacao == 'SUSPENSO'  %}selected{% endif %}>Suspenso</option>
                             <option value="CANCELADO" {% if filtros.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
                         </select>
                     </div>
@@ -102,10 +94,10 @@
                         <label for="regime">Regime Tributário</label>
                         <select id="regime" name="regime" class="form-control">
                             <option value="">Todos</option>
-                            <option value="SIMPLES" {% if filtros.regime == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
+                            <option value="SIMPLES"         {% if filtros.regime == 'SIMPLES'         %}selected{% endif %}>Simples Nacional</option>
                             <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
-                            <option value="LUCRO_REAL" {% if filtros.regime == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
-                            <option value="MEI" {% if filtros.regime == 'MEI' %}selected{% endif %}>MEI</option>
+                            <option value="LUCRO_REAL"      {% if filtros.regime == 'LUCRO_REAL'      %}selected{% endif %}>Lucro Real</option>
+                            <option value="MEI"             {% if filtros.regime == 'MEI'             %}selected{% endif %}>MEI</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -122,71 +114,91 @@
 
     <!-- Clientes Table -->
     <div class="card table-card">
-        <div class="card-body">
+        <div class="card-body" style="padding: 0;">
+
+            <!-- Table header bar -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border-color);">
+                <span style="font-size:13px; color:var(--text-secondary);">
+                    {% if total > 0 %}
+                        {% set start = (page - 1) * 50 + 1 %}
+                        {% set end   = [page * 50, total] | min %}
+                        Mostrando <strong>{{ start }}–{{ end }}</strong> de <strong>{{ total }}</strong> cliente{{ 's' if total != 1 else '' }}
+                    {% else %}
+                        Nenhum cliente encontrado
+                    {% endif %}
+                </span>
+                <span style="font-size:12px; color:var(--text-secondary);">Ordenado por nome A → Z</span>
+            </div>
+
             <div class="table-responsive">
-                <table class="table">
+                <table class="table" style="margin:0;">
                     <thead>
                         <tr>
-                            <th>Nº Cliente</th>
+                            <th style="width:100px;">Nº Cliente</th>
                             <th>Nome</th>
-                            <th>CPF/CNPJ</th>
+                            <th style="width:150px;">CPF/CNPJ</th>
                             <th>Email</th>
-                            <th>Telefone</th>
+                            <th style="width:130px;">Telefone</th>
                             <th>Ramo de Atividade</th>
-                            <th>Tipo</th>
-                            <th>Situação</th>
-                            <th>Ações</th>
+                            <th style="width:60px; text-align:center;">Tipo</th>
+                            <th style="width:90px; text-align:center;">Situação</th>
+                            <th style="width:90px; text-align:center;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if clientes %}
                             {% for cliente in clientes %}
-                            <tr>
+                            <tr class="cli-row">
                                 <td>
                                     {% if cliente.numero_cliente %}
-                                        <strong style="color: #22C55E;">#{{ cliente.numero_cliente }}</strong>
+                                        <span class="cli-num">#{{ cliente.numero_cliente }}</span>
                                     {% else %}
-                                        <span style="color: #9CA3AF; font-size: 12px;">Auto: {{ cliente.id }}</span>
+                                        <span style="color:var(--text-secondary); font-size:12px;">{{ cliente.id }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     <div class="table-user">
-                                        <div class="table-user-avatar">
-                                            {{ cliente.nome_razao_social[0] }}
-                                        </div>
-                                        <span>{{ cliente.nome_razao_social }}</span>
+                                        <div class="table-user-avatar">{{ cliente.nome_razao_social[0] }}</div>
+                                        <span class="cli-name">{{ cliente.nome_razao_social }}</span>
                                     </div>
                                 </td>
-                                <td>{{ cliente.cpf_cnpj }}</td>
-                                <td>{{ cliente.email or '-' }}</td>
-                                <td>{{ cliente.telefone or cliente.celular or '-' }}</td>
+                                <td style="font-size:13px; font-family:monospace; letter-spacing:.3px;">
+                                    {{ cliente.cpf_cnpj }}
+                                </td>
+                                <td style="font-size:13px;">{{ cliente.email or '—' }}</td>
+                                <td style="font-size:13px;">{{ cliente.telefone or cliente.celular or '—' }}</td>
                                 <td>
                                     {% if cliente.ramo_atividade_nome %}
-                                        <span class="badge badge-secondary" title="{{ cliente.ramo_atividade_nome }}">
-                                            <i class="fas fa-industry"></i> {{ cliente.ramo_atividade_nome }}
+                                        <span class="badge badge-secondary" style="font-size:11px;" title="{{ cliente.ramo_atividade_nome }}">
+                                            <i class="fas fa-industry" style="margin-right:3px;"></i>
+                                            {{ cliente.ramo_atividade_nome | truncate(40, True, '…') }}
                                         </span>
                                     {% else %}
-                                        <span style="color: #9CA3AF;">-</span>
+                                        <span style="color:var(--text-secondary);">—</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    <span class="badge badge-info">{{ cliente.tipo_pessoa }}</span>
+                                <td style="text-align:center;">
+                                    <span class="badge badge-info" style="font-size:11px;">{{ cliente.tipo_pessoa }}</span>
                                 </td>
-                                <td>
-                                    <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
+                                <td style="text-align:center;">
+                                    <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}" style="font-size:11px;">
                                         {{ cliente.situacao }}
                                     </span>
                                 </td>
-                                <td>
-                                    <div class="table-actions">
-                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn-icon" title="Ver">
+                                <td style="text-align:center;">
+                                    <div class="table-actions" style="justify-content:center;">
+                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}"
+                                           class="btn-icon btn-view" title="Ver detalhes">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn-icon" title="Editar">
-                                            <i class="fas fa-edit"></i>
+                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                           class="btn-icon btn-edit" title="Editar">
+                                            <i class="fas fa-pen"></i>
                                         </a>
-                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST" style="display: inline;">
-                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Tem certeza que deseja excluir este cliente?')" title="Excluir">
+                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST" style="display:inline;"
+                                              onsubmit="return confirmDelete(this);"
+                                              data-name="{{ cliente.nome_razao_social | e }}">
+                                            <button type="submit" class="btn-icon btn-delete" title="Excluir">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>
@@ -196,7 +208,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="8" class="text-center">
+                                <td colspan="9">
                                     <div class="empty-state">
                                         <i class="fas fa-users"></i>
                                         <p>Nenhum cliente encontrado</p>
@@ -216,41 +228,56 @@
         <nav class="pagination">
             {% if page > 1 %}
             <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
-                <i class="fas fa-chevron-left"></i>
-                Anterior
+                <i class="fas fa-chevron-left"></i> Anterior
             </a>
             {% endif %}
-            
             <div class="pagination-pages">
                 {% for page_num in range(1, total_pages + 1) %}
                     {% if page_num == 1 or page_num == total_pages or (page_num >= page - 2 and page_num <= page + 2) %}
-                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" 
-                           class="pagination-page {% if page_num == page %}active{% endif %}">
-                            {{ page_num }}
-                        </a>
+                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}"
+                           class="pagination-page {% if page_num == page %}active{% endif %}">{{ page_num }}</a>
                     {% elif page_num == page - 3 or page_num == page + 3 %}
-                        <span class="pagination-ellipsis">...</span>
+                        <span class="pagination-ellipsis">…</span>
                     {% endif %}
                 {% endfor %}
             </div>
-            
             {% if page < total_pages %}
             <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
-                Próximo
-                <i class="fas fa-chevron-right"></i>
+                Próximo <i class="fas fa-chevron-right"></i>
             </a>
             {% endif %}
         </nav>
-        <p class="pagination-info">
-            Mostrando página {{ page }} de {{ total_pages }} ({{ total }} clientes)
-        </p>
+        <p class="pagination-info">Página {{ page }} de {{ total_pages }}</p>
     </div>
     {% endif %}
+
 </div>
+
+<style>
+/* ── Compact, elegant client table rows ────────────────────────────────── */
+.cli-row td { padding: 9px 12px; vertical-align: middle; }
+.cli-num    { font-weight: 600; color: var(--primary-green); font-size: 13px; }
+.cli-name   { font-size: 13px; font-weight: 500; }
+
+.table-user-avatar {
+    width: 30px; height: 30px; min-width: 30px;
+    font-size: 13px; font-weight: 700;
+}
+
+/* Row hover highlight */
+.cli-row:hover { background: rgba(34,197,94,.04); }
+
+/* Action buttons tighter */
+.cli-row .table-actions { gap: 4px; }
+.cli-row .btn-icon { width: 28px; height: 28px; font-size: 12px; }
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Tab navigation and modal handlers are inline in the template
+function confirmDelete(form) {
+    var name = form.getAttribute('data-name') || 'este cliente';
+    return confirm('Excluir o cliente ' + name + '?');
+}
 </script>
 {% endblock %}

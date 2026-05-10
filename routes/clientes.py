@@ -22,7 +22,7 @@ def index():
         tipo_pessoa = request.args.get('tipo_pessoa', '')
         busca = request.args.get('busca', '')
         page = request.args.get('page', 1, type=int)
-        per_page = 20
+        per_page = 50
         
         # Buscar clientes com filtros
         filters = {}
@@ -37,17 +37,14 @@ def index():
         
         result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
         
-        # Contadores para o dashboard
-        stats = Cliente.get_stats()
-        
         # Verificar se houve erro na obtenção dos dados
         if result is None:
             flash('Erro ao buscar clientes. Verifique a conexão com o banco de dados.', 'danger')
-            result = {'clientes': [], 'page': 1, 'total_pages': 0, 'total': 0}
+            result = {'clientes': [], 'page': 1, 'total_pages': 0, 'total': 0,
+                      'stats': {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}}
         
-        if stats is None:
-            flash('Erro ao buscar estatísticas. Verifique a conexão com o banco de dados.', 'danger')
-            stats = {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
+        # stats is now bundled inside result (no separate DB call needed)
+        stats = result.get('stats', {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0})
         
         return render_template('clientes/index.html', 
                              clientes=result['clientes'],

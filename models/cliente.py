@@ -86,11 +86,28 @@ class Cliente:
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
+        # Single query that returns filtered count + global stats in one DB round-trip,
+        # avoiding a separate get_stats() call from the route.
         # COUNT must be on the clientes table alone (not on the JOIN) to avoid
         # counting one row per ramo when a client has multiple ramos de atividade.
-        count_query = f"SELECT COUNT(DISTINCT id) as total FROM clientes{where_clause}"
-        total_result = execute_query(count_query, tuple(params), fetch=True, fetch_one=True)
-        total = total_result['total'] if total_result else 0
+        count_query = f"""
+            SELECT
+                COUNT(DISTINCT id)                                                  AS total,
+                (SELECT COUNT(*) FROM clientes)                                     AS global_total,
+                (SELECT COUNT(*) FROM clientes WHERE situacao = 'ATIVO')            AS global_ativos,
+                (SELECT COUNT(*) FROM clientes WHERE situacao = 'INATIVO')          AS global_inativos,
+                (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PF')            AS global_pf,
+                (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PJ')            AS global_pj
+            FROM clientes{where_clause}"""
+        count_result = execute_query(count_query, tuple(params), fetch=True, fetch_one=True)
+        total = int(count_result['total']) if count_result else 0
+        stats = {
+            'total':   int(count_result.get('global_total',   0) or 0),
+            'ativos':  int(count_result.get('global_ativos',  0) or 0),
+            'inativos':int(count_result.get('global_inativos',0) or 0),
+            'pf':      int(count_result.get('global_pf',      0) or 0),
+            'pj':      int(count_result.get('global_pj',      0) or 0),
+        } if count_result else {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
         
         offset = (page - 1) * per_page
         params.extend([per_page, offset])
@@ -109,7 +126,7 @@ class Cliente:
             GROUP BY c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                      c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                      c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes
-            ORDER BY c.nome_razao_social
+            ORDER BY c.nome_razao_social ASC
             LIMIT %s OFFSET %s
         """
         
@@ -124,7 +141,8 @@ class Cliente:
             'total': total,
             'page': page,
             'per_page': per_page,
-            'total_pages': (total + per_page - 1) // per_page if total > 0 else 0
+            'total_pages': (total + per_page - 1) // per_page if total > 0 else 0,
+            'stats': stats,
         }
     
     @staticmethod
