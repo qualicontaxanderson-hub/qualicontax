@@ -63,55 +63,82 @@ class Cliente:
         filters = filters or {}
         conditions = []
         params = []
-        
+        need_ramo_join = False  # only True when filtering by ramo de atividade
+
         if filters.get('tipo_pessoa'):
-            conditions.append("tipo_pessoa = %s")
+            conditions.append("c.tipo_pessoa = %s")
             params.append(filters['tipo_pessoa'])
-        
+
         if filters.get('situacao'):
-            conditions.append("situacao = %s")
+            conditions.append("c.situacao = %s")
             params.append(filters['situacao'])
-        
+
         if filters.get('regime_tributario'):
-            conditions.append("regime_tributario = %s")
+            conditions.append("c.regime_tributario = %s")
             params.append(filters['regime_tributario'])
-        
-        # Busca por nome, CPF/CNPJ, email ou número do cliente
-        if filters.get('busca'):
-            conditions.append("(nome_razao_social LIKE %s OR cpf_cnpj LIKE %s OR email LIKE %s OR numero_cliente LIKE %s)")
-            # Sanitize special characters that have meaning in LIKE patterns
-            search_term = filters['busca'].replace('%', '\\%').replace('_', '\\_')
+
+        # Busca restrita ao campo escolhido pelo usuário
+        busca = filters.get('busca', '').strip()
+        busca_tipo = filters.get('busca_tipo', 'nome')  # 'nome' | 'numero' | 'ramo'
+        if busca:
+            search_term = busca.replace('%', '\\%').replace('_', '\\_')
             search_pattern = f"%{search_term}%"
-            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
-        
+            if busca_tipo == 'numero':
+                conditions.append("c.numero_cliente LIKE %s")
+                params.append(search_pattern)
+            elif busca_tipo == 'ramo':
+                need_ramo_join = True
+                conditions.append("ra.nome LIKE %s")
+                params.append(search_pattern)
+            else:  # nome (default)
+                conditions.append("c.nome_razao_social LIKE %s")
+                params.append(search_pattern)
+
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        
+
+        # When filtering by ramo the count query needs the same JOINs as the
+        # main query; otherwise keep it lightweight (no JOIN).
+        count_ramo_join = ""
+        if need_ramo_join:
+            count_ramo_join = """
+                LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
+                LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id"""
+
         # Single query that returns filtered count + global stats in one DB round-trip,
         # avoiding a separate get_stats() call from the route.
-        # COUNT must be on the clientes table alone (not on the JOIN) to avoid
-        # counting one row per ramo when a client has multiple ramos de atividade.
         count_query = f"""
             SELECT
-                COUNT(DISTINCT id)                                                  AS total,
+                COUNT(DISTINCT c.id)                                                AS total,
                 (SELECT COUNT(*) FROM clientes)                                     AS global_total,
                 (SELECT COUNT(*) FROM clientes WHERE situacao = 'ATIVO')            AS global_ativos,
                 (SELECT COUNT(*) FROM clientes WHERE situacao = 'INATIVO')          AS global_inativos,
                 (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PF')            AS global_pf,
                 (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PJ')            AS global_pj
-            FROM clientes{where_clause}"""
+            FROM clientes c{count_ramo_join}{where_clause}"""
         count_result = execute_query(count_query, tuple(params), fetch=True, fetch_one=True)
         total = int(count_result['total']) if count_result else 0
         stats = {
-            'total':   int(count_result.get('global_total',   0) or 0),
-            'ativos':  int(count_result.get('global_ativos',  0) or 0),
-            'inativos':int(count_result.get('global_inativos',0) or 0),
-            'pf':      int(count_result.get('global_pf',      0) or 0),
-            'pj':      int(count_result.get('global_pj',      0) or 0),
+            'total':    int(count_result.get('global_total',   0) or 0),
+            'ativos':   int(count_result.get('global_ativos',  0) or 0),
+            'inativos': int(count_result.get('global_inativos',0) or 0),
+            'pf':       int(count_result.get('global_pf',      0) or 0),
+            'pj':       int(count_result.get('global_pj',      0) or 0),
         } if count_result else {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
-        
+
+        # Ordenação configurável: sort_by in ('nome', 'numero'), sort_dir in ('asc', 'desc')
+        sort_by  = filters.get('sort_by',  'nome')
+        sort_dir = filters.get('sort_dir', 'asc').lower()
+        if sort_dir not in ('asc', 'desc'):
+            sort_dir = 'asc'
+        if sort_by == 'numero':
+            # Numeric sort so 1 < 2 < 162 < 211 < 5000 (not lexicographic)
+            order_clause = f"ORDER BY CAST(NULLIF(c.numero_cliente,'') AS UNSIGNED) IS NULL, CAST(NULLIF(c.numero_cliente,'') AS UNSIGNED) {sort_dir.upper()}, c.nome_razao_social ASC"
+        else:
+            order_clause = f"ORDER BY c.nome_razao_social {sort_dir.upper()}"
+
         offset = (page - 1) * per_page
         params.extend([per_page, offset])
-        
+
         # GROUP BY c.id + GROUP_CONCAT ensures one row per client even when the
         # client has multiple ramos de atividade in the many-to-many relation.
         query = f"""
@@ -126,7 +153,7 @@ class Cliente:
             GROUP BY c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                      c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                      c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes
-            ORDER BY c.nome_razao_social ASC
+            {order_clause}
             LIMIT %s OFFSET %s
         """
         

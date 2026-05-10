@@ -65,12 +65,26 @@
     <!-- Filters -->
     <div class="card filters-card">
         <div class="card-body">
-            <form method="GET" class="filters-form">
+            {# Preserve sort state across filter submissions #}
+            <form method="GET" class="filters-form" id="filter-form">
+                <input type="hidden" name="sort_by"  value="{{ sort_by }}">
+                <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
                 <div class="filters-row">
-                    <div class="form-group">
+                    <!-- Composite search: type selector + text input -->
+                    <div class="form-group" style="flex:2; min-width:260px;">
                         <label for="busca">Buscar</label>
-                        <input type="text" id="busca" name="busca" class="form-control"
-                               placeholder="Nome, CPF/CNPJ, Email..." value="{{ filtros.busca }}">
+                        <div style="display:flex; gap:0;">
+                            <select name="busca_tipo" id="busca_tipo"
+                                    class="form-control"
+                                    style="width:130px; border-right:none; border-radius:6px 0 0 6px; flex-shrink:0;">
+                                <option value="nome"   {% if filtros.busca_tipo == 'nome'   %}selected{% endif %}>Nome</option>
+                                <option value="numero" {% if filtros.busca_tipo == 'numero' %}selected{% endif %}>Nº Cliente</option>
+                                <option value="ramo"   {% if filtros.busca_tipo == 'ramo'   %}selected{% endif %}>Ramo</option>
+                            </select>
+                            <input type="text" id="busca" name="busca" class="form-control"
+                                   style="border-radius:0 6px 6px 0;"
+                                   placeholder="Digite para buscar…" value="{{ filtros.busca }}">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="tipo_pessoa">Tipo</label>
@@ -114,11 +128,11 @@
 
     <!-- Clientes Table -->
     <div class="card table-card">
-        <div class="card-body" style="padding: 0;">
+        <div class="card-body" style="padding:0;">
 
-            <!-- Table header bar -->
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border-color);">
-                <span style="font-size:13px; color:var(--text-secondary);">
+            <!-- Table info bar -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border-color);">
+                <span style="font-size:12px; color:var(--text-secondary);">
                     {% if total > 0 %}
                         {% set start = (page - 1) * 50 + 1 %}
                         {% set end   = [page * 50, total] | min %}
@@ -127,22 +141,56 @@
                         Nenhum cliente encontrado
                     {% endif %}
                 </span>
-                <span style="font-size:12px; color:var(--text-secondary);">Ordenado por nome A → Z</span>
+                {% if sort_by == 'numero' %}
+                <span style="font-size:11px; color:var(--text-secondary);">
+                    Ordenado por Nº {{ '↑' if sort_dir == 'asc' else '↓' }}
+                </span>
+                {% else %}
+                <span style="font-size:11px; color:var(--text-secondary);">
+                    Ordenado por Nome {{ '↑' if sort_dir == 'asc' else '↓' }}
+                </span>
+                {% endif %}
             </div>
 
             <div class="table-responsive">
-                <table class="table" style="margin:0;">
+                <table class="table cli-table">
                     <thead>
                         <tr>
-                            <th style="width:100px;">Nº Cliente</th>
-                            <th>Nome</th>
-                            <th style="width:150px;">CPF/CNPJ</th>
+                            {# Sortable: Nº Cliente #}
+                            {% set num_dir = 'desc' if (sort_by == 'numero' and sort_dir == 'asc') else 'asc' %}
+                            <th class="cli-th-sort {% if sort_by == 'numero' %}active-sort{% endif %}"
+                                onclick="sortBy('numero', '{{ num_dir }}')"
+                                style="width:95px; cursor:pointer; user-select:none;">
+                                Nº Cliente
+                                <span class="sort-icon">
+                                    {% if sort_by == 'numero' %}
+                                        {{ '↑' if sort_dir == 'asc' else '↓' }}
+                                    {% else %}
+                                        <span style="opacity:.35;">↕</span>
+                                    {% endif %}
+                                </span>
+                            </th>
+                            {# Sortable: Nome #}
+                            {% set nome_dir = 'desc' if (sort_by == 'nome' and sort_dir == 'asc') else 'asc' %}
+                            <th class="cli-th-sort {% if sort_by == 'nome' %}active-sort{% endif %}"
+                                onclick="sortBy('nome', '{{ nome_dir }}')"
+                                style="cursor:pointer; user-select:none;">
+                                Nome
+                                <span class="sort-icon">
+                                    {% if sort_by == 'nome' %}
+                                        {{ '↑' if sort_dir == 'asc' else '↓' }}
+                                    {% else %}
+                                        <span style="opacity:.35;">↕</span>
+                                    {% endif %}
+                                </span>
+                            </th>
+                            <th style="width:145px;">CPF/CNPJ</th>
                             <th>Email</th>
-                            <th style="width:130px;">Telefone</th>
+                            <th style="width:125px;">Telefone</th>
                             <th>Ramo de Atividade</th>
-                            <th style="width:60px; text-align:center;">Tipo</th>
-                            <th style="width:90px; text-align:center;">Situação</th>
-                            <th style="width:90px; text-align:center;">Ações</th>
+                            <th style="width:52px; text-align:center;">Tipo</th>
+                            <th style="width:82px; text-align:center;">Situação</th>
+                            <th style="width:84px; text-align:center;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -153,40 +201,34 @@
                                     {% if cliente.numero_cliente %}
                                         <span class="cli-num">#{{ cliente.numero_cliente }}</span>
                                     {% else %}
-                                        <span style="color:var(--text-secondary); font-size:12px;">{{ cliente.id }}</span>
+                                        <span class="cli-id">{{ cliente.id }}</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    <div class="table-user">
-                                        <div class="table-user-avatar">{{ cliente.nome_razao_social[0] }}</div>
-                                        <span class="cli-name">{{ cliente.nome_razao_social }}</span>
-                                    </div>
+                                <td class="cli-name-cell">
+                                    <span class="cli-name" title="{{ cliente.nome_razao_social }}">{{ cliente.nome_razao_social }}</span>
                                 </td>
-                                <td style="font-size:13px; font-family:monospace; letter-spacing:.3px;">
-                                    {{ cliente.cpf_cnpj }}
-                                </td>
-                                <td style="font-size:13px;">{{ cliente.email or '—' }}</td>
-                                <td style="font-size:13px;">{{ cliente.telefone or cliente.celular or '—' }}</td>
-                                <td>
+                                <td class="cli-mono">{{ cliente.cpf_cnpj }}</td>
+                                <td class="cli-text cli-ellipsis" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</td>
+                                <td class="cli-text cli-nowrap">{{ cliente.telefone or cliente.celular or '—' }}</td>
+                                <td class="cli-ramo-cell">
                                     {% if cliente.ramo_atividade_nome %}
-                                        <span class="badge badge-secondary" style="font-size:11px;" title="{{ cliente.ramo_atividade_nome }}">
-                                            <i class="fas fa-industry" style="margin-right:3px;"></i>
-                                            {{ cliente.ramo_atividade_nome | truncate(40, True, '…') }}
+                                        <span class="cli-ramo-text" title="{{ cliente.ramo_atividade_nome }}">
+                                            {{ cliente.ramo_atividade_nome | truncate(35, True, '…') }}
                                         </span>
                                     {% else %}
-                                        <span style="color:var(--text-secondary);">—</span>
+                                        <span class="cli-dash">—</span>
                                     {% endif %}
                                 </td>
                                 <td style="text-align:center;">
-                                    <span class="badge badge-info" style="font-size:11px;">{{ cliente.tipo_pessoa }}</span>
+                                    <span class="badge badge-info cli-badge">{{ cliente.tipo_pessoa }}</span>
                                 </td>
                                 <td style="text-align:center;">
-                                    <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}" style="font-size:11px;">
+                                    <span class="badge cli-badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
                                         {{ cliente.situacao }}
                                     </span>
                                 </td>
                                 <td style="text-align:center;">
-                                    <div class="table-actions" style="justify-content:center;">
+                                    <div class="table-actions" style="justify-content:center; gap:3px;">
                                         <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}"
                                            class="btn-icon btn-view" title="Ver detalhes">
                                             <i class="fas fa-eye"></i>
@@ -195,7 +237,8 @@
                                            class="btn-icon btn-edit" title="Editar">
                                             <i class="fas fa-pen"></i>
                                         </a>
-                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST" style="display:inline;"
+                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST"
+                                              style="display:inline;"
                                               onsubmit="return confirmDelete(this);"
                                               data-name="{{ cliente.nome_razao_social | e }}">
                                             <button type="submit" class="btn-icon btn-delete" title="Excluir">
@@ -227,14 +270,14 @@
     <div class="pagination-wrapper">
         <nav class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
+            <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, sort_by=sort_by, sort_dir=sort_dir) }}" class="pagination-btn">
                 <i class="fas fa-chevron-left"></i> Anterior
             </a>
             {% endif %}
             <div class="pagination-pages">
                 {% for page_num in range(1, total_pages + 1) %}
                     {% if page_num == 1 or page_num == total_pages or (page_num >= page - 2 and page_num <= page + 2) %}
-                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}"
+                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, sort_by=sort_by, sort_dir=sort_dir) }}"
                            class="pagination-page {% if page_num == page %}active{% endif %}">{{ page_num }}</a>
                     {% elif page_num == page - 3 or page_num == page + 3 %}
                         <span class="pagination-ellipsis">…</span>
@@ -242,7 +285,7 @@
                 {% endfor %}
             </div>
             {% if page < total_pages %}
-            <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
+            <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, sort_by=sort_by, sort_dir=sort_dir) }}" class="pagination-btn">
                 Próximo <i class="fas fa-chevron-right"></i>
             </a>
             {% endif %}
@@ -254,22 +297,52 @@
 </div>
 
 <style>
-/* ── Compact, elegant client table rows ────────────────────────────────── */
-.cli-row td { padding: 9px 12px; vertical-align: middle; }
-.cli-num    { font-weight: 600; color: var(--primary-green); font-size: 13px; }
-.cli-name   { font-size: 13px; font-weight: 500; }
+/* ── Client table: compact single-line rows ─────────────────────────────── */
+.cli-table          { margin: 0; table-layout: fixed; width: 100%; }
+.cli-table thead th { font-size: 11px; padding: 8px 10px; white-space: nowrap; }
+.cli-row td         { padding: 7px 10px; vertical-align: middle; font-size: 12px; }
 
-.table-user-avatar {
-    width: 30px; height: 30px; min-width: 30px;
-    font-size: 13px; font-weight: 700;
-}
+/* Prevent any cell from wrapping and causing multi-line rows */
+.cli-row td         { white-space: nowrap; overflow: hidden; }
 
-/* Row hover highlight */
-.cli-row:hover { background: rgba(34,197,94,.04); }
+/* Name column: allow a bit more room, ellipsis on overflow */
+.cli-name-cell      { max-width: 220px; }
+.cli-name           { font-size: 12px; font-weight: 500; display: block;
+                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Action buttons tighter */
-.cli-row .table-actions { gap: 4px; }
-.cli-row .btn-icon { width: 28px; height: 28px; font-size: 12px; }
+/* CPF/CNPJ */
+.cli-mono           { font-family: monospace; font-size: 11.5px; letter-spacing: .2px; width: 145px; }
+
+/* Generic small text */
+.cli-text           { font-size: 12px; }
+.cli-nowrap         { white-space: nowrap; }
+.cli-ellipsis       { overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+
+/* Ramo: just plain text, truncated */
+.cli-ramo-cell      { max-width: 200px; overflow: hidden; }
+.cli-ramo-text      { font-size: 11px; color: var(--text-secondary);
+                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                      display: block; }
+.cli-dash           { color: var(--text-secondary); }
+
+/* Nº Cliente */
+.cli-num            { font-weight: 600; color: var(--primary-green); font-size: 12px; }
+.cli-id             { color: var(--text-secondary); font-size: 11px; }
+
+/* Badges */
+.cli-badge          { font-size: 10px; padding: 2px 6px; }
+
+/* Action buttons */
+.cli-row .btn-icon  { width: 26px; height: 26px; font-size: 11px; }
+
+/* Row hover */
+.cli-row:hover      { background: rgba(34,197,94,.04); }
+
+/* Sortable header */
+.cli-th-sort        { white-space: nowrap; transition: color .15s; }
+.cli-th-sort:hover  { color: var(--primary-green); }
+.active-sort        { color: var(--primary-green); }
+.sort-icon          { margin-left: 3px; font-size: 11px; }
 </style>
 {% endblock %}
 
@@ -278,6 +351,13 @@
 function confirmDelete(form) {
     var name = form.getAttribute('data-name') || 'este cliente';
     return confirm('Excluir o cliente ' + name + '?');
+}
+
+function sortBy(field, dir) {
+    var form = document.getElementById('filter-form');
+    form.querySelector('[name="sort_by"]').value  = field;
+    form.querySelector('[name="sort_dir"]').value = dir;
+    form.submit();
 }
 </script>
 {% endblock %}
