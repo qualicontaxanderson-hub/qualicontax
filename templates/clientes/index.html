@@ -190,7 +190,7 @@
                             <th>Ramo de Atividade</th>
                             <th style="width:52px; text-align:center;">Tipo</th>
                             <th style="width:82px; text-align:center;">Situação</th>
-                            <th style="width:84px; text-align:center;">Ações</th>
+                            <th style="width:100px; text-align:center; overflow:visible;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -227,8 +227,8 @@
                                         {{ cliente.situacao }}
                                     </span>
                                 </td>
-                                <td style="text-align:center;">
-                                    <div class="table-actions" style="justify-content:center; gap:3px;">
+                                <td style="text-align:center; overflow:visible; padding:4px 6px;">
+                                    <div class="table-actions" style="justify-content:center; gap:3px; flex-wrap:nowrap;">
                                         <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}"
                                            class="btn-icon btn-view" title="Ver detalhes">
                                             <i class="fas fa-eye"></i>
@@ -332,8 +332,9 @@
 /* Badges */
 .cli-badge          { font-size: 10px; padding: 2px 6px; }
 
-/* Action buttons */
+/* Action buttons — never clip the delete button */
 .cli-row .btn-icon  { width: 26px; height: 26px; font-size: 11px; }
+.cli-row td:last-child { overflow: visible; }
 
 /* Row hover */
 .cli-row:hover      { background: rgba(34,197,94,.04); }
