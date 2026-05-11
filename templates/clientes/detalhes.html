@@ -2,6 +2,29 @@
 
 {% block title %}{{ cliente.nome_razao_social }} - Qualicontax{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ── Area-chip checkboxes ─────────────────────────────────────────────────── */
+.area-chip { display:inline-flex; cursor:pointer; user-select:none; }
+.area-chip-input { display:none; }
+.area-chip-body {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:5px 11px; border-radius:20px; font-size:12px; font-weight:500;
+    border:1.5px solid var(--chip-color, #6b7280);
+    color:var(--chip-color, #6b7280);
+    background:transparent;
+    transition:background .15s, color .15s;
+}
+.area-chip-input:checked + .area-chip-body {
+    background:var(--chip-color, #6b7280);
+    color:#fff;
+}
+.area-chip:hover .area-chip-body {
+    background:color-mix(in srgb, var(--chip-color, #6b7280) 12%, transparent);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="cliente-view-page">
     <!-- Page Header -->
@@ -268,8 +291,8 @@
                                             <th>Cargo</th>
                                             <th>Email</th>
                                             <th>Telefone</th>
-                                            <th>Celular</th>
                                             <th>Departamento</th>
+                                            <th>Áreas de Recebimento</th>
                                             <th>Status</th>
                                             <th>Ações</th>
                                         </tr>
@@ -285,9 +308,21 @@
                                             </td>
                                             <td>{{ contato.cargo or '-' }}</td>
                                             <td>{{ contato.email or '-' }}</td>
-                                            <td>{{ contato.telefone or '-' }}</td>
-                                            <td>{{ contato.celular or '-' }}</td>
+                                            <td>{{ contato.telefone or contato.celular or '-' }}</td>
                                             <td>{{ contato.departamento or '-' }}</td>
+                                            <td>
+                                                {% if contato.areas_atendimento %}
+                                                    {% for area_key in contato.areas_atendimento %}
+                                                        {% for a in areas_atendimento if a[0] == area_key %}
+                                                        <span class="badge" style="background:{{ a[3] }}20; color:{{ a[3] }}; border:1px solid {{ a[3] }}40; font-size:10px; margin-right:2px;">
+                                                            <i class="fas {{ a[2] }}" style="margin-right:2px;"></i>{{ a[1] }}
+                                                        </span>
+                                                        {% endfor %}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted" style="font-size:11px;">Todas</span>
+                                                {% endif %}
+                                            </td>
                                             <td>
                                                 <span class="badge badge-{{ 'success' if contato.ativo else 'secondary' }}">
                                                     {{ 'Ativo' if contato.ativo else 'Inativo' }}
@@ -599,7 +634,7 @@
 
 <!-- Modal para Adicionar Contato -->
 <div id="addContactModal" class="modal" style="display: none;">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:580px;">
         <div class="modal-header">
             <h3>Adicionar Contato</h3>
             <button class="modal-close" onclick="closeAddContactModal()">&times;</button>
@@ -634,6 +669,28 @@
                         <input type="text" id="celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000">
                     </div>
                 </div>
+
+                <!-- Áreas de Recebimento -->
+                <div class="form-group">
+                    <label style="display:block; margin-bottom:8px;">
+                        Áreas de Recebimento
+                        <span style="font-weight:400; font-size:11px; color:var(--text-secondary);">
+                            — deixe em branco para receber todas
+                        </span>
+                    </label>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        {% for area_key, area_label, area_icon, area_color in areas_atendimento %}
+                        <label class="area-chip" style="--chip-color:{{ area_color }};">
+                            <input type="checkbox" name="areas_atendimento" value="{{ area_key }}" class="area-chip-input">
+                            <span class="area-chip-body">
+                                <i class="fas {{ area_icon }}"></i>
+                                {{ area_label }}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>
                         <input type="checkbox" name="principal" id="principal_contato">

@@ -4,7 +4,7 @@ from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
-from models.contato_cliente import ContatoCliente
+from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade
 
@@ -230,7 +230,8 @@ def detalhes(id):
                          ramos_atividade=ramos_atividade,
                          processos=processos,
                          tarefas=tarefas,
-                         obrigacoes=obrigacoes)
+                         obrigacoes=obrigacoes,
+                         areas_atendimento=AREAS_ATENDIMENTO)
 
 
 @clientes.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])
@@ -462,6 +463,7 @@ def novo_contato(cliente_id):
         telefone=request.form.get('telefone'),
         celular=request.form.get('celular'),
         departamento=request.form.get('departamento'),
+        areas_atendimento=request.form.getlist('areas_atendimento'),
         principal=request.form.get('principal') == 'on',
         ativo=True
     )
