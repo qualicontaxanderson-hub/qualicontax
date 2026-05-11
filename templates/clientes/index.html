@@ -22,41 +22,41 @@
         </div>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="stats-showcase">
-        <div class="stat-panel">
-            <span class="stat-panel-icon bg-primary"><i class="fas fa-users"></i></span>
-            <div class="stat-panel-body">
-                <span class="stat-panel-label">Total de Clientes</span>
-                <strong class="stat-panel-value">{{ stats.total or 0 }}</strong>
+    <!-- Statistics Cards — compact KPI strip -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-primary"><i class="fas fa-users"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.total or 0 }}</strong>
+                <span class="kpi-lbl">Total de Clientes</span>
             </div>
         </div>
-        <div class="stat-panel">
-            <span class="stat-panel-icon bg-success"><i class="fas fa-check-circle"></i></span>
-            <div class="stat-panel-body">
-                <span class="stat-panel-label">Clientes Ativos</span>
-                <strong class="stat-panel-value">{{ stats.ativos or 0 }}</strong>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-success"><i class="fas fa-check-circle"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.ativos or 0 }}</strong>
+                <span class="kpi-lbl">Ativos</span>
             </div>
         </div>
-        <div class="stat-panel">
-            <span class="stat-panel-icon bg-danger"><i class="fas fa-times-circle"></i></span>
-            <div class="stat-panel-body">
-                <span class="stat-panel-label">Clientes Inativos</span>
-                <strong class="stat-panel-value">{{ stats.inativos or 0 }}</strong>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-danger"><i class="fas fa-times-circle"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.inativos or 0 }}</strong>
+                <span class="kpi-lbl">Inativos</span>
             </div>
         </div>
-        <div class="stat-panel">
-            <span class="stat-panel-icon bg-info"><i class="fas fa-user"></i></span>
-            <div class="stat-panel-body">
-                <span class="stat-panel-label">Pessoa Física</span>
-                <strong class="stat-panel-value">{{ stats.pf or 0 }}</strong>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-info"><i class="fas fa-user"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.pf or 0 }}</strong>
+                <span class="kpi-lbl">Pessoa Física</span>
             </div>
         </div>
-        <div class="stat-panel">
-            <span class="stat-panel-icon bg-warning"><i class="fas fa-building"></i></span>
-            <div class="stat-panel-body">
-                <span class="stat-panel-label">Pessoa Jurídica</span>
-                <strong class="stat-panel-value">{{ stats.pj or 0 }}</strong>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-warning"><i class="fas fa-building"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.pj or 0 }}</strong>
+                <span class="kpi-lbl">Pessoa Jurídica</span>
             </div>
         </div>
     </div>
@@ -79,40 +79,39 @@
         </div>
         <div class="filters-body" id="filters-body"
              style="display:none; border-top:1px solid var(--border-color);">
-            <div class="card-body">
+            <div class="fi-wrap">
                 {# Preserve sort state across filter submissions #}
-                <form method="GET" class="filters-form" id="filter-form">
+                <form method="GET" id="filter-form">
                     <input type="hidden" name="sort_by"  value="{{ sort_by }}">
                     <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
-                    <div class="filters-grid">
-                        <!-- Composite search: type selector + text input -->
-                        <div class="form-group filters-search-group">
-                            <label for="busca">Buscar</label>
-                            <div class="filters-search-input">
-                                <select name="busca_tipo" id="busca_tipo"
-                                        class="form-control filters-search-select">
-                                    <option value="nome"   {% if filtros.busca_tipo == 'nome'   %}selected{% endif %}>Nome</option>
-                                    <option value="numero" {% if filtros.busca_tipo == 'numero' %}selected{% endif %}>Nº Cliente</option>
-                                    <option value="ramo"   {% if filtros.busca_tipo == 'ramo'   %}selected{% endif %}>Ramo</option>
-                                    <option value="grupo"  {% if filtros.busca_tipo == 'grupo'  %}selected{% endif %}>Grupo</option>
+                    <div class="fi-row">
+                        <!-- Busca composta: tipo + texto -->
+                        <div class="fi-group fi-search-group">
+                            <span class="fi-lbl">Buscar</span>
+                            <div class="fi-search-wrap">
+                                <select name="busca_tipo" id="busca_tipo" class="fi-ctrl fi-type-sel">
+                                    <option value="nome"     {% if filtros.busca_tipo == 'nome'     %}selected{% endif %}>Nome</option>
+                                    <option value="numero"   {% if filtros.busca_tipo == 'numero'   %}selected{% endif %}>Nº Cliente</option>
+                                    <option value="ramo"     {% if filtros.busca_tipo == 'ramo'     %}selected{% endif %}>Ramo</option>
+                                    <option value="grupo"    {% if filtros.busca_tipo == 'grupo'    %}selected{% endif %}>Grupo</option>
                                     <option value="cpf_cnpj" {% if filtros.busca_tipo == 'cpf_cnpj' %}selected{% endif %}>CPF/CNPJ</option>
-                                    <option value="email"  {% if filtros.busca_tipo == 'email'  %}selected{% endif %}>Email</option>
+                                    <option value="email"    {% if filtros.busca_tipo == 'email'    %}selected{% endif %}>E-mail</option>
                                 </select>
-                                <input type="text" id="busca" name="busca" class="form-control"
+                                <input type="text" id="busca" name="busca" class="fi-ctrl fi-text"
                                        placeholder="Digite para buscar…" value="{{ filtros.busca }}">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label for="tipo_pessoa">Tipo</label>
-                            <select id="tipo_pessoa" name="tipo_pessoa" class="form-control">
+                        <div class="fi-group">
+                            <span class="fi-lbl">Tipo</span>
+                            <select id="tipo_pessoa" name="tipo_pessoa" class="fi-ctrl fi-narrow">
                                 <option value="">Todos</option>
-                                <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
-                                <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
+                                <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pess. Física</option>
+                                <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pess. Jurídica</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="situacao">Situação</label>
-                            <select id="situacao" name="situacao" class="form-control">
+                        <div class="fi-group">
+                            <span class="fi-lbl">Situação</span>
+                            <select id="situacao" name="situacao" class="fi-ctrl fi-narrow">
                                 <option value="">Todos</option>
                                 <option value="ATIVO"     {% if filtros.situacao == 'ATIVO'     %}selected{% endif %}>Ativo</option>
                                 <option value="INATIVO"   {% if filtros.situacao == 'INATIVO'   %}selected{% endif %}>Inativo</option>
@@ -120,9 +119,9 @@
                                 <option value="CANCELADO" {% if filtros.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="regime">Regime Tributário</label>
-                            <select id="regime" name="regime" class="form-control">
+                        <div class="fi-group">
+                            <span class="fi-lbl">Regime</span>
+                            <select id="regime" name="regime" class="fi-ctrl fi-medium">
                                 <option value="">Todos</option>
                                 <option value="SIMPLES"         {% if filtros.regime == 'SIMPLES'         %}selected{% endif %}>Simples Nacional</option>
                                 <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
@@ -130,37 +129,35 @@
                                 <option value="MEI"             {% if filtros.regime == 'MEI'             %}selected{% endif %}>MEI</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="grupo_id">Grupo</label>
-                            <select id="grupo_id" name="grupo_id" class="form-control">
+                        <div class="fi-group">
+                            <span class="fi-lbl">Grupo</span>
+                            <select id="grupo_id" name="grupo_id" class="fi-ctrl fi-medium">
                                 <option value="">Todos</option>
                                 {% for grupo in grupos %}
                                 <option value="{{ grupo.id }}" {% if filtros.grupo_id == grupo.id|string %}selected{% endif %}>{{ grupo.nome }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="ramo_id">Atividade</label>
-                            <select id="ramo_id" name="ramo_id" class="form-control">
+                        <div class="fi-group">
+                            <span class="fi-lbl">Atividade</span>
+                            <select id="ramo_id" name="ramo_id" class="fi-ctrl fi-medium">
                                 <option value="">Todas</option>
                                 {% for ramo in ramos_atividade %}
                                 <option value="{{ ramo.id }}" {% if filtros.ramo_id == ramo.id|string %}selected{% endif %}>{{ ramo.nome }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="form-group filters-actions">
-                            <label>&nbsp;</label>
-                            <div class="filters-actions-row">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-search"></i>
-                                    Filtrar
+                        <div class="fi-group fi-actions">
+                            <span class="fi-lbl">&nbsp;</span>
+                            <div class="fi-btns">
+                                <button type="submit" class="btn btn-primary fi-btn">
+                                    <i class="fas fa-search"></i> Filtrar
                                 </button>
-                            {% if filters_active %}
-                                <a href="{{ url_for('clientes.index') }}" class="btn btn-outline" title="Limpar filtros">
-                                    <i class="fas fa-times"></i>
-                                    Limpar
+                                {% if filters_active %}
+                                <a href="{{ url_for('clientes.index') }}" class="btn btn-outline fi-btn" title="Limpar filtros">
+                                    <i class="fas fa-times"></i> Limpar
                                 </a>
-                            {% endif %}
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -233,7 +230,7 @@
                             <th>Ramo de Atividade</th>
                             <th style="width:52px; text-align:center;">Tipo</th>
                             <th style="width:82px; text-align:center;">Situação</th>
-                            <th style="width:100px; text-align:center; overflow:visible;">Ações</th>
+                            <th style="width:130px; text-align:center; overflow:visible;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -273,25 +270,19 @@
                                         {{ cliente.situacao }}
                                     </span>
                                 </td>
-                                <td style="text-align:center; overflow:visible; padding:4px 6px;">
-                                    <div class="table-actions" style="justify-content:center; gap:3px; flex-wrap:nowrap;">
-                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
-                                           class="btn-icon btn-view" title="Abrir cadastro">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
-                                           class="btn-icon btn-edit" title="Editar">
-                                            <i class="fas fa-pen"></i>
-                                        </a>
-                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST"
-                                              style="display:inline;"
-                                              onsubmit="return confirmDelete(this);"
-                                              data-name="{{ cliente.nome_razao_social | e }}">
-                                            <button type="submit" class="btn-icon btn-delete" title="Excluir">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    </div>
+                                <td class="cli-act-cell">
+                                    <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                       class="cli-btn-open" title="Abrir cadastro">
+                                        <i class="fas fa-pen"></i> Editar
+                                    </a>
+                                    <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST"
+                                          style="display:inline;"
+                                          onsubmit="return confirmDelete(this);"
+                                          data-name="{{ cliente.nome_razao_social | e }}">
+                                        <button type="submit" class="cli-btn-del" title="Excluir cliente">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -343,88 +334,92 @@
 </div>
 
 <style>
-/* ── Elegant stats cards ─────────────────────────────────────────────────── */
-.stats-showcase     { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
-                      gap:14px; margin-bottom:16px; }
-.stat-panel         { display:flex; align-items:center; gap:14px; padding:18px 20px;
-                      background:linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
-                      border:1px solid rgba(15, 23, 42, 0.08); border-radius:14px;
-                      box-shadow:0 8px 24px rgba(15, 23, 42, 0.06); }
-.stat-panel-icon    { width:52px; height:52px; border-radius:14px; display:flex;
-                      align-items:center; justify-content:center; flex-shrink:0; opacity:.95; }
-.stat-panel-icon i  { font-size:20px; color:#fff; }
-.stat-panel-body    { display:flex; flex-direction:column; gap:3px; min-width:0; }
-.stat-panel-label   { font-size:13px; color:var(--text-secondary); }
-.stat-panel-value   { font-size:34px; line-height:1; color:var(--text-primary); font-weight:700; }
+/* ── KPI Strip ───────────────────────────────────────────────────────────── */
+.kpi-strip      { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.kpi-card       { display:flex; align-items:center; gap:12px; padding:12px 18px;
+                  background:#fff; border:1px solid rgba(0,0,0,.07); border-radius:12px;
+                  box-shadow:0 2px 8px rgba(0,0,0,.04); flex:1; min-width:140px; }
+.kpi-icon       { width:40px; height:40px; border-radius:10px; display:flex;
+                  align-items:center; justify-content:center; flex-shrink:0; }
+.kpi-icon i     { font-size:17px; color:#fff; }
+.kpi-primary    { background:var(--primary-green, #22c55e); }
+.kpi-success    { background:#22c55e; }
+.kpi-danger     { background:#ef4444; }
+.kpi-info       { background:#3b82f6; }
+.kpi-warning    { background:#f59e0b; }
+.kpi-body       { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.kpi-val        { font-size:26px; font-weight:700; line-height:1; color:var(--text-primary); }
+.kpi-lbl        { font-size:12px; color:var(--text-secondary); line-height:1.3; white-space:nowrap; }
 
-/* ── Collapsible filters ─────────────────────────────────────────────────── */
+/* ── Collapsible filter panel ────────────────────────────────────────────── */
 .filters-header     { transition: background .15s; }
 .filters-header:hover { background: rgba(34,197,94,.04); }
-.filters-chevron    { font-size:11px; color:var(--text-secondary);
-                      transition: transform .25s; }
-.filters-chevron.open { transform: rotate(180deg); }
+.filters-chevron    { font-size:11px; color:var(--text-secondary); transition:transform .25s; }
+.filters-chevron.open { transform:rotate(180deg); }
 .filter-active-badge { font-size:10px; font-weight:500; background:rgba(34,197,94,.12);
                        color:var(--primary-green); border-radius:20px; padding:2px 8px; }
-.filters-grid       { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
-                      gap:14px 16px; align-items:end; }
-.filters-search-group { grid-column:span 2; }
-.filters-search-input { display:flex; }
-.filters-search-select { width:150px; border-right:none; border-radius:6px 0 0 6px; flex-shrink:0; }
-.filters-search-input .form-control:last-child { border-radius:0 6px 6px 0; }
-.filters-actions    { min-width:240px; }
-.filters-actions-row { display:flex; gap:8px; flex-wrap:wrap; }
 
-.cli-table          { margin: 0; table-layout: fixed; width: 100%; }
-.cli-table thead th { font-size: 11px; padding: 8px 10px; white-space: nowrap; }
-.cli-row td         { padding: 7px 10px; vertical-align: middle; font-size: 12px; }
+/* ── Compact inline filter row ───────────────────────────────────────────── */
+.fi-wrap        { padding:12px 16px 14px; }
+.fi-row         { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 10px; }
+.fi-group       { display:flex; flex-direction:column; gap:3px; }
+.fi-lbl         { font-size:10.5px; font-weight:600; text-transform:uppercase;
+                  letter-spacing:.3px; color:var(--text-secondary); }
+.fi-ctrl        { height:34px; border:1px solid var(--border-color); border-radius:6px;
+                  padding:0 8px; font-size:12.5px; color:var(--text-primary);
+                  background:#fff; box-sizing:border-box; }
+.fi-ctrl:focus  { border-color:var(--primary-green); outline:none;
+                  box-shadow:0 0 0 2px rgba(34,197,94,.15); }
+.fi-search-wrap { display:flex; }
+.fi-type-sel    { width:108px; border-right:none; border-radius:6px 0 0 6px; flex-shrink:0; }
+.fi-text        { width:170px; border-radius:0 6px 6px 0; }
+.fi-narrow      { width:110px; }
+.fi-medium      { width:130px; }
+.fi-btns        { display:flex; gap:6px; }
+.fi-btn         { padding:5px 14px; font-size:12.5px; height:34px; display:inline-flex;
+                  align-items:center; gap:5px; }
 
-/* Prevent any cell from wrapping and causing multi-line rows */
-.cli-row td         { white-space: nowrap; overflow: hidden; }
+/* ── Clientes table ──────────────────────────────────────────────────────── */
+.cli-table          { margin:0; table-layout:fixed; width:100%; }
+.cli-table thead th { font-size:11px; padding:8px 10px; white-space:nowrap; }
+.cli-row td         { padding:7px 10px; vertical-align:middle; font-size:12px;
+                      white-space:nowrap; overflow:hidden; }
+.cli-name-cell      { max-width:220px; }
+.cli-name           { font-size:12px; font-weight:500; display:block;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cli-mono           { font-family:monospace; font-size:11.5px; letter-spacing:.2px; width:145px; }
+.cli-text           { font-size:12px; }
+.cli-nowrap         { white-space:nowrap; }
+.cli-ellipsis       { overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+.cli-ramo-cell      { max-width:200px; overflow:hidden; }
+.cli-ramo-text      { font-size:11px; color:var(--text-secondary); white-space:nowrap;
+                      overflow:hidden; text-overflow:ellipsis; display:block; }
+.cli-dash           { color:var(--text-secondary); }
+.cli-num            { font-weight:600; color:var(--primary-green); font-size:12px; }
+.cli-id             { color:var(--text-secondary); font-size:11px; }
+.cli-badge          { font-size:10px; padding:2px 6px; }
 
-/* Name column: allow a bit more room, ellipsis on overflow */
-.cli-name-cell      { max-width: 220px; }
-.cli-name           { font-size: 12px; font-weight: 500; display: block;
-                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ── Action buttons ──────────────────────────────────────────────────────── */
+.cli-act-cell   { overflow:visible; white-space:nowrap; text-align:center; padding:4px 8px; }
+.cli-btn-open   { display:inline-flex; align-items:center; gap:5px; padding:3px 10px;
+                  background:rgba(34,197,94,.1); color:#166534; border-radius:6px;
+                  font-size:12px; font-weight:600; text-decoration:none;
+                  border:1px solid rgba(34,197,94,.2); }
+.cli-btn-open:hover { background:rgba(34,197,94,.2); }
+.cli-btn-del    { display:inline-flex; align-items:center; justify-content:center;
+                  width:28px; height:28px; background:rgba(239,68,68,.1); color:#b91c1c;
+                  border:1px solid rgba(239,68,68,.2); border-radius:6px;
+                  cursor:pointer; font-size:13px; }
+.cli-btn-del:hover { background:rgba(239,68,68,.2); }
+.cli-row td:last-child { overflow:visible; }
 
-/* CPF/CNPJ */
-.cli-mono           { font-family: monospace; font-size: 11.5px; letter-spacing: .2px; width: 145px; }
-
-/* Generic small text */
-.cli-text           { font-size: 12px; }
-.cli-nowrap         { white-space: nowrap; }
-.cli-ellipsis       { overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-
-/* Ramo: just plain text, truncated */
-.cli-ramo-cell      { max-width: 200px; overflow: hidden; }
-.cli-ramo-text      { font-size: 11px; color: var(--text-secondary);
-                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-                      display: block; }
-.cli-dash           { color: var(--text-secondary); }
-
-/* Nº Cliente */
-.cli-num            { font-weight: 600; color: var(--primary-green); font-size: 12px; }
-.cli-id             { color: var(--text-secondary); font-size: 11px; }
-
-/* Badges */
-.cli-badge          { font-size: 10px; padding: 2px 6px; }
-
-/* Action buttons — never clip the delete button */
-.cli-row .btn-icon  { width: 26px; height: 26px; font-size: 11px; }
-.cli-row td:last-child { overflow: visible; }
-
-/* Row hover */
-.cli-row:hover      { background: rgba(34,197,94,.04); }
-.cli-row-clickable  { cursor: pointer; }
-
-/* Sortable header */
-.cli-th-sort        { white-space: nowrap; transition: color .15s; }
-.cli-th-sort:hover  { color: var(--primary-green); }
-.active-sort        { color: var(--primary-green); }
-.sort-icon          { margin-left: 3px; font-size: 11px; }
-
-@media (max-width: 1200px) {
-    .filters-search-group { grid-column:span 1; }
-}
+/* ── Row hover & sort ────────────────────────────────────────────────────── */
+.cli-row:hover      { background:rgba(34,197,94,.04); }
+.cli-row-clickable  { cursor:pointer; }
+.cli-th-sort        { white-space:nowrap; transition:color .15s; }
+.cli-th-sort:hover  { color:var(--primary-green); }
+.active-sort        { color:var(--primary-green); }
+.sort-icon          { margin-left:3px; font-size:11px; }
 </style>
 {% endblock %}
 
