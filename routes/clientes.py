@@ -22,7 +22,7 @@ def index():
         tipo_pessoa = request.args.get('tipo_pessoa', '')
         busca       = request.args.get('busca', '')
         busca_tipo  = request.args.get('busca_tipo', 'nome')   # 'nome' | 'numero' | 'ramo'
-        sort_by     = request.args.get('sort_by',  'nome')     # 'nome' | 'numero'
+        sort_by     = request.args.get('sort_by',  'numero')   # 'nome' | 'numero'
         sort_dir    = request.args.get('sort_dir', 'asc')      # 'asc'  | 'desc'
         page        = request.args.get('page', 1, type=int)
         per_page    = 50
@@ -72,7 +72,7 @@ def index():
                              total_pages=0,
                              total=0,
                              stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
-                             sort_by='nome',
+                             sort_by='numero',
                              sort_dir='asc',
                              filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '',
                                       'busca': '', 'busca_tipo': 'nome'})

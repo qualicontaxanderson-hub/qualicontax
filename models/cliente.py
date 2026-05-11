@@ -79,7 +79,7 @@ class Cliente:
 
         # Busca restrita ao campo escolhido pelo usuário
         busca = filters.get('busca', '').strip()
-        busca_tipo = filters.get('busca_tipo', 'nome')  # 'nome' | 'numero' | 'ramo'
+        busca_tipo = filters.get('busca_tipo', 'nome')  # 'nome' | 'numero' | 'ramo' | 'cpf_cnpj' | 'email'
         if busca:
             search_term = busca.replace('%', '\\%').replace('_', '\\_')
             search_pattern = f"%{search_term}%"
@@ -89,6 +89,12 @@ class Cliente:
             elif busca_tipo == 'ramo':
                 need_ramo_join = True
                 conditions.append("ra.nome LIKE %s")
+                params.append(search_pattern)
+            elif busca_tipo == 'cpf_cnpj':
+                conditions.append("c.cpf_cnpj LIKE %s")
+                params.append(search_pattern)
+            elif busca_tipo == 'email':
+                conditions.append("c.email LIKE %s")
                 params.append(search_pattern)
             else:  # nome (default)
                 conditions.append("c.nome_razao_social LIKE %s")
