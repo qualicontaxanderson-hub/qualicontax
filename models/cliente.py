@@ -150,8 +150,14 @@ class Cliente:
         if sort_dir not in ('asc', 'desc'):
             sort_dir = 'asc'
         if sort_by == 'numero':
+            numero_sort_expr = (
+                "CASE "
+                "WHEN c.numero_cliente REGEXP '^[0-9]+$' THEN CAST(c.numero_cliente AS UNSIGNED) "
+                "ELSE NULL "
+                "END"
+            )
             # Numeric sort so 1 < 2 < 162 < 211 < 5000 (not lexicographic)
-            order_clause = f"ORDER BY CAST(NULLIF(c.numero_cliente,'') AS UNSIGNED) IS NULL, CAST(NULLIF(c.numero_cliente,'') AS UNSIGNED) {sort_dir.upper()}, c.nome_razao_social ASC"
+            order_clause = f"ORDER BY {numero_sort_expr} IS NULL, {numero_sort_expr} {sort_dir.upper()}, c.nome_razao_social ASC"
         else:
             order_clause = f"ORDER BY c.nome_razao_social {sort_dir.upper()}"
 
