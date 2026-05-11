@@ -126,7 +126,7 @@
                                 <td>
                                     <div class="table-actions">
                                         <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn-icon" title="Editar Cliente">
-                                            <i class="fas fa-eye"></i>
+                                            <i class="fas fa-pen"></i>
                                         </a>
                                         <form action="{{ url_for('grupos.remover_cliente', grupo_id=grupo.id, cliente_id=cliente.id) }}" method="POST" style="display: inline;">
                                             <button type="submit" class="btn-icon btn-danger" onclick="event.stopPropagation(); return confirm('Remover este cliente do grupo?')" title="Remover do Grupo">
