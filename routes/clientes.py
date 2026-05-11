@@ -20,6 +20,8 @@ def index():
         situacao    = request.args.get('situacao', '')
         regime      = request.args.get('regime', '')
         tipo_pessoa = request.args.get('tipo_pessoa', '')
+        grupo_id    = request.args.get('grupo_id', '')
+        ramo_id     = request.args.get('ramo_id', '')
         busca       = request.args.get('busca', '')
         busca_tipo  = request.args.get('busca_tipo', 'nome')   # 'nome' | 'numero' | 'ramo'
         sort_by     = request.args.get('sort_by',  'numero')   # 'nome' | 'numero'
@@ -35,6 +37,10 @@ def index():
             filters['regime_tributario'] = regime
         if tipo_pessoa:
             filters['tipo_pessoa'] = tipo_pessoa
+        if grupo_id:
+            filters['grupo_id'] = grupo_id
+        if ramo_id:
+            filters['ramo_id'] = ramo_id
         if busca:
             filters['busca']      = busca
             filters['busca_tipo'] = busca_tipo
@@ -42,6 +48,8 @@ def index():
         filters['sort_dir'] = sort_dir
 
         result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
+        grupos = GrupoCliente.get_all(situacao='ATIVO')
+        ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
 
         # Verificar se houve erro na obtenção dos dados
         if result is None:
@@ -56,26 +64,32 @@ def index():
                              clientes=result['clientes'],
                              page=result['page'],
                              total_pages=result['total_pages'],
-                             total=result['total'],
-                             stats=stats,
-                             sort_by=sort_by,
-                             sort_dir=sort_dir,
-                             filtros={'situacao': situacao, 'regime': regime,
-                                      'tipo_pessoa': tipo_pessoa, 'busca': busca,
-                                      'busca_tipo': busca_tipo})
+                              total=result['total'],
+                              stats=stats,
+                              grupos=grupos,
+                              ramos_atividade=ramos_atividade,
+                              sort_by=sort_by,
+                              sort_dir=sort_dir,
+                              filtros={'situacao': situacao, 'regime': regime,
+                                       'tipo_pessoa': tipo_pessoa, 'grupo_id': grupo_id,
+                                       'ramo_id': ramo_id, 'busca': busca,
+                                       'busca_tipo': busca_tipo})
     
     except Exception as e:
         flash(f'Erro ao carregar página de clientes: {str(e)}', 'danger')
         return render_template('clientes/index.html',
-                             clientes=[],
+                              clientes=[],
                              page=1,
                              total_pages=0,
-                             total=0,
-                             stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
-                             sort_by='numero',
-                             sort_dir='asc',
-                             filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '',
-                                      'busca': '', 'busca_tipo': 'nome'})
+                              total=0,
+                              stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
+                              grupos=[],
+                              ramos_atividade=[],
+                              sort_by='numero',
+                              sort_dir='asc',
+                              filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '',
+                                       'grupo_id': '', 'ramo_id': '',
+                                       'busca': '', 'busca_tipo': 'nome'})
 
 
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])

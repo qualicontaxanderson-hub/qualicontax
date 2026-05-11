@@ -77,9 +77,18 @@ class Cliente:
             conditions.append("c.regime_tributario = %s")
             params.append(filters['regime_tributario'])
 
+        if filters.get('grupo_id'):
+            conditions.append("cgr.grupo_id = %s")
+            params.append(filters['grupo_id'])
+
+        if filters.get('ramo_id'):
+            need_ramo_join = True
+            conditions.append("crar.ramo_atividade_id = %s")
+            params.append(filters['ramo_id'])
+
         # Busca restrita ao campo escolhido pelo usuário
         busca = filters.get('busca', '').strip()
-        busca_tipo = filters.get('busca_tipo', 'nome')  # 'nome' | 'numero' | 'ramo' | 'cpf_cnpj' | 'email'
+        busca_tipo = filters.get('busca_tipo', 'nome')  # 'nome' | 'numero' | 'ramo' | 'grupo' | 'cpf_cnpj' | 'email'
         if busca:
             search_term = busca.replace('%', '\\%').replace('_', '\\_')
             search_pattern = f"%{search_term}%"
@@ -89,6 +98,9 @@ class Cliente:
             elif busca_tipo == 'ramo':
                 need_ramo_join = True
                 conditions.append("ra.nome LIKE %s")
+                params.append(search_pattern)
+            elif busca_tipo == 'grupo':
+                conditions.append("g.nome LIKE %s")
                 params.append(search_pattern)
             elif busca_tipo == 'cpf_cnpj':
                 conditions.append("c.cpf_cnpj LIKE %s")
@@ -102,11 +114,12 @@ class Cliente:
 
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
-        # When filtering by ramo the count query needs the same JOINs as the
-        # main query; otherwise keep it lightweight (no JOIN).
-        count_ramo_join = ""
+        # The count query needs the same JOINs used by active filters.
+        count_ramo_join = """
+                LEFT JOIN cliente_grupo_relacao cgr ON c.id = cgr.cliente_id
+                LEFT JOIN grupos_clientes g ON cgr.grupo_id = g.id"""
         if need_ramo_join:
-            count_ramo_join = """
+            count_ramo_join += """
                 LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
                 LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id"""
 
@@ -132,7 +145,7 @@ class Cliente:
         } if count_result else {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
 
         # Ordenação configurável: sort_by in ('nome', 'numero'), sort_dir in ('asc', 'desc')
-        sort_by  = filters.get('sort_by',  'nome')
+        sort_by  = filters.get('sort_by',  'numero')
         sort_dir = filters.get('sort_dir', 'asc').lower()
         if sort_dir not in ('asc', 'desc'):
             sort_dir = 'asc'
@@ -151,8 +164,11 @@ class Cliente:
             SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                    c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                    c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
-                   GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome SEPARATOR ', ') as ramo_atividade_nome
+                   GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome SEPARATOR ', ') as ramo_atividade_nome,
+                   GROUP_CONCAT(DISTINCT g.nome ORDER BY g.nome SEPARATOR ', ') as grupo_nome
             FROM clientes c
+            LEFT JOIN cliente_grupo_relacao cgr ON c.id = cgr.cliente_id
+            LEFT JOIN grupos_clientes g ON cgr.grupo_id = g.id
             LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
             LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id
             {where_clause}
@@ -518,4 +534,3 @@ class Cliente:
         # """
         # return execute_query(query, (cliente_id,), fetch=True) or []
         return []
-
