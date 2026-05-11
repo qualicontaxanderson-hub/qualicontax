@@ -103,7 +103,7 @@
                         </div>
                         <div class="fi-group">
                             <span class="fi-lbl">Tipo</span>
-                            <select id="tipo_pessoa" name="tipo_pessoa" class="fi-ctrl fi-narrow">
+                            <select id="tipo_pessoa" name="tipo_pessoa" class="fi-ctrl">
                                 <option value="">Todos</option>
                                 <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pess. Física</option>
                                 <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pess. Jurídica</option>
@@ -111,7 +111,7 @@
                         </div>
                         <div class="fi-group">
                             <span class="fi-lbl">Situação</span>
-                            <select id="situacao" name="situacao" class="fi-ctrl fi-narrow">
+                            <select id="situacao" name="situacao" class="fi-ctrl">
                                 <option value="">Todos</option>
                                 <option value="ATIVO"     {% if filtros.situacao == 'ATIVO'     %}selected{% endif %}>Ativo</option>
                                 <option value="INATIVO"   {% if filtros.situacao == 'INATIVO'   %}selected{% endif %}>Inativo</option>
@@ -121,7 +121,7 @@
                         </div>
                         <div class="fi-group">
                             <span class="fi-lbl">Regime</span>
-                            <select id="regime" name="regime" class="fi-ctrl fi-medium">
+                            <select id="regime" name="regime" class="fi-ctrl">
                                 <option value="">Todos</option>
                                 <option value="SIMPLES"         {% if filtros.regime == 'SIMPLES'         %}selected{% endif %}>Simples Nacional</option>
                                 <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
@@ -131,7 +131,7 @@
                         </div>
                         <div class="fi-group">
                             <span class="fi-lbl">Grupo</span>
-                            <select id="grupo_id" name="grupo_id" class="fi-ctrl fi-medium">
+                            <select id="grupo_id" name="grupo_id" class="fi-ctrl">
                                 <option value="">Todos</option>
                                 {% for grupo in grupos %}
                                 <option value="{{ grupo.id }}" {% if filtros.grupo_id == grupo.id|string %}selected{% endif %}>{{ grupo.nome }}</option>
@@ -140,7 +140,7 @@
                         </div>
                         <div class="fi-group">
                             <span class="fi-lbl">Atividade</span>
-                            <select id="ramo_id" name="ramo_id" class="fi-ctrl fi-medium">
+                            <select id="ramo_id" name="ramo_id" class="fi-ctrl">
                                 <option value="">Todas</option>
                                 {% for ramo in ramos_atividade %}
                                 <option value="{{ ramo.id }}" {% if filtros.ramo_id == ramo.id|string %}selected{% endif %}>{{ ramo.nome }}</option>
@@ -361,20 +361,28 @@
 
 /* ── Compact inline filter row ───────────────────────────────────────────── */
 .fi-wrap        { padding:12px 16px 14px; }
-.fi-row         { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 10px; }
-.fi-group       { display:flex; flex-direction:column; gap:3px; }
+/* Each fi-group grows equally; search and actions stay at natural width */
+.fi-row         { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 12px; }
+.fi-group       { display:flex; flex-direction:column; gap:3px;
+                  flex:1; min-width:110px; }
+.fi-search-group { flex:0 0 auto; }   /* fixed — type-selector + text */
+.fi-actions     { flex:0 0 auto; }    /* fixed — buttons only */
 .fi-lbl         { font-size:10.5px; font-weight:600; text-transform:uppercase;
                   letter-spacing:.3px; color:var(--text-secondary); }
-.fi-ctrl        { height:34px; border:1px solid var(--border-color); border-radius:6px;
-                  padding:0 8px; font-size:12.5px; color:var(--text-primary);
-                  background:#fff; box-sizing:border-box; }
+/* Controls fill the width of their group */
+.fi-ctrl        { height:34px; width:100%; border:1px solid var(--border-color);
+                  border-radius:6px; padding:0 8px; font-size:12.5px;
+                  color:var(--text-primary); background:#fff; box-sizing:border-box; }
 .fi-ctrl:focus  { border-color:var(--primary-green); outline:none;
                   box-shadow:0 0 0 2px rgba(34,197,94,.15); }
+/* Search compound: type selector + freetext */
 .fi-search-wrap { display:flex; }
-.fi-type-sel    { width:108px; border-right:none; border-radius:6px 0 0 6px; flex-shrink:0; }
-.fi-text        { width:170px; border-radius:0 6px 6px 0; }
-.fi-narrow      { width:110px; }
-.fi-medium      { width:130px; }
+.fi-type-sel    { width:108px; border-right:none; border-radius:6px 0 0 6px;
+                  flex-shrink:0; }
+.fi-text        { width:180px; border-radius:0 6px 6px 0; }
+/* Override width:100% back to auto for the search-group controls */
+.fi-search-group .fi-type-sel,
+.fi-search-group .fi-text { width:auto; }
 .fi-btns        { display:flex; gap:6px; }
 .fi-btn         { padding:5px 14px; font-size:12.5px; height:34px; display:inline-flex;
                   align-items:center; gap:5px; }
