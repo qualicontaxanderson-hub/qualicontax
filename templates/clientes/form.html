@@ -20,6 +20,7 @@
 
     <!-- Form -->
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container">
+        {% set endereco = endereco_principal if endereco_principal else None %}
         
         <!-- Informações Básicas -->
         <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
@@ -338,27 +339,27 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="cep">CEP</label>
-                        <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" maxlength="9">
+                        <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" maxlength="9" value="{{ endereco.cep if endereco else '' }}">
                     </div>
                     <div class="form-group">
                         <label for="logradouro">Logradouro</label>
-                        <input type="text" id="logradouro" name="logradouro" class="form-control" placeholder="Rua, Avenida, etc.">
+                        <input type="text" id="logradouro" name="logradouro" class="form-control" placeholder="Rua, Avenida, etc." value="{{ endereco.logradouro if endereco else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="numero">Número</label>
-                        <input type="text" id="numero" name="numero" class="form-control" placeholder="Número">
+                        <input type="text" id="numero" name="numero" class="form-control" placeholder="Número" value="{{ endereco.numero if endereco else '' }}">
                     </div>
                     <div class="form-group">
                         <label for="complemento">Complemento</label>
-                        <input type="text" id="complemento" name="complemento" class="form-control" placeholder="Apto, Sala, etc.">
+                        <input type="text" id="complemento" name="complemento" class="form-control" placeholder="Apto, Sala, etc." value="{{ endereco.complemento if endereco else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="bairro">Bairro</label>
-                        <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro">
+                        <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro" value="{{ endereco.bairro if endereco else '' }}">
                     </div>
                     <div class="form-group">
                         <label for="cidade">Cidade / Município</label>
@@ -367,13 +368,13 @@
                                name="cidade" 
                                class="form-control" 
                                placeholder="Digite o nome da cidade" 
-                               value="{{ cliente.cidade if cliente else '' }}">
+                               value="{{ endereco.cidade if endereco else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="estado">Estado (UF) *</label>
-                        <select id="estado" name="estado" class="form-control">
+                        <select id="estado" name="estado" class="form-control" data-selected-uf="{{ endereco.estado if endereco else '' }}">
                             <option value="">Selecione...</option>
                             <option value="AC">AC - Acre</option>
                             <option value="AL">AL - Alagoas</option>
@@ -528,6 +529,35 @@
 
 {% block extra_js %}
 <style>
+.cliente-form-page {
+    background: #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.cliente-form-page .card {
+    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc;
+}
+
+.cliente-form-page .card-body {
+    background: #f8fafc;
+}
+
+.cliente-form-page .form-control,
+.cliente-form-page select.form-control,
+.cliente-form-page textarea.form-control {
+    border-color: #cbd5e1;
+    background: #ffffff;
+}
+
+.cliente-form-page .form-control:focus,
+.cliente-form-page select.form-control:focus,
+.cliente-form-page textarea.form-control:focus {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
 /* Hover effect for Ramos de Atividade checkboxes */
 .form-check:has(input[type="checkbox"]):hover {
     background-color: #f0f9ff !important;
@@ -603,6 +633,11 @@ function toggleIsentoIE(checkbox) {
 
 // Call on page load if editing
 document.addEventListener('DOMContentLoaded', function() {
+    const estadoSelect = document.getElementById('estado');
+    if (estadoSelect && estadoSelect.dataset.selectedUf) {
+        estadoSelect.value = estadoSelect.dataset.selectedUf;
+    }
+
     // Apply initial ISENTO state if editing a client with ISENTO
     var isentoCheckbox = document.getElementById('inscricao_estadual_isento');
     if (isentoCheckbox && isentoCheckbox.checked) {

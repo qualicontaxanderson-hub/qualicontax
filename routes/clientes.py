@@ -226,6 +226,8 @@ def editar(id):
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
+    enderecos_cliente = EnderecoCliente.get_by_cliente(id)
+    endereco_principal = next((e for e in enderecos_cliente if e.get('principal')), enderecos_cliente[0] if enderecos_cliente else None)
     
     if request.method == 'POST':
         try:
@@ -243,7 +245,7 @@ def editar(id):
                 ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
             
             # Validar número do cliente se fornecido
             numero_cliente = request.form.get('numero_cliente', '').strip()
@@ -254,7 +256,7 @@ def editar(id):
                 ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
             
             data = {
                 'numero_cliente': numero_cliente if numero_cliente else None,
@@ -293,6 +295,49 @@ def editar(id):
                         RamoAtividade.add_cliente(int(ramo_id), id)
                     except:
                         pass  # Ignora erros de duplicação
+
+                # Atualizar/salvar endereço principal
+                cep = request.form.get('cep', '').strip()
+                logradouro = request.form.get('logradouro', '').strip()
+                numero = request.form.get('numero', '').strip()
+                complemento = request.form.get('complemento', '').strip()
+                bairro = request.form.get('bairro', '').strip()
+                cidade = request.form.get('cidade', '').strip()
+                estado = request.form.get('estado', '').strip()
+                possui_dados_endereco = any([cep, logradouro, numero, complemento, bairro, cidade, estado])
+
+                if possui_dados_endereco:
+                    try:
+                        if endereco_principal:
+                            EnderecoCliente.update(
+                                endereco_principal['id'],
+                                endereco_principal.get('tipo') or 'COMERCIAL',
+                                cep,
+                                logradouro,
+                                numero,
+                                complemento=complemento,
+                                bairro=bairro,
+                                cidade=cidade,
+                                estado=estado,
+                                pais=endereco_principal.get('pais') or 'Brasil',
+                                principal=True
+                            )
+                        else:
+                            EnderecoCliente.create(
+                                cliente_id=id,
+                                tipo='COMERCIAL',
+                                cep=cep,
+                                logradouro=logradouro,
+                                numero=numero,
+                                complemento=complemento,
+                                bairro=bairro,
+                                cidade=cidade,
+                                estado=estado,
+                                pais='Brasil',
+                                principal=True
+                            )
+                    except Exception as endereco_error:
+                        print(f"Erro ao salvar endereço do cliente {id}: {endereco_error}")
                 
                 flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
@@ -308,7 +353,7 @@ def editar(id):
     ramos_cliente = [ramo['id'] for ramo in cliente_ramos]  # Lista de IDs para checkboxes
     grupos = GrupoCliente.get_all(situacao='ATIVO')
     grupos_cliente = Cliente.get_grupos(id)
-    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
+    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
 
 
 @clientes.route('/clientes/<int:id>/inativar', methods=['POST'])
@@ -662,4 +707,3 @@ edit_cliente = editar
 create = novo
 view = detalhes
 edit = editar
-
