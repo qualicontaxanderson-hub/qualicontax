@@ -123,6 +123,7 @@ def novo():
             'cnae_fiscal': request.form.get('cnae_fiscal'),
             'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
             'situacao': request.form.get('situacao', 'ATIVO'),
+            'data_inicio_atividade': request.form.get('data_inicio_atividade'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
             'criado_por': current_user.id
@@ -273,6 +274,7 @@ def editar(id):
                 'cnae_fiscal': request.form.get('cnae_fiscal'),
                 'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
                 'situacao': request.form.get('situacao'),
+                'data_inicio_atividade': request.form.get('data_inicio_atividade'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes')
             }
