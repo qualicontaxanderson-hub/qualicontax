@@ -196,7 +196,10 @@
                     <tbody>
                         {% if clientes %}
                             {% for cliente in clientes %}
-                            <tr class="cli-row">
+                            <tr class="cli-row cli-row-clickable"
+                                data-edit-url="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                title="Abrir cadastro para edição"
+                                tabindex="0">
                                 <td>
                                     {% if cliente.numero_cliente %}
                                         <span class="cli-num">#{{ cliente.numero_cliente }}</span>
@@ -229,8 +232,8 @@
                                 </td>
                                 <td style="text-align:center; overflow:visible; padding:4px 6px;">
                                     <div class="table-actions" style="justify-content:center; gap:3px; flex-wrap:nowrap;">
-                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}"
-                                           class="btn-icon btn-view" title="Ver detalhes">
+                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                           class="btn-icon btn-view" title="Abrir cadastro">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                         <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
@@ -338,6 +341,7 @@
 
 /* Row hover */
 .cli-row:hover      { background: rgba(34,197,94,.04); }
+.cli-row-clickable  { cursor: pointer; }
 
 /* Sortable header */
 .cli-th-sort        { white-space: nowrap; transition: color .15s; }
@@ -360,5 +364,27 @@ function sortBy(field, dir) {
     form.querySelector('[name="sort_dir"]').value = dir;
     form.submit();
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.cli-row-clickable[data-edit-url]').forEach(function (row) {
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, form, input, select, textarea, label')) {
+                return;
+            }
+            window.location.href = row.dataset.editUrl;
+        });
+
+        row.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter') {
+                return;
+            }
+            if (event.target.closest('a, button, form, input, select, textarea, label')) {
+                return;
+            }
+            event.preventDefault();
+            window.location.href = row.dataset.editUrl;
+        });
+    });
+});
 </script>
 {% endblock %}

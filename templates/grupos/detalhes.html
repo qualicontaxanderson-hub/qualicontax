@@ -100,7 +100,9 @@
                     <tbody>
                         {% if clientes %}
                             {% for cliente in clientes %}
-                            <tr>
+                            <tr class="cliente-row-clickable"
+                                data-edit-url="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                style="cursor:pointer;">
                                 <td><strong style="color: #22C55E;">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}-{% endif %}</strong></td>
                                 <td>
                                     <div class="table-user">
@@ -123,11 +125,11 @@
                                 </td>
                                 <td>
                                     <div class="table-actions">
-                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn-icon" title="Ver Cliente">
+                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn-icon" title="Editar Cliente">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                         <form action="{{ url_for('grupos.remover_cliente', grupo_id=grupo.id, cliente_id=cliente.id) }}" method="POST" style="display: inline;">
-                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Remover este cliente do grupo?')" title="Remover do Grupo">
+                                            <button type="submit" class="btn-icon btn-danger" onclick="event.stopPropagation(); return confirm('Remover este cliente do grupo?')" title="Remover do Grupo">
                                                 <i class="fas fa-user-times"></i>
                                             </button>
                                         </form>
@@ -154,4 +156,19 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.cliente-row-clickable[data-edit-url]').forEach(function (row) {
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, form, input, select, textarea, label')) {
+                return;
+            }
+            window.location.href = row.dataset.editUrl;
+        });
+    });
+});
+</script>
 {% endblock %}
