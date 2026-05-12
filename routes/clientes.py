@@ -1,10 +1,13 @@
 """Rotas de Clientes - CRUD completo"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
+from decimal import Decimal, InvalidOperation
 from utils.auth_helper import login_required, permission_required
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
+from models.cadastro_adicional_cliente import CadastroAdicionalCliente
+from models.socio_cliente import SocioCliente
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade
 
@@ -215,6 +218,9 @@ def detalhes(id):
     processos = Cliente.get_processos(id)
     tarefas = Cliente.get_tarefas(id)
     obrigacoes = Cliente.get_obrigacoes(id)
+    cadastros_adicionais = CadastroAdicionalCliente.get_by_cliente(id)
+    socios = SocioCliente.get_by_cliente(id)
+    socios_total_percentual = SocioCliente.get_total_percentual(id)
     
     # Buscar grupos disponíveis (que o cliente ainda não pertence)
     todos_grupos = GrupoCliente.get_all(situacao='ATIVO')
@@ -228,10 +234,13 @@ def detalhes(id):
                          grupos=grupos,
                          grupos_disponiveis=grupos_disponiveis,
                          ramos_atividade=ramos_atividade,
-                         processos=processos,
-                         tarefas=tarefas,
-                         obrigacoes=obrigacoes,
-                         areas_atendimento=AREAS_ATENDIMENTO)
+                          processos=processos,
+                          tarefas=tarefas,
+                          obrigacoes=obrigacoes,
+                         cadastros_adicionais=cadastros_adicionais,
+                         socios=socios,
+                         socios_total_percentual=float(socios_total_percentual),
+                          areas_atendimento=AREAS_ATENDIMENTO)
 
 
 @clientes.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])
@@ -493,6 +502,136 @@ def excluir_contato(id):
     else:
         flash('Erro ao excluir contato!', 'danger')
     
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+# Rotas para Cadastros Adicionais
+@clientes.route('/clientes/<int:cliente_id>/cadastros-adicionais/novo', methods=['POST'])
+@login_required
+def novo_cadastro_adicional(cliente_id):
+    """Adicionar novo cadastro adicional"""
+    tipo = request.form.get('tipo', '').strip()
+    campo = request.form.get('campo', '').strip()
+
+    if not tipo or not campo:
+        flash('Preencha os campos obrigatórios de cadastro adicional.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    cadastro_id = CadastroAdicionalCliente.create(
+        cliente_id=cliente_id,
+        tipo=tipo,
+        campo=campo,
+        valor=request.form.get('valor'),
+        data_referencia=request.form.get('data_referencia'),
+        observacoes=request.form.get('observacoes'),
+        ativo=True
+    )
+
+    if cadastro_id:
+        flash('Cadastro adicional adicionado com sucesso!', 'success')
+    else:
+        flash('Erro ao adicionar cadastro adicional!', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/cadastros-adicionais/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_cadastro_adicional(id):
+    """Excluir cadastro adicional"""
+    cadastro = CadastroAdicionalCliente.get_by_id(id)
+    if not cadastro:
+        flash('Cadastro adicional não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    cliente_id = cadastro['cliente_id']
+    sucesso = CadastroAdicionalCliente.delete(id)
+
+    if sucesso:
+        flash('Cadastro adicional excluído com sucesso!', 'success')
+    else:
+        flash('Erro ao excluir cadastro adicional!', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+# Rotas para Sócios
+@clientes.route('/clientes/<int:cliente_id>/socios/novo', methods=['POST'])
+@login_required
+def novo_socio(cliente_id):
+    """Adicionar novo sócio"""
+    nome = request.form.get('nome', '').strip()
+    cpf = request.form.get('cpf', '').strip()
+    email = request.form.get('email', '').strip() or None
+    percentual_raw = (request.form.get('percentual_participacao') or '').strip()
+    responsavel = request.form.get('responsavel') == 'on'
+
+    if not nome or not cpf or not percentual_raw:
+        flash('Preencha nome, CPF e percentual do sócio.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    cpf_numeros = ''.join(ch for ch in cpf if ch.isdigit())
+    if len(cpf_numeros) != 11:
+        flash('CPF inválido. Informe um CPF com 11 dígitos.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    try:
+        percentual = Decimal(percentual_raw.replace(',', '.'))
+    except (InvalidOperation, ValueError):
+        flash('Percentual inválido. Use um número válido.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    if percentual <= 0 or percentual > 100:
+        flash('Percentual deve ser maior que 0 e menor ou igual a 100.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    total_atual = SocioCliente.get_total_percentual(cliente_id)
+    novo_total = total_atual + percentual
+    if novo_total > Decimal('100'):
+        restante = Decimal('100') - total_atual
+        flash(f'Total de participação não pode ultrapassar 100%. Restante disponível: {restante:.2f}%.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    socio_id = SocioCliente.create(
+        cliente_id=cliente_id,
+        nome=nome,
+        cpf=cpf,
+        email=email,
+        percentual_participacao=percentual,
+        responsavel=responsavel,
+        ativo=True
+    )
+
+    if socio_id:
+        total_final = SocioCliente.get_total_percentual(cliente_id)
+        if total_final == Decimal('100'):
+            flash('Sócio adicionado com sucesso! Total de participação atingiu 100%.', 'success')
+        else:
+            flash(f'Sócio adicionado. Total atual de participação: {total_final:.2f}%.', 'warning')
+    else:
+        flash('Erro ao adicionar sócio!', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/socios/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_socio(id):
+    """Excluir sócio"""
+    socio = SocioCliente.get_by_id(id)
+    if not socio:
+        flash('Sócio não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    cliente_id = socio['cliente_id']
+    sucesso = SocioCliente.delete(id)
+
+    if sucesso:
+        total_final = SocioCliente.get_total_percentual(cliente_id)
+        flash(f'Sócio excluído com sucesso. Total atual de participação: {total_final:.2f}%.', 'success')
+    else:
+        flash('Erro ao excluir sócio!', 'danger')
+
     return redirect(url_for('clientes.detalhes', id=cliente_id))
 
 
