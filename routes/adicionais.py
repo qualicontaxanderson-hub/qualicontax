@@ -49,11 +49,11 @@ def sync_dropbox_anp():
     pasta_novo = '/Legalizacao/NOVO'
     try:
         entries = svc.list_folder(pasta_novo)
-    except dropbox_sync.DropboxAuthError as exc:
-        return jsonify({'erro': str(exc)}), 401
+    except dropbox_sync.DropboxAuthError:
+        return jsonify({'erro': 'Credenciais Dropbox inválidas ou expiradas. Verifique a configuração.'}), 401
     except Exception as exc:
         logger.error("Erro ao listar pasta Dropbox %s: %s", pasta_novo, exc)
-        return jsonify({'erro': f'Erro ao listar pasta Dropbox: {exc}'}), 500
+        return jsonify({'erro': 'Erro ao listar pasta Dropbox. Verifique os logs do servidor.'}), 500
 
     pdf_entries = [e for e in entries if e.get('is_file') and e.get('name', '').lower().endswith('.pdf')]
 
@@ -64,7 +64,8 @@ def sync_dropbox_anp():
         try:
             content = svc.download_file(path)
         except Exception as exc:
-            resultados.append({'arquivo': nome, 'status': 'erro', 'mensagem': str(exc)})
+            logger.error("Erro ao baixar %s: %s", nome, exc)
+            resultados.append({'arquivo': nome, 'status': 'erro', 'mensagem': 'Erro ao baixar arquivo'})
             continue
 
         resultado = extrair_dados_anp(content)
@@ -82,7 +83,7 @@ def sync_dropbox_anp():
         if not clientes_encontrados:
             resultados.append({
                 'arquivo': nome, 'status': 'ignorado',
-                'mensagem': f'CNPJ {cnpj_digits} não encontrado no sistema',
+                'mensagem': f'CNPJ não encontrado no sistema',
             })
             continue
 

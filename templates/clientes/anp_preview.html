@@ -32,8 +32,8 @@
 
 <form method="POST" action="{{ url_for('clientes.anp_salvar', cliente_id=cliente.id) }}" id="formAnpSalvar">
     <input type="hidden" name="fonte" value="PDF">
-    <input type="hidden" name="socios_json" id="sociosJson" value="{{ dados.socios_json if dados.socios_json else (socios | tojson) }}">
-    <input type="hidden" name="produtos_json" id="produtosJson" value="{{ produtos | tojson }}">
+    <input type="hidden" name="socios_json" id="sociosJson" value="{{ socios | tojson | forceescape }}">
+    <input type="hidden" name="produtos_json" id="produtosJson" value="{{ produtos | tojson | forceescape }}">
 
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
 
