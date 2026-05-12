@@ -385,6 +385,28 @@ class Cliente:
         }
     
     @staticmethod
+    def get_by_cnpj_digits(cnpj_digits):
+        """
+        Busca cliente pelo CNPJ usando apenas os dígitos numéricos para comparação.
+        Funciona independentemente de como o CNPJ está formatado no banco.
+
+        Args:
+            cnpj_digits (str): CNPJ apenas com dígitos (ex: '36142094000180')
+
+        Returns:
+            dict|None: Dados do cliente ou None
+        """
+        if not cnpj_digits:
+            return None
+        query = """
+            SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, email, situacao
+            FROM clientes
+            WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s
+            LIMIT 1
+        """
+        return execute_query(query, (cnpj_digits,), fetch=True, fetch_one=True)
+
+    @staticmethod
     def existe_cpf_cnpj(cpf_cnpj, cliente_id=None):
         """
         Verifica se CPF/CNPJ já está cadastrado.

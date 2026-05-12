@@ -441,6 +441,7 @@
                                                class="btn-icon btn-secondary" title="Ver detalhes">
                                                 <i class="fas fa-eye"></i>
                                             </a>
+                                            {% if anp.fonte not in ('DROPBOX', 'PDF') %}
                                             <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}"
                                                class="btn-icon btn-primary" title="Editar">
                                                 <i class="fas fa-edit"></i>
@@ -452,6 +453,7 @@
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             </form>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>

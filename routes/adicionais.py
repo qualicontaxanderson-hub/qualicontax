@@ -78,16 +78,15 @@ def sync_dropbox_anp():
             resultados.append({'arquivo': nome, 'status': 'ignorado', 'mensagem': 'CNPJ não encontrado no PDF'})
             continue
 
-        # Busca cliente pelo CNPJ
-        clientes_encontrados = Cliente.search(cnpj_digits)
-        if not clientes_encontrados:
+        # Busca cliente pelo CNPJ (comparação apenas de dígitos, independente de formatação)
+        cliente = Cliente.get_by_cnpj_digits(cnpj_digits)
+        if not cliente:
             resultados.append({
                 'arquivo': nome, 'status': 'ignorado',
-                'mensagem': f'CNPJ não encontrado no sistema',
+                'mensagem': 'CNPJ não encontrado no sistema',
             })
             continue
 
-        cliente = clientes_encontrados[0]
         cliente_id = cliente['id']
 
         # Verifica se já existe cadastro ANP para esse cliente
