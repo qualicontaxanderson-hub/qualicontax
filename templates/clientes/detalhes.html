@@ -433,10 +433,10 @@
                         <div style="width:100%;">
                             <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
                                 <span>Total de participação</span>
-                                <strong style="color: {{ '#16a34a' if total_ok else '#dc2626' }};">{{ '%.2f'|format(total_s) }}%</strong>
+                                <strong style="color: {{ 'var(--primary-green)' if total_ok else 'var(--accent-orange)' }};">{{ '%.2f'|format(total_s) }}%</strong>
                             </div>
-                            <div style="height:10px; background:#e5e7eb; border-radius:8px; overflow:hidden;">
-                                <div style="height:100%; width:{{ 100 if total_s > 100 else total_s }}%; background:{{ '#22c55e' if total_ok else '#f59e0b' }};"></div>
+                            <div style="height:10px; background:rgba(0,0,0,.08); border-radius:8px; overflow:hidden;">
+                                <div style="height:100%; width:{{ 100 if total_s > 100 else total_s }}%; background:{{ 'var(--primary-green)' if total_ok else 'var(--accent-orange)' }};"></div>
                             </div>
                             <small style="color:var(--text-secondary);">
                                 {% if total_ok %}

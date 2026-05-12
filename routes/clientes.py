@@ -14,6 +14,24 @@ from models.ramo_atividade import RamoAtividade
 clientes = Blueprint('clientes', __name__)
 
 
+def _parse_decimal_input(value):
+    """Converte entrada numérica para Decimal aceitando formatos 10,50 e 10.50."""
+    cleaned = (value or '').strip().replace(' ', '')
+    if not cleaned:
+        raise InvalidOperation
+
+    if ',' in cleaned and '.' in cleaned:
+        # Ex.: 1.234,56 (pt-BR) ou 1,234.56 (en-US)
+        if cleaned.rfind(',') > cleaned.rfind('.'):
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+        else:
+            cleaned = cleaned.replace(',', '')
+    elif ',' in cleaned:
+        cleaned = cleaned.replace('.', '').replace(',', '.')
+
+    return Decimal(cleaned)
+
+
 @clientes.route('/clientes')
 @permission_required('clientes.index')
 def index():
@@ -576,7 +594,7 @@ def novo_socio(cliente_id):
         return redirect(url_for('clientes.detalhes', id=cliente_id))
 
     try:
-        percentual = Decimal(percentual_raw.replace(',', '.'))
+        percentual = _parse_decimal_input(percentual_raw)
     except (InvalidOperation, ValueError):
         flash('Percentual inválido. Use um número válido.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
