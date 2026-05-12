@@ -456,6 +456,7 @@
                                             <th>Nome</th>
                                             <th>CPF</th>
                                             <th>Email</th>
+                                            <th>Telefone</th>
                                             <th>Participação</th>
                                             <th>Responsável</th>
                                             <th>Ações</th>
@@ -467,6 +468,7 @@
                                             <td>{{ socio.nome }}</td>
                                             <td>{{ socio.cpf }}</td>
                                             <td>{{ socio.email or '-' }}</td>
+                                            <td>{{ socio.telefone or '-' }}</td>
                                             <td><strong>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</strong></td>
                                             <td>
                                                 <span class="badge badge-{{ 'success' if socio.responsavel else 'secondary' }}">
@@ -917,6 +919,10 @@
                 <div class="form-group">
                     <label for="socio_email">Email</label>
                     <input type="email" id="socio_email" name="email" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="socio_telefone">Telefone de Contato</label>
+                    <input type="text" id="socio_telefone" name="telefone" class="form-control" data-mask="phone" placeholder="(00) 0000-0000">
                 </div>
                 <div class="form-group">
                     <label>

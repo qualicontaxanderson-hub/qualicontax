@@ -10,7 +10,7 @@ class SocioCliente:
     def get_by_cliente(cliente_id):
         """Busca todos os sócios de um cliente."""
         query = """
-            SELECT id, cliente_id, nome, cpf, email, percentual_participacao, responsavel, ativo, criado_em
+            SELECT id, cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo, criado_em
             FROM socios_clientes
             WHERE cliente_id = %s
             ORDER BY responsavel DESC, nome ASC
@@ -21,7 +21,7 @@ class SocioCliente:
     def get_by_id(socio_id):
         """Busca sócio por ID."""
         query = """
-            SELECT id, cliente_id, nome, cpf, email, percentual_participacao, responsavel, ativo, criado_em
+            SELECT id, cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo, criado_em
             FROM socios_clientes
             WHERE id = %s
         """
@@ -39,22 +39,23 @@ class SocioCliente:
         return Decimal(str(row.get('total') or 0))
 
     @staticmethod
-    def create(cliente_id, nome, cpf, email=None, percentual_participacao=0, responsavel=False, ativo=True):
+    def create(cliente_id, nome, cpf, email=None, telefone=None, percentual_participacao=0, responsavel=False, ativo=True):
         """Cria novo sócio."""
         if responsavel:
             SocioCliente.set_responsavel(cliente_id, None)
 
         query = """
             INSERT INTO socios_clientes (
-                cliente_id, nome, cpf, email, percentual_participacao, responsavel, ativo
+                cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             cliente_id,
             (nome or '').strip().upper(),
             (cpf or '').strip(),
             (email or '').strip() or None,
+            (telefone or '').strip() or None,
             percentual_participacao,
             responsavel,
             ativo
@@ -85,4 +86,3 @@ class SocioCliente:
             """
             return execute_query(query, (socio_id, cliente_id)) is not None
         return True
-

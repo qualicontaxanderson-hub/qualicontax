@@ -456,6 +456,7 @@ def run_migrations():
             nome VARCHAR(255) NOT NULL,
             cpf VARCHAR(14) NOT NULL,
             email VARCHAR(255) NULL,
+            telefone VARCHAR(20) NULL,
             percentual_participacao DECIMAL(5,2) NOT NULL,
             responsavel TINYINT(1) NOT NULL DEFAULT 0,
             ativo TINYINT(1) NOT NULL DEFAULT 1,
@@ -465,6 +466,21 @@ def run_migrations():
             INDEX idx_cpf (cpf)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
+
+    # Incremental: coluna telefone em socios_clientes
+    try:
+        _telefone_socio_exists = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'socios_clientes' AND COLUMN_NAME = 'telefone'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if _telefone_socio_exists.get('cnt', 0) == 0:
+            execute_query(
+                "ALTER TABLE socios_clientes ADD COLUMN telefone VARCHAR(20) NULL AFTER email",
+                fetch=False,
+            )
+    except Exception:
+        pass
 
     # ---- Contratos ----
     execute_query("""

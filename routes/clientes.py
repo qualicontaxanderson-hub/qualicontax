@@ -581,6 +581,7 @@ def novo_socio(cliente_id):
     nome = request.form.get('nome', '').strip()
     cpf = request.form.get('cpf', '').strip()
     email = request.form.get('email', '').strip() or None
+    telefone = request.form.get('telefone', '').strip() or None
     percentual_raw = (request.form.get('percentual_participacao') or '').strip()
     responsavel = request.form.get('responsavel') == 'on'
 
@@ -615,6 +616,7 @@ def novo_socio(cliente_id):
         nome=nome,
         cpf=cpf,
         email=email,
+        telefone=telefone,
         percentual_participacao=percentual,
         responsavel=responsavel,
         ativo=True

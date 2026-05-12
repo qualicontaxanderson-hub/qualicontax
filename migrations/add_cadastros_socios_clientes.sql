@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS socios_clientes (
     nome VARCHAR(255) NOT NULL,
     cpf VARCHAR(14) NOT NULL,
     email VARCHAR(255) NULL,
+    telefone VARCHAR(20) NULL,
     percentual_participacao DECIMAL(5,2) NOT NULL,
     responsavel TINYINT(1) NOT NULL DEFAULT 0,
     ativo TINYINT(1) NOT NULL DEFAULT 1,
