@@ -10,6 +10,7 @@ from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade
+from models.cadastro_anp import CadastroAnp
 
 clientes = Blueprint('clientes', __name__)
 
@@ -239,6 +240,12 @@ def detalhes(id):
     cadastros_adicionais = CadastroAdicionalCliente.get_by_cliente(id)
     socios = SocioCliente.get_by_cliente(id)
     socios_total_percentual = SocioCliente.get_total_percentual(id)
+
+    # Cadastros ANP vinculados ao cliente
+    cadastros_anp = CadastroAnp.get_by_cliente(id)
+    for anp in cadastros_anp:
+        anp['socios'] = CadastroAnp.get_socios(anp['id'])
+        anp['produtos'] = CadastroAnp.get_produtos(anp['id'])
     
     # Buscar grupos disponíveis (que o cliente ainda não pertence)
     todos_grupos = GrupoCliente.get_all(situacao='ATIVO')
@@ -256,6 +263,7 @@ def detalhes(id):
                           tarefas=tarefas,
                           obrigacoes=obrigacoes,
                          cadastros_adicionais=cadastros_adicionais,
+                         cadastros_anp=cadastros_anp,
                          socios=socios,
                          socios_total_percentual=float(socios_total_percentual),
                           areas_atendimento=AREAS_ATENDIMENTO)
@@ -874,6 +882,214 @@ def consultar_cnpj(cnpj):
             'success': False,
             'message': f'Erro ao consultar CNPJ: {str(e)}'
         }), 500
+
+
+# ---------------------------------------------------------------------------
+# Rotas ANP
+# ---------------------------------------------------------------------------
+
+_MAX_ANP_PDF_MB = 20
+_MAX_ANP_PDF_BYTES = _MAX_ANP_PDF_MB * 1024 * 1024
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/importar-pdf', methods=['POST'])
+@login_required
+def anp_importar_pdf(cliente_id):
+    """Recebe PDF da ANP, extrai dados e exibe formulário de confirmação."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    arquivo = request.files.get('arquivo_pdf')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione um arquivo PDF.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    if not arquivo.filename.lower().endswith('.pdf'):
+        flash('Apenas arquivos .pdf são aceitos.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    pdf_bytes = arquivo.read()
+    if len(pdf_bytes) > _MAX_ANP_PDF_BYTES:
+        flash(f'O arquivo excede o tamanho máximo de {_MAX_ANP_PDF_MB} MB.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    from utils.anp_parser import extrair_dados_anp
+    resultado = extrair_dados_anp(pdf_bytes)
+
+    if not resultado['sucesso']:
+        flash(f'Erro ao processar PDF: {resultado["erro"]}', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    # Verifica se o CNPJ do PDF bate com o do cliente
+    cnpj_pdf = resultado['cnpj']
+    cnpj_cliente = ''.join(c for c in (cliente.get('cpf_cnpj') or '') if c.isdigit())
+    cnpj_ok = (cnpj_pdf == cnpj_cliente) if cnpj_pdf and cnpj_cliente else None
+
+    return render_template(
+        'clientes/anp_preview.html',
+        cliente=cliente,
+        dados=resultado['dados'],
+        socios=resultado['socios'],
+        produtos=resultado['produtos'],
+        texto_bruto=resultado['texto_bruto'],
+        cnpj_ok=cnpj_ok,
+        cnpj_pdf=cnpj_pdf,
+    )
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/salvar', methods=['POST'])
+@login_required
+def anp_salvar(cliente_id):
+    """Salva (cria ou atualiza) cadastro ANP a partir do formulário."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    anp_id_raw = request.form.get('anp_id')
+    anp_id = int(anp_id_raw) if anp_id_raw and anp_id_raw.isdigit() else None
+
+    data = {
+        'situacao': request.form.get('situacao', '').strip() or None,
+        'autorizacao': request.form.get('autorizacao', '').strip() or None,
+        'cnpj_anp': request.form.get('cnpj_anp', '').strip() or None,
+        'razao_social': request.form.get('razao_social', '').strip() or None,
+        'nome_fantasia': request.form.get('nome_fantasia', '').strip() or None,
+        'endereco': request.form.get('endereco', '').strip() or None,
+        'complemento': request.form.get('complemento', '').strip() or None,
+        'bairro': request.form.get('bairro', '').strip() or None,
+        'municipio_uf': request.form.get('municipio_uf', '').strip() or None,
+        'cep': request.form.get('cep', '').strip() or None,
+        'nr_despacho': request.form.get('nr_despacho', '').strip() or None,
+        'data_publicacao': request.form.get('data_publicacao') or None,
+        'bandeira': request.form.get('bandeira', '').strip() or None,
+        'data_inicio_bandeira': request.form.get('data_inicio_bandeira') or None,
+        'tipo_posto': request.form.get('tipo_posto', '').strip() or None,
+        'pmqc': request.form.get('pmqc', '').strip() or None,
+        'delivery': request.form.get('delivery', '').strip() or None,
+        'latitude': request.form.get('latitude', '').strip() or None,
+        'longitude': request.form.get('longitude', '').strip() or None,
+        'data_emissao': request.form.get('data_emissao', '').strip() or None,
+        'fonte': request.form.get('fonte', 'MANUAL'),
+    }
+
+    # Sócios: cada linha não-vazia
+    socios_raw = request.form.get('socios_json', '')
+    import json
+    try:
+        socios = [s for s in json.loads(socios_raw) if s.strip()] if socios_raw else []
+    except (json.JSONDecodeError, TypeError):
+        socios = []
+
+    # Produtos
+    produtos_json = request.form.get('produtos_json', '')
+    try:
+        produtos = json.loads(produtos_json) if produtos_json else []
+    except (json.JSONDecodeError, TypeError):
+        produtos = []
+
+    saved_id = CadastroAnp.save_full(
+        cliente_id=cliente_id,
+        data=data,
+        socios=socios,
+        produtos=produtos,
+        anp_id=anp_id,
+    )
+
+    if saved_id:
+        flash('Cadastro ANP salvo com sucesso!', 'success')
+    else:
+        flash('Erro ao salvar cadastro ANP.', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#cadastros-adicionais')
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/<int:anp_id>')
+@login_required
+def anp_detalhe(cliente_id, anp_id):
+    """Exibe detalhes completos de um cadastro ANP."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    anp = CadastroAnp.get_by_id(anp_id)
+    if not anp or anp['cliente_id'] != cliente_id:
+        flash('Cadastro ANP não encontrado.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    socios = CadastroAnp.get_socios(anp_id)
+    produtos = CadastroAnp.get_produtos(anp_id)
+
+    return render_template(
+        'clientes/anp_detalhe.html',
+        cliente=cliente,
+        anp=anp,
+        socios=socios,
+        produtos=produtos,
+    )
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/<int:anp_id>/editar', methods=['GET'])
+@login_required
+def anp_editar(cliente_id, anp_id):
+    """Formulário de edição de cadastro ANP (pré-preenchido)."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    anp = CadastroAnp.get_by_id(anp_id)
+    if not anp or anp['cliente_id'] != cliente_id:
+        flash('Cadastro ANP não encontrado.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    socios = [s['nome'] for s in CadastroAnp.get_socios(anp_id)]
+    produtos = CadastroAnp.get_produtos(anp_id)
+
+    return render_template(
+        'clientes/anp_form.html',
+        cliente=cliente,
+        anp=anp,
+        socios=socios,
+        produtos=produtos,
+        modo='editar',
+    )
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/<int:anp_id>/excluir', methods=['POST'])
+@login_required
+def anp_excluir(cliente_id, anp_id):
+    """Exclui cadastro ANP."""
+    anp = CadastroAnp.get_by_id(anp_id)
+    if not anp or anp['cliente_id'] != cliente_id:
+        flash('Cadastro ANP não encontrado.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    CadastroAnp.delete(anp_id)
+    flash('Cadastro ANP excluído com sucesso.', 'success')
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#cadastros-adicionais')
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/novo', methods=['GET'])
+@login_required
+def anp_novo(cliente_id):
+    """Formulário de cadastro ANP manual (em branco)."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    return render_template(
+        'clientes/anp_form.html',
+        cliente=cliente,
+        anp=None,
+        socios=[],
+        produtos=[],
+        modo='novo',
+    )
 
 
 # Aliases para manter compatibilidade

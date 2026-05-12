@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if modo == 'editar' else 'Novo' }} Cadastro ANP - {{ cliente.nome_razao_social }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-gas-pump" style="color:#e74c3c;"></i>
+            {{ 'Editar' if modo == 'editar' else 'Novo' }} Cadastro ANP
+        </h1>
+        <p class="page-subtitle">{{ cliente.nome_razao_social }}</p>
+    </div>
+    <div>
+        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}#cadastros-adicionais" class="btn btn-secondary">
+            <i class="fas fa-times"></i> Cancelar
+        </a>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('clientes.anp_salvar', cliente_id=cliente.id) }}" id="formAnp">
+    {% if anp %}<input type="hidden" name="anp_id" value="{{ anp.id }}">{% endif %}
+    <input type="hidden" name="fonte" value="{{ anp.fonte if anp else 'MANUAL' }}">
+    <input type="hidden" name="socios_json" id="sociosJson" value="[]">
+    <input type="hidden" name="produtos_json" id="produtosJson" value="[]">
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Dados Principais</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Situação</label>
+                    <input type="text" name="situacao" class="form-control" value="{{ anp.situacao or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Autorização</label>
+                    <input type="text" name="autorizacao" class="form-control" value="{{ anp.autorizacao or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>CNPJ (no certificado ANP)</label>
+                    <input type="text" name="cnpj_anp" class="form-control" value="{{ anp.cnpj_anp or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Razão Social</label>
+                    <input type="text" name="razao_social" class="form-control" value="{{ anp.razao_social or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Nome Fantasia</label>
+                    <input type="text" name="nome_fantasia" class="form-control" value="{{ anp.nome_fantasia or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Data/Hora Emissão</label>
+                    <input type="text" name="data_emissao" class="form-control" placeholder="ex: 2026-05-12 08:57:53"
+                           value="{{ anp.data_emissao or '' if anp else '' }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Endereço</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Endereço</label>
+                    <input type="text" name="endereco" class="form-control" value="{{ anp.endereco or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Complemento</label>
+                    <input type="text" name="complemento" class="form-control" value="{{ anp.complemento or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Bairro</label>
+                    <input type="text" name="bairro" class="form-control" value="{{ anp.bairro or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Município/UF</label>
+                    <input type="text" name="municipio_uf" class="form-control" value="{{ anp.municipio_uf or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>CEP</label>
+                    <input type="text" name="cep" class="form-control" value="{{ anp.cep or '' if anp else '' }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Despacho / Bandeira</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Nr Despacho</label>
+                    <input type="text" name="nr_despacho" class="form-control" value="{{ anp.nr_despacho or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Data de Publicação</label>
+                    <input type="date" name="data_publicacao" class="form-control" value="{{ anp.data_publicacao or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Bandeira</label>
+                    <input type="text" name="bandeira" class="form-control" value="{{ anp.bandeira or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Data Início Bandeira</label>
+                    <input type="date" name="data_inicio_bandeira" class="form-control" value="{{ anp.data_inicio_bandeira or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Tipo de Posto</label>
+                    <input type="text" name="tipo_posto" class="form-control" value="{{ anp.tipo_posto or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>PMQC</label>
+                    <input type="text" name="pmqc" class="form-control" value="{{ anp.pmqc or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Delivery</label>
+                    <input type="text" name="delivery" class="form-control" value="{{ anp.delivery or '' if anp else '' }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Geolocalização</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Latitude</label>
+                    <input type="text" name="latitude" class="form-control" value="{{ anp.latitude or '' if anp else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Longitude</label>
+                    <input type="text" name="longitude" class="form-control" value="{{ anp.longitude or '' if anp else '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sócios -->
+    <div class="card" style="margin-top:20px;">
+        <div class="card-header">
+            <h3 class="card-title">Sócios</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addSocio()">
+                <i class="fas fa-plus"></i> Adicionar Sócio
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="sociosContainer">
+                {% for s in socios %}
+                <div class="socio-row" style="display:flex; gap:8px; margin-bottom:6px;">
+                    <input type="text" class="form-control socio-input" value="{{ s }}" placeholder="Nome do sócio">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeSocio(this)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Produtos -->
+    <div class="card" style="margin-top:20px;">
+        <div class="card-header">
+            <h3 class="card-title">Produtos / Tancagem / Bicos</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addProduto()">
+                <i class="fas fa-plus"></i> Adicionar Produto
+            </button>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr><th>Produto</th><th>Tancagem (m³)</th><th>Bicos</th><th></th></tr>
+                </thead>
+                <tbody id="produtosBody">
+                    {% for p in produtos %}
+                    <tr>
+                        <td><input type="text" class="form-control prod-nome" value="{{ p.produto }}"></td>
+                        <td><input type="number" class="form-control prod-tanc" step="0.001" value="{{ p.tancagem_m3 or '' }}"></td>
+                        <td><input type="number" class="form-control prod-bicos" value="{{ p.bicos or '' }}"></td>
+                        <td><button type="button" class="btn btn-danger btn-sm" onclick="removeProduto(this)"><i class="fas fa-trash"></i></button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:12px; margin-top:24px; padding-bottom:24px;">
+        <button type="submit" class="btn btn-primary" onclick="prepareSubmit()">
+            <i class="fas fa-save"></i> Salvar
+        </button>
+        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}#cadastros-adicionais" class="btn btn-secondary">
+            Cancelar
+        </a>
+    </div>
+</form>
+
+<script>
+function addSocio() {
+    var c = document.getElementById('sociosContainer');
+    var div = document.createElement('div');
+    div.className = 'socio-row';
+    div.style.cssText = 'display:flex; gap:8px; margin-bottom:6px;';
+    div.innerHTML = '<input type="text" class="form-control socio-input" placeholder="Nome do sócio">'
+        + '<button type="button" class="btn btn-danger btn-sm" onclick="removeSocio(this)"><i class="fas fa-trash"></i></button>';
+    c.appendChild(div);
+}
+function removeSocio(btn) { btn.closest('.socio-row').remove(); }
+function addProduto() {
+    var tbody = document.getElementById('produtosBody');
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><input type="text" class="form-control prod-nome"></td>'
+        + '<td><input type="number" class="form-control prod-tanc" step="0.001"></td>'
+        + '<td><input type="number" class="form-control prod-bicos"></td>'
+        + '<td><button type="button" class="btn btn-danger btn-sm" onclick="removeProduto(this)"><i class="fas fa-trash"></i></button></td>';
+    tbody.appendChild(tr);
+}
+function removeProduto(btn) { btn.closest('tr').remove(); }
+function prepareSubmit() {
+    document.getElementById('sociosJson').value = JSON.stringify(
+        Array.from(document.querySelectorAll('.socio-input')).map(i => i.value.trim()).filter(Boolean)
+    );
+    document.getElementById('produtosJson').value = JSON.stringify(
+        Array.from(document.querySelectorAll('#produtosBody tr')).map(function(tr) {
+            return {
+                produto: tr.querySelector('.prod-nome').value.trim(),
+                tancagem_m3: parseFloat(tr.querySelector('.prod-tanc').value) || null,
+                bicos: parseInt(tr.querySelector('.prod-bicos').value) || null,
+            };
+        }).filter(p => p.produto)
+    );
+}
+</script>
+{% endblock %}

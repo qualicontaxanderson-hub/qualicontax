@@ -90,7 +90,7 @@
             <li class="tabs-item">
                 <a href="#cadastros-adicionais" class="tabs-link">
                     <i class="fas fa-layer-group"></i>
-                    Cadastros Adicionais ({{ cadastros_adicionais|length }})
+                    Cadastros Adicionais ({{ cadastros_adicionais|length + cadastros_anp|length }})
                 </a>
             </li>
             <li class="tabs-item">
@@ -364,12 +364,116 @@
 
             <!-- Cadastros Adicionais Tab -->
             <div id="cadastros-adicionais" class="tab-pane">
+
+                <!-- ANP: Upload de PDF -->
+                <div class="card" style="margin-bottom:20px;">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-gas-pump" style="color:#e74c3c;"></i>
+                            Cadastro ANP
+                        </h3>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-secondary btn-sm" onclick="toggleAnpUpload()">
+                                <i class="fas fa-file-pdf"></i> Importar PDF
+                            </button>
+                            <a href="{{ url_for('clientes.anp_novo', cliente_id=cliente.id) }}" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-plus"></i> Cadastro Manual
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Upload PDF ANP (oculto por padrão) -->
+                    <div id="anpUploadBox" style="display:none; padding:16px; border-bottom:1px solid var(--border-color); background:#fafafa;">
+                        <form method="POST" action="{{ url_for('clientes.anp_importar_pdf', cliente_id=cliente.id) }}"
+                              enctype="multipart/form-data" id="formAnpPdf">
+                            <div style="display:flex; gap:12px; align-items:flex-end;">
+                                <div class="form-group" style="flex:1; margin-bottom:0;">
+                                    <label for="arquivo_pdf_anp">Arquivo PDF da ANP</label>
+                                    <input type="file" name="arquivo_pdf" id="arquivo_pdf_anp"
+                                           class="form-control" accept=".pdf" required>
+                                    <small class="text-muted">Ficha Cadastral gerada pelo site da ANP • máx. 20 MB</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-cogs"></i> Processar PDF
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card-body">
+                        {% if cadastros_anp %}
+                            {% for anp in cadastros_anp %}
+                            <div class="card" style="margin-bottom:12px; border:1px solid var(--border-color);">
+                                <div class="card-body" style="padding:14px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                        <div>
+                                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+                                                {% if anp.situacao %}
+                                                <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
+                                                    {{ anp.situacao }}
+                                                </span>
+                                                {% endif %}
+                                                {% if anp.autorizacao %}
+                                                <strong>{{ anp.autorizacao }}</strong>
+                                                {% endif %}
+                                                <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
+                                            </div>
+                                            <div style="font-size:13px; color:var(--text-secondary);">
+                                                {% if anp.bandeira %}<span><i class="fas fa-flag" style="color:#e74c3c;"></i> {{ anp.bandeira }}</span>{% endif %}
+                                                {% if anp.data_publicacao %} &nbsp;|&nbsp; Publicação: {{ anp.data_publicacao | format_date }}{% endif %}
+                                                {% if anp.municipio_uf %} &nbsp;|&nbsp; {{ anp.municipio_uf }}{% endif %}
+                                            </div>
+                                            {% if anp.socios %}
+                                            <div style="font-size:12px; margin-top:4px; color:var(--text-secondary);">
+                                                <i class="fas fa-user-tie"></i>
+                                                {{ anp.socios | map(attribute='nome') | join(', ') }}
+                                            </div>
+                                            {% endif %}
+                                            {% if anp.produtos %}
+                                            <div style="font-size:12px; margin-top:2px; color:var(--text-secondary);">
+                                                <i class="fas fa-gas-pump"></i>
+                                                {{ anp.produtos | map(attribute='produto') | join(', ') }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                                            <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn-icon btn-secondary" title="Ver detalhes">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn-icon btn-primary" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                                  method="POST" style="display:inline;">
+                                                <button type="submit" class="btn-icon btn-danger" title="Excluir"
+                                                        onclick="return confirm('Excluir este cadastro ANP?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state" style="padding:24px 0;">
+                                <i class="fas fa-gas-pump" style="color:#e74c3c; opacity:.4;"></i>
+                                <p>Nenhum cadastro ANP vinculado</p>
+                                <p class="text-muted">Importe o PDF da Ficha Cadastral ou preencha manualmente.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Outros cadastros adicionais genéricos -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Cadastros Adicionais</h3>
-                        <button class="btn btn-primary" onclick="showAddCadastroAdicionalModal()">
+                        <h3 class="card-title">Outros Cadastros Adicionais</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="showAddCadastroAdicionalModal()">
                             <i class="fas fa-plus"></i>
-                            Adicionar Cadastro
+                            Adicionar
                         </button>
                     </div>
                     <div class="card-body">
@@ -409,8 +513,8 @@
                         {% else %}
                             <div class="empty-state">
                                 <i class="fas fa-layer-group"></i>
-                                <p>Nenhum cadastro adicional cadastrado</p>
-                                <p class="text-muted">Ex.: dados de posto (bandeira, tanques, bicos), IBAMA e outros cadastros específicos.</p>
+                                <p>Nenhum cadastro adicional genérico</p>
+                                <p class="text-muted">Ex.: IBAMA, alvarás e outros cadastros específicos.</p>
                             </div>
                         {% endif %}
                     </div>
@@ -981,6 +1085,11 @@ function showAddCadastroAdicionalModal() {
 
 function closeAddCadastroAdicionalModal() {
     document.getElementById('addCadastroAdicionalModal').style.display = 'none';
+}
+
+function toggleAnpUpload() {
+    var box = document.getElementById('anpUploadBox');
+    box.style.display = (box.style.display === 'none' || box.style.display === '') ? 'block' : 'none';
 }
 
 function showAddSocioModal() {

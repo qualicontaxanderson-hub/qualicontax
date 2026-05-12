@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}ANP - {{ cliente.nome_razao_social }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-gas-pump" style="color:#e74c3c;"></i>
+            Cadastro ANP
+        </h1>
+        <p class="page-subtitle">{{ cliente.nome_razao_social }}</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}" class="btn btn-primary">
+            <i class="fas fa-edit"></i> Editar
+        </a>
+        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}#cadastros-adicionais" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+        <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-danger"
+                    onclick="return confirm('Deseja excluir este cadastro ANP?')">
+                <i class="fas fa-trash"></i> Excluir
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Status banner -->
+{% if anp.situacao %}
+<div class="alert alert-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}" style="margin-bottom:16px;">
+    <strong>Situação:</strong> {{ anp.situacao }}
+    {% if anp.autorizacao %} &nbsp;|&nbsp; <strong>Autorização:</strong> {{ anp.autorizacao }}{% endif %}
+    {% if anp.fonte %} &nbsp;|&nbsp; <span class="badge badge-secondary">{{ anp.fonte }}</span>{% endif %}
+</div>
+{% endif %}
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+    <!-- Identificação -->
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Identificação</h3></div>
+        <div class="card-body">
+            <dl class="dl-horizontal">
+                {% if anp.cnpj_anp %}<dt>CNPJ</dt><dd>{{ anp.cnpj_anp | format_cnpj }}</dd>{% endif %}
+                {% if anp.razao_social %}<dt>Razão Social</dt><dd>{{ anp.razao_social }}</dd>{% endif %}
+                {% if anp.nome_fantasia %}<dt>Nome Fantasia</dt><dd>{{ anp.nome_fantasia }}</dd>{% endif %}
+                {% if anp.data_emissao %}<dt>Emissão</dt><dd>{{ anp.data_emissao }}</dd>{% endif %}
+            </dl>
+        </div>
+    </div>
+
+    <!-- Endereço -->
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Endereço</h3></div>
+        <div class="card-body">
+            <dl class="dl-horizontal">
+                {% if anp.endereco %}<dt>Endereço</dt><dd>{{ anp.endereco }}</dd>{% endif %}
+                {% if anp.complemento %}<dt>Complemento</dt><dd>{{ anp.complemento }}</dd>{% endif %}
+                {% if anp.bairro %}<dt>Bairro</dt><dd>{{ anp.bairro }}</dd>{% endif %}
+                {% if anp.municipio_uf %}<dt>Município/UF</dt><dd>{{ anp.municipio_uf }}</dd>{% endif %}
+                {% if anp.cep %}<dt>CEP</dt><dd>{{ anp.cep }}</dd>{% endif %}
+            </dl>
+        </div>
+    </div>
+
+    <!-- Despacho / Bandeira -->
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Despacho / Bandeira</h3></div>
+        <div class="card-body">
+            <dl class="dl-horizontal">
+                {% if anp.nr_despacho %}<dt>Nr Despacho</dt><dd>{{ anp.nr_despacho }}</dd>{% endif %}
+                {% if anp.data_publicacao %}<dt>Data Publicação</dt><dd>{{ anp.data_publicacao | format_date }}</dd>{% endif %}
+                {% if anp.bandeira %}<dt>Bandeira</dt><dd>{{ anp.bandeira }}</dd>{% endif %}
+                {% if anp.data_inicio_bandeira %}<dt>Início Bandeira</dt><dd>{{ anp.data_inicio_bandeira | format_date }}</dd>{% endif %}
+                {% if anp.tipo_posto %}<dt>Tipo de Posto</dt><dd>{{ anp.tipo_posto }}</dd>{% endif %}
+                {% if anp.pmqc %}<dt>PMQC</dt><dd>{{ anp.pmqc }}</dd>{% endif %}
+                {% if anp.delivery %}<dt>Delivery</dt><dd>{{ anp.delivery }}</dd>{% endif %}
+            </dl>
+        </div>
+    </div>
+
+    <!-- Geolocalização -->
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Geolocalização</h3></div>
+        <div class="card-body">
+            <dl class="dl-horizontal">
+                {% if anp.latitude %}<dt>Latitude</dt><dd>{{ anp.latitude }}</dd>{% endif %}
+                {% if anp.longitude %}<dt>Longitude</dt><dd>{{ anp.longitude }}</dd>{% endif %}
+            </dl>
+            {% if anp.latitude and anp.longitude %}
+            <a href="https://maps.google.com/?q={{ anp.latitude }},{{ anp.longitude }}"
+               target="_blank" class="btn btn-secondary btn-sm">
+                <i class="fas fa-map-marker-alt"></i> Ver no Google Maps
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+<!-- Sócios -->
+{% if socios %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header"><h3 class="card-title">Sócios</h3></div>
+    <div class="card-body">
+        <ul style="margin:0; padding-left:20px;">
+            {% for s in socios %}
+            <li>{{ s.nome }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<!-- Produtos -->
+{% if produtos %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header"><h3 class="card-title">Produtos / Tancagem / Bicos</h3></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Tancagem (m³)</th>
+                        <th>Bicos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in produtos %}
+                    <tr>
+                        <td>{{ p.produto }}</td>
+                        <td>{{ p.tancagem_m3 if p.tancagem_m3 is not none else '-' }}</td>
+                        <td>{{ p.bicos if p.bicos is not none else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<style>
+.dl-horizontal dt { font-weight:600; color:var(--text-secondary); font-size:12px; margin-bottom:2px; }
+.dl-horizontal dd { margin-bottom:10px; margin-left:0; }
+</style>
+{% endblock %}

@@ -46,6 +46,7 @@ from routes.dropbox import dropbox_bp
 from routes.modulos import modulos
 from routes.escrita_fiscal import escrita_fiscal as escrita_fiscal_bp
 from routes.configuracoes import configuracoes as configuracoes_bp
+from routes.adicionais import adicionais
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -64,6 +65,7 @@ app.register_blueprint(dropbox_bp)
 app.register_blueprint(modulos)
 app.register_blueprint(escrita_fiscal_bp)
 app.register_blueprint(configuracoes_bp)
+app.register_blueprint(adicionais)
 
 
 # Template filters

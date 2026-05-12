@@ -482,6 +482,64 @@ def run_migrations():
     except Exception:
         pass
 
+    # ---- Cadastros ANP ----
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS cadastros_anp (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            situacao VARCHAR(100) NULL,
+            autorizacao VARCHAR(100) NULL,
+            cnpj_anp VARCHAR(18) NULL,
+            razao_social VARCHAR(255) NULL,
+            nome_fantasia VARCHAR(255) NULL,
+            endereco VARCHAR(255) NULL,
+            complemento VARCHAR(100) NULL,
+            bairro VARCHAR(100) NULL,
+            municipio_uf VARCHAR(100) NULL,
+            cep VARCHAR(10) NULL,
+            nr_despacho VARCHAR(50) NULL,
+            data_publicacao DATE NULL,
+            bandeira VARCHAR(100) NULL,
+            data_inicio_bandeira DATE NULL,
+            tipo_posto VARCHAR(20) NULL,
+            pmqc VARCHAR(50) NULL,
+            delivery VARCHAR(10) NULL,
+            latitude VARCHAR(30) NULL,
+            longitude VARCHAR(30) NULL,
+            data_emissao DATETIME NULL,
+            fonte ENUM('PDF','MANUAL','DROPBOX') NOT NULL DEFAULT 'MANUAL',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+            INDEX idx_cliente_id (cliente_id),
+            INDEX idx_autorizacao (autorizacao)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # ---- Sócios do Cadastro ANP ----
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS cadastros_anp_socios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cadastro_anp_id INT NOT NULL,
+            nome VARCHAR(255) NOT NULL,
+            FOREIGN KEY (cadastro_anp_id) REFERENCES cadastros_anp(id) ON DELETE CASCADE,
+            INDEX idx_cadastro_anp_id (cadastro_anp_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # ---- Produtos do Cadastro ANP ----
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS cadastros_anp_produtos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cadastro_anp_id INT NOT NULL,
+            produto VARCHAR(255) NOT NULL,
+            tancagem_m3 DECIMAL(10,3) NULL,
+            bicos INT NULL,
+            FOREIGN KEY (cadastro_anp_id) REFERENCES cadastros_anp(id) ON DELETE CASCADE,
+            INDEX idx_cadastro_anp_id (cadastro_anp_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
     # ---- Contratos ----
     execute_query("""
         CREATE TABLE IF NOT EXISTS contratos (
