@@ -1,7 +1,9 @@
 """Blueprint para gestão de Tipos de Cadastros Adicionais e auto-importação."""
+import re
 import logging
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from utils.auth_helper import login_required
+from utils.db_helper import get_last_db_error, _set_last_db_error
 from models.cadastro_anp import CadastroAnp
 from models.cliente import Cliente
 
@@ -162,6 +164,7 @@ def sync_dropbox_anp():
             resultados.append({'arquivo': nome, 'status': 'erro', 'mensagem': erro_validacao})
             continue
 
+        _set_last_db_error('')  # reset antes de cada tentativa de save
         saved = CadastroAnp.save_full(
             cliente_id=cliente_id,
             data=dados,
@@ -178,12 +181,11 @@ def sync_dropbox_anp():
                 'cliente_id': cliente_id,
             })
         else:
-            from utils.db_helper import get_last_db_error
-            db_err = get_last_db_error()
-            if db_err:
-                msg = f'Falha ao salvar no banco: {db_err}'
-            else:
-                msg = 'Falha ao salvar no banco de dados. Verifique os logs do servidor para mais detalhes.'
+            db_err = get_last_db_error() or ''
+            # Expose only the MySQL error code (e.g. 1406), not SQL/column details
+            m = re.match(r'(\d+)', db_err)
+            suffix = f' (código MySQL {m.group(1)})' if m else ''
+            msg = f'Falha ao salvar no banco{suffix}. Verifique os logs do servidor para mais detalhes.'
             resultados.append({
                 'arquivo': nome,
                 'status': 'erro',
