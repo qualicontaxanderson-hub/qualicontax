@@ -26,6 +26,33 @@ TIPOS_CADASTROS = [
 
 def _validar_tamanhos_campos_anp(dados):
     """Valida limites de campos da tabela cadastros_anp e retorna erro amigável."""
+
+    # Detecta confusão do parser: quando campos distintos têm o mesmo valor longo
+    # — sinal de que o layout do PDF não foi reconhecido corretamente.
+    def _preview(text, max_len=60):
+        return (text[:max_len] + '...') if len(text) > max_len else text
+
+    header_campos = ('situacao', 'autorizacao', 'razao_social', 'nome_fantasia')
+    header_vals = [str(dados.get(f) or '').strip() for f in header_campos]
+    header_non_empty = [v for v in header_vals if len(v) > 10]
+    if len(header_non_empty) >= 2 and len(set(header_non_empty)) == 1:
+        return (
+            f'Formato de PDF não reconhecido: os campos de identificação (Situação, Autorização, '
+            f'Razão Social) foram extraídos com o mesmo valor incorreto, indicando que o layout '
+            f'deste PDF é diferente do padrão esperado. '
+            f'Valor extraído: "{_preview(header_non_empty[0])}"'
+        )
+
+    addr_campos = ('endereco', 'complemento', 'bairro', 'municipio_uf')
+    addr_vals = [str(dados.get(f) or '').strip() for f in addr_campos]
+    addr_non_empty = [v for v in addr_vals if len(v) > 10]
+    if len(addr_non_empty) >= 2 and len(set(addr_non_empty)) == 1:
+        return (
+            f'Formato de PDF não reconhecido: os campos de endereço (Complemento, Bairro, '
+            f'Município/UF) foram todos extraídos com o mesmo valor do Endereço. '
+            f'Valor: "{_preview(addr_non_empty[0])}"'
+        )
+
     limites = {
         'situacao': 100,
         'autorizacao': 100,
@@ -151,10 +178,16 @@ def sync_dropbox_anp():
                 'cliente_id': cliente_id,
             })
         else:
+            from utils.db_helper import get_last_db_error
+            db_err = get_last_db_error()
+            if db_err:
+                msg = f'Falha ao salvar no banco: {db_err}'
+            else:
+                msg = 'Falha ao salvar no banco de dados. Verifique os logs do servidor para mais detalhes.'
             resultados.append({
                 'arquivo': nome,
                 'status': 'erro',
-                'mensagem': 'Falha ao salvar no banco: verifique se os dados extraídos (ex.: CEP) estão válidos',
+                'mensagem': msg,
             })
 
     return jsonify({'resultados': resultados, 'total': len(pdf_entries)})
