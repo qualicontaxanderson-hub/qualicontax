@@ -1,5 +1,4 @@
 """Blueprint para gestão de Tipos de Cadastros Adicionais e auto-importação."""
-import re
 import logging
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from utils.auth_helper import login_required
@@ -181,11 +180,10 @@ def sync_dropbox_anp():
                 'cliente_id': cliente_id,
             })
         else:
-            db_err = get_last_db_error() or ''
-            # Expose only the MySQL error code (e.g. 1406), not SQL/column details
-            m = re.match(r'(\d+)', db_err)
-            suffix = f' (código MySQL {m.group(1)})' if m else ''
-            msg = f'Falha ao salvar no banco{suffix}. Verifique os logs do servidor para mais detalhes.'
+            db_err = get_last_db_error()
+            if db_err:
+                logger.error("Falha ao salvar cadastro ANP do arquivo '%s': %s", nome, db_err)
+            msg = 'Falha ao salvar no banco de dados. Verifique os logs do servidor para mais detalhes.'
             resultados.append({
                 'arquivo': nome,
                 'status': 'erro',
