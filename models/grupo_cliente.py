@@ -1,5 +1,16 @@
 """Modelo de Grupo de Clientes"""
+import time
 from utils.db_helper import execute_query
+
+_CACHE_TTL_SECONDS = 60
+_cache_ativos = None
+_cache_ativos_ts = 0.0
+
+
+def _invalidate_cache():
+    global _cache_ativos, _cache_ativos_ts
+    _cache_ativos = None
+    _cache_ativos_ts = 0.0
 
 
 class GrupoCliente:
@@ -16,6 +27,10 @@ class GrupoCliente:
         Returns:
             list: Lista de grupos
         """
+        global _cache_ativos, _cache_ativos_ts
+        if situacao == 'ATIVO' and _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
+            return [dict(item) for item in _cache_ativos]
+
         query = """
             SELECT id, nome, descricao, situacao
             FROM grupos_clientes
@@ -28,7 +43,11 @@ class GrupoCliente:
         
         query += " ORDER BY nome"
         
-        return execute_query(query, tuple(params) if params else None, fetch=True) or []
+        result = execute_query(query, tuple(params) if params else None, fetch=True) or []
+        if situacao == 'ATIVO':
+            _cache_ativos = [dict(item) for item in result]
+            _cache_ativos_ts = time.time()
+        return result
     
     @staticmethod
     def get_by_id(grupo_id):
@@ -65,7 +84,10 @@ class GrupoCliente:
             INSERT INTO grupos_clientes (nome, descricao, situacao)
             VALUES (%s, %s, %s)
         """
-        return execute_query(query, (nome, descricao, situacao))
+        result = execute_query(query, (nome, descricao, situacao))
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def update(grupo_id, nome, descricao=None, situacao='ATIVO'):
@@ -86,7 +108,10 @@ class GrupoCliente:
             SET nome = %s, descricao = %s, situacao = %s
             WHERE id = %s
         """
-        return execute_query(query, (nome, descricao, situacao, grupo_id))
+        result = execute_query(query, (nome, descricao, situacao, grupo_id))
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def delete(grupo_id):
@@ -100,7 +125,10 @@ class GrupoCliente:
             int: ID do grupo ou None
         """
         query = "DELETE FROM grupos_clientes WHERE id = %s"
-        return execute_query(query, (grupo_id,))
+        result = execute_query(query, (grupo_id,))
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def add_cliente(grupo_id, cliente_id):

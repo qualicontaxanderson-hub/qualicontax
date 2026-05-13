@@ -1,5 +1,16 @@
 """Modelo de Ramo de Atividade"""
+import time
 from utils.db_helper import execute_query
+
+_CACHE_TTL_SECONDS = 60
+_cache_ativos = None
+_cache_ativos_ts = 0.0
+
+
+def _invalidate_cache():
+    global _cache_ativos, _cache_ativos_ts
+    _cache_ativos = None
+    _cache_ativos_ts = 0.0
 
 
 class RamoAtividade:
@@ -16,6 +27,10 @@ class RamoAtividade:
         Returns:
             list: Lista de ramos de atividade
         """
+        global _cache_ativos, _cache_ativos_ts
+        if situacao == 'ATIVO' and _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
+            return [dict(item) for item in _cache_ativos]
+
         query = """
             SELECT id, nome, descricao, situacao
             FROM ramos_atividade
@@ -28,7 +43,11 @@ class RamoAtividade:
         
         query += " ORDER BY nome"
         
-        return execute_query(query, tuple(params) if params else None, fetch=True) or []
+        result = execute_query(query, tuple(params) if params else None, fetch=True) or []
+        if situacao == 'ATIVO':
+            _cache_ativos = [dict(item) for item in result]
+            _cache_ativos_ts = time.time()
+        return result
     
     @staticmethod
     def get_by_id(ramo_id):
@@ -65,7 +84,10 @@ class RamoAtividade:
             INSERT INTO ramos_atividade (nome, descricao, situacao)
             VALUES (%s, %s, %s)
         """
-        return execute_query(query, (nome, descricao, situacao))
+        result = execute_query(query, (nome, descricao, situacao))
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def update(ramo_id, nome, descricao=None, situacao='ATIVO'):
@@ -86,7 +108,10 @@ class RamoAtividade:
             SET nome = %s, descricao = %s, situacao = %s
             WHERE id = %s
         """
-        return execute_query(query, (nome, descricao, situacao, ramo_id), fetch=False)
+        result = execute_query(query, (nome, descricao, situacao, ramo_id), fetch=False)
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def delete(ramo_id):
@@ -103,7 +128,10 @@ class RamoAtividade:
             DELETE FROM ramos_atividade
             WHERE id = %s
         """
-        return execute_query(query, (ramo_id,), fetch=False)
+        result = execute_query(query, (ramo_id,), fetch=False)
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def add_cliente(ramo_id, cliente_id):

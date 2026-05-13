@@ -1,5 +1,6 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import threading
+import os
 import mysql.connector
 from mysql.connector import Error, pooling
 from config import Config
@@ -29,14 +30,15 @@ def _get_pool() -> pooling.MySQLConnectionPool:
     global _pool
     if _pool is None:
         _pool = pooling.MySQLConnectionPool(
-            pool_name='qualicontax_pool',
-            pool_size=10,
+            pool_name=f'qualicontax_pool_{os.getpid()}',
+            pool_size=Config.DB_POOL_SIZE,
             pool_reset_session=True,
             host=Config.DB_HOST,
             port=Config.DB_PORT,
             database=Config.DB_NAME,
             user=Config.DB_USER,
             password=Config.DB_PASSWORD,
+            connection_timeout=Config.DB_CONNECT_TIMEOUT,
             charset='utf8mb4',
             collation='utf8mb4_unicode_ci',
         )
