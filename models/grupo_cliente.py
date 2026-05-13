@@ -51,7 +51,7 @@ class GrupoCliente:
         result = execute_query(query, tuple(params) if params else None, fetch=True) or []
         if situacao == 'ATIVO':
             with _cache_lock:
-                _cache_ativos = [dict(item) for item in result]
+                _cache_ativos = tuple(dict(item) for item in result)
                 _cache_ativos_ts = time.time()
         return result
     
