@@ -401,7 +401,7 @@ class Cliente:
         query = """
             SELECT id, tipo_pessoa, nome_razao_social, cpf_cnpj, email, situacao
             FROM clientes
-            WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s
+            WHERE REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '/', ''), '-', ''), ' ', '') = %s
             LIMIT 1
         """
         return execute_query(query, (cnpj_digits,), fetch=True, fetch_one=True)

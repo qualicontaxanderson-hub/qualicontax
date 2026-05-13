@@ -233,8 +233,8 @@ class CadastroAnp:
             SELECT a.id, a.cliente_id, c.cpf_cnpj, c.nome_razao_social
             FROM cadastros_anp a
             JOIN clientes c ON c.id = a.cliente_id
-            WHERE REGEXP_REPLACE(a.cnpj_anp, '[^0-9]', '') = %s
-               OR REGEXP_REPLACE(c.cpf_cnpj,  '[^0-9]', '') = %s
+            WHERE REPLACE(REPLACE(REPLACE(REPLACE(a.cnpj_anp, '.', ''), '/', ''), '-', ''), ' ', '') = %s
+               OR REPLACE(REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '/', ''), '-', ''), ' ', '') = %s
             ORDER BY a.criado_em DESC
             LIMIT 1
         """

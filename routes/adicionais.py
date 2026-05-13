@@ -83,7 +83,7 @@ def sync_dropbox_anp():
         if not cliente:
             resultados.append({
                 'arquivo': nome, 'status': 'ignorado',
-                'mensagem': 'CNPJ não encontrado no sistema',
+                'mensagem': f'Info não localizada: CNPJ {cnpj_digits} não foi localizado no sistema',
             })
             continue
 
