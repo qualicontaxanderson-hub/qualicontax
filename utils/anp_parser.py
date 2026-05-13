@@ -415,7 +415,7 @@ def extrair_dados_anp(arquivo_bytes):
         return {
             'sucesso': False, 'dados': {}, 'socios': [], 'produtos': [],
             'cnpj': '', 'texto_bruto': '',
-            'erro': f'Erro ao processar PDF: {exc}',
+            'erro': 'Erro ao processar o arquivo PDF. Verifique se o arquivo não está corrompido.',
         }
 
     texto_bruto = '\n'.join(all_lines)
