@@ -18,6 +18,7 @@ Estratégia de extração (em ordem de prioridade):
 import re
 import io
 import logging
+import unicodedata
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,22 @@ def _only_digits(text):
 def _norm(text):
     """Remove espaços extras."""
     return re.sub(r'\s+', ' ', (text or '')).strip()
+
+
+def _strip_accents(text):
+    return ''.join(
+        ch for ch in unicodedata.normalize('NFKD', text or '')
+        if not unicodedata.combining(ch)
+    )
+
+
+def _norm_label(text):
+    """Normaliza rótulos vindos do pdfplumber para comparação robusta."""
+    text = _norm(text).replace('\n', ' ').replace(':', ' ')
+    text = _strip_accents(text).lower()
+    text = re.sub(r'\s*/\s*', '/', text)
+    text = re.sub(r'[^a-z0-9/\s]', ' ', text)
+    return _norm(text)
 
 
 def _parse_br_date(text):
@@ -541,35 +558,7 @@ def _extract_produtos(lines, tabelas):
 # Extração primária via tabelas estruturadas
 # ---------------------------------------------------------------------------
 
-# Rótulos que identificam linhas de cabeçalho da ficha ANP
-_LABELS_HEADER = frozenset({
-    'situação', 'situacao',
-    'autorização', 'autorizacao',
-    'cnpj',
-    'razão social', 'razao social',
-    'nome fantasia',
-    'endereço', 'endereco',
-    'complemento',
-    'bairro',
-    'município/uf', 'municipio/uf',
-    'cep',
-    'nr despacho', 'nr. despacho',
-    'data da publicação', 'data publicação', 'data da publicacao', 'data publicacao',
-    'bandeira/início', 'bandeira/inicio', 'bandeira / início', 'bandeira / inicio',
-    'tipo de posto',
-    'pmqc',
-    'delivery',
-    'data autorização delivery', 'data autorizacao delivery',
-    'número despacho delivery', 'numero despacho delivery',
-    'latitude',
-    'longitude',
-    'src',
-    'data da obtenção', 'data da obtencao',
-    'origem',
-})
-
-# Mapeamento: rótulo normalizado → campo no dict de dados
-_LABEL_TO_FIELD = {
+_RAW_LABEL_TO_FIELD = {
     'situação': 'situacao',
     'situacao': 'situacao',
     'autorização': 'autorizacao',
@@ -598,9 +587,21 @@ _LABEL_TO_FIELD = {
     'tipo de posto': 'tipo_posto',
     'pmqc': 'pmqc',
     'delivery': 'delivery',
+    'data autorização delivery': '_delivery_data_autorizacao',
+    'data autorizacao delivery': '_delivery_data_autorizacao',
+    'número despacho delivery': '_delivery_nr_despacho',
+    'numero despacho delivery': '_delivery_nr_despacho',
     'latitude': 'latitude',
     'longitude': 'longitude',
+    'src': '_geo_src',
+    'data da obtenção': '_geo_data_obtencao',
+    'data da obtencao': '_geo_data_obtencao',
+    'origem': '_geo_origem',
 }
+
+# Rótulos que identificam linhas de cabeçalho da ficha ANP
+_LABEL_TO_FIELD = {_norm_label(k): v for k, v in _RAW_LABEL_TO_FIELD.items()}
+_LABELS_HEADER = frozenset(_LABEL_TO_FIELD.keys())
 
 
 def _build_label_map_from_tables(tabelas):
@@ -628,8 +629,9 @@ def _build_label_map_from_tables(tabelas):
                 continue
 
             cells = [_norm(str(c or '')) for c in row]
+            cell_keys = [_find_known_label_key(c) for c in cells]
             # Conta quantas células são rótulos conhecidos
-            hits = sum(1 for c in cells if c.lower() in _LABELS_HEADER)
+            hits = sum(1 for c in cell_keys if c)
 
             if hits == 0:
                 i += 1
@@ -646,18 +648,19 @@ def _build_label_map_from_tables(tabelas):
                 continue
 
             vals = [_norm(str(c or '')) for c in val_row]
+            val_keys = [_find_known_label_key(v) for v in vals]
 
             # Verifica se a linha seguinte também é de rótulos (não de valores)
-            val_hits = sum(1 for v in vals if v.lower() in _LABELS_HEADER)
+            val_hits = sum(1 for v in val_keys if v)
             if val_hits >= max(2, hits):
                 # A linha seguinte também é cabeçalho, não avança o índice
                 i += 1
                 continue
 
             # Mapeia rótulo → valor célula a célula
-            for j, cell in enumerate(cells):
-                if cell and j < len(vals) and vals[j]:
-                    label_map[cell.lower()] = vals[j]
+            for j, key in enumerate(cell_keys):
+                if key and j < len(vals) and vals[j]:
+                    label_map[key] = vals[j]
 
             i += 2  # pula a linha de valores
 
@@ -727,6 +730,247 @@ def _extract_all_from_table_map(label_map):
             result['cep'] = cep_raw[:5] + '-' + cep_raw[5:]
 
     return result
+
+
+def _find_known_label_key(text):
+    key = _norm_label(text)
+    if key in _LABEL_TO_FIELD:
+        return key
+    for known in _LABELS_HEADER:
+        if key.startswith(known) or known.startswith(key):
+            return known
+    return None
+
+
+_RE_CORP_SUFFIX = re.compile(
+    r'\b(?:LTDA|LIMITADA|EIRELI|S/?A|SA|ME|EPP|MEI)\b\.?',
+    re.IGNORECASE,
+)
+_RE_PMQC_STATUS = re.compile(r'\b(ADIMPLENTE|INADIMPLENTE)\b', re.IGNORECASE)
+_RE_COMP_KM = re.compile(r'\b(KM\s*\d+[A-Z0-9/-]*)\b', re.IGNORECASE)
+_RE_BAIRRO_PREFIX = re.compile(
+    r'\b(BAIRRO|JARDIM|JD\.?|SETOR|VILA|CENTRO|PARQUE|DISTRITO)\b',
+    re.IGNORECASE,
+)
+
+
+def _dedupe_adjacent_words(text):
+    parts = _norm(text).split()
+    if not parts:
+        return ''
+    deduped = [parts[0]]
+    for token in parts[1:]:
+        if token.upper() != deduped[-1].upper():
+            deduped.append(token)
+    return ' '.join(deduped)
+
+
+def _smart_title(text):
+    parts = []
+    for token in _norm(text).split():
+        if token.isupper() and (len(token) <= 3 or any(ch.isdigit() for ch in token)):
+            parts.append(token)
+        else:
+            parts.append(token.capitalize())
+    return ' '.join(parts)
+
+
+def _extract_name_candidates(lines, dados):
+    candidates = []
+    merged = _norm(' '.join([
+        dados.get('razao_social') or '',
+        dados.get('nome_fantasia') or '',
+    ]))
+    if merged:
+        candidates.append(merged)
+
+    for line in lines:
+        line = _norm(line)
+        if not line:
+            continue
+        if _RE_CNPJ.search(line) or 'razão social' in line.lower() or 'razao social' in line.lower():
+            candidates.append(line)
+
+    return candidates
+
+
+def _cleanup_razao_social_nome_fantasia(dados, lines):
+    current_razao = _norm(dados.get('razao_social'))
+    current_nome = _norm(dados.get('nome_fantasia'))
+
+    for candidate in _extract_name_candidates(lines, dados):
+        candidate_clean = _norm(_RE_CNPJ.sub('', candidate))
+        candidate_clean = re.sub(r'(?i)\b(razão social|razao social|nome fantasia)\b', ' ', candidate_clean)
+        candidate_clean = _norm(candidate_clean)
+        if not candidate_clean:
+            continue
+
+        match = None
+        for m in _RE_CORP_SUFFIX.finditer(candidate_clean):
+            match = m
+        if not match:
+            continue
+
+        razao = _norm(candidate_clean[:match.end()])
+        nome = _norm(candidate_clean[match.end():])
+
+        if razao and (not current_razao or len(razao) > len(current_razao) or current_razao in razao):
+            dados['razao_social'] = razao
+            current_razao = razao
+        if nome and (not current_nome or current_nome in nome):
+            dados['nome_fantasia'] = nome
+            current_nome = nome
+        if current_razao and current_nome:
+            break
+
+
+def _cleanup_endereco(dados, lines):
+    merged = _norm(' '.join([
+        dados.get('endereco') or '',
+        dados.get('complemento') or '',
+        dados.get('bairro') or '',
+        dados.get('municipio_uf') or '',
+        dados.get('cep') or '',
+    ]))
+
+    line_best = ''
+    for line in lines:
+        line = _norm(line)
+        if _RE_CEP.search(line) and '/' in line:
+            if len(line) > len(line_best):
+                line_best = line
+    if line_best:
+        merged = line_best
+
+    if not merged:
+        return
+
+    merged = _dedupe_adjacent_words(merged)
+
+    m_cep = _RE_CEP.search(merged)
+    if m_cep:
+        dados['cep'] = m_cep.group(1)
+        merged = _norm(merged.replace(m_cep.group(0), ' '))
+    else:
+        digits8 = re.search(r'\b(\d{8})\b', merged)
+        if digits8:
+            dados['cep'] = f'{digits8.group(1)[:5]}-{digits8.group(1)[5:]}'
+            merged = _norm(merged.replace(digits8.group(1), ' '))
+
+    m_mun = re.search(
+        r'([A-ZÁÀÃÉÊÍÓÕÚÇÜa-záàãéêíóõúçü]+(?:\s+[A-ZÁÀÃÉÊÍÓÕÚÇÜa-záàãéêíóõúçü]+){0,2})/([A-Z]{2})\s*$',
+        merged,
+    )
+    cidade = None
+    if m_mun:
+        cidade = _norm(m_mun.group(1))
+        uf = m_mun.group(2).upper()
+        before = _norm(merged[:m_mun.start()])
+    else:
+        before = merged
+
+    comp = dados.get('complemento')
+    if not comp:
+        m_comp = _RE_COMP_KM.search(before)
+        if m_comp:
+            comp = _norm(m_comp.group(1))
+            before = _norm(before.replace(m_comp.group(0), ' '))
+    if comp:
+        dados['complemento'] = comp.upper() if comp.upper().startswith('KM') else comp
+
+    bairro = dados.get('bairro')
+    if not bairro and before:
+        prefix_matches = list(_RE_BAIRRO_PREFIX.finditer(before))
+        if prefix_matches:
+            match = prefix_matches[-1]
+            bairro = _norm(before[match.start():])
+            before = _norm(before[:match.start()])
+        else:
+            tokens = before.split()
+            if len(tokens) >= 2:
+                bairro_tokens = []
+                while tokens:
+                    token = tokens[-1]
+                    if re.fullmatch(r'\d+[A-Z/-]*', token):
+                        break
+                    bairro_tokens.insert(0, tokens.pop())
+                    if len(bairro_tokens) >= 4:
+                        break
+                bairro_guess = _norm(' '.join(bairro_tokens))
+                if bairro_guess and len(bairro_guess) >= 6:
+                    bairro = bairro_guess
+                    before = _norm(' '.join(tokens))
+    if bairro:
+        dados['bairro'] = _smart_title(bairro) if bairro.isupper() else bairro
+
+    if cidade:
+        cidade_tokens = cidade.split()
+        bairro_atual = _norm(dados.get('bairro'))
+        if bairro_atual and len(cidade_tokens) > 1:
+            prefix = bairro_atual.split()[0]
+            extras = cidade_tokens[:-1]
+            dados['bairro'] = _smart_title(f'{bairro_atual} {" ".join(extras)}')
+            cidade = cidade_tokens[-1]
+        dados['municipio_uf'] = f'{_smart_title(cidade)}/{uf}'
+
+    endereco = _norm(before)
+    endereco = re.sub(r'(?i)\bRODOVIA\s+RODOVIA\b', 'RODOVIA', endereco)
+    endereco = re.sub(r'\s*,\s*', ', ', endereco)
+    if endereco and ',' not in endereco:
+        parts = endereco.split()
+        if len(parts) >= 2 and re.fullmatch(r'\d+[A-Z/-]*', parts[-1]):
+            endereco = f'{" ".join(parts[:-1])}, {parts[-1]}'
+    if endereco:
+        dados['endereco'] = _smart_title(endereco) if endereco.isupper() else endereco
+
+
+def _cleanup_despacho_bandeira(dados, lines):
+    merged = _norm(' '.join([
+        dados.get('nr_despacho') or '',
+        dados.get('bandeira') or '',
+        dados.get('tipo_posto') or '',
+        dados.get('pmqc') or '',
+        dados.get('data_publicacao') or '',
+        dados.get('data_inicio_bandeira') or '',
+    ]))
+    text = _norm(f'{merged} {" ".join(lines)}')
+
+    if not dados.get('nr_despacho'):
+        m_nr = _RE_NR_DESPACHO.search(text)
+        if m_nr:
+            dados['nr_despacho'] = m_nr.group(1)
+
+    if not dados.get('bandeira') or 'ADIMPLENTE' in str(dados.get('bandeira') or '').upper():
+        m_band = re.search(r'(?i)\bBANDEIRA\s+BRANCA\b', text)
+        if m_band:
+            dados['bandeira'] = 'Bandeira Branca'
+
+    if not dados.get('pmqc') or ' ' in str(dados.get('pmqc') or '').strip():
+        m_pmqc = _RE_PMQC_STATUS.search(text)
+        if m_pmqc:
+            dados['pmqc'] = m_pmqc.group(1).capitalize()
+
+    if not dados.get('data_publicacao'):
+        for line in lines:
+            if 'publica' in line.lower():
+                parsed = _parse_br_date(line)
+                if parsed:
+                    dados['data_publicacao'] = parsed
+                    break
+
+    if not dados.get('data_inicio_bandeira'):
+        for line in lines:
+            if 'bandeira' in line.lower():
+                parsed = _parse_br_date(line)
+                if parsed:
+                    dados['data_inicio_bandeira'] = parsed
+                    break
+
+
+def _cleanup_anp_fields(dados, lines):
+    _cleanup_razao_social_nome_fantasia(dados, lines)
+    _cleanup_endereco(dados, lines)
+    _cleanup_despacho_bandeira(dados, lines)
 
 
 # ---------------------------------------------------------------------------
@@ -845,6 +1089,8 @@ def extrair_dados_anp(arquivo_bytes):
         for k, v in text_geo.items():
             if not dados.get(k):
                 dados[k] = v
+
+    _cleanup_anp_fields(dados, all_lines)
 
     socios = _extract_socios(all_lines)
     produtos = _extract_produtos(all_lines, all_tabelas)
