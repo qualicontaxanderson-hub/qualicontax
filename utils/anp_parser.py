@@ -10,6 +10,10 @@ Campos extraídos:
     nr_despacho, data_publicacao, bandeira, data_inicio_bandeira,
     tipo_posto, pmqc, delivery, latitude, longitude,
     data_emissao, socios, produtos
+
+Estratégia de extração (em ordem de prioridade):
+  1. extract_tables() – preserva colunas/linhas da tabela estruturada.
+  2. Fallback texto – para campos ausentes nas tabelas.
 """
 import re
 import io
@@ -534,6 +538,198 @@ def _extract_produtos(lines, tabelas):
 
 
 # ---------------------------------------------------------------------------
+# Extração primária via tabelas estruturadas
+# ---------------------------------------------------------------------------
+
+# Rótulos que identificam linhas de cabeçalho da ficha ANP
+_LABELS_HEADER = frozenset({
+    'situação', 'situacao',
+    'autorização', 'autorizacao',
+    'cnpj',
+    'razão social', 'razao social',
+    'nome fantasia',
+    'endereço', 'endereco',
+    'complemento',
+    'bairro',
+    'município/uf', 'municipio/uf',
+    'cep',
+    'nr despacho', 'nr. despacho',
+    'data da publicação', 'data publicação', 'data da publicacao', 'data publicacao',
+    'bandeira/início', 'bandeira/inicio', 'bandeira / início', 'bandeira / inicio',
+    'tipo de posto',
+    'pmqc',
+    'delivery',
+    'data autorização delivery', 'data autorizacao delivery',
+    'número despacho delivery', 'numero despacho delivery',
+    'latitude',
+    'longitude',
+    'src',
+    'data da obtenção', 'data da obtencao',
+    'origem',
+})
+
+# Mapeamento: rótulo normalizado → campo no dict de dados
+_LABEL_TO_FIELD = {
+    'situação': 'situacao',
+    'situacao': 'situacao',
+    'autorização': 'autorizacao',
+    'autorizacao': 'autorizacao',
+    'cnpj': 'cnpj_anp',
+    'razão social': 'razao_social',
+    'razao social': 'razao_social',
+    'nome fantasia': 'nome_fantasia',
+    'endereço': 'endereco',
+    'endereco': 'endereco',
+    'complemento': 'complemento',
+    'bairro': 'bairro',
+    'município/uf': 'municipio_uf',
+    'municipio/uf': 'municipio_uf',
+    'cep': 'cep',
+    'nr despacho': 'nr_despacho',
+    'nr. despacho': 'nr_despacho',
+    'data da publicação': 'data_publicacao',
+    'data publicação': 'data_publicacao',
+    'data da publicacao': 'data_publicacao',
+    'data publicacao': 'data_publicacao',
+    'bandeira/início': '_bandeira_raw',
+    'bandeira/inicio': '_bandeira_raw',
+    'bandeira / início': '_bandeira_raw',
+    'bandeira / inicio': '_bandeira_raw',
+    'tipo de posto': 'tipo_posto',
+    'pmqc': 'pmqc',
+    'delivery': 'delivery',
+    'latitude': 'latitude',
+    'longitude': 'longitude',
+}
+
+
+def _build_label_map_from_tables(tabelas):
+    """
+    Varre todas as tabelas extraídas pelo pdfplumber e constrói um dict
+    {rótulo_normalizado: valor} emparelhando linhas de cabeçalho (com
+    rótulos conhecidos) com a linha de valores imediatamente abaixo.
+
+    A ficha ANP tem layout:
+        [Situação] [Autorização] [CNPJ] [Razão Social] [Nome Fantasia]
+        [EM OPERAÇÃO] [PR/GO...] [33.503...] [POSTO ...] [NOVO ...]
+        ...
+    """
+    label_map = {}
+
+    for tabela in tabelas:
+        if not tabela:
+            continue
+        n = len(tabela)
+        i = 0
+        while i < n:
+            row = tabela[i]
+            if not row:
+                i += 1
+                continue
+
+            cells = [_norm(str(c or '')) for c in row]
+            # Conta quantas células são rótulos conhecidos
+            hits = sum(1 for c in cells if c.lower() in _LABELS_HEADER)
+
+            if hits == 0:
+                i += 1
+                continue
+
+            # É uma linha de rótulos; pega a linha de valores logo abaixo
+            if i + 1 >= n:
+                i += 1
+                continue
+
+            val_row = tabela[i + 1]
+            if not val_row:
+                i += 2
+                continue
+
+            vals = [_norm(str(c or '')) for c in val_row]
+
+            # Verifica se a linha seguinte também é de rótulos (não de valores)
+            val_hits = sum(1 for v in vals if v.lower() in _LABELS_HEADER)
+            if val_hits >= max(2, hits):
+                # A linha seguinte também é cabeçalho, não avança o índice
+                i += 1
+                continue
+
+            # Mapeia rótulo → valor célula a célula
+            for j, cell in enumerate(cells):
+                if cell and j < len(vals) and vals[j]:
+                    label_map[cell.lower()] = vals[j]
+
+            i += 2  # pula a linha de valores
+
+    return label_map
+
+
+def _extract_all_from_table_map(label_map):
+    """
+    Converte o label_map (de _build_label_map_from_tables) no dict de dados
+    usado pelo restante do sistema, processando campos especiais como CNPJ,
+    datas, bandeira/início e coordenadas.
+    """
+    result = {}
+
+    for lbl, field in _LABEL_TO_FIELD.items():
+        if lbl in label_map:
+            val = label_map[lbl]
+            if val and field not in result:
+                result[field] = val
+
+    # Processa Bandeira/Início: "BANDEIRA BRANCA - 02/02/2021"
+    bandeira_raw = result.pop('_bandeira_raw', None)
+    if bandeira_raw:
+        m = _RE_DATE.search(bandeira_raw)
+        if m:
+            result['data_inicio_bandeira'] = _parse_br_date(m.group(1))
+            bandeira_nome = re.sub(
+                r'\s*[-–]\s*' + re.escape(m.group(1)), '', bandeira_raw
+            ).strip(' -–')
+            if bandeira_nome:
+                result['bandeira'] = _norm(bandeira_nome)
+        else:
+            result['bandeira'] = _norm(bandeira_raw)
+
+    # Normaliza CNPJ
+    cnpj_raw = result.get('cnpj_anp', '')
+    if cnpj_raw:
+        m = _RE_INLINE_CNPJ_14.search(cnpj_raw)
+        if m:
+            result['cnpj_anp'] = m.group(1)
+        else:
+            m2 = _RE_CNPJ.search(cnpj_raw)
+            if m2:
+                result['cnpj_anp'] = m2.group(1)
+
+    # Converte datas textuais para YYYY-MM-DD
+    for field in ('data_publicacao',):
+        if field in result:
+            parsed = _parse_br_date(result[field])
+            if parsed:
+                result[field] = parsed
+
+    # Normaliza lat/lon
+    for field in ('latitude', 'longitude'):
+        if field in result:
+            m = _RE_LAT_LON.search(str(result[field]))
+            if m:
+                result[field] = m.group(1)
+
+    # CEP: aceita 8 dígitos contínuos (sem traço) além do formato padrão
+    cep_raw = result.get('cep', '')
+    if cep_raw:
+        m = _RE_CEP.search(cep_raw)
+        if m:
+            result['cep'] = m.group(1)
+        elif re.fullmatch(r'\d{8}', cep_raw):
+            result['cep'] = cep_raw[:5] + '-' + cep_raw[5:]
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Função principal
 # ---------------------------------------------------------------------------
 
@@ -592,29 +788,63 @@ def extrair_dados_anp(arquivo_bytes):
         }
 
     dados = {}
-    dados.update(_extract_header_block(all_lines))
 
-    # Fallback para layout compacto: campos do cabeçalho numa única linha sem rótulos
-    if _has_header_confusion(dados):
-        inline = _extract_header_inline(all_lines)
-        if inline:
-            dados.update(inline)
+    # ── 1. Extração via tabelas (primária) ────────────────────────────────────
+    label_map = _build_label_map_from_tables(all_tabelas)
+    if label_map:
+        dados.update(_extract_all_from_table_map(label_map))
+        logger.debug("Tabela ANP: %d rótulos encontrados", len(label_map))
 
-    dados.update(_extract_address_block(all_lines))
+    # ── 2. Data/hora emissão (só no texto do cabeçalho) ───────────────────────
+    for line in all_lines[:10]:
+        m = _RE_DATETIME.search(line)
+        if m:
+            try:
+                dados['data_emissao'] = datetime.strptime(
+                    f"{m.group(1)} {m.group(2)}", '%d/%m/%Y %H:%M:%S'
+                ).strftime('%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                pass
+            break
 
-    # Fallback para layout compacto de endereço
-    if _has_address_confusion(dados):
-        addr_inline = _extract_address_inline(all_lines)
-        if addr_inline:
-            dados.update(addr_inline)
-            # Limpa campos de endereço derivados incorretamente
-            for campo in ('complemento', 'bairro'):
-                if dados.get(campo) and dados.get('endereco') and \
-                        dados[campo] == dados['endereco']:
-                    dados.pop(campo)
+    # ── 3. Fallback texto para campos ainda ausentes ───────────────────────────
+    _campos_header = ('situacao', 'autorizacao', 'cnpj_anp', 'razao_social')
+    if not all(dados.get(c) for c in _campos_header):
+        text_header = _extract_header_block(all_lines)
+        if _has_header_confusion(text_header):
+            inline = _extract_header_inline(all_lines)
+            if inline:
+                text_header.update(inline)
+        for k, v in text_header.items():
+            if not dados.get(k):
+                dados[k] = v
 
-    dados.update(_extract_despacho_block(all_lines))
-    dados.update(_extract_geo_block(all_lines))
+    _campos_endereco = ('endereco', 'municipio_uf')
+    if not all(dados.get(c) for c in _campos_endereco):
+        text_addr = _extract_address_block(all_lines)
+        if _has_address_confusion(text_addr):
+            addr_inline = _extract_address_inline(all_lines)
+            if addr_inline:
+                text_addr.update(addr_inline)
+                for campo in ('complemento', 'bairro'):
+                    if text_addr.get(campo) and text_addr.get('endereco') and \
+                            text_addr[campo] == text_addr['endereco']:
+                        text_addr.pop(campo)
+        for k, v in text_addr.items():
+            if not dados.get(k):
+                dados[k] = v
+
+    if not dados.get('bandeira') and not dados.get('nr_despacho'):
+        text_desp = _extract_despacho_block(all_lines)
+        for k, v in text_desp.items():
+            if not dados.get(k):
+                dados[k] = v
+
+    if not dados.get('latitude'):
+        text_geo = _extract_geo_block(all_lines)
+        for k, v in text_geo.items():
+            if not dados.get(k):
+                dados[k] = v
 
     socios = _extract_socios(all_lines)
     produtos = _extract_produtos(all_lines, all_tabelas)

@@ -428,9 +428,17 @@
                                                     data-autorizacao="{{ anp.autorizacao or '' }}"
                                                     data-cnpj="{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '' }}"
                                                     data-razao="{{ razao_exibicao }}"
+                                                    data-nome-fantasia="{{ anp.nome_fantasia or '' }}"
                                                     data-bandeira="{{ bandeira_exibicao }}"
                                                     data-tipo-posto="{{ anp.tipo_posto or '' }}"
+                                                    data-pmqc="{{ anp.pmqc or '' }}"
+                                                    data-nr-despacho="{{ anp.nr_despacho or '' }}"
+                                                    data-endereco="{{ anp.endereco or '' }}"
+                                                    data-complemento="{{ anp.complemento or '' }}"
+                                                    data-bairro="{{ anp.bairro or '' }}"
                                                     data-municipio="{{ anp.municipio_uf or '' }}"
+                                                    data-cep="{{ anp.cep or '' }}"
+                                                    data-data-publicacao="{{ anp.data_publicacao | format_date if anp.data_publicacao else '' }}"
                                                     data-data-inicio-bandeira="{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '' }}"
                                                     data-latitude="{{ anp.latitude or '' }}"
                                                     data-longitude="{{ anp.longitude or '' }}"
@@ -461,6 +469,10 @@
                                             <div class="anp-info-value">{{ razao_exibicao or '-' }}</div>
                                         </div>
                                         <div class="anp-info-item">
+                                            <span class="anp-info-label">Nome Fantasia</span>
+                                            <div class="anp-info-value">{{ anp.nome_fantasia or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
                                             <span class="anp-info-label">CNPJ</span>
                                             <div class="anp-info-value">{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '-' }}</div>
                                         </div>
@@ -469,16 +481,42 @@
                                             <div class="anp-info-value">{{ bandeira_exibicao or '-' }}</div>
                                         </div>
                                         <div class="anp-info-item">
-                                            <span class="anp-info-label">Início da bandeira</span>
+                                            <span class="anp-info-label">Início da Bandeira</span>
                                             <div class="anp-info-value">{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">PMQC</span>
+                                            <div class="anp-info-value">{{ anp.pmqc or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Tipo de Posto</span>
+                                            <div class="anp-info-value">{{ anp.tipo_posto or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Nr Despacho</span>
+                                            <div class="anp-info-value">{{ anp.nr_despacho or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Publicação</span>
+                                            <div class="anp-info-value">{{ anp.data_publicacao | format_date if anp.data_publicacao else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Endereço</span>
+                                            <div class="anp-info-value">
+                                                {% if anp.endereco %}{{ anp.endereco }}{% if anp.complemento %}, {{ anp.complemento }}{% endif %}{% else %}-{% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Bairro</span>
+                                            <div class="anp-info-value">{{ anp.bairro or '-' }}</div>
                                         </div>
                                         <div class="anp-info-item">
                                             <span class="anp-info-label">Município / UF</span>
                                             <div class="anp-info-value">{{ anp.municipio_uf or '-' }}</div>
                                         </div>
                                         <div class="anp-info-item">
-                                            <span class="anp-info-label">Publicação</span>
-                                            <div class="anp-info-value">{{ anp.data_publicacao | format_date if anp.data_publicacao else '-' }}</div>
+                                            <span class="anp-info-label">CEP</span>
+                                            <div class="anp-info-value">{{ anp.cep or '-' }}</div>
                                         </div>
                                         <div class="anp-info-item">
                                             <span class="anp-info-label">Latitude</span>
@@ -1219,19 +1257,37 @@ function copiarAnpWpp(btn) {
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
     if (d.situacao) linhas.push('⚡ *Situação:* ' + d.situacao);
     if (d.autorizacao) linhas.push('🔑 *Autorização:* ' + d.autorizacao);
-    if (d.cnpj || d.razao) {
+    if (d.cnpj || d.razao || d.nomeFantasia) {
         linhas.push('');
         linhas.push('🏢 *IDENTIFICAÇÃO*');
         if (d.cnpj) linhas.push('   CNPJ: ' + d.cnpj);
         if (d.razao) linhas.push('   Razão Social: ' + d.razao);
+        if (d.nomeFantasia) linhas.push('   Nome Fantasia: ' + d.nomeFantasia);
     }
-    if (d.bandeira || d.tipoPosto || d.municipio) {
+    if (d.endereco || d.bairro || d.municipio) {
         linhas.push('');
-        linhas.push('🚩 *BANDEIRA / LOCALIZAÇÃO*');
+        linhas.push('📍 *ENDEREÇO*');
+        if (d.endereco) {
+            var end = d.endereco;
+            if (d.complemento) end += ', ' + d.complemento;
+            linhas.push('   ' + end);
+        }
+        if (d.bairro) linhas.push('   Bairro: ' + d.bairro);
+        if (d.municipio) {
+            var loc = d.municipio;
+            if (d.cep) loc += ' — CEP: ' + d.cep;
+            linhas.push('   ' + loc);
+        }
+    }
+    if (d.bandeira || d.tipoPosto || d.pmqc || d.nrDespacho) {
+        linhas.push('');
+        linhas.push('🚩 *DESPACHO / BANDEIRA*');
         if (d.bandeira) linhas.push('   Bandeira: ' + d.bandeira);
         if (d.dataInicioBandeira) linhas.push('   Início da Bandeira: ' + d.dataInicioBandeira);
-        if (d.tipoPosto) linhas.push('   Tipo: ' + d.tipoPosto);
-        if (d.municipio) linhas.push('   📍 ' + d.municipio);
+        if (d.tipoPosto) linhas.push('   Tipo de Posto: ' + d.tipoPosto);
+        if (d.nrDespacho) linhas.push('   Nº Despacho: ' + d.nrDespacho);
+        if (d.dataPublicacao) linhas.push('   Publicação: ' + d.dataPublicacao);
+        if (d.pmqc) linhas.push('   PMQC: ' + d.pmqc);
     }
     if (d.latitude || d.longitude) {
         linhas.push('');
