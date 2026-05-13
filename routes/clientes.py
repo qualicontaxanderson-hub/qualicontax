@@ -1,14 +1,36 @@
 """Rotas de Clientes - CRUD completo"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
+from decimal import Decimal, InvalidOperation
 from utils.auth_helper import login_required, permission_required
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
-from models.contato_cliente import ContatoCliente
+from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
+from models.cadastro_adicional_cliente import CadastroAdicionalCliente
+from models.socio_cliente import SocioCliente
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade
+from models.cadastro_anp import CadastroAnp
 
 clientes = Blueprint('clientes', __name__)
+
+
+def _parse_decimal_input(value):
+    """Converte entrada numérica para Decimal aceitando formatos 10,50 e 10.50."""
+    cleaned = (value or '').strip().replace(' ', '')
+    if not cleaned:
+        raise InvalidOperation
+
+    if ',' in cleaned and '.' in cleaned:
+        # Ex.: 1.234,56 (pt-BR) ou 1,234.56 (en-US)
+        if cleaned.rfind(',') > cleaned.rfind('.'):
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+        else:
+            cleaned = cleaned.replace(',', '')
+    elif ',' in cleaned:
+        cleaned = cleaned.replace('.', '').replace(',', '.')
+
+    return Decimal(cleaned)
 
 
 @clientes.route('/clientes')
@@ -17,13 +39,18 @@ def index():
     """Lista todos os clientes com filtros e paginação"""
     try:
         # Parâmetros de filtro
-        situacao = request.args.get('situacao', '')
-        regime = request.args.get('regime', '')
+        situacao    = request.args.get('situacao', '')
+        regime      = request.args.get('regime', '')
         tipo_pessoa = request.args.get('tipo_pessoa', '')
-        busca = request.args.get('busca', '')
-        page = request.args.get('page', 1, type=int)
-        per_page = 20
-        
+        grupo_id    = request.args.get('grupo_id', '')
+        ramo_id     = request.args.get('ramo_id', '')
+        busca       = request.args.get('busca', '')
+        busca_tipo  = request.args.get('busca_tipo', 'nome')   # 'nome' | 'numero' | 'ramo'
+        sort_by     = request.args.get('sort_by',  'numero')   # 'nome' | 'numero'
+        sort_dir    = request.args.get('sort_dir', 'asc')      # 'asc'  | 'desc'
+        page        = request.args.get('page', 1, type=int)
+        per_page    = 50
+
         # Buscar clientes com filtros
         filters = {}
         if situacao:
@@ -32,40 +59,59 @@ def index():
             filters['regime_tributario'] = regime
         if tipo_pessoa:
             filters['tipo_pessoa'] = tipo_pessoa
+        if grupo_id:
+            filters['grupo_id'] = grupo_id
+        if ramo_id:
+            filters['ramo_id'] = ramo_id
         if busca:
-            filters['busca'] = busca
-        
+            filters['busca']      = busca
+            filters['busca_tipo'] = busca_tipo
+        filters['sort_by']  = sort_by
+        filters['sort_dir'] = sort_dir
+
         result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
-        
-        # Contadores para o dashboard
-        stats = Cliente.get_stats()
-        
+        grupos = GrupoCliente.get_all(situacao='ATIVO')
+        ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+
         # Verificar se houve erro na obtenção dos dados
         if result is None:
             flash('Erro ao buscar clientes. Verifique a conexão com o banco de dados.', 'danger')
-            result = {'clientes': [], 'page': 1, 'total_pages': 0, 'total': 0}
-        
-        if stats is None:
-            flash('Erro ao buscar estatísticas. Verifique a conexão com o banco de dados.', 'danger')
-            stats = {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
-        
-        return render_template('clientes/index.html', 
+            result = {'clientes': [], 'page': 1, 'total_pages': 0, 'total': 0,
+                      'stats': {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}}
+
+        # stats is now bundled inside result (no separate DB call needed)
+        stats = result.get('stats', {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0})
+
+        return render_template('clientes/index.html',
                              clientes=result['clientes'],
                              page=result['page'],
                              total_pages=result['total_pages'],
-                             total=result['total'],
-                             stats=stats,
-                             filtros={'situacao': situacao, 'regime': regime, 'tipo_pessoa': tipo_pessoa, 'busca': busca})
+                              total=result['total'],
+                              stats=stats,
+                              grupos=grupos,
+                              ramos_atividade=ramos_atividade,
+                              sort_by=sort_by,
+                              sort_dir=sort_dir,
+                              filtros={'situacao': situacao, 'regime': regime,
+                                       'tipo_pessoa': tipo_pessoa, 'grupo_id': grupo_id,
+                                       'ramo_id': ramo_id, 'busca': busca,
+                                       'busca_tipo': busca_tipo})
     
     except Exception as e:
         flash(f'Erro ao carregar página de clientes: {str(e)}', 'danger')
         return render_template('clientes/index.html',
-                             clientes=[],
+                              clientes=[],
                              page=1,
                              total_pages=0,
-                             total=0,
-                             stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
-                             filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '', 'busca': ''})
+                              total=0,
+                              stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
+                              grupos=[],
+                              ramos_atividade=[],
+                              sort_by='numero',
+                              sort_dir='asc',
+                              filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '',
+                                       'grupo_id': '', 'ramo_id': '',
+                                       'busca': '', 'busca_tipo': 'nome'})
 
 
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])
@@ -113,6 +159,7 @@ def novo():
             'cnae_fiscal': request.form.get('cnae_fiscal'),
             'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
             'situacao': request.form.get('situacao', 'ATIVO'),
+            'data_inicio_atividade': request.form.get('data_inicio_atividade'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
             'criado_por': current_user.id
@@ -190,6 +237,15 @@ def detalhes(id):
     processos = Cliente.get_processos(id)
     tarefas = Cliente.get_tarefas(id)
     obrigacoes = Cliente.get_obrigacoes(id)
+    cadastros_adicionais = CadastroAdicionalCliente.get_by_cliente(id)
+    socios = SocioCliente.get_by_cliente(id)
+    socios_total_percentual = SocioCliente.get_total_percentual(id)
+
+    # Cadastros ANP vinculados ao cliente
+    cadastros_anp = CadastroAnp.get_by_cliente(id)
+    for anp in cadastros_anp:
+        anp['socios'] = CadastroAnp.get_socios(anp['id'])
+        anp['produtos'] = CadastroAnp.get_produtos(anp['id'])
     
     # Buscar grupos disponíveis (que o cliente ainda não pertence)
     todos_grupos = GrupoCliente.get_all(situacao='ATIVO')
@@ -203,9 +259,14 @@ def detalhes(id):
                          grupos=grupos,
                          grupos_disponiveis=grupos_disponiveis,
                          ramos_atividade=ramos_atividade,
-                         processos=processos,
-                         tarefas=tarefas,
-                         obrigacoes=obrigacoes)
+                          processos=processos,
+                          tarefas=tarefas,
+                          obrigacoes=obrigacoes,
+                         cadastros_adicionais=cadastros_adicionais,
+                         cadastros_anp=cadastros_anp,
+                         socios=socios,
+                         socios_total_percentual=float(socios_total_percentual),
+                          areas_atendimento=AREAS_ATENDIMENTO)
 
 
 @clientes.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])
@@ -216,6 +277,8 @@ def editar(id):
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
+    enderecos_cliente = EnderecoCliente.get_by_cliente(id)
+    endereco_principal = next((e for e in enderecos_cliente if e.get('principal')), enderecos_cliente[0] if enderecos_cliente else None)
     
     if request.method == 'POST':
         try:
@@ -233,7 +296,7 @@ def editar(id):
                 ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
             
             # Validar número do cliente se fornecido
             numero_cliente = request.form.get('numero_cliente', '').strip()
@@ -244,7 +307,7 @@ def editar(id):
                 ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
                 grupos = GrupoCliente.get_all(situacao='ATIVO')
                 grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
+                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
             
             data = {
                 'numero_cliente': numero_cliente if numero_cliente else None,
@@ -261,6 +324,7 @@ def editar(id):
                 'cnae_fiscal': request.form.get('cnae_fiscal'),
                 'cnae_fiscal_descricao': request.form.get('cnae_fiscal_descricao'),
                 'situacao': request.form.get('situacao'),
+                'data_inicio_atividade': request.form.get('data_inicio_atividade'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes')
             }
@@ -283,6 +347,49 @@ def editar(id):
                         RamoAtividade.add_cliente(int(ramo_id), id)
                     except:
                         pass  # Ignora erros de duplicação
+
+                # Atualizar/salvar endereço principal
+                cep = request.form.get('cep', '').strip()
+                logradouro = request.form.get('logradouro', '').strip()
+                numero = request.form.get('numero', '').strip()
+                complemento = request.form.get('complemento', '').strip()
+                bairro = request.form.get('bairro', '').strip()
+                cidade = request.form.get('cidade', '').strip()
+                estado = request.form.get('estado', '').strip()
+                possui_dados_endereco = any([cep, logradouro, numero, complemento, bairro, cidade, estado])
+
+                if possui_dados_endereco:
+                    try:
+                        if endereco_principal:
+                            EnderecoCliente.update(
+                                endereco_principal['id'],
+                                endereco_principal.get('tipo') or 'COMERCIAL',
+                                cep,
+                                logradouro,
+                                numero,
+                                complemento=complemento,
+                                bairro=bairro,
+                                cidade=cidade,
+                                estado=estado,
+                                pais=endereco_principal.get('pais') or 'Brasil',
+                                principal=True
+                            )
+                        else:
+                            EnderecoCliente.create(
+                                cliente_id=id,
+                                tipo='COMERCIAL',
+                                cep=cep,
+                                logradouro=logradouro,
+                                numero=numero,
+                                complemento=complemento,
+                                bairro=bairro,
+                                cidade=cidade,
+                                estado=estado,
+                                pais='Brasil',
+                                principal=True
+                            )
+                    except Exception as endereco_error:
+                        print(f"Erro ao salvar endereço do cliente {id}: {endereco_error}")
                 
                 flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
@@ -298,7 +405,7 @@ def editar(id):
     ramos_cliente = [ramo['id'] for ramo in cliente_ramos]  # Lista de IDs para checkboxes
     grupos = GrupoCliente.get_all(situacao='ATIVO')
     grupos_cliente = Cliente.get_grupos(id)
-    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente)
+    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
 
 
 @clientes.route('/clientes/<int:id>/inativar', methods=['POST'])
@@ -391,6 +498,7 @@ def novo_contato(cliente_id):
         telefone=request.form.get('telefone'),
         celular=request.form.get('celular'),
         departamento=request.form.get('departamento'),
+        areas_atendimento=request.form.getlist('areas_atendimento'),
         principal=request.form.get('principal') == 'on',
         ativo=True
     )
@@ -420,6 +528,138 @@ def excluir_contato(id):
     else:
         flash('Erro ao excluir contato!', 'danger')
     
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+# Rotas para Cadastros Adicionais
+@clientes.route('/clientes/<int:cliente_id>/cadastros-adicionais/novo', methods=['POST'])
+@login_required
+def novo_cadastro_adicional(cliente_id):
+    """Adicionar novo cadastro adicional"""
+    tipo = request.form.get('tipo', '').strip()
+    campo = request.form.get('campo', '').strip()
+
+    if not tipo or not campo:
+        flash('Preencha os campos obrigatórios de cadastro adicional.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    cadastro_id = CadastroAdicionalCliente.create(
+        cliente_id=cliente_id,
+        tipo=tipo,
+        campo=campo,
+        valor=request.form.get('valor'),
+        data_referencia=request.form.get('data_referencia'),
+        observacoes=request.form.get('observacoes'),
+        ativo=True
+    )
+
+    if cadastro_id:
+        flash('Cadastro adicional adicionado com sucesso!', 'success')
+    else:
+        flash('Erro ao adicionar cadastro adicional!', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/cadastros-adicionais/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_cadastro_adicional(id):
+    """Excluir cadastro adicional"""
+    cadastro = CadastroAdicionalCliente.get_by_id(id)
+    if not cadastro:
+        flash('Cadastro adicional não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    cliente_id = cadastro['cliente_id']
+    sucesso = CadastroAdicionalCliente.delete(id)
+
+    if sucesso:
+        flash('Cadastro adicional excluído com sucesso!', 'success')
+    else:
+        flash('Erro ao excluir cadastro adicional!', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+# Rotas para Sócios
+@clientes.route('/clientes/<int:cliente_id>/socios/novo', methods=['POST'])
+@login_required
+def novo_socio(cliente_id):
+    """Adicionar novo sócio"""
+    nome = request.form.get('nome', '').strip()
+    cpf = request.form.get('cpf', '').strip()
+    email = request.form.get('email', '').strip() or None
+    telefone = request.form.get('telefone', '').strip() or None
+    percentual_raw = (request.form.get('percentual_participacao') or '').strip()
+    responsavel = request.form.get('responsavel') == 'on'
+
+    if not nome or not cpf or not percentual_raw:
+        flash('Preencha nome, CPF e percentual do sócio.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    cpf_numeros = ''.join(ch for ch in cpf if ch.isdigit())
+    if len(cpf_numeros) != 11:
+        flash('CPF inválido. Informe um CPF com 11 dígitos.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    try:
+        percentual = _parse_decimal_input(percentual_raw)
+    except (InvalidOperation, ValueError):
+        flash('Percentual inválido. Use um número válido.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    if percentual <= 0 or percentual > 100:
+        flash('Percentual deve ser maior que 0 e menor ou igual a 100.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    total_atual = SocioCliente.get_total_percentual(cliente_id)
+    novo_total = total_atual + percentual
+    if novo_total > Decimal('100'):
+        restante = Decimal('100') - total_atual
+        flash(f'Total de participação não pode ultrapassar 100%. Restante disponível: {restante:.2f}%.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    socio_id = SocioCliente.create(
+        cliente_id=cliente_id,
+        nome=nome,
+        cpf=cpf,
+        email=email,
+        telefone=telefone,
+        percentual_participacao=percentual,
+        responsavel=responsavel,
+        ativo=True
+    )
+
+    if socio_id:
+        total_final = SocioCliente.get_total_percentual(cliente_id)
+        if total_final == Decimal('100'):
+            flash('Sócio adicionado com sucesso! Total de participação atingiu 100%.', 'success')
+        else:
+            flash(f'Sócio adicionado. Total atual de participação: {total_final:.2f}%.', 'warning')
+    else:
+        flash('Erro ao adicionar sócio!', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/socios/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_socio(id):
+    """Excluir sócio"""
+    socio = SocioCliente.get_by_id(id)
+    if not socio:
+        flash('Sócio não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    cliente_id = socio['cliente_id']
+    sucesso = SocioCliente.delete(id)
+
+    if sucesso:
+        total_final = SocioCliente.get_total_percentual(cliente_id)
+        flash(f'Sócio excluído com sucesso. Total atual de participação: {total_final:.2f}%.', 'success')
+    else:
+        flash('Erro ao excluir sócio!', 'danger')
+
     return redirect(url_for('clientes.detalhes', id=cliente_id))
 
 
@@ -644,6 +884,214 @@ def consultar_cnpj(cnpj):
         }), 500
 
 
+# ---------------------------------------------------------------------------
+# Rotas ANP
+# ---------------------------------------------------------------------------
+
+_MAX_ANP_PDF_MB = 20
+_MAX_ANP_PDF_BYTES = _MAX_ANP_PDF_MB * 1024 * 1024
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/importar-pdf', methods=['POST'])
+@login_required
+def anp_importar_pdf(cliente_id):
+    """Recebe PDF da ANP, extrai dados e exibe formulário de confirmação."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    arquivo = request.files.get('arquivo_pdf')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione um arquivo PDF.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    if not arquivo.filename.lower().endswith('.pdf'):
+        flash('Apenas arquivos .pdf são aceitos.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    pdf_bytes = arquivo.read()
+    if len(pdf_bytes) > _MAX_ANP_PDF_BYTES:
+        flash(f'O arquivo excede o tamanho máximo de {_MAX_ANP_PDF_MB} MB.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    from utils.anp_parser import extrair_dados_anp
+    resultado = extrair_dados_anp(pdf_bytes)
+
+    if not resultado['sucesso']:
+        flash(f'Erro ao processar PDF: {resultado["erro"]}', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    # Verifica se o CNPJ do PDF bate com o do cliente
+    cnpj_pdf = resultado['cnpj']
+    cnpj_cliente = ''.join(c for c in (cliente.get('cpf_cnpj') or '') if c.isdigit())
+    cnpj_ok = (cnpj_pdf == cnpj_cliente) if cnpj_pdf and cnpj_cliente else None
+
+    return render_template(
+        'clientes/anp_preview.html',
+        cliente=cliente,
+        dados=resultado['dados'],
+        socios=resultado['socios'],
+        produtos=resultado['produtos'],
+        texto_bruto=resultado['texto_bruto'],
+        cnpj_ok=cnpj_ok,
+        cnpj_pdf=cnpj_pdf,
+    )
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/salvar', methods=['POST'])
+@login_required
+def anp_salvar(cliente_id):
+    """Salva (cria ou atualiza) cadastro ANP a partir do formulário."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    anp_id_raw = request.form.get('anp_id')
+    anp_id = int(anp_id_raw) if anp_id_raw and anp_id_raw.isdigit() else None
+
+    data = {
+        'situacao': request.form.get('situacao', '').strip() or None,
+        'autorizacao': request.form.get('autorizacao', '').strip() or None,
+        'cnpj_anp': request.form.get('cnpj_anp', '').strip() or None,
+        'razao_social': request.form.get('razao_social', '').strip() or None,
+        'nome_fantasia': request.form.get('nome_fantasia', '').strip() or None,
+        'endereco': request.form.get('endereco', '').strip() or None,
+        'complemento': request.form.get('complemento', '').strip() or None,
+        'bairro': request.form.get('bairro', '').strip() or None,
+        'municipio_uf': request.form.get('municipio_uf', '').strip() or None,
+        'cep': request.form.get('cep', '').strip() or None,
+        'nr_despacho': request.form.get('nr_despacho', '').strip() or None,
+        'data_publicacao': request.form.get('data_publicacao') or None,
+        'bandeira': request.form.get('bandeira', '').strip() or None,
+        'data_inicio_bandeira': request.form.get('data_inicio_bandeira') or None,
+        'tipo_posto': request.form.get('tipo_posto', '').strip() or None,
+        'pmqc': request.form.get('pmqc', '').strip() or None,
+        'delivery': request.form.get('delivery', '').strip() or None,
+        'latitude': request.form.get('latitude', '').strip() or None,
+        'longitude': request.form.get('longitude', '').strip() or None,
+        'data_emissao': request.form.get('data_emissao', '').strip() or None,
+        'fonte': request.form.get('fonte', 'MANUAL'),
+    }
+
+    # Sócios: cada linha não-vazia
+    socios_raw = request.form.get('socios_json', '')
+    import json
+    try:
+        socios = [s for s in json.loads(socios_raw) if s.strip()] if socios_raw else []
+    except (json.JSONDecodeError, TypeError):
+        socios = []
+
+    # Produtos
+    produtos_json = request.form.get('produtos_json', '')
+    try:
+        produtos = json.loads(produtos_json) if produtos_json else []
+    except (json.JSONDecodeError, TypeError):
+        produtos = []
+
+    saved_id = CadastroAnp.save_full(
+        cliente_id=cliente_id,
+        data=data,
+        socios=socios,
+        produtos=produtos,
+        anp_id=anp_id,
+    )
+
+    if saved_id:
+        flash('Cadastro ANP salvo com sucesso!', 'success')
+    else:
+        flash('Erro ao salvar cadastro ANP.', 'danger')
+
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#cadastros-adicionais')
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/<int:anp_id>')
+@login_required
+def anp_detalhe(cliente_id, anp_id):
+    """Exibe detalhes completos de um cadastro ANP."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    anp = CadastroAnp.get_by_id(anp_id)
+    if not anp or anp['cliente_id'] != cliente_id:
+        flash('Cadastro ANP não encontrado.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    socios = CadastroAnp.get_socios(anp_id)
+    produtos = CadastroAnp.get_produtos(anp_id)
+
+    return render_template(
+        'clientes/anp_detalhe.html',
+        cliente=cliente,
+        anp=anp,
+        socios=socios,
+        produtos=produtos,
+    )
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/<int:anp_id>/editar', methods=['GET'])
+@login_required
+def anp_editar(cliente_id, anp_id):
+    """Formulário de edição de cadastro ANP (pré-preenchido)."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    anp = CadastroAnp.get_by_id(anp_id)
+    if not anp or anp['cliente_id'] != cliente_id:
+        flash('Cadastro ANP não encontrado.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    socios = [s['nome'] for s in CadastroAnp.get_socios(anp_id)]
+    produtos = CadastroAnp.get_produtos(anp_id)
+
+    return render_template(
+        'clientes/anp_form.html',
+        cliente=cliente,
+        anp=anp,
+        socios=socios,
+        produtos=produtos,
+        modo='editar',
+    )
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/<int:anp_id>/excluir', methods=['POST'])
+@login_required
+def anp_excluir(cliente_id, anp_id):
+    """Exclui cadastro ANP."""
+    anp = CadastroAnp.get_by_id(anp_id)
+    if not anp or anp['cliente_id'] != cliente_id:
+        flash('Cadastro ANP não encontrado.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    CadastroAnp.delete(anp_id)
+    flash('Cadastro ANP excluído com sucesso.', 'success')
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#cadastros-adicionais')
+
+
+@clientes.route('/clientes/<int:cliente_id>/anp/novo', methods=['GET'])
+@login_required
+def anp_novo(cliente_id):
+    """Formulário de cadastro ANP manual (em branco)."""
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        flash('Cliente não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+
+    return render_template(
+        'clientes/anp_form.html',
+        cliente=cliente,
+        anp=None,
+        socios=[],
+        produtos=[],
+        modo='novo',
+    )
+
+
 # Aliases para manter compatibilidade
 list_clientes = index
 create_cliente = novo
@@ -652,4 +1100,3 @@ edit_cliente = editar
 create = novo
 view = detalhes
 edit = editar
-

@@ -20,6 +20,7 @@
 
     <!-- Form -->
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container">
+        {% set endereco = endereco_principal if endereco_principal else None %}
         
         <!-- Informações Básicas -->
         <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
@@ -259,24 +260,23 @@
                     
                     <div class="form-row">
                         <div class="form-group" style="width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                <label style="margin: 0; font-weight: 600; font-size: 15px;">Ramos de Atividade</label>
-                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm" style="padding: 6px 12px; font-size: 13px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div class="ramos-header">
+                                <label class="ramos-title">Ramos de Atividade</label>
+                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm ramos-btn-novo">
                                     <i class="fas fa-plus"></i> Novo Ramo de Atividade
                                 </a>
                             </div>
-                            <div style="border: 2px solid #e5e7eb; border-radius: 10px; padding: 20px; background: linear-gradient(to bottom, #ffffff, #f9fafb);">
+                            <div class="ramos-wrapper">
                                 {% if ramos_atividade %}
-                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                                    <div class="ramos-grid">
                                         {% for ramo in ramos_atividade %}
-                                        <div class="form-check" style="margin-bottom: 0; padding: 10px; border-radius: 6px; background-color: white; border: 1px solid #e5e7eb; transition: all 0.2s;">
+                                        <div class="form-check ramo-item">
                                             <input class="form-check-input" type="checkbox" 
-                                                   name="ramos_atividade_ids" 
-                                                   value="{{ ramo.id }}" 
-                                                   id="ramo_{{ ramo.id }}"
-                                                   style="margin-top: 3px;"
-                                                   {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                                            <label class="form-check-label" for="ramo_{{ ramo.id }}" style="margin-left: 8px; font-size: 14px; cursor: pointer; user-select: none;">
+                                                    name="ramos_atividade_ids" 
+                                                    value="{{ ramo.id }}" 
+                                                    id="ramo_{{ ramo.id }}"
+                                                    {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
+                                            <label class="form-check-label ramo-label" for="ramo_{{ ramo.id }}">
                                                 {{ ramo.nome }}
                                             </label>
                                         </div>
@@ -338,27 +338,27 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="cep">CEP</label>
-                        <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" maxlength="9">
+                        <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" maxlength="9" value="{{ endereco.cep if endereco else '' }}">
                     </div>
                     <div class="form-group">
                         <label for="logradouro">Logradouro</label>
-                        <input type="text" id="logradouro" name="logradouro" class="form-control" placeholder="Rua, Avenida, etc.">
+                        <input type="text" id="logradouro" name="logradouro" class="form-control" placeholder="Rua, Avenida, etc." value="{{ endereco.logradouro if endereco else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="numero">Número</label>
-                        <input type="text" id="numero" name="numero" class="form-control" placeholder="Número">
+                        <input type="text" id="numero" name="numero" class="form-control" placeholder="Número" value="{{ endereco.numero if endereco else '' }}">
                     </div>
                     <div class="form-group">
                         <label for="complemento">Complemento</label>
-                        <input type="text" id="complemento" name="complemento" class="form-control" placeholder="Apto, Sala, etc.">
+                        <input type="text" id="complemento" name="complemento" class="form-control" placeholder="Apto, Sala, etc." value="{{ endereco.complemento if endereco else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="bairro">Bairro</label>
-                        <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro">
+                        <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro" value="{{ endereco.bairro if endereco else '' }}">
                     </div>
                     <div class="form-group">
                         <label for="cidade">Cidade / Município</label>
@@ -367,13 +367,13 @@
                                name="cidade" 
                                class="form-control" 
                                placeholder="Digite o nome da cidade" 
-                               value="{{ cliente.cidade if cliente else '' }}">
+                               value="{{ endereco.cidade if endereco else '' }}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="estado">Estado (UF) *</label>
-                        <select id="estado" name="estado" class="form-control">
+                        <select id="estado" name="estado" class="form-control" data-selected-uf="{{ endereco.estado if endereco else '' }}">
                             <option value="">Selecione...</option>
                             <option value="AC">AC - Acre</option>
                             <option value="AL">AL - Alagoas</option>
@@ -528,15 +528,104 @@
 
 {% block extra_js %}
 <style>
-/* Hover effect for Ramos de Atividade checkboxes */
-.form-check:has(input[type="checkbox"]):hover {
-    background-color: #f0f9ff !important;
-    border-color: #22C55E !important;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+.cliente-form-page {
+    background: #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
 }
 
-.form-check:has(input[type="checkbox"]:checked) {
+.cliente-form-page .card {
+    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc;
+}
+
+.cliente-form-page .card-body {
+    background: #f8fafc;
+}
+
+.cliente-form-page .form-control,
+.cliente-form-page select.form-control,
+.cliente-form-page textarea.form-control {
+    border-color: #cbd5e1;
+    background: #ffffff;
+}
+
+.cliente-form-page .form-control:focus,
+.cliente-form-page select.form-control:focus,
+.cliente-form-page textarea.form-control:focus {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Ramos de Atividade - visual mais compacto e elegante */
+.ramos-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ramos-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.ramos-btn-novo {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08) !important;
+}
+
+.ramos-wrapper {
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 12px;
+    background: linear-gradient(to bottom, #ffffff, #f8fafc);
+}
+
+.ramos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.ramos-grid .ramo-item {
+    margin-bottom: 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.ramos-grid .ramo-item .form-check-input {
+    margin-top: 0;
+}
+
+.ramos-grid .ramo-label {
+    margin-left: 8px;
+    font-size: 13px;
+    line-height: 1.25;
+    cursor: pointer;
+    user-select: none;
+    color: #334155;
+}
+
+.ramos-grid .form-check:has(input[type="checkbox"]):hover {
+    background-color: #f0f9ff !important;
+    border-color: #22C55E !important;
+    transform: translateY(-0.5px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.ramos-grid .form-check:has(input[type="checkbox"]:checked) {
     background-color: #ecfdf5 !important;
     border-color: #22C55E !important;
 }
@@ -603,6 +692,11 @@ function toggleIsentoIE(checkbox) {
 
 // Call on page load if editing
 document.addEventListener('DOMContentLoaded', function() {
+    const estadoSelect = document.getElementById('estado');
+    if (estadoSelect && estadoSelect.dataset.selectedUf) {
+        estadoSelect.value = estadoSelect.dataset.selectedUf;
+    }
+
     // Apply initial ISENTO state if editing a client with ISENTO
     var isentoCheckbox = document.getElementById('inscricao_estadual_isento');
     if (isentoCheckbox && isentoCheckbox.checked) {

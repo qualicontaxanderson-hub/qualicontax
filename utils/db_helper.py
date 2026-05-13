@@ -1,4 +1,5 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
+import threading
 import mysql.connector
 from mysql.connector import Error, pooling
 from config import Config
@@ -6,6 +7,18 @@ import logging
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Thread-local storage for the last DB error (surfaced in UI responses)
+_last_db_error = threading.local()
+
+
+def get_last_db_error() -> str | None:
+    """Retorna a mensagem do último erro de banco ocorrido nesta thread."""
+    return getattr(_last_db_error, 'message', None)
+
+
+def _set_last_db_error(msg: str) -> None:
+    _last_db_error.message = msg
 
 # Pool de conexões reutilizadas entre requisições – elimina o overhead de
 # abrir/fechar uma conexão TCP+autenticação MySQL a cada query.
@@ -90,6 +103,7 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
                 return True
             
     except Error as e:
+        _set_last_db_error(str(e))
         logger.error(f"Erro ao executar query: {e}")
         logger.error(f"Query: {query}")
         logger.error(f"Params: {params}")

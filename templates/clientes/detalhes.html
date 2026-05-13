@@ -2,6 +2,45 @@
 
 {% block title %}{{ cliente.nome_razao_social }} - Qualicontax{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ── Area-chip checkboxes ─────────────────────────────────────────────────── */
+.area-chip { display:inline-flex; cursor:pointer; user-select:none; }
+.area-chip-input { display:none; }
+.area-chip-body {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:5px 11px; border-radius:20px; font-size:12px; font-weight:500;
+    border:1.5px solid var(--chip-color, #6b7280);
+    color:var(--chip-color, #6b7280);
+    background:transparent;
+    transition:background .15s, color .15s;
+}
+.area-chip-input:checked + .area-chip-body {
+    background:var(--chip-color, #6b7280);
+    color:#fff;
+}
+.area-chip:hover .area-chip-body {
+    background:color-mix(in srgb, var(--chip-color, #6b7280) 12%, transparent);
+}
+
+/* ── ANP cards ─────────────────────────────────────────────────────────────── */
+.anp-list-card { border:1px solid var(--border-color); border-radius:10px; background:var(--card-bg, #fff); margin-bottom:12px; }
+.anp-list-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+.anp-list-grid { display:grid; grid-template-columns:repeat(2, minmax(220px, 1fr)); gap:10px 16px; }
+.anp-info-item { min-width:0; }
+.anp-info-label { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:2px; }
+.anp-info-value { font-size:13px; color:var(--text-primary, #111); word-break:break-word; line-height:1.45; }
+.anp-subsection { margin-top:10px; border-top:1px dashed var(--border-color); padding-top:10px; }
+.anp-subtitle { font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+.anp-inline-list { margin:0; padding-left:18px; font-size:12px; line-height:1.5; color:var(--text-secondary); }
+.anp-prod-table { width:100%; border-collapse:collapse; font-size:12px; }
+.anp-prod-table th, .anp-prod-table td { padding:6px 8px; border-bottom:1px solid var(--border-color); text-align:left; vertical-align:top; }
+.anp-prod-table th { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; }
+.anp-prod-table td.center { text-align:center; white-space:nowrap; }
+@media (max-width: 900px) { .anp-list-grid { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="cliente-view-page">
     <!-- Page Header -->
@@ -62,6 +101,18 @@
                 <a href="#contatos" class="tabs-link">
                     <i class="fas fa-users"></i>
                     Contatos ({{ contatos|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#cadastros-adicionais" class="tabs-link">
+                    <i class="fas fa-layer-group"></i>
+                    Cadastros Adicionais ({{ cadastros_adicionais|length + cadastros_anp|length }})
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#socios" class="tabs-link">
+                    <i class="fas fa-user-tie"></i>
+                    Sócios ({{ socios|length }})
                 </a>
             </li>
             <li class="tabs-item">
@@ -268,8 +319,8 @@
                                             <th>Cargo</th>
                                             <th>Email</th>
                                             <th>Telefone</th>
-                                            <th>Celular</th>
                                             <th>Departamento</th>
+                                            <th>Áreas de Recebimento</th>
                                             <th>Status</th>
                                             <th>Ações</th>
                                         </tr>
@@ -285,9 +336,21 @@
                                             </td>
                                             <td>{{ contato.cargo or '-' }}</td>
                                             <td>{{ contato.email or '-' }}</td>
-                                            <td>{{ contato.telefone or '-' }}</td>
-                                            <td>{{ contato.celular or '-' }}</td>
+                                            <td>{{ contato.telefone or contato.celular or '-' }}</td>
                                             <td>{{ contato.departamento or '-' }}</td>
+                                            <td>
+                                                {% if contato.areas_atendimento %}
+                                                    {% for area_key in contato.areas_atendimento %}
+                                                        {% for a in areas_atendimento if a[0] == area_key %}
+                                                        <span class="badge" style="background:{{ a[3] }}20; color:{{ a[3] }}; border:1px solid {{ a[3] }}40; font-size:10px; margin-right:2px;">
+                                                            <i class="fas {{ a[2] }}" style="margin-right:2px;"></i>{{ a[1] }}
+                                                        </span>
+                                                        {% endfor %}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted" style="font-size:11px;">Todas</span>
+                                                {% endif %}
+                                            </td>
                                             <td>
                                                 <span class="badge badge-{{ 'success' if contato.ativo else 'secondary' }}">
                                                     {{ 'Ativo' if contato.ativo else 'Inativo' }}
@@ -309,6 +372,347 @@
                             <div class="empty-state">
                                 <i class="fas fa-users"></i>
                                 <p>Nenhum contato cadastrado</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cadastros Adicionais Tab -->
+            <div id="cadastros-adicionais" class="tab-pane">
+
+                <!-- ANP: Upload de PDF -->
+                <div class="card" style="margin-bottom:20px;">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-gas-pump" style="color:#e74c3c;"></i>
+                            Cadastro ANP
+                        </h3>
+                    </div>
+
+                    <div class="card-body">
+                        {% if cadastros_anp %}
+                            {% for anp in cadastros_anp %}
+                            {% set bandeira_exibicao = anp.bandeira or '' %}
+                            {% set razao_exibicao = anp.razao_social or cliente.nome_razao_social %}
+                            {% if bandeira_exibicao and 'BANDEIRA' in bandeira_exibicao|upper %}
+                                {% set bandeira_exibicao = bandeira_exibicao.split('BANDEIRA')[-1].strip() %}
+                            {% endif %}
+                            {% if cliente.nome_razao_social and razao_exibicao and (cliente.nome_razao_social|upper).startswith(razao_exibicao|upper) and (cliente.nome_razao_social|length > razao_exibicao|length) %}
+                                {% set razao_exibicao = cliente.nome_razao_social %}
+                            {% endif %}
+                            <div class="anp-list-card">
+                                <div class="card-body" style="padding:14px;">
+                                    <div class="anp-list-top">
+                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                            {% if anp.situacao %}
+                                            <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
+                                                {{ anp.situacao }}
+                                            </span>
+                                            {% endif %}
+                                            {% if anp.autorizacao %}
+                                            <strong>{{ anp.autorizacao }}</strong>
+                                            {% endif %}
+                                            <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
+                                        </div>
+                                        <div style="display:flex; gap:6px; flex-shrink:0; align-items:flex-start;">
+                                            <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn btn-secondary btn-sm" title="Abrir URL de detalhes do cadastro ANP">
+                                                <i class="fas fa-eye"></i> Ver URL
+                                            </a>
+                                            <button type="button"
+                                                    class="btn-icon"
+                                                    style="background:#25d366; color:#fff; border:none; cursor:pointer;"
+                                                    title="Copiar dados para WhatsApp"
+                                                    data-situacao="{{ anp.situacao or '' }}"
+                                                    data-autorizacao="{{ anp.autorizacao or '' }}"
+                                                    data-cnpj="{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '' }}"
+                                                    data-razao="{{ razao_exibicao }}"
+                                                    data-nome-fantasia="{{ anp.nome_fantasia or '' }}"
+                                                    data-bandeira="{{ bandeira_exibicao }}"
+                                                    data-tipo-posto="{{ anp.tipo_posto or '' }}"
+                                                    data-pmqc="{{ anp.pmqc or '' }}"
+                                                    data-nr-despacho="{{ anp.nr_despacho or '' }}"
+                                                    data-endereco="{{ anp.endereco or '' }}"
+                                                    data-complemento="{{ anp.complemento or '' }}"
+                                                    data-bairro="{{ anp.bairro or '' }}"
+                                                    data-municipio="{{ anp.municipio_uf or '' }}"
+                                                    data-cep="{{ anp.cep or '' }}"
+                                                    data-data-publicacao="{{ anp.data_publicacao | format_date if anp.data_publicacao else '' }}"
+                                                    data-data-inicio-bandeira="{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '' }}"
+                                                    data-latitude="{{ anp.latitude or '' }}"
+                                                    data-longitude="{{ anp.longitude or '' }}"
+                                                    data-socios='{{ anp.socios | map(attribute="nome") | list | tojson | forceescape }}'
+                                                    data-produtos='{{ anp.produtos | tojson | forceescape }}'
+                                                    onclick="copiarAnpWpp(this)">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </button>
+                                            {% if anp.fonte not in ('DROPBOX', 'PDF') %}
+                                            <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn-icon btn-primary" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                                  method="POST" style="display:inline;">
+                                                <button type="submit" class="btn-icon btn-danger" title="Excluir"
+                                                        onclick="return confirm('Excluir este cadastro ANP?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="anp-list-grid">
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Razão Social</span>
+                                            <div class="anp-info-value">{{ razao_exibicao or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Nome Fantasia</span>
+                                            <div class="anp-info-value">{{ anp.nome_fantasia or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">CNPJ</span>
+                                            <div class="anp-info-value">{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Bandeira</span>
+                                            <div class="anp-info-value">{{ bandeira_exibicao or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Início da Bandeira</span>
+                                            <div class="anp-info-value">{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">PMQC</span>
+                                            <div class="anp-info-value">{{ anp.pmqc or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Tipo de Posto</span>
+                                            <div class="anp-info-value">{{ anp.tipo_posto or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Nr Despacho</span>
+                                            <div class="anp-info-value">{{ anp.nr_despacho or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Publicação</span>
+                                            <div class="anp-info-value">{{ anp.data_publicacao | format_date if anp.data_publicacao else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Endereço</span>
+                                            <div class="anp-info-value">
+                                                {% if anp.endereco %}{{ anp.endereco }}{% if anp.complemento %}, {{ anp.complemento }}{% endif %}{% else %}-{% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Bairro</span>
+                                            <div class="anp-info-value">{{ anp.bairro or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Município / UF</span>
+                                            <div class="anp-info-value">{{ anp.municipio_uf or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">CEP</span>
+                                            <div class="anp-info-value">{{ anp.cep or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Latitude</span>
+                                            <div class="anp-info-value">{{ anp.latitude or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Longitude</span>
+                                            <div class="anp-info-value">{{ anp.longitude or '-' }}</div>
+                                        </div>
+                                    </div>
+
+                                    {% if anp.socios %}
+                                    <div class="anp-subsection">
+                                        <div class="anp-subtitle">Sócios</div>
+                                        <ul class="anp-inline-list">
+                                            {% for s in anp.socios %}
+                                            {% if s.nome %}
+                                            <li>{{ s.nome }}</li>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if anp.produtos %}
+                                    <div class="anp-subsection">
+                                        <div class="anp-subtitle">Produtos (com tancagem e bicos)</div>
+                                        <div class="table-responsive">
+                                            <table class="anp-prod-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Produto</th>
+                                                        <th class="center">Tancagem (m³)</th>
+                                                        <th class="center">Bicos</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for p in anp.produtos %}
+                                                    {% if p.produto and p.produto|lower != 'voltar' %}
+                                                    <tr>
+                                                        <td>{{ p.produto }}</td>
+                                                        <td class="center">{{ p.tancagem_m3 if p.tancagem_m3 is not none else '—' }}</td>
+                                                        <td class="center">{{ p.bicos if p.bicos is not none else '—' }}</td>
+                                                    </tr>
+                                                    {% endif %}
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state" style="padding:24px 0;">
+                                <i class="fas fa-gas-pump" style="color:#e74c3c; opacity:.4;"></i>
+                                <p>Nenhum cadastro ANP vinculado</p>
+                                <p class="text-muted">A importação é feita automaticamente via
+                                    <a href="https://app.qualicontax.com.br/cadastros/adicionais" target="_blank">
+                                        cadastros/adicionais
+                                    </a>.
+                                </p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Outros cadastros adicionais genéricos -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Outros Cadastros Adicionais</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="showAddCadastroAdicionalModal()">
+                            <i class="fas fa-plus"></i>
+                            Adicionar
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if cadastros_adicionais %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Campo</th>
+                                            <th>Valor</th>
+                                            <th>Data Referência</th>
+                                            <th>Observações</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for cadastro in cadastros_adicionais %}
+                                        <tr>
+                                            <td>{{ cadastro.tipo }}</td>
+                                            <td>{{ cadastro.campo }}</td>
+                                            <td>{{ cadastro.valor or '-' }}</td>
+                                            <td>{{ cadastro.data_referencia|format_date if cadastro.data_referencia else '-' }}</td>
+                                            <td>{{ cadastro.observacoes or '-' }}</td>
+                                            <td>
+                                                <form action="{{ url_for('clientes.excluir_cadastro_adicional', id=cadastro.id) }}" method="POST" style="display: inline;">
+                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este cadastro adicional?')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-layer-group"></i>
+                                <p>Nenhum cadastro adicional genérico</p>
+                                <p class="text-muted">Ex.: IBAMA, alvarás e outros cadastros específicos.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sócios Tab -->
+            <div id="socios" class="tab-pane">
+                <div class="card">
+                    <div class="card-header" style="display:block;">
+                        <div style="display:flex; width:100%; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
+                            <h3 class="card-title">Sócios</h3>
+                            <button class="btn btn-primary" onclick="showAddSocioModal()">
+                                <i class="fas fa-plus"></i>
+                                Adicionar Sócio
+                            </button>
+                        </div>
+                        {% set total_s = socios_total_percentual or 0 %}
+                        {% set total_ok = total_s == 100 %}
+                        <div style="width:100%;">
+                            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
+                                <span>Total de participação</span>
+                                <strong style="color: {{ 'var(--primary-green)' if total_ok else 'var(--accent-orange)' }};">{{ '%.2f'|format(total_s) }}%</strong>
+                            </div>
+                            <div style="height:10px; background:rgba(0,0,0,.08); border-radius:8px; overflow:hidden;">
+                                <div style="height:100%; width:{{ 100 if total_s > 100 else total_s }}%; background:{{ 'var(--primary-green)' if total_ok else 'var(--accent-orange)' }};"></div>
+                            </div>
+                            <small style="color:var(--text-secondary);">
+                                {% if total_ok %}
+                                    Total fechado em 100%.
+                                {% else %}
+                                    O total precisa fechar em 100% para consistência dos dados.
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if socios %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>CPF</th>
+                                            <th>Email</th>
+                                            <th>Telefone</th>
+                                            <th>Participação</th>
+                                            <th>Responsável</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for socio in socios %}
+                                        <tr>
+                                            <td>{{ socio.nome }}</td>
+                                            <td>{{ socio.cpf }}</td>
+                                            <td>{{ socio.email or '-' }}</td>
+                                            <td>{{ socio.telefone or '-' }}</td>
+                                            <td><strong>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</strong></td>
+                                            <td>
+                                                <span class="badge badge-{{ 'success' if socio.responsavel else 'secondary' }}">
+                                                    {{ 'Sim' if socio.responsavel else 'Não' }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <form action="{{ url_for('clientes.excluir_socio', id=socio.id) }}" method="POST" style="display: inline;">
+                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este sócio?')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-user-tie"></i>
+                                <p>Nenhum sócio cadastrado</p>
                             </div>
                         {% endif %}
                     </div>
@@ -599,7 +1003,7 @@
 
 <!-- Modal para Adicionar Contato -->
 <div id="addContactModal" class="modal" style="display: none;">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:580px;">
         <div class="modal-header">
             <h3>Adicionar Contato</h3>
             <button class="modal-close" onclick="closeAddContactModal()">&times;</button>
@@ -634,6 +1038,28 @@
                         <input type="text" id="celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000">
                     </div>
                 </div>
+
+                <!-- Áreas de Recebimento -->
+                <div class="form-group">
+                    <label style="display:block; margin-bottom:8px;">
+                        Áreas de Recebimento
+                        <span style="font-weight:400; font-size:11px; color:var(--text-secondary);">
+                            — deixe em branco para receber todas
+                        </span>
+                    </label>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        {% for area_key, area_label, area_icon, area_color in areas_atendimento %}
+                        <label class="area-chip" style="--chip-color:{{ area_color }};">
+                            <input type="checkbox" name="areas_atendimento" value="{{ area_key }}" class="area-chip-input">
+                            <span class="area-chip-body">
+                                <i class="fas {{ area_icon }}"></i>
+                                {{ area_label }}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>
                         <input type="checkbox" name="principal" id="principal_contato">
@@ -643,6 +1069,92 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeAddContactModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Cadastro Adicional -->
+<div id="addCadastroAdicionalModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+            <h3>Adicionar Cadastro Adicional</h3>
+            <button class="modal-close" onclick="closeAddCadastroAdicionalModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('clientes.novo_cadastro_adicional', cliente_id=cliente.id) }}" method="POST">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cadastro_tipo">Tipo *</label>
+                        <input type="text" id="cadastro_tipo" name="tipo" class="form-control" required placeholder="Ex.: POSTO COMBUSTÍVEL, IBAMA">
+                    </div>
+                    <div class="form-group">
+                        <label for="cadastro_data_referencia">Data Referência</label>
+                        <input type="date" id="cadastro_data_referencia" name="data_referencia" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="cadastro_campo">Campo *</label>
+                    <input type="text" id="cadastro_campo" name="campo" class="form-control" required placeholder="Ex.: BANDEIRA, TANQUES, NÚMERO INSCRIÇÃO">
+                </div>
+                <div class="form-group">
+                    <label for="cadastro_valor">Valor</label>
+                    <input type="text" id="cadastro_valor" name="valor" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="cadastro_observacoes">Observações</label>
+                    <textarea id="cadastro_observacoes" name="observacoes" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeAddCadastroAdicionalModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Sócio -->
+<div id="addSocioModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+            <h3>Adicionar Sócio</h3>
+            <button class="modal-close" onclick="closeAddSocioModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('clientes.novo_socio', cliente_id=cliente.id) }}" method="POST">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="socio_nome">Nome *</label>
+                    <input type="text" id="socio_nome" name="nome" class="form-control" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="socio_cpf">CPF *</label>
+                        <input type="text" id="socio_cpf" name="cpf" class="form-control" required placeholder="000.000.000-00">
+                    </div>
+                    <div class="form-group">
+                        <label for="socio_percentual">Participação (%) *</label>
+                        <input type="number" id="socio_percentual" name="percentual_participacao" class="form-control" required min="0.01" max="100" step="0.01" placeholder="Ex.: 50.00">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="socio_email">Email</label>
+                    <input type="email" id="socio_email" name="email" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="socio_telefone">Telefone de Contato</label>
+                    <input type="text" id="socio_telefone" name="telefone" class="form-control" data-mask="phone" placeholder="(00) 0000-0000 ou (00) 00000-0000">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="responsavel" id="socio_responsavel">
+                        Marcar como sócio responsável
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeAddSocioModal()">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Adicionar</button>
             </div>
         </form>
@@ -685,6 +1197,22 @@ function closeAddContactModal() {
     document.getElementById('addContactModal').style.display = 'none';
 }
 
+function showAddCadastroAdicionalModal() {
+    document.getElementById('addCadastroAdicionalModal').style.display = 'block';
+}
+
+function closeAddCadastroAdicionalModal() {
+    document.getElementById('addCadastroAdicionalModal').style.display = 'none';
+}
+
+function showAddSocioModal() {
+    document.getElementById('addSocioModal').style.display = 'block';
+}
+
+function closeAddSocioModal() {
+    document.getElementById('addSocioModal').style.display = 'none';
+}
+
 // CEP search
 document.getElementById('cep')?.addEventListener('blur', function() {
     const cep = this.value.replace(/\D/g, '');
@@ -717,5 +1245,97 @@ window.onclick = function(event) {
         }
     });
 }
+
+function copiarAnpWpp(btn) {
+    var d = btn.dataset;
+    var linhas = [];
+    var socios = [];
+    var produtos = [];
+    try { socios = JSON.parse(d.socios || '[]'); } catch (e) { socios = []; }
+    try { produtos = JSON.parse(d.produtos || '[]'); } catch (e) { produtos = []; }
+    linhas.push('📋 *CADASTRO ANP*');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
+    if (d.situacao) linhas.push('⚡ *Situação:* ' + d.situacao);
+    if (d.autorizacao) linhas.push('🔑 *Autorização:* ' + d.autorizacao);
+    if (d.cnpj || d.razao || d.nomeFantasia) {
+        linhas.push('');
+        linhas.push('🏢 *IDENTIFICAÇÃO*');
+        if (d.cnpj) linhas.push('   CNPJ: ' + d.cnpj);
+        if (d.razao) linhas.push('   Razão Social: ' + d.razao);
+        if (d.nomeFantasia) linhas.push('   Nome Fantasia: ' + d.nomeFantasia);
+    }
+    if (d.endereco || d.bairro || d.municipio) {
+        linhas.push('');
+        linhas.push('📍 *ENDEREÇO*');
+        if (d.endereco) {
+            var end = d.endereco;
+            if (d.complemento) end += ', ' + d.complemento;
+            linhas.push('   ' + end);
+        }
+        if (d.bairro) linhas.push('   Bairro: ' + d.bairro);
+        if (d.municipio) {
+            var loc = d.municipio;
+            if (d.cep) loc += ' — CEP: ' + d.cep;
+            linhas.push('   ' + loc);
+        }
+    }
+    if (d.bandeira || d.tipoPosto || d.pmqc || d.nrDespacho) {
+        linhas.push('');
+        linhas.push('🚩 *DESPACHO / BANDEIRA*');
+        if (d.bandeira) linhas.push('   Bandeira: ' + d.bandeira);
+        if (d.dataInicioBandeira) linhas.push('   Início da Bandeira: ' + d.dataInicioBandeira);
+        if (d.tipoPosto) linhas.push('   Tipo de Posto: ' + d.tipoPosto);
+        if (d.nrDespacho) linhas.push('   Nº Despacho: ' + d.nrDespacho);
+        if (d.dataPublicacao) linhas.push('   Publicação: ' + d.dataPublicacao);
+        if (d.pmqc) linhas.push('   PMQC: ' + d.pmqc);
+    }
+    if (d.latitude || d.longitude) {
+        linhas.push('');
+        linhas.push('🧭 *GEOLOCALIZAÇÃO*');
+        if (d.latitude) linhas.push('   Latitude: ' + d.latitude);
+        if (d.longitude) linhas.push('   Longitude: ' + d.longitude);
+    }
+    if (socios.length) {
+        linhas.push('');
+        linhas.push('👤 *SÓCIOS*');
+        socios.forEach(function(s) { if ((s || '').trim()) linhas.push('   • ' + s.trim()); });
+    }
+    if (produtos.length) {
+        linhas.push('');
+        linhas.push('⛽ *PRODUTOS*');
+        produtos.forEach(function(p) {
+            var nome = (p && p.produto ? String(p.produto) : '').trim();
+            if (!nome || nome.toLowerCase() === 'voltar') return;
+            var extra = [];
+            if (p.tancagem_m3 !== null && p.tancagem_m3 !== undefined && p.tancagem_m3 !== '') extra.push('Tancagem: ' + p.tancagem_m3 + ' m³');
+            if (p.bicos !== null && p.bicos !== undefined && p.bicos !== '') extra.push('Bicos: ' + p.bicos);
+            linhas.push('   • ' + nome + (extra.length ? ' — ' + extra.join(' | ') : ''));
+        });
+    }
+    linhas.push('');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('_Gerado pelo Qualicontax_');
+    var texto = linhas.join('\n');
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).then(function() { mostrarToastAnpWpp(); });
+    } else {
+        var el = document.createElement('textarea');
+        el.value = texto;
+        el.style.position = 'fixed'; el.style.opacity = '0';
+        document.body.appendChild(el); el.select();
+        document.execCommand('copy'); document.body.removeChild(el);
+        mostrarToastAnpWpp();
+    }
+}
+function mostrarToastAnpWpp() {
+    var t = document.getElementById('anpWppToast');
+    if (!t) return;
+    t.style.display = 'block';
+    setTimeout(function() { t.style.display = 'none'; }, 3000);
+}
 </script>
+
+<div id="anpWppToast" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#1a1a2e; color:#fff; padding:12px 24px; border-radius:8px; font-size:14px; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.25);">
+    <i class="fas fa-check-circle" style="color:#25d366;"></i>&nbsp; Texto copiado! Cole no WhatsApp 📋
+</div>
 {% endblock %}

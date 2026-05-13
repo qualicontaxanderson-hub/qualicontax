@@ -22,181 +22,277 @@
         </div>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon bg-primary">
-                <i class="fas fa-users"></i>
-            </div>
-            <div class="stat-content">
-                <h3 class="stat-value">{{ stats.total or 0 }}</h3>
-                <p class="stat-label">Total de Clientes</p>
+    <!-- Statistics Cards — compact KPI strip -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-primary"><i class="fas fa-users"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.total or 0 }}</strong>
+                <span class="kpi-lbl">Total de Clientes</span>
             </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon bg-success">
-                <i class="fas fa-check-circle"></i>
-            </div>
-            <div class="stat-content">
-                <h3 class="stat-value">{{ stats.ativos or 0 }}</h3>
-                <p class="stat-label">Clientes Ativos</p>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-success"><i class="fas fa-check-circle"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.ativos or 0 }}</strong>
+                <span class="kpi-lbl">Ativos</span>
             </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon bg-danger">
-                <i class="fas fa-times-circle"></i>
-            </div>
-            <div class="stat-content">
-                <h3 class="stat-value">{{ stats.inativos or 0 }}</h3>
-                <p class="stat-label">Clientes Inativos</p>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-danger"><i class="fas fa-times-circle"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.inativos or 0 }}</strong>
+                <span class="kpi-lbl">Inativos</span>
             </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon bg-info">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="stat-content">
-                <h3 class="stat-value">{{ stats.pf or 0 }}</h3>
-                <p class="stat-label">Pessoa Física</p>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-info"><i class="fas fa-user"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.pf or 0 }}</strong>
+                <span class="kpi-lbl">Pessoa Física</span>
             </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon bg-warning">
-                <i class="fas fa-building"></i>
-            </div>
-            <div class="stat-content">
-                <h3 class="stat-value">{{ stats.pj or 0 }}</h3>
-                <p class="stat-label">Pessoa Jurídica</p>
+        <div class="kpi-card">
+            <span class="kpi-icon kpi-warning"><i class="fas fa-building"></i></span>
+            <div class="kpi-body">
+                <strong class="kpi-val">{{ stats.pj or 0 }}</strong>
+                <span class="kpi-lbl">Pessoa Jurídica</span>
             </div>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="card filters-card">
-        <div class="card-body">
-            <form method="GET" class="filters-form">
-                <div class="filters-row">
-                    <div class="form-group">
-                        <label for="busca">Buscar</label>
-                        <input type="text" id="busca" name="busca" class="form-control" placeholder="Nome, CPF/CNPJ, Email..." value="{{ filtros.busca }}">
+    <!-- Filters — collapsible panel -->
+    {# Determine se há algum filtro ativo para abrir o painel automaticamente #}
+    {% set filters_active = filtros.busca or filtros.tipo_pessoa or filtros.situacao or filtros.regime or filtros.grupo_id or filtros.ramo_id %}
+    <div class="card filters-card" id="filters-card">
+        <div class="filters-header" id="filters-toggle" onclick="toggleFilters()"
+             style="display:flex; align-items:center; justify-content:space-between;
+                    padding:10px 16px; cursor:pointer; user-select:none;">
+            <span style="font-size:13px; font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-filter" style="color:var(--primary-green); font-size:12px;"></i>
+                Filtros de Pesquisa
+                {% if filters_active %}
+                    <span class="filter-active-badge">filtros ativos</span>
+                {% endif %}
+            </span>
+            <i class="fas fa-chevron-down filters-chevron" id="filters-chevron"></i>
+        </div>
+        <div class="filters-body" id="filters-body"
+             style="display:none; border-top:1px solid var(--border-color);">
+            <div class="fi-wrap">
+                {# Preserve sort state across filter submissions #}
+                <form method="GET" id="filter-form">
+                    <input type="hidden" name="sort_by"  value="{{ sort_by }}">
+                    <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+                    <div class="fi-row">
+                        <!-- Busca composta: tipo + texto -->
+                        <div class="fi-group fi-search-group">
+                            <span class="fi-lbl">Buscar</span>
+                            <div class="fi-search-wrap">
+                                <select name="busca_tipo" id="busca_tipo" class="fi-ctrl fi-type-sel">
+                                    <option value="nome"     {% if filtros.busca_tipo == 'nome'     %}selected{% endif %}>Nome</option>
+                                    <option value="numero"   {% if filtros.busca_tipo == 'numero'   %}selected{% endif %}>Nº Cliente</option>
+                                    <option value="ramo"     {% if filtros.busca_tipo == 'ramo'     %}selected{% endif %}>Ramo</option>
+                                    <option value="grupo"    {% if filtros.busca_tipo == 'grupo'    %}selected{% endif %}>Grupo</option>
+                                    <option value="cpf_cnpj" {% if filtros.busca_tipo == 'cpf_cnpj' %}selected{% endif %}>CPF/CNPJ</option>
+                                    <option value="email"    {% if filtros.busca_tipo == 'email'    %}selected{% endif %}>E-mail</option>
+                                </select>
+                                <input type="text" id="busca" name="busca" class="fi-ctrl fi-text"
+                                       placeholder="Digite para buscar…" value="{{ filtros.busca }}">
+                            </div>
+                        </div>
+                        <div class="fi-group">
+                            <span class="fi-lbl">Tipo</span>
+                            <select id="tipo_pessoa" name="tipo_pessoa" class="fi-ctrl">
+                                <option value="">Todos</option>
+                                <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pess. Física</option>
+                                <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pess. Jurídica</option>
+                            </select>
+                        </div>
+                        <div class="fi-group">
+                            <span class="fi-lbl">Situação</span>
+                            <select id="situacao" name="situacao" class="fi-ctrl">
+                                <option value="">Todos</option>
+                                <option value="ATIVO"     {% if filtros.situacao == 'ATIVO'     %}selected{% endif %}>Ativo</option>
+                                <option value="INATIVO"   {% if filtros.situacao == 'INATIVO'   %}selected{% endif %}>Inativo</option>
+                                <option value="SUSPENSO"  {% if filtros.situacao == 'SUSPENSO'  %}selected{% endif %}>Suspenso</option>
+                                <option value="CANCELADO" {% if filtros.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                            </select>
+                        </div>
+                        <div class="fi-group">
+                            <span class="fi-lbl">Regime</span>
+                            <select id="regime" name="regime" class="fi-ctrl">
+                                <option value="">Todos</option>
+                                <option value="SIMPLES"         {% if filtros.regime == 'SIMPLES'         %}selected{% endif %}>Simples Nacional</option>
+                                <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
+                                <option value="LUCRO_REAL"      {% if filtros.regime == 'LUCRO_REAL'      %}selected{% endif %}>Lucro Real</option>
+                                <option value="MEI"             {% if filtros.regime == 'MEI'             %}selected{% endif %}>MEI</option>
+                            </select>
+                        </div>
+                        <div class="fi-group">
+                            <span class="fi-lbl">Grupo</span>
+                            <select id="grupo_id" name="grupo_id" class="fi-ctrl">
+                                <option value="">Todos</option>
+                                {% for grupo in grupos %}
+                                <option value="{{ grupo.id }}" {% if filtros.grupo_id == grupo.id|string %}selected{% endif %}>{{ grupo.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="fi-group">
+                            <span class="fi-lbl">Atividade</span>
+                            <select id="ramo_id" name="ramo_id" class="fi-ctrl">
+                                <option value="">Todas</option>
+                                {% for ramo in ramos_atividade %}
+                                <option value="{{ ramo.id }}" {% if filtros.ramo_id == ramo.id|string %}selected{% endif %}>{{ ramo.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="fi-group fi-actions">
+                            <span class="fi-lbl">&nbsp;</span>
+                            <div class="fi-btns">
+                                <button type="submit" class="btn btn-primary fi-btn">
+                                    <i class="fas fa-search"></i> Filtrar
+                                </button>
+                                {% if filters_active %}
+                                <a href="{{ url_for('clientes.index') }}" class="btn btn-outline fi-btn" title="Limpar filtros">
+                                    <i class="fas fa-times"></i> Limpar
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="tipo_pessoa">Tipo</label>
-                        <select id="tipo_pessoa" name="tipo_pessoa" class="form-control">
-                            <option value="">Todos</option>
-                            <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
-                            <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="situacao">Situação</label>
-                        <select id="situacao" name="situacao" class="form-control">
-                            <option value="">Todos</option>
-                            <option value="ATIVO" {% if filtros.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
-                            <option value="INATIVO" {% if filtros.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
-                            <option value="SUSPENSO" {% if filtros.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
-                            <option value="CANCELADO" {% if filtros.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="regime">Regime Tributário</label>
-                        <select id="regime" name="regime" class="form-control">
-                            <option value="">Todos</option>
-                            <option value="SIMPLES" {% if filtros.regime == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
-                            <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
-                            <option value="LUCRO_REAL" {% if filtros.regime == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
-                            <option value="MEI" {% if filtros.regime == 'MEI' %}selected{% endif %}>MEI</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-search"></i>
-                            Filtrar
-                        </button>
-                    </div>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
     </div>
 
     <!-- Clientes Table -->
     <div class="card table-card">
-        <div class="card-body">
+        <div class="card-body" style="padding:0;">
+
+            <!-- Table info bar -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border-color);">
+                <span style="font-size:12px; color:var(--text-secondary);">
+                    {% if total > 0 %}
+                        {% set start = (page - 1) * 50 + 1 %}
+                        {% set end   = [page * 50, total] | min %}
+                        Mostrando <strong>{{ start }}–{{ end }}</strong> de <strong>{{ total }}</strong> cliente{{ 's' if total != 1 else '' }}
+                    {% else %}
+                        Nenhum cliente encontrado
+                    {% endif %}
+                </span>
+                {% if sort_by == 'numero' %}
+                <span style="font-size:11px; color:var(--text-secondary);">
+                    Ordenado por Nº {{ '↑' if sort_dir == 'asc' else '↓' }}
+                </span>
+                {% else %}
+                <span style="font-size:11px; color:var(--text-secondary);">
+                    Ordenado por Nome {{ '↑' if sort_dir == 'asc' else '↓' }}
+                </span>
+                {% endif %}
+            </div>
+
             <div class="table-responsive">
-                <table class="table">
+                <table class="table cli-table">
                     <thead>
                         <tr>
-                            <th>Nº Cliente</th>
-                            <th>Nome</th>
-                            <th>CPF/CNPJ</th>
+                            {# Sortable: Nº Cliente #}
+                            {% set num_dir = 'desc' if (sort_by == 'numero' and sort_dir == 'asc') else 'asc' %}
+                            <th class="cli-th-sort {% if sort_by == 'numero' %}active-sort{% endif %}"
+                                onclick="sortBy('numero', '{{ num_dir }}')"
+                                style="width:95px; cursor:pointer; user-select:none;">
+                                Nº Cliente
+                                <span class="sort-icon">
+                                    {% if sort_by == 'numero' %}
+                                        {{ '↑' if sort_dir == 'asc' else '↓' }}
+                                    {% else %}
+                                        <span style="opacity:.35;">↕</span>
+                                    {% endif %}
+                                </span>
+                            </th>
+                            {# Sortable: Nome #}
+                            {% set nome_dir = 'desc' if (sort_by == 'nome' and sort_dir == 'asc') else 'asc' %}
+                            <th class="cli-th-sort {% if sort_by == 'nome' %}active-sort{% endif %}"
+                                onclick="sortBy('nome', '{{ nome_dir }}')"
+                                style="cursor:pointer; user-select:none;">
+                                Nome
+                                <span class="sort-icon">
+                                    {% if sort_by == 'nome' %}
+                                        {{ '↑' if sort_dir == 'asc' else '↓' }}
+                                    {% else %}
+                                        <span style="opacity:.35;">↕</span>
+                                    {% endif %}
+                                </span>
+                            </th>
+                            <th style="width:145px;">CPF/CNPJ</th>
                             <th>Email</th>
-                            <th>Telefone</th>
+                            <th style="width:125px;">Telefone</th>
                             <th>Ramo de Atividade</th>
-                            <th>Tipo</th>
-                            <th>Situação</th>
-                            <th>Ações</th>
+                            <th style="width:52px; text-align:center;">Tipo</th>
+                            <th style="width:82px; text-align:center;">Situação</th>
+                            <th style="width:160px; text-align:center; overflow:visible;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if clientes %}
                             {% for cliente in clientes %}
-                            <tr>
+                            <tr class="cli-row cli-row-clickable"
+                                data-edit-url="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                title="Abrir cadastro para edição"
+                                tabindex="0">
                                 <td>
                                     {% if cliente.numero_cliente %}
-                                        <strong style="color: #22C55E;">#{{ cliente.numero_cliente }}</strong>
+                                        <span class="cli-num">#{{ cliente.numero_cliente }}</span>
                                     {% else %}
-                                        <span style="color: #9CA3AF; font-size: 12px;">Auto: {{ cliente.id }}</span>
+                                        <span class="cli-id">{{ cliente.id }}</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    <div class="table-user">
-                                        <div class="table-user-avatar">
-                                            {{ cliente.nome_razao_social[0] }}
-                                        </div>
-                                        <span>{{ cliente.nome_razao_social }}</span>
-                                    </div>
+                                <td class="cli-name-cell">
+                                    <span class="cli-name" title="{{ cliente.nome_razao_social }}">{{ cliente.nome_razao_social }}</span>
                                 </td>
-                                <td>{{ cliente.cpf_cnpj }}</td>
-                                <td>{{ cliente.email or '-' }}</td>
-                                <td>{{ cliente.telefone or cliente.celular or '-' }}</td>
-                                <td>
+                                <td class="cli-mono">{{ cliente.cpf_cnpj }}</td>
+                                <td class="cli-text cli-ellipsis" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</td>
+                                <td class="cli-text cli-nowrap">{{ cliente.telefone or cliente.celular or '—' }}</td>
+                                <td class="cli-ramo-cell">
                                     {% if cliente.ramo_atividade_nome %}
-                                        <span class="badge badge-secondary" title="{{ cliente.ramo_atividade_nome }}">
-                                            <i class="fas fa-industry"></i> {{ cliente.ramo_atividade_nome }}
+                                        <span class="cli-ramo-text" title="{{ cliente.ramo_atividade_nome }}">
+                                            {{ cliente.ramo_atividade_nome | truncate(35, True, '…') }}
                                         </span>
                                     {% else %}
-                                        <span style="color: #9CA3AF;">-</span>
+                                        <span class="cli-dash">—</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    <span class="badge badge-info">{{ cliente.tipo_pessoa }}</span>
+                                <td style="text-align:center;">
+                                    <span class="badge badge-info cli-badge">{{ cliente.tipo_pessoa }}</span>
                                 </td>
-                                <td>
-                                    <span class="badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
+                                <td style="text-align:center;">
+                                    <span class="badge cli-badge badge-{{ 'success' if cliente.situacao == 'ATIVO' else 'danger' if cliente.situacao == 'INATIVO' else 'warning' }}">
                                         {{ cliente.situacao }}
                                     </span>
                                 </td>
-                                <td>
-                                    <div class="table-actions">
-                                        <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="btn-icon" title="Ver">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn-icon" title="Editar">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                        <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST" style="display: inline;">
-                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Tem certeza que deseja excluir este cliente?')" title="Excluir">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    </div>
+                                <td class="cli-act-cell">
+                                    <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}"
+                                       class="cli-btn-view" title="Visualizar detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
+                                       class="cli-btn-open" title="Abrir cadastro">
+                                        <i class="fas fa-pen"></i> Editar
+                                    </a>
+                                    <form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST"
+                                          style="display:inline;"
+                                          onsubmit="return confirmDelete(this);"
+                                          data-name="{{ cliente.nome_razao_social | e }}">
+                                        <button type="submit" class="cli-btn-del" title="Excluir cliente">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="8" class="text-center">
+                                <td colspan="9">
                                     <div class="empty-state">
                                         <i class="fas fa-users"></i>
                                         <p>Nenhum cliente encontrado</p>
@@ -215,42 +311,185 @@
     <div class="pagination-wrapper">
         <nav class="pagination">
             {% if page > 1 %}
-            <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
-                <i class="fas fa-chevron-left"></i>
-                Anterior
+            <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, grupo_id=filtros.grupo_id, ramo_id=filtros.ramo_id, sort_by=sort_by, sort_dir=sort_dir) }}" class="pagination-btn">
+                <i class="fas fa-chevron-left"></i> Anterior
             </a>
             {% endif %}
-            
             <div class="pagination-pages">
                 {% for page_num in range(1, total_pages + 1) %}
                     {% if page_num == 1 or page_num == total_pages or (page_num >= page - 2 and page_num <= page + 2) %}
-                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" 
-                           class="pagination-page {% if page_num == page %}active{% endif %}">
-                            {{ page_num }}
-                        </a>
+                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, grupo_id=filtros.grupo_id, ramo_id=filtros.ramo_id, sort_by=sort_by, sort_dir=sort_dir) }}"
+                           class="pagination-page {% if page_num == page %}active{% endif %}">{{ page_num }}</a>
                     {% elif page_num == page - 3 or page_num == page + 3 %}
-                        <span class="pagination-ellipsis">...</span>
+                        <span class="pagination-ellipsis">…</span>
                     {% endif %}
                 {% endfor %}
             </div>
-            
             {% if page < total_pages %}
-            <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime) }}" class="pagination-btn">
-                Próximo
-                <i class="fas fa-chevron-right"></i>
+            <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, grupo_id=filtros.grupo_id, ramo_id=filtros.ramo_id, sort_by=sort_by, sort_dir=sort_dir) }}" class="pagination-btn">
+                Próximo <i class="fas fa-chevron-right"></i>
             </a>
             {% endif %}
         </nav>
-        <p class="pagination-info">
-            Mostrando página {{ page }} de {{ total_pages }} ({{ total }} clientes)
-        </p>
+        <p class="pagination-info">Página {{ page }} de {{ total_pages }}</p>
     </div>
     {% endif %}
+
 </div>
+
+<style>
+/* ── KPI Strip ───────────────────────────────────────────────────────────── */
+.kpi-strip      { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.kpi-card       { display:flex; align-items:center; gap:12px; padding:12px 18px;
+                  background:#fff; border:1px solid rgba(0,0,0,.07); border-radius:12px;
+                  box-shadow:0 2px 8px rgba(0,0,0,.04); flex:1; min-width:140px; }
+.kpi-icon       { width:40px; height:40px; border-radius:10px; display:flex;
+                  align-items:center; justify-content:center; flex-shrink:0; }
+.kpi-icon i     { font-size:17px; color:#fff; }
+.kpi-primary    { background:var(--primary-green, #22c55e); }
+.kpi-success    { background:#22c55e; }
+.kpi-danger     { background:#ef4444; }
+.kpi-info       { background:#3b82f6; }
+.kpi-warning    { background:#f59e0b; }
+.kpi-body       { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.kpi-val        { font-size:26px; font-weight:700; line-height:1; color:var(--text-primary); }
+.kpi-lbl        { font-size:12px; color:var(--text-secondary); line-height:1.3; white-space:nowrap; }
+
+/* ── Collapsible filter panel ────────────────────────────────────────────── */
+.filters-header     { transition: background .15s; }
+.filters-header:hover { background: rgba(34,197,94,.04); }
+.filters-chevron    { font-size:11px; color:var(--text-secondary); transition:transform .25s; }
+.filters-chevron.open { transform:rotate(180deg); }
+.filter-active-badge { font-size:10px; font-weight:500; background:rgba(34,197,94,.12);
+                       color:var(--primary-green); border-radius:20px; padding:2px 8px; }
+
+/* ── Compact inline filter row ───────────────────────────────────────────── */
+.fi-wrap        { padding:12px 16px 14px; }
+/* Each fi-group grows equally; search and actions stay at natural width */
+.fi-row         { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 12px; }
+.fi-group       { display:flex; flex-direction:column; gap:3px;
+                  flex:1; min-width:110px; }
+.fi-search-group { flex:0 0 auto; }   /* fixed — type-selector + text */
+.fi-actions     { flex:0 0 auto; }    /* fixed — buttons only */
+.fi-lbl         { font-size:10.5px; font-weight:600; text-transform:uppercase;
+                  letter-spacing:.3px; color:var(--text-secondary); }
+/* Controls fill the width of their group */
+.fi-ctrl        { height:34px; width:100%; border:1px solid var(--border-color);
+                  border-radius:6px; padding:0 8px; font-size:12.5px;
+                  color:var(--text-primary); background:#fff; box-sizing:border-box; }
+.fi-ctrl:focus  { border-color:var(--primary-green); outline:none;
+                  box-shadow:0 0 0 2px rgba(34,197,94,.15); }
+/* Search compound: type selector + freetext */
+.fi-search-wrap { display:flex; }
+.fi-type-sel    { width:108px; border-right:none; border-radius:6px 0 0 6px;
+                  flex-shrink:0; }
+.fi-text        { width:180px; border-radius:0 6px 6px 0; }
+/* Override width:100% back to auto for the search-group controls */
+.fi-search-group .fi-type-sel,
+.fi-search-group .fi-text { width:auto; }
+.fi-btns        { display:flex; gap:6px; }
+.fi-btn         { padding:5px 14px; font-size:12.5px; height:34px; display:inline-flex;
+                  align-items:center; gap:5px; }
+
+/* ── Clientes table ──────────────────────────────────────────────────────── */
+.cli-table          { margin:0; table-layout:fixed; width:100%; }
+.cli-table thead th { font-size:11px; padding:8px 10px; white-space:nowrap; }
+.cli-row td         { padding:7px 10px; vertical-align:middle; font-size:12px;
+                      white-space:nowrap; overflow:hidden; }
+.cli-name-cell      { max-width:220px; }
+.cli-name           { font-size:12px; font-weight:500; display:block;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cli-mono           { font-family:monospace; font-size:11.5px; letter-spacing:.2px; width:145px; }
+.cli-text           { font-size:12px; }
+.cli-nowrap         { white-space:nowrap; }
+.cli-ellipsis       { overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+.cli-ramo-cell      { max-width:200px; overflow:hidden; }
+.cli-ramo-text      { font-size:11px; color:var(--text-secondary); white-space:nowrap;
+                      overflow:hidden; text-overflow:ellipsis; display:block; }
+.cli-dash           { color:var(--text-secondary); }
+.cli-num            { font-weight:600; color:var(--primary-green); font-size:12px; }
+.cli-id             { color:var(--text-secondary); font-size:11px; }
+.cli-badge          { font-size:10px; padding:2px 6px; }
+
+/* ── Action buttons ──────────────────────────────────────────────────────── */
+.cli-act-cell   { overflow:visible; white-space:nowrap; text-align:center; padding:4px 8px; }
+.cli-btn-view   { display:inline-flex; align-items:center; justify-content:center;
+                  width:28px; height:28px; background:rgba(59,130,246,.1); color:#1d4ed8;
+                  border:1px solid rgba(59,130,246,.2); border-radius:6px;
+                  text-decoration:none; transition:background .15s; }
+.cli-btn-view:hover { background:rgba(59,130,246,.2); }
+.cli-btn-open   { display:inline-flex; align-items:center; gap:5px; padding:3px 10px;
+                  background:rgba(34,197,94,.1); color:#166534; border-radius:6px;
+                  font-size:12px; font-weight:600; text-decoration:none;
+                  border:1px solid rgba(34,197,94,.2); }
+.cli-btn-open:hover { background:rgba(34,197,94,.2); }
+.cli-btn-del    { display:inline-flex; align-items:center; justify-content:center;
+                  width:28px; height:28px; background:rgba(239,68,68,.1); color:#b91c1c;
+                  border:1px solid rgba(239,68,68,.2); border-radius:6px;
+                  cursor:pointer; font-size:13px; }
+.cli-btn-del:hover { background:rgba(239,68,68,.2); }
+.cli-row td:last-child { overflow:visible; }
+
+/* ── Row hover & sort ────────────────────────────────────────────────────── */
+.cli-row:hover      { background:rgba(34,197,94,.04); }
+.cli-row-clickable  { cursor:pointer; }
+.cli-th-sort        { white-space:nowrap; transition:color .15s; }
+.cli-th-sort:hover  { color:var(--primary-green); }
+.active-sort        { color:var(--primary-green); }
+.sort-icon          { margin-left:3px; font-size:11px; }
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Tab navigation and modal handlers are inline in the template
+function confirmDelete(form) {
+    var name = form.getAttribute('data-name') || 'este cliente';
+    return confirm('Excluir o cliente ' + name + '?');
+}
+
+function toggleFilters() {
+    var body    = document.getElementById('filters-body');
+    var chevron = document.getElementById('filters-chevron');
+    var isOpen  = body.style.display !== 'none';
+    body.style.display    = isOpen ? 'none' : 'block';
+    chevron.classList.toggle('open', !isOpen);
+}
+
+function sortBy(field, dir) {
+    var form = document.getElementById('filter-form');
+    form.querySelector('[name="sort_by"]').value  = field;
+    form.querySelector('[name="sort_dir"]').value = dir;
+    form.submit();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Abrir painel de filtros automaticamente se há filtros ativos
+    {% if filters_active %}
+    var body    = document.getElementById('filters-body');
+    var chevron = document.getElementById('filters-chevron');
+    body.style.display = 'block';
+    chevron.classList.add('open');
+    {% endif %}
+
+    document.querySelectorAll('.cli-row-clickable[data-edit-url]').forEach(function (row) {
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, form, input, select, textarea, label')) {
+                return;
+            }
+            window.location.href = row.dataset.editUrl;
+        });
+
+        row.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+            if (event.target.closest('a, button, form, input, select, textarea, label')) {
+                return;
+            }
+            event.preventDefault();
+            window.location.href = row.dataset.editUrl;
+        });
+    });
+});
 </script>
 {% endblock %}
