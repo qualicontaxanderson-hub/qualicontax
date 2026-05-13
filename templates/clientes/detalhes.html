@@ -22,6 +22,22 @@
 .area-chip:hover .area-chip-body {
     background:color-mix(in srgb, var(--chip-color, #6b7280) 12%, transparent);
 }
+
+/* ── ANP cards ─────────────────────────────────────────────────────────────── */
+.anp-list-card { border:1px solid var(--border-color); border-radius:10px; background:var(--card-bg, #fff); margin-bottom:12px; }
+.anp-list-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+.anp-list-grid { display:grid; grid-template-columns:repeat(2, minmax(220px, 1fr)); gap:10px 16px; }
+.anp-info-item { min-width:0; }
+.anp-info-label { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:2px; }
+.anp-info-value { font-size:13px; color:var(--text-primary, #111); word-break:break-word; line-height:1.45; }
+.anp-subsection { margin-top:10px; border-top:1px dashed var(--border-color); padding-top:10px; }
+.anp-subtitle { font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+.anp-inline-list { margin:0; padding-left:18px; font-size:12px; line-height:1.5; color:var(--text-secondary); }
+.anp-prod-table { width:100%; border-collapse:collapse; font-size:12px; }
+.anp-prod-table th, .anp-prod-table td { padding:6px 8px; border-bottom:1px solid var(--border-color); text-align:left; vertical-align:top; }
+.anp-prod-table th { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; }
+.anp-prod-table td.center { text-align:center; white-space:nowrap; }
+@media (max-width: 900px) { .anp-list-grid { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
 
@@ -385,47 +401,25 @@
                             {% if cliente.nome_razao_social and razao_exibicao and (cliente.nome_razao_social|upper).startswith(razao_exibicao|upper) and (cliente.nome_razao_social|length > razao_exibicao|length) %}
                                 {% set razao_exibicao = cliente.nome_razao_social %}
                             {% endif %}
-                            <div class="card" style="margin-bottom:12px; border:1px solid var(--border-color);">
+                            <div class="anp-list-card">
                                 <div class="card-body" style="padding:14px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
-                                        <!-- Conteúdo (flex:1 + min-width:0 evita overflow) -->
-                                        <div style="flex:1; min-width:0;">
-                                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
-                                                {% if anp.situacao %}
-                                                <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
-                                                    {{ anp.situacao }}
-                                                </span>
-                                                {% endif %}
-                                                {% if anp.autorizacao %}
-                                                <strong>{{ anp.autorizacao }}</strong>
-                                                {% endif %}
-                                                <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
-                                            </div>
-                                            <div style="font-size:13px; color:var(--text-secondary); line-height:1.45;">
-                                                {% if bandeira_exibicao %}<span><i class="fas fa-flag" style="color:#e74c3c;"></i> {{ bandeira_exibicao }}</span>{% endif %}
-                                                {% if anp.data_publicacao %} &nbsp;|&nbsp; Publicação: {{ anp.data_publicacao | format_date }}{% endif %}
-                                                {% if anp.data_inicio_bandeira %} &nbsp;|&nbsp; Início: {{ anp.data_inicio_bandeira | format_date }}{% endif %}
-                                                {% if anp.municipio_uf %} &nbsp;|&nbsp; {{ anp.municipio_uf }}{% endif %}
-                                            </div>
-                                            {% if anp.socios %}
-                                            <div style="font-size:12px; margin-top:4px; color:var(--text-secondary); line-height:1.45; word-break:break-word;">
-                                                <i class="fas fa-user-tie"></i>
-                                                {{ anp.socios | map(attribute='nome') | join(', ') }}
-                                            </div>
+                                    <div class="anp-list-top">
+                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                            {% if anp.situacao %}
+                                            <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
+                                                {{ anp.situacao }}
+                                            </span>
                                             {% endif %}
-                                            {% if anp.produtos %}
-                                            <div style="font-size:12px; margin-top:2px; color:var(--text-secondary); line-height:1.45; word-break:break-word;">
-                                                <i class="fas fa-gas-pump"></i>
-                                                {% for p in anp.produtos if p.produto and p.produto|lower != 'voltar' %}
-                                                    {% if not loop.first %}, {% endif %}
-                                                    {{ p.produto }}{% if p.tancagem_m3 is not none %} ({{ p.tancagem_m3 }} m³{% if p.bicos is not none %}, {{ p.bicos }} bicos{% endif %}){% elif p.bicos is not none %} ({{ p.bicos }} bicos){% endif %}
-                                                {% endfor %}
-                                            </div>
+                                            {% if anp.autorizacao %}
+                                            <strong>{{ anp.autorizacao }}</strong>
                                             {% endif %}
+                                            <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
                                         </div>
-                                        <!-- Ações -->
                                         <div style="display:flex; gap:6px; flex-shrink:0; align-items:flex-start;">
-                                            <!-- Botão WhatsApp -->
+                                            <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn btn-secondary btn-sm" title="Abrir URL de detalhes do cadastro ANP">
+                                                <i class="fas fa-eye"></i> Ver URL
+                                            </a>
                                             <button type="button"
                                                     class="btn-icon"
                                                     style="background:#25d366; color:#fff; border:none; cursor:pointer;"
@@ -445,10 +439,6 @@
                                                     onclick="copiarAnpWpp(this)">
                                                 <i class="fab fa-whatsapp"></i>
                                             </button>
-                                            <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
-                                               class="btn-icon btn-secondary" title="Ver detalhes">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
                                             {% if anp.fonte not in ('DROPBOX', 'PDF') %}
                                             <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}"
                                                class="btn-icon btn-primary" title="Editar">
@@ -464,6 +454,82 @@
                                             {% endif %}
                                         </div>
                                     </div>
+
+                                    <div class="anp-list-grid">
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Razão Social</span>
+                                            <div class="anp-info-value">{{ razao_exibicao or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">CNPJ</span>
+                                            <div class="anp-info-value">{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Bandeira</span>
+                                            <div class="anp-info-value">{{ bandeira_exibicao or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Início da bandeira</span>
+                                            <div class="anp-info-value">{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Município / UF</span>
+                                            <div class="anp-info-value">{{ anp.municipio_uf or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Publicação</span>
+                                            <div class="anp-info-value">{{ anp.data_publicacao | format_date if anp.data_publicacao else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Latitude</span>
+                                            <div class="anp-info-value">{{ anp.latitude or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Longitude</span>
+                                            <div class="anp-info-value">{{ anp.longitude or '-' }}</div>
+                                        </div>
+                                    </div>
+
+                                    {% if anp.socios %}
+                                    <div class="anp-subsection">
+                                        <div class="anp-subtitle">Sócios</div>
+                                        <ul class="anp-inline-list">
+                                            {% for s in anp.socios %}
+                                            {% if s.nome %}
+                                            <li>{{ s.nome }}</li>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if anp.produtos %}
+                                    <div class="anp-subsection">
+                                        <div class="anp-subtitle">Produtos (com tancagem e bicos)</div>
+                                        <div class="table-responsive">
+                                            <table class="anp-prod-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Produto</th>
+                                                        <th class="center">Tancagem (m³)</th>
+                                                        <th class="center">Bicos</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for p in anp.produtos %}
+                                                    {% if p.produto and p.produto|lower != 'voltar' %}
+                                                    <tr>
+                                                        <td>{{ p.produto }}</td>
+                                                        <td class="center">{{ p.tancagem_m3 if p.tancagem_m3 is not none else '—' }}</td>
+                                                        <td class="center">{{ p.bicos if p.bicos is not none else '—' }}</td>
+                                                    </tr>
+                                                    {% endif %}
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% endfor %}
