@@ -1,6 +1,56 @@
 {% extends "base.html" %}
 {% block title %}ANP - {{ cliente.nome_razao_social }}{% endblock %}
+{% block extra_css %}
+<style>
+.anp-page { max-width: 960px; margin: 0 auto; }
+.anp-status-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 20px; border-radius: 10px; margin-bottom: 24px;
+    background: linear-gradient(135deg, #fff8f8, #fff3f3);
+    border: 1px solid #fca5a5;
+}
+.anp-status-bar .status-situacao { font-weight: 700; font-size: 15px; }
+.anp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 640px) { .anp-grid { grid-template-columns: 1fr; } }
+.anp-card { border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); background: var(--card-bg, #fff); }
+.anp-card-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; font-weight: 600; font-size: 13px;
+    background: #f9fafb; border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .05em;
+}
+.anp-card-header i { font-size: 14px; color: #e74c3c; }
+.anp-card-body { padding: 16px; }
+.anp-row { display: flex; flex-direction: column; margin-bottom: 12px; }
+.anp-row:last-child { margin-bottom: 0; }
+.anp-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); margin-bottom: 2px; }
+.anp-value { font-size: 14px; color: var(--text-primary, #111); }
+.btn-whatsapp {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #25d366; color: #fff; border: none;
+    padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .2s, transform .1s;
+    text-decoration: none;
+}
+.btn-whatsapp:hover { background: #1ebe5d; transform: translateY(-1px); color: #fff; }
+.btn-whatsapp:active { transform: translateY(0); }
+.btn-whatsapp i { font-size: 18px; }
+.copied-toast {
+    display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: #1a1a2e; color: #fff; padding: 12px 24px; border-radius: 8px;
+    font-size: 14px; z-index: 9999; box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from { opacity:0; bottom: 20px; } to { opacity:1; bottom: 30px; } }
+.dl-horizontal dt { font-weight:600; color:var(--text-secondary); font-size:12px; margin-bottom:2px; }
+.dl-horizontal dd { margin-bottom:10px; margin-left:0; }
+</style>
+{% endblock %}
 {% block content %}
+<div class="anp-page">
+
+<!-- Page Header -->
 <div class="page-header">
     <div>
         <h1 class="page-title">
@@ -9,7 +59,11 @@
         </h1>
         <p class="page-subtitle">{{ cliente.nome_razao_social }}</p>
     </div>
-    <div style="display:flex; gap:8px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <!-- WhatsApp Copy Button -->
+        <button class="btn-whatsapp" onclick="copiarParaWhatsApp()" title="Copiar dados para WhatsApp">
+            <i class="fab fa-whatsapp"></i> Copiar para WhatsApp
+        </button>
         <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}" class="btn btn-primary">
             <i class="fas fa-edit"></i> Editar
         </a>
@@ -27,71 +81,156 @@
 
 <!-- Status banner -->
 {% if anp.situacao %}
-<div class="alert alert-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}" style="margin-bottom:16px;">
-    <strong>Situação:</strong> {{ anp.situacao }}
-    {% if anp.autorizacao %} &nbsp;|&nbsp; <strong>Autorização:</strong> {{ anp.autorizacao }}{% endif %}
-    {% if anp.fonte %} &nbsp;|&nbsp; <span class="badge badge-secondary">{{ anp.fonte }}</span>{% endif %}
+<div class="anp-status-bar">
+    <i class="fas fa-circle-check" style="color:{{ '#22c55e' if 'operação' in (anp.situacao|lower) else '#f59e0b' }};"></i>
+    <span class="status-situacao" style="color:{{ '#15803d' if 'operação' in (anp.situacao|lower) else '#92400e' }};">
+        {{ anp.situacao }}
+    </span>
+    {% if anp.autorizacao %}
+    <span style="color:#6b7280;">|</span>
+    <span><strong>Autorização:</strong> {{ anp.autorizacao }}</span>
+    {% endif %}
+    {% if anp.fonte %}
+    <span class="badge badge-secondary" style="margin-left:4px;">{{ anp.fonte }}</span>
+    {% endif %}
+    {% if anp.data_emissao %}
+    <span style="color:#6b7280; font-size:13px; margin-left:auto;">
+        <i class="fas fa-calendar-alt"></i> Emissão: {{ anp.data_emissao }}
+    </span>
+    {% endif %}
 </div>
 {% endif %}
 
-<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+<div class="anp-grid">
 
     <!-- Identificação -->
-    <div class="card">
-        <div class="card-header"><h3 class="card-title">Identificação</h3></div>
-        <div class="card-body">
-            <dl class="dl-horizontal">
-                {% if anp.cnpj_anp %}<dt>CNPJ</dt><dd>{{ anp.cnpj_anp | format_cnpj }}</dd>{% endif %}
-                {% if anp.razao_social %}<dt>Razão Social</dt><dd>{{ anp.razao_social }}</dd>{% endif %}
-                {% if anp.nome_fantasia %}<dt>Nome Fantasia</dt><dd>{{ anp.nome_fantasia }}</dd>{% endif %}
-                {% if anp.data_emissao %}<dt>Emissão</dt><dd>{{ anp.data_emissao }}</dd>{% endif %}
-            </dl>
+    <div class="anp-card">
+        <div class="anp-card-header"><i class="fas fa-id-card"></i> Identificação</div>
+        <div class="anp-card-body">
+            {% if anp.cnpj_anp %}
+            <div class="anp-row">
+                <span class="anp-label">CNPJ</span>
+                <span class="anp-value">{{ anp.cnpj_anp | format_cnpj }}</span>
+            </div>
+            {% endif %}
+            {% if anp.razao_social %}
+            <div class="anp-row">
+                <span class="anp-label">Razão Social</span>
+                <span class="anp-value">{{ anp.razao_social }}</span>
+            </div>
+            {% endif %}
+            {% if anp.nome_fantasia %}
+            <div class="anp-row">
+                <span class="anp-label">Nome Fantasia</span>
+                <span class="anp-value">{{ anp.nome_fantasia }}</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <!-- Endereço -->
-    <div class="card">
-        <div class="card-header"><h3 class="card-title">Endereço</h3></div>
-        <div class="card-body">
-            <dl class="dl-horizontal">
-                {% if anp.endereco %}<dt>Endereço</dt><dd>{{ anp.endereco }}</dd>{% endif %}
-                {% if anp.complemento %}<dt>Complemento</dt><dd>{{ anp.complemento }}</dd>{% endif %}
-                {% if anp.bairro %}<dt>Bairro</dt><dd>{{ anp.bairro }}</dd>{% endif %}
-                {% if anp.municipio_uf %}<dt>Município/UF</dt><dd>{{ anp.municipio_uf }}</dd>{% endif %}
-                {% if anp.cep %}<dt>CEP</dt><dd>{{ anp.cep }}</dd>{% endif %}
-            </dl>
+    <div class="anp-card">
+        <div class="anp-card-header"><i class="fas fa-map-marker-alt"></i> Endereço</div>
+        <div class="anp-card-body">
+            {% if anp.endereco %}
+            <div class="anp-row">
+                <span class="anp-label">Logradouro</span>
+                <span class="anp-value">{{ anp.endereco }}{% if anp.complemento %}, {{ anp.complemento }}{% endif %}</span>
+            </div>
+            {% endif %}
+            {% if anp.bairro %}
+            <div class="anp-row">
+                <span class="anp-label">Bairro</span>
+                <span class="anp-value">{{ anp.bairro }}</span>
+            </div>
+            {% endif %}
+            {% if anp.municipio_uf %}
+            <div class="anp-row">
+                <span class="anp-label">Município / UF</span>
+                <span class="anp-value">{{ anp.municipio_uf }}</span>
+            </div>
+            {% endif %}
+            {% if anp.cep %}
+            <div class="anp-row">
+                <span class="anp-label">CEP</span>
+                <span class="anp-value">{{ anp.cep }}</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <!-- Despacho / Bandeira -->
-    <div class="card">
-        <div class="card-header"><h3 class="card-title">Despacho / Bandeira</h3></div>
-        <div class="card-body">
-            <dl class="dl-horizontal">
-                {% if anp.nr_despacho %}<dt>Nr Despacho</dt><dd>{{ anp.nr_despacho }}</dd>{% endif %}
-                {% if anp.data_publicacao %}<dt>Data Publicação</dt><dd>{{ anp.data_publicacao | format_date }}</dd>{% endif %}
-                {% if anp.bandeira %}<dt>Bandeira</dt><dd>{{ anp.bandeira }}</dd>{% endif %}
-                {% if anp.data_inicio_bandeira %}<dt>Início Bandeira</dt><dd>{{ anp.data_inicio_bandeira | format_date }}</dd>{% endif %}
-                {% if anp.tipo_posto %}<dt>Tipo de Posto</dt><dd>{{ anp.tipo_posto }}</dd>{% endif %}
-                {% if anp.pmqc %}<dt>PMQC</dt><dd>{{ anp.pmqc }}</dd>{% endif %}
-                {% if anp.delivery %}<dt>Delivery</dt><dd>{{ anp.delivery }}</dd>{% endif %}
-            </dl>
+    <div class="anp-card">
+        <div class="anp-card-header"><i class="fas fa-flag"></i> Despacho / Bandeira</div>
+        <div class="anp-card-body">
+            {% if anp.nr_despacho %}
+            <div class="anp-row">
+                <span class="anp-label">Nº Despacho</span>
+                <span class="anp-value">{{ anp.nr_despacho }}</span>
+            </div>
+            {% endif %}
+            {% if anp.data_publicacao %}
+            <div class="anp-row">
+                <span class="anp-label">Data de Publicação</span>
+                <span class="anp-value">{{ anp.data_publicacao | format_date }}</span>
+            </div>
+            {% endif %}
+            {% if anp.bandeira %}
+            <div class="anp-row">
+                <span class="anp-label">Bandeira</span>
+                <span class="anp-value">{{ anp.bandeira }}</span>
+            </div>
+            {% endif %}
+            {% if anp.data_inicio_bandeira %}
+            <div class="anp-row">
+                <span class="anp-label">Início da Bandeira</span>
+                <span class="anp-value">{{ anp.data_inicio_bandeira | format_date }}</span>
+            </div>
+            {% endif %}
+            {% if anp.tipo_posto %}
+            <div class="anp-row">
+                <span class="anp-label">Tipo de Posto</span>
+                <span class="anp-value">{{ anp.tipo_posto }}</span>
+            </div>
+            {% endif %}
+            {% if anp.pmqc %}
+            <div class="anp-row">
+                <span class="anp-label">PMQC</span>
+                <span class="anp-value">{{ anp.pmqc }}</span>
+            </div>
+            {% endif %}
+            {% if anp.delivery %}
+            <div class="anp-row">
+                <span class="anp-label">Delivery</span>
+                <span class="anp-value">{{ anp.delivery }}</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <!-- Geolocalização -->
-    <div class="card">
-        <div class="card-header"><h3 class="card-title">Geolocalização</h3></div>
-        <div class="card-body">
-            <dl class="dl-horizontal">
-                {% if anp.latitude %}<dt>Latitude</dt><dd>{{ anp.latitude }}</dd>{% endif %}
-                {% if anp.longitude %}<dt>Longitude</dt><dd>{{ anp.longitude }}</dd>{% endif %}
-            </dl>
+    <div class="anp-card">
+        <div class="anp-card-header"><i class="fas fa-map"></i> Geolocalização</div>
+        <div class="anp-card-body">
+            {% if anp.latitude %}
+            <div class="anp-row">
+                <span class="anp-label">Latitude</span>
+                <span class="anp-value">{{ anp.latitude }}</span>
+            </div>
+            {% endif %}
+            {% if anp.longitude %}
+            <div class="anp-row">
+                <span class="anp-label">Longitude</span>
+                <span class="anp-value">{{ anp.longitude }}</span>
+            </div>
+            {% endif %}
             {% if anp.latitude and anp.longitude %}
             <a href="https://maps.google.com/?q={{ anp.latitude }},{{ anp.longitude }}"
-               target="_blank" class="btn btn-secondary btn-sm">
+               target="_blank" class="btn btn-secondary btn-sm" style="margin-top:8px;">
                 <i class="fas fa-map-marker-alt"></i> Ver no Google Maps
             </a>
+            {% else %}
+            <p class="text-muted" style="font-size:13px; margin:0;">Sem coordenadas disponíveis.</p>
             {% endif %}
         </div>
     </div>
@@ -100,12 +239,12 @@
 
 <!-- Sócios -->
 {% if socios %}
-<div class="card" style="margin-top:20px;">
-    <div class="card-header"><h3 class="card-title">Sócios</h3></div>
-    <div class="card-body">
-        <ul style="margin:0; padding-left:20px;">
+<div class="anp-card" style="margin-top:20px;">
+    <div class="anp-card-header"><i class="fas fa-user-tie"></i> Sócios / Responsáveis</div>
+    <div class="anp-card-body">
+        <ul style="margin:0; padding-left:18px; line-height:1.9;">
             {% for s in socios %}
-            <li>{{ s.nome }}</li>
+            <li style="font-size:14px;">{{ s.nome }}</li>
             {% endfor %}
         </ul>
     </div>
@@ -114,24 +253,24 @@
 
 <!-- Produtos -->
 {% if produtos %}
-<div class="card" style="margin-top:20px;">
-    <div class="card-header"><h3 class="card-title">Produtos / Tancagem / Bicos</h3></div>
-    <div class="card-body">
+<div class="anp-card" style="margin-top:20px;">
+    <div class="anp-card-header"><i class="fas fa-gas-pump"></i> Produtos / Tancagem / Bicos</div>
+    <div class="anp-card-body" style="padding:0;">
         <div class="table-responsive">
-            <table class="table">
+            <table class="table" style="margin:0;">
                 <thead>
                     <tr>
                         <th>Produto</th>
-                        <th>Tancagem (m³)</th>
-                        <th>Bicos</th>
+                        <th style="text-align:center;">Tancagem (m³)</th>
+                        <th style="text-align:center;">Bicos</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for p in produtos %}
                     <tr>
                         <td>{{ p.produto }}</td>
-                        <td>{{ p.tancagem_m3 if p.tancagem_m3 is not none else '-' }}</td>
-                        <td>{{ p.bicos if p.bicos is not none else '-' }}</td>
+                        <td style="text-align:center;">{{ p.tancagem_m3 if p.tancagem_m3 is not none else '—' }}</td>
+                        <td style="text-align:center;">{{ p.bicos if p.bicos is not none else '—' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -141,8 +280,119 @@
 </div>
 {% endif %}
 
-<style>
-.dl-horizontal dt { font-weight:600; color:var(--text-secondary); font-size:12px; margin-bottom:2px; }
-.dl-horizontal dd { margin-bottom:10px; margin-left:0; }
-</style>
+</div><!-- /anp-page -->
+
+<!-- Toast de confirmação -->
+<div class="copied-toast" id="copiedToast">
+    <i class="fas fa-check-circle" style="color:#25d366;"></i>&nbsp; Texto copiado! Cole no WhatsApp 📋
+</div>
+
+<script>
+function copiarParaWhatsApp() {
+    var linhas = [];
+    linhas.push('📋 *CADASTRO ANP*');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
+
+    {% if anp.situacao %}
+    linhas.push('⚡ *Situação:* {{ anp.situacao | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.autorizacao %}
+    linhas.push('🔑 *Autorização:* {{ anp.autorizacao | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.data_emissao %}
+    linhas.push('📅 *Emissão:* {{ anp.data_emissao }}');
+    {% endif %}
+
+    linhas.push('');
+    linhas.push('🏢 *IDENTIFICAÇÃO*');
+    {% if anp.cnpj_anp %}
+    linhas.push('   CNPJ: {{ anp.cnpj_anp | format_cnpj }}');
+    {% endif %}
+    {% if anp.razao_social %}
+    linhas.push('   Razão Social: {{ anp.razao_social | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.nome_fantasia %}
+    linhas.push('   Nome Fantasia: {{ anp.nome_fantasia | replace("'", "\\'") }}');
+    {% endif %}
+
+    {% if anp.endereco or anp.municipio_uf %}
+    linhas.push('');
+    linhas.push('📍 *ENDEREÇO*');
+    {% if anp.endereco %}
+    linhas.push('   {{ anp.endereco | replace("'", "\\'") }}{% if anp.complemento %}, {{ anp.complemento | replace("'", "\\'") }}{% endif %}');
+    {% endif %}
+    {% if anp.bairro %}
+    linhas.push('   Bairro: {{ anp.bairro | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.municipio_uf %}
+    linhas.push('   {{ anp.municipio_uf | replace("'", "\\'") }}{% if anp.cep %} — CEP: {{ anp.cep }}{% endif %}');
+    {% endif %}
+    {% endif %}
+
+    {% if anp.bandeira or anp.tipo_posto or anp.nr_despacho %}
+    linhas.push('');
+    linhas.push('🚩 *DESPACHO / BANDEIRA*');
+    {% if anp.bandeira %}
+    linhas.push('   Bandeira: {{ anp.bandeira | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.tipo_posto %}
+    linhas.push('   Tipo de Posto: {{ anp.tipo_posto | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.nr_despacho %}
+    linhas.push('   Nº Despacho: {{ anp.nr_despacho | replace("'", "\\'") }}');
+    {% endif %}
+    {% if anp.data_publicacao %}
+    linhas.push('   Publicação: {{ anp.data_publicacao | format_date }}');
+    {% endif %}
+    {% if anp.pmqc %}
+    linhas.push('   PMQC: {{ anp.pmqc | replace("'", "\\'") }}');
+    {% endif %}
+    {% endif %}
+
+    {% if socios %}
+    linhas.push('');
+    linhas.push('👤 *SÓCIOS*');
+    {% for s in socios %}
+    linhas.push('   • {{ s.nome | replace("'", "\\'") }}');
+    {% endfor %}
+    {% endif %}
+
+    {% if produtos %}
+    linhas.push('');
+    linhas.push('⛽ *PRODUTOS*');
+    {% for p in produtos %}
+    linhas.push('   • {{ p.produto | replace("'", "\\'") }}{% if p.tancagem_m3 %} — Tancagem: {{ p.tancagem_m3 }} m³{% endif %}{% if p.bicos %} — Bicos: {{ p.bicos }}{% endif %}');
+    {% endfor %}
+    {% endif %}
+
+    linhas.push('');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('_Gerado pelo Qualicontax_');
+
+    var texto = linhas.join('\n');
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).then(function() {
+            mostrarToast();
+        });
+    } else {
+        var el = document.createElement('textarea');
+        el.value = texto;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        mostrarToast();
+    }
+}
+
+function mostrarToast() {
+    var toast = document.getElementById('copiedToast');
+    toast.style.display = 'block';
+    setTimeout(function() { toast.style.display = 'none'; }, 3000);
+}
+</script>
 {% endblock %}
+
