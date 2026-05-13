@@ -31,29 +31,27 @@ class RamoAtividade:
             list: Lista de ramos de atividade
         """
         global _cache_ativos, _cache_ativos_ts
-        if situacao == 'ATIVO':
-            with _cache_lock:
-                if _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
-                    return _cache_ativos
 
         query = """
             SELECT id, nome, descricao, situacao
             FROM ramos_atividade
         """
         params = []
-        
         if situacao:
             query += " WHERE situacao = %s"
             params.append(situacao)
-        
         query += " ORDER BY nome"
-        
-        result = execute_query(query, tuple(params) if params else None, fetch=True) or []
+
         if situacao == 'ATIVO':
             with _cache_lock:
+                if _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
+                    return _cache_ativos
+                result = execute_query(query, tuple(params), fetch=True) or []
                 _cache_ativos = result
                 _cache_ativos_ts = time.time()
-        return result
+                return result
+
+        return execute_query(query, tuple(params) if params else None, fetch=True) or []
     
     @staticmethod
     def get_by_id(ramo_id):
