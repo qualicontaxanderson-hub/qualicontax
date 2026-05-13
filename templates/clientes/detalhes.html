@@ -379,9 +379,10 @@
                             {% for anp in cadastros_anp %}
                             <div class="card" style="margin-bottom:12px; border:1px solid var(--border-color);">
                                 <div class="card-body" style="padding:14px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                                        <div>
-                                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+                                        <!-- Conteúdo (flex:1 + min-width:0 evita overflow) -->
+                                        <div style="flex:1; min-width:0;">
+                                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
                                                 {% if anp.situacao %}
                                                 <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
                                                     {{ anp.situacao }}
@@ -392,25 +393,43 @@
                                                 {% endif %}
                                                 <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
                                             </div>
-                                            <div style="font-size:13px; color:var(--text-secondary);">
+                                            <div style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                                 {% if anp.bandeira %}<span><i class="fas fa-flag" style="color:#e74c3c;"></i> {{ anp.bandeira }}</span>{% endif %}
                                                 {% if anp.data_publicacao %} &nbsp;|&nbsp; Publicação: {{ anp.data_publicacao | format_date }}{% endif %}
                                                 {% if anp.municipio_uf %} &nbsp;|&nbsp; {{ anp.municipio_uf }}{% endif %}
                                             </div>
                                             {% if anp.socios %}
-                                            <div style="font-size:12px; margin-top:4px; color:var(--text-secondary);">
+                                            <div style="font-size:12px; margin-top:4px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ anp.socios | map(attribute='nome') | join(', ') }}">
                                                 <i class="fas fa-user-tie"></i>
                                                 {{ anp.socios | map(attribute='nome') | join(', ') }}
                                             </div>
                                             {% endif %}
                                             {% if anp.produtos %}
-                                            <div style="font-size:12px; margin-top:2px; color:var(--text-secondary);">
+                                            <div style="font-size:12px; margin-top:2px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ anp.produtos | map(attribute='produto') | join(', ') }}">
                                                 <i class="fas fa-gas-pump"></i>
                                                 {{ anp.produtos | map(attribute='produto') | join(', ') }}
                                             </div>
                                             {% endif %}
                                         </div>
-                                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                                        <!-- Ações -->
+                                        <div style="display:flex; gap:6px; flex-shrink:0; align-items:flex-start;">
+                                            <!-- Botão WhatsApp -->
+                                            <button type="button"
+                                                    class="btn-icon"
+                                                    style="background:#25d366; color:#fff; border:none; cursor:pointer;"
+                                                    title="Copiar dados para WhatsApp"
+                                                    data-situacao="{{ anp.situacao or '' }}"
+                                                    data-autorizacao="{{ anp.autorizacao or '' }}"
+                                                    data-cnpj="{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '' }}"
+                                                    data-razao="{{ anp.razao_social or '' }}"
+                                                    data-bandeira="{{ anp.bandeira or '' }}"
+                                                    data-tipo-posto="{{ anp.tipo_posto or '' }}"
+                                                    data-municipio="{{ anp.municipio_uf or '' }}"
+                                                    data-socios="{{ anp.socios | map(attribute='nome') | join(', ') }}"
+                                                    data-produtos="{{ anp.produtos | map(attribute='produto') | join(', ') }}"
+                                                    onclick="copiarAnpWpp(this)">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </button>
                                             <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
                                                class="btn-icon btn-secondary" title="Ver detalhes">
                                                 <i class="fas fa-eye"></i>
@@ -1107,5 +1126,61 @@ window.onclick = function(event) {
         }
     });
 }
+
+function copiarAnpWpp(btn) {
+    var d = btn.dataset;
+    var linhas = [];
+    linhas.push('📋 *CADASTRO ANP*');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
+    if (d.situacao) linhas.push('⚡ *Situação:* ' + d.situacao);
+    if (d.autorizacao) linhas.push('🔑 *Autorização:* ' + d.autorizacao);
+    if (d.cnpj || d.razao) {
+        linhas.push('');
+        linhas.push('🏢 *IDENTIFICAÇÃO*');
+        if (d.cnpj) linhas.push('   CNPJ: ' + d.cnpj);
+        if (d.razao) linhas.push('   Razão Social: ' + d.razao);
+    }
+    if (d.bandeira || d.tipoPosto || d.municipio) {
+        linhas.push('');
+        linhas.push('🚩 *BANDEIRA / LOCALIZAÇÃO*');
+        if (d.bandeira) linhas.push('   Bandeira: ' + d.bandeira);
+        if (d.tipoPosto) linhas.push('   Tipo: ' + d.tipoPosto);
+        if (d.municipio) linhas.push('   📍 ' + d.municipio);
+    }
+    if (d.socios) {
+        linhas.push('');
+        linhas.push('👤 *SÓCIOS*');
+        d.socios.split(', ').forEach(function(s) { if (s.trim()) linhas.push('   • ' + s.trim()); });
+    }
+    if (d.produtos) {
+        linhas.push('');
+        linhas.push('⛽ *PRODUTOS*');
+        d.produtos.split(', ').forEach(function(p) { if (p.trim()) linhas.push('   • ' + p.trim()); });
+    }
+    linhas.push('');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('_Gerado pelo Qualicontax_');
+    var texto = linhas.join('\n');
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).then(function() { mostrarToastAnpWpp(); });
+    } else {
+        var el = document.createElement('textarea');
+        el.value = texto;
+        el.style.position = 'fixed'; el.style.opacity = '0';
+        document.body.appendChild(el); el.select();
+        document.execCommand('copy'); document.body.removeChild(el);
+        mostrarToastAnpWpp();
+    }
+}
+function mostrarToastAnpWpp() {
+    var t = document.getElementById('anpWppToast');
+    if (!t) return;
+    t.style.display = 'block';
+    setTimeout(function() { t.style.display = 'none'; }, 3000);
+}
 </script>
+
+<div id="anpWppToast" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#1a1a2e; color:#fff; padding:12px 24px; border-radius:8px; font-size:14px; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.25);">
+    <i class="fas fa-check-circle" style="color:#25d366;"></i>&nbsp; Texto copiado! Cole no WhatsApp 📋
+</div>
 {% endblock %}
