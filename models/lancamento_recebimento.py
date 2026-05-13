@@ -219,36 +219,48 @@ class LancamentoRecebimento:
             FROM lancamentos_recebimento
             {where}
         """
-        return execute_query(sql, params, fetch=True, fetch_one=True) or {}
+        try:
+            return execute_query(sql, params, fetch=True, fetch_one=True) or {}
+        except Exception:
+            return {}
 
     # ------------------------------------------------------------------
     # Lookups para os filtros
     # ------------------------------------------------------------------
     @staticmethod
     def listar_empresas():
-        return execute_query(
-            "SELECT id, nome FROM empresas WHERE situacao='ATIVO' ORDER BY nome",
-            fetch=True
-        ) or []
+        try:
+            return execute_query(
+                "SELECT id, nome FROM empresas WHERE situacao='ATIVO' ORDER BY nome",
+                fetch=True
+            ) or []
+        except Exception:
+            return []
 
     @staticmethod
     def listar_contas(empresa_id=None):
-        if empresa_id:
+        try:
+            if empresa_id:
+                return execute_query(
+                    "SELECT id, descricao FROM contas_bancarias "
+                    "WHERE situacao='ATIVO' AND empresa_id=%s ORDER BY descricao",
+                    (int(empresa_id),), fetch=True
+                ) or []
             return execute_query(
                 "SELECT id, descricao FROM contas_bancarias "
-                "WHERE situacao='ATIVO' AND empresa_id=%s ORDER BY descricao",
-                (int(empresa_id),), fetch=True
+                "WHERE situacao='ATIVO' ORDER BY descricao",
+                fetch=True
             ) or []
-        return execute_query(
-            "SELECT id, descricao FROM contas_bancarias "
-            "WHERE situacao='ATIVO' ORDER BY descricao",
-            fetch=True
-        ) or []
+        except Exception:
+            return []
 
     @staticmethod
     def listar_formas_recebimento():
-        return execute_query(
-            "SELECT id, descricao FROM formas_recebimento "
-            "WHERE situacao='ATIVO' ORDER BY descricao",
-            fetch=True
-        ) or []
+        try:
+            return execute_query(
+                "SELECT id, descricao FROM formas_recebimento "
+                "WHERE situacao='ATIVO' ORDER BY descricao",
+                fetch=True
+            ) or []
+        except Exception:
+            return []
