@@ -34,7 +34,7 @@ class GrupoCliente:
         if situacao == 'ATIVO':
             with _cache_lock:
                 if _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
-                    return [dict(item) for item in _cache_ativos]
+                    return _cache_ativos
 
         query = """
             SELECT id, nome, descricao, situacao
@@ -51,7 +51,7 @@ class GrupoCliente:
         result = execute_query(query, tuple(params) if params else None, fetch=True) or []
         if situacao == 'ATIVO':
             with _cache_lock:
-                _cache_ativos = tuple(dict(item) for item in result)
+                _cache_ativos = result
                 _cache_ativos_ts = time.time()
         return result
     
