@@ -1,16 +1,19 @@
 """Modelo de Grupo de Clientes"""
 import time
+import threading
 from utils.db_helper import execute_query
 
 _CACHE_TTL_SECONDS = 60
 _cache_ativos = None
 _cache_ativos_ts = 0.0
+_cache_lock = threading.Lock()
 
 
 def _invalidate_cache():
     global _cache_ativos, _cache_ativos_ts
-    _cache_ativos = None
-    _cache_ativos_ts = 0.0
+    with _cache_lock:
+        _cache_ativos = None
+        _cache_ativos_ts = 0.0
 
 
 class GrupoCliente:
@@ -28,8 +31,10 @@ class GrupoCliente:
             list: Lista de grupos
         """
         global _cache_ativos, _cache_ativos_ts
-        if situacao == 'ATIVO' and _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
-            return [dict(item) for item in _cache_ativos]
+        if situacao == 'ATIVO':
+            with _cache_lock:
+                if _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
+                    return [dict(item) for item in _cache_ativos]
 
         query = """
             SELECT id, nome, descricao, situacao
@@ -45,8 +50,9 @@ class GrupoCliente:
         
         result = execute_query(query, tuple(params) if params else None, fetch=True) or []
         if situacao == 'ATIVO':
-            _cache_ativos = [dict(item) for item in result]
-            _cache_ativos_ts = time.time()
+            with _cache_lock:
+                _cache_ativos = [dict(item) for item in result]
+                _cache_ativos_ts = time.time()
         return result
     
     @staticmethod
