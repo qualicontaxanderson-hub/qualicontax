@@ -24,6 +24,41 @@ TIPOS_CADASTROS = [
 ]
 
 
+def _validar_tamanhos_campos_anp(dados):
+    """Valida limites de campos da tabela cadastros_anp e retorna erro amigável."""
+    limites = {
+        'situacao': 100,
+        'autorizacao': 100,
+        'cnpj_anp': 18,
+        'razao_social': 255,
+        'nome_fantasia': 255,
+        'endereco': 255,
+        'complemento': 100,
+        'bairro': 100,
+        'municipio_uf': 100,
+        'cep': 10,
+        'nr_despacho': 50,
+        'bandeira': 100,
+        'tipo_posto': 20,
+        'pmqc': 50,
+        'delivery': 10,
+        'latitude': 30,
+        'longitude': 30,
+    }
+    for campo, maximo in limites.items():
+        valor = dados.get(campo)
+        if valor is None:
+            continue
+        texto = str(valor).strip()
+        if len(texto) > maximo:
+            preview = (texto[:80] + '...') if len(texto) > 80 else texto
+            return (
+                f'Info não localizada corretamente no PDF: campo {campo.upper()} excede o limite '
+                f'({len(texto)}/{maximo}). Valor extraído: "{preview}"'
+            )
+    return None
+
+
 @adicionais.route('/cadastros/adicionais')
 @login_required
 def index():
@@ -95,6 +130,11 @@ def sync_dropbox_anp():
 
         dados = resultado['dados']
         dados['fonte'] = 'DROPBOX'
+        erro_validacao = _validar_tamanhos_campos_anp(dados)
+        if erro_validacao:
+            resultados.append({'arquivo': nome, 'status': 'erro', 'mensagem': erro_validacao})
+            continue
+
         saved = CadastroAnp.save_full(
             cliente_id=cliente_id,
             data=dados,
@@ -111,6 +151,10 @@ def sync_dropbox_anp():
                 'cliente_id': cliente_id,
             })
         else:
-            resultados.append({'arquivo': nome, 'status': 'erro', 'mensagem': 'Falha ao salvar no banco'})
+            resultados.append({
+                'arquivo': nome,
+                'status': 'erro',
+                'mensagem': 'Falha ao salvar no banco: verifique se os dados extraídos (ex.: CEP) estão válidos',
+            })
 
     return jsonify({'resultados': resultados, 'total': len(pdf_entries)})

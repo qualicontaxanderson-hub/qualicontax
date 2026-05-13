@@ -35,6 +35,7 @@ _RE_DATE2 = re.compile(r'\b(\d{4}-\d{2}-\d{2})\b')
 _RE_LAT_LON = re.compile(r'(-?\d+\.\d{4,})')
 _RE_NUMERO = re.compile(r'(\d[\d.,]*)')
 _RE_DATETIME = re.compile(r'(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}(?::\d{2})?)')
+_RE_CEP = re.compile(r'\b(\d{5}-?\d{3})\b')
 
 
 def _only_digits(text):
@@ -171,7 +172,15 @@ def _extract_address_block(lines):
 
     cep = _after(lines, 'CEP', stop_labels=['Nr Despacho', 'Data'])
     if cep:
-        result['cep'] = _norm(cep)
+        m = _RE_CEP.search(cep)
+        if m:
+            result['cep'] = _norm(m.group(1))
+
+    if 'cep' not in result:
+        texto_bruto = '\n'.join(lines)
+        m = _RE_CEP.search(texto_bruto)
+        if m:
+            result['cep'] = _norm(m.group(1))
 
     return result
 
