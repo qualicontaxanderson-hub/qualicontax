@@ -301,6 +301,10 @@ def _extract_despacho_block(lines):
     nr_despacho = _after(lines, 'Nr Despacho', stop_labels=['Data', 'Bandeira'])
     if nr_despacho:
         result['nr_despacho'] = _norm(nr_despacho)
+    else:
+        m_nr = _RE_NR_DESPACHO.search('\n'.join(lines))
+        if m_nr:
+            result['nr_despacho'] = m_nr.group(1)
 
     # Data da Publicação
     pub_text = _after(lines, 'Data da Publicação', stop_labels=['Bandeira', 'Tipo'])
@@ -308,12 +312,27 @@ def _extract_despacho_block(lines):
         pub_text = _after(lines, 'Data Publicação', stop_labels=['Bandeira', 'Tipo'])
     if pub_text:
         result['data_publicacao'] = _parse_br_date(pub_text)
+    if 'data_publicacao' not in result:
+        for line in lines:
+            lc = line.lower()
+            if 'publica' in lc:
+                pub_fallback = _parse_br_date(line)
+                if pub_fallback:
+                    result['data_publicacao'] = pub_fallback
+                    break
 
     # Bandeira/Início — valor pode ser "RAIZEN - 24/09/2021"
     bandeira_raw = _after(lines, 'Bandeira/Início', stop_labels=['Tipo de Posto', 'PMQC'])
     if not bandeira_raw:
         bandeira_raw = _after(lines, 'Bandeira/Inicio', stop_labels=['Tipo de Posto', 'PMQC'])
     if bandeira_raw:
+        lc_bandeira = bandeira_raw.lower()
+        # Alguns PDFs compactam tudo numa linha (ANP Nº, Publicação e Bandeira).
+        # Nesses casos, mantém apenas o trecho após "Bandeira".
+        if 'bandeira' in lc_bandeira:
+            idx = lc_bandeira.rfind('bandeira')
+            bandeira_raw = bandeira_raw[idx + len('bandeira'):].strip(' :;-–')
+
         # Separa bandeira da data de início
         m = _RE_DATE.search(bandeira_raw)
         if m:
@@ -325,6 +344,13 @@ def _extract_despacho_block(lines):
                 result['bandeira'] = _norm(bandeira_nome)
         else:
             result['bandeira'] = _norm(bandeira_raw)
+        if result.get('bandeira'):
+            # Remove restos de tokens de outras colunas quando vierem colados.
+            result['bandeira'] = re.sub(
+                r'(?i)\b(anp|n[ºo°\.]?|publica(?:ção|cao)|tipo de posto|pmqc)\b.*$',
+                '',
+                result['bandeira']
+            ).strip(' -–:;')
 
     # Tipo de Posto
     tipo_posto = _after(lines, 'Tipo de Posto', stop_labels=['PMQC', 'Delivery'])
@@ -411,6 +437,7 @@ def _extract_produtos(lines, tabelas):
     Tenta primeiro via tabelas pdfplumber (mais preciso), depois via texto.
     """
     produtos = []
+    invalid_tokens = ('voltar', 'editar', 'excluir', 'copiar', 'whatsapp')
 
     # --- Via tabelas estruturadas ---
     for tabela in tabelas:
@@ -447,6 +474,8 @@ def _extract_produtos(lines, tabelas):
                         except ValueError:
                             pass
             if prod:
+                if any(tok in prod.lower() for tok in invalid_tokens):
+                    continue
                 produtos.append({'produto': prod, 'tancagem_m3': tancagem, 'bicos': bicos})
 
     if produtos:
@@ -471,6 +500,8 @@ def _extract_produtos(lines, tabelas):
             if numeros and len(stripped) > 5:
                 produto_nome = re.sub(r'\d[\d.,\s]*$', '', stripped).strip()
                 if produto_nome:
+                    if any(tok in produto_nome.lower() for tok in invalid_tokens):
+                        continue
                     tancagem = None
                     bicos = None
                     if len(numeros) >= 1:
@@ -485,7 +516,21 @@ def _extract_produtos(lines, tabelas):
                             pass
                     produtos.append({'produto': produto_nome, 'tancagem_m3': tancagem, 'bicos': bicos})
 
-    return produtos
+    # Remove duplicados mantendo ordem
+    vistos = set()
+    dedup = []
+    for p in produtos:
+        key = (
+            (p.get('produto') or '').strip().lower(),
+            str(p.get('tancagem_m3')),
+            str(p.get('bicos')),
+        )
+        if not key[0] or key in vistos:
+            continue
+        vistos.add(key)
+        dedup.append(p)
+
+    return dedup
 
 
 # ---------------------------------------------------------------------------

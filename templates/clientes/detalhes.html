@@ -377,6 +377,14 @@
                     <div class="card-body">
                         {% if cadastros_anp %}
                             {% for anp in cadastros_anp %}
+                            {% set bandeira_exibicao = anp.bandeira or '' %}
+                            {% set razao_exibicao = anp.razao_social or cliente.nome_razao_social %}
+                            {% if bandeira_exibicao and 'BANDEIRA' in bandeira_exibicao|upper %}
+                                {% set bandeira_exibicao = bandeira_exibicao.split('BANDEIRA')[-1].strip() %}
+                            {% endif %}
+                            {% if cliente.nome_razao_social and razao_exibicao and (cliente.nome_razao_social|upper).startswith(razao_exibicao|upper) and (cliente.nome_razao_social|length > razao_exibicao|length) %}
+                                {% set razao_exibicao = cliente.nome_razao_social %}
+                            {% endif %}
                             <div class="card" style="margin-bottom:12px; border:1px solid var(--border-color);">
                                 <div class="card-body" style="padding:14px;">
                                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
@@ -393,21 +401,25 @@
                                                 {% endif %}
                                                 <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
                                             </div>
-                                            <div style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                                {% if anp.bandeira %}<span><i class="fas fa-flag" style="color:#e74c3c;"></i> {{ anp.bandeira }}</span>{% endif %}
+                                            <div style="font-size:13px; color:var(--text-secondary); line-height:1.45;">
+                                                {% if bandeira_exibicao %}<span><i class="fas fa-flag" style="color:#e74c3c;"></i> {{ bandeira_exibicao }}</span>{% endif %}
                                                 {% if anp.data_publicacao %} &nbsp;|&nbsp; Publicação: {{ anp.data_publicacao | format_date }}{% endif %}
+                                                {% if anp.data_inicio_bandeira %} &nbsp;|&nbsp; Início: {{ anp.data_inicio_bandeira | format_date }}{% endif %}
                                                 {% if anp.municipio_uf %} &nbsp;|&nbsp; {{ anp.municipio_uf }}{% endif %}
                                             </div>
                                             {% if anp.socios %}
-                                            <div style="font-size:12px; margin-top:4px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ anp.socios | map(attribute='nome') | join(', ') }}">
+                                            <div style="font-size:12px; margin-top:4px; color:var(--text-secondary); line-height:1.45; word-break:break-word;">
                                                 <i class="fas fa-user-tie"></i>
                                                 {{ anp.socios | map(attribute='nome') | join(', ') }}
                                             </div>
                                             {% endif %}
                                             {% if anp.produtos %}
-                                            <div style="font-size:12px; margin-top:2px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ anp.produtos | map(attribute='produto') | join(', ') }}">
+                                            <div style="font-size:12px; margin-top:2px; color:var(--text-secondary); line-height:1.45; word-break:break-word;">
                                                 <i class="fas fa-gas-pump"></i>
-                                                {{ anp.produtos | map(attribute='produto') | join(', ') }}
+                                                {% for p in anp.produtos if p.produto and p.produto|lower != 'voltar' %}
+                                                    {% if not loop.first %}, {% endif %}
+                                                    {{ p.produto }}{% if p.tancagem_m3 is not none %} ({{ p.tancagem_m3 }} m³{% if p.bicos is not none %}, {{ p.bicos }} bicos{% endif %}){% elif p.bicos is not none %} ({{ p.bicos }} bicos){% endif %}
+                                                {% endfor %}
                                             </div>
                                             {% endif %}
                                         </div>
@@ -421,12 +433,15 @@
                                                     data-situacao="{{ anp.situacao or '' }}"
                                                     data-autorizacao="{{ anp.autorizacao or '' }}"
                                                     data-cnpj="{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '' }}"
-                                                    data-razao="{{ anp.razao_social or '' }}"
-                                                    data-bandeira="{{ anp.bandeira or '' }}"
+                                                    data-razao="{{ razao_exibicao }}"
+                                                    data-bandeira="{{ bandeira_exibicao }}"
                                                     data-tipo-posto="{{ anp.tipo_posto or '' }}"
                                                     data-municipio="{{ anp.municipio_uf or '' }}"
-                                                    data-socios="{{ anp.socios | map(attribute='nome') | join(', ') }}"
-                                                    data-produtos="{{ anp.produtos | map(attribute='produto') | join(', ') }}"
+                                                    data-data-inicio-bandeira="{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '' }}"
+                                                    data-latitude="{{ anp.latitude or '' }}"
+                                                    data-longitude="{{ anp.longitude or '' }}"
+                                                    data-socios='{{ anp.socios | map(attribute="nome") | list | tojson | forceescape }}'
+                                                    data-produtos='{{ anp.produtos | tojson | forceescape }}'
                                                     onclick="copiarAnpWpp(this)">
                                                 <i class="fab fa-whatsapp"></i>
                                             </button>
@@ -1130,6 +1145,10 @@ window.onclick = function(event) {
 function copiarAnpWpp(btn) {
     var d = btn.dataset;
     var linhas = [];
+    var socios = [];
+    var produtos = [];
+    try { socios = JSON.parse(d.socios || '[]'); } catch (e) { socios = []; }
+    try { produtos = JSON.parse(d.produtos || '[]'); } catch (e) { produtos = []; }
     linhas.push('📋 *CADASTRO ANP*');
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
     if (d.situacao) linhas.push('⚡ *Situação:* ' + d.situacao);
@@ -1144,18 +1163,32 @@ function copiarAnpWpp(btn) {
         linhas.push('');
         linhas.push('🚩 *BANDEIRA / LOCALIZAÇÃO*');
         if (d.bandeira) linhas.push('   Bandeira: ' + d.bandeira);
+        if (d.dataInicioBandeira) linhas.push('   Início da Bandeira: ' + d.dataInicioBandeira);
         if (d.tipoPosto) linhas.push('   Tipo: ' + d.tipoPosto);
         if (d.municipio) linhas.push('   📍 ' + d.municipio);
     }
-    if (d.socios) {
+    if (d.latitude || d.longitude) {
+        linhas.push('');
+        linhas.push('🧭 *GEOLOCALIZAÇÃO*');
+        if (d.latitude) linhas.push('   Latitude: ' + d.latitude);
+        if (d.longitude) linhas.push('   Longitude: ' + d.longitude);
+    }
+    if (socios.length) {
         linhas.push('');
         linhas.push('👤 *SÓCIOS*');
-        d.socios.split(', ').forEach(function(s) { if (s.trim()) linhas.push('   • ' + s.trim()); });
+        socios.forEach(function(s) { if ((s || '').trim()) linhas.push('   • ' + s.trim()); });
     }
-    if (d.produtos) {
+    if (produtos.length) {
         linhas.push('');
         linhas.push('⛽ *PRODUTOS*');
-        d.produtos.split(', ').forEach(function(p) { if (p.trim()) linhas.push('   • ' + p.trim()); });
+        produtos.forEach(function(p) {
+            var nome = (p && p.produto ? String(p.produto) : '').trim();
+            if (!nome || nome.toLowerCase() === 'voltar') return;
+            var extra = [];
+            if (p.tancagem_m3 !== null && p.tancagem_m3 !== undefined && p.tancagem_m3 !== '') extra.push('Tancagem: ' + p.tancagem_m3 + ' m³');
+            if (p.bicos !== null && p.bicos !== undefined && p.bicos !== '') extra.push('Bicos: ' + p.bicos);
+            linhas.push('   • ' + nome + (extra.length ? ' — ' + extra.join(' | ') : ''));
+        });
     }
     linhas.push('');
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━');
