@@ -37,6 +37,28 @@ _RE_NUMERO = re.compile(r'(\d[\d.,]*)')
 _RE_DATETIME = re.compile(r'(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}(?::\d{2})?)')
 _RE_CEP = re.compile(r'\b(\d{5}-?\d{3})\b')
 
+# Inline-layout helpers (fields merged onto one unlabelled line)
+_RE_INLINE_CNPJ_14 = re.compile(r'(?<!\d)(\d{14})(?!\d)')
+_RE_AUTH_CODE = re.compile(r'\b([A-Z]{1,4}/[A-Z]{0,3}\d{3,})\b')
+_RE_NR_DESPACHO = re.compile(r'\bANP\s+N[ºo°\.]\s*(\d+)\b', re.IGNORECASE)
+_RE_MUNICIPIO_UF = re.compile(
+    r'([A-ZÁÀÃÉÊÍÓÕÚÇÜ][A-ZÁÀÃÉÊÍÓÕÚÇÜa-záàãéêíóõúçü\s\-\']+)'
+    r'/([A-Z]{2})\b'
+)
+
+# Known Tipo de Posto values (max 20 chars each)
+_TIPOS_POSTO_KNOWN = [
+    'POSTO REVENDEDOR',
+    'TROCA A ÓLEO',
+    'TROCA A OLEO',
+    'POSTO FLUTUANTE',
+    'AVIAÇÃO GERAL',
+    'AVIAÇÃO',
+    'AVIAO GERAL',
+    'AVIAO',
+    'TRR',
+]
+
 
 def _only_digits(text):
     return re.sub(r'\D', '', text or '')
@@ -88,6 +110,93 @@ def _after(lines, label, stop_labels=None, max_distance=4):
                     break
                 return candidate
     return None
+
+
+# ---------------------------------------------------------------------------
+# Helpers de layout compacto (campos mesclados em uma linha sem rótulos)
+# ---------------------------------------------------------------------------
+
+def _has_header_confusion(dados):
+    """Retorna True quando dois ou mais campos do cabeçalho têm o mesmo valor longo."""
+    campos = ('situacao', 'autorizacao', 'razao_social', 'nome_fantasia')
+    vals = [str(dados.get(c) or '').strip() for c in campos]
+    non_empty = [v for v in vals if len(v) > 10]
+    return len(non_empty) >= 2 and len(set(non_empty)) == 1
+
+
+def _extract_header_inline(lines):
+    """
+    Fallback para PDFs cujo cabeçalho é condensado em uma única linha sem
+    rótulos separadores, e.g.:
+      'EM OPERAÇÃO PR/SP0199861 36142094000180 AUTO POSTO PARQUE PIQUERI LTDA'
+    Detecta pela presença de um CNPJ de 14 dígitos contínuos com contexto
+    antes (situação + autorização) e depois (razão social).
+    """
+    for line in lines:
+        stripped = line.strip()
+        m_cnpj = _RE_INLINE_CNPJ_14.search(stripped)
+        if not m_cnpj:
+            continue
+        before = stripped[:m_cnpj.start()].strip()
+        after = stripped[m_cnpj.end():].strip()
+        # Exige texto antes e depois do CNPJ
+        if not before or not after:
+            continue
+        result = {'cnpj_anp': m_cnpj.group(1)}
+        m_auth = _RE_AUTH_CODE.search(before)
+        if m_auth:
+            result['autorizacao'] = m_auth.group(1)
+            situacao = before[:m_auth.start()].strip()
+            if situacao:
+                result['situacao'] = situacao
+        if after:
+            result['razao_social'] = after
+        return result
+    return {}
+
+
+def _has_address_confusion(dados):
+    """Retorna True quando dois ou mais campos de endereço têm o mesmo valor longo."""
+    campos = ('endereco', 'complemento', 'bairro', 'municipio_uf')
+    vals = [str(dados.get(c) or '').strip() for c in campos]
+    non_empty = [v for v in vals if len(v) > 10]
+    return len(non_empty) >= 2 and len(set(non_empty)) == 1
+
+
+def _extract_address_inline(lines):
+    """
+    Fallback para layout compacto de endereço onde todos os campos aparecem
+    numa única linha sem rótulos, e.g.:
+      'RUA PIQUERI 211  PIRITUBA  SÃO PAULO/SP  02956-020'
+    Extrai Município/UF e CEP por padrão; o texto antes do município é
+    usado como Endereço.
+    """
+    _label_keywords = ('endereço', 'endereco', 'complemento', 'bairro',
+                       'município', 'municipio', 'cep')
+    for line in lines:
+        stripped = line.strip()
+        lc = stripped.lower()
+        # Pula linhas de rótulos
+        if any(kw in lc for kw in _label_keywords):
+            continue
+        m_cep = _RE_CEP.search(stripped)
+        m_mun = _RE_MUNICIPIO_UF.search(stripped)
+        if not m_cep and not m_mun:
+            continue
+        result = {}
+        if m_cep:
+            result['cep'] = m_cep.group(1)
+        if m_mun:
+            result['municipio_uf'] = _norm(m_mun.group(0))
+            before_mun = stripped[:m_mun.start()].strip()
+            if before_mun:
+                result['endereco'] = _norm(before_mun)
+        elif m_cep:
+            before_cep = stripped[:m_cep.start()].strip()
+            if before_cep:
+                result['endereco'] = _norm(before_cep)
+        return result
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +340,13 @@ def _extract_despacho_block(lines):
     delivery = _after(lines, 'Delivery', stop_labels=['Data Autorização', 'Latitude', 'Longitude'])
     if delivery:
         result['delivery'] = _norm(delivery)
+
+    # Corrige tipo_posto se foi extraído como bloco grande (layout compacto)
+    tipo = result.get('tipo_posto', '')
+    if tipo and len(tipo) > 20:
+        tipo_upper = tipo.upper()
+        found = next((t for t in _TIPOS_POSTO_KNOWN if t.upper() in tipo_upper), None)
+        result['tipo_posto'] = found
 
     return result
 
@@ -432,7 +548,26 @@ def extrair_dados_anp(arquivo_bytes):
 
     dados = {}
     dados.update(_extract_header_block(all_lines))
+
+    # Fallback para layout compacto: campos do cabeçalho numa única linha sem rótulos
+    if _has_header_confusion(dados):
+        inline = _extract_header_inline(all_lines)
+        if inline:
+            dados.update(inline)
+
     dados.update(_extract_address_block(all_lines))
+
+    # Fallback para layout compacto de endereço
+    if _has_address_confusion(dados):
+        addr_inline = _extract_address_inline(all_lines)
+        if addr_inline:
+            dados.update(addr_inline)
+            # Limpa campos de endereço derivados incorretamente
+            for campo in ('complemento', 'bairro'):
+                if dados.get(campo) and dados.get('endereco') and \
+                        dados[campo] == dados['endereco']:
+                    dados.pop(campo)
+
     dados.update(_extract_despacho_block(all_lines))
     dados.update(_extract_geo_block(all_lines))
 
