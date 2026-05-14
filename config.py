@@ -18,7 +18,7 @@ class Config:
     DB_USER = os.getenv('DB_USER', 'root')
     DB_PASSWORD = os.getenv('DB_PASSWORD', '')
     DB_POOL_SIZE = max(1, min(32, int(os.getenv('DB_POOL_SIZE', 20))))
-    DB_CONNECT_TIMEOUT = max(1, int(os.getenv('DB_CONNECT_TIMEOUT', 8)))
+    DB_CONNECT_TIMEOUT = max(1, int(os.getenv('DB_CONNECT_TIMEOUT', 3)))
     
     # SQLAlchemy
     SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
