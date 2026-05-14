@@ -224,7 +224,7 @@
                             {% if cliente.data_inicio_atividade %}
                             <div class="info-item">
                                 <label>Data de Início da Atividade</label>
-                                <span>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '-' }}</span>
+                                <span>{{ cliente.data_inicio_atividade|format_date }}</span>
                             </div>
                             {% endif %}
                             {% if cliente.data_inicio_contrato %}
