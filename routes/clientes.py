@@ -255,10 +255,7 @@ def detalhes(id):
             anp['socios'] = anp_socios_map.get(anp['id'], [])
             anp['produtos'] = anp_produtos_map.get(anp['id'], [])
     
-    # Buscar grupos disponíveis (que o cliente ainda não pertence)
-    todos_grupos = GrupoCliente.get_all(situacao='ATIVO')
-    grupos_ids_cliente = [g['id'] for g in grupos]
-    grupos_disponiveis = [g for g in todos_grupos if g['id'] not in grupos_ids_cliente]
+    grupos_disponiveis = []
     
     return render_template('clientes/detalhes.html',
                          cliente=cliente,
