@@ -215,9 +215,11 @@
                             <div class="info-item">
                                 <label>Ramo de Atividade</label>
                                 <div>
+                                    <ul style="list-style: none; margin: 0; padding: 0;">
                                     {% for ramo in ramos_atividade %}
-                                        <div>{{ ramo.nome }}</div>
+                                        <li>{{ ramo.nome }}</li>
                                     {% endfor %}
+                                    </ul>
                                 </div>
                             </div>
                             {% endif %}
