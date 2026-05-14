@@ -214,11 +214,17 @@
                             {% if ramos_atividade %}
                             <div class="info-item">
                                 <label>Ramo de Atividade</label>
-                                <span>
+                                <div>
                                     {% for ramo in ramos_atividade %}
-                                        <span class="badge badge-secondary">{{ ramo.nome }}</span>
+                                        <div>{{ ramo.nome }}</div>
                                     {% endfor %}
-                                </span>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if cliente.data_inicio_atividade %}
+                            <div class="info-item">
+                                <label>Data de Início da Atividade</label>
+                                <span>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '-' }}</span>
                             </div>
                             {% endif %}
                             {% if cliente.data_inicio_contrato %}
