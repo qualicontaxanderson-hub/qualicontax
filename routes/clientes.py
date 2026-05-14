@@ -239,13 +239,21 @@ def detalhes(id):
     obrigacoes = Cliente.get_obrigacoes(id)
     cadastros_adicionais = CadastroAdicionalCliente.get_by_cliente(id)
     socios = SocioCliente.get_by_cliente(id)
-    socios_total_percentual = SocioCliente.get_total_percentual(id)
+    # Compute the active-partner total in Python instead of a separate DB query
+    socios_total_percentual = float(sum(
+        Decimal(str(s.get('percentual_participacao') or 0))
+        for s in socios
+        if s.get('ativo')
+    ))
 
-    # Cadastros ANP vinculados ao cliente
+    # Cadastros ANP vinculados ao cliente — batch-load socios/produtos to avoid N+1
     cadastros_anp = CadastroAnp.get_by_cliente(id)
-    for anp in cadastros_anp:
-        anp['socios'] = CadastroAnp.get_socios(anp['id'])
-        anp['produtos'] = CadastroAnp.get_produtos(anp['id'])
+    if cadastros_anp:
+        anp_socios_map = CadastroAnp.get_socios_by_cliente(id)
+        anp_produtos_map = CadastroAnp.get_produtos_by_cliente(id)
+        for anp in cadastros_anp:
+            anp['socios'] = anp_socios_map.get(anp['id'], [])
+            anp['produtos'] = anp_produtos_map.get(anp['id'], [])
     
     # Buscar grupos disponíveis (que o cliente ainda não pertence)
     todos_grupos = GrupoCliente.get_all(situacao='ATIVO')
@@ -265,7 +273,7 @@ def detalhes(id):
                          cadastros_adicionais=cadastros_adicionais,
                          cadastros_anp=cadastros_anp,
                          socios=socios,
-                         socios_total_percentual=float(socios_total_percentual),
+                         socios_total_percentual=socios_total_percentual,
                           areas_atendimento=AREAS_ATENDIMENTO)
 
 

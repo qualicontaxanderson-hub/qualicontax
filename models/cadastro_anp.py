@@ -138,6 +138,25 @@ class CadastroAnp:
         ) or []
 
     @staticmethod
+    def get_socios_by_cliente(cliente_id):
+        """Retorna sócios de todos os cadastros ANP de um cliente em uma única query.
+
+        Returns:
+            dict: {cadastro_anp_id: [socios]} para montagem sem N+1 no caller.
+        """
+        rows = execute_query(
+            "SELECT s.id, s.cadastro_anp_id, s.nome "
+            "FROM cadastros_anp_socios s "
+            "JOIN cadastros_anp a ON s.cadastro_anp_id = a.id "
+            "WHERE a.cliente_id = %s ORDER BY s.id",
+            (cliente_id,), fetch=True,
+        ) or []
+        result: dict = {}
+        for row in rows:
+            result.setdefault(row['cadastro_anp_id'], []).append(row)
+        return result
+
+    @staticmethod
     def delete_socios(cadastro_anp_id):
         """Remove todos os sócios de um cadastro ANP."""
         execute_query("DELETE FROM cadastros_anp_socios WHERE cadastro_anp_id = %s", (cadastro_anp_id,))
@@ -162,6 +181,25 @@ class CadastroAnp:
             "FROM cadastros_anp_produtos WHERE cadastro_anp_id = %s ORDER BY id",
             (cadastro_anp_id,), fetch=True,
         ) or []
+
+    @staticmethod
+    def get_produtos_by_cliente(cliente_id):
+        """Retorna produtos de todos os cadastros ANP de um cliente em uma única query.
+
+        Returns:
+            dict: {cadastro_anp_id: [produtos]} para montagem sem N+1 no caller.
+        """
+        rows = execute_query(
+            "SELECT p.id, p.cadastro_anp_id, p.produto, p.tancagem_m3, p.bicos "
+            "FROM cadastros_anp_produtos p "
+            "JOIN cadastros_anp a ON p.cadastro_anp_id = a.id "
+            "WHERE a.cliente_id = %s ORDER BY p.id",
+            (cliente_id,), fetch=True,
+        ) or []
+        result: dict = {}
+        for row in rows:
+            result.setdefault(row['cadastro_anp_id'], []).append(row)
+        return result
 
     @staticmethod
     def delete_produtos(cadastro_anp_id):
