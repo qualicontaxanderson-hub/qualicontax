@@ -213,18 +213,6 @@
                                 <span>{{ cliente.porte_empresa }}</span>
                             </div>
                             {% endif %}
-                            {% if ramos_atividade %}
-                            <div class="info-item">
-                                <label>Ramo de Atividade</label>
-                                <div>
-                                    <ul class="branch-list">
-                                    {% for ramo in ramos_atividade %}
-                                        <li>{{ ramo.nome }}</li>
-                                    {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                            {% endif %}
                             {% if cliente.data_inicio_atividade %}
                             <div class="info-item">
                                 <label>Data de Início da Atividade</label>
@@ -249,6 +237,18 @@
                                     {{ cliente.situacao }}
                                 </span>
                             </div>
+                            {% if ramos_atividade %}
+                            <div class="info-item full-width">
+                                <label>Ramo de Atividade</label>
+                                <div>
+                                    <ul class="branch-list">
+                                    {% for ramo in ramos_atividade %}
+                                        <li>{{ ramo.nome }}</li>
+                                    {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                         {% if cliente.observacoes %}
                         <div class="info-item full-width">
