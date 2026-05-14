@@ -1,4 +1,5 @@
 """Rotas de Clientes - CRUD completo"""
+from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from decimal import Decimal, InvalidOperation
@@ -230,15 +231,26 @@ def detalhes(id):
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
     
-    enderecos = EnderecoCliente.get_by_cliente(id)
-    contatos = ContatoCliente.get_by_cliente(id)
-    grupos = Cliente.get_grupos(id)
-    ramos_atividade = RamoAtividade.get_by_cliente(id)
-    processos = Cliente.get_processos(id)
-    tarefas = Cliente.get_tarefas(id)
-    obrigacoes = Cliente.get_obrigacoes(id)
-    cadastros_adicionais = CadastroAdicionalCliente.get_by_cliente(id)
-    socios = SocioCliente.get_by_cliente(id)
+    with ThreadPoolExecutor(max_workers=9) as executor:
+        f_enderecos = executor.submit(EnderecoCliente.get_by_cliente, id)
+        f_contatos = executor.submit(ContatoCliente.get_by_cliente, id)
+        f_grupos = executor.submit(Cliente.get_grupos, id)
+        f_ramos = executor.submit(RamoAtividade.get_by_cliente, id)
+        f_processos = executor.submit(Cliente.get_processos, id)
+        f_tarefas = executor.submit(Cliente.get_tarefas, id)
+        f_obrigacoes = executor.submit(Cliente.get_obrigacoes, id)
+        f_cadastros_ad = executor.submit(CadastroAdicionalCliente.get_by_cliente, id)
+        f_socios = executor.submit(SocioCliente.get_by_cliente, id)
+
+    enderecos = f_enderecos.result()
+    contatos = f_contatos.result()
+    grupos = f_grupos.result()
+    ramos_atividade = f_ramos.result()
+    processos = f_processos.result()
+    tarefas = f_tarefas.result()
+    obrigacoes = f_obrigacoes.result()
+    cadastros_adicionais = f_cadastros_ad.result()
+    socios = f_socios.result()
     # Compute the active-partner total in Python instead of a separate DB query
     socios_total_percentual = sum(
         float(s.get('percentual_participacao') or 0)
