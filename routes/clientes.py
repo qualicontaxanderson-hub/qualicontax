@@ -240,11 +240,11 @@ def detalhes(id):
     cadastros_adicionais = CadastroAdicionalCliente.get_by_cliente(id)
     socios = SocioCliente.get_by_cliente(id)
     # Compute the active-partner total in Python instead of a separate DB query
-    socios_total_percentual = float(sum(
-        Decimal(str(s.get('percentual_participacao') or 0))
+    socios_total_percentual = sum(
+        float(s.get('percentual_participacao') or 0)
         for s in socios
         if s.get('ativo')
-    ))
+    )
 
     # Cadastros ANP vinculados ao cliente — batch-load socios/produtos to avoid N+1
     cadastros_anp = CadastroAnp.get_by_cliente(id)
