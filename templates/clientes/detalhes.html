@@ -37,7 +37,7 @@
 .anp-prod-table th, .anp-prod-table td { padding:6px 8px; border-bottom:1px solid var(--border-color); text-align:left; vertical-align:top; }
 .anp-prod-table th { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; }
 .anp-prod-table td.center { text-align:center; white-space:nowrap; }
-.ramo-atividade-list { list-style:none; margin:0; padding:0; }
+.branch-list { list-style:none; margin:0; padding:0; }
 @media (max-width: 900px) { .anp-list-grid { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
@@ -216,7 +216,7 @@
                             <div class="info-item">
                                 <label>Ramo de Atividade</label>
                                 <div>
-                                    <ul class="ramo-atividade-list">
+                                    <ul class="branch-list">
                                     {% for ramo in ramos_atividade %}
                                         <li>{{ ramo.nome }}</li>
                                     {% endfor %}
