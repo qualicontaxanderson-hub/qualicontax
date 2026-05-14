@@ -1,5 +1,19 @@
 """Modelo de Ramo de Atividade"""
+import time
+import threading
 from utils.db_helper import execute_query
+
+_CACHE_TTL_SECONDS = 60
+_cache_ativos = None
+_cache_ativos_ts = 0.0
+_cache_lock = threading.Lock()
+
+
+def _invalidate_cache():
+    global _cache_ativos, _cache_ativos_ts
+    with _cache_lock:
+        _cache_ativos = None
+        _cache_ativos_ts = 0.0
 
 
 class RamoAtividade:
@@ -16,18 +30,27 @@ class RamoAtividade:
         Returns:
             list: Lista de ramos de atividade
         """
+        global _cache_ativos, _cache_ativos_ts
+
         query = """
             SELECT id, nome, descricao, situacao
             FROM ramos_atividade
         """
         params = []
-        
         if situacao:
             query += " WHERE situacao = %s"
             params.append(situacao)
-        
         query += " ORDER BY nome"
-        
+
+        if situacao == 'ATIVO':
+            with _cache_lock:
+                if _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
+                    return _cache_ativos
+                result = execute_query(query, tuple(params), fetch=True) or []
+                _cache_ativos = result
+                _cache_ativos_ts = time.time()
+                return result
+
         return execute_query(query, tuple(params) if params else None, fetch=True) or []
     
     @staticmethod
@@ -65,7 +88,10 @@ class RamoAtividade:
             INSERT INTO ramos_atividade (nome, descricao, situacao)
             VALUES (%s, %s, %s)
         """
-        return execute_query(query, (nome, descricao, situacao))
+        result = execute_query(query, (nome, descricao, situacao))
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def update(ramo_id, nome, descricao=None, situacao='ATIVO'):
@@ -86,7 +112,10 @@ class RamoAtividade:
             SET nome = %s, descricao = %s, situacao = %s
             WHERE id = %s
         """
-        return execute_query(query, (nome, descricao, situacao, ramo_id), fetch=False)
+        result = execute_query(query, (nome, descricao, situacao, ramo_id), fetch=False)
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def delete(ramo_id):
@@ -103,7 +132,10 @@ class RamoAtividade:
             DELETE FROM ramos_atividade
             WHERE id = %s
         """
-        return execute_query(query, (ramo_id,), fetch=False)
+        result = execute_query(query, (ramo_id,), fetch=False)
+        if result is not None:
+            _invalidate_cache()
+        return result
     
     @staticmethod
     def add_cliente(ramo_id, cliente_id):
