@@ -237,6 +237,12 @@
                                     {{ cliente.situacao }}
                                 </span>
                             </div>
+                            {% if cliente.observacoes %}
+                            <div class="info-item">
+                                <label>Observações</label>
+                                <p>{{ cliente.observacoes }}</p>
+                            </div>
+                            {% endif %}
                             {% if ramos_atividade %}
                             <div class="info-item full-width">
                                 <label>Ramo de Atividade</label>
@@ -250,12 +256,6 @@
                             </div>
                             {% endif %}
                         </div>
-                        {% if cliente.observacoes %}
-                        <div class="info-item full-width">
-                            <label>Observações</label>
-                            <p>{{ cliente.observacoes }}</p>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
