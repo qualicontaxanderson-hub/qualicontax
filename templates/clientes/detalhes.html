@@ -240,7 +240,7 @@
                             {% if cliente.observacoes %}
                             <div class="info-item">
                                 <label>Observações</label>
-                                <p>{{ cliente.observacoes }}</p>
+                                <p>{{ cliente.observacoes|e }}</p>
                             </div>
                             {% endif %}
                             {% if ramos_atividade %}
@@ -249,7 +249,7 @@
                                 <div>
                                     <ul class="branch-list">
                                     {% for ramo in ramos_atividade %}
-                                        <li>{{ ramo.nome }}</li>
+                                        <li>{{ ramo.nome|e }}</li>
                                     {% endfor %}
                                     </ul>
                                 </div>
