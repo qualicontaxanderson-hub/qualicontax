@@ -1617,7 +1617,9 @@ function _renderImportResult(acc) {
 
 // ---- Importação assíncrona (background thread) ----
 // O botão "Importar XML" chama /start e recebe job_id imediatamente.
-// O polling a /status/<job_id> a cada 2 s atualiza a UI sem bloquear o servidor.
+// O polling a /status/<job_id> a cada DBX_POLL_INTERVAL_MS ms atualiza a UI sem bloquear o servidor.
+
+const DBX_POLL_INTERVAL_MS = 2000;  // 2 s — leve para o servidor
 
 let _dbxJobId = null;
 let _dbxPollTimer = null;
@@ -1726,8 +1728,7 @@ function executarImportacaoDropbox() {
             return;
         }
         _dbxJobId = data.job_id;
-        // Inicia polling a cada 2 s — leve para o servidor.
-        _dbxPollTimer = setInterval(_dbxPoll, 2000);
+        _dbxPollTimer = setInterval(_dbxPoll, DBX_POLL_INTERVAL_MS);
     })
     .catch(() => {
         _dbxImportFinish();

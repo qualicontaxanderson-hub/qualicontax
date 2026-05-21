@@ -33,6 +33,13 @@ _DROPBOX_AUTH_ERROR_MSG = (
 # completa sem interação do usuário.
 _DROPBOX_BATCH_LIMIT = 20
 
+# Máximo de iterações de lote no job de background — guarda-chuva contra
+# loop infinito caso a lógica de parada por progresso falhe.
+_MAX_IMPORT_ITERATIONS = 1000
+
+# Máximo de mensagens de erro de detalhe armazenadas por job de importação.
+_MAX_ERROR_DETAILS = 50
+
 # Namespace NF-e (usado para detecção de XMLs de evento)
 _NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
 # Tags raiz de XMLs de evento NF-e: carta de correção, cancelamento, etc.
@@ -1449,12 +1456,11 @@ def _run_import_job(job: dict, departamento: str,
             'msg': msg,
             'unregistered_companies': unreg_list,
             'imported_companies': imp_list,
-            'details': details[:50],
+            'details': details[:_MAX_ERROR_DETAILS],
         })
 
-    max_iterations = 1000
     try:
-        for _iteration in range(max_iterations):
+        for _iteration in range(_MAX_IMPORT_ITERATIONS):
             if job.get('stop_requested'):
                 job['status'] = 'stopped'
                 _snapshot()
