@@ -132,8 +132,8 @@ def analise_fiscal_compras():
     erro_filtros = ''
     searched = bool(
         buscar or f_cliente_id or f_grupo_id or
-        request.args.get('data_ini', '').strip() or
-        request.args.get('data_fim', '').strip() or
+        (f_data_ini != data_ini_default) or
+        (f_data_fim != data_fim_default) or
         f_categoria or f_produto_id or f_descricao
     )
 
