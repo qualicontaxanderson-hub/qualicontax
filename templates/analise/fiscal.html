@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Análise Fiscal - Qualicontax{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Análise Fiscal</h1>
+        <p class="page-subtitle">Central de análises fiscais com visão de compras agora e estrutura para saídas, SPED Fiscal, SPED Contribuições e cruzamentos futuros</p>
+    </div>
+</div>
+
+<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #93c5fd;border-radius:16px;padding:18px 22px;margin-bottom:20px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div style="max-width:780px;">
+            <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">Disponível agora</div>
+            <h3 style="margin:0 0 8px;font-size:20px;color:#1e3a8a;">Compras NF-e com análise por produto, valor, quantidade e distribuidora</h3>
+            <p style="margin:0;color:#334155;line-height:1.55;">
+                A <strong>Conferência de Compras</strong> já concentra as informações importadas dos XMLs e permite explorar compras por produto,
+                fornecedor/emissor e períodos. É a base da análise fiscal atual enquanto ampliamos a malha para saídas e SPEDs.
+            </p>
+        </div>
+        {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}"
+           style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,.22);white-space:nowrap;">
+            <i class="fas fa-chart-column"></i> Consultar lançamentos fiscais
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="module-tiles">
+
+    {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
+    <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+            <i class="fas fa-cart-shopping"></i>
+        </div>
+        <h3 class="module-tile-title">Compras NF-e</h3>
+        <p class="module-tile-desc">Analise compras por produto, quantidade total, valor total, emitente/distribuidora e período usando os XMLs já importados</p>
+        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Abrir análise de compras</span>
+    </a>
+    {% endif %}
+
+    <div class="module-tile" style="opacity:.92;">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <i class="fas fa-file-invoice-dollar"></i>
+        </div>
+        <h3 class="module-tile-title">Saídas / Vendas</h3>
+        <p class="module-tile-desc">Espaço reservado para análise fiscal de vendas, confronto de tributos e comportamento de faturamento</p>
+        <span class="module-tile-action" style="color:#b45309;"><i class="fas fa-clock"></i> Em breve</span>
+    </div>
+
+    <div class="module-tile" style="opacity:.92;">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+            <i class="fas fa-file-code"></i>
+        </div>
+        <h3 class="module-tile-title">SPED Fiscal</h3>
+        <p class="module-tile-desc">Base pronta para visão por blocos, registros, apuração, inconsistências e cruzamentos com XMLs importados</p>
+        <span class="module-tile-action" style="color:#6d28d9;"><i class="fas fa-clock"></i> Em breve</span>
+    </div>
+
+    <div class="module-tile" style="opacity:.92;">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+            <i class="fas fa-receipt"></i>
+        </div>
+        <h3 class="module-tile-title">SPED Contribuições</h3>
+        <p class="module-tile-desc">Área preparada para análise de PIS/COFINS, créditos, receitas e reconciliação com compras e saídas</p>
+        <span class="module-tile-action" style="color:#0f766e;"><i class="fas fa-clock"></i> Em breve</span>
+    </div>
+
+    <div class="module-tile" style="opacity:.92;">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+            <i class="fas fa-shuffle"></i>
+        </div>
+        <h3 class="module-tile-title">Compras x Vendas</h3>
+        <p class="module-tile-desc">Ponto de entrada para cruzar entradas e saídas, margens, giro, estoque implícito e coerência operacional</p>
+        <span class="module-tile-action" style="color:#b91c1c;"><i class="fas fa-clock"></i> Em breve</span>
+    </div>
+
+</div>
+{% endblock %}

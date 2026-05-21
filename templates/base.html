@@ -91,7 +91,7 @@
             {% endif %}
             {% if current_user.has_permission('modulos.analise') %}
             <li>
-                <a href="{{ url_for('modulos.analise') }}" class="rail-link rail-analise {% if request.endpoint == 'modulos.analise' %}active{% endif %}" title="Análise">
+                <a href="{{ url_for('modulos.analise') }}" class="rail-link rail-analise {% if request.endpoint and request.endpoint.startswith('modulos.analise') %}active{% endif %}" title="Análise">
                     <i class="fas fa-chart-pie"></i>
                     <span>Análise</span>
                 </a>

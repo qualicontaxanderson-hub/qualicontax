@@ -33,3 +33,9 @@ def legalizacao():
 @permission_required('modulos.analise')
 def analise():
     return render_template('analise/index.html')
+
+
+@modulos.route('/analise/fiscal/')
+@permission_required('modulos.analise')
+def analise_fiscal():
+    return render_template('analise/fiscal.html')
