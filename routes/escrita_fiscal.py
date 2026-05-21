@@ -1,6 +1,7 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
 import logging
 import re
+import threading
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from utils.db_helper import execute_query, execute_many
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
 from utils.dropbox_sync import DropboxAuthError, DropboxError
+from utils import import_jobs
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -1383,6 +1385,422 @@ def api_importar_dropbox():
         'msg': msg,
         'details': details[:10],
     })
+
+
+# ---------------------------------------------------------------------------
+# Importação assíncrona — background thread (não bloqueia workers gunicorn)
+# ---------------------------------------------------------------------------
+
+def _run_import_job(job: dict, departamento: str,
+                    filter_cnpjs: 'set | None', grupo_id_val: 'int | None') -> None:
+    """Executa importação Dropbox completa em background thread.
+
+    Processa todos os lotes de ``_DROPBOX_BATCH_LIMIT`` arquivos até que a
+    pasta NOVO fique vazia ou sem progresso real, atualizando ``job`` com o
+    progresso entre cada lote.  Suporta filtro de empresa/grupo e parada
+    antecipada via ``job['stop_requested']``.
+
+    Não requer contexto Flask — usa diretamente execute_query / dropbox_sync.
+    """
+    svc = dropbox_sync._service
+    pasta_novo = svc.pasta_novo(departamento)
+
+    ok = dup = err = skipped = 0
+    moved_ok = moved_err = 0
+    unregistered: dict = {}          # cnpj/key → nome
+    _imported_companies: dict = {}   # (num, nome) → set of (year, month)
+    details: list = []
+    _vinculos_cache: dict = {}
+    _cnpj_cliente_cache: dict = {}
+    _pastas_criadas: set = set()
+    last_scanned: str | None = None  # cursor para modo de filtro
+
+    def _get_or_create_pasta(path: str) -> str:
+        if path not in _pastas_criadas:
+            svc.ensure_folder(path)
+            _pastas_criadas.add(path)
+        return path
+
+    def _snapshot() -> None:
+        """Grava progresso atual no dict do job (lido pelo endpoint /status)."""
+        unreg_list = [
+            {'cnpj': k, 'nome': v}
+            for k, v in sorted(unregistered.items(), key=lambda x: x[1])
+        ]
+        imp_list = []
+        for (num, nome), periods in sorted(
+                _imported_companies.items(), key=lambda x: x[0][1] or ''):
+            imp_list.append({
+                'numero': num, 'nome': nome,
+                'periodos': [f'{m:02d}/{y}' for (y, m) in sorted(periods)],
+            })
+        total = ok + dup + err + skipped
+        msg = (f'{total} arquivo(s) processado(s). {ok} importado(s), '
+               f'{dup} duplicado(s), {err} com erro.')
+        if skipped:
+            msg += f' {skipped} ignorado(s).'
+        if unregistered:
+            msg += f' {len(unregistered)} empresa(s) não cadastrada(s).'
+        if moved_ok or moved_err:
+            msg += f' {moved_ok} movido(s) para IMPORTADOS, {moved_err} movido(s) para ERROS.'
+        job.update({
+            'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
+            'moved_ok': moved_ok, 'moved_err': moved_err,
+            'msg': msg,
+            'unregistered_companies': unreg_list,
+            'imported_companies': imp_list,
+            'details': details[:50],
+        })
+
+    max_iterations = 1000
+    try:
+        for _iteration in range(max_iterations):
+            if job.get('stop_requested'):
+                job['status'] = 'stopped'
+                _snapshot()
+                job['msg'] += ' Importação interrompida pelo usuário.'
+                return
+
+            try:
+                files = svc.list_xml_files(pasta_novo)
+            except DropboxAuthError:
+                job['status'] = 'error'
+                job['msg'] = _DROPBOX_AUTH_ERROR_MSG
+                return
+            except DropboxError:
+                logger.exception('[import_job] Erro ao listar pasta %r', pasta_novo)
+                job['status'] = 'error'
+                job['msg'] = 'Erro ao conectar ao Dropbox. Verifique as credenciais.'
+                return
+
+            if not files:
+                break
+
+            # Aplica cursor quando filtro está ativo para avançar além dos
+            # arquivos já analisados em lotes anteriores.
+            if filter_cnpjs is not None and last_scanned:
+                cursor_lower = last_scanned.lower()
+                advanced = False
+                for ci, cf in enumerate(files):
+                    if cf['name'].lower() > cursor_lower:
+                        files = files[ci:]
+                        advanced = True
+                        break
+                if not advanced:
+                    # Cursor além do último arquivo — pasta totalmente varrida.
+                    break
+
+            if not files:
+                break
+
+            batch = files[:_DROPBOX_BATCH_LIMIT]
+            has_more = len(files) > _DROPBOX_BATCH_LIMIT
+            last_scanned_this = batch[-1]['name'] if batch else None
+            batch_moved = 0
+            batch_skipped = 0
+            now = datetime.now()
+
+            for info in batch:
+                if job.get('stop_requested'):
+                    break
+
+                try:
+                    raw = svc.download_file(info['path'])
+                except DropboxAuthError:
+                    job['status'] = 'error'
+                    job['msg'] = _DROPBOX_AUTH_ERROR_MSG
+                    _snapshot()
+                    return
+
+                if raw is None:
+                    err += 1
+                    details.append(f"{info['name']}: falha ao baixar do Dropbox")
+                    continue
+
+                try:
+                    content = raw.decode('utf-8')
+                except UnicodeDecodeError:
+                    content = raw.decode('latin-1', errors='replace')
+
+                _nome = None
+                _num = None
+                _cli = None
+                _dt = now
+
+                # Detecta XMLs de evento antes de tentar parsear como NF-e.
+                try:
+                    _ev_root = ET.fromstring(content)
+                    _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
+                except ET.ParseError:
+                    _ev_tag = ''
+
+                if _ev_tag in _NFE_EVENT_ROOT_TAGS:
+                    # Aplica filtro de empresa/grupo se ativo.
+                    if filter_cnpjs is not None:
+                        _ev_dest_cnpj_filter = ''
+                        for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                                    f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
+                            _el = _ev_root.find(_cx)
+                            if _el is not None and _el.text:
+                                _ev_dest_cnpj_filter = re.sub(r'\D', '', _el.text.strip())
+                                if _ev_dest_cnpj_filter:
+                                    break
+                        if _ev_dest_cnpj_filter not in filter_cnpjs:
+                            batch_skipped += 1
+                            skipped += 1
+                            continue
+
+                    _ev_nome = None
+                    _ev_num = None
+                    _ch_nfe = ''
+                    for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
+                        _el = _ev_root.find(_path)
+                        if _el is not None and _el.text:
+                            _ch_nfe = re.sub(r'\D', '', _el.text.strip())
+                            break
+                    if _ch_nfe:
+                        _ev_rec = execute_query(
+                            "SELECT c.nome_razao_social, c.numero_cliente "
+                            "FROM nfe_importacoes n "
+                            "JOIN clientes c ON c.id = n.cliente_id "
+                            "WHERE n.chave_acesso = %s LIMIT 1",
+                            (_ch_nfe,), fetch=True, fetch_one=True,
+                        )
+                        if _ev_rec:
+                            _ev_nome = _ev_rec['nome_razao_social']
+                            _ev_num = _ev_rec.get('numero_cliente') or None
+                    if not _ev_nome:
+                        for _cnpj_xpath in [
+                            f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                            f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
+                        ]:
+                            _el = _ev_root.find(_cnpj_xpath)
+                            if _el is not None and _el.text:
+                                _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
+                                if len(_ev_cnpj_dig) >= 11:
+                                    if _ev_cnpj_dig in _cnpj_cliente_cache:
+                                        _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
+                                    else:
+                                        _ev_found = execute_query(
+                                            "SELECT id, nome_razao_social, numero_cliente "
+                                            "FROM clientes WHERE "
+                                            "REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') "
+                                            "= %s LIMIT 1",
+                                            (_ev_cnpj_dig,), fetch=True, fetch_one=True,
+                                        )
+                                        _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                                    if _ev_found:
+                                        _ev_nome = _ev_found['nome_razao_social']
+                                        _ev_num = _ev_found.get('numero_cliente') or None
+                                        break
+                    _ev_dt = now
+                    for _date_xpath in [
+                        f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
+                        f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
+                    ]:
+                        _date_el = _ev_root.find(_date_xpath)
+                        if _date_el is not None and _date_el.text:
+                            try:
+                                _ev_dt = datetime.fromisoformat(
+                                    _date_el.text.strip().replace('Z', '+00:00'))
+                            except (ValueError, AttributeError):
+                                pass
+                            break
+                    if _ev_nome:
+                        err += 1
+                        try:
+                            pasta_err_ev = _get_or_create_pasta(
+                                svc.pasta_erros(departamento, _ev_nome, _ev_dt,
+                                                empresa_numero=_ev_num))
+                            if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                                moved_err += 1
+                                batch_moved += 1
+                        except DropboxAuthError:
+                            logger.warning('[import_job] Auth ao mover evento %s', info['name'])
+                    continue
+
+                try:
+                    parsed = parse_nfe_xml(content)
+                    _dt = parsed['header'].get('data_emissao') or now
+                    dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+
+                    # Aplica filtro de empresa/grupo se ativo.
+                    if filter_cnpjs is not None:
+                        if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
+                            batch_skipped += 1
+                            skipped += 1
+                            continue
+
+                    if len(dest_cnpj_digits) >= 11:
+                        if dest_cnpj_digits in _cnpj_cliente_cache:
+                            found = _cnpj_cliente_cache[dest_cnpj_digits]
+                        else:
+                            found = execute_query(
+                                "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                                "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') "
+                                "= %s LIMIT 1",
+                                (dest_cnpj_digits,), fetch=True, fetch_one=True,
+                            )
+                            _cnpj_cliente_cache[dest_cnpj_digits] = found
+                        if found:
+                            _cli = found['id']
+                            _nome = found['nome_razao_social']
+                            _num = found.get('numero_cliente') or None
+
+                    if _nome is None:
+                        _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
+                        _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+                        _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
+                        unregistered[_unreg_key] = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
+                        continue
+
+                    result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
+                                       cliente_id=_cli,
+                                       grupo_id=grupo_id_val if _cli is None else None,
+                                       vinculos_cache=_vinculos_cache)
+                    if result == 'dup':
+                        dup += 1
+                    else:
+                        ok += 1
+                    try:
+                        _period_y = _dt.year if hasattr(_dt, 'year') else now.year
+                        _period_m = _dt.month if hasattr(_dt, 'month') else now.month
+                        _co_key = (str(_num or ''), _nome)
+                        if _co_key not in _imported_companies:
+                            _imported_companies[_co_key] = set()
+                        _imported_companies[_co_key].add((_period_y, _period_m))
+                    except Exception:
+                        pass
+                    try:
+                        pasta_imp = _get_or_create_pasta(
+                            svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                        if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
+                            moved_ok += 1
+                            batch_moved += 1
+                    except DropboxAuthError:
+                        logger.warning('[import_job] Auth ao mover %s para importados', info['name'])
+
+                except DropboxAuthError:
+                    job['status'] = 'error'
+                    job['msg'] = _DROPBOX_AUTH_ERROR_MSG
+                    _snapshot()
+                    return
+                except Exception as exc:
+                    err += 1
+                    details.append(f"{info['name']}: {exc}")
+                    logger.exception('[import_job] Erro ao processar %s', info['name'])
+                    _err_empresa = _nome or 'DESCONHECIDO'
+                    _err_num = _num if _nome else None
+                    try:
+                        pasta_err = _get_or_create_pasta(
+                            svc.pasta_erros(departamento, _err_empresa, _dt,
+                                            empresa_numero=_err_num))
+                        if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
+                            moved_err += 1
+                            batch_moved += 1
+                    except DropboxAuthError:
+                        logger.warning('[import_job] Auth ao mover %s para erros', info['name'])
+
+            # Avança cursor no modo de filtro.
+            if filter_cnpjs is not None and last_scanned_this:
+                last_scanned = last_scanned_this
+
+            _snapshot()
+
+            if not has_more:
+                break
+
+            # Guarda-chuva anti-loop: sem progresso E sem arquivos saltados com cursor
+            # avançando → para para evitar loop infinito com arquivos presos em NOVO.
+            if batch_moved == 0:
+                if filter_cnpjs is None or batch_skipped == 0:
+                    break
+
+    except Exception:
+        logger.exception('[import_job] Falha inesperada no job de importação')
+        job['status'] = 'error'
+        job['msg'] = 'Falha inesperada durante a importação. Consulte os logs do servidor.'
+        _snapshot()
+        return
+
+    if job.get('status') == 'running':
+        job['status'] = 'done'
+    _snapshot()
+    logger.info('[import_job] Concluído: ok=%d dup=%d err=%d skipped=%d', ok, dup, err, skipped)
+
+
+@escrita_fiscal.route('/conf-compras/api/importar-dropbox/start', methods=['POST'])
+@login_required
+def api_importar_dropbox_start():
+    """Inicia importação Dropbox em background thread e retorna job_id imediatamente.
+
+    O cliente deve chamar /status/<job_id> periodicamente para acompanhar
+    o progresso, e /stop/<job_id> para interromper antes da conclusão.
+    """
+    if not dropbox_sync.is_configured():
+        return jsonify({'error': 'Dropbox não configurado. Defina DROPBOX_APP_KEY e DROPBOX_REFRESH_TOKEN.'}), 400
+
+    data = request.get_json(force=True) or {}
+    departamento = data.get('departamento', '').strip()
+    cliente_id = data.get('cliente_id') or None
+    grupo_id = data.get('grupo_id') or None
+
+    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
+        return jsonify({'error': 'Departamento inválido.'}), 400
+
+    # Resolve filter_cnpjs aqui, no contexto HTTP, para não precisar de app
+    # context na thread de background.
+    filter_cnpjs: 'set | None' = None
+    grupo_id_val: 'int | None' = None
+    if cliente_id:
+        c = execute_query(
+            "SELECT cpf_cnpj FROM clientes WHERE id = %s",
+            (int(cliente_id),), fetch=True, fetch_one=True,
+        )
+        if c:
+            _d = re.sub(r'\D', '', c['cpf_cnpj'] or '')
+            if _d:
+                filter_cnpjs = {_d}
+    elif grupo_id:
+        grupo_id_val = int(grupo_id)
+        members = execute_query(
+            "SELECT c.cpf_cnpj FROM clientes c "
+            "JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id "
+            "WHERE cgr.grupo_id = %s",
+            (grupo_id_val,), fetch=True,
+        ) or []
+        filter_cnpjs = {re.sub(r'\D', '', m['cpf_cnpj'] or '') for m in members} - {''}
+        if not filter_cnpjs:
+            filter_cnpjs = None
+
+    job_id, job = import_jobs.create_job()
+    t = threading.Thread(
+        target=_run_import_job,
+        args=(job, departamento, filter_cnpjs, grupo_id_val),
+        daemon=True,
+        name=f'import-job-{job_id}',
+    )
+    t.start()
+    logger.info('import_job %s iniciado: depto=%r filter=%r', job_id, departamento, filter_cnpjs)
+    return jsonify({'job_id': job_id})
+
+
+@escrita_fiscal.route('/conf-compras/api/importar-dropbox/status/<job_id>')
+@login_required
+def api_importar_dropbox_status(job_id: str):
+    """Retorna o estado atual de um job de importação assíncrona."""
+    job = import_jobs.get_job(job_id)
+    if job is None:
+        return jsonify({'error': 'Job não encontrado ou expirado.'}), 404
+    return jsonify(job)
+
+
+@escrita_fiscal.route('/conf-compras/api/importar-dropbox/stop/<job_id>', methods=['POST'])
+@login_required
+def api_importar_dropbox_stop(job_id: str):
+    """Solicita parada antecipada de um job de importação assíncrona."""
+    stopped = import_jobs.request_stop(job_id)
+    return jsonify({'ok': stopped})
 
 
 def importar_departamento_background(departamento: str, origem: str = 'agendado',
