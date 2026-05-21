@@ -130,7 +130,12 @@ def analise_fiscal_compras():
     fornecedores_rows = []
     detalhamento_rows = []
     erro_filtros = ''
-    searched = bool(buscar or len(request.args) > 0)
+    searched = bool(
+        buscar or f_cliente_id or f_grupo_id or
+        request.args.get('data_ini', '').strip() or
+        request.args.get('data_fim', '').strip() or
+        f_categoria or f_produto_id or f_descricao
+    )
 
     if searched and not (f_cliente_id or f_grupo_id):
         erro_filtros = 'Selecione uma empresa ou um grupo para gerar a análise.'

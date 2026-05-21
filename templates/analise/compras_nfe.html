@@ -121,9 +121,12 @@
         </div>
         <div class="af-field">
             <label>Produto</label>
-            <select name="produto_id" id="f_produto_id" data-selected="{{ f_produto_id }}">
+            <select name="produto_id" id="f_produto_id" data-selected="{{ f_produto_id }}" aria-describedby="f_produto_hint">
                 <option value="">— Todos —</option>
             </select>
+            <div id="f_produto_hint" style="margin-top:6px;font-size:11px;color:#64748b;">
+                Filtre um produto específico do catálogo dentro do escopo selecionado.
+            </div>
         </div>
         <div class="af-field">
             <label>Descrição contém</label>
@@ -366,11 +369,13 @@ async function loadProdutosCatalogo() {
     const grupoId = document.getElementById('f_grupo_id').value;
     const categoria = document.getElementById('f_categoria').value;
     const select = document.getElementById('f_produto_id');
+    const hint = document.getElementById('f_produto_hint');
     const selected = select.dataset.selected || '';
 
     if (categoria === '__sem_vinculo__') {
         select.innerHTML = '<option value="">— Produtos vinculados indisponíveis para "Sem vínculo" —</option>';
         select.disabled = true;
+        hint.textContent = 'Quando a categoria "Sem vínculo" estiver selecionada, o filtro por produto do catálogo fica indisponível.';
         return;
     }
 
@@ -393,6 +398,7 @@ async function loadProdutosCatalogo() {
         );
         select.innerHTML = options.join('');
         select.disabled = false;
+        hint.textContent = 'Filtre um produto específico do catálogo dentro do escopo selecionado.';
         if (selected) {
             select.value = selected;
         }
@@ -402,6 +408,7 @@ async function loadProdutosCatalogo() {
     } catch (e) {
         select.innerHTML = '<option value="">Erro ao carregar produtos</option>';
         select.disabled = true;
+        hint.textContent = 'Não foi possível carregar os produtos do catálogo para o escopo selecionado.';
     }
 }
 
