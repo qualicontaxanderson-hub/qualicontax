@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+{% block title %}Compras NF-e - Análise Fiscal{% endblock %}
+
+{% macro br_num(value, decimals=2) -%}
+{{ ('{:,.%df}' % decimals).format(value or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+.af-card { background:#fff; border:1.5px solid #e2e8f0; border-radius:16px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
+.af-header-card { padding:18px 22px; margin-bottom:18px; background:linear-gradient(135deg,#eff6ff,#dbeafe); border-color:#bfdbfe; }
+.af-header-card p { margin:6px 0 0; color:#334155; line-height:1.55; }
+.af-filter-card { padding:18px 20px; margin-bottom:18px; }
+.af-filter-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
+.af-field label { display:block; margin-bottom:5px; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+.af-field input, .af-field select { width:100%; padding:10px 12px; border:1.5px solid #dbe2ea; border-radius:10px; background:#f8fafc; color:#0f172a; font-size:13px; }
+.af-field input:focus, .af-field select:focus { outline:none; border-color:#2563eb; background:#fff; }
+.af-filter-actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.af-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px; text-decoration:none; font-size:13px; font-weight:700; cursor:pointer; border:none; }
+.af-btn-primary { background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; }
+.af-btn-secondary { background:#f8fafc; color:#334155; border:1.5px solid #dbe2ea; }
+.af-btn-success { background:linear-gradient(135deg,#16a34a,#22c55e); color:#fff; }
+.af-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:18px; }
+.af-kpi { padding:16px 18px; border-radius:14px; color:#fff; box-shadow:0 10px 24px rgba(37,99,235,.14); }
+.af-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a8a,#2563eb); }
+.af-kpi:nth-child(2) { background:linear-gradient(135deg,#0f766e,#14b8a6); }
+.af-kpi:nth-child(3) { background:linear-gradient(135deg,#166534,#22c55e); }
+.af-kpi:nth-child(4) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.af-kpi:nth-child(5) { background:linear-gradient(135deg,#7c2d12,#ea580c); }
+.af-kpi:nth-child(6) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.af-kpi-label { font-size:10px; font-weight:800; color:rgba(255,255,255,.82); text-transform:uppercase; letter-spacing:.08em; }
+.af-kpi-value { margin-top:6px; font-size:28px; font-weight:800; line-height:1.15; }
+.af-sections { display:grid; grid-template-columns:1fr; gap:18px; }
+.af-section { overflow:hidden; }
+.af-section-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-bottom:1.5px solid #e2e8f0; background:linear-gradient(180deg,#f8fafc,#f1f5f9); }
+.af-section-head h3 { margin:0; font-size:15px; color:#0f172a; }
+.af-section-head span { color:#64748b; font-size:12px; font-weight:600; }
+.af-table-wrap { overflow:auto; }
+.af-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:900px; }
+.af-table th { padding:10px 12px; text-align:left; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; border-bottom:2px solid #e2e8f0; background:#fff; white-space:nowrap; }
+.af-table td { padding:10px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+.af-table tr:hover td { background:#f8fafc; }
+.af-money { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; color:#166534; white-space:nowrap; }
+.af-center { text-align:center; }
+.af-pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
+.af-pill-blue { background:#dbeafe; color:#1d4ed8; }
+.af-pill-purple { background:#ede9fe; color:#6d28d9; }
+.af-empty { padding:42px 20px; text-align:center; color:#94a3b8; }
+.af-empty i { display:block; font-size:30px; margin-bottom:10px; }
+.af-alert { border-radius:12px; padding:14px 16px; margin-bottom:18px; font-size:13px; font-weight:600; }
+.af-alert-danger { background:#fef2f2; border:1.5px solid #fecaca; color:#b91c1c; }
+.af-alert-info { background:#eff6ff; border:1.5px solid #bfdbfe; color:#1d4ed8; }
+
+@media (max-width: 1100px) {
+    .af-filter-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+    .af-filter-grid { grid-template-columns:1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Compras NF-e</h1>
+        <p class="page-subtitle">Relatório analítico de compras por empresa ou grupo, com visão resumida e detalhada por categoria, produto e fornecedor</p>
+    </div>
+</div>
+
+<div class="af-card af-header-card">
+    <strong style="display:block;font-size:16px;color:#1e3a8a;">Use esta área para responder perguntas como:</strong>
+    <p>quanto a empresa comprou de gasolina no período, qual foi a quantidade total, quais fornecedores/distribuidoras mais venderam e como esse volume se distribui por categoria e produto.</p>
+</div>
+
+{% if erro_filtros %}
+<div class="af-alert af-alert-danger"><i class="fas fa-exclamation-circle"></i> {{ erro_filtros }}</div>
+{% elif not searched %}
+<div class="af-alert af-alert-info"><i class="fas fa-circle-info"></i> Selecione uma empresa ou grupo, informe o período e clique em <strong>Gerar análise</strong>.</div>
+{% endif %}
+
+<form method="get" class="af-card af-filter-card" id="comprasForm">
+    <div class="af-filter-grid">
+        <div class="af-field">
+            <label>Empresa</label>
+            <select name="cliente_id" id="f_cliente_id">
+                <option value="">— Todas / usar grupo —</option>
+                {% for empresa in empresas %}
+                <option value="{{ empresa.id }}" {% if f_cliente_id == empresa.id|string %}selected{% endif %}>
+                    {{ empresa.numero_cliente }} - {{ empresa.nome_razao_social }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="af-field">
+            <label>Grupo</label>
+            <select name="grupo_id" id="f_grupo_id">
+                <option value="">— Todos / usar empresa —</option>
+                {% for grupo in grupos %}
+                <option value="{{ grupo.id }}" {% if f_grupo_id == grupo.id|string %}selected{% endif %}>{{ grupo.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="af-field">
+            <label>Data início</label>
+            <input type="date" name="data_ini" value="{{ f_data_ini }}">
+        </div>
+        <div class="af-field">
+            <label>Data fim</label>
+            <input type="date" name="data_fim" value="{{ f_data_fim }}">
+        </div>
+        <div class="af-field">
+            <label>Categoria</label>
+            <select name="categoria" id="f_categoria">
+                <option value="">— Todas —</option>
+                <option value="__sem_vinculo__" {% if f_categoria == '__sem_vinculo__' %}selected{% endif %}>— Sem vínculo —</option>
+                {% for categoria in categorias %}
+                <option value="{{ categoria }}" {% if f_categoria == categoria %}selected{% endif %}>{{ categoria }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="af-field">
+            <label>Produto</label>
+            <select name="produto_id" id="f_produto_id" data-selected="{{ f_produto_id }}">
+                <option value="">— Todos —</option>
+            </select>
+        </div>
+        <div class="af-field">
+            <label>Descrição contém</label>
+            <input type="text" name="descricao" id="f_descricao" placeholder="Ex: Gasolina, Diesel, ARLA..." value="{{ f_descricao }}">
+        </div>
+        <div class="af-field">
+            <label>Origem do filtro</label>
+            <div style="padding:10px 12px;border:1.5px solid #dbe2ea;border-radius:10px;background:#f8fafc;font-size:13px;color:#334155;">
+                empresa ou grupo + período + categoria/produto
+            </div>
+        </div>
+    </div>
+    <div class="af-filter-actions">
+        <button class="af-btn af-btn-primary" type="submit" name="buscar" value="1">
+            <i class="fas fa-chart-column"></i> Gerar análise
+        </button>
+        <a href="{{ url_for('modulos.analise_fiscal_compras') }}" class="af-btn af-btn-secondary">
+            <i class="fas fa-eraser"></i> Limpar
+        </a>
+        <a href="{{ url_for('modulos.analise_fiscal') }}" class="af-btn af-btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar para Fiscal
+        </a>
+        {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="af-btn af-btn-success">
+            <i class="fas fa-file-search"></i> Abrir conferência operacional
+        </a>
+        {% endif %}
+    </div>
+</form>
+
+{% if searched and not erro_filtros %}
+<div class="af-kpis">
+    <div class="af-kpi">
+        <div class="af-kpi-label">Total de notas</div>
+        <div class="af-kpi-value">{{ resumo.total_notas }}</div>
+    </div>
+    <div class="af-kpi">
+        <div class="af-kpi-label">Total de itens</div>
+        <div class="af-kpi-value">{{ resumo.total_itens }}</div>
+    </div>
+    <div class="af-kpi">
+        <div class="af-kpi-label">Quantidade total</div>
+        <div class="af-kpi-value">{{ br_num(resumo.total_qtd) }}</div>
+    </div>
+    <div class="af-kpi">
+        <div class="af-kpi-label">Valor total</div>
+        <div class="af-kpi-value">{{ resumo.total_valor|format_currency }}</div>
+    </div>
+    <div class="af-kpi">
+        <div class="af-kpi-label">Fornecedores</div>
+        <div class="af-kpi-value">{{ resumo.total_fornecedores }}</div>
+    </div>
+    <div class="af-kpi">
+        <div class="af-kpi-label">ICMS</div>
+        <div class="af-kpi-value">{{ resumo.total_icms|format_currency }}</div>
+    </div>
+</div>
+
+<div class="af-sections">
+    <section class="af-card af-section">
+        <div class="af-section-head">
+            <h3>Resumo por categoria</h3>
+            <span>{{ categorias_rows|length }} registro(s)</span>
+        </div>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Categoria</th>
+                        <th>Subcategoria</th>
+                        <th class="af-center">Notas</th>
+                        <th class="af-center">Itens</th>
+                        <th class="af-money">Qtd. total</th>
+                        <th class="af-money">Valor total</th>
+                        <th class="af-money">ICMS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if categorias_rows %}
+                        {% for row in categorias_rows %}
+                        <tr>
+                            <td><span class="af-pill af-pill-blue">{{ row.categoria }}</span></td>
+                            <td>{{ row.subcategoria }}</td>
+                            <td class="af-center">{{ row.qtd_notas }}</td>
+                            <td class="af-center">{{ row.qtd_itens }}</td>
+                            <td class="af-money">{{ br_num(row.total_qtd) }}</td>
+                            <td class="af-money">{{ row.total_valor|format_currency }}</td>
+                            <td class="af-money">{{ row.total_icms|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="7" class="af-empty"><i class="fas fa-layer-group"></i>Nenhum dado encontrado para o filtro informado.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="af-card af-section">
+        <div class="af-section-head">
+            <h3>Resumo por produto</h3>
+            <span>{{ produtos_rows|length }} registro(s)</span>
+        </div>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Categoria</th>
+                        <th>Subcategoria</th>
+                        <th>Produto</th>
+                        <th>Unid.</th>
+                        <th class="af-center">Notas</th>
+                        <th class="af-center">Itens</th>
+                        <th class="af-money">Qtd. total</th>
+                        <th class="af-money">Valor total</th>
+                        <th class="af-money">ICMS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if produtos_rows %}
+                        {% for row in produtos_rows %}
+                        <tr>
+                            <td>{{ row.categoria }}</td>
+                            <td>{{ row.subcategoria }}</td>
+                            <td style="font-weight:700;color:#0f172a;">{{ row.produto_nome }}</td>
+                            <td>{{ row.unidade or '—' }}</td>
+                            <td class="af-center">{{ row.qtd_notas }}</td>
+                            <td class="af-center">{{ row.qtd_itens }}</td>
+                            <td class="af-money">{{ br_num(row.total_qtd) }}</td>
+                            <td class="af-money">{{ row.total_valor|format_currency }}</td>
+                            <td class="af-money">{{ row.total_icms|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="9" class="af-empty"><i class="fas fa-box-open"></i>Nenhum produto encontrado para o filtro informado.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="af-card af-section">
+        <div class="af-section-head">
+            <h3>Resumo por fornecedor</h3>
+            <span>{{ fornecedores_rows|length }} registro(s)</span>
+        </div>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Fornecedor</th>
+                        <th>CNPJ</th>
+                        <th>UF</th>
+                        <th class="af-center">Notas</th>
+                        <th class="af-center">Itens</th>
+                        <th class="af-money">Qtd. total</th>
+                        <th class="af-money">Valor total</th>
+                        <th class="af-money">ICMS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if fornecedores_rows %}
+                        {% for row in fornecedores_rows %}
+                        <tr>
+                            <td style="font-weight:700;color:#0f172a;">{{ row.emit_nome or '—' }}</td>
+                            <td>{{ row.emit_cnpj or '—' }}</td>
+                            <td>{{ row.emit_uf or '—' }}</td>
+                            <td class="af-center">{{ row.qtd_notas }}</td>
+                            <td class="af-center">{{ row.qtd_itens }}</td>
+                            <td class="af-money">{{ br_num(row.total_qtd) }}</td>
+                            <td class="af-money">{{ row.total_valor|format_currency }}</td>
+                            <td class="af-money">{{ row.total_icms|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="8" class="af-empty"><i class="fas fa-building"></i>Nenhum fornecedor encontrado para o filtro informado.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="af-card af-section">
+        <div class="af-section-head">
+            <h3>Detalhamento das compras</h3>
+            <span>limitado aos 500 itens mais recentes do filtro</span>
+        </div>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Nota</th>
+                        <th>Empresa / Grupo</th>
+                        <th>Fornecedor</th>
+                        <th>Categoria</th>
+                        <th>Produto</th>
+                        <th>Unid.</th>
+                        <th class="af-money">Qtd.</th>
+                        <th class="af-money">Vlr. unit.</th>
+                        <th class="af-money">Vlr. total</th>
+                        <th class="af-money">ICMS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if detalhamento_rows %}
+                        {% for row in detalhamento_rows %}
+                        <tr>
+                            <td>{{ row.data_emissao.strftime('%d/%m/%Y') if row.data_emissao else '—' }}</td>
+                            <td>{{ row.num_nota or '—' }}{% if row.serie %} / {{ row.serie }}{% endif %}</td>
+                            <td>
+                                {% if row.empresa_nome %}<span class="af-pill af-pill-blue">{{ row.empresa_nome }}</span>{% endif %}
+                                {% if row.grupo_nome %}<span class="af-pill af-pill-purple">{{ row.grupo_nome }}</span>{% endif %}
+                            </td>
+                            <td>{{ row.emit_nome or '—' }}</td>
+                            <td>{{ row.categoria }}{% if row.subcategoria and row.subcategoria != '—' %} / {{ row.subcategoria }}{% endif %}</td>
+                            <td style="font-weight:700;color:#0f172a;">{{ row.produto_nome }}</td>
+                            <td>{{ row.unidade or '—' }}</td>
+                            <td class="af-money">{{ br_num(row.quantidade) }}</td>
+                            <td class="af-money">{{ row.valor_unitario|format_currency }}</td>
+                            <td class="af-money">{{ row.valor_total|format_currency }}</td>
+                            <td class="af-money">{{ row.valor_icms|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="11" class="af-empty"><i class="fas fa-file-invoice"></i>Nenhum item encontrado para o filtro informado.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadProdutosCatalogo() {
+    const clienteId = document.getElementById('f_cliente_id').value;
+    const grupoId = document.getElementById('f_grupo_id').value;
+    const categoria = document.getElementById('f_categoria').value;
+    const select = document.getElementById('f_produto_id');
+    const selected = select.dataset.selected || '';
+
+    if (categoria === '__sem_vinculo__') {
+        select.innerHTML = '<option value="">— Produtos vinculados indisponíveis para "Sem vínculo" —</option>';
+        select.disabled = true;
+        return;
+    }
+
+    const params = new URLSearchParams();
+    if (clienteId) params.append('cliente_id', clienteId);
+    if (grupoId) params.append('grupo_id', grupoId);
+
+    select.disabled = true;
+    select.innerHTML = '<option value="">Carregando...</option>';
+
+    try {
+        const resp = await fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + params.toString());
+        const rows = await resp.json();
+        const filtered = categoria ? rows.filter(r => (r.categoria || '') === categoria) : rows;
+        const options = ['<option value="">— Todos —</option>'].concat(
+            filtered.map(r => {
+                const scope = r.categoria ? `${r.categoria} · ` : '';
+                return `<option value="${r.id}">${scope}${r.nome}</option>`;
+            })
+        );
+        select.innerHTML = options.join('');
+        select.disabled = false;
+        if (selected) {
+            select.value = selected;
+        }
+        if (select.value !== selected) {
+            select.value = '';
+        }
+    } catch (e) {
+        select.innerHTML = '<option value="">Erro ao carregar produtos</option>';
+        select.disabled = true;
+    }
+}
+
+document.getElementById('f_cliente_id').addEventListener('change', () => {
+    document.getElementById('f_produto_id').dataset.selected = '';
+    loadProdutosCatalogo();
+});
+document.getElementById('f_grupo_id').addEventListener('change', () => {
+    document.getElementById('f_produto_id').dataset.selected = '';
+    loadProdutosCatalogo();
+});
+document.getElementById('f_categoria').addEventListener('change', () => {
+    document.getElementById('f_produto_id').dataset.selected = '';
+    loadProdutosCatalogo();
+});
+
+loadProdutosCatalogo();
+</script>
+{% endblock %}

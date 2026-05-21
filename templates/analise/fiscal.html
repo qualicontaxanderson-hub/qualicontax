@@ -14,31 +14,27 @@
             <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">Disponível agora</div>
             <h3 style="margin:0 0 8px;font-size:20px;color:#1e3a8a;">Compras NF-e com análise por produto, valor, quantidade e distribuidora</h3>
             <p style="margin:0;color:#334155;line-height:1.55;">
-                A <strong>Conferência de Compras</strong> já concentra as informações importadas dos XMLs e permite explorar compras por produto,
-                fornecedor/emissor e períodos. É a base da análise fiscal atual enquanto ampliamos a malha para saídas e SPEDs.
+                O relatório de <strong>Compras NF-e</strong> entrega a visão analítica por empresa ou grupo, período, categoria, produto e fornecedor.
+                A conferência operacional continua disponível para importação, conferência de XMLs e vínculos de produtos enquanto ampliamos a malha para saídas e SPEDs.
             </p>
         </div>
-        {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
-        <a href="{{ url_for('escrita_fiscal.conf_compras') }}"
+        <a href="{{ url_for('modulos.analise_fiscal_compras') }}"
            style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,.22);white-space:nowrap;">
             <i class="fas fa-chart-column"></i> Consultar lançamentos fiscais
         </a>
-        {% endif %}
     </div>
 </div>
 
 <div class="module-tiles">
 
-    {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
-    <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="module-tile">
+    <a href="{{ url_for('modulos.analise_fiscal_compras') }}" class="module-tile">
         <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
             <i class="fas fa-cart-shopping"></i>
         </div>
         <h3 class="module-tile-title">Compras NF-e</h3>
-        <p class="module-tile-desc">Analise compras por produto, quantidade total, valor total, emitente/distribuidora e período usando os XMLs já importados</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Abrir análise de compras</span>
+        <p class="module-tile-desc">Abra o relatório fiscal de compras por empresa ou grupo, com período, categoria, produto, fornecedor e detalhamento dos lançamentos</p>
+        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Abrir relatório de compras</span>
     </a>
-    {% endif %}
 
     <div class="module-tile" style="opacity:.92;">
         <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
