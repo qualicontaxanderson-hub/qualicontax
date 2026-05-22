@@ -7,6 +7,7 @@ from utils.db_helper import execute_query
 
 modulos = Blueprint('modulos', __name__)
 FORNECEDOR_CARDS_AUTO_OPEN_DEFAULT = 2
+PRODUTO_CARDS_AUTO_OPEN_DEFAULT = 2
 
 
 def _get_empresas_analise():
@@ -158,6 +159,8 @@ def analise_fiscal_compras():
     fornecedores_rows = []
     fornecedor_cards = []
     fornecedor_cards_auto_open = FORNECEDOR_CARDS_AUTO_OPEN_DEFAULT
+    produto_cards = []
+    produto_cards_auto_open = PRODUTO_CARDS_AUTO_OPEN_DEFAULT
     produto_historico_rows = []
     detalhamento_rows = []
     erro_filtros = ''
@@ -418,6 +421,77 @@ def analise_fiscal_compras():
 
         fornecedor_cards.sort(key=lambda f: (f['total_valor'], f['emit_nome']), reverse=True)
 
+        produtos_map = {}
+        for row in produto_historico_rows:
+            produto_nome = (row.get('produto_nome') or 'Produto não informado').strip()
+            unidade = (row.get('unidade') or '').strip()
+            produto_key = f'{produto_nome}::{unidade}'
+            produto = produtos_map.get(produto_key)
+            if not produto:
+                produto = {
+                    'produto_nome': produto_nome,
+                    'unidade': unidade,
+                    'total_qtd': 0.0,
+                    'total_valor': 0.0,
+                    'total_icms': 0.0,
+                    'total_itens': 0,
+                    'primeira_data': None,
+                    'ultima_data': None,
+                    'valor_unitario_medio': 0.0,
+                    'fornecedores_set': set(),
+                    'notas_set': set(),
+                    'itens': [],
+                }
+                produtos_map[produto_key] = produto
+
+            quantidade = float(row.get('quantidade') or 0)
+            valor_total = float(row.get('valor_total') or 0)
+            valor_icms = float(row.get('valor_icms') or 0)
+            valor_unitario = float(row.get('valor_unitario') or 0)
+            data_emissao = row.get('data_emissao')
+            emit_nome = (row.get('emit_nome') or 'Fornecedor não identificado').strip()
+            emit_cnpj = (row.get('emit_cnpj') or '').strip()
+            num_nota = row.get('num_nota')
+            serie = row.get('serie')
+
+            produto['total_qtd'] += quantidade
+            produto['total_valor'] += valor_total
+            produto['total_icms'] += valor_icms
+            produto['total_itens'] += 1
+            if data_emissao:
+                if not produto['primeira_data'] or data_emissao < produto['primeira_data']:
+                    produto['primeira_data'] = data_emissao
+                if not produto['ultima_data'] or data_emissao > produto['ultima_data']:
+                    produto['ultima_data'] = data_emissao
+
+            fornecedor_key = emit_cnpj or emit_nome
+            if fornecedor_key:
+                produto['fornecedores_set'].add(fornecedor_key)
+            produto['notas_set'].add((num_nota, serie, emit_cnpj, data_emissao))
+
+            produto['itens'].append({
+                'data_emissao': data_emissao,
+                'emit_nome': emit_nome,
+                'emit_cnpj': emit_cnpj,
+                'num_nota': num_nota,
+                'serie': serie,
+                'quantidade': quantidade,
+                'valor_unitario': valor_unitario,
+                'valor_total': valor_total,
+                'valor_icms': valor_icms,
+            })
+
+        for produto in produtos_map.values():
+            if produto['total_qtd'] > 0:
+                produto['valor_unitario_medio'] = produto['total_valor'] / produto['total_qtd']
+            produto['qtd_fornecedores'] = len(produto['fornecedores_set'])
+            produto['qtd_notas'] = len(produto['notas_set'])
+            del produto['fornecedores_set']
+            del produto['notas_set']
+            produto_cards.append(produto)
+
+        produto_cards.sort(key=lambda p: (p['total_valor'], p['produto_nome']), reverse=True)
+
     return render_template(
         'analise/compras_nfe.html',
         empresas=empresas,
@@ -430,6 +504,8 @@ def analise_fiscal_compras():
         fornecedores_rows=fornecedores_rows,
         fornecedor_cards=fornecedor_cards,
         fornecedor_cards_auto_open=fornecedor_cards_auto_open,
+        produto_cards=produto_cards,
+        produto_cards_auto_open=produto_cards_auto_open,
         produto_historico_rows=produto_historico_rows,
         detalhamento_rows=detalhamento_rows,
         searched=searched,
