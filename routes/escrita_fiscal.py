@@ -1482,9 +1482,11 @@ def _run_import_job(job: dict, departamento: str,
             if not files:
                 break
 
-            # Aplica cursor quando filtro está ativo para avançar além dos
-            # arquivos já analisados em lotes anteriores.
-            if filter_cnpjs is not None and last_scanned:
+            # Aplica cursor para avançar além dos arquivos já analisados em lotes
+            # anteriores — inclui arquivos de empresas não cadastradas (que ficam em
+            # NOVO mas já foram processados nesta execução) e arquivos saltados por
+            # filtro de empresa/grupo.
+            if last_scanned:
                 cursor_lower = last_scanned.lower()
                 advanced = False
                 for ci, cf in enumerate(files):
@@ -1504,6 +1506,7 @@ def _run_import_job(job: dict, departamento: str,
             last_scanned_this = batch[-1]['name'] if batch else None
             batch_moved = 0
             batch_skipped = 0
+            batch_unregistered_this = 0
             now = datetime.now()
 
             for info in batch:
@@ -1658,6 +1661,7 @@ def _run_import_job(job: dict, departamento: str,
                         _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
                         _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
                         unregistered[_unreg_key] = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
+                        batch_unregistered_this += 1
                         continue
 
                     result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
@@ -1707,8 +1711,10 @@ def _run_import_job(job: dict, departamento: str,
                     except DropboxAuthError:
                         logger.warning('[import_job] Auth ao mover %s para erros', info['name'])
 
-            # Avança cursor no modo de filtro.
-            if filter_cnpjs is not None and last_scanned_this:
+            # Atualiza cursor com o último arquivo analisado neste lote.
+            # Usado em todas as execuções (com ou sem filtro) para garantir que
+            # arquivos de empresas não cadastradas não bloqueiem iterações futuras.
+            if last_scanned_this:
                 last_scanned = last_scanned_this
 
             _snapshot()
@@ -1716,11 +1722,13 @@ def _run_import_job(job: dict, departamento: str,
             if not has_more:
                 break
 
-            # Guarda-chuva anti-loop: sem progresso E sem arquivos saltados com cursor
-            # avançando → para para evitar loop infinito com arquivos presos em NOVO.
-            if batch_moved == 0:
-                if filter_cnpjs is None or batch_skipped == 0:
-                    break
+            # Guarda-chuva anti-loop: pára apenas quando não houve nenhum
+            # progresso real — nem arquivos movidos, nem saltados por filtro, nem
+            # empresas não cadastradas analisadas.  O cursor já garante que os
+            # mesmos arquivos não serão re-processados nesta execução; só paramos
+            # aqui quando todos os arquivos do lote falharam no download/parse.
+            if batch_moved == 0 and batch_skipped == 0 and batch_unregistered_this == 0:
+                break
 
     except Exception:
         logger.exception('[import_job] Falha inesperada no job de importação')
@@ -1853,6 +1861,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = {}
     _pastas_criadas: set = set()
+    _last_seen: str | None = None  # cursor para pular arquivos já analisados
 
     def _get_or_create_pasta(path: str) -> str:
         if path not in _pastas_criadas:
@@ -1860,7 +1869,9 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             _pastas_criadas.add(path)
         return path
 
-    # Loop de lotes — continua enquanto houver arquivos e progresso real (arquivos movidos)
+    # Loop de lotes — continua enquanto houver arquivos novos para processar.
+    # O cursor _last_seen garante que arquivos de empresas não cadastradas (que
+    # ficam em NOVO) não bloqueiem o processamento dos demais.
     max_iterations = 1000  # guarda-chuva contra loop infinito
     iteration = 0
     while iteration < max_iterations:
@@ -1875,9 +1886,25 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             logger.info('[agendado] Nenhum arquivo em %r — concluído.', pasta_novo)
             break
 
+        # Avança cursor para pular arquivos já analisados em lotes anteriores.
+        if _last_seen:
+            cursor_lower = _last_seen.lower()
+            advanced = False
+            for ci, cf in enumerate(files):
+                if cf['name'].lower() > cursor_lower:
+                    files = files[ci:]
+                    advanced = True
+                    break
+            if not advanced:
+                logger.info('[agendado] Cursor além do último arquivo em %r — concluído.', pasta_novo)
+                break
+            if not files:
+                break
+
         batch = files[:_DROPBOX_BATCH_LIMIT]
         now = datetime.now(ZoneInfo('America/Sao_Paulo'))
         batch_moved = 0
+        batch_unregistered_this = 0
 
         for info in batch:
             _nome = None
@@ -2011,6 +2038,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
                                       'empresa': _dest_nome_xml or _raw_dest_cnpj,
                                       'detalhe': f'Empresa não cadastrada (CNPJ: {_raw_dest_cnpj})'})
+                    batch_unregistered_this += 1
                     continue
 
                 result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
@@ -2053,10 +2081,15 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                 except DropboxAuthError:
                     logger.warning('[agendado] Falha de auth ao mover %s para erros', info['name'])
 
-        # Sem progresso neste lote (nenhum arquivo movido) → para para evitar loop infinito.
-        # Isso acontece quando todos os arquivos restantes são de empresas não cadastradas.
-        if batch_moved == 0:
-            logger.info('[agendado] Nenhum arquivo movido neste lote — encerrando loop.')
+        # Atualiza cursor com o último arquivo analisado neste lote.
+        if batch and batch[-1].get('name'):
+            _last_seen = batch[-1]['name']
+
+        # Sem progresso neste lote → pára apenas quando não houve nenhum arquivo
+        # processado (nem movidos, nem empresas não cadastradas).  O cursor acima
+        # garante que os mesmos arquivos não serão re-processados em iterações futuras.
+        if batch_moved == 0 and batch_unregistered_this == 0:
+            logger.info('[agendado] Nenhum arquivo processado neste lote — encerrando loop.')
             break
 
     logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
