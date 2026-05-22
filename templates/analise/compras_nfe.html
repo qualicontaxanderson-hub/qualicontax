@@ -96,7 +96,8 @@
 .af-ms-empty { padding:10px 12px; font-size:12px; color:#94a3b8; font-style:italic; }
 
 /* Period preset buttons */
-.af-presets-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; }
+.af-filter-footer { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px, 360px); gap:12px; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; align-items:end; }
+.af-presets-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .af-presets-label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-right:2px; }
 .af-preset-btn { padding:4px 12px; border-radius:999px; font-size:11px; font-weight:800; border:1px solid #dbe2ea; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; transition:all .15s ease; box-shadow:0 1px 0 rgba(15,23,42,.04); }
 .af-preset-btn:hover { transform:translateY(-1px); box-shadow:0 4px 10px rgba(15,23,42,.10); }
@@ -114,6 +115,7 @@
     .af-top { grid-template-columns:1fr; }
     .af-toolbar { justify-content:flex-start; }
     .af-filter-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .af-filter-footer { grid-template-columns:1fr; }
     .af-grid-2 { grid-template-columns:1fr; }
     .af-supplier-grid { grid-template-columns:1fr; }
     .af-product-grid { grid-template-columns:1fr; }
@@ -247,14 +249,14 @@
                 </div>
             </div>
         </div>
-        <div class="af-presets-row">
-            <span class="af-presets-label">Período rápido:</span>
-            <button type="button" class="af-preset-btn af-preset-btn--mes-atual" onclick="setPreset('mes_atual')">Mês atual</button>
-            <button type="button" class="af-preset-btn af-preset-btn--mes-anterior" onclick="setPreset('mes_anterior')">Mês anterior</button>
-            <button type="button" class="af-preset-btn af-preset-btn--ano-atual" onclick="setPreset('ano_atual')">Ano atual</button>
-            <button type="button" class="af-preset-btn af-preset-btn--ano-anterior" onclick="setPreset('ano_anterior')">Ano anterior</button>
-        </div>
-        <div class="af-filter-grid" style="margin-top:10px; border-top:none;">
+        <div class="af-filter-footer">
+            <div class="af-presets-row">
+                <span class="af-presets-label">Período rápido:</span>
+                <button type="button" class="af-preset-btn af-preset-btn--mes-atual" onclick="setPreset('mes_atual')">Mês atual</button>
+                <button type="button" class="af-preset-btn af-preset-btn--mes-anterior" onclick="setPreset('mes_anterior')">Mês anterior</button>
+                <button type="button" class="af-preset-btn af-preset-btn--ano-atual" onclick="setPreset('ano_atual')">Ano atual</button>
+                <button type="button" class="af-preset-btn af-preset-btn--ano-anterior" onclick="setPreset('ano_anterior')">Ano anterior</button>
+            </div>
             <div class="af-field">
                 <label>Ordenação da data</label>
                 <select name="ordem_data">
