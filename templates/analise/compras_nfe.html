@@ -98,8 +98,16 @@
 /* Period preset buttons */
 .af-presets-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; }
 .af-presets-label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-right:2px; }
-.af-preset-btn { padding:4px 12px; border-radius:7px; font-size:11px; font-weight:700; border:1px solid #dbe2ea; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; transition:all .1s; }
-.af-preset-btn:hover { background:#eff6ff; border-color:#2563eb; color:#1d4ed8; }
+.af-preset-btn { padding:4px 12px; border-radius:999px; font-size:11px; font-weight:800; border:1px solid #dbe2ea; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; transition:all .15s ease; box-shadow:0 1px 0 rgba(15,23,42,.04); }
+.af-preset-btn:hover { transform:translateY(-1px); box-shadow:0 4px 10px rgba(15,23,42,.10); }
+.af-preset-btn--mes-atual { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.af-preset-btn--mes-atual:hover { background:#dbeafe; border-color:#93c5fd; color:#1e40af; }
+.af-preset-btn--mes-anterior { background:#ecfeff; border-color:#a5f3fc; color:#0f766e; }
+.af-preset-btn--mes-anterior:hover { background:#cffafe; border-color:#67e8f9; color:#115e59; }
+.af-preset-btn--ano-atual { background:#f5f3ff; border-color:#ddd6fe; color:#6d28d9; }
+.af-preset-btn--ano-atual:hover { background:#ede9fe; border-color:#c4b5fd; color:#5b21b6; }
+.af-preset-btn--ano-anterior { background:#fff7ed; border-color:#fed7aa; color:#c2410c; }
+.af-preset-btn--ano-anterior:hover { background:#ffedd5; border-color:#fdba74; color:#9a3412; }
 
 @media (max-width: 1300px) { .af-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
 @media (max-width: 980px) {
@@ -248,10 +256,10 @@
         </div>
         <div class="af-presets-row">
             <span class="af-presets-label">Período rápido:</span>
-            <button type="button" class="af-preset-btn" onclick="setPreset('mes_atual')">Mês atual</button>
-            <button type="button" class="af-preset-btn" onclick="setPreset('mes_anterior')">Mês anterior</button>
-            <button type="button" class="af-preset-btn" onclick="setPreset('ano_atual')">Ano atual</button>
-            <button type="button" class="af-preset-btn" onclick="setPreset('ano_anterior')">Ano anterior</button>
+            <button type="button" class="af-preset-btn af-preset-btn--mes-atual" onclick="setPreset('mes_atual')">Mês atual</button>
+            <button type="button" class="af-preset-btn af-preset-btn--mes-anterior" onclick="setPreset('mes_anterior')">Mês anterior</button>
+            <button type="button" class="af-preset-btn af-preset-btn--ano-atual" onclick="setPreset('ano_atual')">Ano atual</button>
+            <button type="button" class="af-preset-btn af-preset-btn--ano-anterior" onclick="setPreset('ano_anterior')">Ano anterior</button>
         </div>
         <div class="af-actions">
             <button class="af-btn af-btn-primary" type="submit" name="buscar" value="1"><i class="fas fa-chart-column"></i> Gerar relatório</button>
