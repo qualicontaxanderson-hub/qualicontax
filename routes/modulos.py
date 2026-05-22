@@ -34,6 +34,7 @@ def _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=None):
     if params is None:
         params = []
     else:
+        # Evita mutar a lista recebida pelo chamador.
         params = list(params)
     clauses = []
     if f_cliente_id:
