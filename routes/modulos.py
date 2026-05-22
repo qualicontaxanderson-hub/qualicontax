@@ -33,6 +33,8 @@ def _get_categorias_analise():
 def _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=None):
     if params is None:
         params = []
+    else:
+        params = list(params)
     clauses = []
     if f_cliente_id:
         cid = int(f_cliente_id)
