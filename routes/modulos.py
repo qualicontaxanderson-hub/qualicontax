@@ -33,6 +33,7 @@ def _get_categorias_analise():
 
 
 def _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=None):
+    """Monta cláusulas SQL de escopo (empresa/grupo) e retorna (clauses, params)."""
     if params is None:
         params = []
     else:
@@ -482,8 +483,9 @@ def analise_fiscal_compras():
             })
 
         for produto in produtos_map.values():
-            if produto['total_qtd'] > 0:
-                produto['valor_unitario_medio'] = produto['total_valor'] / produto['total_qtd']
+            total_qtd = float(produto.get('total_qtd') or 0)
+            if total_qtd > 0:
+                produto['valor_unitario_medio'] = produto['total_valor'] / total_qtd
             produto['qtd_fornecedores'] = len(produto['fornecedores_set'])
             produto['qtd_notas'] = len(produto['notas_set'])
             del produto['fornecedores_set']
