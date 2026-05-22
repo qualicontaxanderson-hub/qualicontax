@@ -6,6 +6,7 @@ from utils.auth_helper import permission_required
 from utils.db_helper import execute_query
 
 modulos = Blueprint('modulos', __name__)
+FORNECEDOR_CARDS_AUTO_OPEN_DEFAULT = 2
 
 
 def _get_empresas_analise():
@@ -156,7 +157,7 @@ def analise_fiscal_compras():
     produtos_rows = []
     fornecedores_rows = []
     fornecedor_cards = []
-    fornecedor_cards_auto_open = 2
+    fornecedor_cards_auto_open = FORNECEDOR_CARDS_AUTO_OPEN_DEFAULT
     produto_historico_rows = []
     detalhamento_rows = []
     erro_filtros = ''
