@@ -246,13 +246,6 @@
                     </div>
                 </div>
             </div>
-            <div class="af-field">
-                <label>Ordenação da data</label>
-                <select name="ordem_data">
-                    <option value="asc" {% if f_ordem_data == 'asc' %}selected{% endif %}>Crescente (sequencial)</option>
-                    <option value="desc" {% if f_ordem_data == 'desc' %}selected{% endif %}>Decrescente (mais recente)</option>
-                </select>
-            </div>
         </div>
         <div class="af-presets-row">
             <span class="af-presets-label">Período rápido:</span>
@@ -260,6 +253,15 @@
             <button type="button" class="af-preset-btn af-preset-btn--mes-anterior" onclick="setPreset('mes_anterior')">Mês anterior</button>
             <button type="button" class="af-preset-btn af-preset-btn--ano-atual" onclick="setPreset('ano_atual')">Ano atual</button>
             <button type="button" class="af-preset-btn af-preset-btn--ano-anterior" onclick="setPreset('ano_anterior')">Ano anterior</button>
+        </div>
+        <div class="af-filter-grid" style="margin-top:10px; border-top:none;">
+            <div class="af-field">
+                <label>Ordenação da data</label>
+                <select name="ordem_data">
+                    <option value="asc" {% if f_ordem_data == 'asc' %}selected{% endif %}>Crescente (sequencial)</option>
+                    <option value="desc" {% if f_ordem_data == 'desc' %}selected{% endif %}>Decrescente (mais recente)</option>
+                </select>
+            </div>
         </div>
         <div class="af-actions">
             <button class="af-btn af-btn-primary" type="submit" name="buscar" value="1"><i class="fas fa-chart-column"></i> Gerar relatório</button>
