@@ -222,7 +222,7 @@
                         <span class="af-badge"><span class="af-badge-label">Produtos</span><span class="af-badge-value">{{ fornecedor.qtd_produtos }}</span></span>
                     </div>
                 </div>
-                <details {% if loop.index <= 2 %}open{% endif %}>
+                <details {% if loop.index <= fornecedor_cards_auto_open %}open{% endif %}>
                     <summary>Ver produtos comprados desta distribuidora</summary>
                     <div class="af-table-wrap">
                         <table class="af-table" style="min-width:640px;">

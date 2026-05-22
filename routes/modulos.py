@@ -156,6 +156,7 @@ def analise_fiscal_compras():
     produtos_rows = []
     fornecedores_rows = []
     fornecedor_cards = []
+    fornecedor_cards_auto_open = 2
     produto_historico_rows = []
     detalhamento_rows = []
     erro_filtros = ''
@@ -427,6 +428,7 @@ def analise_fiscal_compras():
         produtos_rows=produtos_rows,
         fornecedores_rows=fornecedores_rows,
         fornecedor_cards=fornecedor_cards,
+        fornecedor_cards_auto_open=fornecedor_cards_auto_open,
         produto_historico_rows=produto_historico_rows,
         detalhamento_rows=detalhamento_rows,
         searched=searched,
