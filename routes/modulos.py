@@ -114,10 +114,10 @@ def analise_fiscal_compras():
     f_grupo_id = request.args.get('grupo_id', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip() or data_ini_default
     f_data_fim = request.args.get('data_fim', '').strip() or data_fim_default
-    f_categoria = request.args.get('categoria', '').strip()
-    f_produto_id = request.args.get('produto_id', '').strip()
+    f_categorias = [v.strip() for v in request.args.getlist('categoria') if v.strip()]
+    f_produto_ids = [v.strip() for v in request.args.getlist('produto_id') if v.strip()]
     f_descricao = request.args.get('descricao', '').strip()
-    f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    f_emit_cnpjs = [v.strip() for v in request.args.getlist('emit_cnpj') if v.strip()]
     f_ordem_data = request.args.get('ordem_data', 'asc').strip().lower()
     if f_ordem_data not in ('asc', 'desc'):
         f_ordem_data = 'asc'
@@ -169,7 +169,7 @@ def analise_fiscal_compras():
         buscar or f_cliente_id or f_grupo_id or
         (f_data_ini != data_ini_default) or
         (f_data_fim != data_fim_default) or
-        f_categoria or f_produto_id or f_descricao or f_emit_cnpj
+        f_categorias or f_produto_ids or f_descricao or f_emit_cnpjs
     )
 
     if searched and not (f_cliente_id or f_grupo_id):
@@ -184,17 +184,34 @@ def analise_fiscal_compras():
         if f_data_fim:
             where.append('n.data_emissao <= %s')
             params.append(f_data_fim)
-        if f_emit_cnpj:
-            where.append('n.emit_cnpj = %s')
-            params.append(f_emit_cnpj)
-        if f_produto_id:
-            where.append('i.produto_catalogo_id = %s')
-            params.append(int(f_produto_id))
-        elif f_categoria == '__sem_vinculo__':
-            where.append('i.produto_catalogo_id IS NULL')
-        elif f_categoria:
-            where.append('p.categoria = %s')
-            params.append(f_categoria)
+        if f_emit_cnpjs:
+            ph = ','.join(['%s'] * len(f_emit_cnpjs))
+            where.append(f'n.emit_cnpj IN ({ph})')
+            params.extend(f_emit_cnpjs)
+        if f_produto_ids:
+            valid_ids = []
+            for pid in f_produto_ids:
+                try:
+                    valid_ids.append(int(pid))
+                except (ValueError, TypeError):
+                    pass
+            if valid_ids:
+                ph = ','.join(['%s'] * len(valid_ids))
+                where.append(f'i.produto_catalogo_id IN ({ph})')
+                params.extend(valid_ids)
+        elif f_categorias:
+            has_sem_vinculo = '__sem_vinculo__' in f_categorias
+            real_cats = [c for c in f_categorias if c != '__sem_vinculo__']
+            if has_sem_vinculo and real_cats:
+                ph = ','.join(['%s'] * len(real_cats))
+                where.append(f'(i.produto_catalogo_id IS NULL OR p.categoria IN ({ph}))')
+                params.extend(real_cats)
+            elif has_sem_vinculo:
+                where.append('i.produto_catalogo_id IS NULL')
+            elif real_cats:
+                ph = ','.join(['%s'] * len(real_cats))
+                where.append(f'p.categoria IN ({ph})')
+                params.extend(real_cats)
         if f_descricao:
             where.append('(COALESCE(p.nome, i.descricao) LIKE %s OR i.descricao LIKE %s)')
             like_value = f'%{f_descricao}%'
@@ -516,9 +533,9 @@ def analise_fiscal_compras():
         f_grupo_id=f_grupo_id,
         f_data_ini=f_data_ini,
         f_data_fim=f_data_fim,
-        f_categoria=f_categoria,
-        f_produto_id=f_produto_id,
+        f_categorias=f_categorias,
+        f_produto_ids=f_produto_ids,
         f_descricao=f_descricao,
-        f_emit_cnpj=f_emit_cnpj,
+        f_emit_cnpjs=f_emit_cnpjs,
         f_ordem_data=f_ordem_data,
     )

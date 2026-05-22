@@ -79,6 +79,28 @@
 .af-product-card details { padding:0 12px 10px; }
 .af-product-card details summary { margin:10px 0; font-size:12px; font-weight:700; color:#1d4ed8; }
 
+/* Multi-select custom dropdown */
+.af-ms { position:relative; width:100%; }
+.af-ms-btn { width:100%; padding:9px 10px; border:1px solid #dbe2ea; border-radius:9px; background:#f8fafc; font-size:13px; color:#0f172a; text-align:left; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; }
+.af-ms-btn:focus { outline:none; border-color:#2563eb; background:#fff; }
+.af-ms-btn:disabled { opacity:.55; cursor:default; }
+.af-ms-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.af-ms-count { background:#2563eb; color:#fff; border-radius:999px; font-size:10px; font-weight:800; padding:1px 6px; flex-shrink:0; }
+.af-ms-caret { color:#64748b; font-size:11px; transition:transform .15s; flex-shrink:0; }
+.af-ms[data-open] .af-ms-caret { transform:rotate(180deg); }
+.af-ms-dropdown { display:none; position:absolute; z-index:300; top:calc(100% + 3px); left:0; right:0; min-width:180px; background:#fff; border:1px solid #dbe2ea; border-radius:10px; box-shadow:0 8px 24px rgba(15,23,42,.12); max-height:240px; overflow-y:auto; }
+.af-ms[data-open] .af-ms-dropdown { display:block; }
+.af-ms-item { display:flex; align-items:center; gap:8px; padding:7px 10px; cursor:pointer; font-size:12px; color:#334155; user-select:none; }
+.af-ms-item:hover { background:#f1f5f9; }
+.af-ms-item input[type=checkbox] { accent-color:#2563eb; width:14px; height:14px; flex-shrink:0; cursor:pointer; margin:0; }
+.af-ms-empty { padding:10px 12px; font-size:12px; color:#94a3b8; font-style:italic; }
+
+/* Period preset buttons */
+.af-presets-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; }
+.af-presets-label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-right:2px; }
+.af-preset-btn { padding:4px 12px; border-radius:7px; font-size:11px; font-weight:700; border:1px solid #dbe2ea; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; transition:all .1s; }
+.af-preset-btn:hover { background:#eff6ff; border-color:#2563eb; color:#1d4ed8; }
+
 @media (max-width: 1300px) { .af-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
 @media (max-width: 980px) {
     .af-top { grid-template-columns:1fr; }
@@ -150,20 +172,43 @@
             </div>
             <div class="af-field">
                 <label>Categoria</label>
-                <select name="categoria" id="f_categoria">
-                    <option value="">— Todas —</option>
-                    <option value="__sem_vinculo__" {% if f_categoria == '__sem_vinculo__' %}selected{% endif %}>— Sem vínculo —</option>
-                    {% for categoria in categorias %}
-                    <option value="{{ categoria }}" {% if f_categoria == categoria %}selected{% endif %}>{{ categoria }}</option>
-                    {% endfor %}
-                </select>
+                <div class="af-ms" id="ms_categoria" data-all-label="— Todas —">
+                    <button type="button" class="af-ms-btn" onclick="msToggle('ms_categoria')">
+                        <span class="af-ms-label" id="ms_categoria_label">— Todas —</span>
+                        <span class="af-ms-count" id="ms_categoria_count" style="display:none"></span>
+                        <i class="fas fa-chevron-down af-ms-caret"></i>
+                    </button>
+                    <div class="af-ms-dropdown">
+                        <label class="af-ms-item">
+                            <input type="checkbox" name="categoria" value="__sem_vinculo__"
+                                {% if '__sem_vinculo__' in f_categorias %}checked{% endif %}
+                                onchange="msUpdateLabel('ms_categoria'); loadProdutosCatalogo()">
+                            <span>— Sem vínculo —</span>
+                        </label>
+                        {% for cat in categorias %}
+                        <label class="af-ms-item">
+                            <input type="checkbox" name="categoria" value="{{ cat }}"
+                                {% if cat in f_categorias %}checked{% endif %}
+                                onchange="msUpdateLabel('ms_categoria'); loadProdutosCatalogo()">
+                            <span>{{ cat }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
             <div class="af-field">
                 <label>Produto</label>
-                <select name="produto_id" id="f_produto_id" data-selected="{{ f_produto_id }}" aria-describedby="f_produto_hint">
-                    <option value="">— Todos —</option>
-                </select>
-                <div id="f_produto_hint" class="af-hint">Filtre um produto específico do catálogo no escopo selecionado.</div>
+                <div class="af-ms" id="ms_produto_id" data-all-label="— Todos —">
+                    <button type="button" class="af-ms-btn" id="ms_produto_id_btn" onclick="msToggle('ms_produto_id')">
+                        <span class="af-ms-label" id="ms_produto_id_label">— Todos —</span>
+                        <span class="af-ms-count" id="ms_produto_id_count" style="display:none"></span>
+                        <i class="fas fa-chevron-down af-ms-caret"></i>
+                    </button>
+                    <div class="af-ms-dropdown" id="ms_produto_id_dropdown">
+                        <div class="af-ms-empty">Selecione empresa/grupo para carregar produtos.</div>
+                    </div>
+                </div>
+                <div id="f_produto_hint" class="af-hint">Filtre um ou mais produtos do catálogo no escopo selecionado.</div>
             </div>
             <div class="af-field">
                 <label>Descrição contém</label>
@@ -171,12 +216,27 @@
             </div>
             <div class="af-field">
                 <label>Distribuidora / fornecedor</label>
-                <select name="emit_cnpj" id="f_emit_cnpj">
-                    <option value="">— Todos —</option>
-                    {% for em in emitentes %}
-                    <option value="{{ em.emit_cnpj }}" {% if f_emit_cnpj == em.emit_cnpj %}selected{% endif %}>{{ em.emit_nome or em.emit_cnpj }}{% if em.emit_cnpj %} ({{ em.emit_cnpj }}){% endif %}</option>
-                    {% endfor %}
-                </select>
+                <div class="af-ms" id="ms_emit_cnpj" data-all-label="— Todos —">
+                    <button type="button" class="af-ms-btn" onclick="msToggle('ms_emit_cnpj')">
+                        <span class="af-ms-label" id="ms_emit_cnpj_label">— Todos —</span>
+                        <span class="af-ms-count" id="ms_emit_cnpj_count" style="display:none"></span>
+                        <i class="fas fa-chevron-down af-ms-caret"></i>
+                    </button>
+                    <div class="af-ms-dropdown">
+                        {% if emitentes %}
+                            {% for em in emitentes %}
+                            <label class="af-ms-item">
+                                <input type="checkbox" name="emit_cnpj" value="{{ em.emit_cnpj }}"
+                                    {% if em.emit_cnpj in f_emit_cnpjs %}checked{% endif %}
+                                    onchange="msUpdateLabel('ms_emit_cnpj')">
+                                <span>{{ em.emit_nome or em.emit_cnpj }}{% if em.emit_cnpj %} ({{ em.emit_cnpj }}){% endif %}</span>
+                            </label>
+                            {% endfor %}
+                        {% else %}
+                            <div class="af-ms-empty">Selecione empresa/grupo para carregar fornecedores.</div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
             <div class="af-field">
                 <label>Ordenação da data</label>
@@ -185,6 +245,13 @@
                     <option value="desc" {% if f_ordem_data == 'desc' %}selected{% endif %}>Decrescente (mais recente)</option>
                 </select>
             </div>
+        </div>
+        <div class="af-presets-row">
+            <span class="af-presets-label">Período rápido:</span>
+            <button type="button" class="af-preset-btn" onclick="setPreset('mes_atual')">Mês atual</button>
+            <button type="button" class="af-preset-btn" onclick="setPreset('mes_anterior')">Mês anterior</button>
+            <button type="button" class="af-preset-btn" onclick="setPreset('ano_atual')">Ano atual</button>
+            <button type="button" class="af-preset-btn" onclick="setPreset('ano_anterior')">Ano anterior</button>
         </div>
         <div class="af-actions">
             <button class="af-btn af-btn-primary" type="submit" name="buscar" value="1"><i class="fas fa-chart-column"></i> Gerar relatório</button>
@@ -501,62 +568,134 @@
 
 {% block extra_js %}
 <script>
+const SELECTED_PRODUTO_IDS = {{ f_produto_ids | tojson }};
+
+/* ── Multi-select helpers ── */
+function msToggle(id) {
+    const el = document.getElementById(id);
+    if (el.hasAttribute('data-open')) {
+        el.removeAttribute('data-open');
+    } else {
+        // close all others
+        document.querySelectorAll('.af-ms[data-open]').forEach(e => e.removeAttribute('data-open'));
+        el.setAttribute('data-open', '');
+    }
+}
+
+function msUpdateLabel(id) {
+    const el = document.getElementById(id);
+    const allLabel = el.dataset.allLabel || '— Todos —';
+    const checked = el.querySelectorAll('input[type=checkbox]:checked');
+    const labelEl = document.getElementById(id + '_label');
+    const countEl = document.getElementById(id + '_count');
+    if (checked.length === 0) {
+        labelEl.textContent = allLabel;
+        countEl.style.display = 'none';
+    } else if (checked.length === 1) {
+        labelEl.textContent = checked[0].closest('.af-ms-item').querySelector('span').textContent;
+        countEl.style.display = 'none';
+    } else {
+        labelEl.textContent = `${checked.length} selecionados`;
+        countEl.textContent = checked.length;
+        countEl.style.display = '';
+    }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e => {
+    if (!e.target.closest('.af-ms')) {
+        document.querySelectorAll('.af-ms[data-open]').forEach(el => el.removeAttribute('data-open'));
+    }
+});
+
+/* ── Date presets ── */
+function setPreset(preset) {
+    const now = new Date();
+    let ini, fim;
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+    if (preset === 'mes_atual') {
+        ini = new Date(now.getFullYear(), now.getMonth(), 1);
+        fim = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    } else if (preset === 'mes_anterior') {
+        ini = new Date(now.getFullYear(), now.getMonth()-1, 1);
+        fim = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (preset === 'ano_atual') {
+        ini = new Date(now.getFullYear(), 0, 1);
+        fim = new Date(now.getFullYear(), 11, 31);
+    } else if (preset === 'ano_anterior') {
+        ini = new Date(now.getFullYear()-1, 0, 1);
+        fim = new Date(now.getFullYear()-1, 11, 31);
+    }
+    document.querySelector('[name=data_ini]').value = fmt(ini);
+    document.querySelector('[name=data_fim]').value = fmt(fim);
+}
+
+/* ── Produtos catálogo (multi-select) ── */
 async function loadProdutosCatalogo() {
     const clienteId = document.getElementById('f_cliente_id').value;
     const grupoId = document.getElementById('f_grupo_id').value;
-    const categoria = document.getElementById('f_categoria').value;
-    const select = document.getElementById('f_produto_id');
+    const dropdown = document.getElementById('ms_produto_id_dropdown');
+    const btn = document.getElementById('ms_produto_id_btn');
     const hint = document.getElementById('f_produto_hint');
-    const selected = select.dataset.selected || '';
 
-    if (categoria === '__sem_vinculo__') {
-        select.innerHTML = '<option value="">— Produtos vinculados indisponíveis para "Sem vínculo" —</option>';
-        select.disabled = true;
-        hint.textContent = 'Quando a categoria "Sem vínculo" estiver selecionada, o filtro por produto do catálogo fica indisponível.';
+    // Check if "Sem vínculo" is the only selection in categoria
+    const catChecked = document.querySelectorAll('#ms_categoria input[type=checkbox]:checked');
+    const allSemVinculo = catChecked.length > 0 && Array.from(catChecked).every(c => c.value === '__sem_vinculo__');
+
+    if (allSemVinculo) {
+        dropdown.innerHTML = '<div class="af-ms-empty">Produtos do catálogo indisponíveis quando apenas "Sem vínculo" está selecionado.</div>';
+        btn.disabled = true;
+        if (hint) hint.textContent = 'Quando apenas "Sem vínculo" estiver selecionado, o filtro por produto fica indisponível.';
+        msUpdateLabel('ms_produto_id');
         return;
     }
+
+    btn.disabled = true;
+    dropdown.innerHTML = '<div class="af-ms-empty">Carregando...</div>';
+
+    const selectedCats = Array.from(document.querySelectorAll('#ms_categoria input[type=checkbox]:checked'))
+        .map(c => c.value).filter(v => v !== '__sem_vinculo__');
 
     const params = new URLSearchParams();
     if (clienteId) params.append('cliente_id', clienteId);
     if (grupoId) params.append('grupo_id', grupoId);
 
-    select.disabled = true;
-    select.innerHTML = '<option value="">Carregando...</option>';
-
     try {
         const resp = await fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + params.toString());
         const rows = await resp.json();
-        const filtered = categoria ? rows.filter(r => (r.categoria || '') === categoria) : rows;
-        const options = ['<option value="">— Todos —</option>'].concat(
-            filtered.map(r => {
+        const filtered = selectedCats.length ? rows.filter(r => selectedCats.includes(r.categoria || '')) : rows;
+
+        if (!filtered.length) {
+            dropdown.innerHTML = '<div class="af-ms-empty">Nenhum produto encontrado.</div>';
+        } else {
+            dropdown.innerHTML = filtered.map(r => {
                 const scope = r.categoria ? `${r.categoria} · ` : '';
-                return `<option value="${r.id}">${scope}${r.nome}</option>`;
-            })
-        );
-        select.innerHTML = options.join('');
-        select.disabled = false;
-        hint.textContent = 'Filtre um produto específico do catálogo no escopo selecionado.';
-        if (selected) select.value = selected;
-        if (select.value !== selected) select.value = '';
+                const isChecked = SELECTED_PRODUTO_IDS.includes(String(r.id)) || SELECTED_PRODUTO_IDS.includes(r.id);
+                return `<label class="af-ms-item">
+                    <input type="checkbox" name="produto_id" value="${r.id}" ${isChecked ? 'checked' : ''}
+                        onchange="msUpdateLabel('ms_produto_id')">
+                    <span>${scope}${r.nome}</span>
+                </label>`;
+            }).join('');
+        }
+        btn.disabled = false;
+        if (hint) hint.textContent = 'Filtre um ou mais produtos do catálogo no escopo selecionado.';
+        msUpdateLabel('ms_produto_id');
     } catch (e) {
-        select.innerHTML = '<option value="">Erro ao carregar produtos</option>';
-        select.disabled = true;
-        hint.textContent = 'Não foi possível carregar os produtos do catálogo para o escopo selecionado.';
+        dropdown.innerHTML = '<div class="af-ms-empty">Erro ao carregar produtos.</div>';
+        btn.disabled = true;
+        if (hint) hint.textContent = 'Não foi possível carregar os produtos do catálogo.';
     }
 }
 
-document.getElementById('f_cliente_id').addEventListener('change', () => {
-    document.getElementById('f_produto_id').dataset.selected = '';
-    loadProdutosCatalogo();
-});
-document.getElementById('f_grupo_id').addEventListener('change', () => {
-    document.getElementById('f_produto_id').dataset.selected = '';
-    loadProdutosCatalogo();
-});
-document.getElementById('f_categoria').addEventListener('change', () => {
-    document.getElementById('f_produto_id').dataset.selected = '';
-    loadProdutosCatalogo();
-});
+document.getElementById('f_cliente_id').addEventListener('change', loadProdutosCatalogo);
+document.getElementById('f_grupo_id').addEventListener('change', loadProdutosCatalogo);
+
+// Init labels
+msUpdateLabel('ms_categoria');
+msUpdateLabel('ms_emit_cnpj');
 
 loadProdutosCatalogo();
 </script>
