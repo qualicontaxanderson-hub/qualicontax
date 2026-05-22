@@ -12,6 +12,12 @@
 .af-header-card p { margin:6px 0 0; color:#334155; line-height:1.55; }
 .af-filter-card { padding:18px 20px; margin-bottom:18px; }
 .af-filter-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
+.af-filter-card summary { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:14px; font-weight:800; color:#0f172a; }
+.af-filter-card summary::-webkit-details-marker { display:none; }
+.af-filter-card summary i { color:#2563eb; }
+.af-filter-card summary .af-caret { transition:transform .2s ease; }
+.af-filter-card[open] summary .af-caret { transform:rotate(180deg); }
+.af-filter-body { margin-top:14px; }
 .af-field label { display:block; margin-bottom:5px; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
 .af-field input, .af-field select { width:100%; padding:10px 12px; border:1.5px solid #dbe2ea; border-radius:10px; background:#f8fafc; color:#0f172a; font-size:13px; }
 .af-field input:focus, .af-field select:focus { outline:none; border-color:#2563eb; background:#fff; }
@@ -50,6 +56,7 @@
 .af-alert { border-radius:12px; padding:14px 16px; margin-bottom:18px; font-size:13px; font-weight:600; }
 .af-alert-danger { background:#fef2f2; border:1.5px solid #fecaca; color:#b91c1c; }
 .af-alert-info { background:#eff6ff; border:1.5px solid #bfdbfe; color:#1d4ed8; }
+.af-filter-chip { display:inline-flex; align-items:center; gap:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; }
 
 @media (max-width: 1100px) {
     .af-filter-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
@@ -79,7 +86,13 @@
 <div class="af-alert af-alert-info"><i class="fas fa-circle-info"></i> Selecione uma empresa ou grupo, informe o período e clique em <strong>Gerar análise</strong>.</div>
 {% endif %}
 
-<form method="get" class="af-card af-filter-card" id="comprasForm">
+<details class="af-card af-filter-card" {% if (not searched) or erro_filtros %}open{% endif %}>
+    <summary>
+        <span><i class="fas fa-sliders-h"></i> Filtros do relatório (clique para mostrar/ocultar)</span>
+        <span class="af-filter-chip">Busca flexível por produto, distribuidora e período</span>
+        <i class="fas fa-chevron-down af-caret"></i>
+    </summary>
+    <form method="get" class="af-filter-body" id="comprasForm">
     <div class="af-filter-grid">
         <div class="af-field">
             <label>Empresa</label>
@@ -133,10 +146,22 @@
             <input type="text" name="descricao" id="f_descricao" placeholder="Ex: Gasolina, Diesel, ARLA..." value="{{ f_descricao }}">
         </div>
         <div class="af-field">
-            <label>Escopo do filtro</label>
-            <div style="padding:10px 12px;border:1.5px solid #dbe2ea;border-radius:10px;background:#f8fafc;font-size:13px;color:#334155;">
-                empresa ou grupo + período + categoria/produto
-            </div>
+            <label>Distribuidora / fornecedor</label>
+            <select name="emit_cnpj" id="f_emit_cnpj">
+                <option value="">— Todos —</option>
+                {% for em in emitentes %}
+                <option value="{{ em.emit_cnpj }}" {% if f_emit_cnpj == em.emit_cnpj %}selected{% endif %}>
+                    {{ em.emit_nome or em.emit_cnpj }}{% if em.emit_cnpj %} ({{ em.emit_cnpj }}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="af-field">
+            <label>Ordenação da data</label>
+            <select name="ordem_data">
+                <option value="asc" {% if f_ordem_data == 'asc' %}selected{% endif %}>Crescente (sequencial)</option>
+                <option value="desc" {% if f_ordem_data == 'desc' %}selected{% endif %}>Decrescente (mais recente)</option>
+            </select>
         </div>
     </div>
     <div class="af-filter-actions">
@@ -155,7 +180,8 @@
         </a>
         {% endif %}
     </div>
-</form>
+    </form>
+</details>
 
 {% if searched and not erro_filtros %}
 <div class="af-kpis">
@@ -311,8 +337,51 @@
 
     <section class="af-card af-section">
         <div class="af-section-head">
+            <h3>Histórico por produto (datas sequenciais e preço unitário)</h3>
+            <span>{{ produto_historico_rows|length }} registro(s)</span>
+        </div>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Data</th>
+                        <th>Distribuidora</th>
+                        <th>Nota</th>
+                        <th>Unid.</th>
+                        <th class="af-money">Qtd.</th>
+                        <th class="af-money">Preço unitário</th>
+                        <th class="af-money">Valor total</th>
+                        <th class="af-money">ICMS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if produto_historico_rows %}
+                        {% for row in produto_historico_rows %}
+                        <tr>
+                            <td style="font-weight:700;color:#0f172a;">{{ row.produto_nome }}</td>
+                            <td>{{ row.data_emissao.strftime('%d/%m/%Y') if row.data_emissao else '—' }}</td>
+                            <td>{{ row.emit_nome or '—' }}{% if row.emit_cnpj %}<br><small style="color:#64748b;">{{ row.emit_cnpj }}</small>{% endif %}</td>
+                            <td>{{ row.num_nota or '—' }}{% if row.serie %} / {{ row.serie }}{% endif %}</td>
+                            <td>{{ row.unidade or '—' }}</td>
+                            <td class="af-money">{{ br_num(row.quantidade) }}</td>
+                            <td class="af-money">{{ row.valor_unitario|format_currency }}</td>
+                            <td class="af-money">{{ row.valor_total|format_currency }}</td>
+                            <td class="af-money">{{ row.valor_icms|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="9" class="af-empty"><i class="fas fa-clock-rotate-left"></i>Nenhum histórico por produto encontrado para o filtro informado.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="af-card af-section">
+        <div class="af-section-head">
             <h3>Detalhamento das compras</h3>
-            <span>limitado aos 500 itens mais recentes do filtro</span>
+            <span>limitado a 500 itens do filtro, respeitando a ordenação de data</span>
         </div>
         <div class="af-table-wrap">
             <table class="af-table">

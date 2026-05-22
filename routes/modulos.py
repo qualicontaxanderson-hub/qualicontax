@@ -111,11 +111,35 @@ def analise_fiscal_compras():
     f_categoria = request.args.get('categoria', '').strip()
     f_produto_id = request.args.get('produto_id', '').strip()
     f_descricao = request.args.get('descricao', '').strip()
+    f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    f_ordem_data = request.args.get('ordem_data', 'asc').strip().lower()
+    if f_ordem_data not in ('asc', 'desc'):
+        f_ordem_data = 'asc'
     buscar = request.args.get('buscar', '').strip()
 
     empresas = _get_empresas_analise()
     grupos = _get_grupos_analise()
     categorias = _get_categorias_analise()
+    emitentes = []
+    if f_cliente_id or f_grupo_id:
+        where_emit, params_emit = _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=[])
+        if f_data_ini:
+            where_emit.append('n.data_emissao >= %s')
+            params_emit.append(f_data_ini)
+        if f_data_fim:
+            where_emit.append('n.data_emissao <= %s')
+            params_emit.append(f_data_fim)
+        where_emit_sql = ('WHERE ' + ' AND '.join(where_emit)) if where_emit else ''
+        emitentes = execute_query(
+            f"""SELECT n.emit_cnpj, MAX(n.emit_nome) AS emit_nome
+                  FROM nfe_importacoes n
+                  {where_emit_sql}
+                 GROUP BY n.emit_cnpj
+                 ORDER BY emit_nome
+                 LIMIT 500""",
+            tuple(params_emit),
+            fetch=True,
+        ) or []
 
     resumo = {
         'total_notas': 0,
@@ -128,19 +152,21 @@ def analise_fiscal_compras():
     categorias_rows = []
     produtos_rows = []
     fornecedores_rows = []
+    produto_historico_rows = []
     detalhamento_rows = []
     erro_filtros = ''
     searched = bool(
         buscar or f_cliente_id or f_grupo_id or
         (f_data_ini != data_ini_default) or
         (f_data_fim != data_fim_default) or
-        f_categoria or f_produto_id or f_descricao
+        f_categoria or f_produto_id or f_descricao or f_emit_cnpj
     )
 
     if searched and not (f_cliente_id or f_grupo_id):
         erro_filtros = 'Selecione uma empresa ou um grupo para gerar a análise.'
 
     if searched and not erro_filtros:
+        date_order = 'DESC' if f_ordem_data == 'desc' else 'ASC'
         where, params = _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=[])
         if f_data_ini:
             where.append('n.data_emissao >= %s')
@@ -148,6 +174,9 @@ def analise_fiscal_compras():
         if f_data_fim:
             where.append('n.data_emissao <= %s')
             params.append(f_data_fim)
+        if f_emit_cnpj:
+            where.append('n.emit_cnpj = %s')
+            params.append(f_emit_cnpj)
         if f_produto_id:
             where.append('i.produto_catalogo_id = %s')
             params.append(int(f_produto_id))
@@ -251,6 +280,31 @@ def analise_fiscal_compras():
             fetch=True,
         ) or []
 
+        produto_historico_rows = execute_query(
+            f"""SELECT n.data_emissao,
+                       n.emit_nome,
+                       n.emit_cnpj,
+                       n.num_nota,
+                       n.serie,
+                       COALESCE(NULLIF(p.nome, ''), i.descricao) AS produto_nome,
+                       COALESCE(NULLIF(p.unidade, ''), i.unidade) AS unidade,
+                       i.quantidade,
+                       i.valor_unitario,
+                       i.valor_total,
+                       i.valor_icms
+                  FROM nfe_itens i
+                  JOIN nfe_importacoes n ON n.id = i.nfe_id
+                  LEFT JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
+                  {where_sql}
+                 ORDER BY COALESCE(NULLIF(p.nome, ''), i.descricao),
+                          n.data_emissao {date_order},
+                          n.id {date_order},
+                          i.num_item ASC
+                 LIMIT 2000""",
+            tuple(params),
+            fetch=True,
+        ) or []
+
         detalhamento_rows = execute_query(
             f"""SELECT n.data_emissao,
                        n.num_nota,
@@ -273,13 +327,13 @@ def analise_fiscal_compras():
                   LEFT JOIN clientes c ON c.id = n.cliente_id
                   LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
                   {where_sql}
-                 ORDER BY n.data_emissao DESC, n.id DESC, i.num_item ASC
+                 ORDER BY n.data_emissao {date_order}, n.id {date_order}, i.num_item ASC
                  LIMIT 500""",
             tuple(params),
             fetch=True,
         ) or []
 
-        for collection in (categorias_rows, produtos_rows, fornecedores_rows, detalhamento_rows):
+        for collection in (categorias_rows, produtos_rows, fornecedores_rows, produto_historico_rows, detalhamento_rows):
             for row in collection:
                 for key in ('total_qtd', 'total_valor', 'total_icms', 'quantidade', 'valor_unitario'):
                     if key in row:
@@ -290,10 +344,12 @@ def analise_fiscal_compras():
         empresas=empresas,
         grupos=grupos,
         categorias=categorias,
+        emitentes=emitentes,
         resumo=resumo,
         categorias_rows=categorias_rows,
         produtos_rows=produtos_rows,
         fornecedores_rows=fornecedores_rows,
+        produto_historico_rows=produto_historico_rows,
         detalhamento_rows=detalhamento_rows,
         searched=searched,
         erro_filtros=erro_filtros,
@@ -304,4 +360,6 @@ def analise_fiscal_compras():
         f_categoria=f_categoria,
         f_produto_id=f_produto_id,
         f_descricao=f_descricao,
+        f_emit_cnpj=f_emit_cnpj,
+        f_ordem_data=f_ordem_data,
     )
