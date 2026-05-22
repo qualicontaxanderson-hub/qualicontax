@@ -155,6 +155,7 @@ def analise_fiscal_compras():
     categorias_rows = []
     produtos_rows = []
     fornecedores_rows = []
+    fornecedor_cards = []
     produto_historico_rows = []
     detalhamento_rows = []
     erro_filtros = ''
@@ -342,6 +343,79 @@ def analise_fiscal_compras():
                     if key in row:
                         row[key] = float(row.get(key) or 0)
 
+        fornecedores_map = {}
+        for row in produto_historico_rows:
+            emit_cnpj = (row.get('emit_cnpj') or '').strip()
+            emit_nome = (row.get('emit_nome') or 'Fornecedor não identificado').strip()
+            fornecedor_key = emit_cnpj or emit_nome
+            fornecedor = fornecedores_map.get(fornecedor_key)
+            if not fornecedor:
+                fornecedor = {
+                    'emit_nome': emit_nome,
+                    'emit_cnpj': emit_cnpj,
+                    'total_qtd': 0.0,
+                    'total_valor': 0.0,
+                    'total_icms': 0.0,
+                    'total_itens': 0,
+                    'primeira_data': None,
+                    'ultima_data': None,
+                    'produtos_map': {},
+                }
+                fornecedores_map[fornecedor_key] = fornecedor
+
+            quantidade = float(row.get('quantidade') or 0)
+            valor_total = float(row.get('valor_total') or 0)
+            valor_icms = float(row.get('valor_icms') or 0)
+            data_emissao = row.get('data_emissao')
+            produto_nome = (row.get('produto_nome') or 'Produto não informado').strip()
+            unidade = (row.get('unidade') or '').strip()
+            produto_key = f'{produto_nome}::{unidade}'
+
+            fornecedor['total_qtd'] += quantidade
+            fornecedor['total_valor'] += valor_total
+            fornecedor['total_icms'] += valor_icms
+            fornecedor['total_itens'] += 1
+            if data_emissao:
+                if not fornecedor['primeira_data'] or data_emissao < fornecedor['primeira_data']:
+                    fornecedor['primeira_data'] = data_emissao
+                if not fornecedor['ultima_data'] or data_emissao > fornecedor['ultima_data']:
+                    fornecedor['ultima_data'] = data_emissao
+
+            produto = fornecedor['produtos_map'].get(produto_key)
+            if not produto:
+                produto = {
+                    'produto_nome': produto_nome,
+                    'unidade': unidade,
+                    'total_qtd': 0.0,
+                    'total_valor': 0.0,
+                    'total_icms': 0.0,
+                    'total_itens': 0,
+                    'ultima_data': None,
+                    'valor_unitario_medio': 0.0,
+                }
+                fornecedor['produtos_map'][produto_key] = produto
+
+            produto['total_qtd'] += quantidade
+            produto['total_valor'] += valor_total
+            produto['total_icms'] += valor_icms
+            produto['total_itens'] += 1
+            if data_emissao and (not produto['ultima_data'] or data_emissao > produto['ultima_data']):
+                produto['ultima_data'] = data_emissao
+
+        for fornecedor in fornecedores_map.values():
+            produtos_list = []
+            for produto in fornecedor['produtos_map'].values():
+                if produto['total_qtd'] > 0:
+                    produto['valor_unitario_medio'] = produto['total_valor'] / produto['total_qtd']
+                produtos_list.append(produto)
+            produtos_list.sort(key=lambda p: (p['total_valor'], p['produto_nome']), reverse=True)
+            fornecedor['produtos'] = produtos_list
+            fornecedor['qtd_produtos'] = len(produtos_list)
+            del fornecedor['produtos_map']
+            fornecedor_cards.append(fornecedor)
+
+        fornecedor_cards.sort(key=lambda f: (f['total_valor'], f['emit_nome']), reverse=True)
+
     return render_template(
         'analise/compras_nfe.html',
         empresas=empresas,
@@ -352,6 +426,7 @@ def analise_fiscal_compras():
         categorias_rows=categorias_rows,
         produtos_rows=produtos_rows,
         fornecedores_rows=fornecedores_rows,
+        fornecedor_cards=fornecedor_cards,
         produto_historico_rows=produto_historico_rows,
         detalhamento_rows=detalhamento_rows,
         searched=searched,
