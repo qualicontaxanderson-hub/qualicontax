@@ -4,11 +4,20 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">Análise</h1>
-        <p class="page-subtitle">Indicadores e análises financeiras e contábeis</p>
+        <p class="page-subtitle">Indicadores e análises financeiras, contábeis e fiscais</p>
     </div>
 </div>
 
 <div class="module-tiles">
+
+    <a href="{{ url_for('modulos.analise_fiscal') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">
+            <i class="fas fa-file-invoice"></i>
+        </div>
+        <h3 class="module-tile-title">Fiscal</h3>
+        <p class="module-tile-desc">Central de análises fiscais com foco atual em compras e estrutura para saídas, SPED Fiscal, SPED Contribuições e cruzamentos futuros</p>
+        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
+    </a>
 
     <a href="#" class="module-tile">
         <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">

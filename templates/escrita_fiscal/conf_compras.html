@@ -1615,159 +1615,127 @@ function _renderImportResult(acc) {
     result.innerHTML = html;
 }
 
-let _importAborted = false;
+// ---- Importação assíncrona (background thread) ----
+// O botão "Importar XML" chama /start e recebe job_id imediatamente.
+// O polling a /status/<job_id> a cada DBX_POLL_INTERVAL_MS ms atualiza a UI sem bloquear o servidor.
+
+const DBX_POLL_INTERVAL_MS = 2000;  // 2 s — leve para o servidor
+
+let _dbxJobId = null;
+let _dbxPollTimer = null;
 
 function pararImportacao() {
-    _importAborted = true;
+    if (!_dbxJobId) return;
     const btnParar = document.getElementById('btnDbxParar');
     btnParar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Parando...';
     btnParar.disabled = true;
+    fetch(`{{ url_for("escrita_fiscal.api_importar_dropbox_stop", job_id="__JID__") }}`.replace('__JID__', _dbxJobId),
+          {method: 'POST'}).catch(() => {});
 }
 
-function executarImportacaoDropbox(_retryCount, _accumulated) {
-    _retryCount = _retryCount || 0;
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [3000, 8000, 15000]; // ms between retry attempts
-
-    // First call: reset abort flag and show stop button.
-    if (!_accumulated) {
-        _importAborted = false;
-        const btnParar = document.getElementById('btnDbxParar');
-        btnParar.style.display = '';
-        btnParar.disabled = false;
-        btnParar.innerHTML = '<i class="fas fa-stop-circle"></i> Parar Importação';
-    }
-
-    // Accumulated totals across all has_more batches.
-    // impCos: {key: {numero, nome, periodosSet}}
-    // unreg: {cnpj_or_name: {cnpj, nome}}
-    // lastScanned: cursor (last filename analysed) for filter-mode pagination.
-    const acc = _accumulated || {
-        ok: 0, dup: 0, err: 0, skipped: 0, moved_ok: 0, moved_err: 0,
-        impCos: {}, unreg: {}, details: [],
-        lastScanned: null,
+function _dbxJobToAcc(data) {
+    // Transforma o estado do job no formato acc esperado por _renderImportResult.
+    const acc = {
+        ok: data.ok || 0, dup: data.dup || 0, err: data.err || 0,
+        skipped: data.skipped || 0, moved_ok: data.moved_ok || 0,
+        moved_err: data.moved_err || 0,
+        impCos: {}, unreg: {}, details: data.details || [],
     };
+    (data.imported_companies || []).forEach(c => {
+        const key = (c.numero || '') + '|' + (c.nome || '');
+        acc.impCos[key] = {numero: c.numero, nome: c.nome, periodosSet: new Set(c.periodos || [])};
+    });
+    (data.unregistered_companies || []).forEach(c => {
+        acc.unreg[c.cnpj || c.nome] = c;
+    });
+    return acc;
+}
 
-    const departamento = 'Fiscal';
-
-    const cliente_id = document.getElementById('dbxEmpresa').value || null;
-    const grupo_id = document.getElementById('dbxGrupo').value || null;
-
+function _dbxImportFinish() {
+    clearInterval(_dbxPollTimer);
+    _dbxPollTimer = null;
+    _dbxJobId = null;
     const btn = document.getElementById('btnDbxImportar');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
+    document.getElementById('btnDbxParar').style.display = 'none';
+}
 
-    const result = document.getElementById('dbxResult');
-    result.style.display = 'none';
-
-    fetch('{{ url_for("escrita_fiscal.api_importar_dropbox") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({departamento, cliente_id, grupo_id, last_scanned: acc.lastScanned}),
-    })
+function _dbxPoll() {
+    if (!_dbxJobId) return;
+    fetch(`{{ url_for("escrita_fiscal.api_importar_dropbox_status", job_id="__JID__") }}`.replace('__JID__', _dbxJobId))
     .then(r => r.json())
     .then(data => {
-        btn.disabled = false;
-        result.style.display = 'block';
         if (data.error) {
-            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
-            document.getElementById('btnDbxParar').style.display = 'none';
+            _dbxImportFinish();
+            const result = document.getElementById('dbxResult');
+            result.style.display = 'block';
             result.className = 'err';
             result.innerHTML = `
               <div class="dbx-res-head">
                 <div class="dbx-res-icon"><i class="fas fa-times-circle"></i></div>
                 <div class="dbx-res-text"><strong>Erro na importação</strong><span>${data.error}</span></div>
               </div>`;
-        } else {
-            // --- Accumulate numeric counters ---
-            acc.ok       += data.ok       || 0;
-            acc.dup      += data.dup      || 0;
-            acc.err      += data.err      || 0;
-            acc.skipped  += data.skipped  || 0;
-            acc.moved_ok += data.moved_ok || 0;
-            acc.moved_err+= data.moved_err|| 0;
-
-            // --- Update cursor for filter-mode pagination ---
-            // last_scanned is the last filename analysed in this batch; the next
-            // call will start from the file immediately after it in the folder.
-            if (data.last_scanned) acc.lastScanned = data.last_scanned;
-            if (!data.has_more) acc.lastScanned = null; // reset when scan completes
-
-            // --- Accumulate imported companies (merge periods from each batch) ---
-            (data.imported_companies || []).forEach(c => {
-                const key = (c.numero || '') + '|' + (c.nome || '');
-                if (!acc.impCos[key]) {
-                    acc.impCos[key] = {numero: c.numero, nome: c.nome, periodosSet: new Set()};
-                }
-                (c.periodos || []).forEach(p => acc.impCos[key].periodosSet.add(p));
-            });
-
-            // --- Accumulate unregistered companies ---
-            (data.unregistered_companies || []).forEach(c => {
-                const key = c.cnpj || c.nome;
-                acc.unreg[key] = c;
-            });
-
-            // --- Accumulate error details (cap at 50 total to avoid huge DOM) ---
-            (data.details || []).forEach(d => {
-                if (acc.details.length < 50) acc.details.push(d);
-            });
-
-            if (data.ok > 0 && (currentClienteId || currentGrupoId)) applyFilters();
-
-            // Continua automaticamente quando:
-            // (a) arquivos foram fisicamente movidos (fluxo normal), OU
-            // (b) filtro ativo pulou arquivos e o cursor avançou (há arquivos da
-            //     empresa selecionada mais adiante na pasta).
-            // Usar somente ok+dup+err causaria loop infinito: XMLs de evento sem
-            // empresa identificada incrementam err mas ficam em NOVO.
-            const filesWereMoved = ((data.moved_ok || 0) + (data.moved_err || 0)) > 0;
-            const filterSkipsAdvancing = !!(data.skipped > 0 && data.has_more && data.last_scanned);
-            if (data.has_more && (filesWereMoved || filterSkipsAdvancing)) {
-                // Check if user requested stop before scheduling next batch.
-                if (_importAborted) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
-                    document.getElementById('btnDbxParar').style.display = 'none';
-                    result.style.display = 'block';
-                    _renderImportResult(acc);
-                    result.innerHTML += `<div class="dbx-more-msg" style="background:#fef9c3;color:#854d0e;border-color:#fde68a;"><i class="fas fa-stop-circle"></i> Importação interrompida pelo usuário. Há mais arquivos na pasta — clique em Importar XML para continuar.</div>`;
-                    return;
-                }
-                // Show running totals while more batches are pending.
-                _renderImportResult(acc);
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
-                btn.disabled = true;
-                setTimeout(() => executarImportacaoDropbox(0, acc), 300);
-            } else {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
-                document.getElementById('btnDbxParar').style.display = 'none';
-                _renderImportResult(acc);
-                if (data.has_more && !filesWereMoved && !filterSkipsAdvancing) {
-                    result.innerHTML += `<div class="dbx-more-msg"><i class="fas fa-info-circle"></i> Há mais arquivos na pasta. Cadastre as empresas acima e importe novamente.</div>`;
-                }
-            }
+            return;
+        }
+        // Mostra progresso em tempo real.
+        _renderImportResult(_dbxJobToAcc(data));
+        if (data.status === 'stopped') {
+            _dbxImportFinish();
+            document.getElementById('dbxResult').innerHTML +=
+                `<div class="dbx-more-msg" style="background:#fef9c3;color:#854d0e;border-color:#fde68a;"><i class="fas fa-stop-circle"></i> Importação interrompida pelo usuário.</div>`;
+        } else if (data.status !== 'running') {
+            // done | error
+            _dbxImportFinish();
+            if ((data.ok || 0) > 0 && (currentClienteId || currentGrupoId)) applyFilters();
         }
     })
-    .catch(() => {
-        if (_retryCount < MAX_RETRIES) {
-            const attempt = _retryCount + 1;
-            const delay   = RETRY_DELAYS[_retryCount];
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Importando...`;
-            result.style.display = 'block';
-            result.className = 'warn';
-            result.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Erro de conexão — reconectando... (tentativa ${attempt}/${MAX_RETRIES})`;
-            setTimeout(() => executarImportacaoDropbox(attempt, acc), delay);
-        } else {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Importar XML';
-            document.getElementById('btnDbxParar').style.display = 'none';
+    .catch(() => {});  // ignora erro de rede — próximo poll vai tentar novamente
+}
+
+function executarImportacaoDropbox() {
+    const btn = document.getElementById('btnDbxImportar');
+    const btnParar = document.getElementById('btnDbxParar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    btnParar.style.display = '';
+    btnParar.disabled = false;
+    btnParar.innerHTML = '<i class="fas fa-stop-circle"></i> Parar Importação';
+
+    document.getElementById('dbxResult').style.display = 'none';
+
+    const departamento = 'Fiscal';
+    const cliente_id = document.getElementById('dbxEmpresa').value || null;
+    const grupo_id = document.getElementById('dbxGrupo').value || null;
+
+    fetch('{{ url_for("escrita_fiscal.api_importar_dropbox_start") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({departamento, cliente_id, grupo_id}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            _dbxImportFinish();
+            const result = document.getElementById('dbxResult');
             result.style.display = 'block';
             result.className = 'err';
-            result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão. Verifique sua internet e tente novamente.';
+            result.innerHTML = `
+              <div class="dbx-res-head">
+                <div class="dbx-res-icon"><i class="fas fa-times-circle"></i></div>
+                <div class="dbx-res-text"><strong>Erro na importação</strong><span>${data.error}</span></div>
+              </div>`;
+            return;
         }
+        _dbxJobId = data.job_id;
+        _dbxPollTimer = setInterval(_dbxPoll, DBX_POLL_INTERVAL_MS);
+    })
+    .catch(() => {
+        _dbxImportFinish();
+        const result = document.getElementById('dbxResult');
+        result.style.display = 'block';
+        result.className = 'err';
+        result.innerHTML = '<i class="fas fa-exclamation-circle"></i> Erro de conexão. Verifique sua internet e tente novamente.';
     });
 }
 

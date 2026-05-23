@@ -37,6 +37,8 @@
 .anp-prod-table th, .anp-prod-table td { padding:6px 8px; border-bottom:1px solid var(--border-color); text-align:left; vertical-align:top; }
 .anp-prod-table th { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; }
 .anp-prod-table td.center { text-align:center; white-space:nowrap; }
+.branch-list { list-style:none; margin:0; padding:0; }
+.branch-list li { padding:2px 0; }
 @media (max-width: 900px) { .anp-list-grid { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
@@ -211,14 +213,10 @@
                                 <span>{{ cliente.porte_empresa }}</span>
                             </div>
                             {% endif %}
-                            {% if ramos_atividade %}
+                            {% if cliente.data_inicio_atividade %}
                             <div class="info-item">
-                                <label>Ramo de Atividade</label>
-                                <span>
-                                    {% for ramo in ramos_atividade %}
-                                        <span class="badge badge-secondary">{{ ramo.nome }}</span>
-                                    {% endfor %}
-                                </span>
+                                <label>Data de Início da Atividade</label>
+                                <span>{{ cliente.data_inicio_atividade|format_date }}</span>
                             </div>
                             {% endif %}
                             {% if cliente.data_inicio_contrato %}
@@ -239,13 +237,25 @@
                                     {{ cliente.situacao }}
                                 </span>
                             </div>
+                            {% if cliente.observacoes %}
+                            <div class="info-item">
+                                <label>Observações</label>
+                                <p>{{ cliente.observacoes|e }}</p>
+                            </div>
+                            {% endif %}
+                            {% if ramos_atividade %}
+                            <div class="info-item full-width">
+                                <label>Ramo de Atividade</label>
+                                <div>
+                                    <ul class="branch-list">
+                                    {% for ramo in ramos_atividade %}
+                                        <li>{{ ramo.nome|e }}</li>
+                                    {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% if cliente.observacoes %}
-                        <div class="info-item full-width">
-                            <label>Observações</label>
-                            <p>{{ cliente.observacoes }}</p>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>

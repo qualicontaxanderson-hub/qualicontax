@@ -97,7 +97,7 @@
 
             <!-- Análise -->
             <li class="nav-item">
-                <a href="{{ url_for('modulos.analise') }}" class="nav-link {% if request.endpoint == 'modulos.analise' %}active{% endif %}">
+                <a href="{{ url_for('modulos.analise') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('modulos.analise') %}active{% endif %}">
                     <i class="fas fa-chart-pie"></i>
                     <span>Análise</span>
                 </a>

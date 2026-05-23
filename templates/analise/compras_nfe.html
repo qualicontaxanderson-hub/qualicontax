@@ -1,0 +1,714 @@
+{% extends "base.html" %}
+{% block title %}Compras NF-e - Análise Fiscal{% endblock %}
+
+{% macro br_num(value, decimals=2) -%}
+{{ ('{:,.%df}' % decimals).format(value or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+.af-card { background:#fff; border:1px solid #dbe4ef; border-radius:14px; box-shadow:0 4px 14px rgba(15,23,42,.05); }
+.af-top { display:grid; grid-template-columns:1fr auto; gap:14px; align-items:start; margin-bottom:14px; }
+.af-top p { margin:4px 0 0; color:#475569; }
+.af-toolbar { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.af-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 13px; border-radius:9px; text-decoration:none; font-size:12px; font-weight:700; border:1px solid transparent; }
+.af-btn-primary { background:#1d4ed8; color:#fff; }
+.af-btn-muted { background:#fff; color:#334155; border-color:#dbe2ea; }
+.af-alert { border-radius:10px; padding:12px 14px; margin:0 0 14px; font-size:13px; font-weight:600; }
+.af-alert-danger { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; }
+.af-alert-info { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+
+.af-filter { margin-bottom:14px; padding:14px; }
+.af-filter summary { list-style:none; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14px; font-weight:800; color:#0f172a; }
+.af-filter summary::-webkit-details-marker { display:none; }
+.af-filter .af-caret { color:#1d4ed8; transition:transform .2s ease; }
+.af-filter[open] .af-caret { transform:rotate(180deg); }
+.af-filter-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-top:12px; }
+.af-field label { display:block; margin-bottom:5px; font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; }
+.af-field input, .af-field select { width:100%; padding:9px 10px; border:1px solid #dbe2ea; border-radius:9px; background:#f8fafc; font-size:13px; color:#0f172a; }
+.af-field input:focus, .af-field select:focus { outline:none; border-color:#2563eb; background:#fff; }
+.af-actions { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+.af-hint { margin-top:5px; font-size:11px; color:#64748b; }
+
+.af-kpis { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.af-kpi { background:#fff; border:1px solid #dbe4ef; border-radius:12px; padding:12px; }
+.af-kpi-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
+.af-kpi-value { margin-top:4px; font-size:22px; font-weight:800; color:#0f172a; line-height:1.2; }
+.af-kpi-value.af-money { color:#0f766e; }
+
+.af-sections { display:grid; gap:12px; }
+.af-section { padding:14px; }
+.af-section summary { list-style:none; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14px; font-weight:800; color:#0f172a; }
+.af-section summary::-webkit-details-marker { display:none; }
+.af-section .af-caret { color:#1d4ed8; transition:transform .2s ease; }
+.af-section[open] .af-caret { transform:rotate(180deg); }
+.af-subtitle { color:#64748b; font-size:12px; font-weight:600; }
+
+.af-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+.af-table-wrap { overflow:auto; margin-top:10px; }
+.af-table { width:100%; border-collapse:collapse; min-width:760px; font-size:12px; }
+.af-table th { padding:9px 10px; background:#f8fafc; border-bottom:1px solid #e2e8f0; color:#64748b; font-size:10px; text-transform:uppercase; letter-spacing:.05em; text-align:left; }
+.af-table td { padding:9px 10px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+.af-table tr:hover td { background:#f8fafc; }
+.af-center { text-align:center; }
+.af-money { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; white-space:nowrap; color:#0f766e; }
+.af-empty { padding:28px 14px; text-align:center; color:#94a3b8; }
+.af-pill { display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+.af-pill-blue { background:#dbeafe; color:#1d4ed8; }
+.af-pill-purple { background:#ede9fe; color:#6d28d9; }
+
+.af-supplier-grid { margin-top:12px; display:grid; gap:10px; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+.af-supplier-card { border:1px solid #dbe4ef; border-radius:12px; overflow:hidden; background:#fff; }
+.af-supplier-head { background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:10px 12px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.af-supplier-name { font-size:13px; font-weight:800; color:#0f172a; margin:0; }
+.af-supplier-cnpj { margin-top:3px; color:#64748b; font-size:11px; }
+.af-supplier-metrics { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.af-badge { background:#fff; border:1px solid #dbe2ea; border-radius:8px; padding:5px 7px; min-width:78px; }
+.af-badge-label { display:block; font-size:9px; text-transform:uppercase; color:#64748b; font-weight:700; }
+.af-badge-value { display:block; font-size:13px; font-weight:800; color:#0f172a; }
+.af-badge-value.af-negative { color:#b91c1c; }
+.af-supplier-card details { padding:0 12px 10px; }
+.af-supplier-card details summary { margin:10px 0; font-size:12px; font-weight:700; color:#1d4ed8; }
+
+.af-product-grid { margin-top:12px; display:grid; gap:10px; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+.af-product-card { border:1px solid #dbe4ef; border-radius:12px; overflow:hidden; background:#fff; }
+.af-product-head { background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:10px 12px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.af-product-name { font-size:13px; font-weight:800; color:#0f172a; margin:0; }
+.af-product-meta { margin-top:3px; color:#64748b; font-size:11px; }
+.af-product-metrics { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.af-product-card details { padding:0 12px 10px; }
+.af-product-card details summary { margin:10px 0; font-size:12px; font-weight:700; color:#1d4ed8; }
+
+/* Multi-select custom dropdown */
+.af-ms { position:relative; width:100%; }
+.af-ms-btn { width:100%; padding:9px 10px; border:1px solid #dbe2ea; border-radius:9px; background:#f8fafc; font-size:13px; color:#0f172a; text-align:left; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; }
+.af-ms-btn:focus { outline:none; border-color:#2563eb; background:#fff; }
+.af-ms-btn:disabled { opacity:.55; cursor:default; }
+.af-ms-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.af-ms-count { background:#2563eb; color:#fff; border-radius:999px; font-size:10px; font-weight:800; padding:1px 6px; flex-shrink:0; }
+.af-ms-caret { color:#64748b; font-size:11px; transition:transform .15s; flex-shrink:0; }
+.af-ms[data-open] .af-ms-caret { transform:rotate(180deg); }
+.af-ms-dropdown { display:none; position:absolute; z-index:300; top:calc(100% + 3px); left:0; right:0; min-width:180px; background:#fff; border:1px solid #dbe2ea; border-radius:10px; box-shadow:0 8px 24px rgba(15,23,42,.12); max-height:240px; overflow-y:auto; }
+.af-ms[data-open] .af-ms-dropdown { display:block; }
+.af-ms-item { display:flex; align-items:center; gap:8px; padding:7px 10px; cursor:pointer; font-size:12px; color:#334155; user-select:none; }
+.af-ms-item:hover { background:#f1f5f9; }
+.af-ms-item input[type=checkbox] { accent-color:#2563eb; width:14px; height:14px; flex-shrink:0; cursor:pointer; margin:0; }
+.af-ms-empty { padding:10px 12px; font-size:12px; color:#94a3b8; font-style:italic; }
+
+/* Period preset buttons */
+.af-filter-footer { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px, 360px); gap:12px; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; align-items:flex-start; }
+.af-presets-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.af-presets-label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-right:2px; }
+.af-preset-btn { padding:4px 12px; border-radius:999px; font-size:11px; font-weight:800; border:1px solid #dbe2ea; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; transition:all .15s ease; box-shadow:0 1px 0 rgba(15,23,42,.04); }
+.af-preset-btn:hover { transform:translateY(-1px); box-shadow:0 4px 10px rgba(15,23,42,.10); }
+.af-preset-btn--mes-atual { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.af-preset-btn--mes-atual:hover { background:#dbeafe; border-color:#93c5fd; color:#1e40af; }
+.af-preset-btn--mes-anterior { background:#ecfeff; border-color:#a5f3fc; color:#0f766e; }
+.af-preset-btn--mes-anterior:hover { background:#cffafe; border-color:#67e8f9; color:#115e59; }
+.af-preset-btn--ano-atual { background:#f5f3ff; border-color:#ddd6fe; color:#6d28d9; }
+.af-preset-btn--ano-atual:hover { background:#ede9fe; border-color:#c4b5fd; color:#5b21b6; }
+.af-preset-btn--ano-anterior { background:#fff7ed; border-color:#fed7aa; color:#c2410c; }
+.af-preset-btn--ano-anterior:hover { background:#ffedd5; border-color:#fdba74; color:#9a3412; }
+
+@media (max-width: 1300px) { .af-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width: 980px) {
+    .af-top { grid-template-columns:1fr; }
+    .af-toolbar { justify-content:flex-start; }
+    .af-filter-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .af-filter-footer { grid-template-columns:1fr; }
+    .af-grid-2 { grid-template-columns:1fr; }
+    .af-supplier-grid { grid-template-columns:1fr; }
+    .af-product-grid { grid-template-columns:1fr; }
+}
+@media (max-width: 700px) {
+    .af-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .af-filter-grid { grid-template-columns:1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="af-top">
+    <div>
+        <h1 class="page-title">Compras NF-e</h1>
+        <p class="page-subtitle">Visão clara por distribuidora, categoria e produto, com quantidades, preço unitário e total de compras.</p>
+    </div>
+    <div class="af-toolbar">
+        <a href="{{ url_for('modulos.analise_fiscal') }}" class="af-btn af-btn-muted"><i class="fas fa-arrow-left"></i> Voltar</a>
+        {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="af-btn af-btn-muted"><i class="fas fa-file-search"></i> Conferência</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if erro_filtros %}
+<div class="af-alert af-alert-danger"><i class="fas fa-exclamation-circle"></i> {{ erro_filtros }}</div>
+{% elif not searched %}
+<div class="af-alert af-alert-info"><i class="fas fa-circle-info"></i> Selecione uma empresa/grupo e período para montar o relatório.</div>
+{% endif %}
+
+<details class="af-card af-filter" {% if (not searched) or erro_filtros %}open{% endif %}>
+    <summary>
+        <span><i class="fas fa-sliders-h"></i> Filtros do relatório</span>
+        <i class="fas fa-chevron-down af-caret"></i>
+    </summary>
+    <form method="get" id="comprasForm">
+        <div class="af-filter-grid">
+            <div class="af-field">
+                <label>Empresa</label>
+                <select name="cliente_id" id="f_cliente_id">
+                    <option value="">— Todas / usar grupo —</option>
+                    {% for empresa in empresas %}
+                    <option value="{{ empresa.id }}" {% if f_cliente_id == empresa.id|string %}selected{% endif %}>{{ empresa.numero_cliente }} - {{ empresa.nome_razao_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="af-field">
+                <label>Grupo</label>
+                <select name="grupo_id" id="f_grupo_id">
+                    <option value="">— Todos / usar empresa —</option>
+                    {% for grupo in grupos %}
+                    <option value="{{ grupo.id }}" {% if f_grupo_id == grupo.id|string %}selected{% endif %}>{{ grupo.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="af-field">
+                <label>Data início</label>
+                <input type="date" name="data_ini" value="{{ f_data_ini }}">
+            </div>
+            <div class="af-field">
+                <label>Data fim</label>
+                <input type="date" name="data_fim" value="{{ f_data_fim }}">
+            </div>
+            <div class="af-field">
+                <label>Categoria</label>
+                <div class="af-ms" id="ms_categoria" data-all-label="— Todas —">
+                    <button type="button" class="af-ms-btn" onclick="msToggle('ms_categoria')">
+                        <span class="af-ms-label" id="ms_categoria_label">— Todas —</span>
+                        <span class="af-ms-count" id="ms_categoria_count" style="display:none"></span>
+                        <i class="fas fa-chevron-down af-ms-caret"></i>
+                    </button>
+                    <div class="af-ms-dropdown">
+                        <label class="af-ms-item">
+                            <input type="checkbox" name="categoria" value="__sem_vinculo__"
+                                {% if '__sem_vinculo__' in f_categorias %}checked{% endif %}
+                                onchange="msUpdateLabel('ms_categoria'); loadProdutosCatalogo()">
+                            <span>— Sem vínculo —</span>
+                        </label>
+                        {% for cat in categorias %}
+                        <label class="af-ms-item">
+                            <input type="checkbox" name="categoria" value="{{ cat }}"
+                                {% if cat in f_categorias %}checked{% endif %}
+                                onchange="msUpdateLabel('ms_categoria'); loadProdutosCatalogo()">
+                            <span>{{ cat }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="af-field">
+                <label>Produto</label>
+                <div class="af-ms" id="ms_produto_id" data-all-label="— Todos —">
+                    <button type="button" class="af-ms-btn" id="ms_produto_id_btn" onclick="msToggle('ms_produto_id')">
+                        <span class="af-ms-label" id="ms_produto_id_label">— Todos —</span>
+                        <span class="af-ms-count" id="ms_produto_id_count" style="display:none"></span>
+                        <i class="fas fa-chevron-down af-ms-caret"></i>
+                    </button>
+                    <div class="af-ms-dropdown" id="ms_produto_id_dropdown">
+                        <div class="af-ms-empty">Selecione empresa/grupo para carregar produtos.</div>
+                    </div>
+                </div>
+                <div id="f_produto_hint" class="af-hint">Filtre um ou mais produtos do catálogo no escopo selecionado.</div>
+            </div>
+            <div class="af-field">
+                <label>Descrição contém</label>
+                <input type="text" name="descricao" id="f_descricao" placeholder="Ex: Diesel, Gasolina, Etanol..." value="{{ f_descricao }}">
+            </div>
+            <div class="af-field">
+                <label>Distribuidora / fornecedor</label>
+                <div class="af-ms" id="ms_emit_cnpj" data-all-label="— Todos —">
+                    <button type="button" class="af-ms-btn" onclick="msToggle('ms_emit_cnpj')">
+                        <span class="af-ms-label" id="ms_emit_cnpj_label">— Todos —</span>
+                        <span class="af-ms-count" id="ms_emit_cnpj_count" style="display:none"></span>
+                        <i class="fas fa-chevron-down af-ms-caret"></i>
+                    </button>
+                    <div class="af-ms-dropdown">
+                        {% if emitentes %}
+                            {% for em in emitentes %}
+                            <label class="af-ms-item">
+                                <input type="checkbox" name="emit_cnpj" value="{{ em.emit_cnpj }}"
+                                    {% if em.emit_cnpj in f_emit_cnpjs %}checked{% endif %}
+                                    onchange="msUpdateLabel('ms_emit_cnpj')">
+                                <span>{{ em.emit_nome or em.emit_cnpj }}{% if em.emit_cnpj %} ({{ em.emit_cnpj }}){% endif %}</span>
+                            </label>
+                            {% endfor %}
+                        {% else %}
+                            <div class="af-ms-empty">Selecione empresa/grupo para carregar fornecedores.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="af-filter-footer">
+            <div class="af-presets-row">
+                <span class="af-presets-label">Período rápido:</span>
+                <button type="button" class="af-preset-btn af-preset-btn--mes-atual" onclick="setPreset('mes_atual')">Mês atual</button>
+                <button type="button" class="af-preset-btn af-preset-btn--mes-anterior" onclick="setPreset('mes_anterior')">Mês anterior</button>
+                <button type="button" class="af-preset-btn af-preset-btn--ano-atual" onclick="setPreset('ano_atual')">Ano atual</button>
+                <button type="button" class="af-preset-btn af-preset-btn--ano-anterior" onclick="setPreset('ano_anterior')">Ano anterior</button>
+            </div>
+            <div class="af-field">
+                <label>Ordenação da data</label>
+                <select name="ordem_data">
+                    <option value="asc" {% if f_ordem_data == 'asc' %}selected{% endif %}>Crescente (sequencial)</option>
+                    <option value="desc" {% if f_ordem_data == 'desc' %}selected{% endif %}>Decrescente (mais recente)</option>
+                </select>
+            </div>
+        </div>
+        <div class="af-actions">
+            <button class="af-btn af-btn-primary" type="submit" name="buscar" value="1"><i class="fas fa-chart-column"></i> Gerar relatório</button>
+            <a href="{{ url_for('modulos.analise_fiscal_compras') }}" class="af-btn af-btn-muted"><i class="fas fa-eraser"></i> Limpar</a>
+        </div>
+    </form>
+</details>
+
+{% if searched and not erro_filtros %}
+<div class="af-kpis">
+    <div class="af-kpi"><div class="af-kpi-label">Notas</div><div class="af-kpi-value">{{ resumo.total_notas }}</div></div>
+    <div class="af-kpi"><div class="af-kpi-label">Itens</div><div class="af-kpi-value">{{ resumo.total_itens }}</div></div>
+    <div class="af-kpi"><div class="af-kpi-label">Qtd total</div><div class="af-kpi-value">{{ br_num(resumo.total_qtd) }}</div></div>
+    <div class="af-kpi"><div class="af-kpi-label">Valor total</div><div class="af-kpi-value af-money">{{ resumo.total_valor|format_currency }}</div></div>
+    <div class="af-kpi"><div class="af-kpi-label">Fornecedores</div><div class="af-kpi-value">{{ resumo.total_fornecedores }}</div></div>
+    <div class="af-kpi"><div class="af-kpi-label">ICMS</div><div class="af-kpi-value af-money">{{ resumo.total_icms|format_currency }}</div></div>
+</div>
+
+<div class="af-sections">
+    <details class="af-card af-section" open>
+        <summary>
+            <span><i class="fas fa-building"></i> Compras por distribuidora / fornecedor</span>
+            <span class="af-subtitle">{{ fornecedor_cards|length }} distribuidora(s)</span>
+            <i class="fas fa-chevron-down af-caret"></i>
+        </summary>
+        {% if fornecedor_cards %}
+        <div class="af-supplier-grid">
+            {% for fornecedor in fornecedor_cards %}
+            <article class="af-supplier-card">
+                <div class="af-supplier-head">
+                    <div>
+                        <h4 class="af-supplier-name">{{ fornecedor.emit_nome }}</h4>
+                        <div class="af-supplier-cnpj">{{ fornecedor.emit_cnpj or 'CNPJ não informado' }}</div>
+                        <div class="af-supplier-cnpj">
+                            {% if fornecedor.primeira_data and fornecedor.ultima_data %}
+                                {{ fornecedor.primeira_data.strftime('%d/%m/%Y') }} até {{ fornecedor.ultima_data.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                Sem período identificado
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="af-supplier-metrics">
+                        <span class="af-badge"><span class="af-badge-label">Qtd total</span><span class="af-badge-value">{{ br_num(fornecedor.total_qtd) }}</span></span>
+                        <span class="af-badge"><span class="af-badge-label">Compra</span><span class="af-badge-value">{{ fornecedor.total_valor|format_currency }}</span></span>
+                        <span class="af-badge"><span class="af-badge-label">Produtos</span><span class="af-badge-value">{{ fornecedor.qtd_produtos }}</span></span>
+                    </div>
+                </div>
+                <details {% if loop.index <= fornecedor_cards_auto_open %}open{% endif %}>
+                    <summary>Ver produtos comprados desta distribuidora</summary>
+                    <div class="af-table-wrap">
+                        <table class="af-table" style="min-width:640px;">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Unid.</th>
+                                    <th class="af-center">Itens</th>
+                                    <th class="af-money">Qtd total</th>
+                                    <th class="af-money">Preço unit. médio</th>
+                                    <th class="af-money">Valor total</th>
+                                    <th>Última compra</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for produto in fornecedor.produtos %}
+                                <tr>
+                                    <td style="font-weight:700;color:#0f172a;">{{ produto.produto_nome }}</td>
+                                    <td>{{ produto.unidade or '—' }}</td>
+                                    <td class="af-center">{{ produto.total_itens }}</td>
+                                    <td class="af-money">{{ br_num(produto.total_qtd) }}</td>
+                                    <td class="af-money">{{ produto.valor_unitario_medio|format_currency }}</td>
+                                    <td class="af-money">{{ produto.total_valor|format_currency }}</td>
+                                    <td>{{ produto.ultima_data.strftime('%d/%m/%Y') if produto.ultima_data else '—' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="af-empty"><i class="fas fa-building"></i>Nenhum fornecedor encontrado para os filtros.</div>
+        {% endif %}
+    </details>
+
+    <details class="af-card af-section" {% if f_produto_id or f_descricao %}open{% endif %}>
+        <summary>
+            <span><i class="fas fa-gas-pump"></i> Conferência por mercadoria (produto)</span>
+            <span class="af-subtitle">{{ produto_cards|length }} mercadoria(s)</span>
+            <i class="fas fa-chevron-down af-caret"></i>
+        </summary>
+        {% if produto_cards %}
+        <div class="af-product-grid">
+            {% for produto in produto_cards %}
+            <article class="af-product-card">
+                <div class="af-product-head">
+                    <div>
+                        <h4 class="af-product-name">{{ produto.produto_nome }}</h4>
+                        <div class="af-product-meta">Unidade: {{ produto.unidade or '—' }}</div>
+                        <div class="af-product-meta">
+                            {% if produto.primeira_data and produto.ultima_data %}
+                                {{ produto.primeira_data.strftime('%d/%m/%Y') }} até {{ produto.ultima_data.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                Sem período identificado
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="af-product-metrics">
+                        <span class="af-badge"><span class="af-badge-label">Qtd total</span><span class="af-badge-value">{{ br_num(produto.total_qtd) }}</span></span>
+                        <span class="af-badge"><span class="af-badge-label">Preço méd.</span><span class="af-badge-value">{{ produto.valor_unitario_medio|format_currency }}</span></span>
+                        <span class="af-badge"><span class="af-badge-label">Compra</span><span class="af-badge-value">{{ produto.total_valor|format_currency }}</span></span>
+                        <span class="af-badge"><span class="af-badge-label">Fornecedores</span><span class="af-badge-value">{{ produto.qtd_fornecedores }}</span></span>
+                    </div>
+                </div>
+                <details {% if loop.index <= produto_cards_auto_open %}open{% endif %}>
+                    <summary>Ver compras deste produto ({{ produto.qtd_notas }} nota(s))</summary>
+                    <div class="af-table-wrap">
+                        <table class="af-table" style="min-width:700px;">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Fornecedor</th>
+                                    <th>Nota</th>
+                                    <th class="af-money">Qtd.</th>
+                                    <th class="af-money">Preço unit.</th>
+                                    <th class="af-money">Valor total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in produto.itens %}
+                                <tr>
+                                    <td>{{ item.data_emissao.strftime('%d/%m/%Y') if item.data_emissao else '—' }}</td>
+                                    <td>{{ item.emit_nome }}{% if item.emit_cnpj %}<br><small style="color:#64748b;">{{ item.emit_cnpj }}</small>{% endif %}</td>
+                                    <td>{{ item.num_nota or '—' }}{% if item.serie %} / {{ item.serie }}{% endif %}</td>
+                                    <td class="af-money">{{ br_num(item.quantidade) }}</td>
+                                    <td class="af-money">{{ item.valor_unitario|format_currency }}</td>
+                                    <td class="af-money">{{ item.valor_total|format_currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="af-empty"><i class="fas fa-gas-pump"></i>Nenhuma mercadoria encontrada para os filtros.</div>
+        {% endif %}
+    </details>
+
+    <details class="af-card af-section">
+        <summary>
+            <span><i class="fas fa-layer-group"></i> Resumos consolidados (categoria e produto)</span>
+            <span class="af-subtitle">{{ categorias_rows|length }} categoria(s) · {{ produtos_rows|length }} produto(s)</span>
+            <i class="fas fa-chevron-down af-caret"></i>
+        </summary>
+        <div class="af-grid-2">
+            <div>
+                <div class="af-subtitle">Resumo por categoria</div>
+                <div class="af-table-wrap">
+                    <table class="af-table">
+                        <thead>
+                            <tr>
+                                <th>Categoria</th>
+                                <th class="af-center">Itens</th>
+                                <th class="af-money">Qtd total</th>
+                                <th class="af-money">Valor total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if categorias_rows %}
+                                {% for row in categorias_rows %}
+                                <tr>
+                                    <td><span class="af-pill af-pill-blue">{{ row.categoria }}</span></td>
+                                    <td class="af-center">{{ row.qtd_itens }}</td>
+                                    <td class="af-money">{{ br_num(row.total_qtd) }}</td>
+                                    <td class="af-money">{{ row.total_valor|format_currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="4" class="af-empty">Sem dados por categoria.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div>
+                <div class="af-subtitle">Resumo por produto</div>
+                <div class="af-table-wrap">
+                    <table class="af-table">
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th>Unid.</th>
+                                <th class="af-money">Qtd total</th>
+                                <th class="af-money">Valor total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if produtos_rows %}
+                                {% for row in produtos_rows %}
+                                <tr>
+                                    <td style="font-weight:700;color:#0f172a;">{{ row.produto_nome }}</td>
+                                    <td>{{ row.unidade or '—' }}</td>
+                                    <td class="af-money">{{ br_num(row.total_qtd) }}</td>
+                                    <td class="af-money">{{ row.total_valor|format_currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="4" class="af-empty">Sem dados por produto.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <details class="af-card af-section">
+        <summary>
+            <span><i class="fas fa-clock-rotate-left"></i> Histórico por produto (sequencial)</span>
+            <span class="af-subtitle">{{ produto_historico_rows|length }} lançamento(s)</span>
+            <i class="fas fa-chevron-down af-caret"></i>
+        </summary>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Data</th>
+                        <th>Distribuidora</th>
+                        <th>Nota</th>
+                        <th>Unid.</th>
+                        <th class="af-money">Qtd.</th>
+                        <th class="af-money">Preço unit.</th>
+                        <th class="af-money">Valor total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if produto_historico_rows %}
+                        {% for row in produto_historico_rows %}
+                        <tr>
+                            <td style="font-weight:700;color:#0f172a;">{{ row.produto_nome }}</td>
+                            <td>{{ row.data_emissao.strftime('%d/%m/%Y') if row.data_emissao else '—' }}</td>
+                            <td>{{ row.emit_nome or '—' }}</td>
+                            <td>{{ row.num_nota or '—' }}{% if row.serie %} / {{ row.serie }}{% endif %}</td>
+                            <td>{{ row.unidade or '—' }}</td>
+                            <td class="af-money">{{ br_num(row.quantidade) }}</td>
+                            <td class="af-money">{{ row.valor_unitario|format_currency }}</td>
+                            <td class="af-money">{{ row.valor_total|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="8" class="af-empty">Sem histórico por produto no período.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+
+    <details class="af-card af-section">
+        <summary>
+            <span><i class="fas fa-table-list"></i> Detalhamento completo</span>
+            <span class="af-subtitle">até 500 linhas</span>
+            <i class="fas fa-chevron-down af-caret"></i>
+        </summary>
+        <div class="af-table-wrap">
+            <table class="af-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Nota</th>
+                        <th>Empresa / Grupo</th>
+                        <th>Fornecedor</th>
+                        <th>Categoria</th>
+                        <th>Produto</th>
+                        <th>Unid.</th>
+                        <th class="af-money">Qtd.</th>
+                        <th class="af-money">Vlr. unit.</th>
+                        <th class="af-money">Vlr. total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if detalhamento_rows %}
+                        {% for row in detalhamento_rows %}
+                        <tr>
+                            <td>{{ row.data_emissao.strftime('%d/%m/%Y') if row.data_emissao else '—' }}</td>
+                            <td>{{ row.num_nota or '—' }}{% if row.serie %} / {{ row.serie }}{% endif %}</td>
+                            <td>
+                                {% if row.empresa_nome %}<span class="af-pill af-pill-blue">{{ row.empresa_nome }}</span>{% endif %}
+                                {% if row.grupo_nome %}<span class="af-pill af-pill-purple">{{ row.grupo_nome }}</span>{% endif %}
+                            </td>
+                            <td>{{ row.emit_nome or '—' }}</td>
+                            <td>{{ row.categoria }}{% if row.subcategoria and row.subcategoria != '—' %} / {{ row.subcategoria }}{% endif %}</td>
+                            <td style="font-weight:700;color:#0f172a;">{{ row.produto_nome }}</td>
+                            <td>{{ row.unidade or '—' }}</td>
+                            <td class="af-money">{{ br_num(row.quantidade) }}</td>
+                            <td class="af-money">{{ row.valor_unitario|format_currency }}</td>
+                            <td class="af-money">{{ row.valor_total|format_currency }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="10" class="af-empty">Nenhum item encontrado para o filtro informado.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SELECTED_PRODUTO_IDS = {{ f_produto_ids | tojson }};
+
+/* ── Multi-select helpers ── */
+function msToggle(id) {
+    const el = document.getElementById(id);
+    if (el.hasAttribute('data-open')) {
+        el.removeAttribute('data-open');
+    } else {
+        // close all others
+        document.querySelectorAll('.af-ms[data-open]').forEach(e => e.removeAttribute('data-open'));
+        el.setAttribute('data-open', '');
+    }
+}
+
+function msUpdateLabel(id) {
+    const el = document.getElementById(id);
+    const allLabel = el.dataset.allLabel || '— Todos —';
+    const checked = el.querySelectorAll('input[type=checkbox]:checked');
+    const labelEl = document.getElementById(id + '_label');
+    const countEl = document.getElementById(id + '_count');
+    if (checked.length === 0) {
+        labelEl.textContent = allLabel;
+        countEl.style.display = 'none';
+    } else if (checked.length === 1) {
+        labelEl.textContent = checked[0].closest('.af-ms-item').querySelector('span').textContent;
+        countEl.style.display = 'none';
+    } else {
+        labelEl.textContent = `${checked.length} selecionados`;
+        countEl.textContent = checked.length;
+        countEl.style.display = '';
+    }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e => {
+    if (!e.target.closest('.af-ms')) {
+        document.querySelectorAll('.af-ms[data-open]').forEach(el => el.removeAttribute('data-open'));
+    }
+});
+
+/* ── Date presets ── */
+function setPreset(preset) {
+    const now = new Date();
+    let ini, fim;
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+    if (preset === 'mes_atual') {
+        ini = new Date(now.getFullYear(), now.getMonth(), 1);
+        fim = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    } else if (preset === 'mes_anterior') {
+        ini = new Date(now.getFullYear(), now.getMonth()-1, 1);
+        fim = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (preset === 'ano_atual') {
+        ini = new Date(now.getFullYear(), 0, 1);
+        fim = new Date(now.getFullYear(), 11, 31);
+    } else if (preset === 'ano_anterior') {
+        ini = new Date(now.getFullYear()-1, 0, 1);
+        fim = new Date(now.getFullYear()-1, 11, 31);
+    }
+    document.querySelector('[name=data_ini]').value = fmt(ini);
+    document.querySelector('[name=data_fim]').value = fmt(fim);
+}
+
+/* ── Produtos catálogo (multi-select) ── */
+async function loadProdutosCatalogo() {
+    const clienteId = document.getElementById('f_cliente_id').value;
+    const grupoId = document.getElementById('f_grupo_id').value;
+    const dropdown = document.getElementById('ms_produto_id_dropdown');
+    const btn = document.getElementById('ms_produto_id_btn');
+    const hint = document.getElementById('f_produto_hint');
+
+    // Check if "Sem vínculo" is the only selection in categoria
+    const catChecked = document.querySelectorAll('#ms_categoria input[type=checkbox]:checked');
+    const allSemVinculo = catChecked.length > 0 && Array.from(catChecked).every(c => c.value === '__sem_vinculo__');
+
+    if (allSemVinculo) {
+        dropdown.innerHTML = '<div class="af-ms-empty">Produtos do catálogo indisponíveis quando apenas "Sem vínculo" está selecionado.</div>';
+        btn.disabled = true;
+        if (hint) hint.textContent = 'Quando apenas "Sem vínculo" estiver selecionado, o filtro por produto fica indisponível.';
+        msUpdateLabel('ms_produto_id');
+        return;
+    }
+
+    btn.disabled = true;
+    dropdown.innerHTML = '<div class="af-ms-empty">Carregando...</div>';
+
+    const selectedCats = Array.from(document.querySelectorAll('#ms_categoria input[type=checkbox]:checked'))
+        .map(c => c.value).filter(v => v !== '__sem_vinculo__');
+
+    const params = new URLSearchParams();
+    if (clienteId) params.append('cliente_id', clienteId);
+    if (grupoId) params.append('grupo_id', grupoId);
+
+    try {
+        const resp = await fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + params.toString());
+        const rows = await resp.json();
+        const filtered = selectedCats.length ? rows.filter(r => selectedCats.includes(r.categoria || '')) : rows;
+
+        if (!filtered.length) {
+            dropdown.innerHTML = '<div class="af-ms-empty">Nenhum produto encontrado.</div>';
+        } else {
+            dropdown.innerHTML = filtered.map(r => {
+                const scope = r.categoria ? `${r.categoria} · ` : '';
+                const isChecked = SELECTED_PRODUTO_IDS.includes(String(r.id)) || SELECTED_PRODUTO_IDS.includes(r.id);
+                return `<label class="af-ms-item">
+                    <input type="checkbox" name="produto_id" value="${r.id}" ${isChecked ? 'checked' : ''}
+                        onchange="msUpdateLabel('ms_produto_id')">
+                    <span>${scope}${r.nome}</span>
+                </label>`;
+            }).join('');
+        }
+        btn.disabled = false;
+        if (hint) hint.textContent = 'Filtre um ou mais produtos do catálogo no escopo selecionado.';
+        msUpdateLabel('ms_produto_id');
+    } catch (e) {
+        dropdown.innerHTML = '<div class="af-ms-empty">Erro ao carregar produtos.</div>';
+        btn.disabled = true;
+        if (hint) hint.textContent = 'Não foi possível carregar os produtos do catálogo.';
+    }
+}
+
+document.getElementById('f_cliente_id').addEventListener('change', loadProdutosCatalogo);
+document.getElementById('f_grupo_id').addEventListener('change', loadProdutosCatalogo);
+
+// Init labels
+msUpdateLabel('ms_categoria');
+msUpdateLabel('ms_emit_cnpj');
+
+loadProdutosCatalogo();
+</script>
+{% endblock %}
