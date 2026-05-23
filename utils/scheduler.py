@@ -66,7 +66,7 @@ def _job_importar_todos(app):
     hour, minute = _get_saved_time()
     logger.info('[scheduler] Iniciando importação automática (%02d:%02d).', hour, minute)
     with app.app_context():
-        for dep in dropbox_sync.DEPARTAMENTOS:
+        for dep in dropbox_sync.DEPARTAMENTOS_CANONICOS:
             try:
                 result = importar_departamento_background(dep)
                 logger.info('[scheduler] %s → %s', dep, result)

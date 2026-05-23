@@ -1018,6 +1018,7 @@ def api_importar_dropbox():
 
     if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
         return jsonify({'error': 'Departamento inválido.'}), 400
+    departamento = dropbox_sync.normalize_departamento(departamento)
 
     svc = dropbox_sync._service
 
@@ -1764,6 +1765,7 @@ def api_importar_dropbox_start():
 
     if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
         return jsonify({'error': 'Departamento inválido.'}), 400
+    departamento = dropbox_sync.normalize_departamento(departamento)
 
     # Resolve filter_cnpjs aqui, no contexto HTTP, para não precisar de app
     # context na thread de background.
@@ -1841,6 +1843,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     if departamento not in dropbox_sync.DEPARTAMENTOS:
         logger.warning('importar_departamento_background: departamento inválido %r', departamento)
         return {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'log_id': None, 'file_logs': []}
+    departamento = dropbox_sync.normalize_departamento(departamento)
 
     # Cria registro de auditoria antes de iniciar
     iniciado_em = datetime.now(timezone.utc)
@@ -2126,7 +2129,7 @@ def api_executar_importacao_agendada():
     resumo = {}
     erros = []
 
-    for dep in dropbox_sync.DEPARTAMENTOS:
+    for dep in dropbox_sync.DEPARTAMENTOS_CANONICOS:
         try:
             result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
             resumo[dep] = {
@@ -2154,7 +2157,7 @@ def api_executar_importacao_agendada():
         'msg': (
             f'{total_ok} importado(s), {total_dup} duplicata(s), '
             f'{total_err} erro(s), {total_skipped} ignorado(s) '
-            f'em {len(dropbox_sync.DEPARTAMENTOS)} departamento(s).'
+            f'em {len(dropbox_sync.DEPARTAMENTOS_CANONICOS)} departamento(s).'
         ),
     })
 

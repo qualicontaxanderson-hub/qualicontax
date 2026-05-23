@@ -29,22 +29,27 @@ class DropboxError(Exception):
 # We accept any file whose name *starts* with at least 44 consecutive digits.
 _NFE_KEY_RE = re.compile(r'^\d{44}')
 
+DEPARTAMENTO_ALIASES = {
+    # Nome canônico → aliases aceitos na raiz da App Folder do Dropbox.
+    'Fiscal': ['Fiscal', 'qualicontax-fiscal'],
+    'Contabil': ['Contabil', 'qualicontax-contabil'],
+    'DP': ['DP', 'qualicontax-dp'],
+    'Financeiro': ['Financeiro', 'qualicontax-financeiro'],
+    'Legalizacao': ['Legalizacao', 'qualicontax-legalizacao'],
+    'Comercial': ['Comercial', 'qualicontax-comercial'],
+}
+
+DEPARTAMENTOS_CANONICOS = list(DEPARTAMENTO_ALIASES.keys())
 DEPARTAMENTOS = [
-    # Nomes usados na APP FOLDER do Dropbox (caminhos relativos à raiz do app)
-    'Fiscal',
-    'Contabil',
-    'DP',
-    'Financeiro',
-    'Legalizacao',
-    'Comercial',
-    # Nomes legados — mantidos para compatibilidade com importações antigas
-    'qualicontax-contabil',
-    'qualicontax-fiscal',
-    'qualicontax-dp',
-    'qualicontax-financeiro',
-    'qualicontax-legalizacao',
-    'qualicontax-comercial',
+    alias
+    for aliases in DEPARTAMENTO_ALIASES.values()
+    for alias in aliases
 ]
+_DEPARTAMENTO_TO_CANONICAL = {
+    alias: canonical
+    for canonical, aliases in DEPARTAMENTO_ALIASES.items()
+    for alias in aliases
+}
 
 
 def _sanitize_folder_name(name: str) -> str:
@@ -71,6 +76,7 @@ class DropboxService:
 
     def __init__(self):
         self._dbx = None
+        self._departamento_root_cache: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Autenticação
@@ -169,6 +175,29 @@ class DropboxService:
             raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
         return entries
 
+    def _path_exists(self, path: str) -> bool:
+        """Retorna True se o caminho existe no Dropbox."""
+        dbx = self._client()
+        if not dbx:
+            raise DropboxError(
+                'Cliente Dropbox não disponível. '
+                'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+            )
+        try:
+            dbx.files_get_metadata(path)
+            return True
+        except Exception as exc:
+            if self._is_auth_error(exc):
+                self._dbx = None
+                raise DropboxAuthError(
+                    'Credenciais Dropbox inválidas ou expiradas. '
+                    'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                ) from exc
+            if 'not_found' in str(exc):
+                return False
+            logger.warning('Dropbox _path_exists(%r): erro ao consultar metadata: %s', path, exc)
+            return False
+
     def list_xml_files(self, path: str) -> list:
         """Lista arquivos .xml/.htm/.html e arquivos cujo nome começa com a chave NF-e (≥44 dígitos).
 
@@ -247,20 +276,50 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Helpers de caminho por departamento
     # ------------------------------------------------------------------
+    def resolve_departamento_root(self, departamento: str) -> str:
+        canonical = normalize_departamento(departamento)
+        if canonical in self._departamento_root_cache:
+            return self._departamento_root_cache[canonical]
+
+        for candidate in departamento_aliases(canonical):
+            if self._path_exists(f'/{candidate}'):
+                self._departamento_root_cache[canonical] = candidate
+                logger.info('Dropbox resolve_departamento_root(%r): usando %r', departamento, candidate)
+                return candidate
+
+        self._departamento_root_cache[canonical] = canonical
+        logger.warning('Dropbox resolve_departamento_root(%r): nenhuma pasta existente encontrada; usando fallback %r',
+                       departamento, canonical)
+        return canonical
+
     def pasta_novo(self, departamento: str) -> str:
-        return f'/{departamento}/NOVO'
+        root = self.resolve_departamento_root(departamento)
+        return f'/{root}/NOVO'
 
     def pasta_importados(self, departamento: str, empresa_nome: str,
                          dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
-        return f'/{departamento}/IMPORTADOS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+        root = self.resolve_departamento_root(departamento)
+        return f'/{root}/IMPORTADOS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
                     dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
-        return f'/{departamento}/ERROS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+        root = self.resolve_departamento_root(departamento)
+        return f'/{root}/ERROS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+
+
+def normalize_departamento(departamento: str) -> str:
+    """Converte aliases legados para o nome canônico do departamento."""
+    return _DEPARTAMENTO_TO_CANONICAL.get((departamento or '').strip(), (departamento or '').strip())
+
+
+def departamento_aliases(departamento: str) -> list[str]:
+    """Retorna aliases válidos do departamento, com o nome canônico primeiro."""
+    canonical = normalize_departamento(departamento)
+    return DEPARTAMENTO_ALIASES.get(canonical, [canonical])
 
 
 # ---------------------------------------------------------------------------
