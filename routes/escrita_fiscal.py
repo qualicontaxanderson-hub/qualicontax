@@ -101,6 +101,40 @@ def _get_categorias():
     return [(c['nome'], subs_map.get(c['id'], [])) for c in cats]
 
 
+def _build_cliente_doc_cache() -> dict:
+    """Indexa clientes por documento numérico para matching robusto de CNPJ/CPF."""
+    rows = execute_query(
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes",
+        fetch=True,
+    ) or []
+    cache: dict = {}
+    for row in rows:
+        digits = re.sub(r'\D', '', row.get('cpf_cnpj') or '')
+        if len(digits) < 11:
+            continue
+        doc_keys = {digits}
+        nozero = digits.lstrip('0')
+        if nozero:
+            doc_keys.add(nozero)
+        item = {
+            'id': row['id'],
+            'numero_cliente': row.get('numero_cliente'),
+            'nome_razao_social': row['nome_razao_social'],
+        }
+        for k in doc_keys:
+            cache.setdefault(k, item)
+    return cache
+
+
+def _find_cliente_by_doc_digits(doc_digits: str, cache: dict) -> dict | None:
+    """Busca cliente por documento usando variações normalizadas."""
+    digits = re.sub(r'\D', '', doc_digits or '')
+    if len(digits) < 11:
+        return None
+    nozero = digits.lstrip('0')
+    return cache.get(digits) or (cache.get(nozero) if nozero else None)
+
+
 
 
 
@@ -1082,7 +1116,7 @@ def api_importar_dropbox():
     # Chave: (emit_cnpj, codigo_produto, cli, grp) → produto_catalogo_id | None
     _vinculos_cache: dict = {}
     # Cache de dest_cnpj → cliente para evitar repetir a mesma lookup por arquivo.
-    _cnpj_cliente_cache: dict = {}
+    _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
 
     def _get_or_create_pasta(path: str) -> str:
         if path not in _pastas_criadas:
@@ -1189,15 +1223,7 @@ def api_importar_dropbox():
                     if _el is not None and _el.text:
                         _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
                         if len(_ev_cnpj_dig) >= 11:
-                            if _ev_cnpj_dig in _cnpj_cliente_cache:
-                                _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
-                            else:
-                                _ev_found = execute_query(
-                                    "SELECT id, nome_razao_social, numero_cliente FROM clientes "
-                                    "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                                    (_ev_cnpj_dig,), fetch=True, fetch_one=True,
-                                )
-                                _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                            _ev_found = _find_cliente_by_doc_digits(_ev_cnpj_dig, _cnpj_cliente_cache)
                             if _ev_found:
                                 _ev_nome = _ev_found['nome_razao_social']
                                 _ev_num = _ev_found.get('numero_cliente') or None
@@ -1266,15 +1292,7 @@ def api_importar_dropbox():
                     continue
 
             if len(dest_cnpj_digits) >= 11:
-                if dest_cnpj_digits in _cnpj_cliente_cache:
-                    found = _cnpj_cliente_cache[dest_cnpj_digits]
-                else:
-                    found = execute_query(
-                        "SELECT id, numero_cliente, nome_razao_social FROM clientes "
-                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                        (dest_cnpj_digits,), fetch=True, fetch_one=True,
-                    )
-                    _cnpj_cliente_cache[dest_cnpj_digits] = found
+                found = _find_cliente_by_doc_digits(dest_cnpj_digits, _cnpj_cliente_cache)
                 if found:
                     _cli = found['id']
                     _nome = found['nome_razao_social']
@@ -1418,7 +1436,7 @@ def _run_import_job(job: dict, departamento: str,
     _imported_companies: dict = {}   # (num, nome) → set of (year, month)
     details: list = []
     _vinculos_cache: dict = {}
-    _cnpj_cliente_cache: dict = {}
+    _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
     last_scanned: str | None = None  # cursor para modo de filtro
 
@@ -1591,17 +1609,7 @@ def _run_import_job(job: dict, departamento: str,
                             if _el is not None and _el.text:
                                 _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
                                 if len(_ev_cnpj_dig) >= 11:
-                                    if _ev_cnpj_dig in _cnpj_cliente_cache:
-                                        _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
-                                    else:
-                                        _ev_found = execute_query(
-                                            "SELECT id, nome_razao_social, numero_cliente "
-                                            "FROM clientes WHERE "
-                                            "REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') "
-                                            "= %s LIMIT 1",
-                                            (_ev_cnpj_dig,), fetch=True, fetch_one=True,
-                                        )
-                                        _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                                    _ev_found = _find_cliente_by_doc_digits(_ev_cnpj_dig, _cnpj_cliente_cache)
                                     if _ev_found:
                                         _ev_nome = _ev_found['nome_razao_social']
                                         _ev_num = _ev_found.get('numero_cliente') or None
@@ -1645,16 +1653,7 @@ def _run_import_job(job: dict, departamento: str,
                             continue
 
                     if len(dest_cnpj_digits) >= 11:
-                        if dest_cnpj_digits in _cnpj_cliente_cache:
-                            found = _cnpj_cliente_cache[dest_cnpj_digits]
-                        else:
-                            found = execute_query(
-                                "SELECT id, numero_cliente, nome_razao_social FROM clientes "
-                                "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') "
-                                "= %s LIMIT 1",
-                                (dest_cnpj_digits,), fetch=True, fetch_one=True,
-                            )
-                            _cnpj_cliente_cache[dest_cnpj_digits] = found
+                        found = _find_cliente_by_doc_digits(dest_cnpj_digits, _cnpj_cliente_cache)
                         if found:
                             _cli = found['id']
                             _nome = found['nome_razao_social']
@@ -1863,7 +1862,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
 
     totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
     _vinculos_cache: dict = {}
-    _cnpj_cliente_cache: dict = {}
+    _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
     _last_seen: str | None = None  # cursor para pular arquivos já analisados
 
@@ -1973,15 +1972,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                         if _el is not None and _el.text:
                             _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
                             if len(_ev_cnpj_dig) >= 11:
-                                if _ev_cnpj_dig in _cnpj_cliente_cache:
-                                    _ev_found = _cnpj_cliente_cache[_ev_cnpj_dig]
-                                else:
-                                    _ev_found = execute_query(
-                                        "SELECT id, nome_razao_social, numero_cliente FROM clientes "
-                                        "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                                        (_ev_cnpj_dig,), fetch=True, fetch_one=True,
-                                    )
-                                    _cnpj_cliente_cache[_ev_cnpj_dig] = _ev_found
+                                _ev_found = _find_cliente_by_doc_digits(_ev_cnpj_dig, _cnpj_cliente_cache)
                                 if _ev_found:
                                     _ev_nome = _ev_found['nome_razao_social']
                                     _ev_num = _ev_found.get('numero_cliente') or None
@@ -2022,15 +2013,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                 dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
 
                 if len(dest_cnpj_digits) >= 11:
-                    if dest_cnpj_digits in _cnpj_cliente_cache:
-                        found = _cnpj_cliente_cache[dest_cnpj_digits]
-                    else:
-                        found = execute_query(
-                            "SELECT id, numero_cliente, nome_razao_social FROM clientes "
-                            "WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
-                            (dest_cnpj_digits,), fetch=True, fetch_one=True,
-                        )
-                        _cnpj_cliente_cache[dest_cnpj_digits] = found
+                    found = _find_cliente_by_doc_digits(dest_cnpj_digits, _cnpj_cliente_cache)
                     if found:
                         _cli = found['id']
                         _nome = found['nome_razao_social']
