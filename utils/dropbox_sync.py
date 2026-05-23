@@ -23,8 +23,11 @@ class DropboxError(Exception):
 
 # NF-e access keys are exactly 44 digits; files are normally saved as
 # "{44digits}.xml" but browsers (Edge, Chrome) sometimes strip the extension
-# or save as ".html".  We accept any file whose name starts with exactly 44 digits.
-_NFE_KEY_RE = re.compile(r'^\d{44}(?:\D|$)')
+# or save as ".html" / ".htm".  Some download tools also append a protocol
+# number or sequence after the key, producing names longer than 44 digits
+# (e.g. 52-digit names like "{44-digit-key}{8-digit-seq}.htm").
+# We accept any file whose name *starts* with at least 44 consecutive digits.
+_NFE_KEY_RE = re.compile(r'^\d{44}')
 
 DEPARTAMENTOS = [
     # Nomes usados na APP FOLDER do Dropbox (caminhos relativos à raiz do app)
@@ -167,17 +170,21 @@ class DropboxService:
         return entries
 
     def list_xml_files(self, path: str) -> list:
-        """Lista arquivos .xml e arquivos cujo nome começa com a chave NF-e (44 dígitos).
+        """Lista arquivos .xml/.htm/.html e arquivos cujo nome começa com a chave NF-e (≥44 dígitos).
 
         Navegadores como Edge/Chrome às vezes salvam arquivos XML de NF-e sem a
-        extensão .xml (ou com .html).  Para não perder esses arquivos, também
-        incluímos qualquer arquivo cujo nome inicie com 44 dígitos consecutivos.
+        extensão .xml ou com extensão .html/.htm.  Algumas ferramentas de download
+        salvam o nome como "{44 dígitos da chave}{dígitos adicionais}.htm", resultando
+        em nomes com mais de 44 dígitos.  Para não perder esses arquivos, aceitamos
+        qualquer arquivo cujo nome inicie com pelo menos 44 dígitos consecutivos.
         """
         all_files = self.list_folder(path)
         xml_files = [
             f for f in all_files
             if f.get('is_file') and (
                 f['name'].lower().endswith('.xml')
+                or f['name'].lower().endswith('.htm')
+                or f['name'].lower().endswith('.html')
                 or _NFE_KEY_RE.match(f['name'])
             )
         ]
