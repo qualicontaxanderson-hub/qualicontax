@@ -195,7 +195,7 @@ class DropboxService:
                 ) from exc
             if 'not_found' in str(exc):
                 return False
-            logger.warning('Dropbox _path_exists(%r): erro ao consultar metadata: %s', path, exc)
+                        logger.warning('Dropbox _path_exists(%r): erro inesperado ao consultar metadata: %s', path, exc, exc_info=True)
             return False
 
     def list_xml_files(self, path: str) -> list:
@@ -282,14 +282,20 @@ class DropboxService:
             return self._departamento_root_cache[canonical]
 
         for candidate in departamento_aliases(canonical):
-            if self._path_exists(f'/{candidate}'):
-                self._departamento_root_cache[canonical] = candidate
-                logger.info('Dropbox resolve_departamento_root(%r): usando %r', departamento, candidate)
-                return candidate
+            try:
+                if self._path_exists(f'/{candidate}'):
+                    self._departamento_root_cache[canonical] = candidate
+                    logger.info('Dropbox resolve_departamento_root(%r): usando %r', departamento, candidate)
+                    return candidate
+            except Exception as e:
+                logger.warning('Dropbox resolve_departamento_root: erro ao testar /%s: %s', candidate, e)
 
+        # Fallback: nenhum alias encontrado via _path_exists, usa o canônico diretamente
+        logger.warning(
+            'Dropbox resolve_departamento_root(%r): nenhuma pasta encontrada via _path_exists '
+            '(possivel erro de conexao ou permissao). Usando canonico %r como fallback.',
+            departamento, canonical)
         self._departamento_root_cache[canonical] = canonical
-        logger.warning('Dropbox resolve_departamento_root(%r): nenhuma pasta existente encontrada; usando fallback %r',
-                       departamento, canonical)
         return canonical
 
     def pasta_novo(self, departamento: str) -> str:
