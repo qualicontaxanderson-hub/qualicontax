@@ -1482,6 +1482,10 @@ def _run_import_job(job: dict, departamento: str,
             if not files:
                 break
 
+            # Garante ordem estável entre iterações para que o cursor avance
+            # monotonicamente e não volte para arquivos já analisados.
+            files = sorted(files, key=lambda f: ((f.get('name') or '').lower(), f.get('path') or ''))
+
             # Aplica cursor para avançar além dos arquivos já analisados em lotes
             # anteriores — inclui arquivos de empresas não cadastradas (que ficam em
             # NOVO mas já foram processados nesta execução) e arquivos saltados por
@@ -1885,6 +1889,9 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
         if not files:
             logger.info('[agendado] Nenhum arquivo em %r — concluído.', pasta_novo)
             break
+
+        # Mantém ordenação determinística para o cursor _last_seen não regredir.
+        files = sorted(files, key=lambda f: ((f.get('name') or '').lower(), f.get('path') or ''))
 
         # Avança cursor para pular arquivos já analisados em lotes anteriores.
         if _last_seen:
