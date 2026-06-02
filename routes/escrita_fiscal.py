@@ -1886,14 +1886,15 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             files = svc.list_xml_files(pasta_novo)
         except DropboxAuthError as exc:
             logger.error('[agendado] Erro de autenticação ao listar %r: %s', pasta_novo, exc)
-            totals['error'] = str(exc)
+            totals['error'] = 'Erro de autenticação no Dropbox. Verifique o token de acesso.'
             break
         except DropboxError as exc:
             logger.error('[agendado] Erro ao listar %r: %s', pasta_novo, exc)
             totals['error'] = (
                 f'Não foi possível ler a pasta "{pasta_novo}". '
-                f'Verifique se a variável DROPBOX_ROOT_FOLDER está configurada corretamente. '
-                f'Detalhe: {exc}'
+                'Verifique se a variável DROPBOX_ROOT_FOLDER está configurada corretamente '
+                '(ex.: DROPBOX_ROOT_FOLDER=/Aplicativos/ESCRITA FISCAL). '
+                'Consulte os logs do servidor para mais detalhes.'
             )
             break
 
