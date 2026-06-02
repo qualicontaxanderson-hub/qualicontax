@@ -1080,6 +1080,8 @@ def api_importar_dropbox():
     # na lista ordenada pelo Dropbox.
     # ------------------------------------------------------------------
     if filter_cnpjs is not None and last_scanned:
+        # Cursor legado do endpoint traz apenas o nome; usa path vazio como menor
+        # sufixo possível para avançar para o próximo item ordenado por (name, path).
         cursor_key = (last_scanned.lower(), '')
         _cursor_applied = False
         for _ci, _cf in enumerate(files):
@@ -1394,6 +1396,8 @@ def api_importar_dropbox():
     # (skipped), o cursor last_scanned avança para um novo bloco de arquivos na próxima
     # chamada — não há risco de loop infinito, então has_more deve permanecer True.
     files_physically_moved = moved_ok + moved_err
+    # Se nenhum arquivo do lote chegou a um estado analisado, interrompe paginação
+    # para evitar reprocessar o mesmo lote infinitamente.
     if has_more and analyzed_in_batch == 0:
         has_more = False
     elif has_more and files_physically_moved == 0:
@@ -1899,7 +1903,16 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('[agendado] Importando departamento=%r, pasta=%r', departamento, pasta_novo)
 
-    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'error': None, 'pasta': pasta_novo}
+    totals = {
+        'ok': 0,
+        'dup': 0,
+        'err': 0,
+        'moved_ok': 0,
+        'moved_err': 0,
+        'skipped': 0,
+        'error': None,
+        'pasta': pasta_novo,
+    }
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
