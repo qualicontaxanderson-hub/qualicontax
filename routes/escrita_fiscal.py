@@ -1863,7 +1863,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('[agendado] Importando departamento=%r, pasta=%r', departamento, pasta_novo)
 
-    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'error': None}
+    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'error': None, 'pasta': pasta_novo}
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
@@ -2152,6 +2152,7 @@ def api_executar_importacao_agendada():
                 'moved_err': result['moved_err'],
                 'skipped': result['skipped'],
                 'log_id': result.get('log_id'),
+                'pasta': result.get('pasta', ''),
             }
         except Exception:
             logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
