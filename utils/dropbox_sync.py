@@ -95,12 +95,13 @@ class DropboxService:
                     oauth2_refresh_token=refresh_token,
                     app_key=app_key,
                     app_secret=app_secret,
+                    timeout=30,
                 )
                 return self._dbx
             # Fallback para access token legado
             access_token = Config.DROPBOX_ACCESS_TOKEN
             if access_token:
-                self._dbx = dropbox_sdk.Dropbox(access_token)
+                self._dbx = dropbox_sdk.Dropbox(access_token, timeout=30)
                 return self._dbx
         except Exception as exc:
             logger.error('Erro ao criar cliente Dropbox: %s', exc)

@@ -40,6 +40,11 @@ _MAX_IMPORT_ITERATIONS = 1000
 # Máximo de mensagens de erro de detalhe armazenadas por job de importação.
 _MAX_ERROR_DETAILS = 50
 
+# Timeout do worker Gunicorn (segundos). Margem reservada para serialização
+# e envio da resposta HTTP antes de o worker ser encerrado pelo gunicorn.
+_GUNICORN_WORKER_TIMEOUT = 300
+_GUNICORN_RESPONSE_MARGIN = 60
+
 # Namespace NF-e (usado para detecção de XMLs de evento)
 _NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
 # Tags raiz de XMLs de evento NF-e: carta de correção, cancelamento, etc.
@@ -1863,7 +1868,8 @@ def api_importar_dropbox_stop(job_id: str):
 
 
 def importar_departamento_background(departamento: str, origem: str = 'agendado',
-                                      usuario_id: int = None) -> dict:
+                                      usuario_id: int = None,
+                                      deadline: float = None) -> dict:
     """Executa a importação completa de um departamento sem contexto HTTP.
 
     Processa todos os arquivos XML da pasta NOVO do departamento, fazendo
@@ -1875,6 +1881,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     Pensado para uso por tarefas agendadas (scheduler) e execução manual.
     """
     import json as _json
+    import time as _time
 
     if not dropbox_sync.is_configured():
         logger.warning('importar_departamento_background: Dropbox não configurado, abortando.')
@@ -1931,6 +1938,10 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     iteration = 0
     while iteration < max_iterations:
         iteration += 1
+        if deadline is not None:
+            if _time.monotonic() >= deadline:
+                logger.warning('[agendado] departamento=%r: deadline atingido, encerrando loop.', departamento)
+                break
         try:
             files = svc.list_xml_files(pasta_novo)
         except DropboxAuthError as exc:
@@ -2190,6 +2201,8 @@ def api_executar_importacao_agendada():
     Restrito a usuários administradores.  A resposta inclui o sumário por
     departamento e o log_id de cada execução para consulta posterior.
     """
+    import time as _time
+
     usuario = current_user
     if not usuario.is_authenticated or not usuario.is_admin():
         return jsonify({'error': 'Acesso restrito a administradores.'}), 403
@@ -2201,9 +2214,20 @@ def api_executar_importacao_agendada():
     resumo = {}
     erros = []
 
+    # Reserva _GUNICORN_RESPONSE_MARGIN s de margem antes do gunicorn timeout
+    # para que o worker ainda consiga serializar e enviar a resposta HTTP.
+    overall_deadline = _time.monotonic() + (_GUNICORN_WORKER_TIMEOUT - _GUNICORN_RESPONSE_MARGIN)
+
     for dep in dropbox_sync.DEPARTAMENTOS_CANONICOS:
+        if _time.monotonic() >= overall_deadline:
+            logger.warning('api_executar_importacao_agendada: deadline atingido antes de %r', dep)
+            erros.append(f'Tempo limite atingido antes de processar o departamento {dep}.')
+            continue
         try:
-            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
+            result = importar_departamento_background(
+                dep, origem='manual', usuario_id=usuario_id,
+                deadline=overall_deadline,
+            )
             if result.get('error'):
                 erros.append(result['error'])
             resumo[dep] = {
