@@ -130,8 +130,8 @@ class DropboxService:
             or 'insufficient_scope' in exc_str
         )
 
-    def list_folder(self, path: str) -> list:
-        """Lista todos os itens de uma pasta (arquivos e sub-pastas).
+    def list_folder(self, path: str, recursive: bool = False) -> list:
+        """Lista itens de uma pasta (arquivos e sub-pastas).
 
         Raises:
             DropboxAuthError: credenciais inválidas/expiradas.
@@ -146,8 +146,8 @@ class DropboxService:
         entries = []
         try:
             import dropbox as dropbox_sdk
-            logger.info('Dropbox list_folder: path=%r', path)
-            result = dbx.files_list_folder(path)
+            logger.info('Dropbox list_folder: path=%r recursive=%s', path, recursive)
+            result = dbx.files_list_folder(path, recursive=recursive)
             while True:
                 for entry in result.entries:
                     entries.append({
@@ -160,8 +160,8 @@ class DropboxService:
                 if not result.has_more:
                     break
                 result = dbx.files_list_folder_continue(result.cursor)
-            logger.info('Dropbox list_folder(%r): %d item(s) encontrado(s): %s',
-                        path, len(entries), [e['name'] for e in entries])
+            logger.info('Dropbox list_folder(%r, recursive=%s): %d item(s) encontrado(s): %s',
+                        path, recursive, len(entries), [e['name'] for e in entries])
         except (DropboxAuthError, DropboxError):
             raise
         except Exception as exc:
@@ -213,7 +213,8 @@ class DropboxService:
         em nomes com mais de 44 dígitos.  Para não perder esses arquivos, aceitamos
         qualquer arquivo cujo nome inicie com pelo menos 44 dígitos consecutivos.
         """
-        all_files = self.list_folder(path)
+        # Inclui subpastas dentro de NOVO para suportar organização por empresa.
+        all_files = self.list_folder(path, recursive=True)
         xml_files = [
             f for f in all_files
             if f.get('is_file') and (
