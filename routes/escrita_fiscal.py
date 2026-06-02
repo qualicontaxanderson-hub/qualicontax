@@ -2123,7 +2123,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
 @escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
 @login_required
 def api_executar_importacao_agendada():
-    """Dispara imediatamente a importação de um departamento (padrão: Fiscal).
+    """Dispara imediatamente a importação de todos os departamentos (equivale ao job das 23:59).
 
     Restrito a usuários administradores.  A resposta inclui o sumário por
     departamento e o log_id de cada execução para consulta posterior.
@@ -2135,33 +2135,27 @@ def api_executar_importacao_agendada():
     if not dropbox_sync.is_configured():
         return jsonify({'error': 'Dropbox não configurado.'}), 400
 
-    data = request.get_json(silent=True) or {}
-    departamento = dropbox_sync.normalize_departamento(
-        (data.get('departamento') or 'Fiscal').strip()
-    )
-    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS_CANONICOS:
-        return jsonify({'error': 'Departamento inválido.'}), 400
-
     usuario_id = getattr(usuario, 'id', None)
     resumo = {}
     erros = []
 
-    try:
-        result = importar_departamento_background(departamento, origem='manual', usuario_id=usuario_id)
-        if result.get('error'):
-            erros.append(result['error'])
-        resumo[departamento] = {
-            'ok': result['ok'],
-            'dup': result['dup'],
-            'err': result['err'],
-            'moved_ok': result['moved_ok'],
-            'moved_err': result['moved_err'],
-            'skipped': result['skipped'],
-            'log_id': result.get('log_id'),
-        }
-    except Exception:
-        logger.exception('api_executar_importacao_agendada: erro no dep %r', departamento)
-        erros.append(f'Erro ao processar departamento {departamento}. Consulte os logs do servidor.')
+    for dep in dropbox_sync.DEPARTAMENTOS_CANONICOS:
+        try:
+            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
+            if result.get('error'):
+                erros.append(result['error'])
+            resumo[dep] = {
+                'ok': result['ok'],
+                'dup': result['dup'],
+                'err': result['err'],
+                'moved_ok': result['moved_ok'],
+                'moved_err': result['moved_err'],
+                'skipped': result['skipped'],
+                'log_id': result.get('log_id'),
+            }
+        except Exception:
+            logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
+            erros.append(f'Erro ao processar departamento {dep}. Consulte os logs do servidor.')
 
     total_ok = sum(r['ok'] for r in resumo.values())
     total_dup = sum(r['dup'] for r in resumo.values())

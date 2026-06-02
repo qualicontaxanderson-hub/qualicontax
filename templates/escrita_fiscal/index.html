@@ -9,7 +9,7 @@
     {% if is_admin %}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
-                title="Executa agora a importação de XMLs do departamento Fiscal"
+                title="Executa agora o mesmo processo automático de importação de XMLs para todos os departamentos"
                 style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);">
             <i class="fas fa-play-circle"></i> Executar Agora
         </button>
@@ -114,7 +114,7 @@
     </div>
     <div style="padding:20px 24px;">
         <p style="font-size:13px;color:#64748b;margin:0 0 16px 0;line-height:1.5;">
-            Define a hora em que o sistema executará automaticamente a importação de XMLs do Dropbox todos os dias.
+            Define a hora em que o sistema executará automaticamente a importação de XMLs do Dropbox todos os dias para todos os departamentos.
             Use <strong>Executar Agora</strong> para um teste imediato sem alterar o horário agendado.
         </p>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
@@ -159,13 +159,12 @@ function executarImportacaoAgendada() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     document.getElementById('execAgendadaBody').innerHTML =
-        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando departamento Fiscal... isso pode levar alguns minutos.</p>';
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando todos os departamentos... isso pode levar alguns minutos.</p>';
     document.getElementById('execAgendadaOverlay').style.display = 'flex';
 
     fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ departamento: 'Fiscal' }),
     })
     .then(r => r.json())
     .then(data => {
