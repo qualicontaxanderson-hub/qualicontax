@@ -2126,10 +2126,11 @@ def api_executar_importacao_agendada():
         return jsonify({'error': 'Dropbox não configurado.'}), 400
 
     data = request.get_json(silent=True) or {}
-    departamento = (data.get('departamento') or 'Fiscal').strip()
-    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
+    departamento = dropbox_sync.normalize_departamento(
+        (data.get('departamento') or 'Fiscal').strip()
+    )
+    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS_CANONICOS:
         return jsonify({'error': 'Departamento inválido.'}), 400
-    departamento = dropbox_sync.normalize_departamento(departamento)
 
     usuario_id = getattr(usuario, 'id', None)
     resumo = {}
@@ -2154,6 +2155,8 @@ def api_executar_importacao_agendada():
     total_dup = sum(r['dup'] for r in resumo.values())
     total_err = sum(r['err'] for r in resumo.values())
     total_skipped = sum(r['skipped'] for r in resumo.values())
+    total_departamentos = len(resumo)
+    departamento_label = 'departamento' if total_departamentos == 1 else 'departamentos'
 
     return jsonify({
         'ok': True,
@@ -2162,7 +2165,7 @@ def api_executar_importacao_agendada():
         'msg': (
             f'{total_ok} importado(s), {total_dup} duplicata(s), '
             f'{total_err} erro(s), {total_skipped} ignorado(s) '
-            f'em {len(resumo)} departamento(s).'
+            f'em {total_departamentos} {departamento_label}.'
         ),
     })
 
