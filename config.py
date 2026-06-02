@@ -47,3 +47,7 @@ class Config:
     # Legado — access token de longa duração (mantido para compatibilidade)
     DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN', '')
     DROPBOX_XML_FOLDER = os.getenv('DROPBOX_XML_FOLDER', '/qualicontax/xml-compras')
+    # Prefixo de pasta raiz para tokens com acesso Full Dropbox.
+    # Deixe em branco (padrão) para tokens com escopo de App Folder.
+    # Exemplo: /Aplicativos/ESCRITA FISCAL
+    DROPBOX_ROOT_FOLDER = os.getenv('DROPBOX_ROOT_FOLDER', '').strip().rstrip('/')

@@ -116,6 +116,22 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Operações de arquivo
     # ------------------------------------------------------------------
+    def _root_folder(self) -> str:
+        """Retorna o prefixo raiz para todos os caminhos Dropbox.
+
+        Vazio para tokens com escopo de App Folder (padrão).
+        Defina ``DROPBOX_ROOT_FOLDER`` (ex.: ``/Aplicativos/ESCRITA FISCAL``)
+        quando o token tiver acesso Full Dropbox.
+        """
+        from config import Config
+        return (Config.DROPBOX_ROOT_FOLDER or '').rstrip('/')
+
+    def _build_path(self, *parts: str) -> str:
+        """Monta um caminho Dropbox absoluto com o prefixo raiz configurado."""
+        root = self._root_folder()
+        segments = [root.strip('/')] + [p.strip('/') for p in parts if p]
+        return '/' + '/'.join(s for s in segments if s)
+
     def _is_auth_error(self, exc: Exception) -> bool:
         """Retorna True se a exceção é um erro de autenticação/autorização do Dropbox."""
         exc_type = type(exc).__name__
@@ -291,18 +307,19 @@ class DropboxService:
 
         for candidate in departamento_aliases(canonical):
             try:
-                if self._path_exists(f'/{candidate}'):
+                if self._path_exists(self._build_path(candidate)):
                     self._departamento_root_cache[canonical] = candidate
                     logger.info(
-                        'Dropbox resolve_departamento_root(%r): usando %r',
+                        'Dropbox resolve_departamento_root(%r): usando %r (root=%r)',
                         departamento,
                         candidate,
+                        self._root_folder(),
                     )
                     return candidate
             except Exception as e:
                 logger.warning(
-                    'Dropbox resolve_departamento_root: erro ao testar /%s: %s',
-                    candidate,
+                    'Dropbox resolve_departamento_root: erro ao testar %s: %s',
+                    self._build_path(candidate),
                     e,
                 )
 
@@ -316,21 +333,21 @@ class DropboxService:
 
     def pasta_novo(self, departamento: str) -> str:
         root = self.resolve_departamento_root(departamento)
-        return f'/{root}/NOVO'
+        return self._build_path(root, 'NOVO')
 
     def pasta_importados(self, departamento: str, empresa_nome: str,
                          dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
-        return f'/{root}/IMPORTADOS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+        return self._build_path(root, 'IMPORTADOS', pasta_empresa, str(dt.year), f'{dt.month:02d}')
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
                     dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
-        return f'/{root}/ERROS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+        return self._build_path(root, 'ERROS', pasta_empresa, str(dt.year), f'{dt.month:02d}')
 
 
 def normalize_departamento(departamento: str) -> str:

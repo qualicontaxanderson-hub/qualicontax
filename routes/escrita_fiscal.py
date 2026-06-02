@@ -1863,7 +1863,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('[agendado] Importando departamento=%r, pasta=%r', departamento, pasta_novo)
 
-    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0, 'error': None}
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
@@ -1884,8 +1884,17 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
         iteration += 1
         try:
             files = svc.list_xml_files(pasta_novo)
-        except (DropboxAuthError, DropboxError) as exc:
+        except DropboxAuthError as exc:
+            logger.error('[agendado] Erro de autenticação ao listar %r: %s', pasta_novo, exc)
+            totals['error'] = str(exc)
+            break
+        except DropboxError as exc:
             logger.error('[agendado] Erro ao listar %r: %s', pasta_novo, exc)
+            totals['error'] = (
+                f'Não foi possível ler a pasta "{pasta_novo}". '
+                f'Verifique se a variável DROPBOX_ROOT_FOLDER está configurada corretamente. '
+                f'Detalhe: {exc}'
+            )
             break
 
         if not files:
@@ -2138,6 +2147,8 @@ def api_executar_importacao_agendada():
 
     try:
         result = importar_departamento_background(departamento, origem='manual', usuario_id=usuario_id)
+        if result.get('error'):
+            erros.append(result['error'])
         resumo[departamento] = {
             'ok': result['ok'],
             'dup': result['dup'],
