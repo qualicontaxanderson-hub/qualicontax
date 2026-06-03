@@ -6,6 +6,7 @@ import os
 import secrets
 from urllib.parse import urlencode
 import logging
+from markupsafe import escape
 
 dropbox_bp = Blueprint('dropbox', __name__)
 logger = logging.getLogger(__name__)
@@ -21,11 +22,11 @@ _RAILWAY_ENDPOINTS = (
 
 def _dropbox_env(name: str, default: str = '') -> str:
     """Lê variável de ambiente Dropbox dinamicamente (sem cache estático)."""
-    return os.getenv(name, default).strip()
+    return (os.getenv(name, default) or default).strip()
 
 
 def _railway_env(name: str, default: str = '') -> str:
-    return os.getenv(name, default).strip()
+    return (os.getenv(name, default) or default).strip()
 
 
 def _railway_upsert_variable(name: str, value: str) -> tuple[bool, str]:
@@ -40,6 +41,7 @@ def _railway_upsert_variable(name: str, value: str) -> tuple[bool, str]:
     if not project_id or not environment_id:
         return False, 'RAILWAY_PROJECT_ID e RAILWAY_ENVIRONMENT_ID são obrigatórios'
 
+    # Valores "all/*/null" indicam variável no nível do ambiente (sem serviceId).
     if service_id.lower() in {'', 'null', 'none', 'all', '*'}:
         service_id = None
 
@@ -76,7 +78,7 @@ def _railway_upsert_variable(name: str, value: str) -> tuple[bool, str]:
                 timeout=25,
             )
             if response.status_code != 200:
-                last_error = f'HTTP {response.status_code}: {response.text[:400]}'
+                last_error = f'HTTP {response.status_code}'
                 continue
             payload = response.json()
             errors = payload.get('errors')
@@ -139,13 +141,14 @@ def dropbox_callback():
     state = request.args.get('state', '')
 
     if error:
-        return f'<h2>Erro na autorização Dropbox: {error}</h2>', 400
+        logger.warning('Dropbox OAuth retornou erro no callback: %s', error)
+        return '<h2>Erro na autorização Dropbox.</h2>', 400
 
     if not code:
         return '<h2>Código de autorização não recebido.</h2>', 400
 
     expected_state = session.pop(_DROPBOX_STATE_SESSION_KEY, None)
-    if not expected_state or not state or state != expected_state:
+    if not expected_state or not state or not secrets.compare_digest(state, expected_state):
         return '<h2>Estado OAuth inválido. Refaça a autenticação.</h2>', 400
 
     app_key = _dropbox_env('DROPBOX_APP_KEY')
@@ -161,16 +164,21 @@ def dropbox_callback():
     }, auth=(app_key, app_secret))
 
     if response.status_code != 200:
-        return f'<h2>Erro ao obter token: {response.text}</h2>', 400
+        logger.warning('Falha ao obter token Dropbox (HTTP %s): %s',
+                       response.status_code, response.text[:500])
+        return '<h2>Erro ao obter token do Dropbox. Tente novamente.</h2>', 400
 
     data = response.json()
     refresh_token = data.get('refresh_token', '')
     account_id = data.get('account_id', '')
     scope = data.get('scope', '(não retornado)')
     if not refresh_token:
-        return f'<h2>Dropbox não retornou refresh_token: {data}</h2>', 400
+        logger.warning('Dropbox callback sem refresh_token. Resposta: %s', data)
+        return '<h2>Dropbox não retornou refresh token. Revise as permissões do app.</h2>', 400
 
     ok, save_status = _railway_upsert_variable('DROPBOX_REFRESH_TOKEN', refresh_token)
+    if not ok:
+        logger.warning('Falha ao salvar DROPBOX_REFRESH_TOKEN no Railway: %s', save_status)
     os.environ['DROPBOX_REFRESH_TOKEN'] = refresh_token
     try:
         from utils.dropbox_sync import _service
@@ -182,13 +190,19 @@ def dropbox_callback():
         '<p><strong>Railway:</strong> ✅ DROPBOX_REFRESH_TOKEN atualizado com sucesso.</p>'
         if ok
         else (
-            '<p><strong>Railway:</strong> ⚠️ não foi possível salvar automaticamente '
-            f'({save_status}).</p>'
+            '<p><strong>Railway:</strong> ⚠️ não foi possível salvar automaticamente.</p>'
             '<p>Configure RAILWAY_API_TOKEN, RAILWAY_PROJECT_ID e RAILWAY_ENVIRONMENT_ID '
             'para habilitar o salvamento automático.</p>'
         )
     )
-    masked = f'{refresh_token[:8]}...{refresh_token[-6:]}' if len(refresh_token) > 20 else refresh_token
+    token_len = len(refresh_token)
+    if token_len > 14:
+        masked = f'{refresh_token[:8]}...{refresh_token[-6:]}'
+    else:
+        masked = '*' * token_len
+    account_id_safe = escape(account_id)
+    scope_safe = escape(scope)
+    masked_safe = escape(masked)
 
     return f'''
     <html>
@@ -204,12 +218,12 @@ def dropbox_callback():
     </head>
     <body>
     <h2>&#x2705; Dropbox Autorizado com Sucesso!</h2>
-    <p>Account ID: <strong>{account_id}</strong></p>
-    <p>Scopes concedidos: <code>{scope}</code></p>
+    <p>Account ID: <strong>{account_id_safe}</strong></p>
+    <p>Scopes concedidos: <code>{scope_safe}</code></p>
     {railway_msg}
     <div class="box">
         <strong>DROPBOX_REFRESH_TOKEN gerado:</strong><br><br>
-        <div class="token">{masked}</div>
+        <div class="token">{masked_safe}</div>
     </div>
     <div class="warn">&#x26A0;&#xFE0F; Se o salvamento automático no Railway falhar, adicione manualmente a variável <code>DROPBOX_REFRESH_TOKEN</code>.</div>
     </body>

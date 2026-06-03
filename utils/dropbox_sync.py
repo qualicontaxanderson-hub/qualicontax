@@ -83,8 +83,8 @@ class DropboxService:
     # Autenticação
     # ------------------------------------------------------------------
     def _cfg(self, name: str, default: str = '') -> str:
-        """Lê config Dropbox dinamicamente para aceitar update em runtime."""
-        value = os.getenv(name, default)
+        """Lê config Dropbox dinamicamente para permitir atualização em runtime."""
+        value = os.getenv(name, default) or default
         return value.strip() if isinstance(value, str) else value
 
     def _client(self):
