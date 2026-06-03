@@ -2218,7 +2218,7 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None') -> None:
         try:
             result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
             if result.get('error'):
-                job['erros'] = list(job['erros']) + [result['error']]
+                job['erros'].append(result['error'])
             dep_entry = {
                 'ok': result['ok'],
                 'dup': result['dup'],
@@ -2238,9 +2238,9 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None') -> None:
             total_skipped += result['skipped']
         except Exception:
             logger.exception('_run_all_departments_job: erro no dep %r', dep)
-            job['erros'] = list(job['erros']) + [
+            job['erros'].append(
                 f'Erro ao processar departamento {dep}. Consulte os logs do servidor.'
-            ]
+            )
         job['completed_deps'] += 1
         job['ok'] = total_ok
         job['dup'] = total_dup
