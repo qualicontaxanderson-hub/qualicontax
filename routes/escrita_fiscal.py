@@ -2193,44 +2193,33 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
 # ---------------------------------------------------------------------------
 # Execução manual do job de importação (para testes / auditoria)
 # ---------------------------------------------------------------------------
-@escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
-@login_required
-def api_executar_importacao_agendada():
-    """Dispara imediatamente a importação de todos os departamentos (equivale ao job das 23:59).
+def _run_all_departments_job(job: dict, usuario_id: 'int | None') -> None:
+    """Executa importação de todos os departamentos sequencialmente em background thread.
 
-    Restrito a usuários administradores.  A resposta inclui o sumário por
-    departamento e o log_id de cada execução para consulta posterior.
+    Atualiza ``job`` (dict compartilhado) com progresso em tempo real para que
+    o endpoint de status possa informar o cliente via polling.
     """
-    import time as _time
+    deps = dropbox_sync.DEPARTAMENTOS_CANONICOS
+    job['total_deps'] = len(deps)
+    job['completed_deps'] = 0
+    job['resumo'] = {}
+    job['erros'] = []
 
-    usuario = current_user
-    if not usuario.is_authenticated or not usuario.is_admin():
-        return jsonify({'error': 'Acesso restrito a administradores.'}), 403
+    total_ok = 0
+    total_dup = 0
+    total_err = 0
+    total_skipped = 0
 
-    if not dropbox_sync.is_configured():
-        return jsonify({'error': 'Dropbox não configurado.'}), 400
-
-    usuario_id = getattr(usuario, 'id', None)
-    resumo = {}
-    erros = []
-
-    # Reserva _GUNICORN_RESPONSE_MARGIN s de margem antes do gunicorn timeout
-    # para que o worker ainda consiga serializar e enviar a resposta HTTP.
-    overall_deadline = _time.monotonic() + (_GUNICORN_WORKER_TIMEOUT - _GUNICORN_RESPONSE_MARGIN)
-
-    for dep in dropbox_sync.DEPARTAMENTOS_CANONICOS:
-        if _time.monotonic() >= overall_deadline:
-            logger.warning('api_executar_importacao_agendada: deadline atingido antes de %r', dep)
-            erros.append(f'Tempo limite atingido antes de processar o departamento {dep}.')
-            continue
+    for dep in deps:
+        if job.get('stop_requested'):
+            break
+        job['current_dep'] = dep
+        job['msg'] = f'Processando {dep} ({job["completed_deps"] + 1}/{len(deps)})...'
         try:
-            result = importar_departamento_background(
-                dep, origem='manual', usuario_id=usuario_id,
-                deadline=overall_deadline,
-            )
+            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
             if result.get('error'):
-                erros.append(result['error'])
-            resumo[dep] = {
+                job['erros'] = list(job['erros']) + [result['error']]
+            dep_entry = {
                 'ok': result['ok'],
                 'dup': result['dup'],
                 'err': result['err'],
@@ -2240,26 +2229,80 @@ def api_executar_importacao_agendada():
                 'log_id': result.get('log_id'),
                 'pasta': result.get('pasta', ''),
             }
+            new_resumo = dict(job['resumo'])
+            new_resumo[dep] = dep_entry
+            job['resumo'] = new_resumo
+            total_ok += result['ok']
+            total_dup += result['dup']
+            total_err += result['err']
+            total_skipped += result['skipped']
         except Exception:
-            logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
-            erros.append(f'Erro ao processar departamento {dep}. Consulte os logs do servidor.')
+            logger.exception('_run_all_departments_job: erro no dep %r', dep)
+            job['erros'] = list(job['erros']) + [
+                f'Erro ao processar departamento {dep}. Consulte os logs do servidor.'
+            ]
+        job['completed_deps'] += 1
+        job['ok'] = total_ok
+        job['dup'] = total_dup
+        job['err'] = total_err
+        job['skipped'] = total_skipped
 
-    total_ok = sum(r['ok'] for r in resumo.values())
-    total_dup = sum(r['dup'] for r in resumo.values())
-    total_err = sum(r['err'] for r in resumo.values())
-    total_skipped = sum(r['skipped'] for r in resumo.values())
-    total_departamentos = len(dropbox_sync.DEPARTAMENTOS_CANONICOS)
+    total_departamentos = len(deps)
+    job['msg'] = (
+        f'{total_ok} importado(s), {total_dup} duplicata(s), '
+        f'{total_err} erro(s), {total_skipped} ignorado(s) '
+        f'em {total_departamentos} departamento(s).'
+    )
+    job['current_dep'] = None
+    job['status'] = 'done'
+    logger.info('_run_all_departments_job concluído: ok=%d dup=%d err=%d skipped=%d',
+                total_ok, total_dup, total_err, total_skipped)
 
-    return jsonify({
-        'ok': True,
-        'resumo': resumo,
-        'erros': erros,
-        'msg': (
-            f'{total_ok} importado(s), {total_dup} duplicata(s), '
-            f'{total_err} erro(s), {total_skipped} ignorado(s) '
-            f'em {total_departamentos} departamento(s).'
-        ),
-    })
+
+@escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
+@login_required
+def api_executar_importacao_agendada():
+    """Dispara imediatamente a importação de todos os departamentos em background thread.
+
+    Restrito a usuários administradores.  Retorna imediatamente um ``job_id``
+    que pode ser consultado via GET /api/executar-importacao-agendada/status/<job_id>
+    para acompanhar o progresso e obter o sumário final.
+    """
+    usuario = current_user
+    if not usuario.is_authenticated or not usuario.is_admin():
+        return jsonify({'error': 'Acesso restrito a administradores.'}), 403
+
+    if not dropbox_sync.is_configured():
+        return jsonify({'error': 'Dropbox não configurado.'}), 400
+
+    usuario_id = getattr(usuario, 'id', None)
+
+    job_id, job = import_jobs.create_job()
+    job['resumo'] = {}
+    job['erros'] = []
+    job['current_dep'] = None
+    job['completed_deps'] = 0
+    job['total_deps'] = len(dropbox_sync.DEPARTAMENTOS_CANONICOS)
+
+    t = threading.Thread(
+        target=_run_all_departments_job,
+        args=(job, usuario_id),
+        daemon=True,
+        name=f'import-all-{job_id}',
+    )
+    t.start()
+    logger.info('api_executar_importacao_agendada: job %s iniciado', job_id)
+    return jsonify({'job_id': job_id})
+
+
+@escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada/status/<job_id>')
+@login_required
+def api_executar_agendada_status(job_id: str):
+    """Retorna o estado atual de um job de importação de todos os departamentos."""
+    job = import_jobs.get_job(job_id)
+    if job is None:
+        return jsonify({'error': 'Job não encontrado ou expirado.'}), 404
+    return jsonify(job)
 
 
 @escrita_fiscal.route('/conf-compras/api/log-importacoes')
