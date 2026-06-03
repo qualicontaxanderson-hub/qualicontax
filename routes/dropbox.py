@@ -1,19 +1,142 @@
 """Rotas de integração com Dropbox - OAuth2 e importação de arquivos"""
-from flask import Blueprint, request, redirect, jsonify
+from flask import Blueprint, request, redirect, jsonify, session
 from flask_login import login_required
 import requests
 import os
+import secrets
+from urllib.parse import urlencode
+import logging
 
 dropbox_bp = Blueprint('dropbox', __name__)
+logger = logging.getLogger(__name__)
 
 DROPBOX_TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token'
+DROPBOX_AUTHORIZE_URL = 'https://www.dropbox.com/oauth2/authorize'
+_DROPBOX_STATE_SESSION_KEY = 'dropbox_oauth_state'
+_RAILWAY_ENDPOINTS = (
+    'https://backboard.railway.app/graphql/v2',
+    'https://backboard.railway.app/graphql',
+)
+
+
+def _dropbox_env(name: str, default: str = '') -> str:
+    """Lê variável de ambiente Dropbox dinamicamente (sem cache estático)."""
+    return os.getenv(name, default).strip()
+
+
+def _railway_env(name: str, default: str = '') -> str:
+    return os.getenv(name, default).strip()
+
+
+def _railway_upsert_variable(name: str, value: str) -> tuple[bool, str]:
+    """Salva/atualiza variável no Railway via GraphQL API."""
+    api_token = _railway_env('RAILWAY_API_TOKEN') or _railway_env('RAILWAY_TOKEN')
+    project_id = _railway_env('RAILWAY_PROJECT_ID')
+    environment_id = _railway_env('RAILWAY_ENVIRONMENT_ID')
+    service_id = _railway_env('RAILWAY_SERVICE_ID')
+
+    if not api_token:
+        return False, 'RAILWAY_API_TOKEN (ou RAILWAY_TOKEN) não configurado'
+    if not project_id or not environment_id:
+        return False, 'RAILWAY_PROJECT_ID e RAILWAY_ENVIRONMENT_ID são obrigatórios'
+
+    if service_id.lower() in {'', 'null', 'none', 'all', '*'}:
+        service_id = None
+
+    mutation = """
+    mutation UpsertVar($input: VariableUpsertInput!) {
+      variableUpsert(input: $input) {
+        id
+        name
+      }
+    }
+    """
+    variables = {
+        'input': {
+            'projectId': project_id,
+            'environmentId': environment_id,
+            'serviceId': service_id,
+            'name': name,
+            'value': value,
+        }
+    }
+    bearer = 'Bearer ' + api_token
+    headers = {
+        'Authorization': bearer,
+        'Content-Type': 'application/json',
+    }
+
+    last_error = 'falha desconhecida ao comunicar com Railway'
+    for endpoint in _RAILWAY_ENDPOINTS:
+        try:
+            response = requests.post(
+                endpoint,
+                json={'query': mutation, 'variables': variables},
+                headers=headers,
+                timeout=25,
+            )
+            if response.status_code != 200:
+                last_error = f'HTTP {response.status_code}: {response.text[:400]}'
+                continue
+            payload = response.json()
+            errors = payload.get('errors')
+            if errors:
+                last_error = '; '.join(e.get('message', str(e)) for e in errors)
+                continue
+            data = payload.get('data', {}) or {}
+            if data.get('variableUpsert'):
+                return True, endpoint
+            last_error = f'resposta inválida: {payload}'
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+
+    return False, last_error
+
+
+def _build_dropbox_authorize_url() -> str:
+    app_key = _dropbox_env('DROPBOX_APP_KEY')
+    redirect_uri = _dropbox_env('DROPBOX_REDIRECT_URI')
+    state = secrets.token_urlsafe(32)
+    session[_DROPBOX_STATE_SESSION_KEY] = state
+    query = urlencode({
+        'client_id': app_key,
+        'token_access_type': 'offline',
+        'response_type': 'code',
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'scope': 'files.metadata.read files.content.read files.content.write files.metadata.write',
+    })
+    return f'{DROPBOX_AUTHORIZE_URL}?{query}'
+
+
+@dropbox_bp.route('/dropbox/auth')
+@login_required
+def dropbox_auth():
+    """Redireciona para autorização OAuth do Dropbox (offline refresh token)."""
+    app_key = _dropbox_env('DROPBOX_APP_KEY')
+    redirect_uri = _dropbox_env('DROPBOX_REDIRECT_URI')
+    if not app_key or not redirect_uri:
+        return jsonify({
+            'error': 'DROPBOX_APP_KEY e DROPBOX_REDIRECT_URI precisam estar configurados.'
+        }), 400
+    return redirect(_build_dropbox_authorize_url())
+
+
+@dropbox_bp.route('/dropbox/auth-url')
+@login_required
+def dropbox_auth_url():
+    """Compatibilidade com rota antiga de autorização."""
+    return dropbox_auth()
 
 
 @dropbox_bp.route('/dropbox/callback')
+@login_required
 def dropbox_callback():
-    """Callback OAuth2 do Dropbox - troca code por refresh_token"""
+    """Callback OAuth2 do Dropbox: troca code por refresh_token e salva no Railway."""
     code = request.args.get('code')
     error = request.args.get('error')
+    state = request.args.get('state', '')
 
     if error:
         return f'<h2>Erro na autorização Dropbox: {error}</h2>', 400
@@ -21,9 +144,15 @@ def dropbox_callback():
     if not code:
         return '<h2>Código de autorização não recebido.</h2>', 400
 
-    app_key = os.environ.get('DROPBOX_APP_KEY', '').strip()
-    app_secret = os.environ.get('DROPBOX_APP_SECRET', '').strip()
-    redirect_uri = os.environ.get('DROPBOX_REDIRECT_URI', '').strip()
+    expected_state = session.pop(_DROPBOX_STATE_SESSION_KEY, None)
+    if not expected_state or not state or state != expected_state:
+        return '<h2>Estado OAuth inválido. Refaça a autenticação.</h2>', 400
+
+    app_key = _dropbox_env('DROPBOX_APP_KEY')
+    app_secret = _dropbox_env('DROPBOX_APP_SECRET')
+    redirect_uri = _dropbox_env('DROPBOX_REDIRECT_URI')
+    if not app_key or not app_secret or not redirect_uri:
+        return '<h2>Configuração incompleta: DROPBOX_APP_KEY, DROPBOX_APP_SECRET e DROPBOX_REDIRECT_URI são obrigatórios.</h2>', 400
 
     response = requests.post(DROPBOX_TOKEN_URL, data={
         'code': code,
@@ -38,6 +167,28 @@ def dropbox_callback():
     refresh_token = data.get('refresh_token', '')
     account_id = data.get('account_id', '')
     scope = data.get('scope', '(não retornado)')
+    if not refresh_token:
+        return f'<h2>Dropbox não retornou refresh_token: {data}</h2>', 400
+
+    ok, save_status = _railway_upsert_variable('DROPBOX_REFRESH_TOKEN', refresh_token)
+    os.environ['DROPBOX_REFRESH_TOKEN'] = refresh_token
+    try:
+        from utils.dropbox_sync import _service
+        _service._dbx = None
+    except Exception:
+        logger.exception('Falha ao resetar cliente Dropbox após atualizar refresh token.')
+
+    railway_msg = (
+        '<p><strong>Railway:</strong> ✅ DROPBOX_REFRESH_TOKEN atualizado com sucesso.</p>'
+        if ok
+        else (
+            '<p><strong>Railway:</strong> ⚠️ não foi possível salvar automaticamente '
+            f'({save_status}).</p>'
+            '<p>Configure RAILWAY_API_TOKEN, RAILWAY_PROJECT_ID e RAILWAY_ENVIRONMENT_ID '
+            'para habilitar o salvamento automático.</p>'
+        )
+    )
+    masked = f'{refresh_token[:8]}...{refresh_token[-6:]}' if len(refresh_token) > 20 else refresh_token
 
     return f'''
     <html>
@@ -55,34 +206,15 @@ def dropbox_callback():
     <h2>&#x2705; Dropbox Autorizado com Sucesso!</h2>
     <p>Account ID: <strong>{account_id}</strong></p>
     <p>Scopes concedidos: <code>{scope}</code></p>
+    {railway_msg}
     <div class="box">
-        <strong>DROPBOX_REFRESH_TOKEN (copie e salve no Railway):</strong><br><br>
-        <div class="token">{refresh_token}</div>
+        <strong>DROPBOX_REFRESH_TOKEN gerado:</strong><br><br>
+        <div class="token">{masked}</div>
     </div>
-    <div class="warn">
-        &#x26A0;&#xFE0F; Copie o token acima, acesse Railway &rarr; qualicontax &rarr; Variables e adicione:<br><br>
-        <code>DROPBOX_REFRESH_TOKEN = {refresh_token}</code>
-    </div>
+    <div class="warn">&#x26A0;&#xFE0F; Se o salvamento automático no Railway falhar, adicione manualmente a variável <code>DROPBOX_REFRESH_TOKEN</code>.</div>
     </body>
     </html>
     '''
-
-
-@dropbox_bp.route('/dropbox/auth-url')
-@login_required
-def dropbox_auth_url():
-    """Redireciona para a URL de autorização OAuth do Dropbox"""
-    app_key = os.environ.get('DROPBOX_APP_KEY', '').strip()
-    redirect_uri = os.environ.get('DROPBOX_REDIRECT_URI', '').strip()
-    url = (
-        f'https://www.dropbox.com/oauth2/authorize'
-        f'?client_id={app_key}'
-        f'&token_access_type=offline'
-        f'&response_type=code'
-        f'&redirect_uri={redirect_uri}'
-        f'&scope=files.metadata.read+files.content.read+files.content.write+files.metadata.write'
-    )
-    return redirect(url)
 
 
 @dropbox_bp.route('/dropbox/test')

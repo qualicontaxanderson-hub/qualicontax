@@ -8,6 +8,7 @@ Estrutura de pastas por departamento:
 """
 import logging
 import re
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -81,16 +82,20 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Autenticação
     # ------------------------------------------------------------------
+    def _cfg(self, name: str, default: str = '') -> str:
+        """Lê config Dropbox dinamicamente para aceitar update em runtime."""
+        value = os.getenv(name, default)
+        return value.strip() if isinstance(value, str) else value
+
     def _client(self):
         if self._dbx is not None:
             return self._dbx
-        from config import Config
         try:
             import dropbox as dropbox_sdk
-            refresh_token = Config.DROPBOX_REFRESH_TOKEN
-            app_key = Config.DROPBOX_APP_KEY
-            app_secret = Config.DROPBOX_APP_SECRET
-            if refresh_token and app_key:
+            refresh_token = self._cfg('DROPBOX_REFRESH_TOKEN')
+            app_key = self._cfg('DROPBOX_APP_KEY')
+            app_secret = self._cfg('DROPBOX_APP_SECRET')
+            if refresh_token and app_key and app_secret:
                 self._dbx = dropbox_sdk.Dropbox(
                     oauth2_refresh_token=refresh_token,
                     app_key=app_key,
@@ -98,20 +103,15 @@ class DropboxService:
                     timeout=30,
                 )
                 return self._dbx
-            # Fallback para access token legado
-            access_token = Config.DROPBOX_ACCESS_TOKEN
-            if access_token:
-                self._dbx = dropbox_sdk.Dropbox(access_token, timeout=30)
-                return self._dbx
         except Exception as exc:
             logger.error('Erro ao criar cliente Dropbox: %s', exc)
         return None
 
     def is_configured(self) -> bool:
-        from config import Config
         return bool(
-            (Config.DROPBOX_REFRESH_TOKEN and Config.DROPBOX_APP_KEY)
-            or Config.DROPBOX_ACCESS_TOKEN
+            self._cfg('DROPBOX_REFRESH_TOKEN')
+            and self._cfg('DROPBOX_APP_KEY')
+            and self._cfg('DROPBOX_APP_SECRET')
         )
 
     # ------------------------------------------------------------------
@@ -124,8 +124,7 @@ class DropboxService:
         Defina ``DROPBOX_ROOT_FOLDER`` (ex.: ``/Aplicativos/ESCRITA FISCAL``)
         quando o token tiver acesso Full Dropbox.
         """
-        from config import Config
-        return (Config.DROPBOX_ROOT_FOLDER or '').rstrip('/')
+        return self._cfg('DROPBOX_ROOT_FOLDER').rstrip('/')
 
     def _build_path(self, *parts: str) -> str:
         """Monta um caminho Dropbox absoluto com o prefixo raiz configurado."""
@@ -376,8 +375,7 @@ def is_configured() -> bool:
 
 
 def list_xml_files(folder: str = None) -> list:
-    from config import Config
-    path = folder or Config.DROPBOX_XML_FOLDER
+    path = folder or os.getenv('DROPBOX_XML_FOLDER', '/qualicontax/xml-compras')
     return _service.list_xml_files(path)
 
 
