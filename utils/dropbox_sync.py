@@ -326,7 +326,7 @@ class DropboxService:
         # Fallback: nenhum alias encontrado via _path_exists, usa o canônico diretamente
         logger.warning(
             'Dropbox resolve_departamento_root(%r): nenhuma pasta encontrada via _path_exists '
-            '(possivel erro de conexao ou permissao). Usando canonico %r como fallback.',
+            '(possível erro de conexão ou permissão). Usando canônico %r como fallback.',
             departamento, canonical)
         self._departamento_root_cache[canonical] = canonical
         return canonical
