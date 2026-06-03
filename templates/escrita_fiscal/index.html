@@ -9,7 +9,7 @@
     {% if is_admin %}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
-                title="Executa agora o mesmo processo automático de importação de XMLs para todos os departamentos Fiscais"
+                title="Executa agora o mesmo processo automático de importação de XMLs para todos os departamentos"
                 style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);">
             <i class="fas fa-play-circle"></i> Executar Agora
         </button>
@@ -114,7 +114,7 @@
     </div>
     <div style="padding:20px 24px;">
         <p style="font-size:13px;color:#64748b;margin:0 0 16px 0;line-height:1.5;">
-            Define a hora em que o sistema executará automaticamente a importação de XMLs do Dropbox todos os dias para todos os departamentos Fiscais.
+            Define a hora em que o sistema executará automaticamente a importação de XMLs do Dropbox todos os dias para todos os departamentos.
             Use <strong>Executar Agora</strong> para um teste imediato sem alterar o horário agendado.
         </p>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
@@ -154,12 +154,89 @@
 function closeExecAgendada() {
     document.getElementById('execAgendadaOverlay').style.display = 'none';
 }
+let _execAgendadaTimer = null;
+
+function _execAgendadaRenderFinal(data) {
+    const btn = document.getElementById('btnExecAgendada');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+    const resumo = data.resumo || {};
+    const deps = Object.keys(resumo);
+    let html = `<div style="background:#f0fdf4;border-radius:10px;padding:12px 16px;margin-bottom:16px;color:#15803d;font-weight:600;font-size:13px;">
+        <i class="fas fa-check-circle"></i> ${data.msg || 'Concluído.'}
+    </div>`;
+    if (deps.length) {
+        html += `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Departamento</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
+          </tr></thead><tbody>`;
+        deps.forEach(d => {
+            const r = resumo[d];
+            const hasActivity = (r.ok + r.dup + r.err + r.skipped) > 0;
+            const rowStyle = hasActivity ? '' : 'color:#94a3b8;';
+            const pasta = r.pasta ? `<br><span style="font-weight:400;font-size:11px;color:#94a3b8;">${r.pasta}</span>` : '';
+            html += `<tr style="border-bottom:1px solid #f1f5f9;${rowStyle}">
+              <td style="padding:7px 10px;font-weight:600;">${d}${pasta}</td>
+              <td style="padding:7px 6px;text-align:center;${hasActivity ? 'color:#059669;font-weight:700;' : ''}">${r.ok}</td>
+              <td style="padding:7px 6px;text-align:center;${r.dup > 0 ? 'color:#d97706;' : ''}">${r.dup}</td>
+              <td style="padding:7px 6px;text-align:center;${r.err > 0 ? 'color:#dc2626;' : ''}">${r.err}</td>
+              <td style="padding:7px 6px;text-align:center;">${r.skipped}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    if (data.erros && data.erros.length) {
+        html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
+            <strong>Erros:</strong> ${data.erros.join('<br>')}
+        </div>`;
+    }
+    document.getElementById('execAgendadaBody').innerHTML = html;
+}
+
+function _execAgendadaPollStatus(jobId) {
+    const statusUrl = '{{ url_for("escrita_fiscal.api_executar_agendada_status", job_id="__JID__") }}'.replace('__JID__', jobId);
+    fetch(statusUrl)
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            clearInterval(_execAgendadaTimer);
+            _execAgendadaTimer = null;
+            const btn = document.getElementById('btnExecAgendada');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<div style="background:#fef2f2;border-radius:10px;padding:16px;color:#dc2626;font-weight:600;">${data.error}</div>`;
+            return;
+        }
+        const done = data.status === 'done' || data.status === 'error' || data.status === 'stopped';
+        if (!done) {
+            const total = data.total_deps || 1;
+            const completed = data.completed_deps || 0;
+            const cur = data.current_dep ? ` — ${data.current_dep}` : '';
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<p style="color:#94a3b8;text-align:center;margin-top:30px;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Processando departamentos${cur}… (${completed}/${total})
+                </p>`;
+            return;
+        }
+        clearInterval(_execAgendadaTimer);
+        _execAgendadaTimer = null;
+        _execAgendadaRenderFinal(data);
+    })
+    .catch(() => {});
+}
+
 function executarImportacaoAgendada() {
     const btn = document.getElementById('btnExecAgendada');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     document.getElementById('execAgendadaBody').innerHTML =
-        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando todos os departamentos... isso pode levar alguns minutos.</p>';
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Iniciando importação de todos os departamentos…</p>';
     document.getElementById('execAgendadaOverlay').style.display = 'flex';
 
     fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
@@ -168,47 +245,17 @@ function executarImportacaoAgendada() {
     })
     .then(r => r.json())
     .then(data => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
         if (data.error) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
             document.getElementById('execAgendadaBody').innerHTML =
                 `<div style="background:#fef2f2;border-radius:10px;padding:16px;color:#dc2626;font-weight:600;">${data.error}</div>`;
             return;
         }
-        const resumo = data.resumo || {};
-        const deps = Object.keys(resumo).filter(d => resumo[d].ok + resumo[d].dup + resumo[d].err + resumo[d].skipped > 0);
-        let html = `<div style="background:#f0fdf4;border-radius:10px;padding:12px 16px;margin-bottom:16px;color:#15803d;font-weight:600;font-size:13px;">
-            <i class="fas fa-check-circle"></i> ${data.msg || 'Concluído.'}
-        </div>`;
-        if (deps.length) {
-            html += `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
-                <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Departamento</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
-              </tr></thead><tbody>`;
-            deps.forEach(d => {
-                const r = resumo[d];
-                html += `<tr style="border-bottom:1px solid #f1f5f9;">
-                  <td style="padding:7px 10px;font-weight:600;">${d}</td>
-                  <td style="padding:7px 6px;text-align:center;color:#059669;font-weight:700;">${r.ok}</td>
-                  <td style="padding:7px 6px;text-align:center;color:#d97706;">${r.dup}</td>
-                  <td style="padding:7px 6px;text-align:center;color:#dc2626;">${r.err}</td>
-                  <td style="padding:7px 6px;text-align:center;color:#6b7280;">${r.skipped}</td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-        } else {
-            html += '<p style="color:#94a3b8;text-align:center;">Nenhum arquivo processado (pastas NOVO vazias).</p>';
-        }
-        if (data.erros && data.erros.length) {
-            html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
-                <strong>Erros:</strong> ${data.erros.join('<br>')}
-            </div>`;
-        }
-        document.getElementById('execAgendadaBody').innerHTML = html;
+        const jobId = data.job_id;
+        if (_execAgendadaTimer) clearInterval(_execAgendadaTimer);
+        _execAgendadaTimer = setInterval(() => _execAgendadaPollStatus(jobId), 3000);
+        _execAgendadaPollStatus(jobId);
     })
     .catch(() => {
         btn.disabled = false;

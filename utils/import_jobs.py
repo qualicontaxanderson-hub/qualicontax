@@ -51,15 +51,20 @@ def get_job(job_id: str) -> dict | None:
         job = _jobs.get(job_id)
         if job is None:
             return None
-        # Retorna cópia com listas duplicadas para evitar race condition entre
-        # a thread de background (que substitui as listas atomicamente) e a
-        # thread HTTP que lê o resultado.
-        return {
+        # Retorna cópia com listas/dicts duplicadas para evitar race condition
+        # entre a thread de background (que substitui estruturas atomicamente)
+        # e a thread HTTP que lê o resultado.
+        snapshot = {
             **job,
             'details': list(job['details']),
             'unregistered_companies': list(job['unregistered_companies']),
             'imported_companies': list(job['imported_companies']),
         }
+        if 'resumo' in job:
+            snapshot['resumo'] = dict(job['resumo'])
+        if 'erros' in job:
+            snapshot['erros'] = list(job['erros'])
+        return snapshot
 
 
 def request_stop(job_id: str) -> bool:

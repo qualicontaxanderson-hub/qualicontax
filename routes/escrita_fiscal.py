@@ -40,6 +40,11 @@ _MAX_IMPORT_ITERATIONS = 1000
 # Máximo de mensagens de erro de detalhe armazenadas por job de importação.
 _MAX_ERROR_DETAILS = 50
 
+# Timeout do worker Gunicorn (segundos). Margem reservada para serialização
+# e envio da resposta HTTP antes de o worker ser encerrado pelo gunicorn.
+_GUNICORN_WORKER_TIMEOUT = 300
+_GUNICORN_RESPONSE_MARGIN = 60
+
 # Namespace NF-e (usado para detecção de XMLs de evento)
 _NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
 # Tags raiz de XMLs de evento NF-e: carta de correção, cancelamento, etc.
@@ -1080,10 +1085,13 @@ def api_importar_dropbox():
     # na lista ordenada pelo Dropbox.
     # ------------------------------------------------------------------
     if filter_cnpjs is not None and last_scanned:
-        cursor_lower = last_scanned.lower()
+        # Cursor legado do endpoint traz apenas o nome; usa path vazio como menor
+        # sufixo possível para avançar para o próximo item ordenado por (name, path).
+        cursor_key = (last_scanned.lower(), '')
         _cursor_applied = False
         for _ci, _cf in enumerate(files):
-            if _cf['name'].lower() > cursor_lower:
+            _cf_key = ((_cf.get('name') or '').lower(), _cf.get('path') or '')
+            if _cf_key > cursor_key:
                 files = files[_ci:]
                 _cursor_applied = True
                 break
@@ -1126,6 +1134,7 @@ def api_importar_dropbox():
         return path
 
     ok, dup, err, moved_ok, moved_err, skipped = 0, 0, 0, 0, 0, 0
+    analyzed_in_batch = 0
     details = []
     # Empresas detectadas nos XMLs que não têm cadastro no sistema.
     # Chave: CNPJ dígitos (ou nome do arquivo), Valor: nome da empresa do XML.
@@ -1140,6 +1149,7 @@ def api_importar_dropbox():
             return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
         if raw is None:
             err += 1
+            analyzed_in_batch += 1
             details.append(f"{info['name']}: falha ao baixar do Dropbox")
             # Arquivo deixado em NOVO para reprocessamento automático.
             # Não criamos pasta GLOBAL — sem o conteúdo do XML não é possível
@@ -1184,6 +1194,7 @@ def api_importar_dropbox():
             # Se houver filtro ativo e o CNPJ do evento não pertencer ao conjunto, ignora.
             if filter_cnpjs is not None and _ev_dest_cnpj_filter not in filter_cnpjs:
                 skipped += 1
+                analyzed_in_batch += 1
                 logger.info('%s: XML de evento, CNPJ=%r não pertence ao filtro, ignorado',
                             info['name'], _ev_dest_cnpj_filter)
                 continue
@@ -1255,11 +1266,14 @@ def api_importar_dropbox():
                         svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
                     if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
                         moved_err += 1
+                    else:
+                        details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
                 except DropboxAuthError:
                     logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
             else:
                 # Empresa não identificada — deixa em NOVO para revisão manual.
                 logger.info('%s: XML de evento, empresa não identificada — deixado em NOVO', info['name'])
+            analyzed_in_batch += 1
             continue
 
         try:
@@ -1288,6 +1302,7 @@ def api_importar_dropbox():
             if filter_cnpjs is not None:
                 if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
                     skipped += 1
+                    analyzed_in_batch += 1
                     logger.info('%s: dest_cnpj=%r não pertence ao filtro, ignorado',
                                 info['name'], dest_cnpj_digits)
                     continue
@@ -1308,6 +1323,7 @@ def api_importar_dropbox():
                 _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
                 _unreg_label = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
                 unregistered[_unreg_key] = _unreg_label
+                analyzed_in_batch += 1
                 logger.warning(
                     '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → deixado em NOVO',
                     info['name'], _raw_dest_cnpj, _dest_nome_xml,
@@ -1339,12 +1355,16 @@ def api_importar_dropbox():
                     svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
                 if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
                     moved_ok += 1
+                else:
+                    details.append(f"{info['name']}: falha ao mover para IMPORTADOS no Dropbox")
             except DropboxAuthError:
                 logger.warning('Falha de autenticação ao mover %s para importados', info['name'])
+            analyzed_in_batch += 1
         except DropboxAuthError:
             return jsonify({'error': _DROPBOX_AUTH_ERROR_MSG}), 401
         except Exception as exc:
             err += 1
+            analyzed_in_batch += 1
             details.append(f"{info['name']}: {exc}")
             logger.exception('Erro ao processar %s', info['name'])
             # Move para ERROS sempre que ocorre uma exceção.
@@ -1357,6 +1377,8 @@ def api_importar_dropbox():
                     svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
+                else:
+                    details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
             except DropboxAuthError:
                 logger.warning('Falha de autenticação ao mover %s para erros', info['name'])
 
@@ -1379,7 +1401,11 @@ def api_importar_dropbox():
     # (skipped), o cursor last_scanned avança para um novo bloco de arquivos na próxima
     # chamada — não há risco de loop infinito, então has_more deve permanecer True.
     files_physically_moved = moved_ok + moved_err
-    if has_more and files_physically_moved == 0:
+    # Se nenhum arquivo do lote chegou a um estado analisado, interrompe paginação
+    # para evitar reprocessar o mesmo lote infinitamente.
+    if has_more and analyzed_in_batch == 0:
+        has_more = False
+    elif has_more and files_physically_moved == 0:
         if filter_cnpjs is None or skipped == 0:
             has_more = False
 
@@ -1439,7 +1465,7 @@ def _run_import_job(job: dict, departamento: str,
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
-    last_scanned: str | None = None  # cursor para modo de filtro
+    last_scanned_key: tuple[str, str] | None = None  # cursor (name_lower, path)
 
     def _get_or_create_pasta(path: str) -> str:
         if path not in _pastas_criadas:
@@ -1509,11 +1535,11 @@ def _run_import_job(job: dict, departamento: str,
             # anteriores — inclui arquivos de empresas não cadastradas (que ficam em
             # NOVO mas já foram processados nesta execução) e arquivos saltados por
             # filtro de empresa/grupo.
-            if last_scanned:
-                cursor_lower = last_scanned.lower()
+            if last_scanned_key:
                 advanced = False
                 for ci, cf in enumerate(files):
-                    if cf['name'].lower() > cursor_lower:
+                    cf_key = ((cf.get('name') or '').lower(), cf.get('path') or '')
+                    if cf_key > last_scanned_key:
                         files = files[ci:]
                         advanced = True
                         break
@@ -1526,10 +1552,14 @@ def _run_import_job(job: dict, departamento: str,
 
             batch = files[:_DROPBOX_BATCH_LIMIT]
             has_more = len(files) > _DROPBOX_BATCH_LIMIT
-            last_scanned_this = batch[-1]['name'] if batch else None
+            last_scanned_this_key = (
+                ((batch[-1].get('name') or '').lower(), batch[-1].get('path') or '')
+                if batch else None
+            )
             batch_moved = 0
             batch_skipped = 0
             batch_unregistered_this = 0
+            batch_processed = 0
             now = datetime.now()
 
             for info in batch:
@@ -1547,6 +1577,7 @@ def _run_import_job(job: dict, departamento: str,
                 if raw is None:
                     err += 1
                     details.append(f"{info['name']}: falha ao baixar do Dropbox")
+                    batch_processed += 1
                     continue
 
                 try:
@@ -1580,6 +1611,7 @@ def _run_import_job(job: dict, departamento: str,
                         if _ev_dest_cnpj_filter not in filter_cnpjs:
                             batch_skipped += 1
                             skipped += 1
+                            batch_processed += 1
                             continue
 
                     _ev_nome = None
@@ -1637,8 +1669,13 @@ def _run_import_job(job: dict, departamento: str,
                             if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
                                 moved_err += 1
                                 batch_moved += 1
+                            else:
+                                details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
                         except DropboxAuthError:
                             logger.warning('[import_job] Auth ao mover evento %s', info['name'])
+                        batch_processed += 1
+                    else:
+                        batch_processed += 1
                     continue
 
                 try:
@@ -1651,6 +1688,7 @@ def _run_import_job(job: dict, departamento: str,
                         if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
                             batch_skipped += 1
                             skipped += 1
+                            batch_processed += 1
                             continue
 
                     if len(dest_cnpj_digits) >= 11:
@@ -1666,6 +1704,7 @@ def _run_import_job(job: dict, departamento: str,
                         _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
                         unregistered[_unreg_key] = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
                         batch_unregistered_this += 1
+                        batch_processed += 1
                         continue
 
                     result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
@@ -1691,8 +1730,11 @@ def _run_import_job(job: dict, departamento: str,
                         if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
                             moved_ok += 1
                             batch_moved += 1
+                        else:
+                            details.append(f"{info['name']}: falha ao mover para IMPORTADOS no Dropbox")
                     except DropboxAuthError:
                         logger.warning('[import_job] Auth ao mover %s para importados', info['name'])
+                    batch_processed += 1
 
                 except DropboxAuthError:
                     job['status'] = 'error'
@@ -1712,14 +1754,17 @@ def _run_import_job(job: dict, departamento: str,
                         if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                             moved_err += 1
                             batch_moved += 1
+                        else:
+                            details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
                     except DropboxAuthError:
                         logger.warning('[import_job] Auth ao mover %s para erros', info['name'])
+                    batch_processed += 1
 
             # Atualiza cursor com o último arquivo analisado neste lote.
             # Usado em todas as execuções (com ou sem filtro) para garantir que
             # arquivos de empresas não cadastradas não bloqueiem iterações futuras.
-            if last_scanned_this:
-                last_scanned = last_scanned_this
+            if last_scanned_this_key:
+                last_scanned_key = last_scanned_this_key
 
             _snapshot()
 
@@ -1731,7 +1776,7 @@ def _run_import_job(job: dict, departamento: str,
             # empresas não cadastradas analisadas.  O cursor já garante que os
             # mesmos arquivos não serão re-processados nesta execução; só paramos
             # aqui quando todos os arquivos do lote falharam no download/parse.
-            if batch_moved == 0 and batch_skipped == 0 and batch_unregistered_this == 0:
+            if batch_processed == 0:
                 break
 
     except Exception:
@@ -1823,7 +1868,8 @@ def api_importar_dropbox_stop(job_id: str):
 
 
 def importar_departamento_background(departamento: str, origem: str = 'agendado',
-                                      usuario_id: int = None) -> dict:
+                                      usuario_id: int = None,
+                                      deadline: float = None) -> dict:
     """Executa a importação completa de um departamento sem contexto HTTP.
 
     Processa todos os arquivos XML da pasta NOVO do departamento, fazendo
@@ -1835,6 +1881,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     Pensado para uso por tarefas agendadas (scheduler) e execução manual.
     """
     import json as _json
+    import time as _time
 
     if not dropbox_sync.is_configured():
         logger.warning('importar_departamento_background: Dropbox não configurado, abortando.')
@@ -1863,11 +1910,20 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     pasta_novo = svc.pasta_novo(departamento)
     logger.info('[agendado] Importando departamento=%r, pasta=%r', departamento, pasta_novo)
 
-    totals = {'ok': 0, 'dup': 0, 'err': 0, 'moved_ok': 0, 'moved_err': 0, 'skipped': 0}
+    totals = {
+        'ok': 0,
+        'dup': 0,
+        'err': 0,
+        'moved_ok': 0,
+        'moved_err': 0,
+        'skipped': 0,
+        'error': None,
+        'pasta': pasta_novo,
+    }
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
-    _last_seen: str | None = None  # cursor para pular arquivos já analisados
+    _last_seen_key: tuple[str, str] | None = None  # cursor (name_lower, path)
 
     def _get_or_create_pasta(path: str) -> str:
         if path not in _pastas_criadas:
@@ -1882,10 +1938,24 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     iteration = 0
     while iteration < max_iterations:
         iteration += 1
+        if deadline is not None:
+            if _time.monotonic() >= deadline:
+                logger.warning('[agendado] departamento=%r: deadline atingido, encerrando loop.', departamento)
+                break
         try:
             files = svc.list_xml_files(pasta_novo)
-        except (DropboxAuthError, DropboxError) as exc:
+        except DropboxAuthError as exc:
+            logger.error('[agendado] Erro de autenticação ao listar %r: %s', pasta_novo, exc)
+            totals['error'] = 'Erro de autenticação no Dropbox. Verifique o token de acesso.'
+            break
+        except DropboxError as exc:
             logger.error('[agendado] Erro ao listar %r: %s', pasta_novo, exc)
+            totals['error'] = (
+                f'Não foi possível ler a pasta "{pasta_novo}". '
+                'Verifique se a variável DROPBOX_ROOT_FOLDER está configurada corretamente '
+                '(ex.: DROPBOX_ROOT_FOLDER=/Aplicativos/ESCRITA FISCAL). '
+                'Consulte os logs do servidor para mais detalhes.'
+            )
             break
 
         if not files:
@@ -1896,11 +1966,11 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
         files = sorted(files, key=lambda f: ((f.get('name') or '').lower(), f.get('path') or ''))
 
         # Avança cursor para pular arquivos já analisados em lotes anteriores.
-        if _last_seen:
-            cursor_lower = _last_seen.lower()
+        if _last_seen_key:
             advanced = False
             for ci, cf in enumerate(files):
-                if cf['name'].lower() > cursor_lower:
+                cf_key = ((cf.get('name') or '').lower(), cf.get('path') or '')
+                if cf_key > _last_seen_key:
                     files = files[ci:]
                     advanced = True
                     break
@@ -1914,6 +1984,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
         now = datetime.now(ZoneInfo('America/Sao_Paulo'))
         batch_moved = 0
         batch_unregistered_this = 0
+        batch_processed = 0
 
         for info in batch:
             _nome = None
@@ -1929,6 +2000,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             if raw is None:
                 totals['err'] += 1
                 logger.warning('[agendado] %s: falha ao baixar, deixado em NOVO', info['name'])
+                batch_processed += 1
                 continue
 
             try:
@@ -2003,11 +2075,16 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                         if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
                             totals['moved_err'] += 1
                             batch_moved += 1
+                        else:
+                            file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
+                                              'empresa': _ev_nome or '', 'detalhe': 'Falha ao mover para ERROS no Dropbox'})
                     except DropboxAuthError:
                         logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
+                    batch_processed += 1
                 else:
                     file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
                                       'empresa': '', 'detalhe': f'XML de evento sem empresa identificada: {_ev_tag} — mantido em NOVO'})
+                    batch_processed += 1
                 continue
 
             try:
@@ -2032,6 +2109,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                                       'empresa': _dest_nome_xml or _raw_dest_cnpj,
                                       'detalhe': f'Empresa não cadastrada (CNPJ: {_raw_dest_cnpj})'})
                     batch_unregistered_this += 1
+                    batch_processed += 1
                     continue
 
                 result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
@@ -2051,8 +2129,12 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
                         totals['moved_ok'] += 1
                         batch_moved += 1
+                    else:
+                        file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
+                                          'empresa': _nome, 'detalhe': 'Falha ao mover para IMPORTADOS no Dropbox'})
                 except DropboxAuthError:
                     logger.warning('[agendado] Falha de auth ao mover %s para importados', info['name'])
+                batch_processed += 1
 
             except DropboxAuthError as exc:
                 logger.error('[agendado] Falha de auth ao processar %s: %s', info['name'], exc)
@@ -2073,15 +2155,16 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                         batch_moved += 1
                 except DropboxAuthError:
                     logger.warning('[agendado] Falha de auth ao mover %s para erros', info['name'])
+                batch_processed += 1
 
         # Atualiza cursor com o último arquivo analisado neste lote.
-        if batch and batch[-1].get('name'):
-            _last_seen = batch[-1]['name']
+        if batch:
+            _last_seen_key = ((batch[-1].get('name') or '').lower(), batch[-1].get('path') or '')
 
         # Sem progresso neste lote → pára apenas quando não houve nenhum arquivo
         # processado (nem movidos, nem empresas não cadastradas).  O cursor acima
         # garante que os mesmos arquivos não serão re-processados em iterações futuras.
-        if batch_moved == 0 and batch_unregistered_this == 0:
+        if batch_processed == 0:
             logger.info('[agendado] Nenhum arquivo processado neste lote — encerrando loop.')
             break
 
@@ -2110,13 +2193,80 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
 # ---------------------------------------------------------------------------
 # Execução manual do job de importação (para testes / auditoria)
 # ---------------------------------------------------------------------------
+def _run_all_departments_job(job: dict, usuario_id: 'int | None') -> None:
+    """Executa importação de todos os departamentos sequencialmente em background thread.
+
+    Atualiza ``job`` (dict compartilhado) com progresso em tempo real para que
+    o endpoint de status possa informar o cliente via polling.
+    """
+    deps = dropbox_sync.DEPARTAMENTOS_CANONICOS
+    job['total_deps'] = len(deps)
+    job['completed_deps'] = 0
+    job['resumo'] = {}
+    job['erros'] = []
+
+    total_ok = 0
+    total_dup = 0
+    total_err = 0
+    total_skipped = 0
+
+    for dep in deps:
+        if job.get('stop_requested'):
+            break
+        job['current_dep'] = dep
+        job['msg'] = f'Processando {dep} ({job["completed_deps"] + 1}/{len(deps)})...'
+        try:
+            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
+            if result.get('error'):
+                job['erros'].append(result['error'])
+            dep_entry = {
+                'ok': result['ok'],
+                'dup': result['dup'],
+                'err': result['err'],
+                'moved_ok': result['moved_ok'],
+                'moved_err': result['moved_err'],
+                'skipped': result['skipped'],
+                'log_id': result.get('log_id'),
+                'pasta': result.get('pasta', ''),
+            }
+            new_resumo = dict(job['resumo'])
+            new_resumo[dep] = dep_entry
+            job['resumo'] = new_resumo
+            total_ok += result['ok']
+            total_dup += result['dup']
+            total_err += result['err']
+            total_skipped += result['skipped']
+        except Exception:
+            logger.exception('_run_all_departments_job: erro no dep %r', dep)
+            job['erros'].append(
+                f'Erro ao processar departamento {dep}. Consulte os logs do servidor.'
+            )
+        job['completed_deps'] += 1
+        job['ok'] = total_ok
+        job['dup'] = total_dup
+        job['err'] = total_err
+        job['skipped'] = total_skipped
+
+    total_departamentos = len(deps)
+    job['msg'] = (
+        f'{total_ok} importado(s), {total_dup} duplicata(s), '
+        f'{total_err} erro(s), {total_skipped} ignorado(s) '
+        f'em {total_departamentos} departamento(s).'
+    )
+    job['current_dep'] = None
+    job['status'] = 'done'
+    logger.info('_run_all_departments_job concluído: ok=%d dup=%d err=%d skipped=%d',
+                total_ok, total_dup, total_err, total_skipped)
+
+
 @escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
 @login_required
 def api_executar_importacao_agendada():
-    """Dispara imediatamente a importação de todos os departamentos (equivale ao job das 23:59).
+    """Dispara imediatamente a importação de todos os departamentos em background thread.
 
-    Restrito a usuários administradores.  A resposta inclui o sumário por
-    departamento e o log_id de cada execução para consulta posterior.
+    Restrito a usuários administradores.  Retorna imediatamente um ``job_id``
+    que pode ser consultado via GET /api/executar-importacao-agendada/status/<job_id>
+    para acompanhar o progresso e obter o sumário final.
     """
     usuario = current_user
     if not usuario.is_authenticated or not usuario.is_admin():
@@ -2126,40 +2276,33 @@ def api_executar_importacao_agendada():
         return jsonify({'error': 'Dropbox não configurado.'}), 400
 
     usuario_id = getattr(usuario, 'id', None)
-    resumo = {}
-    erros = []
 
-    for dep in dropbox_sync.DEPARTAMENTOS_CANONICOS:
-        try:
-            result = importar_departamento_background(dep, origem='manual', usuario_id=usuario_id)
-            resumo[dep] = {
-                'ok': result['ok'],
-                'dup': result['dup'],
-                'err': result['err'],
-                'moved_ok': result['moved_ok'],
-                'moved_err': result['moved_err'],
-                'skipped': result['skipped'],
-                'log_id': result.get('log_id'),
-            }
-        except Exception:
-            logger.exception('api_executar_importacao_agendada: erro no dep %r', dep)
-            erros.append(f'Erro ao processar departamento {dep}. Consulte os logs do servidor.')
+    job_id, job = import_jobs.create_job()
+    job['resumo'] = {}
+    job['erros'] = []
+    job['current_dep'] = None
+    job['completed_deps'] = 0
+    job['total_deps'] = len(dropbox_sync.DEPARTAMENTOS_CANONICOS)
 
-    total_ok = sum(r['ok'] for r in resumo.values())
-    total_dup = sum(r['dup'] for r in resumo.values())
-    total_err = sum(r['err'] for r in resumo.values())
-    total_skipped = sum(r['skipped'] for r in resumo.values())
+    t = threading.Thread(
+        target=_run_all_departments_job,
+        args=(job, usuario_id),
+        daemon=True,
+        name=f'import-all-{job_id}',
+    )
+    t.start()
+    logger.info('api_executar_importacao_agendada: job %s iniciado', job_id)
+    return jsonify({'job_id': job_id})
 
-    return jsonify({
-        'ok': True,
-        'resumo': resumo,
-        'erros': erros,
-        'msg': (
-            f'{total_ok} importado(s), {total_dup} duplicata(s), '
-            f'{total_err} erro(s), {total_skipped} ignorado(s) '
-            f'em {len(dropbox_sync.DEPARTAMENTOS_CANONICOS)} departamento(s).'
-        ),
-    })
+
+@escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada/status/<job_id>')
+@login_required
+def api_executar_agendada_status(job_id: str):
+    """Retorna o estado atual de um job de importação de todos os departamentos."""
+    job = import_jobs.get_job(job_id)
+    if job is None:
+        return jsonify({'error': 'Job não encontrado ou expirado.'}), 404
+    return jsonify(job)
 
 
 @escrita_fiscal.route('/conf-compras/api/log-importacoes')
@@ -2906,6 +3049,19 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
             h['cfop'], h['natureza_operacao'], xml_raw_store, origem,
         ),
     )
+
+    if nfe_id is None:
+        # INSERT falhou — pode ser race condition: outro processo inseriu o mesmo
+        # chave_acesso entre o SELECT acima e este INSERT (violação UNIQUE).
+        # Verificamos se o registro já existe; se sim, retorna 'dup' para que o
+        # chamador mova o arquivo corretamente para IMPORTADOS.
+        already = execute_query(
+            "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s",
+            (chave,), fetch=True, fetch_one=True,
+        )
+        if already:
+            return 'dup'
+        raise Exception(f"Falha ao salvar NF-e no banco (chave_acesso: {chave})")
 
     # Pre-fetch all vinculos for this emit_cnpj in ONE query (avoids N×4 queries
     # per item, which caused gunicorn worker timeouts on large batches).

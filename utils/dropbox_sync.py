@@ -8,6 +8,7 @@ Estrutura de pastas por departamento:
 """
 import logging
 import re
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -81,41 +82,56 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Autenticação
     # ------------------------------------------------------------------
+    def _cfg(self, name: str, default: str = '') -> str:
+        """Lê config Dropbox dinamicamente para permitir atualização em runtime."""
+        value = os.getenv(name, default) or default
+        return value.strip() if isinstance(value, str) else value
+
     def _client(self):
         if self._dbx is not None:
             return self._dbx
-        from config import Config
         try:
             import dropbox as dropbox_sdk
-            refresh_token = Config.DROPBOX_REFRESH_TOKEN
-            app_key = Config.DROPBOX_APP_KEY
-            app_secret = Config.DROPBOX_APP_SECRET
-            if refresh_token and app_key:
+            refresh_token = self._cfg('DROPBOX_REFRESH_TOKEN')
+            app_key = self._cfg('DROPBOX_APP_KEY')
+            app_secret = self._cfg('DROPBOX_APP_SECRET')
+            if refresh_token and app_key and app_secret:
                 self._dbx = dropbox_sdk.Dropbox(
                     oauth2_refresh_token=refresh_token,
                     app_key=app_key,
                     app_secret=app_secret,
+                    timeout=30,
                 )
-                return self._dbx
-            # Fallback para access token legado
-            access_token = Config.DROPBOX_ACCESS_TOKEN
-            if access_token:
-                self._dbx = dropbox_sdk.Dropbox(access_token)
                 return self._dbx
         except Exception as exc:
             logger.error('Erro ao criar cliente Dropbox: %s', exc)
         return None
 
     def is_configured(self) -> bool:
-        from config import Config
         return bool(
-            (Config.DROPBOX_REFRESH_TOKEN and Config.DROPBOX_APP_KEY)
-            or Config.DROPBOX_ACCESS_TOKEN
+            self._cfg('DROPBOX_REFRESH_TOKEN')
+            and self._cfg('DROPBOX_APP_KEY')
+            and self._cfg('DROPBOX_APP_SECRET')
         )
 
     # ------------------------------------------------------------------
     # Operações de arquivo
     # ------------------------------------------------------------------
+    def _root_folder(self) -> str:
+        """Retorna o prefixo raiz para todos os caminhos Dropbox.
+
+        Vazio para tokens com escopo de App Folder (padrão).
+        Defina ``DROPBOX_ROOT_FOLDER`` (ex.: ``/Aplicativos/ESCRITA FISCAL``)
+        quando o token tiver acesso Full Dropbox.
+        """
+        return self._cfg('DROPBOX_ROOT_FOLDER').rstrip('/')
+
+    def _build_path(self, *parts: str) -> str:
+        """Monta um caminho Dropbox absoluto com o prefixo raiz configurado."""
+        root = self._root_folder()
+        segments = [root.strip('/')] + [p.strip('/') for p in parts if p]
+        return '/' + '/'.join(s for s in segments if s)
+
     def _is_auth_error(self, exc: Exception) -> bool:
         """Retorna True se a exceção é um erro de autenticação/autorização do Dropbox."""
         exc_type = type(exc).__name__
@@ -130,8 +146,8 @@ class DropboxService:
             or 'insufficient_scope' in exc_str
         )
 
-    def list_folder(self, path: str) -> list:
-        """Lista todos os itens de uma pasta (arquivos e sub-pastas).
+    def list_folder(self, path: str, recursive: bool = False) -> list:
+        """Lista itens de uma pasta (arquivos e sub-pastas).
 
         Raises:
             DropboxAuthError: credenciais inválidas/expiradas.
@@ -146,8 +162,8 @@ class DropboxService:
         entries = []
         try:
             import dropbox as dropbox_sdk
-            logger.info('Dropbox list_folder: path=%r', path)
-            result = dbx.files_list_folder(path)
+            logger.info('Dropbox list_folder: path=%r recursive=%s', path, recursive)
+            result = dbx.files_list_folder(path, recursive=recursive)
             while True:
                 for entry in result.entries:
                     entries.append({
@@ -160,8 +176,8 @@ class DropboxService:
                 if not result.has_more:
                     break
                 result = dbx.files_list_folder_continue(result.cursor)
-            logger.info('Dropbox list_folder(%r): %d item(s) encontrado(s): %s',
-                        path, len(entries), [e['name'] for e in entries])
+            logger.info('Dropbox list_folder(%r, recursive=%s): %d item(s) encontrado(s): %s',
+                        path, recursive, len(entries), [e['name'] for e in entries])
         except (DropboxAuthError, DropboxError):
             raise
         except Exception as exc:
@@ -193,9 +209,15 @@ class DropboxService:
                     'Credenciais Dropbox inválidas ou expiradas. '
                     'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
                 ) from exc
+
             if 'not_found' in str(exc):
                 return False
-                        logger.warning('Dropbox _path_exists(%r): erro inesperado ao consultar metadata: %s', path, exc, exc_info=True)
+            logger.warning(
+                'Dropbox _path_exists(%r): erro inesperado ao consultar metadata: %s',
+                path,
+                exc,
+                exc_info=True,
+            )
             return False
 
     def list_xml_files(self, path: str) -> list:
@@ -207,7 +229,8 @@ class DropboxService:
         em nomes com mais de 44 dígitos.  Para não perder esses arquivos, aceitamos
         qualquer arquivo cujo nome inicie com pelo menos 44 dígitos consecutivos.
         """
-        all_files = self.list_folder(path)
+        # Inclui subpastas dentro de NOVO para suportar organização por empresa.
+        all_files = self.list_folder(path, recursive=True)
         xml_files = [
             f for f in all_files
             if f.get('is_file') and (
@@ -278,43 +301,53 @@ class DropboxService:
     # ------------------------------------------------------------------
     def resolve_departamento_root(self, departamento: str) -> str:
         canonical = normalize_departamento(departamento)
+
         if canonical in self._departamento_root_cache:
             return self._departamento_root_cache[canonical]
 
         for candidate in departamento_aliases(canonical):
             try:
-                if self._path_exists(f'/{candidate}'):
+                if self._path_exists(self._build_path(candidate)):
                     self._departamento_root_cache[canonical] = candidate
-                    logger.info('Dropbox resolve_departamento_root(%r): usando %r', departamento, candidate)
+                    logger.info(
+                        'Dropbox resolve_departamento_root(%r): usando %r (root=%r)',
+                        departamento,
+                        candidate,
+                        self._root_folder(),
+                    )
                     return candidate
             except Exception as e:
-                logger.warning('Dropbox resolve_departamento_root: erro ao testar /%s: %s', candidate, e)
+                logger.warning(
+                    'Dropbox resolve_departamento_root: erro ao testar %s: %s',
+                    self._build_path(candidate),
+                    e,
+                )
 
         # Fallback: nenhum alias encontrado via _path_exists, usa o canônico diretamente
         logger.warning(
             'Dropbox resolve_departamento_root(%r): nenhuma pasta encontrada via _path_exists '
-            '(possivel erro de conexao ou permissao). Usando canonico %r como fallback.',
+            '(possível erro de conexão ou permissão). Usando canônico %r como fallback.',
             departamento, canonical)
         self._departamento_root_cache[canonical] = canonical
         return canonical
 
     def pasta_novo(self, departamento: str) -> str:
         root = self.resolve_departamento_root(departamento)
-        return f'/{root}/NOVO'
+        return self._build_path(root, 'NOVO')
 
     def pasta_importados(self, departamento: str, empresa_nome: str,
                          dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
-        return f'/{root}/IMPORTADOS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+        return self._build_path(root, 'IMPORTADOS', pasta_empresa, str(dt.year), f'{dt.month:02d}')
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
                     dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
-        return f'/{root}/ERROS/{pasta_empresa}/{dt.year}/{dt.month:02d}'
+        return self._build_path(root, 'ERROS', pasta_empresa, str(dt.year), f'{dt.month:02d}')
 
 
 def normalize_departamento(departamento: str) -> str:
@@ -342,8 +375,7 @@ def is_configured() -> bool:
 
 
 def list_xml_files(folder: str = None) -> list:
-    from config import Config
-    path = folder or Config.DROPBOX_XML_FOLDER
+    path = folder or os.getenv('DROPBOX_XML_FOLDER', '/qualicontax/xml-compras')
     return _service.list_xml_files(path)
 
 
