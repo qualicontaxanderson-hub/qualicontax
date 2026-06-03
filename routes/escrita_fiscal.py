@@ -3050,6 +3050,19 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         ),
     )
 
+    if nfe_id is None:
+        # INSERT falhou — pode ser race condition: outro processo inseriu o mesmo
+        # chave_acesso entre o SELECT acima e este INSERT (violação UNIQUE).
+        # Verificamos se o registro já existe; se sim, retorna 'dup' para que o
+        # chamador mova o arquivo corretamente para IMPORTADOS.
+        already = execute_query(
+            "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s",
+            (chave,), fetch=True, fetch_one=True,
+        )
+        if already:
+            return 'dup'
+        raise Exception(f"Falha ao salvar NF-e no banco (chave_acesso: {chave})")
+
     # Pre-fetch all vinculos for this emit_cnpj in ONE query (avoids N×4 queries
     # per item, which caused gunicorn worker timeouts on large batches).
     # Results are shared via vinculos_cache across NF-es from the same emitente.
