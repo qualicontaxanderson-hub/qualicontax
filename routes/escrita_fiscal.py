@@ -287,6 +287,7 @@ def index():
         'escrita_fiscal/index.html',
         is_admin=current_user.is_admin(),
         schedule_texto=schedule.get('texto', ''),
+        departamento='Fiscal',
     )
 
 
@@ -2197,13 +2198,13 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
 # ---------------------------------------------------------------------------
 # Execução manual do job de importação (para testes / auditoria)
 # ---------------------------------------------------------------------------
-def _run_all_departments_job(job: dict, usuario_id: 'int | None') -> None:
-    """Executa importação de todos os departamentos sequencialmente em background thread.
+def _run_all_departments_job(job: dict, usuario_id: 'int | None', departamentos: list) -> None:
+    """Executa importação dos departamentos informados sequencialmente em background thread.
 
     Atualiza ``job`` (dict compartilhado) com progresso em tempo real para que
     o endpoint de status possa informar o cliente via polling.
     """
-    deps = dropbox_sync.DEPARTAMENTOS_CANONICOS
+    deps = departamentos
     job['total_deps'] = len(deps)
     job['completed_deps'] = 0
     job['resumo'] = {}
@@ -2266,7 +2267,7 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None') -> None:
 @escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
 @login_required
 def api_executar_importacao_agendada():
-    """Dispara imediatamente a importação de todos os departamentos em background thread.
+    """Dispara imediatamente a importação do departamento informado em background thread.
 
     Restrito a usuários administradores.  Retorna imediatamente um ``job_id``
     que pode ser consultado via GET /api/executar-importacao-agendada/status/<job_id>
@@ -2279,6 +2280,12 @@ def api_executar_importacao_agendada():
     if not dropbox_sync.is_configured():
         return jsonify({'error': 'Dropbox não configurado.'}), 400
 
+    data = request.get_json(force=True) or {}
+    departamento = data.get('departamento', '').strip()
+    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
+        return jsonify({'error': 'Departamento inválido. Envie o campo "departamento" no body.'}), 400
+    departamento = dropbox_sync.normalize_departamento(departamento)
+
     usuario_id = getattr(usuario, 'id', None)
 
     job_id, job = import_jobs.create_job()
@@ -2286,11 +2293,11 @@ def api_executar_importacao_agendada():
     job['erros'] = []
     job['current_dep'] = None
     job['completed_deps'] = 0
-    job['total_deps'] = len(dropbox_sync.DEPARTAMENTOS_CANONICOS)
+    job['total_deps'] = 1
 
     t = threading.Thread(
         target=_run_all_departments_job,
-        args=(job, usuario_id),
+        args=(job, usuario_id, [departamento]),
         daemon=True,
         name=f'import-all-{job_id}',
     )
