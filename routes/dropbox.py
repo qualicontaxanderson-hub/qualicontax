@@ -15,8 +15,8 @@ DROPBOX_TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token'
 DROPBOX_AUTHORIZE_URL = 'https://www.dropbox.com/oauth2/authorize'
 _DROPBOX_STATE_SESSION_KEY = 'dropbox_oauth_state'
 _RAILWAY_ENDPOINTS = (
-    'https://backboard.railway.app/graphql/v2',
-    'https://backboard.railway.app/graphql',
+    'https://backboard.railway.com/graphql/v2',
+    'https://backboard.railway.com/graphql',
 )
 
 
