@@ -195,14 +195,9 @@ def dropbox_callback():
             'para habilitar o salvamento automático.</p>'
         )
     )
-    token_len = len(refresh_token)
-    if token_len > 14:
-        masked = f'{refresh_token[:8]}...{refresh_token[-6:]}'
-    else:
-        masked = '*' * token_len
     account_id_safe = escape(account_id)
     scope_safe = escape(scope)
-    masked_safe = escape(masked)
+    token_safe = escape(refresh_token)
 
     return f'''
     <html>
@@ -223,7 +218,7 @@ def dropbox_callback():
     {railway_msg}
     <div class="box">
         <strong>DROPBOX_REFRESH_TOKEN gerado:</strong><br><br>
-        <div class="token">{masked_safe}</div>
+        <div class="token">{token_safe}</div>
     </div>
     <div class="warn">&#x26A0;&#xFE0F; Se o salvamento automático no Railway falhar, adicione manualmente a variável <code>DROPBOX_REFRESH_TOKEN</code>.</div>
     </body>
