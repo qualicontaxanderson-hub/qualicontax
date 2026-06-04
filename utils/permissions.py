@@ -12,6 +12,7 @@ PERMISSION_CATALOG = {
     'Escrita Fiscal': {
         'escrita_fiscal.index':           'Acessar Escrita Fiscal',
         'escrita_fiscal.conf_compras':    'Conferência de Compras',
+        'escrita_fiscal.conf_saidas':     'Conferência de Saídas',
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',
         'escrita_fiscal.memorizacoes':    'Memorizações',
     },

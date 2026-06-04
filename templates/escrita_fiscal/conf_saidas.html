@@ -1,0 +1,1032 @@
+{% extends "base.html" %}
+{% block title %}Conferência de Saídas - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ---- Layout ---- */
+.cc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.cc-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.cc-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ---- Empresa selector bar ---- */
+.cc-empresa-bar { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(37,99,235,.25); }
+.cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
+.cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
+.cc-empresa-ac { position:relative; min-width:320px; }
+.cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
+.cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
+.cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
+.dbx-empresa-ac { min-width:100%; }
+.dbx-empresa-ac input[type=text] { border:1.5px solid #d1d5db; background:#fff; color:#1e293b; }
+.cc-ac-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:9999; max-height:260px; overflow-y:auto; }
+.cc-ac-item { padding:8px 12px; font-size:13px; color:#1e293b; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+.cc-ac-item:last-child { border-bottom:none; }
+.cc-ac-item:hover, .cc-ac-item.active { background:#eff6ff; color:#1d4ed8; }
+.cc-ac-item.all { color:#64748b; font-style:italic; }
+.cc-ac-empty { padding:10px 12px; font-size:12px; color:#94a3b8; text-align:center; }
+.cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
+.cc-scope-badge.empresa { background:#bfdbfe; color:#1d4ed8; }
+.cc-scope-badge.grupo   { background:#e9d5ff; color:#7c3aed; }
+.cc-scope-badge.global  { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+
+/* ---- KPI cards ---- */
+.cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+.cc-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.cc-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
+.cc-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.cc-kpi:nth-child(3) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.cc-kpi:nth-child(4) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.cc-kpi:nth-child(5) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.cc-kpi-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
+.cc-kpi-value { font-size:20px; font-weight:800; color:#fff; margin-top:4px; }
+
+/* ---- Filters ---- */
+.cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+.cc-filters-head { display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:0; }
+.cc-filters-head h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
+.cc-filter-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+.cc-filter-grid label { font-size:10px; font-weight:700; color:#94a3b8; display:block; margin-bottom:3px; text-transform:uppercase; }
+.cc-filter-grid input, .cc-filter-grid select { width:100%; padding:6px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; background:#f8fafc; }
+.cc-filter-grid input:focus, .cc-filter-grid select:focus { border-color:#2563eb; outline:none; background:#fff; }
+.cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
+
+/* ---- Tabs ---- */
+.cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; align-items:center; justify-content:space-between; }
+.cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
+.cc-tab:hover { color:#1e293b; background:#f1f5f9; }
+.cc-tab.active { color:#16a34a; border-bottom-color:#22c55e; background:#f0fdf4; }
+
+/* ---- Table ---- */
+.cc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); }
+table.cc-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.cc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+table.cc-table tr.cc-row-clickable:hover td { background:#f0fdf4; cursor:pointer; }
+table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:#166534; }
+.badge-upload  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.cc-empresa-pill { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+.cc-grupo-pill   { background:#e9d5ff; color:#7c3aed; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+.btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
+.btn-del:hover { background:#fee2e2; }
+
+/* ---- Pagination ---- */
+.cc-pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; padding:4px 0; }
+.cc-pagination button { padding:5px 14px; border:1.5px solid #e2e8f0; border-radius:7px; background:#fff; cursor:pointer; font-weight:600; color:#374151; }
+.cc-pagination button:hover { background:#f1f5f9; }
+.cc-pagination button:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ---- Empty / Loading ---- */
+.cc-empty { text-align:center; padding:40px 20px; color:#94a3b8; }
+.cc-empty i { font-size:36px; margin-bottom:10px; display:block; }
+.cc-loading { text-align:center; padding:30px; color:#64748b; display:none; }
+.cc-loading i { animation:spin 1s linear infinite; font-size:22px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ---- Panel overlay ---- */
+.cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
+.cc-panel-overlay.open { display:flex; }
+.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:1100px; max-width:100%; max-height:92vh; box-shadow:0 20px 60px rgba(0,0,0,.25); transform:scale(.96); opacity:0; transition:transform .2s ease, opacity .2s ease; }
+.cc-panel-overlay.open .cc-panel { transform:scale(1); opacity:1; }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:16px 16px 0 0; }
+.cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
+.cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
+.cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; }
+.panel-nota-info { display:grid; grid-template-columns:1fr auto; gap:4px 20px; margin-bottom:16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:10px; padding:14px 16px; border:1.5px solid #86efac; align-items:center; }
+.panel-nota-info dt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
+.panel-nota-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0; }
+.panel-nota-info .pni-date { text-align:right; }
+.vinc-dot { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.vinc-dot.verde   { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+.vinc-dot.amarelo { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.2); }
+.vinc-dot.vermelho{ background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.2); }
+.vinc-cell { display:flex; align-items:center; justify-content:center; gap:5px; font-size:11px; font-weight:600; }
+.chave-cell { font-family:monospace; font-size:11px; color:#374151; word-break:break-all; max-width:380px; }
+.btn-copy-chave { background:transparent; border:1px solid #d1d5db; color:#374151; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; white-space:nowrap; transition:background .15s; }
+.btn-copy-chave:hover { background:#f0fdf4; border-color:#86efac; color:#166534; }
+.btn-copy-chave.copied { background:#dcfce7; border-color:#86efac; color:#166534; }
+.cc-chaves-toolbar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f8fafc; border-bottom:1.5px solid #e2e8f0; gap:10px; flex-wrap:wrap; }
+.cc-chaves-count { font-size:12px; color:#64748b; font-weight:600; }
+table.cc-items-table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:10px; overflow:hidden; }
+table.cc-items-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; padding:8px 10px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-items-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; color:#334155; }
+table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
+.prod-vinculo { display:flex; align-items:center; gap:6px; }
+.prod-vinculo select { flex:1; padding:4px 8px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:12px; background:#f8fafc; }
+.prod-vinculo button { padding:5px 10px; border-radius:6px; border:none; background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(34,197,94,.3); }
+.prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
+.vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cc-header">
+    <div>
+        <a href="{{ url_for('escrita_fiscal.index') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
+            <i class="fas fa-arrow-left"></i> Escrita Fiscal
+        </a>
+        <h1 style="margin-top:4px;"><i class="fas fa-file-export" style="color:#22c55e;margin-right:8px;"></i>Conferência de Saídas</h1>
+    </div>
+    <div class="cc-actions">
+        <button onclick="exportarCSV()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">
+            <i class="fas fa-download"></i> CSV
+        </button>
+    </div>
+</div>
+
+<!-- Seletor empresa / grupo (aqui = o emitente, nosso cliente) -->
+<div class="cc-empresa-bar">
+    <label><i class="fas fa-building"></i> Empresa Emitente</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="cc-empresa-ac" id="empresaAcWrap">
+            <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
+                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="sel_empresa" value="">
+            <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
+        </div>
+        <span style="color:#d1d5db;font-size:11px;">OU</span>
+        <select id="sel_grupo" onchange="onGrupoChange()">
+            <option value="">— Todos os Grupos —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+</div>
+
+<!-- KPIs -->
+<div class="cc-kpis">
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Total de Notas</div>
+        <div class="cc-kpi-value" id="kpiNotas">0</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Valor Total</div>
+        <div class="cc-kpi-value" id="kpiValor">R$ 0,00</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">ICMS</div>
+        <div class="cc-kpi-value" id="kpiICMS">R$ 0,00</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">PIS</div>
+        <div class="cc-kpi-value" id="kpiPIS">R$ 0,00</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">COFINS</div>
+        <div class="cc-kpi-value" id="kpiCOFINS">R$ 0,00</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="cc-filters">
+    <div class="cc-filters-head" onclick="toggleFilters()">
+        <h3><i class="fas fa-filter" style="color:#22c55e;margin-right:4px;"></i>Filtros</h3>
+        <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
+    </div>
+    <div id="filterBody">
+        <div class="cc-filter-grid">
+            <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
+            <div>
+                <label>Destinatário (CNPJ)</label>
+                <select id="f_dest_cnpj_sel" style="text-transform:uppercase;">
+                    <option value="">— Todos —</option>
+                    {% for d in destinatarios %}
+                    <option value="{{ d.dest_cnpj }}" style="text-transform:uppercase;">{{ d.dest_nome or d.dest_cnpj }} ({{ d.dest_cnpj }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>UF Destinatário</label>
+                <select id="f_dest_uf">
+                    <option value="">— Todos —</option>
+                    {% for uf in uf_list %}
+                    <option value="{{ uf }}">{{ uf }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div><label>Nº da Nota</label><input type="text" id="f_num_nota" placeholder="Ex: 000123"></div>
+            <div><label>CFOP</label><input type="text" id="f_cfop" placeholder="Ex: 5102"></div>
+            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
+            <div><label>CNPJ Emitente</label><input type="text" id="f_emit_cnpj" placeholder="Ex: 12.345.678/0001-95"></div>
+            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
+            <div>
+                <label>Origem</label>
+                <select id="f_origem">
+                    <option value="">— Todos —</option>
+                    <option value="UPLOAD">Upload Manual</option>
+                    <option value="DROPBOX">Dropbox</option>
+                </select>
+            </div>
+            <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
+            <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
+        </div>
+        <div class="cc-filter-actions">
+            <button onclick="applyFilters()"
+                    style="background:#22c55e;color:#fff;border:none;padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+            <button onclick="clearFilters()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;">
+                <i class="fas fa-times"></i> Limpar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="cc-tabs">
+    <div class="cc-tab active" data-tab="notas" onclick="switchTab('notas')">
+        <i class="fas fa-file-alt"></i> Notas Fiscais
+        <span id="tabBadgeNotas" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+    <div class="cc-tab" data-tab="destinatario" onclick="switchTab('destinatario')">
+        <i class="fas fa-store"></i> Por Destinatário
+    </div>
+    <div class="cc-tab" data-tab="produto" onclick="switchTab('produto')">
+        <i class="fas fa-box-open"></i> Por Produto
+    </div>
+    <div class="cc-tab" data-tab="chaves" onclick="switchTab('chaves')">
+        <i class="fas fa-key"></i> Chaves XML
+        <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+    <div style="margin-left:auto;">
+        <button onclick="excluirLote()"
+                style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-trash-alt"></i> Excluir em Lote
+        </button>
+    </div>
+</div>
+
+<div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
+
+<!-- Tab: Notas Fiscais -->
+<div id="tab-notas">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Nº / Série</th>
+                    <th>Empresa (Emit.)</th>
+                    <th>Destinatário</th>
+                    <th>UF Dest.</th>
+                    <th>CFOP</th>
+                    <th>Itens</th>
+                    <th style="text-align:center;">Cadastro</th>
+                    <th style="text-align:right;">Valor R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                    <th>Origem</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="tbodyNotas">
+                <tr><td colspan="12" class="cc-empty"><i class="fas fa-file-export"></i>Selecione uma empresa e clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationNotas"></div>
+</div>
+
+<!-- Tab: Por Destinatário -->
+<div id="tab-destinatario" style="display:none;">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>CNPJ Destinatário</th>
+                    <th>Nome Destinatário</th>
+                    <th>UF</th>
+                    <th style="text-align:right;">Qtd. Notas</th>
+                    <th style="text-align:right;">Total R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                    <th style="text-align:right;">PIS</th>
+                    <th style="text-align:right;">COFINS</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyDestinatario">
+                <tr><td colspan="8" class="cc-empty"><i class="fas fa-store"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Por Produto -->
+<div id="tab-produto" style="display:none;">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descrição XML</th>
+                    <th>Produto Vinculado</th>
+                    <th>NCM</th>
+                    <th>CFOP</th>
+                    <th>Unid.</th>
+                    <th style="text-align:right;">Qtd. Notas</th>
+                    <th style="text-align:right;">Qtd. Total</th>
+                    <th style="text-align:right;">Total R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyProduto">
+                <tr><td colspan="10" class="cc-empty"><i class="fas fa-box-open"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Chaves XML -->
+<div id="tab-chaves" style="display:none;">
+    <div class="cc-table-wrap">
+        <div class="cc-chaves-toolbar">
+            <span class="cc-chaves-count" id="chavesCount">0 chave(s)</span>
+            <button onclick="copiarTodasChaves()"
+                    style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-copy"></i> Copiar Todas
+            </button>
+        </div>
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Empresa (Emit.)</th>
+                    <th>Destinatário</th>
+                    <th>Chave de Acesso XML</th>
+                    <th style="text-align:center;">Copiar</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyChaves">
+                <tr><td colspan="5" class="cc-empty"><i class="fas fa-key"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationChaves"></div>
+</div>
+
+<!-- Panel: Itens da NF-e -->
+<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()">
+<div class="cc-panel" id="itemPanel" onclick="event.stopPropagation()">
+    <div class="cc-panel-header">
+        <h3 id="panelTitle">Itens da Nota Fiscal</h3>
+        <button onclick="closePanel()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;line-height:32px;">&times;</button>
+    </div>
+    <div id="vincularTodosBar" style="display:none;padding:12px 22px;background:#f0fdf4;border-bottom:1.5px solid #86efac;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#166534;white-space:nowrap;">
+                <i class="fas fa-bolt"></i> Vincular todos os itens:
+            </span>
+            <select id="selVincularTodos" style="flex:1;min-width:200px;padding:6px 10px;border:1.5px solid #86efac;border-radius:7px;font-size:13px;background:#fff;"></select>
+            <button onclick="vincularTodos()"
+                    style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                <i class="fas fa-check-double"></i> Aplicar a Todos
+            </button>
+        </div>
+    </div>
+    <div class="cc-panel-body" id="panelBody">
+        <div id="panelLoading" style="text-align:center;padding:40px;color:#9ca3af;">
+            <i class="fas fa-spinner fa-spin" style="font-size:24px;"></i>
+        </div>
+    </div>
+    <div class="cc-panel-footer">
+        <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
+            Fechar
+        </button>
+    </div>
+</div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+let currentTab = 'notas';
+let currentPage = 1;
+let currentClienteId = '';
+let currentGrupoId = '';
+let catalogoProdutos = [];
+let catalogoCache = {};
+let currentNfeId = null;
+let panelModified = false;
+let hasSearched = false;
+let requestControllers = {notas: null, destinatario: null, produto: null, chaves: null};
+
+function _abortRequest(type) {
+    const ctrl = requestControllers[type];
+    if (ctrl) ctrl.abort();
+    requestControllers[type] = null;
+}
+function _fetchWithAbort(type, url) {
+    _abortRequest(type);
+    const ctrl = new AbortController();
+    requestControllers[type] = ctrl;
+    return fetch(url, {signal: ctrl.signal}).finally(() => {
+        if (requestControllers[type] === ctrl) requestControllers[type] = null;
+    });
+}
+function _isAbort(err) { return err && err.name === 'AbortError'; }
+
+function loadActiveTab() {
+    if (currentTab === 'destinatario') return loadDestinatario();
+    if (currentTab === 'produto') return loadProduto();
+    if (currentTab === 'chaves') return loadChaves();
+    return loadNotas();
+}
+
+// ---- Empresa autocomplete ----
+const empresasData = [
+    {id: '', nome: '— Todas as Empresas —'},
+    {% for e in empresas %}
+    {id: {{ e.id | tojson }}, nome: {{ ((e.numero_cliente|string + ' - ' + e.nome_razao_social) if e.numero_cliente else e.nome_razao_social) | tojson }}},
+    {% endfor %}
+];
+let acActiveIndex = -1;
+
+function onEmpresaInput() {
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+    document.getElementById('sel_empresa_clear').style.display = q ? '' : 'none';
+}
+function onEmpresaFocus() {
+    const currentId = document.getElementById('sel_empresa').value;
+    if (currentId) document.getElementById('sel_empresa_input').value = '';
+    renderEmpresaDropdown(document.getElementById('sel_empresa_input').value.trim().toLowerCase());
+}
+function onEmpresaBlur() {
+    setTimeout(function() {
+        const currentId = document.getElementById('sel_empresa').value;
+        const input = document.getElementById('sel_empresa_input');
+        if (currentId && input.value === '') {
+            const found = empresasData.find(e => e.id == currentId);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
+}
+function renderEmpresaDropdown(q) {
+    const list = document.getElementById('empresaAcList');
+    acActiveIndex = -1;
+    const filtered = !q ? empresasData : empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    if (!filtered.length) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.map(e =>
+            `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`
+        ).join('');
+    }
+    list.style.display = '';
+}
+function onEmpresaKeydown(e) {
+    const list = document.getElementById('empresaAcList');
+    const items = list.querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') { acActiveIndex = Math.min(acActiveIndex+1, items.length-1); items.forEach((el,i)=>el.classList.toggle('active',i===acActiveIndex)); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { acActiveIndex = Math.max(acActiveIndex-1, 0); items.forEach((el,i)=>el.classList.toggle('active',i===acActiveIndex)); e.preventDefault(); }
+    else if (e.key === 'Enter') { const t = acActiveIndex >= 0 ? items[acActiveIndex] : items[0]; if (t) selectEmpresa(t.dataset.id, t.dataset.nome); e.preventDefault(); }
+    else if (e.key === 'Escape') { closeEmpresaDropdown(); }
+}
+function selectEmpresa(id, nome) {
+    document.getElementById('sel_empresa').value = id;
+    document.getElementById('sel_empresa_input').value = id ? nome : '';
+    document.getElementById('sel_empresa_clear').style.display = id ? '' : 'none';
+    closeEmpresaDropdown();
+    onEmpresaChange();
+}
+function clearEmpresa() { selectEmpresa('', ''); }
+function closeEmpresaDropdown() { document.getElementById('empresaAcList').style.display = 'none'; }
+document.addEventListener('click', function(e) {
+    if (!document.getElementById('empresaAcWrap').contains(e.target)) closeEmpresaDropdown();
+});
+
+function onEmpresaChange() {
+    currentClienteId = document.getElementById('sel_empresa').value;
+    if (currentClienteId) {
+        document.getElementById('sel_grupo').value = '';
+        currentGrupoId = '';
+        updateScopeBadge('empresa', document.getElementById('sel_empresa_input').value);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    catalogoCache = {};
+}
+function onGrupoChange() {
+    currentGrupoId = document.getElementById('sel_grupo').value;
+    if (currentGrupoId) {
+        document.getElementById('sel_empresa').value = '';
+        document.getElementById('sel_empresa_input').value = '';
+        document.getElementById('sel_empresa_clear').style.display = 'none';
+        currentClienteId = '';
+        updateScopeBadge('grupo', document.getElementById('sel_grupo').options[document.getElementById('sel_grupo').selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    catalogoCache = {};
+}
+function updateScopeBadge(type, label) {
+    const b = document.getElementById('scopeBadge');
+    b.className = 'cc-scope-badge ' + type;
+    const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
+    b.innerHTML = `<i class="${icons[type]}"></i> ${label}`;
+}
+
+// ---- Tabs ----
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.cc-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    ['notas','destinatario','produto','chaves'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
+    });
+    document.getElementById('f_descricao_wrap').style.display = tab === 'produto' ? '' : 'none';
+    document.getElementById('f_ncm_wrap').style.display = tab === 'produto' ? '' : 'none';
+    if (hasSearched && (currentClienteId || currentGrupoId)) loadActiveTab();
+}
+
+function toggleFilters() {
+    const b = document.getElementById('filterBody');
+    const c = document.getElementById('filterChevron');
+    const hidden = b.style.display === 'none';
+    b.style.display = hidden ? '' : 'none';
+    c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
+}
+function clearFilters() {
+    ['f_data_ini','f_data_fim','f_num_nota','f_cfop','f_chave','f_emit_cnpj','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('f_dest_cnpj_sel').value = '';
+    document.getElementById('f_dest_uf').value = '';
+    document.getElementById('f_origem').value = '';
+    currentPage = 1;
+    chavesCurrentPage = 1;
+    applyFilters();
+}
+function getFilters() {
+    return {
+        cliente_id: currentClienteId,
+        grupo_id:   currentGrupoId,
+        data_ini:   document.getElementById('f_data_ini').value,
+        data_fim:   document.getElementById('f_data_fim').value,
+        dest_cnpj:  document.getElementById('f_dest_cnpj_sel').value,
+        dest_uf:    document.getElementById('f_dest_uf').value,
+        num_nota:   document.getElementById('f_num_nota').value,
+        cfop:       document.getElementById('f_cfop').value,
+        chave:      document.getElementById('f_chave').value,
+        emit_cnpj:  document.getElementById('f_emit_cnpj').value,
+        vmin:       document.getElementById('f_vmin').value,
+        vmax:       document.getElementById('f_vmax').value,
+        origem:     document.getElementById('f_origem').value,
+        descricao:  document.getElementById('f_descricao').value,
+        ncm:        document.getElementById('f_ncm').value,
+    };
+}
+function applyFilters() {
+    if (!currentClienteId && !currentGrupoId) {
+        const inp = document.getElementById('sel_empresa_input');
+        inp.style.borderColor = '#ef4444';
+        inp.style.boxShadow = '0 0 0 3px rgba(239,68,68,.2)';
+        setTimeout(() => { inp.style.borderColor = ''; inp.style.boxShadow = ''; }, 2500);
+        alert('Selecione uma Empresa ou Grupo antes de buscar.');
+        return;
+    }
+    currentPage = 1;
+    chavesCurrentPage = 1;
+    hasSearched = true;
+    loadActiveTab();
+}
+
+// ---- Formatters ----
+function fmtBRL(v) { return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtNum(v,d) { return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||2,maximumFractionDigits:d||4}); }
+function fmtDate(v) {
+    if (!v) return '—';
+    const parts = v.toString().substring(0,10).split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return v;
+}
+
+function showLoad() { document.getElementById('loadingIndicator').style.display='block'; }
+function hideLoad() { document.getElementById('loadingIndicator').style.display='none'; }
+
+// ---- Load Notas ----
+function loadNotas() {
+    const f = getFilters();
+    const params = new URLSearchParams({...f, page: currentPage});
+    showLoad();
+    document.getElementById('tbodyNotas').innerHTML = '';
+    _fetchWithAbort('notas', '{{ url_for("escrita_fiscal.api_notas_saidas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            document.getElementById('tabBadgeNotas').textContent = data.total;
+            if (data.kpi) {
+                document.getElementById('kpiNotas').textContent = data.total;
+                document.getElementById('kpiValor').textContent = fmtBRL(data.kpi.total_valor);
+                document.getElementById('kpiICMS').textContent  = fmtBRL(data.kpi.total_icms);
+                document.getElementById('kpiPIS').textContent   = fmtBRL(data.kpi.total_pis);
+                document.getElementById('kpiCOFINS').textContent = fmtBRL(data.kpi.total_cofins);
+            }
+            const tbody = document.getElementById('tbodyNotas');
+            if (!data.rows || !data.rows.length) {
+                tbody.innerHTML = '<tr><td colspan="12" class="cc-empty"><i class="fas fa-file-export"></i><br>Nenhuma nota encontrada</td></tr>';
+                document.getElementById('paginationNotas').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = data.rows.map(r => {
+                const empPill = r.empresa_nome
+                    ? `<span class="cc-empresa-pill">${r.empresa_nome}</span>`
+                    : (r.grupo_nome ? `<span class="cc-grupo-pill">${r.grupo_nome}</span>` : '<span style="color:#d1d5db">—</span>');
+                const total = r.qtd_itens || 0, vinc = r.itens_vinculados || 0;
+                let dotCls, dotTip;
+                if (total === 0)         { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
+                else if (vinc === 0)     { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
+                else if (vinc === total) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
+                else                    { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
+                return `<tr class="cc-row-clickable" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
+                    <td>${fmtDate(r.data_emissao)}</td>
+                    <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
+                    <td>${empPill}</td>
+                    <td title="${r.dest_cnpj}" style="text-transform:uppercase;">${r.dest_nome||r.dest_cnpj||'—'}</td>
+                    <td>${r.dest_uf||'—'}</td>
+                    <td>${r.cfop||'—'}</td>
+                    <td style="text-align:center;">${total}</td>
+                    <td style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
+                    <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
+                    <td class="money">${fmtBRL(r.valor_icms)}</td>
+                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span></td>
+                    <td onclick="event.stopPropagation()">
+                        <button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            renderPagination('paginationNotas', data.total, data.per_page, data.page);
+            // Pre-warm catalog
+            const _catKey = (currentClienteId||'')+':'+(currentGrupoId||'');
+            if (!catalogoCache[_catKey]) {
+                const _cp = new URLSearchParams({cliente_id: currentClienteId||'', grupo_id: currentGrupoId||''});
+                catalogoCache[_catKey] = fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + _cp)
+                    .then(r => r.json()).catch(() => []);
+            }
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+// ---- Load Por Destinatário ----
+function loadDestinatario() {
+    const f = getFilters();
+    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});
+    showLoad();
+    _fetchWithAbort('destinatario', '{{ url_for("escrita_fiscal.api_por_destinatario") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const tbody = document.getElementById('tbodyDestinatario');
+            if (!data || !data.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="cc-empty"><i class="fas fa-store"></i><br>Nenhum destinatário encontrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td>${r.dest_cnpj||'—'}</td>
+                    <td style="text-transform:uppercase;">${r.dest_nome||'—'}</td>
+                    <td>${r.dest_uf||'—'}</td>
+                    <td class="money">${r.qtd_notas}</td>
+                    <td class="money">${fmtBRL(r.total_valor)}</td>
+                    <td class="money">${fmtBRL(r.total_icms)}</td>
+                    <td class="money">${fmtBRL(r.total_pis)}</td>
+                    <td class="money">${fmtBRL(r.total_cofins)}</td>
+                </tr>
+            `).join('');
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+// ---- Load Por Produto ----
+function loadProduto() {
+    const f = getFilters();
+    const params = new URLSearchParams({
+        cliente_id:f.cliente_id, grupo_id:f.grupo_id,
+        data_ini:f.data_ini, data_fim:f.data_fim,
+        dest_cnpj:f.dest_cnpj, ncm:f.ncm, descricao:f.descricao,
+    });
+    showLoad();
+    _fetchWithAbort('produto', '{{ url_for("escrita_fiscal.api_por_produto_saidas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const tbody = document.getElementById('tbodyProduto');
+            if (!data || !data.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="cc-empty"><i class="fas fa-box-open"></i><br>Nenhum produto encontrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => {
+                const vincPill = r.produto_catalogo_nome
+                    ? `<span class="vinculado-badge">${r.produto_catalogo_nome}</span>`
+                    : `<span style="color:#d1d5db;font-size:11px;">Não vinculado</span>`;
+                return `<tr>
+                    <td>${r.codigo_produto||'—'}</td>
+                    <td style="text-transform:uppercase;">${r.descricao||'—'}</td>
+                    <td>${vincPill}</td>
+                    <td>${r.ncm||'—'}</td>
+                    <td>${r.cfop||'—'}</td>
+                    <td>${r.unidade||'—'}</td>
+                    <td class="money">${r.qtd_notas}</td>
+                    <td class="money">${fmtNum(r.total_qtd,2)}</td>
+                    <td class="money">${fmtBRL(r.total_valor)}</td>
+                    <td class="money">${fmtBRL(r.total_icms)}</td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+// ---- Pagination ----
+function renderPagination(id, total, perPage, page) {
+    const pages = Math.ceil(total / perPage);
+    const el = document.getElementById(id);
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button onclick="goPage(${page-1})" ${page<=1?'disabled':''}><i class="fas fa-chevron-left"></i></button>
+        <span>Página ${page} de ${pages} &nbsp;|&nbsp; ${total} registro(s)</span>
+        <button onclick="goPage(${page+1})" ${page>=pages?'disabled':''}><i class="fas fa-chevron-right"></i></button>
+    `;
+}
+function goPage(p) {
+    currentPage = p;
+    chavesCurrentPage = p;
+    if (currentTab === 'chaves') loadChaves();
+    else loadNotas();
+}
+
+// ---- Delete ----
+function excluirNfe(id, btn) {
+    if (!confirm('Excluir esta nota fiscal e todos os seus itens?')) return;
+    fetch(`/escrita-fiscal/conf-compras/excluir/${id}`,
+        {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}})
+        .then(r => r.json())
+        .then(() => { btn.closest('tr').remove(); applyFilters(); })
+        .catch(() => alert('Erro ao excluir.'));
+}
+function excluirLote() {
+    const total = parseInt(document.getElementById('tabBadgeNotas').textContent) || 0;
+    if (total === 0) { alert('Nenhuma nota encontrada com os filtros atuais.'); return; }
+    if (!confirm(`Excluir TODAS as ${total} nota(s) de saída encontradas com os filtros atuais?\n\nEsta ação não pode ser desfeita.`)) return;
+    const f = getFilters();
+    fetch('/escrita-fiscal/conf-saidas/excluir-lote', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(f),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) { alert(`${data.deleted} nota(s) excluída(s).`); applyFilters(); }
+        else { alert('Erro ao excluir em lote.'); }
+    })
+    .catch(() => alert('Erro ao excluir em lote.'));
+}
+
+// ---- Panel ----
+function openPanel(nfeId, evt) {
+    if (nfeId == null) return;
+    if (currentNfeId !== nfeId) panelModified = false;
+    currentNfeId = nfeId;
+    document.getElementById('panelOverlay').classList.add('open');
+    document.getElementById('panelBody').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+    document.getElementById('vincularTodosBar').style.display = 'none';
+
+    const catKey = (currentClienteId||'')+':'+(currentGrupoId||'');
+    if (!catalogoCache[catKey]) {
+        const cp = new URLSearchParams({cliente_id:currentClienteId, grupo_id:currentGrupoId});
+        catalogoCache[catKey] = fetch('{{ url_for("escrita_fiscal.api_produtos_catalogo") }}?' + cp)
+            .then(r => r.json()).catch(() => []);
+    }
+    const catPromise = catalogoCache[catKey];
+    const itensPromise = fetch(`/escrita-fiscal/conf-compras/api/itens/${nfeId}`).then(r => r.json());
+
+    Promise.all([catPromise, itensPromise])
+        .then(([cats, data]) => {
+            catalogoProdutos = cats;
+            const sel = document.getElementById('selVincularTodos');
+            sel.innerHTML = '<option value="">— Selecione o produto —</option>' + buildProdOpts(null);
+            document.getElementById('vincularTodosBar').style.display = '';
+
+            if (data.error) { document.getElementById('panelBody').innerHTML = `<p style="color:red">${data.error}</p>`; return; }
+            const nota = data.nota;
+            document.getElementById('panelTitle').textContent =
+                `NF ${nota.num_nota||'s/n'} — ${(nota.emit_nome||nota.emit_cnpj||'').toUpperCase()}`;
+
+            let html = `<dl class="panel-nota-info">
+                <div><dt>Emitente (nossa empresa)</dt><dd style="text-transform:uppercase;">${nota.emit_nome||nota.emit_cnpj||'—'}</dd></div>
+                <div class="pni-date"><dt>Data Emissão</dt><dd>${fmtDate(nota.data_emissao)}</dd></div>
+                <div><dt>Destinatário</dt><dd style="text-transform:uppercase;">${nota.dest_nome||'—'}</dd></div>
+                <div></div>
+            </dl>`;
+
+            if (!data.itens || !data.itens.length) {
+                html += '<p style="color:#9ca3af;text-align:center;">Nenhum item encontrado nesta NF-e.</p>';
+            } else {
+                html += `<table class="cc-items-table">
+                    <thead><tr>
+                        <th>#</th><th>Código</th><th>Descrição</th><th>NCM</th>
+                        <th class="r">Qtd.</th><th class="r">Vl.Unit</th><th class="r">Total R$</th>
+                        <th>Produto Vinculado</th>
+                    </tr></thead><tbody>`;
+                data.itens.forEach(it => {
+                    const cid = nota.cliente_id||'null', gid = nota.grupo_id||'null';
+                    let vinculoHtml;
+                    if (it.produto_catalogo_id && it.produto_catalogo_nome) {
+                        vinculoHtml = `<span class="vinculado-badge">${it.produto_catalogo_nome}</span>
+                            <button onclick="desvincular(${it.id})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+                    } else {
+                        const opts = buildProdOpts(it.produto_catalogo_id);
+                        vinculoHtml = `<select id="sel_prod_${it.id}">${opts}</select>
+                            <button onclick="vincularProduto(${it.id}, ${cid}, ${gid})">Vincular</button>`;
+                    }
+                    html += `<tr>
+                        <td>${it.num_item}</td>
+                        <td>${it.codigo_produto||'—'}</td>
+                        <td style="text-transform:uppercase;">${it.descricao||'—'}</td>
+                        <td>${it.ncm||'—'}</td>
+                        <td class="r">${fmtNum(it.quantidade,3)} ${it.unidade||''}</td>
+                        <td class="r">${fmtBRL(it.valor_unitario)}</td>
+                        <td class="r"><strong>${fmtBRL(it.valor_total)}</strong></td>
+                        <td><div class="prod-vinculo" id="vinculo_${it.id}">${vinculoHtml}</div></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            document.getElementById('panelBody').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('panelBody').innerHTML = '<p style="color:red">Erro ao carregar itens.</p>';
+        });
+}
+
+function buildProdOpts(selectedId) {
+    let opts = '<option value="">— Sem vínculo —</option>';
+    let lastCat = '';
+    catalogoProdutos.forEach(p => {
+        if (p.categoria !== lastCat) { if (lastCat) opts += '</optgroup>'; opts += `<optgroup label="${p.categoria||'Sem categoria'}">`; lastCat = p.categoria; }
+        opts += `<option value="${p.id}" ${p.id == selectedId ? 'selected':''}>${p.nome}</option>`;
+    });
+    if (lastCat) opts += '</optgroup>';
+    return opts;
+}
+
+function closePanel() {
+    if (panelModified && currentNfeId) {
+        const totalWraps = document.querySelectorAll('[id^="vinculo_"]').length;
+        const vincWraps  = document.querySelectorAll('[id^="vinculo_"] .vinculado-badge').length;
+        const row = document.querySelector(`tr[data-nfeid="${currentNfeId}"]`);
+        if (row) {
+            let dotCls, dotTip;
+            if (totalWraps === 0)             { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
+            else if (vincWraps === 0)          { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
+            else if (vincWraps === totalWraps) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
+            else                              { dotCls = 'amarelo';   dotTip = `Parcial (${vincWraps}/${totalWraps})`; }
+            const dotCell = row.querySelector('.vinc-cell');
+            if (dotCell) dotCell.innerHTML = `<span class="vinc-dot ${dotCls}" title="${dotTip}"></span>`;
+        }
+        panelModified = false;
+    }
+    document.getElementById('panelOverlay').classList.remove('open');
+    currentNfeId = null;
+}
+
+function vincularProduto(itemId, clienteId, grupoId) {
+    const sel = document.getElementById('sel_prod_' + itemId);
+    const produtoId = sel.value ? parseInt(sel.value) : null;
+    const prodObj = produtoId ? catalogoProdutos.find(p => p.id === produtoId) : null;
+    const prodNome = prodObj ? prodObj.nome : null;
+    const wrap = document.getElementById('vinculo_' + itemId);
+    if (produtoId && prodNome) {
+        wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
+            <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+        panelModified = true;
+        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({item_id:itemId, produto_id:produtoId, salvar_regra:true}),
+        }).catch(()=>{});
+    } else if (!produtoId) {
+        wrap.innerHTML = `<select id="sel_prod_${itemId}">${buildProdOpts(null)}</select>
+            <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+        panelModified = true;
+    }
+}
+function desvincular(itemId) {
+    const wrap = document.getElementById('vinculo_' + itemId);
+    wrap.innerHTML = `<select id="sel_prod_${itemId}">${buildProdOpts(null)}</select>
+        <button onclick="vincularProduto(${itemId}, null, null)">Vincular</button>`;
+}
+function vincularTodos() {
+    const sel = document.getElementById('selVincularTodos');
+    const produtoId = sel.value ? parseInt(sel.value) : null;
+    if (!produtoId) { alert('Selecione um produto para vincular.'); return; }
+    if (!currentNfeId) return;
+    if (!confirm('Aplicar este produto a TODOS os itens desta NF-e?')) return;
+    const prodObj = catalogoProdutos.find(p => p.id === produtoId);
+    const prodNome = prodObj ? prodObj.nome : null;
+    if (prodNome) {
+        document.querySelectorAll('[id^="vinculo_"]').forEach(wrap => {
+            const itemId = parseInt(wrap.id.replace('vinculo_',''));
+            wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
+                <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
+        });
+        panelModified = true;
+    }
+    fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({nfe_id:currentNfeId, produto_id:produtoId}),
+    }).then(r=>r.json()).catch(()=>alert('Erro ao vincular todos.'));
+}
+
+// ---- Chaves XML ----
+let chavesData = [];
+let chavesCurrentPage = 1;
+const chavesPerPage = 100;
+
+function loadChaves() {
+    const f = getFilters();
+    const params = new URLSearchParams({...f, page:chavesCurrentPage, per_page:chavesPerPage});
+    showLoad();
+    document.getElementById('tbodyChaves').innerHTML = '';
+    _fetchWithAbort('chaves', '{{ url_for("escrita_fiscal.api_notas_saidas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const rows = data.rows || [];
+            chavesData = rows;
+            document.getElementById('tabBadgeChaves').textContent = data.total || 0;
+            document.getElementById('chavesCount').textContent = (data.total||0) + ' chave(s)';
+            const tbody = document.getElementById('tbodyChaves');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="cc-empty"><i class="fas fa-key"></i><br>Nenhuma nota encontrada</td></tr>';
+                document.getElementById('paginationChaves').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = rows.map(r => {
+                const emp = r.empresa_nome || r.grupo_nome || '—';
+                const chave = r.chave_acesso || '—';
+                return `<tr>
+                    <td style="white-space:nowrap;">${fmtDate(r.data_emissao)}</td>
+                    <td>${emp}</td>
+                    <td style="text-transform:uppercase;">${r.dest_nome||r.dest_cnpj||'—'}</td>
+                    <td class="chave-cell">${chave}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-copy-chave" onclick="copiarChave(this, '${chave.replace(/'/g,"\\'")}')">
+                            <i class="fas fa-copy"></i> Copiar
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            renderPagination('paginationChaves', data.total, data.per_page||chavesPerPage, data.page||chavesCurrentPage);
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+function copiarChave(btn, chave) {
+    navigator.clipboard.writeText(chave).then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiada';
+        setTimeout(()=>{ btn.classList.remove('copied'); btn.innerHTML='<i class="fas fa-copy"></i> Copiar'; }, 2000);
+    });
+}
+function copiarTodasChaves() {
+    if (!chavesData.length) { alert('Nenhuma chave disponível. Clique em Buscar primeiro.'); return; }
+    const texto = chavesData.map(r=>r.chave_acesso||'').filter(Boolean).join('\n');
+    navigator.clipboard.writeText(texto).then(()=>{
+        const btn = event.currentTarget;
+        const orig = btn.innerHTML;
+        btn.innerHTML='<i class="fas fa-check"></i> Copiadas!';
+        btn.style.background='linear-gradient(135deg,#22c55e,#16a34a)';
+        setTimeout(()=>{ btn.innerHTML=orig; btn.style.background=''; }, 2500);
+    });
+}
+
+// ---- CSV Export ----
+function exportarCSV() {
+    const f = getFilters();
+    const params = new URLSearchParams({...f, page:1, per_page:99999});
+    fetch('{{ url_for("escrita_fiscal.api_notas_saidas") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.rows || !data.rows.length) { alert('Nenhuma nota para exportar.'); return; }
+            const cols = ['data_emissao','num_nota','serie','emit_cnpj','emit_nome','emit_uf',
+                          'dest_cnpj','dest_nome','dest_uf','empresa_nome','cfop','natureza_operacao',
+                          'valor_total','valor_icms','valor_pis','valor_cofins','valor_ipi','origem','chave_acesso'];
+            let csv = cols.join(';') + '\n';
+            data.rows.forEach(r => {
+                const row = {...r, data_emissao: fmtDate(r.data_emissao)};
+                csv += cols.map(c => JSON.stringify(row[c]??'')).join(';') + '\n';
+            });
+            const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'conf_saidas.csv';
+            a.click();
+        });
+}
+</script>
+{% endblock %}

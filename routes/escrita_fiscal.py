@@ -279,6 +279,38 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
     return clauses, params
 
 
+def _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=None):
+    """Filtro empresa/grupo para Saídas (cliente = emitente do XML)."""
+    if params is None:
+        params = []
+    clauses = []
+    if f_cliente_id:
+        cid = int(f_cliente_id)
+        clauses.append(
+            f"({alias}.cliente_id = %s"
+            f" OR ({alias}.cliente_id IS NULL"
+            f"     AND REPLACE(REPLACE(REPLACE({alias}.emit_cnpj,'.',''),'/',''),'-','')"
+            f"       = (SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','')"
+            f"            FROM clientes WHERE id = %s)))"
+        )
+        params.append(cid)
+        params.append(cid)
+    if f_grupo_id:
+        gid = int(f_grupo_id)
+        clauses.append(
+            f"({alias}.grupo_id = %s"
+            f" OR ({alias}.grupo_id IS NULL"
+            f"     AND REPLACE(REPLACE(REPLACE({alias}.emit_cnpj,'.',''),'/',''),'-','')"
+            f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
+            f"             FROM clientes c"
+            f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
+            f"             WHERE cgr.grupo_id = %s)))"
+        )
+        params.append(gid)
+        params.append(gid)
+    return clauses, params
+
+
 # ---------------------------------------------------------------------------
 # Landing page
 # ---------------------------------------------------------------------------
@@ -350,7 +382,7 @@ def api_notas():
     per_page = 50
 
     extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where = extra_clauses
+    where = ["n.tipo = 'entrada'"] + extra_clauses
 
     if f_emit_cnpj:
         where.append('n.emit_cnpj = %s')
@@ -678,7 +710,7 @@ def api_por_emissor():
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
 
-    where, params = [], []
+    where, params = ["n.tipo = 'entrada'"], []
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
     where.extend(extra)
     if f_data_ini:
@@ -724,7 +756,7 @@ def api_por_produto():
     f_ncm = request.args.get('ncm', '').strip()
     f_descricao = request.args.get('descricao', '').strip()
 
-    where, params = [], []
+    where, params = ["n.tipo = 'entrada'"], []
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
     where.extend(extra)
     if f_data_ini:
@@ -789,7 +821,7 @@ def api_resumo_produtos():
     f_emit_cnpj  = request.args.get('emit_cnpj', '').strip()
     f_emit_uf    = request.args.get('emit_uf', '').strip()
 
-    where, params = [], []
+    where, params = ["n.tipo = 'entrada'"], []
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
     where.extend(extra)
     if f_data_ini:
@@ -930,6 +962,8 @@ def importar_xml():
     ok, dup, err = 0, 0, 0
     errors = []
 
+    _upload_cache = _build_cliente_doc_cache()
+
     for f in files:
         if not f.filename.lower().endswith('.xml'):
             err += 1
@@ -938,8 +972,26 @@ def importar_xml():
         try:
             content = f.read().decode('utf-8', errors='replace')
             parsed = parse_nfe_xml(content)
-            result = _save_nfe(parsed, f.filename, 'UPLOAD', content,
-                               cliente_id=cliente_id, grupo_id=grupo_id)
+
+            dest_cli = int(cliente_id) if cliente_id else None
+            grp_id = int(grupo_id) if grupo_id else None
+
+            # Detecta cliente emitente para gerar registro de saída
+            emit_digits = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
+            emit_cli = None
+            if len(emit_digits) >= 11:
+                _ef = _find_cliente_by_doc_digits(emit_digits, _upload_cache)
+                if _ef and _ef['id'] != dest_cli:
+                    emit_cli = _ef['id']
+
+            if dest_cli is None and emit_cli is None:
+                # Sem empresa selecionada e nenhum CNPJ reconhecido — salva sem vínculo
+                result = _save_nfe(parsed, f.filename, 'UPLOAD', content,
+                                   grupo_id=grp_id, tipo='entrada')
+            else:
+                result = _save_nfe_dual(parsed, f.filename, 'UPLOAD', content,
+                                        dest_cli=dest_cli, emit_cli=emit_cli,
+                                        grupo_id=grp_id)
             if result == 'dup':
                 dup += 1
             else:
@@ -992,7 +1044,7 @@ def sync_dropbox():
         try:
             parsed = parse_nfe_xml(content)
             result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                               cliente_id=cliente_id, grupo_id=grupo_id)
+                               cliente_id=cliente_id, grupo_id=grupo_id, tipo='entrada')
             if result == 'dup':
                 dup += 1
             else:
@@ -1320,9 +1372,20 @@ def api_importar_dropbox():
                     _num = found.get('numero_cliente') or None
                     logger.info('%s: empresa detectada por dest_cnpj → %s', info['name'], _nome)
 
+            # Detecta cliente emitente para geração de registro de saída
+            _emit_cli_sync = None
+            _emit_digits_sync = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
+            if len(_emit_digits_sync) >= 11:
+                _emit_found_sync = _find_cliente_by_doc_digits(_emit_digits_sync, _cnpj_cliente_cache)
+                if _emit_found_sync and _emit_found_sync['id'] != _cli:
+                    _emit_cli_sync = _emit_found_sync['id']
+                    if _nome is None:
+                        # Só emitente encontrado: usa ele para nomear pasta
+                        _nome = _emit_found_sync['nome_razao_social']
+                        _num = _emit_found_sync.get('numero_cliente') or None
+
             if _nome is None:
-                # Empresa não cadastrada — não importar; registrar para aviso ao usuário.
-                # O arquivo permanece em NOVO até que a empresa seja cadastrada.
+                # Nenhum cliente encontrado como dest NEM emit — não importar.
                 _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
                 _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
                 _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
@@ -1335,10 +1398,12 @@ def api_importar_dropbox():
                 )
                 continue
 
-            # Salva com o cliente detectado pelo XML, não pelo filtro do modal.
-            result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                               cliente_id=_cli, grupo_id=grupo_id if _cli is None else None,
-                               vinculos_cache=_vinculos_cache)
+            # Salva entrada (se dest encontrado) e/ou saída (se emit encontrado)
+            result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
+                                    dest_cli=_cli,
+                                    emit_cli=_emit_cli_sync,
+                                    grupo_id=grupo_id if _cli is None else None,
+                                    vinculos_cache=_vinculos_cache)
             if result == 'dup':
                 dup += 1
             else:
@@ -1773,6 +1838,17 @@ def _run_import_job(job: dict, departamento: str,
                             _nome = found['nome_razao_social']
                             _num = found.get('numero_cliente') or None
 
+                    # Detecta emitente para registro de saída
+                    _emit_cli_job = None
+                    _emit_digs_job = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
+                    if len(_emit_digs_job) >= 11:
+                        _ef_job = _find_cliente_by_doc_digits(_emit_digs_job, _cnpj_cliente_cache)
+                        if _ef_job and _ef_job['id'] != _cli:
+                            _emit_cli_job = _ef_job['id']
+                            if _nome is None:
+                                _nome = _ef_job['nome_razao_social']
+                                _num = _ef_job.get('numero_cliente') or None
+
                     if _nome is None:
                         _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
                         _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
@@ -1782,10 +1858,10 @@ def _run_import_job(job: dict, departamento: str,
                         batch_processed += 1
                         continue
 
-                    result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                                       cliente_id=_cli,
-                                       grupo_id=grupo_id_val if _cli is None else None,
-                                       vinculos_cache=_vinculos_cache)
+                    result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
+                                            dest_cli=_cli, emit_cli=_emit_cli_job,
+                                            grupo_id=grupo_id_val if _cli is None else None,
+                                            vinculos_cache=_vinculos_cache)
                     if result == 'dup':
                         dup += 1
                     else:
@@ -2172,6 +2248,17 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                         _nome = found['nome_razao_social']
                         _num = found.get('numero_cliente') or None
 
+                # Detecta emitente para registro de saída
+                _emit_cli_ag = None
+                _emit_digs_ag = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
+                if len(_emit_digs_ag) >= 11:
+                    _ef_ag = _find_cliente_by_doc_digits(_emit_digs_ag, _cnpj_cliente_cache)
+                    if _ef_ag and _ef_ag['id'] != _cli:
+                        _emit_cli_ag = _ef_ag['id']
+                        if _nome is None:
+                            _nome = _ef_ag['nome_razao_social']
+                            _num = _ef_ag.get('numero_cliente') or None
+
                 if _nome is None:
                     _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
                     _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
@@ -2185,8 +2272,9 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     batch_processed += 1
                     continue
 
-                result = _save_nfe(parsed, info['name'], 'DROPBOX', content,
-                                   cliente_id=_cli, vinculos_cache=_vinculos_cache)
+                result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
+                                        dest_cli=_cli, emit_cli=_emit_cli_ag,
+                                        vinculos_cache=_vinculos_cache)
                 if result == 'dup':
                     totals['dup'] += 1
                     file_logs.append({'arquivo': info['name'], 'resultado': 'duplicata',
@@ -2499,6 +2587,7 @@ def api_configurar_horario_agendado():
     return jsonify({'ok': True, 'hora': hora, 'minuto': minuto, 'texto': f'{hora:02d}:{minuto:02d}'})
 
 
+@escrita_fiscal.route('/conf-compras/excluir/<int:nfe_id>', methods=['POST'])
 @login_required
 def excluir_nfe(nfe_id):
     execute_query("DELETE FROM nfe_importacoes WHERE id = %s", (nfe_id,))
@@ -2529,7 +2618,7 @@ def excluir_lote():
     f_vmax       = str(data.get('vmax', '')).strip()
     f_origem     = str(data.get('origem', '')).strip()
 
-    where, params = [], []
+    where, params = ["n.tipo = 'entrada'"], []
     extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
     where.extend(extra_clauses)
 
@@ -3087,17 +3176,19 @@ def _lookup_vinculo(codigo_produto: str, cliente_id, grupo_id,
 # Helpers internos
 # ---------------------------------------------------------------------------
 def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
-              cliente_id=None, grupo_id=None, vinculos_cache: dict | None = None):
+              cliente_id=None, grupo_id=None, tipo: str = 'entrada',
+              vinculos_cache: dict | None = None):
     """
     Salva NF-e parseada no banco.
+    tipo: 'entrada' (destinatário é nosso cliente) ou 'saida' (emitente é nosso cliente).
     Returns: 'ok' ou 'dup'
     """
     h = parsed['header']
     chave = h['chave_acesso']
 
     existing = execute_query(
-        "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s",
-        (chave,), fetch=True, fetch_one=True,
+        "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s AND tipo = %s",
+        (chave, tipo), fetch=True, fetch_one=True,
     )
     if existing:
         return 'dup'
@@ -3105,9 +3196,10 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     xml_raw_store = xml_raw[:_MAX_XML_SIZE] if xml_raw else ''
     cli = int(cliente_id) if cliente_id else None
     grp = int(grupo_id) if grupo_id else None
+    dest_uf = h.get('dest_uf', '') or ''
 
-    # Auto-detect empresa from dest_cnpj when not explicitly provided
-    if cli is None:
+    # Para entradas: auto-detecta empresa pelo dest_cnpj quando não fornecida explicitamente
+    if cli is None and tipo == 'entrada':
         dest_cnpj_raw = h.get('dest_cnpj', '')
         dest_digits = re.sub(r'\D', '', dest_cnpj_raw)
         if len(dest_digits) >= 11:
@@ -3120,16 +3212,16 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
 
     nfe_id = execute_query(
         """INSERT INTO nfe_importacoes
-               (cliente_id, grupo_id, nome_arquivo, chave_acesso, num_nota, serie,
+               (cliente_id, grupo_id, tipo, nome_arquivo, chave_acesso, num_nota, serie,
                 data_emissao, emit_cnpj, emit_nome, emit_uf,
-                dest_cnpj, dest_nome,
+                dest_cnpj, dest_nome, dest_uf,
                 valor_total, valor_icms, valor_pis, valor_cofins, valor_ipi,
                 cfop, natureza_operacao, xml_raw, origem)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (
-            cli, grp, nome_arquivo, chave, h['num_nota'], h['serie'],
+            cli, grp, tipo, nome_arquivo, chave, h['num_nota'], h['serie'],
             h['data_emissao'], h['emit_cnpj'], h['emit_nome'], h['emit_uf'],
-            h['dest_cnpj'], h['dest_nome'],
+            h['dest_cnpj'], h['dest_nome'], dest_uf,
             h['valor_total'], h['valor_icms'], h['valor_pis'],
             h['valor_cofins'], h['valor_ipi'],
             h['cfop'], h['natureza_operacao'], xml_raw_store, origem,
@@ -3138,16 +3230,14 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
 
     if nfe_id is None:
         # INSERT falhou — pode ser race condition: outro processo inseriu o mesmo
-        # chave_acesso entre o SELECT acima e este INSERT (violação UNIQUE).
-        # Verificamos se o registro já existe; se sim, retorna 'dup' para que o
-        # chamador mova o arquivo corretamente para IMPORTADOS.
+        # (chave_acesso, tipo) entre o SELECT acima e este INSERT (violação UNIQUE).
         already = execute_query(
-            "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s",
-            (chave,), fetch=True, fetch_one=True,
+            "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s AND tipo = %s",
+            (chave, tipo), fetch=True, fetch_one=True,
         )
         if already:
             return 'dup'
-        raise Exception(f"Falha ao salvar NF-e no banco (chave_acesso: {chave})")
+        raise Exception(f"Falha ao salvar NF-e no banco (chave_acesso: {chave}, tipo: {tipo})")
 
     # Pre-fetch all vinculos for this emit_cnpj in ONE query (avoids N×4 queries
     # per item, which caused gunicorn worker timeouts on large batches).
@@ -3205,6 +3295,32 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         )
 
     return 'ok'
+
+
+def _save_nfe_dual(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
+                   dest_cli=None, emit_cli=None,
+                   grupo_id=None, vinculos_cache=None) -> str:
+    """Salva NF-e como entrada (dest_cli) e/ou saída (emit_cli) quando aplicável.
+
+    Se dest_cli e emit_cli são None, levanta ValueError.
+    Returns: 'ok' se qualquer registro foi criado; 'dup' se todos já existiam.
+    """
+    results = []
+    if dest_cli is not None:
+        results.append(_save_nfe(
+            parsed, nome_arquivo, origem, xml_raw,
+            cliente_id=dest_cli, grupo_id=grupo_id,
+            tipo='entrada', vinculos_cache=vinculos_cache,
+        ))
+    if emit_cli is not None and emit_cli != dest_cli:
+        results.append(_save_nfe(
+            parsed, nome_arquivo, origem, xml_raw,
+            cliente_id=emit_cli, tipo='saida',
+            vinculos_cache=vinculos_cache,
+        ))
+    if not results:
+        raise ValueError('Nenhum cliente (dest/emit) associado a este XML')
+    return 'ok' if 'ok' in results else 'dup'
 
 
 def _get_ramo_cliente(cliente_id):
@@ -3371,5 +3487,318 @@ def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id) ->
         cod = r['codigo_produto_xml']
         if cod not in result:
             result[cod] = r['produto_catalogo_id']
+
+
+# ===========================================================================
+# Conferência de Saídas
+# ===========================================================================
+
+@escrita_fiscal.route('/conf-saidas/')
+@permission_required('escrita_fiscal.conf_saidas')
+def conf_saidas():
+    empresas = _get_empresas()
+    grupos = _get_grupos()
+    destinatarios = execute_query(
+        "SELECT DISTINCT dest_cnpj, dest_nome FROM nfe_importacoes "
+        "WHERE tipo='saida' ORDER BY dest_nome",
+        fetch=True,
+    ) or []
+    dropbox_ok = dropbox_sync.is_configured()
+    stats = {'total_notas': 0, 'total_valor': 0, 'total_icms': 0,
+             'total_pis': 0, 'total_cofins': 0}
+    return render_template(
+        'escrita_fiscal/conf_saidas.html',
+        stats=stats,
+        destinatarios=destinatarios,
+        empresas=empresas,
+        grupos=grupos,
+        dropbox_configured=dropbox_ok,
+        uf_list=_UF_LIST,
+        dropbox_folder=Config.DROPBOX_XML_FOLDER,
+    )
+
+
+@escrita_fiscal.route('/conf-saidas/api/notas')
+@login_required
+def api_notas_saidas():
+    f_cliente_id  = request.args.get('cliente_id', '').strip()
+    f_grupo_id    = request.args.get('grupo_id', '').strip()
+    f_dest_cnpj   = request.args.get('dest_cnpj', '').strip()
+    f_data_ini    = request.args.get('data_ini', '').strip()
+    f_data_fim    = request.args.get('data_fim', '').strip()
+    f_chave       = request.args.get('chave', '').strip()
+    f_num_nota    = request.args.get('num_nota', '').strip()
+    f_cfop        = request.args.get('cfop', '').strip()
+    f_dest_uf     = request.args.get('dest_uf', '').strip()
+    f_emit_cnpj   = request.args.get('emit_cnpj', '').strip()
+    f_vmin        = request.args.get('vmin', '').strip()
+    f_vmax        = request.args.get('vmax', '').strip()
+    f_origem      = request.args.get('origem', '').strip()
+    page          = max(1, int(request.args.get('page', 1)))
+    per_page      = 50
+
+    extra_clauses, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where = ["n.tipo = 'saida'"] + extra_clauses
+
+    if f_dest_cnpj:
+        where.append('n.dest_cnpj LIKE %s')
+        params.append(f'%{f_dest_cnpj}%')
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_nota:
+        where.append('n.num_nota = %s')
+        params.append(f_num_nota)
+    if f_cfop:
+        where.append('n.cfop LIKE %s')
+        params.append(f'{f_cfop}%')
+    if f_dest_uf:
+        where.append('n.dest_uf = %s')
+        params.append(f_dest_uf)
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj LIKE %s')
+        params.append(f'%{f_emit_cnpj}%')
+    if f_vmin:
+        where.append('n.valor_total >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_total <= %s')
+        params.append(float(f_vmax))
+    if f_origem:
+        where.append('n.origem = %s')
+        params.append(f_origem)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    offset = (page - 1) * per_page
+
+    all_rows = execute_query(
+        f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
+                   n.emit_cnpj, n.emit_nome, n.emit_uf,
+                   n.dest_cnpj, n.dest_nome, n.dest_uf,
+                   n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
+                   n.cfop, n.natureza_operacao, n.origem, n.nome_arquivo,
+                   n.importado_em, n.cliente_id, n.grupo_id,
+                   c.nome_razao_social AS empresa_nome,
+                   g.nome AS grupo_nome,
+                   COALESCE(ic.qtd_itens, 0) AS qtd_itens,
+                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados,
+                   COUNT(*) OVER() AS _total,
+                   COALESCE(SUM(n.valor_total) OVER(), 0) AS _kpi_valor,
+                   COALESCE(SUM(n.valor_icms)  OVER(), 0) AS _kpi_icms,
+                   COALESCE(SUM(n.valor_pis)   OVER(), 0) AS _kpi_pis,
+                   COALESCE(SUM(n.valor_cofins) OVER(), 0) AS _kpi_cofins
+              FROM nfe_importacoes n
+              LEFT JOIN clientes c ON c.id = n.cliente_id
+              LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
+              LEFT JOIN (
+                  SELECT nfe_id,
+                         COUNT(*) AS qtd_itens,
+                         COUNT(produto_catalogo_id) AS itens_vinculados
+                    FROM nfe_itens
+                   GROUP BY nfe_id
+              ) ic ON ic.nfe_id = n.id
+              {where_sql}
+             ORDER BY n.data_emissao DESC, n.id DESC
+             LIMIT %s OFFSET %s""",
+        tuple(params) + (per_page, offset),
+        fetch=True,
+    ) or []
+
+    first = all_rows[0] if all_rows else {}
+    total = int(first.get('_total') or 0)
+    kpi = {
+        'total_valor':  float(first.get('_kpi_valor') or 0),
+        'total_icms':   float(first.get('_kpi_icms')  or 0),
+        'total_pis':    float(first.get('_kpi_pis')   or 0),
+        'total_cofins': float(first.get('_kpi_cofins') or 0),
+    }
+    if not all_rows:
+        total = 0
+        kpi = {'total_valor': 0, 'total_icms': 0, 'total_pis': 0, 'total_cofins': 0}
+
+    _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
+    rows = []
+    for r in all_rows:
+        row = {k: v for k, v in r.items() if k not in _window_cols}
+        for k in ('data_emissao', 'importado_em'):
+            if row.get(k) and hasattr(row[k], 'isoformat'):
+                row[k] = row[k].isoformat()
+        for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):
+            row[k] = float(row.get(k) or 0)
+        rows.append(row)
+
+    return jsonify({'total': total, 'page': page, 'per_page': per_page, 'rows': rows, 'kpi': kpi})
+
+
+@escrita_fiscal.route('/conf-saidas/api/por-destinatario')
+@login_required
+def api_por_destinatario():
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id   = request.args.get('grupo_id', '').strip()
+    f_data_ini   = request.args.get('data_ini', '').strip()
+    f_data_fim   = request.args.get('data_fim', '').strip()
+
+    where = ["n.tipo = 'saida'"]
+    extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    rows = execute_query(
+        f"""SELECT n.dest_cnpj, n.dest_nome, n.dest_uf,
+                   COUNT(*) AS qtd_notas,
+                   SUM(n.valor_total)  AS total_valor,
+                   SUM(n.valor_icms)   AS total_icms,
+                   SUM(n.valor_pis)    AS total_pis,
+                   SUM(n.valor_cofins) AS total_cofins
+              FROM nfe_importacoes n {where_sql}
+             GROUP BY n.dest_cnpj, n.dest_nome, n.dest_uf
+             ORDER BY total_valor DESC""",
+        tuple(params), fetch=True,
+    ) or []
+
+    for r in rows:
+        for k in ('total_valor', 'total_icms', 'total_pis', 'total_cofins'):
+            r[k] = float(r.get(k) or 0)
+
+    return jsonify(rows)
+
+
+@escrita_fiscal.route('/conf-saidas/api/por-produto')
+@login_required
+def api_por_produto_saidas():
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id   = request.args.get('grupo_id', '').strip()
+    f_data_ini   = request.args.get('data_ini', '').strip()
+    f_data_fim   = request.args.get('data_fim', '').strip()
+    f_dest_cnpj  = request.args.get('dest_cnpj', '').strip()
+    f_ncm        = request.args.get('ncm', '').strip()
+    f_descricao  = request.args.get('descricao', '').strip()
+
+    where = ["n.tipo = 'saida'"]
+    extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_dest_cnpj:
+        where.append('n.dest_cnpj LIKE %s')
+        params.append(f'%{f_dest_cnpj}%')
+    if f_ncm:
+        where.append('i.ncm LIKE %s')
+        params.append(f'{f_ncm}%')
+    if f_descricao:
+        where.append('i.descricao LIKE %s')
+        params.append(f'%{f_descricao}%')
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    rows = execute_query(
+        f"""SELECT i.codigo_produto, i.descricao, i.ncm, i.cfop, i.unidade,
+                   i.produto_catalogo_id,
+                   p.nome AS produto_catalogo_nome, p.categoria AS produto_categoria,
+                   COUNT(DISTINCT n.id) AS qtd_notas,
+                   SUM(i.quantidade)   AS total_qtd,
+                   SUM(i.valor_total)  AS total_valor,
+                   SUM(i.valor_icms)   AS total_icms,
+                   SUM(i.valor_pis)    AS total_pis,
+                   SUM(i.valor_cofins) AS total_cofins
+              FROM nfe_itens i
+              JOIN nfe_importacoes n ON n.id = i.nfe_id
+              LEFT JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
+              {where_sql}
+             GROUP BY i.codigo_produto, i.descricao, i.ncm, i.cfop, i.unidade,
+                      i.produto_catalogo_id, p.nome, p.categoria
+             ORDER BY total_valor DESC
+             LIMIT 500""",
+        tuple(params), fetch=True,
+    ) or []
+
+    for r in rows:
+        for k in ('total_qtd', 'total_valor', 'total_icms', 'total_pis', 'total_cofins'):
+            r[k] = float(r.get(k) or 0)
+
+    return jsonify(rows)
+
+
+@escrita_fiscal.route('/conf-saidas/excluir-lote', methods=['POST'])
+@login_required
+def excluir_lote_saidas():
+    data = request.get_json(silent=True) or {}
+    f_cliente_id = str(data.get('cliente_id', '')).strip()
+    f_grupo_id   = str(data.get('grupo_id', '')).strip()
+    f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
+    f_data_ini   = str(data.get('data_ini', '')).strip()
+    f_data_fim   = str(data.get('data_fim', '')).strip()
+    f_chave      = str(data.get('chave', '')).strip()
+    f_num_nota   = str(data.get('num_nota', '')).strip()
+    f_cfop       = str(data.get('cfop', '')).strip()
+    f_dest_uf    = str(data.get('dest_uf', '')).strip()
+    f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
+    f_vmin       = str(data.get('vmin', '')).strip()
+    f_vmax       = str(data.get('vmax', '')).strip()
+    f_origem     = str(data.get('origem', '')).strip()
+
+    where = ["n.tipo = 'saida'"]
+    extra_clauses, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra_clauses)
+
+    if f_dest_cnpj:
+        where.append('n.dest_cnpj LIKE %s')
+        params.append(f'%{f_dest_cnpj}%')
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_nota:
+        where.append('n.num_nota = %s')
+        params.append(f_num_nota)
+    if f_cfop:
+        where.append('n.cfop LIKE %s')
+        params.append(f'{f_cfop}%')
+    if f_dest_uf:
+        where.append('n.dest_uf = %s')
+        params.append(f_dest_uf)
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj LIKE %s')
+        params.append(f'%{f_emit_cnpj}%')
+    if f_vmin:
+        where.append('n.valor_total >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_total <= %s')
+        params.append(float(f_vmax))
+    if f_origem:
+        where.append('n.origem = %s')
+        params.append(f_origem)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    count_row = execute_query(
+        f"SELECT COUNT(*) AS total FROM nfe_importacoes n {where_sql}",
+        params, fetch=True, fetch_one=True,
+    ) or {}
+    total = int(count_row.get('total', 0))
+    execute_query(f"DELETE n FROM nfe_importacoes n {where_sql}", params)
+    return jsonify({'ok': True, 'deleted': total})
 
     return result

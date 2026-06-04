@@ -274,6 +274,42 @@ def run_migrations():
         if _exists.get('cnt', 0) == 0:
             execute_query(f"ALTER TABLE nfe_importacoes ADD COLUMN {_col} {_defn}", fetch=False)
 
+    # Incremental: tipo e dest_uf em nfe_importacoes (Conferência de Saídas)
+    for _col, _defn in [
+        ('tipo',    "ENUM('entrada','saida') NOT NULL DEFAULT 'entrada'"),
+        ('dest_uf', 'VARCHAR(2) NULL'),
+    ]:
+        try:
+            _exists = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' AND COLUMN_NAME = %s",
+                (_col,), fetch=True, fetch_one=True,
+            ) or {}
+            if _exists.get('cnt', 0) == 0:
+                execute_query(f"ALTER TABLE nfe_importacoes ADD COLUMN {_col} {_defn}", fetch=False)
+        except Exception:
+            pass
+
+    # Incremental: troca UNIQUE (chave_acesso) → (chave_acesso, tipo)
+    try:
+        _new_uk = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' "
+            "AND INDEX_NAME = 'uk_chave_tipo'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if _new_uk.get('cnt', 0) == 0:
+            try:
+                execute_query("ALTER TABLE nfe_importacoes DROP INDEX chave_acesso", fetch=False)
+            except Exception:
+                pass
+            execute_query(
+                "ALTER TABLE nfe_importacoes ADD UNIQUE KEY uk_chave_tipo (chave_acesso, tipo)",
+                fetch=False,
+            )
+    except Exception:
+        pass
+
     execute_query("""
         CREATE TABLE IF NOT EXISTS nfe_itens (
             id INT AUTO_INCREMENT PRIMARY KEY,

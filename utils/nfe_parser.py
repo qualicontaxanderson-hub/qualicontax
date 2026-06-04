@@ -108,6 +108,11 @@ def parse_nfe_xml(xml_content: str) -> dict:
     if dest is not None:
         dest_cnpj = _text(dest, 'CNPJ') or _text(dest, 'CPF')
     dest_nome = _text(dest, 'xNome') if dest is not None else ''
+    dest_uf = ''
+    if dest is not None:
+        ender_dest = _find(dest, 'enderDest')
+        if ender_dest is not None:
+            dest_uf = _text(ender_dest, 'UF')
 
     # ---- TOTAL ----
     total = _find(infNFe, 'total')
@@ -168,6 +173,7 @@ def parse_nfe_xml(xml_content: str) -> dict:
         'emit_uf': emit_uf,
         'dest_cnpj': dest_cnpj,
         'dest_nome': dest_nome,
+        'dest_uf': dest_uf,
         'valor_total': vNF,
         'valor_icms': vICMS,
         'valor_pis': vPIS,
