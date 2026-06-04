@@ -21,7 +21,7 @@ _lock = threading.Lock()
 _JOB_TTL = 3600  # segundos — jobs finalizados são removidos após 1 hora
 
 
-def create_job() -> tuple[str, dict]:
+def create_job(user_id: int | None = None) -> tuple[str, dict]:
     """Cria um job novo, registra no store e retorna (job_id, state dict)."""
     job_id = uuid.uuid4().hex[:16]
     state: dict = {
@@ -38,11 +38,21 @@ def create_job() -> tuple[str, dict]:
         'details': [],
         'stop_requested': False,
         'created_at': time.time(),
+        'user_id': user_id,
     }
     with _lock:
         _jobs[job_id] = state
         _cleanup_old_jobs()
     return job_id, state
+
+
+def get_active_job_for_user(user_id: int) -> str | None:
+    """Retorna o job_id de um job em andamento para o usuário, ou None."""
+    with _lock:
+        for job_id, job in _jobs.items():
+            if job['status'] == 'running' and job.get('user_id') == user_id:
+                return job_id
+    return None
 
 
 def get_job(job_id: str) -> dict | None:

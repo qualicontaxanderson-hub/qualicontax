@@ -6,6 +6,13 @@ from config import Config
 from models.usuario import Usuario
 import os
 
+_INSECURE_KEY = 'dev-secret-key-change-in-production'
+if Config.FLASK_ENV == 'production' and Config.SECRET_KEY == _INSECURE_KEY:
+    raise RuntimeError(
+        'SECRET_KEY não configurada. '
+        'Defina a variável de ambiente SECRET_KEY no Railway antes de iniciar em produção.'
+    )
+
 # Inicializa Flask app
 app = Flask(__name__)
 app.config.from_object(Config)

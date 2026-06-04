@@ -1803,6 +1803,10 @@ def api_importar_dropbox_start():
     if not dropbox_sync.is_configured():
         return jsonify({'error': 'Dropbox não configurado. Defina DROPBOX_APP_KEY e DROPBOX_REFRESH_TOKEN.'}), 400
 
+    active = import_jobs.get_active_job_for_user(current_user.id)
+    if active:
+        return jsonify({'error': 'Você já possui uma importação em andamento.', 'job_id': active}), 429
+
     data = request.get_json(force=True) or {}
     departamento = data.get('departamento', '').strip()
     cliente_id = data.get('cliente_id') or None
@@ -1837,7 +1841,7 @@ def api_importar_dropbox_start():
         if not filter_cnpjs:
             filter_cnpjs = None
 
-    job_id, job = import_jobs.create_job()
+    job_id, job = import_jobs.create_job(user_id=current_user.id)
     t = threading.Thread(
         target=_run_import_job,
         args=(job, departamento, filter_cnpjs, grupo_id_val),

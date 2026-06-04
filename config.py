@@ -17,7 +17,7 @@ class Config:
     DB_NAME = os.getenv('DB_NAME', 'railway')
     DB_USER = os.getenv('DB_USER', 'root')
     DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-    DB_POOL_SIZE = max(1, min(32, int(os.getenv('DB_POOL_SIZE', 20))))
+    DB_POOL_SIZE = max(1, int(os.getenv('DB_POOL_SIZE', 50)))
     DB_CONNECT_TIMEOUT = max(1, int(os.getenv('DB_CONNECT_TIMEOUT', 3)))
     
     # SQLAlchemy
