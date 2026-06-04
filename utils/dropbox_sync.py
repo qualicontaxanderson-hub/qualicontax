@@ -149,76 +149,85 @@ class DropboxService:
     def list_folder(self, path: str, recursive: bool = False) -> list:
         """Lista itens de uma pasta (arquivos e sub-pastas).
 
+        Tenta automaticamente uma segunda vez se o access token estiver expirado,
+        forçando renovação silenciosa via refresh token.
+
         Raises:
-            DropboxAuthError: credenciais inválidas/expiradas.
+            DropboxAuthError: credenciais definitivamente inválidas (falhou após retry).
             DropboxError: qualquer outro erro (rede, API, token não configurado).
         """
-        dbx = self._client()
-        if not dbx:
-            raise DropboxError(
-                'Cliente Dropbox não disponível. '
-                'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
-            )
-        entries = []
-        try:
-            import dropbox as dropbox_sdk
-            logger.info('Dropbox list_folder: path=%r recursive=%s', path, recursive)
-            result = dbx.files_list_folder(path, recursive=recursive)
-            while True:
-                for entry in result.entries:
-                    entries.append({
-                        'name': entry.name,
-                        'path': entry.path_lower,
-                        'size': getattr(entry, 'size', 0),
-                        'modified': str(getattr(entry, 'server_modified', '')),
-                        'is_file': isinstance(entry, dropbox_sdk.files.FileMetadata),
-                    })
-                if not result.has_more:
-                    break
-                result = dbx.files_list_folder_continue(result.cursor)
-            logger.info('Dropbox list_folder(%r, recursive=%s): %d item(s) encontrado(s): %s',
-                        path, recursive, len(entries), [e['name'] for e in entries])
-        except (DropboxAuthError, DropboxError):
-            raise
-        except Exception as exc:
-            logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
-            if self._is_auth_error(exc):
-                self._dbx = None  # Limpa cache para tentar renovar token na próxima chamada
-                raise DropboxAuthError(
-                    'Credenciais Dropbox inválidas ou expiradas. '
-                    'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
-                ) from exc
-            raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
-        return entries
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                raise DropboxError(
+                    'Cliente Dropbox não disponível. '
+                    'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+                )
+            entries = []
+            try:
+                import dropbox as dropbox_sdk
+                logger.info('Dropbox list_folder: path=%r recursive=%s', path, recursive)
+                result = dbx.files_list_folder(path, recursive=recursive)
+                while True:
+                    for entry in result.entries:
+                        entries.append({
+                            'name': entry.name,
+                            'path': entry.path_lower,
+                            'size': getattr(entry, 'size', 0),
+                            'modified': str(getattr(entry, 'server_modified', '')),
+                            'is_file': isinstance(entry, dropbox_sdk.files.FileMetadata),
+                        })
+                    if not result.has_more:
+                        break
+                    result = dbx.files_list_folder_continue(result.cursor)
+                logger.info('Dropbox list_folder(%r, recursive=%s): %d item(s) encontrado(s): %s',
+                            path, recursive, len(entries), [e['name'] for e in entries])
+                return entries
+            except (DropboxAuthError, DropboxError):
+                raise
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox list_folder: token expirado, renovando silenciosamente...')
+                        continue
+                    logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
+                    raise DropboxAuthError(
+                        'Credenciais Dropbox inválidas ou expiradas. '
+                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                    ) from exc
+                logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
+                raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
 
     def _path_exists(self, path: str) -> bool:
         """Retorna True se o caminho existe no Dropbox."""
-        dbx = self._client()
-        if not dbx:
-            raise DropboxError(
-                'Cliente Dropbox não disponível. '
-                'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
-            )
-        try:
-            dbx.files_get_metadata(path)
-            return True
-        except Exception as exc:
-            if self._is_auth_error(exc):
-                self._dbx = None
-                raise DropboxAuthError(
-                    'Credenciais Dropbox inválidas ou expiradas. '
-                    'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
-                ) from exc
-
-            if 'not_found' in str(exc):
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                raise DropboxError(
+                    'Cliente Dropbox não disponível. '
+                    'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+                )
+            try:
+                dbx.files_get_metadata(path)
+                return True
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox _path_exists: token expirado, renovando silenciosamente...')
+                        continue
+                    raise DropboxAuthError(
+                        'Credenciais Dropbox inválidas ou expiradas. '
+                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                    ) from exc
+                if 'not_found' in str(exc):
+                    return False
+                logger.warning(
+                    'Dropbox _path_exists(%r): erro inesperado ao consultar metadata: %s',
+                    path, exc, exc_info=True,
+                )
                 return False
-            logger.warning(
-                'Dropbox _path_exists(%r): erro inesperado ao consultar metadata: %s',
-                path,
-                exc,
-                exc_info=True,
-            )
-            return False
 
     def list_xml_files(self, path: str) -> list:
         """Lista arquivos .xml/.htm/.html e arquivos cujo nome começa com a chave NF-e (≥44 dígitos).
@@ -246,55 +255,63 @@ class DropboxService:
 
     def download_file(self, path: str):
         """Baixa um arquivo e retorna seu conteúdo como bytes, ou None em caso de erro."""
-        dbx = self._client()
-        if not dbx:
-            return None
-        try:
-            _, response = dbx.files_download(path)
-            return response.content
-        except Exception as exc:
-            logger.error('Erro ao baixar Dropbox %s: %s', path, exc)
-            if self._is_auth_error(exc):
-                self._dbx = None
-                raise DropboxAuthError(
-                    'Credenciais Dropbox inválidas ou expiradas.'
-                ) from exc
-            return None
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return None
+            try:
+                _, response = dbx.files_download(path)
+                return response.content
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox download_file: token expirado, renovando silenciosamente...')
+                        continue
+                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                logger.error('Erro ao baixar Dropbox %s: %s', path, exc)
+                return None
 
     def ensure_folder(self, path: str) -> None:
         """Cria a pasta se não existir; ignora conflito de pasta já existente."""
-        dbx = self._client()
-        if not dbx:
-            return
-        try:
-            dbx.files_create_folder_v2(path)
-            logger.info('Pasta criada no Dropbox: %s', path)
-        except Exception as exc:
-            if self._is_auth_error(exc):
-                self._dbx = None
-                raise DropboxAuthError(
-                    'Credenciais Dropbox inválidas ou expiradas.'
-                ) from exc
-            if 'conflict' not in str(exc):
-                logger.warning('Falha ao criar pasta %s: %s', path, exc)
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return
+            try:
+                dbx.files_create_folder_v2(path)
+                logger.info('Pasta criada no Dropbox: %s', path)
+                return
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox ensure_folder: token expirado, renovando silenciosamente...')
+                        continue
+                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                if 'conflict' not in str(exc):
+                    logger.warning('Falha ao criar pasta %s: %s', path, exc)
+                return
 
     def move_file(self, from_path: str, to_path: str) -> bool:
         """Move um arquivo de from_path para to_path (autorename se já existir)."""
-        dbx = self._client()
-        if not dbx:
-            return False
-        try:
-            dbx.files_move_v2(from_path, to_path, autorename=True)
-            logger.info('Arquivo movido: %s → %s', from_path, to_path)
-            return True
-        except Exception as exc:
-            logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
-            if self._is_auth_error(exc):
-                self._dbx = None
-                raise DropboxAuthError(
-                    'Credenciais Dropbox inválidas ou expiradas.'
-                ) from exc
-            return False
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return False
+            try:
+                dbx.files_move_v2(from_path, to_path, autorename=True)
+                logger.info('Arquivo movido: %s → %s', from_path, to_path)
+                return True
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox move_file: token expirado, renovando silenciosamente...')
+                        continue
+                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
+                return False
 
     # ------------------------------------------------------------------
     # Helpers de caminho por departamento
