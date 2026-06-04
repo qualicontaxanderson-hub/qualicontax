@@ -2267,11 +2267,14 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None', departamentos:
 @escrita_fiscal.route('/conf-compras/api/executar-importacao-agendada', methods=['POST'])
 @login_required
 def api_executar_importacao_agendada():
-    """Dispara imediatamente a importação do departamento informado em background thread.
+    """Dispara imediatamente a importação de um ou todos os departamentos em background thread.
 
-    Restrito a usuários administradores.  Retorna imediatamente um ``job_id``
-    que pode ser consultado via GET /api/executar-importacao-agendada/status/<job_id>
-    para acompanhar o progresso e obter o sumário final.
+    Restrito a usuários administradores.  Aceita ``departamento`` no body JSON:
+    - Vazio ou ``"todos"`` → importa todos os departamentos (admin only).
+    - Nome de departamento válido → importa somente ele.
+
+    Retorna imediatamente um ``job_id`` consultável via
+    GET /api/executar-importacao-agendada/status/<job_id>.
     """
     usuario = current_user
     if not usuario.is_authenticated or not usuario.is_admin():
@@ -2281,10 +2284,14 @@ def api_executar_importacao_agendada():
         return jsonify({'error': 'Dropbox não configurado.'}), 400
 
     data = request.get_json(force=True) or {}
-    departamento = data.get('departamento', '').strip()
-    if not departamento or departamento not in dropbox_sync.DEPARTAMENTOS:
-        return jsonify({'error': 'Departamento inválido. Envie o campo "departamento" no body.'}), 400
-    departamento = dropbox_sync.normalize_departamento(departamento)
+    departamento = (data.get('departamento') or '').strip()
+
+    if not departamento or departamento.lower() == 'todos':
+        departamentos = list(dropbox_sync.DEPARTAMENTOS_CANONICOS)
+    else:
+        if departamento not in dropbox_sync.DEPARTAMENTOS:
+            return jsonify({'error': f'Departamento inválido: {departamento!r}.'}), 400
+        departamentos = [dropbox_sync.normalize_departamento(departamento)]
 
     usuario_id = getattr(usuario, 'id', None)
 
@@ -2293,11 +2300,11 @@ def api_executar_importacao_agendada():
     job['erros'] = []
     job['current_dep'] = None
     job['completed_deps'] = 0
-    job['total_deps'] = 1
+    job['total_deps'] = len(departamentos)
 
     t = threading.Thread(
         target=_run_all_departments_job,
-        args=(job, usuario_id, [departamento]),
+        args=(job, usuario_id, departamentos),
         daemon=True,
         name=f'import-all-{job_id}',
     )
