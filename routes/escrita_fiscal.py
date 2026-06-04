@@ -4,6 +4,7 @@ import re
 import threading
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import (
@@ -39,6 +40,9 @@ _MAX_IMPORT_ITERATIONS = 1000
 
 # Máximo de mensagens de erro de detalhe armazenadas por job de importação.
 _MAX_ERROR_DETAILS = 50
+
+# Workers para download e move paralelos do Dropbox.
+_DOWNLOAD_WORKERS = 10
 
 # Timeout do worker Gunicorn (segundos). Margem reservada para serialização
 # e envio da resposta HTTP antes de o worker ser encerrado pelo gunicorn.
@@ -1444,6 +1448,76 @@ def api_importar_dropbox():
 # Importação assíncrona — background thread (não bloqueia workers gunicorn)
 # ---------------------------------------------------------------------------
 
+def _download_batch_parallel(svc, files: list) -> 'dict | None':
+    """Baixa arquivos do Dropbox em paralelo com ThreadPoolExecutor.
+
+    Retorna {path: bytes|None} para cada arquivo do lote.
+    Retorna None se qualquer download levantar DropboxAuthError.
+    """
+    results: dict = {}
+
+    def _fetch(file_info: dict):
+        return file_info['path'], svc.download_file(file_info['path'])
+
+    with ThreadPoolExecutor(max_workers=_DOWNLOAD_WORKERS) as executor:
+        future_to_file = {executor.submit(_fetch, f): f for f in files}
+        for future in as_completed(future_to_file):
+            try:
+                path, content = future.result()
+                results[path] = content
+            except DropboxAuthError:
+                for pending in future_to_file:
+                    pending.cancel()
+                return None
+            except Exception as exc:
+                file_info = future_to_file[future]
+                logger.warning('[import_job] Download falhou %r: %s', file_info.get('path'), exc)
+                results[file_info['path']] = None
+    return results
+
+
+def _execute_moves_parallel(
+    svc, pending_moves: list
+) -> 'tuple[int, int, list]':
+    """Executa moves do Dropbox em paralelo com ThreadPoolExecutor.
+
+    pending_moves: lista de (from_path, to_path, move_type, file_name)
+    move_type é 'ok' (→ IMPORTADOS) ou 'err' (→ ERROS).
+
+    Retorna (moved_ok, moved_err, error_details).
+    """
+    if not pending_moves:
+        return 0, 0, []
+
+    moved_ok = moved_err = 0
+    error_details: list = []
+
+    def _move(args: tuple):
+        from_path, to_path, move_type, file_name = args
+        try:
+            success = svc.move_file(from_path, to_path)
+            return move_type, success, file_name
+        except DropboxAuthError:
+            logger.warning('[import_job] Auth ao mover %s', file_name)
+            return move_type, False, file_name
+        except Exception as exc:
+            logger.warning('[import_job] Erro ao mover %s: %s', file_name, exc)
+            return move_type, False, file_name
+
+    with ThreadPoolExecutor(max_workers=_DOWNLOAD_WORKERS) as executor:
+        for move_type, success, file_name in executor.map(_move, pending_moves, timeout=120):
+            if success:
+                if move_type == 'ok':
+                    moved_ok += 1
+                else:
+                    moved_err += 1
+            else:
+                dest = 'IMPORTADOS' if move_type == 'ok' else 'ERROS'
+                error_details.append(f"{file_name}: falha ao mover para {dest} no Dropbox")
+
+    return moved_ok, moved_err, error_details
+
+
 def _run_import_job(job: dict, departamento: str,
                     filter_cnpjs: 'set | None', grupo_id_val: 'int | None') -> None:
     """Executa importação Dropbox completa em background thread.
@@ -1557,24 +1631,27 @@ def _run_import_job(job: dict, departamento: str,
                 ((batch[-1].get('name') or '').lower(), batch[-1].get('path') or '')
                 if batch else None
             )
-            batch_moved = 0
             batch_skipped = 0
             batch_unregistered_this = 0
             batch_processed = 0
             now = datetime.now()
+            # Moves acumulados durante o processamento — executados em paralelo no final.
+            pending_moves: list[tuple[str, str, str, str]] = []  # (from, to, type, name)
 
+            # ── Phase 1: downloads em paralelo ────────────────────────────
+            downloaded = _download_batch_parallel(svc, batch)
+            if downloaded is None:
+                job['status'] = 'error'
+                job['msg'] = _DROPBOX_AUTH_ERROR_MSG
+                _snapshot()
+                return
+
+            # ── Phase 2: parse + DB (serial — mantém integridade transacional) ──
             for info in batch:
                 if job.get('stop_requested'):
                     break
 
-                try:
-                    raw = svc.download_file(info['path'])
-                except DropboxAuthError:
-                    job['status'] = 'error'
-                    job['msg'] = _DROPBOX_AUTH_ERROR_MSG
-                    _snapshot()
-                    return
-
+                raw = downloaded.get(info['path'])
                 if raw is None:
                     err += 1
                     details.append(f"{info['name']}: falha ao baixar do Dropbox")
@@ -1667,13 +1744,10 @@ def _run_import_job(job: dict, departamento: str,
                             pasta_err_ev = _get_or_create_pasta(
                                 svc.pasta_erros(departamento, _ev_nome, _ev_dt,
                                                 empresa_numero=_ev_num))
-                            if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
-                                moved_err += 1
-                                batch_moved += 1
-                            else:
-                                details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
+                            pending_moves.append((
+                                info['path'], f"{pasta_err_ev}/{info['name']}", 'err', info['name']))
                         except DropboxAuthError:
-                            logger.warning('[import_job] Auth ao mover evento %s', info['name'])
+                            logger.warning('[import_job] Auth ao criar pasta para evento %s', info['name'])
                         batch_processed += 1
                     else:
                         batch_processed += 1
@@ -1728,13 +1802,10 @@ def _run_import_job(job: dict, departamento: str,
                     try:
                         pasta_imp = _get_or_create_pasta(
                             svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
-                        if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
-                            moved_ok += 1
-                            batch_moved += 1
-                        else:
-                            details.append(f"{info['name']}: falha ao mover para IMPORTADOS no Dropbox")
+                        pending_moves.append((
+                            info['path'], f"{pasta_imp}/{info['name']}", 'ok', info['name']))
                     except DropboxAuthError:
-                        logger.warning('[import_job] Auth ao mover %s para importados', info['name'])
+                        logger.warning('[import_job] Auth ao criar pasta para %s', info['name'])
                     batch_processed += 1
 
                 except DropboxAuthError:
@@ -1752,18 +1823,20 @@ def _run_import_job(job: dict, departamento: str,
                         pasta_err = _get_or_create_pasta(
                             svc.pasta_erros(departamento, _err_empresa, _dt,
                                             empresa_numero=_err_num))
-                        if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
-                            moved_err += 1
-                            batch_moved += 1
-                        else:
-                            details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
+                        pending_moves.append((
+                            info['path'], f"{pasta_err}/{info['name']}", 'err', info['name']))
                     except DropboxAuthError:
-                        logger.warning('[import_job] Auth ao mover %s para erros', info['name'])
+                        logger.warning('[import_job] Auth ao criar pasta de erros para %s', info['name'])
                     batch_processed += 1
 
+            # ── Phase 3: moves em paralelo ────────────────────────────────
+            if pending_moves:
+                m_ok, m_err, m_details = _execute_moves_parallel(svc, pending_moves)
+                moved_ok += m_ok
+                moved_err += m_err
+                details.extend(m_details)
+
             # Atualiza cursor com o último arquivo analisado neste lote.
-            # Usado em todas as execuções (com ou sem filtro) para garantir que
-            # arquivos de empresas não cadastradas não bloqueiem iterações futuras.
             if last_scanned_this_key:
                 last_scanned_key = last_scanned_this_key
 
@@ -1772,11 +1845,6 @@ def _run_import_job(job: dict, departamento: str,
             if not has_more:
                 break
 
-            # Guarda-chuva anti-loop: pára apenas quando não houve nenhum
-            # progresso real — nem arquivos movidos, nem saltados por filtro, nem
-            # empresas não cadastradas analisadas.  O cursor já garante que os
-            # mesmos arquivos não serão re-processados nesta execução; só paramos
-            # aqui quando todos os arquivos do lote falharam no download/parse.
             if batch_processed == 0:
                 break
 
