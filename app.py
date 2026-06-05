@@ -1,10 +1,15 @@
 """Aplicação principal Flask - Qualicontax"""
-from flask import Flask, render_template
+import os
+import time
+import logging
+from flask import Flask, render_template, jsonify
 from flask_login import LoginManager
 from flask_compress import Compress
 from config import Config
 from models.usuario import Usuario
-import os
+
+_startup_time = time.time()
+logger = logging.getLogger(__name__)
 
 _INSECURE_KEY = 'dev-secret-key-change-in-production'
 if Config.FLASK_ENV == 'production' and Config.SECRET_KEY == _INSECURE_KEY:
@@ -88,6 +93,28 @@ app.jinja_env.filters['format_date'] = format_date
 # Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens
 if not Config.DEBUG:
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 365 * 24 * 60 * 60  # 1 ano em segundos
+
+
+# ---------------------------------------------------------------------------
+# Health check — sem autenticação, usado pelo Railway para zero-downtime deploy.
+# Verifica conectividade com o banco antes de sinalizar "pronto".
+# ---------------------------------------------------------------------------
+@app.route('/health')
+def health():
+    from utils.db_helper import execute_query
+    try:
+        execute_query("SELECT 1", fetch=True)
+        db_ok = True
+        db_msg = 'ok'
+    except Exception as exc:
+        db_ok = False
+        db_msg = str(exc)[:120]
+        logger.warning('Health check: DB indisponível — %s', db_msg)
+
+    uptime = round(time.time() - _startup_time, 1)
+    status = 'ok' if db_ok else 'degraded'
+    code   = 200  if db_ok else 503
+    return jsonify({'status': status, 'db': db_msg, 'uptime_s': uptime}), code
 
 
 # Error handlers

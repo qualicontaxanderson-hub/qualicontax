@@ -1,0 +1,14 @@
+[deploy]
+# Caminho do health check — Railway aguarda HTTP 200 nesse endpoint antes de
+# encaminhar tráfego para o novo container. Isso garante zero downtime:
+# o container antigo só é encerrado depois que o novo estiver saudável.
+healthcheckPath = "/health"
+
+# Tempo máximo (segundos) que Railway aguarda o health check passar.
+# Inclui: boot do Gunicorn + fork de workers + migrations + scheduler init.
+# 300 s = 5 minutos; generoso para evitar que deploys lentos falhem.
+healthcheckTimeout = 300
+
+# Reinicia automaticamente apenas em falha, não em encerramento normal.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
