@@ -100,7 +100,7 @@ class DropboxService:
                     oauth2_refresh_token=refresh_token,
                     app_key=app_key,
                     app_secret=app_secret,
-                    timeout=30,
+                    timeout=60,
                 )
                 return self._dbx
         except Exception as exc:
@@ -254,23 +254,47 @@ class DropboxService:
         return xml_files
 
     def download_file(self, path: str):
-        """Baixa um arquivo e retorna seu conteúdo como bytes, ou None em caso de erro."""
-        for _attempt in range(2):
-            dbx = self._client()
-            if not dbx:
-                return None
-            try:
-                _, response = dbx.files_download(path)
-                return response.content
-            except Exception as exc:
-                if self._is_auth_error(exc):
-                    self._dbx = None
-                    if _attempt == 0:
-                        logger.info('Dropbox download_file: token expirado, renovando silenciosamente...')
-                        continue
-                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
-                logger.error('Erro ao baixar Dropbox %s: %s', path, exc)
-                return None
+        """Baixa um arquivo e retorna seu conteúdo como bytes, ou None em caso de erro.
+
+        Retry automático (até 3 tentativas, espera 2 s entre elas) para erros
+        transientes de rede: timeout e conexão abortada.
+        """
+        import time
+
+        _RETRYABLE = ('timed out', 'timeout', 'remoteconnection', 'connection aborted',
+                      'connection reset', 'broken pipe', 'eof occurred')
+
+        def _is_retryable(exc: Exception) -> bool:
+            return any(k in str(exc).lower() for k in _RETRYABLE)
+
+        _MAX_NETWORK_TRIES = 3
+        _RETRY_WAIT = 2  # segundos entre tentativas
+
+        for _net_try in range(_MAX_NETWORK_TRIES):
+            for _auth_try in range(2):
+                dbx = self._client()
+                if not dbx:
+                    return None
+                try:
+                    _, response = dbx.files_download(path)
+                    return response.content
+                except Exception as exc:
+                    if self._is_auth_error(exc):
+                        self._dbx = None
+                        if _auth_try == 0:
+                            logger.info('Dropbox download_file: token expirado, renovando silenciosamente...')
+                            continue
+                        raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                    # Erro de rede transiente → retry no loop externo
+                    if _is_retryable(exc) and _net_try < _MAX_NETWORK_TRIES - 1:
+                        logger.warning('Dropbox download_file: erro transiente (tentativa %d/%d): %s',
+                                       _net_try + 1, _MAX_NETWORK_TRIES, exc)
+                        time.sleep(_RETRY_WAIT)
+                        break  # sai do loop de auth e tenta novamente
+                    logger.error('Erro ao baixar Dropbox %s (tentativa %d/%d): %s',
+                                 path, _net_try + 1, _MAX_NETWORK_TRIES, exc)
+                    return None
+        return None
 
     def ensure_folder(self, path: str) -> None:
         """Cria a pasta se não existir; ignora conflito de pasta já existente."""

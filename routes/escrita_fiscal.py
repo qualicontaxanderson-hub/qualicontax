@@ -42,7 +42,7 @@ _MAX_IMPORT_ITERATIONS = 1000
 _MAX_ERROR_DETAILS = 50
 
 # Workers para download e move paralelos do Dropbox.
-_DOWNLOAD_WORKERS = 10
+_DOWNLOAD_WORKERS = 5
 
 # Timeout do worker Gunicorn (segundos). Margem reservada para serialização
 # e envio da resposta HTTP antes de o worker ser encerrado pelo gunicorn.
