@@ -51,12 +51,32 @@ _GUNICORN_RESPONSE_MARGIN = 60
 
 # Namespace NF-e (usado para detecção de XMLs de evento)
 _NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
-# Tags raiz de XMLs de evento NF-e: carta de correção, cancelamento, etc.
-# Esses arquivos não são NF-e padrão e não devem ser importados como notas.
+# Tags raiz de XMLs de evento NF-e (carta de correção, cancelamento, manifestação…)
 _NFE_EVENT_ROOT_TAGS = frozenset({
     'procEventoNFe', 'envEvento', 'retEnvEvento',
     'resNFe', 'retCancNFe', 'procCancNFe',
 })
+
+# Tags raiz de CT-e — não são NF-e, devem ficar em NOVO para processamento futuro.
+_CTE_ROOT_TAGS = frozenset({
+    'cteProc', 'procCTe', 'CTe', 'retCTe', 'CTeOS', 'cteOSProc',
+})
+
+# Códigos tpEvento por categoria
+_TPEVENTO_CANCELAMENTO = frozenset({'110111', '111111', '110113', '110112'})
+_TPEVENTO_CCE          = frozenset({'110110'})
+_TPEVENTO_MANIFESTACAO = frozenset({'210200', '210210', '210220', '210240'})
+_TPEVENTO_DESCR: dict = {
+    '110111': 'Cancelamento',
+    '111111': 'Cancelamento por Substituição',
+    '110113': 'Cancelamento por Substituição',
+    '110112': 'Encerramento',
+    '110110': 'Carta de Correção (CC-e)',
+    '210200': 'Confirmação da Operação',
+    '210210': 'Ciência da Operação',
+    '210220': 'Desconhecimento da Operação',
+    '210240': 'Operação não Realizada',
+}
 
 _UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
             'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
@@ -1227,109 +1247,42 @@ def api_importar_dropbox():
         _dt = now
 
         # ------------------------------------------------------------------
-        # Detecta XMLs de evento (carta de correção, cancelamento,
-        # confirmação) ANTES de tentar parsear como NF-e.
-        # Esses documentos não têm <NFe>/<infNFe> e nunca devem ser
-        # importados como nota fiscal; são movidos para ERROS.
         # ------------------------------------------------------------------
-        try:
-            _ev_root = ET.fromstring(content)
-            _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
-        except ET.ParseError:
-            _ev_tag = ''
+        # Classifica o XML antes de qualquer processamento.
+        # ------------------------------------------------------------------
+        _clf = _classify_xml(content)
 
-        if _ev_tag in _NFE_EVENT_ROOT_TAGS:
-            # Extrai CNPJ do evento para aplicar filtro antes de qualquer processamento.
-            _ev_dest_cnpj_filter = ''
-            for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
-                        f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
-                _el = _ev_root.find(_cx)
-                if _el is not None and _el.text:
-                    _ev_dest_cnpj_filter = re.sub(r'\D', '', _el.text.strip())
-                    if _ev_dest_cnpj_filter:
-                        break
-            # Se houver filtro ativo e o CNPJ do evento não pertencer ao conjunto, ignora.
-            if filter_cnpjs is not None and _ev_dest_cnpj_filter not in filter_cnpjs:
+        if _clf['tipo'] == 'cte':
+            logger.info('%s: CT-e detectado — deixado em NOVO', info['name'])
+            skipped += 1
+            analyzed_in_batch += 1
+            continue
+
+        if _clf['tipo'] in ('cancelamento', 'cce', 'manifestacao', 'evento_outro'):
+            # Aplica filtro de empresa/grupo se ativo.
+            if filter_cnpjs is not None and (
+                not _clf['dest_cnpj_digits'] or _clf['dest_cnpj_digits'] not in filter_cnpjs
+            ):
                 skipped += 1
                 analyzed_in_batch += 1
-                logger.info('%s: XML de evento, CNPJ=%r não pertence ao filtro, ignorado',
-                            info['name'], _ev_dest_cnpj_filter)
+                logger.info('%s: evento %r, CNPJ=%r não pertence ao filtro, ignorado',
+                            info['name'], _clf['tipo'], _clf['dest_cnpj_digits'])
                 continue
 
-            # XMLs de evento (procEventoNFe, cancelamento, etc.) não são NF-e de compra.
-            # Se a empresa for identificada, movemos para ERROS (arquivo inválido para
-            # importação). Se a empresa não for identificada, deixamos em NOVO.
-            logger.info('%s: XML de evento (%s) — não é NF-e de compra', info['name'], _ev_tag)
-            # Tenta identificar a empresa para mover para a pasta ERROS correta.
-            _ev_nome = None
-            _ev_num = None
-            _ch_nfe = ''
-            for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
-                _el = _ev_root.find(_path)
-                if _el is not None and _el.text:
-                    _ch_nfe = re.sub(r'\D', '', _el.text.strip())
-                    break
-            if _ch_nfe:
-                _ev_rec = execute_query(
-                    "SELECT c.nome_razao_social, c.numero_cliente "
-                    "FROM nfe_importacoes n "
-                    "JOIN clientes c ON c.id = n.cliente_id "
-                    "WHERE n.chave_acesso = %s LIMIT 1",
-                    (_ch_nfe,), fetch=True, fetch_one=True,
-                )
-                if _ev_rec:
-                    _ev_nome = _ev_rec['nome_razao_social']
-                    _ev_num = _ev_rec.get('numero_cliente') or None
-            # Se a busca por chNFe falhou, tenta pelo CNPJ direto no XML do evento.
-            # Exemplos: <CNPJ> em infEvento (procEventoNFe/envEvento) ou
-            # <CNPJDest> em retEvento — presentes em confirmações, ciências, etc.
-            if not _ev_nome:
-                for _cnpj_xpath in [
-                    f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
-                    f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
-                ]:
-                    _el = _ev_root.find(_cnpj_xpath)
-                    if _el is not None and _el.text:
-                        _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
-                        if len(_ev_cnpj_dig) >= 11:
-                            _ev_found = _find_cliente_by_doc_digits(_ev_cnpj_dig, _cnpj_cliente_cache)
-                            if _ev_found:
-                                _ev_nome = _ev_found['nome_razao_social']
-                                _ev_num = _ev_found.get('numero_cliente') or None
-                                logger.info('%s: empresa de evento detectada por CNPJ (%s) → %s',
-                                            info['name'], _ev_cnpj_dig, _ev_nome)
-                                break
-            # Extrai data do evento para organizar a pasta ERROS pelo mês correto.
-            _ev_dt = now
-            for _date_xpath in [
-                f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
-                f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
-            ]:
-                _date_el = _ev_root.find(_date_xpath)
-                if _date_el is not None and _date_el.text:
-                    try:
-                        _ev_dt = datetime.fromisoformat(
-                            _date_el.text.strip().replace('Z', '+00:00')
-                        )
-                    except (ValueError, AttributeError):
-                        pass
-                    break
-            if _ev_nome:
-                # Empresa identificada: arquivo de evento é inválido para importação
-                # → move para ERROS para manter NOVO limpo.
-                err += 1
-                try:
-                    pasta_err_ev = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
-                    if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
-                        moved_err += 1
-                    else:
-                        details.append(f"{info['name']}: falha ao mover para ERROS no Dropbox")
-                except DropboxAuthError:
-                    logger.warning('Falha de autenticação ao mover evento %s para erros', info['name'])
-            else:
-                # Empresa não identificada — deixa em NOVO para revisão manual.
-                logger.info('%s: XML de evento, empresa não identificada — deixado em NOVO', info['name'])
+            logger.info('%s: %s → processando e movendo para IMPORTADOS',
+                        info['name'], _clf['descr_evento'])
+            _proc = _process_evento(_clf, info['name'], content, _cnpj_cliente_cache, now)
+            ok += 1
+            try:
+                pasta_imp_ev = _get_or_create_pasta(
+                    svc.pasta_importados(departamento, _proc['empresa_nome'],
+                                         _proc['dt'], empresa_numero=_proc['empresa_num']))
+                if svc.move_file(info['path'], f"{pasta_imp_ev}/{info['name']}"):
+                    moved_ok += 1
+                else:
+                    details.append(f"{info['name']}: falha ao mover evento para IMPORTADOS")
+            except DropboxAuthError:
+                logger.warning('Falha de autenticação ao mover evento %s', info['name'])
             analyzed_in_batch += 1
             continue
 
@@ -1733,89 +1686,35 @@ def _run_import_job(job: dict, departamento: str,
                 _cli = None
                 _dt = now
 
-                # Detecta XMLs de evento antes de tentar parsear como NF-e.
-                try:
-                    _ev_root = ET.fromstring(content)
-                    _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
-                except ET.ParseError:
-                    _ev_tag = ''
+                # Classifica o XML antes de qualquer processamento.
+                _clf = _classify_xml(content)
 
-                if _ev_tag in _NFE_EVENT_ROOT_TAGS:
-                    # Aplica filtro de empresa/grupo se ativo.
-                    if filter_cnpjs is not None:
-                        _ev_dest_cnpj_filter = ''
-                        for _cx in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
-                                    f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
-                            _el = _ev_root.find(_cx)
-                            if _el is not None and _el.text:
-                                _ev_dest_cnpj_filter = re.sub(r'\D', '', _el.text.strip())
-                                if _ev_dest_cnpj_filter:
-                                    break
-                        if _ev_dest_cnpj_filter not in filter_cnpjs:
-                            batch_skipped += 1
-                            skipped += 1
-                            batch_processed += 1
-                            continue
+                if _clf['tipo'] == 'cte':
+                    logger.info('[import_job] %s: CT-e — deixado em NOVO', info['name'])
+                    skipped += 1
+                    batch_processed += 1
+                    continue
 
-                    _ev_nome = None
-                    _ev_num = None
-                    _ch_nfe = ''
-                    for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
-                        _el = _ev_root.find(_path)
-                        if _el is not None and _el.text:
-                            _ch_nfe = re.sub(r'\D', '', _el.text.strip())
-                            break
-                    if _ch_nfe:
-                        _ev_rec = execute_query(
-                            "SELECT c.nome_razao_social, c.numero_cliente "
-                            "FROM nfe_importacoes n "
-                            "JOIN clientes c ON c.id = n.cliente_id "
-                            "WHERE n.chave_acesso = %s LIMIT 1",
-                            (_ch_nfe,), fetch=True, fetch_one=True,
-                        )
-                        if _ev_rec:
-                            _ev_nome = _ev_rec['nome_razao_social']
-                            _ev_num = _ev_rec.get('numero_cliente') or None
-                    if not _ev_nome:
-                        for _cnpj_xpath in [
-                            f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
-                            f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
-                        ]:
-                            _el = _ev_root.find(_cnpj_xpath)
-                            if _el is not None and _el.text:
-                                _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
-                                if len(_ev_cnpj_dig) >= 11:
-                                    _ev_found = _find_cliente_by_doc_digits(_ev_cnpj_dig, _cnpj_cliente_cache)
-                                    if _ev_found:
-                                        _ev_nome = _ev_found['nome_razao_social']
-                                        _ev_num = _ev_found.get('numero_cliente') or None
-                                        break
-                    _ev_dt = now
-                    for _date_xpath in [
-                        f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
-                        f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
-                    ]:
-                        _date_el = _ev_root.find(_date_xpath)
-                        if _date_el is not None and _date_el.text:
-                            try:
-                                _ev_dt = datetime.fromisoformat(
-                                    _date_el.text.strip().replace('Z', '+00:00'))
-                            except (ValueError, AttributeError):
-                                pass
-                            break
-                    if _ev_nome:
-                        err += 1
-                        try:
-                            pasta_err_ev = _get_or_create_pasta(
-                                svc.pasta_erros(departamento, _ev_nome, _ev_dt,
-                                                empresa_numero=_ev_num))
-                            pending_moves.append((
-                                info['path'], f"{pasta_err_ev}/{info['name']}", 'err', info['name']))
-                        except DropboxAuthError:
-                            logger.warning('[import_job] Auth ao criar pasta para evento %s', info['name'])
+                if _clf['tipo'] in ('cancelamento', 'cce', 'manifestacao', 'evento_outro'):
+                    if filter_cnpjs is not None and (
+                        not _clf['dest_cnpj_digits'] or _clf['dest_cnpj_digits'] not in filter_cnpjs
+                    ):
+                        batch_skipped += 1
+                        skipped += 1
                         batch_processed += 1
-                    else:
-                        batch_processed += 1
+                        continue
+
+                    _proc = _process_evento(_clf, info['name'], content, _cnpj_cliente_cache, now)
+                    ok += 1
+                    try:
+                        pasta_imp_ev = _get_or_create_pasta(
+                            svc.pasta_importados(departamento, _proc['empresa_nome'],
+                                                 _proc['dt'], empresa_numero=_proc['empresa_num']))
+                        pending_moves.append((
+                            info['path'], f"{pasta_imp_ev}/{info['name']}", 'ok', info['name']))
+                    except DropboxAuthError:
+                        logger.warning('[import_job] Auth ao criar pasta para evento %s', info['name'])
+                    batch_processed += 1
                     continue
 
                 try:
@@ -2157,83 +2056,39 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             except UnicodeDecodeError:
                 content = raw.decode('latin-1', errors='replace')
 
-            # Detecção de XML de evento (cancelamento, CCe, etc.)
-            try:
-                _ev_root = ET.fromstring(content)
-                _ev_tag = _ev_root.tag.split('}')[-1] if '}' in _ev_root.tag else _ev_root.tag
-            except ET.ParseError:
-                _ev_tag = ''
+            # Classifica o XML antes de qualquer processamento.
+            _clf = _classify_xml(content)
 
-            if _ev_tag in _NFE_EVENT_ROOT_TAGS:
-                logger.info('[agendado] %s: XML de evento (%s) — não é NF-e de compra',
-                            info['name'], _ev_tag)
-                # Tenta identificar empresa pelo CNPJ ou chave NF-e para mover para ERROS.
-                _ev_nome = None
-                _ev_num = None
-                _ch_nfe = ''
-                for _path in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
-                    _el = _ev_root.find(_path)
-                    if _el is not None and _el.text:
-                        _ch_nfe = re.sub(r'\D', '', _el.text.strip())
-                        break
-                if _ch_nfe:
-                    _ev_rec = execute_query(
-                        "SELECT c.nome_razao_social, c.numero_cliente "
-                        "FROM nfe_importacoes n "
-                        "JOIN clientes c ON c.id = n.cliente_id "
-                        "WHERE n.chave_acesso = %s LIMIT 1",
-                        (_ch_nfe,), fetch=True, fetch_one=True,
-                    )
-                    if _ev_rec:
-                        _ev_nome = _ev_rec['nome_razao_social']
-                        _ev_num = _ev_rec.get('numero_cliente') or None
-                if not _ev_nome:
-                    for _cnpj_xpath in [
-                        f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
-                        f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest',
-                    ]:
-                        _el = _ev_root.find(_cnpj_xpath)
-                        if _el is not None and _el.text:
-                            _ev_cnpj_dig = re.sub(r'\D', '', _el.text.strip())
-                            if len(_ev_cnpj_dig) >= 11:
-                                _ev_found = _find_cliente_by_doc_digits(_ev_cnpj_dig, _cnpj_cliente_cache)
-                                if _ev_found:
-                                    _ev_nome = _ev_found['nome_razao_social']
-                                    _ev_num = _ev_found.get('numero_cliente') or None
-                                    break
-                _ev_dt = now
-                for _date_xpath in [
-                    f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
-                    f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento',
-                ]:
-                    _date_el = _ev_root.find(_date_xpath)
-                    if _date_el is not None and _date_el.text:
-                        try:
-                            _ev_dt = datetime.fromisoformat(
-                                _date_el.text.strip().replace('Z', '+00:00'))
-                        except (ValueError, AttributeError):
-                            pass
-                        break
-                if _ev_nome:
-                    totals['err'] += 1
-                    file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
-                                      'empresa': _ev_nome or '', 'detalhe': f'XML de evento: {_ev_tag}'})
-                    try:
-                        pasta_err_ev = _get_or_create_pasta(
-                            svc.pasta_erros(departamento, _ev_nome, _ev_dt, empresa_numero=_ev_num))
-                        if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
-                            totals['moved_err'] += 1
-                            batch_moved += 1
-                        else:
-                            file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
-                                              'empresa': _ev_nome or '', 'detalhe': 'Falha ao mover para ERROS no Dropbox'})
-                    except DropboxAuthError:
-                        logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
-                    batch_processed += 1
-                else:
-                    file_logs.append({'arquivo': info['name'], 'resultado': 'evento',
-                                      'empresa': '', 'detalhe': f'XML de evento sem empresa identificada: {_ev_tag} — mantido em NOVO'})
-                    batch_processed += 1
+            if _clf['tipo'] == 'cte':
+                logger.info('[agendado] %s: CT-e — deixado em NOVO', info['name'])
+                totals['skipped'] += 1
+                file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
+                                  'empresa': '', 'detalhe': 'CT-e — aguardando suporte futuro'})
+                batch_processed += 1
+                continue
+
+            if _clf['tipo'] in ('cancelamento', 'cce', 'manifestacao', 'evento_outro'):
+                logger.info('[agendado] %s: %s → movendo para IMPORTADOS',
+                            info['name'], _clf['descr_evento'])
+                _proc = _process_evento(_clf, info['name'], content, _cnpj_cliente_cache, now)
+                totals['ok'] += 1
+                file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
+                                  'empresa': _proc['empresa_nome'],
+                                  'detalhe': _proc['detalhe']})
+                try:
+                    pasta_imp_ev = _get_or_create_pasta(
+                        svc.pasta_importados(departamento, _proc['empresa_nome'],
+                                             _proc['dt'], empresa_numero=_proc['empresa_num']))
+                    if svc.move_file(info['path'], f"{pasta_imp_ev}/{info['name']}"):
+                        totals['moved_ok'] += 1
+                        batch_moved += 1
+                    else:
+                        file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
+                                          'empresa': _proc['empresa_nome'],
+                                          'detalhe': 'Falha ao mover evento para IMPORTADOS'})
+                except DropboxAuthError:
+                    logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
+                batch_processed += 1
                 continue
 
             try:
@@ -3321,6 +3176,212 @@ def _save_nfe_dual(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     if not results:
         raise ValueError('Nenhum cliente (dest/emit) associado a este XML')
     return 'ok' if 'ok' in results else 'dup'
+
+
+def _classify_xml(content: str) -> dict:
+    """Classifica um XML fiscal e extrai metadados para tratamento inteligente.
+
+    Retorna dict:
+        tipo: 'nfe'|'nfce'|'cancelamento'|'cce'|'manifestacao'|'evento_outro'
+              |'cte'|'desconhecido'
+        root_tag, chave_nfe, tp_evento, descr_evento, seq_evento,
+        dh_evento (datetime|None), dest_cnpj_digits
+    """
+    out: dict = {
+        'tipo': 'desconhecido',
+        'root_tag': '',
+        'chave_nfe': '',
+        'tp_evento': '',
+        'descr_evento': '',
+        'seq_evento': 1,
+        'dh_evento': None,
+        'dest_cnpj_digits': '',
+    }
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return out
+
+    raw_tag = root.tag
+    tag = raw_tag.split('}')[-1] if '}' in raw_tag else raw_tag
+    out['root_tag'] = tag
+
+    # CT-e — deixar em NOVO
+    if tag in _CTE_ROOT_TAGS:
+        out['tipo'] = 'cte'
+        return out
+
+    # NF-e / NFC-e — detecta modelo (55 vs 65)
+    if tag in ('nfeProc', 'NFe'):
+        mod = ''
+        for xpath in [f'.//{{{_NFE_NS}}}mod', './/mod']:
+            el = root.find(xpath)
+            if el is not None and el.text:
+                mod = el.text.strip()
+                break
+        out['tipo'] = 'nfce' if mod == '65' else 'nfe'
+        return out
+
+    # Eventos NF-e
+    if tag in _NFE_EVENT_ROOT_TAGS:
+        # chNFe
+        for xpath in [f'.//{{{_NFE_NS}}}chNFe', './/chNFe']:
+            el = root.find(xpath)
+            if el is not None and el.text:
+                out['chave_nfe'] = re.sub(r'\D', '', el.text.strip())
+                break
+
+        # tpEvento
+        for xpath in [f'.//{{{_NFE_NS}}}tpEvento', './/tpEvento']:
+            el = root.find(xpath)
+            if el is not None and el.text:
+                out['tp_evento'] = el.text.strip()
+                break
+
+        # nSeqEvento
+        for xpath in [f'.//{{{_NFE_NS}}}nSeqEvento', './/nSeqEvento']:
+            el = root.find(xpath)
+            if el is not None and el.text:
+                try:
+                    out['seq_evento'] = int(el.text.strip())
+                except ValueError:
+                    pass
+                break
+
+        # dhEvento / dhRegEvento
+        for xpath in [f'.//{{{_NFE_NS}}}dhEvento', './/dhEvento',
+                      f'.//{{{_NFE_NS}}}dhRegEvento', './/dhRegEvento']:
+            el = root.find(xpath)
+            if el is not None and el.text:
+                try:
+                    out['dh_evento'] = datetime.fromisoformat(
+                        el.text.strip().replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    pass
+                break
+
+        # CNPJ para filtro de empresa/grupo
+        for xpath in [f'.//{{{_NFE_NS}}}CNPJ', './/CNPJ',
+                      f'.//{{{_NFE_NS}}}CNPJDest', './/CNPJDest']:
+            el = root.find(xpath)
+            if el is not None and el.text:
+                digits = re.sub(r'\D', '', el.text.strip())
+                if len(digits) >= 11:
+                    out['dest_cnpj_digits'] = digits
+                    break
+
+        tp = out['tp_evento']
+        out['descr_evento'] = _TPEVENTO_DESCR.get(tp, f'Evento {tp}' if tp else 'Evento desconhecido')
+
+        if tp in _TPEVENTO_CANCELAMENTO:
+            out['tipo'] = 'cancelamento'
+        elif tp in _TPEVENTO_CCE:
+            out['tipo'] = 'cce'
+        elif tp in _TPEVENTO_MANIFESTACAO:
+            out['tipo'] = 'manifestacao'
+        else:
+            out['tipo'] = 'evento_outro'
+
+        return out
+
+    return out  # desconhecido — tenta parse_nfe_xml como fallback
+
+
+def _marcar_cancelada(chave_nfe: str) -> int:
+    """Marca NF-e(s) com a chave como canceladas. Retorna quantas linhas foram marcadas."""
+    if not chave_nfe:
+        return 0
+    execute_query(
+        "UPDATE nfe_importacoes SET cancelada = 1 WHERE chave_acesso = %s",
+        (chave_nfe,), fetch=False,
+    )
+    row = execute_query(
+        "SELECT COUNT(*) AS cnt FROM nfe_importacoes WHERE chave_acesso = %s AND cancelada = 1",
+        (chave_nfe,), fetch=True, fetch_one=True,
+    ) or {}
+    return int(row.get('cnt', 0))
+
+
+def _salvar_evento(chave_nfe: str, tp_evento: str, descr_evento: str,
+                   seq_evento: int, dh_evento, xml_raw: str,
+                   nome_arquivo: str) -> None:
+    """Persiste evento (CC-e ou outro relevante) em nfe_eventos, vinculando à NF-e se encontrada."""
+    nfe_id = None
+    if chave_nfe:
+        row = execute_query(
+            "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s LIMIT 1",
+            (chave_nfe,), fetch=True, fetch_one=True,
+        )
+        if row:
+            nfe_id = row['id']
+    execute_query(
+        """INSERT INTO nfe_eventos
+               (nfe_id, chave_nfe, tp_evento, descricao_evento,
+                seq_evento, dh_evento, xml_raw, nome_arquivo)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+        (nfe_id, chave_nfe, tp_evento, descr_evento,
+         seq_evento, dh_evento, (xml_raw or '')[:_MAX_XML_SIZE], nome_arquivo),
+        fetch=False,
+    )
+
+
+def _process_evento(clf: dict, file_name: str, xml_raw: str,
+                    cnpj_cache: dict, now) -> dict:
+    """Executa operações de banco para um evento NF-e e determina pasta destino.
+
+    Retorna dict: empresa_nome, empresa_num, dt, detalhe.
+    """
+    _ev_nome = None
+    _ev_num = None
+    chave = clf.get('chave_nfe', '')
+    tp = clf.get('tp_evento', '')
+    descr = clf.get('descr_evento', f'Evento {tp}')
+    dh = clf.get('dh_evento') or now
+
+    # Busca empresa pela chave NF-e no banco (mais confiável)
+    if chave:
+        ev_rec = execute_query(
+            "SELECT c.nome_razao_social, c.numero_cliente "
+            "FROM nfe_importacoes n "
+            "JOIN clientes c ON c.id = n.cliente_id "
+            "WHERE n.chave_acesso = %s LIMIT 1",
+            (chave,), fetch=True, fetch_one=True,
+        )
+        if ev_rec:
+            _ev_nome = ev_rec['nome_razao_social']
+            _ev_num = ev_rec.get('numero_cliente') or None
+
+    # Fallback: busca empresa pelo CNPJ extraído do evento
+    if not _ev_nome:
+        cnpj_dig = clf.get('dest_cnpj_digits', '')
+        if cnpj_dig and len(cnpj_dig) >= 11:
+            ev_found = _find_cliente_by_doc_digits(cnpj_dig, cnpj_cache)
+            if ev_found:
+                _ev_nome = ev_found['nome_razao_social']
+                _ev_num = ev_found.get('numero_cliente') or None
+
+    # Empresa não identificada → pasta genérica dentro de IMPORTADOS
+    if not _ev_nome:
+        _ev_nome = 'EVENTOS'
+        _ev_num = None
+
+    # Operação de banco conforme tipo
+    tipo = clf.get('tipo', 'evento_outro')
+    if tipo == 'cancelamento' and chave:
+        cnt = _marcar_cancelada(chave)
+        detalhe = f'{descr} — {"NF-e cancelada" if cnt else "NF-e não encontrada no sistema"}'
+    elif tipo == 'cce' and chave:
+        _salvar_evento(chave, tp, descr, clf.get('seq_evento', 1), dh, xml_raw, file_name)
+        detalhe = f'{descr} — registrada no sistema'
+    else:
+        detalhe = descr
+
+    return {
+        'empresa_nome': _ev_nome,
+        'empresa_num':  _ev_num,
+        'dt':           dh,
+        'detalhe':      detalhe,
+    }
 
 
 def _get_ramo_cliente(cliente_id):

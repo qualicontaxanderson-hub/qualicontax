@@ -274,6 +274,21 @@ def run_migrations():
         if _exists.get('cnt', 0) == 0:
             execute_query(f"ALTER TABLE nfe_importacoes ADD COLUMN {_col} {_defn}", fetch=False)
 
+    # Incremental: cancelada em nfe_importacoes (flag de cancelamento por evento)
+    try:
+        _can_exists = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' AND COLUMN_NAME = 'cancelada'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if _can_exists.get('cnt', 0) == 0:
+            execute_query(
+                "ALTER TABLE nfe_importacoes ADD COLUMN cancelada TINYINT(1) NOT NULL DEFAULT 0",
+                fetch=False,
+            )
+    except Exception:
+        pass
+
     # Incremental: tipo e dest_uf em nfe_importacoes (Conferência de Saídas)
     for _col, _defn in [
         ('tipo',    "ENUM('entrada','saida') NOT NULL DEFAULT 'entrada'"),
@@ -434,6 +449,26 @@ def run_migrations():
                     "INSERT INTO nfe_produto_subcategorias (categoria_id, nome, ordem) VALUES (%s, %s, %s)",
                     (_cat_id, _sub_nome, _sub_i),
                 )
+
+    # ---- Eventos NF-e (CC-e, cancelamento, manifestação) ----
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS nfe_eventos (
+            id               INT AUTO_INCREMENT PRIMARY KEY,
+            nfe_id           INT NULL,
+            chave_nfe        VARCHAR(44) NOT NULL DEFAULT '',
+            tp_evento        VARCHAR(6)  NOT NULL DEFAULT '',
+            descricao_evento VARCHAR(150) DEFAULT '',
+            seq_evento       INT NOT NULL DEFAULT 1,
+            dh_evento        DATETIME NULL,
+            xml_raw          MEDIUMTEXT,
+            nome_arquivo     VARCHAR(500) DEFAULT '',
+            criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (nfe_id) REFERENCES nfe_importacoes(id) ON DELETE SET NULL,
+            INDEX idx_chave_nfe (chave_nfe),
+            INDEX idx_nfe_id (nfe_id),
+            INDEX idx_tp_evento (tp_evento)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
 
     # ---- Regras de vínculo automático (emit_cnpj + cod_xml → produto_catalogo) ----
     execute_query("""
