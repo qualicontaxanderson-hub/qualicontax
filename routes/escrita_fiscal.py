@@ -1366,9 +1366,12 @@ def api_importar_dropbox():
                 _period_y = _dt.year if hasattr(_dt, 'year') else now.year
                 _period_m = _dt.month if hasattr(_dt, 'month') else now.month
                 _co_key = (str(_num or ''), _nome)
+                _period = (_period_y, _period_m)
                 if _co_key not in _imported_companies:
-                    _imported_companies[_co_key] = set()
-                _imported_companies[_co_key].add((_period_y, _period_m))
+                    _imported_companies[_co_key] = {}
+                if _period not in _imported_companies[_co_key]:
+                    _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
+                _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
             except Exception:
                 pass
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
@@ -1388,7 +1391,12 @@ def api_importar_dropbox():
         except Exception as exc:
             err += 1
             analyzed_in_batch += 1
-            details.append(f"{info['name']}: {exc}")
+            if len(details) < _MAX_ERROR_DETAILS:
+                details.append({
+                    'arquivo': info['name'],
+                    'empresa': (_nome or 'DESCONHECIDO')[:80],
+                    'erro':    str(exc)[:200],
+                })
             logger.exception('Erro ao processar %s', info['name'])
             # Move para ERROS sempre que ocorre uma exceção.
             # Quando a empresa foi identificada usa a pasta da empresa; caso
@@ -1440,15 +1448,16 @@ def api_importar_dropbox():
     # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
     unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
 
-    # Sumário de empresas importadas com períodos cobertos, ordenado por nome.
+    # Sumário de empresas importadas com totais por período.
     imported_companies_list = []
-    for (num, nome), periods in sorted(_imported_companies.items(), key=lambda x: x[0][1] or ''):
-        sorted_periods = sorted(periods)
-        imported_companies_list.append({
-            'numero': num,
-            'nome': nome,
-            'periodos': [f'{m:02d}/{y}' for (y, m) in sorted_periods],
-        })
+    for (num, nome), periods_data in sorted(_imported_companies.items(), key=lambda x: x[0][1] or ''):
+        periodos = [
+            {'periodo': f'{m:02d}/{y}', 'ok': s['ok'], 'dup': s['dup'], 'err': s['err']}
+            for (y, m), s in sorted(periods_data.items())
+            if s['ok'] + s['dup'] + s['err'] > 0
+        ]
+        if periodos:
+            imported_companies_list.append({'numero': num, 'nome': nome, 'periodos': periodos})
 
     return jsonify({
         'ok': ok, 'dup': dup, 'err': err, 'skipped': skipped,
@@ -1573,12 +1582,16 @@ def _run_import_job(job: dict, departamento: str,
             for k, v in sorted(unregistered.items(), key=lambda x: x[1])
         ]
         imp_list = []
-        for (num, nome), periods in sorted(
+        for (num, nome), periods_data in sorted(
                 _imported_companies.items(), key=lambda x: x[0][1] or ''):
-            imp_list.append({
-                'numero': num, 'nome': nome,
-                'periodos': [f'{m:02d}/{y}' for (y, m) in sorted(periods)],
-            })
+            periodos = [
+                {'periodo': f'{m:02d}/{y}',
+                 'ok': s['ok'], 'dup': s['dup'], 'err': s['err']}
+                for (y, m), s in sorted(periods_data.items())
+                if s['ok'] + s['dup'] + s['err'] > 0
+            ]
+            if periodos:
+                imp_list.append({'numero': num, 'nome': nome, 'periodos': periodos})
         total = ok + dup + err + skipped
         msg = (f'{total} arquivo(s) processado(s). {ok} importado(s), '
                f'{dup} duplicado(s), {err} com erro.')
@@ -1769,9 +1782,12 @@ def _run_import_job(job: dict, departamento: str,
                         _period_y = _dt.year if hasattr(_dt, 'year') else now.year
                         _period_m = _dt.month if hasattr(_dt, 'month') else now.month
                         _co_key = (str(_num or ''), _nome)
+                        _period = (_period_y, _period_m)
                         if _co_key not in _imported_companies:
-                            _imported_companies[_co_key] = set()
-                        _imported_companies[_co_key].add((_period_y, _period_m))
+                            _imported_companies[_co_key] = {}
+                        if _period not in _imported_companies[_co_key]:
+                            _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
+                        _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
                     except Exception:
                         pass
                     try:
@@ -1790,7 +1806,25 @@ def _run_import_job(job: dict, departamento: str,
                     return
                 except Exception as exc:
                     err += 1
-                    details.append(f"{info['name']}: {exc}")
+                    if len(details) < _MAX_ERROR_DETAILS:
+                        details.append({
+                            'arquivo': info['name'],
+                            'empresa': (_nome or 'DESCONHECIDO')[:80],
+                            'erro':    str(exc)[:200],
+                        })
+                    if _nome:
+                        try:
+                            _pe_y = _dt.year if hasattr(_dt, 'year') else now.year
+                            _pe_m = _dt.month if hasattr(_dt, 'month') else now.month
+                            _pe_key = (str(_num or ''), _nome)
+                            _pe_p = (_pe_y, _pe_m)
+                            if _pe_key not in _imported_companies:
+                                _imported_companies[_pe_key] = {}
+                            if _pe_p not in _imported_companies[_pe_key]:
+                                _imported_companies[_pe_key][_pe_p] = {'ok': 0, 'dup': 0, 'err': 0}
+                            _imported_companies[_pe_key][_pe_p]['err'] += 1
+                        except Exception:
+                            pass
                     logger.exception('[import_job] Erro ao processar %s', info['name'])
                     _err_empresa = _nome or 'DESCONHECIDO'
                     _err_num = _num if _nome else None

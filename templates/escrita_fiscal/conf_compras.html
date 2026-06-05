@@ -1494,120 +1494,174 @@ function fmtCNPJ(s) {
     return s;
 }
 
-// Renders accumulated import results and updates the result div.
+// ---- helpers de formatação ----
+function _fmtPeriodo(p) {
+    if (!p) return '—';
+    const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const pts = String(p).split('/');
+    if (pts.length === 2) { const mi = parseInt(pts[0],10)-1; return (mn[mi]||pts[0]) + '/' + pts[1]; }
+    return p;
+}
+function _toggleSection(header) {
+    const body = header.nextElementSibling;
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : '';
+    const icon = header.querySelector('.imp-chevron');
+    if (icon) icon.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// Renderiza resultado acumulado da importação.
 function _renderImportResult(acc) {
     const result = document.getElementById('dbxResult');
     result.style.display = 'block';
 
-    const totalOk      = acc.ok;
-    const totalErr     = acc.err;
-    const totalDup     = acc.dup;
-    const totalSkipped = acc.skipped;
-    const unreg        = Object.values(acc.unreg);   // [{cnpj, nome}]
+    const totalOk  = acc.ok,  totalDup = acc.dup;
+    const totalErr = acc.err, totalSkipped = acc.skipped;
+    const total    = totalOk + totalDup + totalErr + totalSkipped;
+    const unreg    = Object.values(acc.unreg);
+    const impCos   = Object.values(acc.impCos);
+    const details  = acc.details || [];
 
-    const nothingHappened = totalOk === 0 && totalErr === 0 && totalDup === 0 && totalSkipped === 0 && unreg.length === 0;
-
-    if (nothingHappened) {
+    if (total === 0 && unreg.length === 0) {
         result.className = 'info';
-        result.innerHTML = `
-          <div class="dbx-res-head">
-            <div class="dbx-res-icon"><i class="fas fa-info-circle"></i></div>
-            <div class="dbx-res-text"><strong>Nenhum arquivo novo</strong><span>Nenhum arquivo novo encontrado na pasta NOVO.</span></div>
-          </div>`;
+        result.innerHTML = `<div class="dbx-res-head">
+          <div class="dbx-res-icon"><i class="fas fa-info-circle"></i></div>
+          <div class="dbx-res-text"><strong>Nenhum arquivo novo</strong>
+            <span>Nenhum arquivo XML encontrado na pasta NOVO.</span></div></div>`;
         return;
     }
 
-    // Determine skin
+    // Determina skin (borda / fundo)
     let skin = 'ok';
-    let icon = 'fas fa-check-circle';
-    let headTitle = 'Importação concluída';
-    if (unreg.length > 0 && totalOk === 0 && totalErr === 0) {
-        skin = 'warn'; icon = 'fas fa-exclamation-triangle';
-        headTitle = 'Empresas não cadastradas';
-    } else if (totalErr > 0 && totalOk === 0) {
-        skin = 'err'; icon = 'fas fa-times-circle';
-        headTitle = 'Importação com erros';
-    } else if (totalOk > 0) {
-        skin = 'ok'; icon = 'fas fa-check-circle';
-        headTitle = 'Importação concluída';
-    } else {
-        skin = 'info'; icon = 'fas fa-info-circle';
-        headTitle = 'Importação concluída';
-    }
-
-    // Build summary sentence from accumulated totals (never from per-batch data.msg).
-    const parts = [];
-    const totalFiles = totalOk + totalDup + totalErr + totalSkipped;
-    if (totalFiles > 0) parts.push(`${totalFiles} arquivo(s) analisado(s).`);
-    if (totalOk > 0)      parts.push(`${totalOk} importado(s).`);
-    if (totalDup > 0)     parts.push(`${totalDup} duplicado(s).`);
-    if (totalErr > 0)     parts.push(`${totalErr} com erro.`);
-    if (totalSkipped > 0) parts.push(`${totalSkipped} ignorado(s).`);
-    if (acc.moved_ok > 0 || acc.moved_err > 0) {
-        parts.push(`${acc.moved_ok} movido(s) para IMPORTADOS, ${acc.moved_err} movido(s) para ERROS.`);
-    }
-    if (unreg.length > 0) parts.push(`${unreg.length} empresa(s) não cadastrada(s).`);
-    const headSub = parts.join(' ');
-
+    if (totalErr > 0 && totalOk === 0 && totalDup === 0 && unreg.length === 0) skin = 'err';
+    else if (unreg.length > 0 && totalOk === 0 && totalDup === 0) skin = 'warn';
     result.className = skin;
-    let html = `<div class="dbx-res-head">
-      <div class="dbx-res-icon"><i class="${icon}"></i></div>
-      <div class="dbx-res-text"><strong>${headTitle}</strong><span>${headSub}</span></div>
-    </div>`;
 
-    // Stats chips
-    const chips = [];
-    if (totalOk > 0)      chips.push(`<span class="dbx-stat s-ok"><i class="fas fa-check"></i>${totalOk} importado(s)</span>`);
-    if (totalDup > 0)     chips.push(`<span class="dbx-stat s-dup"><i class="fas fa-copy"></i>${totalDup} duplicado(s)</span>`);
-    if (totalErr > 0)     chips.push(`<span class="dbx-stat s-err"><i class="fas fa-times"></i>${totalErr} com erro</span>`);
-    if (totalSkipped > 0) chips.push(`<span class="dbx-stat s-skip"><i class="fas fa-forward"></i>${totalSkipped} ignorado(s)</span>`);
-    if (chips.length)     html += `<div class="dbx-stats">${chips.join('')}</div>`;
+    // ── Barra de totais ──────────────────────────────────────────
+    let html = `<div style="padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-bottom:1px solid rgba(0,0,0,.08);">`;
+    if (total > 0)
+        html += `<span style="font-size:12px;color:#64748b;font-weight:500;">${total} analisado(s)</span><span style="color:#cbd5e1;font-size:11px;">|</span>`;
+    if (totalOk > 0)
+        html += `<span style="color:#059669;font-weight:700;font-size:13px;">✅ ${totalOk} importada(s)</span>`;
+    if (totalDup > 0)
+        html += `<span style="color:#d97706;font-weight:600;font-size:12px;">🔄 ${totalDup} duplicata(s)</span>`;
+    if (totalErr > 0)
+        html += `<span style="color:#dc2626;font-weight:700;font-size:13px;">❌ ${totalErr} erro(s)</span>`;
+    if (totalSkipped > 0)
+        html += `<span style="color:#6b7280;font-size:12px;">⊘ ${totalSkipped} ignorado(s)</span>`;
+    if (unreg.length > 0)
+        html += `<span style="color:#b45309;font-weight:700;font-size:12px;">⚠️ ${unreg.length} não cadastrada(s)</span>`;
+    if (acc.moved_ok > 0 || acc.moved_err > 0)
+        html += `<span style="color:#94a3b8;font-size:11px;margin-left:4px;">${acc.moved_ok}→IMPORTADOS ${acc.moved_err}→ERROS</span>`;
+    html += `</div>`;
 
-    // Imported companies summary (with all periods accumulated across batches)
-    const impCos = Object.values(acc.impCos);
+    // ── Por empresa / mês ─────────────────────────────────────────
     if (impCos.length > 0) {
-        impCos.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-        html += `<div class="dbx-imp">
-          <div class="dbx-imp-head"><i class="fas fa-check-circle"></i> Empresas importadas (${impCos.length})</div>
-          <div class="dbx-imp-list">`;
+        impCos.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+        // Calcula totais gerais por empresa para mostrar no cabeçalho
+        html += `<div style="border-bottom:1px solid rgba(0,0,0,.08);">
+          <div onclick="_toggleSection(this)"
+               style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;
+                      font-size:12px;font-weight:700;color:#374151;user-select:none;">
+            <i class="fas fa-building" style="color:#2563eb;"></i>
+            Por Empresa / Mês (${impCos.length})
+            <i class="fas fa-chevron-down imp-chevron"
+               style="margin-left:auto;font-size:10px;color:#9ca3af;transition:transform .2s;"></i>
+          </div>
+          <div style="max-height:360px;overflow-y:auto;background:#f8fafc;">`;
         impCos.forEach(c => {
-            const label = (c.numero ? c.numero + ' — ' : '') + c.nome;
-            const sortedPeriodos = Array.from(c.periodosSet).sort();
-            const periodos = sortedPeriodos.map(p => `<span class="dbx-imp-periodo">${p}</span>`).join('');
-            html += `<div class="dbx-imp-item">
-              <div class="dbx-imp-name">${label}</div>
-              ${periodos ? `<div class="dbx-imp-periodos">${periodos}</div>` : ''}
-            </div>`;
+            const label = (c.numero ? `<strong style="color:#6366f1;">${c.numero}</strong> — ` : '') + (c.nome||'—');
+            // totais da empresa
+            let empOk=0, empDup=0, empErr=0;
+            (c.periodos||[]).forEach(p => {
+                const ok_p = (typeof p === 'object') ? (p.ok||0) : 0;
+                const dup_p = (typeof p === 'object') ? (p.dup||0) : 0;
+                const err_p = (typeof p === 'object') ? (p.err||0) : 0;
+                empOk+=ok_p; empDup+=dup_p; empErr+=err_p;
+            });
+            const empBadge = `${empOk>0?`<span style="color:#059669;font-weight:700;font-size:11px;">✅${empOk}</span>`:''}
+                              ${empDup>0?`<span style="color:#d97706;font-size:11px;margin-left:3px;">🔄${empDup}</span>`:''}
+                              ${empErr>0?`<span style="color:#dc2626;font-weight:700;font-size:11px;margin-left:3px;">❌${empErr}</span>`:''}`;
+            html += `<div style="padding:7px 16px;border-top:1px solid #e2e8f0;">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+                <span style="font-size:12.5px;">${label}</span>
+                <div style="margin-left:auto;display:flex;gap:4px;">${empBadge}</div>
+              </div>`;
+            (c.periodos||[]).forEach(p => {
+                const periodo = (typeof p === 'object') ? p.periodo : p;
+                const ok_p  = (typeof p === 'object') ? (p.ok||0)  : 0;
+                const dup_p = (typeof p === 'object') ? (p.dup||0) : 0;
+                const err_p = (typeof p === 'object') ? (p.err||0) : 0;
+                html += `<div style="display:flex;align-items:center;gap:6px;padding:2px 8px;
+                              font-size:11px;color:#475569;background:#fff;border-radius:5px;
+                              margin:2px 0;border:1px solid #e2e8f0;">
+                  <span style="min-width:68px;color:#64748b;font-weight:600;">${_fmtPeriodo(periodo)}</span>
+                  ${ok_p>0  ? `<span style="color:#059669;font-weight:700;">✅ ${ok_p}</span>`  : ''}
+                  ${dup_p>0 ? `<span style="color:#d97706;">🔄 ${dup_p}</span>` : ''}
+                  ${err_p>0 ? `<span style="color:#dc2626;font-weight:700;">❌ ${err_p}</span>` : ''}
+                </div>`;
+            });
+            html += `</div>`;
         });
         html += `</div></div>`;
     }
 
-    // Unregistered companies card
+    // ── Empresas não cadastradas ──────────────────────────────────
     if (unreg.length > 0) {
-        html += `<div class="dbx-unreg">
-          <div class="dbx-unreg-head"><i class="fas fa-building"></i> Empresas não cadastradas (${unreg.length})</div>
-          <div class="dbx-unreg-list">`;
+        html += `<div style="border-bottom:1px solid rgba(0,0,0,.08);">
+          <div onclick="_toggleSection(this)"
+               style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;
+                      font-size:12px;font-weight:700;color:#92400e;background:#fef9c3;user-select:none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            Empresas não cadastradas (${unreg.length}) — XMLs permanecem em NOVO
+            <i class="fas fa-chevron-down imp-chevron"
+               style="margin-left:auto;font-size:10px;color:#b45309;transition:transform .2s;"></i>
+          </div>
+          <div style="display:none;max-height:220px;overflow-y:auto;background:#fffbeb;">`;
         unreg.forEach(c => {
-            html += `<div class="dbx-unreg-item">
-              <i class="fas fa-store" style="opacity:.6;font-size:11px;flex-shrink:0;"></i>
-              <span style="flex:1;font-weight:600;">${c.nome}</span>
-              ${c.cnpj && c.cnpj !== c.nome ? `<span class="dbx-unreg-cnpj">${fmtCNPJ(c.cnpj)}</span>` : ''}
+            html += `<div style="padding:7px 16px;border-top:1px solid #fde68a;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+              <span style="font-family:monospace;background:#fde68a;padding:2px 7px;border-radius:4px;font-size:11px;white-space:nowrap;">${fmtCNPJ(c.cnpj||'')}</span>
+              <span style="font-weight:700;color:#78350f;">${c.nome||'—'}</span>
+              <span style="color:#b45309;font-size:11px;margin-left:auto;">→ verificar cadastro</span>
             </div>`;
         });
         html += `</div></div>`;
     }
 
-    // Error details (all batches accumulated)
-    if (acc.details.length > 0) {
-        const MAX_DETAILS = 30;
-        const shown = acc.details.slice(0, MAX_DETAILS);
-        const extra = acc.details.length - shown.length;
-        html += `<div class="dbx-unreg" style="background:#fef2f2;">
-          <div class="dbx-unreg-head" style="background:#fecaca;color:#991b1b;"><i class="fas fa-list"></i> Detalhes dos erros (${acc.details.length})</div>
-          <div class="dbx-unreg-list" style="background:#fff1f2;color:#7f1d1d;">`;
-        shown.forEach(d => { html += `<div class="dbx-unreg-item"><i class="fas fa-dot-circle" style="opacity:.5;font-size:10px;"></i>${d}</div>`; });
+    // ── Erros detalhados ─────────────────────────────────────────
+    if (details.length > 0) {
+        const MAX_SHOW = 50;
+        const shown = details.slice(0, MAX_SHOW);
+        const extra = Math.max(0, totalErr - shown.length);
+        html += `<div>
+          <div onclick="_toggleSection(this)"
+               style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;
+                      font-size:12px;font-weight:700;color:#991b1b;background:#fef2f2;user-select:none;">
+            <i class="fas fa-times-circle"></i>
+            Erros detalhados (${shown.length}${extra>0?' de '+totalErr:''})
+            <i class="fas fa-chevron-down imp-chevron"
+               style="margin-left:auto;font-size:10px;color:#ef4444;transition:transform .2s;"></i>
+          </div>
+          <div style="display:none;max-height:260px;overflow-y:auto;background:#fff8f8;">`;
+        shown.forEach(d => {
+            if (typeof d === 'string') {
+                html += `<div style="padding:5px 16px;border-top:1px solid #fecaca;font-size:11.5px;
+                              color:#7f1d1d;font-family:monospace;">${d}</div>`;
+            } else {
+                const arq = `<span style="font-family:monospace;font-size:10.5px;color:#6b7280;">
+                    ${(d.arquivo||'').slice(0,40)}${(d.arquivo||'').length>40?'…':''}</span>`;
+                const emp = d.empresa ? `<span style="font-weight:700;color:#991b1b;">${d.empresa}</span> — ` : '';
+                html += `<div style="padding:5px 16px;border-top:1px solid #fecaca;font-size:12px;color:#7f1d1d;">
+                  ${arq} ${emp}${d.erro||''}
+                </div>`;
+            }
+        });
         if (extra > 0) {
-            html += `<div class="dbx-unreg-item" style="color:#991b1b;font-style:italic;">... e mais ${extra} mensagem(ns) no log.</div>`;
+            html += `<div style="padding:6px 16px;border-top:1px solid #fecaca;font-size:11px;
+                          color:#991b1b;font-style:italic;">
+                … e mais ${extra} erro(s) — consulte o Log de Importações para detalhes completos.
+            </div>`;
         }
         html += `</div></div>`;
     }
@@ -1634,7 +1688,6 @@ function pararImportacao() {
 }
 
 function _dbxJobToAcc(data) {
-    // Transforma o estado do job no formato acc esperado por _renderImportResult.
     const acc = {
         ok: data.ok || 0, dup: data.dup || 0, err: data.err || 0,
         skipped: data.skipped || 0, moved_ok: data.moved_ok || 0,
@@ -1643,7 +1696,7 @@ function _dbxJobToAcc(data) {
     };
     (data.imported_companies || []).forEach(c => {
         const key = (c.numero || '') + '|' + (c.nome || '');
-        acc.impCos[key] = {numero: c.numero, nome: c.nome, periodosSet: new Set(c.periodos || [])};
+        acc.impCos[key] = {numero: c.numero, nome: c.nome, periodos: c.periodos || []};
     });
     (data.unregistered_companies || []).forEach(c => {
         acc.unreg[c.cnpj || c.nome] = c;
