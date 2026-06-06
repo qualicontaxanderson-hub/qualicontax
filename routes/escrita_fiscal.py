@@ -1054,15 +1054,19 @@ def importar_xml():
 def importar_xml_local():
     """Recebe um XML do script local, importa no banco e move no Dropbox.
 
-    Autenticação: sessão Flask-Login ativa OU header X-Import-Token igual à
-    variável de ambiente IMPORT_API_TOKEN.
+    Autenticação: sessão Flask-Login ativa OU header X-Import-Token igual ao
+    valor configurado em app_config (chave: import_api_token).
 
     Parâmetros (multipart/form-data):
         arquivo       — arquivo XML
         dropbox_path  — caminho atual do arquivo no Dropbox (ex: /Fiscal/NOVO/chave.xml)
         departamento  — departamento (padrão: Fiscal)
     """
-    _env_token = Config.IMPORT_API_TOKEN.strip()
+    _token_row = execute_query(
+        "SELECT valor FROM app_config WHERE chave = 'import_api_token'",
+        fetch=True, fetch_one=True,
+    )
+    _env_token = (_token_row['valor'] if _token_row else '').strip()
     if not current_user.is_authenticated:
         req_token = request.headers.get('X-Import-Token', '').strip()
         if not _env_token or req_token != _env_token:

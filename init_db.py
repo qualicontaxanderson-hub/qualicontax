@@ -700,6 +700,12 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # Garante chave padrão para o token do script local (valor vazio = desabilitado)
+    execute_query(
+        "INSERT IGNORE INTO app_config (chave, valor) VALUES ('import_api_token', '')",
+        fetch=False,
+    )
+
     print("✓ Migrations concluídas")
 
 
