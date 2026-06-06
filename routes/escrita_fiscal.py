@@ -27,12 +27,18 @@ _DROPBOX_AUTH_ERROR_MSG = (
     'Credenciais Dropbox inválidas ou expiradas. '
     'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
 )
-# Máximo de arquivos processados por chamada ao endpoint importar-dropbox.
-# Cada arquivo exige download Dropbox + 2 queries DB + move Dropbox (operações
-# de rede dominam). 20 arquivos fica bem dentro do timeout de 300 s do gunicorn;
-# o frontend faz auto-continue quando has_more=True, garantindo importação
-# completa sem interação do usuário.
+# Máximo de arquivos por lote no endpoint SÍNCRONO (api_importar_dropbox).
+# Limitado pelo timeout do worker Gunicorn (300 s). Não alterar sem revisar
+# a math do _GUNICORN_WORKER_TIMEOUT, pois cada arquivo inclui 1 download +
+# 2-3 queries DB + 1 move no Dropbox — tudo operações de rede.
 _DROPBOX_BATCH_LIMIT = 20
+
+# Máximo de arquivos por lote nos jobs de BACKGROUND (_run_import_job e
+# importar_departamento_background). Sem restrição de timeout HTTP, então
+# pode ser maior. Lotes maiores reduzem o número de round-trips para listar
+# a pasta NOVO (list_xml_files), que é a principal fonte de overhead.
+# 100 arquivos: 9000 arquivos ÷ 100 = 90 iterações vs 450 com batch=20.
+_DROPBOX_BATCH_LIMIT_BG = 100
 
 # Máximo de iterações de lote no job de background — guarda-chuva contra
 # loop infinito caso a lógica de parada por progresso falhe.
@@ -1549,7 +1555,7 @@ def _run_import_job(job: dict, departamento: str,
                     filter_cnpjs: 'set | None', grupo_id_val: 'int | None') -> None:
     """Executa importação Dropbox completa em background thread.
 
-    Processa todos os lotes de ``_DROPBOX_BATCH_LIMIT`` arquivos até que a
+    Processa todos os lotes de ``_DROPBOX_BATCH_LIMIT_BG`` arquivos até que a
     pasta NOVO fique vazia ou sem progresso real, atualizando ``job`` com o
     progresso entre cada lote.  Suporta filtro de empresa/grupo e parada
     antecipada via ``job['stop_requested']``.
@@ -1656,8 +1662,8 @@ def _run_import_job(job: dict, departamento: str,
             if not files:
                 break
 
-            batch = files[:_DROPBOX_BATCH_LIMIT]
-            has_more = len(files) > _DROPBOX_BATCH_LIMIT
+            batch = files[:_DROPBOX_BATCH_LIMIT_BG]
+            has_more = len(files) > _DROPBOX_BATCH_LIMIT_BG
             last_scanned_this_key = (
                 ((batch[-1].get('name') or '').lower(), batch[-1].get('path') or '')
                 if batch else None
@@ -1955,7 +1961,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     """Executa a importação completa de um departamento sem contexto HTTP.
 
     Processa todos os arquivos XML da pasta NOVO do departamento, fazendo
-    múltiplas passagens (lotes de ``_DROPBOX_BATCH_LIMIT``) até que não haja
+    múltiplas passagens (lotes de ``_DROPBOX_BATCH_LIMIT_BG``) até que não haja
     mais arquivos a processar.  Não aplica filtro de empresa/grupo.
 
     Retorna um dict com o sumário: ok, dup, err, moved_ok, moved_err, skipped,
@@ -2062,7 +2068,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             if not files:
                 break
 
-        batch = files[:_DROPBOX_BATCH_LIMIT]
+        batch = files[:_DROPBOX_BATCH_LIMIT_BG]
         now = datetime.now(ZoneInfo('America/Sao_Paulo'))
         batch_moved = 0
         batch_unregistered_this = 0

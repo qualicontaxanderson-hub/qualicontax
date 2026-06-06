@@ -17,7 +17,10 @@ class Config:
     DB_NAME = os.getenv('DB_NAME', 'railway')
     DB_USER = os.getenv('DB_USER', 'root')
     DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-    DB_POOL_SIZE = max(1, min(32, int(os.getenv('DB_POOL_SIZE', 32))))
+    # Pool por processo Gunicorn. 4 workers × pool_size = conexões MySQL simultâneas.
+    # Padrão 10: 4 × 10 = 40 conexões — seguro para a maioria dos planos Railway.
+    # Suba via env DB_POOL_SIZE se o plano MySQL permitir mais (max 32 pelo conector).
+    DB_POOL_SIZE = max(1, min(32, int(os.getenv('DB_POOL_SIZE', 10))))
     DB_CONNECT_TIMEOUT = max(1, int(os.getenv('DB_CONNECT_TIMEOUT', 3)))
     
     # SQLAlchemy
