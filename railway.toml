@@ -1,8 +1,3 @@
-# Variáveis de runtime declaradas aqui com valor padrão vazio.
-# Isso informa ao Railpack que são opcionais — não secrets de build obrigatórios.
-[variables]
-IMPORT_API_TOKEN = ""
-
 [deploy]
 # Caminho do health check — Railway aguarda HTTP 200 nesse endpoint antes de
 # encaminhar tráfego para o novo container. Isso garante zero downtime:
