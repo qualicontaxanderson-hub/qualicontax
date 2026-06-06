@@ -1062,8 +1062,7 @@ def importar_xml_local():
         dropbox_path  — caminho atual do arquivo no Dropbox (ex: /Fiscal/NOVO/chave.xml)
         departamento  — departamento (padrão: Fiscal)
     """
-    import os as _os
-    _env_token = _os.getenv('IMPORT_API_TOKEN', '').strip()
+    _env_token = Config.IMPORT_API_TOKEN.strip()
     if not current_user.is_authenticated:
         req_token = request.headers.get('X-Import-Token', '').strip()
         if not _env_token or req_token != _env_token:

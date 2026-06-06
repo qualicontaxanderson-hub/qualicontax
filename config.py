@@ -54,3 +54,7 @@ class Config:
     # Deixe em branco (padrão) para tokens com escopo de App Folder.
     # Exemplo: /Aplicativos/ESCRITA FISCAL
     DROPBOX_ROOT_FOLDER = os.getenv('DROPBOX_ROOT_FOLDER', '').strip().rstrip('/')
+
+    # Token de autenticação para o script local fiscal_importar.py.
+    # Opcional — se não configurado, o endpoint aceita apenas sessão Flask-Login.
+    IMPORT_API_TOKEN = os.getenv('IMPORT_API_TOKEN', '')
