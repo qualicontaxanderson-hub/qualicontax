@@ -197,6 +197,19 @@ function openHistoricoModal() {
 function closeHistoricoModal() {
     document.getElementById('historicoModalOverlay').style.display = 'none';
 }
+function toggleBreakdown(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const btn = document.getElementById('btn_' + id);
+    if (el.style.display === 'none') {
+        el.style.display = 'table-row';
+        if (btn) btn.innerHTML = '&#9660;';
+    } else {
+        el.style.display = 'none';
+        if (btn) btn.innerHTML = '&#9654;';
+    }
+}
+
 function carregarHistorico() {
     document.getElementById('historicoBody').innerHTML =
         '<p style="color:#94a3b8;text-align:center;margin-top:40px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
@@ -217,16 +230,19 @@ function carregarHistorico() {
                 <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
                   <thead><tr style="background:#f8fafc;border-bottom:2px solid #e5e7eb;">
                     <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Data</th>
-                    <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Departamento</th>
+                    <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Depto</th>
                     <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Origem</th>
                     <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">✔ Ok</th>
                     <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">↩ Dup</th>
                     <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">✖ Err</th>
                     <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">⊘ Ign</th>
+                    <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;">Empresas</th>
                   </tr></thead>
                   <tbody>`;
-                rows.forEach(r => {
+                rows.forEach((r, idx) => {
                     const ok = r.ok || 0, dup = r.dup || 0, err = r.err || 0, skipped = r.skipped || 0;
+                    const breakdown = r.breakdown || [];
+                    const bdId = 'bd_' + idx;
                     html += `<tr style="border-bottom:1px solid #f1f5f9;">
                         <td style="padding:7px 10px;color:#374151;white-space:nowrap;">${r.iniciado_em || '—'}</td>
                         <td style="padding:7px 10px;font-weight:600;color:#1e293b;">${r.departamento || '—'}</td>
@@ -235,7 +251,29 @@ function carregarHistorico() {
                         <td style="padding:7px 6px;text-align:center;${dup > 0 ? 'color:#d97706;' : 'color:#94a3b8;'}">${dup}</td>
                         <td style="padding:7px 6px;text-align:center;${err > 0 ? 'color:#dc2626;font-weight:700;' : 'color:#94a3b8;'}">${err}</td>
                         <td style="padding:7px 6px;text-align:center;color:#94a3b8;">${skipped}</td>
+                        <td style="padding:7px 6px;text-align:center;">
+                            ${breakdown.length > 0
+                                ? `<button id="btn_${bdId}" onclick="toggleBreakdown('${bdId}')"
+                                    style="background:#ede9fe;border:none;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;color:#6d28d9;cursor:pointer;">
+                                    &#9654; ${breakdown.length}</button>`
+                                : '<span style="color:#d1d5db;font-size:11px;">—</span>'}
+                        </td>
                     </tr>`;
+                    if (breakdown.length > 0) {
+                        html += `<tr id="${bdId}" style="display:none;background:#faf5ff;">
+                            <td colspan="8" style="padding:0 10px 10px 32px;">
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:8px;">`;
+                        breakdown.forEach(b => {
+                            const hasErr = b.err > 0;
+                            html += `<div style="background:#fff;border:1px solid ${hasErr ? '#fecaca' : '#d1fae5'};border-radius:7px;padding:5px 10px;font-size:12px;white-space:nowrap;">
+                                <span style="font-weight:600;color:#1e293b;">${b.empresa}</span>
+                                <span style="margin-left:8px;color:#059669;">✅ ${b.ok}</span>`;
+                            if (b.dup > 0) html += `<span style="margin-left:6px;color:#d97706;">↩ ${b.dup}</span>`;
+                            if (b.err > 0) html += `<span style="margin-left:6px;color:#dc2626;font-weight:700;">❌ ${b.err}</span>`;
+                            html += `</div>`;
+                        });
+                        html += `</div></td></tr>`;
+                    }
                 });
                 html += '</tbody></table></div>';
             }

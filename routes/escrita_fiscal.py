@@ -2490,48 +2490,89 @@ def api_historico():
         except Exception:
             return str(v)[:16]
 
-    rows = execute_query(
-        "SELECT id, iniciado_em, concluido_em, departamento, origem, "
-        "ok, dup, err, moved_ok, moved_err, skipped, detalhes "
-        "FROM scheduler_import_log "
-        "ORDER BY iniciado_em DESC LIMIT 30",
-        fetch=True,
-    ) or []
+    # Admin vê todos os departamentos; não-admin vê apenas Fiscal
+    if current_user.is_admin():
+        sql = (
+            "SELECT id, iniciado_em, concluido_em, departamento, origem, "
+            "ok, dup, err, moved_ok, moved_err, skipped, detalhes "
+            "FROM scheduler_import_log "
+            "ORDER BY iniciado_em DESC LIMIT 60"
+        )
+        rows = execute_query(sql, fetch=True) or []
+    else:
+        sql = (
+            "SELECT id, iniciado_em, concluido_em, departamento, origem, "
+            "ok, dup, err, moved_ok, moved_err, skipped, detalhes "
+            "FROM scheduler_import_log "
+            "WHERE departamento = 'Fiscal' "
+            "ORDER BY iniciado_em DESC LIMIT 30"
+        )
+        rows = execute_query(sql, fetch=True) or []
 
-    # Agrega empresas não cadastradas com contagem de arquivos distintos
     unreg: dict = {}  # cnpj_key → {cnpj, nome, files: set}
+    result_rows = []
+
     for r in rows:
         detalhes_raw = r.pop('detalhes', None)
         r['iniciado_em'] = _fmt_ts(r.get('iniciado_em'))
         r['concluido_em'] = _fmt_ts(r.get('concluido_em'))
-        if not detalhes_raw:
+
+        ok = r.get('ok') or 0
+        dup = r.get('dup') or 0
+        err = r.get('err') or 0
+        skipped = r.get('skipped') or 0
+
+        # Ignora execuções sem processamento real
+        if ok == 0 and dup == 0 and err == 0 and skipped == 0:
             continue
-        try:
-            file_logs = _json.loads(detalhes_raw) if isinstance(detalhes_raw, str) else (detalhes_raw or [])
-            for entry in file_logs:
-                if entry.get('resultado') != 'ignorado':
-                    continue
-                detalhe = entry.get('detalhe', '')
-                if 'Empresa não cadastrada' not in detalhe:
-                    continue
-                m = re.search(r'CNPJ: ([0-9./\-]+)', detalhe)
-                cnpj_raw = m.group(1).strip() if m else ''
-                cnpj_key = re.sub(r'\D', '', cnpj_raw) or (entry.get('empresa', '') or '')[:30]
-                nome = (entry.get('empresa', '') or cnpj_raw or 'Desconhecido').strip()
-                arquivo = entry.get('arquivo', '')
-                if cnpj_key not in unreg:
-                    unreg[cnpj_key] = {'cnpj': cnpj_raw, 'nome': nome, 'files': set()}
-                if arquivo:
-                    unreg[cnpj_key]['files'].add(arquivo)
-        except Exception:
-            pass
+
+        # Breakdown por empresa e agregação de não cadastradas
+        breakdown: dict = {}  # empresa_nome → {ok, err, dup}
+
+        if detalhes_raw:
+            try:
+                file_logs = _json.loads(detalhes_raw) if isinstance(detalhes_raw, str) else (detalhes_raw or [])
+                for entry in file_logs:
+                    resultado = entry.get('resultado', '')
+                    empresa = (entry.get('empresa', '') or '').strip()
+                    arquivo = entry.get('arquivo', '')
+
+                    if resultado == 'ignorado':
+                        detalhe = entry.get('detalhe', '')
+                        if 'Empresa não cadastrada' in detalhe:
+                            m = re.search(r'CNPJ: ([0-9./\-]+)', detalhe)
+                            cnpj_raw = m.group(1).strip() if m else ''
+                            cnpj_key = re.sub(r'\D', '', cnpj_raw) or (empresa or '')[:30]
+                            nome = (empresa or cnpj_raw or 'Desconhecido').strip()
+                            if cnpj_key not in unreg:
+                                unreg[cnpj_key] = {'cnpj': cnpj_raw, 'nome': nome, 'files': set()}
+                            if arquivo:
+                                unreg[cnpj_key]['files'].add(arquivo)
+
+                    if empresa and resultado in ('importado', 'duplicado', 'erro'):
+                        if empresa not in breakdown:
+                            breakdown[empresa] = {'ok': 0, 'err': 0, 'dup': 0}
+                        if resultado == 'importado':
+                            breakdown[empresa]['ok'] += 1
+                        elif resultado == 'erro':
+                            breakdown[empresa]['err'] += 1
+                        elif resultado == 'duplicado':
+                            breakdown[empresa]['dup'] += 1
+            except Exception:
+                pass
+
+        r['breakdown'] = sorted(
+            [{'empresa': k, **v} for k, v in breakdown.items()],
+            key=lambda x: (x.get('empresa') or '').lower(),
+        )
+        result_rows.append(r)
 
     unreg_list = sorted(
         [{'cnpj': v['cnpj'], 'nome': v['nome'], 'qtd': len(v['files'])} for v in unreg.values()],
         key=lambda x: (x.get('nome') or '').lower(),
     )
 
-    return jsonify({'rows': rows, 'unregistered': unreg_list})
+    return jsonify({'rows': result_rows, 'unregistered': unreg_list})
 
 
 @escrita_fiscal.route('/conf-compras/api/horario-agendado', methods=['GET'])
