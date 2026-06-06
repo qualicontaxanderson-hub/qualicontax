@@ -5,4 +5,4 @@ echo ================================
 cd "C:\Users\User\OneDrive\Anderson - Pessoal\IA Downloads\qualicontax"
 git pull
 call venv\Scripts\activate
-claude
+claude --dangerously-skip-permissions

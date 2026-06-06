@@ -5,76 +5,285 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Login - Qualicontax</title>
-    
-    <!-- CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
-    <!-- Font Awesome 6.x -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 35%, #ecfdf5 65%, #f0f9ff 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+
+        .login-wrapper {
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .login-card {
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow:
+                0 4px 6px -1px rgba(0, 0, 0, 0.07),
+                0 20px 50px -8px rgba(0, 0, 0, 0.12),
+                0 0 0 1px rgba(34, 197, 94, 0.06);
+            padding: 44px 40px 36px;
+        }
+
+        /* Logo e título */
+        .login-logo-area {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .login-logo {
+            width: 88px;
+            height: 88px;
+            object-fit: contain;
+            border-radius: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+        }
+
+        .login-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            letter-spacing: -0.3px;
+            margin-bottom: 4px;
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        /* Flash messages */
+        .alert {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 11px 14px;
+            border-radius: 9px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .alert-error   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .alert-warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .alert-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+        .alert-info    { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+
+        /* Campos */
+        .field-group {
+            margin-bottom: 18px;
+        }
+
+        .field-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 7px;
+        }
+
+        .field-wrap {
+            position: relative;
+        }
+
+        .field-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 14px;
+            pointer-events: none;
+            transition: color 0.15s ease;
+        }
+
+        .field-input {
+            width: 100%;
+            padding: 12px 14px 12px 42px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 9px;
+            font-size: 14px;
+            color: #111827;
+            background: #f9fafb;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+            line-height: 1.4;
+        }
+
+        .field-input::placeholder { color: #9ca3af; }
+
+        .field-input:focus {
+            border-color: #22c55e;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+        }
+
+        .field-wrap:focus-within .field-icon {
+            color: #22c55e;
+        }
+
+        /* Lembrar-me + esqueceu */
+        .form-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 26px;
+            gap: 8px;
+        }
+
+        .checkbox-wrap {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            cursor: pointer;
+        }
+
+        .checkbox-wrap input[type="checkbox"] {
+            accent-color: #22c55e;
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .checkbox-wrap span {
+            font-size: 13px;
+            color: #374151;
+            user-select: none;
+        }
+
+        .forgot-link {
+            font-size: 13px;
+            color: #22c55e;
+            text-decoration: none;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .forgot-link:hover { text-decoration: underline; }
+
+        /* Botão Entrar */
+        .btn-entrar {
+            width: 100%;
+            padding: 13px 16px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 9px;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+        .btn-entrar:hover {
+            opacity: 0.93;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(34, 197, 94, 0.35);
+        }
+        .btn-entrar:active {
+            transform: translateY(0);
+            opacity: 1;
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.25);
+        }
+
+        /* Rodapé */
+        .login-footer {
+            text-align: center;
+            margin-top: 22px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .login-footer a {
+            color: #22c55e;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .login-footer a:hover { text-decoration: underline; }
+
+        /* Mobile */
+        @media (max-width: 480px) {
+            .login-card { padding: 36px 24px 28px; }
+            .login-logo { width: 72px; height: 72px; }
+            .login-title { font-size: 21px; }
+        }
+    </style>
 </head>
-<body class="login-page">
-    <div class="login-container">
-        <div class="login-box">
-            <div class="login-header">
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+
+            <div class="login-logo-area">
                 <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="login-logo">
-                <h1>Qualicontax</h1>
-                <p>Entre na sua conta</p>
+                <div class="login-title">Qualicontax</div>
+                <div class="login-subtitle">Entre na sua conta</div>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
                         <div class="alert alert-{{ category }}">
-                            <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }}"></i>
+                            <i class="fas fa-{% if category == 'error' %}exclamation-triangle{% elif category == 'success' %}check-circle{% elif category == 'warning' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
                             <span>{{ message }}</span>
                         </div>
                     {% endfor %}
                 {% endif %}
             {% endwith %}
 
-            <form method="POST" action="{{ url_for('auth.login') }}" class="login-form">
+            <form method="POST" action="{{ url_for('auth.login') }}">
                 {{ form.hidden_tag() if form }}
-                
-                <div class="form-group">
-                    <label for="login">
-                        <i class="fas fa-user"></i>
-                        Usuário
-                    </label>
-                    <input type="text" id="login" name="login" class="form-control" placeholder="seu.usuario" required autocomplete="username">
+
+                <div class="field-group">
+                    <label class="field-label" for="login">Usuário</label>
+                    <div class="field-wrap">
+                        <input type="text" id="login" name="login" class="field-input"
+                               placeholder="seu.usuario" required autocomplete="username">
+                        <i class="fas fa-user field-icon"></i>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="password">
-                        <i class="fas fa-lock"></i>
-                        Senha
-                    </label>
-                    <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
+                <div class="field-group">
+                    <label class="field-label" for="password">Senha</label>
+                    <div class="field-wrap">
+                        <input type="password" id="password" name="password" class="field-input"
+                               placeholder="••••••••" required autocomplete="current-password">
+                        <i class="fas fa-lock field-icon"></i>
+                    </div>
                 </div>
 
-                <div class="form-options">
-                    <label class="checkbox-label">
+                <div class="form-row">
+                    <label class="checkbox-wrap">
                         <input type="checkbox" name="remember" id="remember">
                         <span>Lembrar-me</span>
                     </label>
-                    <a href="#" class="forgot-password">Esqueceu a senha?</a>
+                    <a href="#" class="forgot-link">Esqueceu a senha?</a>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-block">
+                <button type="submit" class="btn-entrar">
                     <i class="fas fa-sign-in-alt"></i>
                     Entrar
                 </button>
             </form>
 
             <div class="login-footer">
-                <p>Não tem uma conta? <a href="#">Solicitar acesso</a></p>
+                Não tem uma conta? <a href="#">Solicitar acesso</a>
             </div>
-        </div>
 
-        <div class="login-background">
-            <div class="login-bg-overlay"></div>
         </div>
     </div>
-
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
