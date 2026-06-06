@@ -187,17 +187,6 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </select>
     </div>
     <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
-    {% if dropbox_configured %}
-    <button onclick="openDbxModal()"
-            style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-        <i class="fab fa-dropbox"></i> Importar XML
-    </button>
-    {% endif %}
-    <button onclick="openLogModal()"
-            title="Ver histórico de importações"
-            style="background:rgba(100,116,139,.12);color:#475569;border:1.5px solid rgba(100,116,139,.25);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
-        <i class="fas fa-history"></i> Log
-    </button>
     {% if current_user.is_admin() %}
     <button onclick="executarAgendada()" id="btnExecAgendada"
             title="Executa agora a importação Dropbox do departamento Fiscal"

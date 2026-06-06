@@ -1279,18 +1279,23 @@ def api_importar_dropbox():
                             info['name'], _clf['tipo'], _clf['dest_cnpj_digits'])
                 continue
 
-            logger.info('%s: %s → processando e movendo para IMPORTADOS',
-                        info['name'], _clf['descr_evento'])
             _proc = _process_evento(_clf, info['name'], content, _cnpj_cliente_cache, now)
+            if _proc['empresa_nome'] is None:
+                skipped += 1
+                analyzed_in_batch += 1
+                logger.info('%s: evento sem empresa identificada — deixado em NOVO', info['name'])
+                continue
+            logger.info('%s: %s → movendo para ERROS',
+                        info['name'], _clf['descr_evento'])
             ok += 1
             try:
-                pasta_imp_ev = _get_or_create_pasta(
-                    svc.pasta_importados(departamento, _proc['empresa_nome'],
-                                         _proc['dt'], empresa_numero=_proc['empresa_num']))
-                if svc.move_file(info['path'], f"{pasta_imp_ev}/{info['name']}"):
-                    moved_ok += 1
+                pasta_err_ev = _get_or_create_pasta(
+                    svc.pasta_erros(departamento, _proc['empresa_nome'],
+                                    _proc['dt'], empresa_numero=_proc['empresa_num']))
+                if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                    moved_err += 1
                 else:
-                    details.append(f"{info['name']}: falha ao mover evento para IMPORTADOS")
+                    details.append(f"{info['name']}: falha ao mover evento para ERROS")
             except DropboxAuthError:
                 logger.warning('Falha de autenticação ao mover evento %s', info['name'])
             analyzed_in_batch += 1
@@ -1728,13 +1733,19 @@ def _run_import_job(job: dict, departamento: str,
                         continue
 
                     _proc = _process_evento(_clf, info['name'], content, _cnpj_cliente_cache, now)
+                    if _proc['empresa_nome'] is None:
+                        skipped += 1
+                        batch_skipped += 1
+                        batch_processed += 1
+                        logger.info('[import_job] %s: evento sem empresa identificada — deixado em NOVO', info['name'])
+                        continue
                     ok += 1
                     try:
-                        pasta_imp_ev = _get_or_create_pasta(
-                            svc.pasta_importados(departamento, _proc['empresa_nome'],
-                                                 _proc['dt'], empresa_numero=_proc['empresa_num']))
+                        pasta_err_ev = _get_or_create_pasta(
+                            svc.pasta_erros(departamento, _proc['empresa_nome'],
+                                            _proc['dt'], empresa_numero=_proc['empresa_num']))
                         pending_moves.append((
-                            info['path'], f"{pasta_imp_ev}/{info['name']}", 'ok', info['name']))
+                            info['path'], f"{pasta_err_ev}/{info['name']}", 'err', info['name']))
                     except DropboxAuthError:
                         logger.warning('[import_job] Auth ao criar pasta para evento %s', info['name'])
                     batch_processed += 1
@@ -2112,24 +2123,31 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                 continue
 
             if _clf['tipo'] in ('cancelamento', 'cce', 'manifestacao', 'evento_outro'):
-                logger.info('[agendado] %s: %s → movendo para IMPORTADOS',
-                            info['name'], _clf['descr_evento'])
                 _proc = _process_evento(_clf, info['name'], content, _cnpj_cliente_cache, now)
+                if _proc['empresa_nome'] is None:
+                    totals['skipped'] += 1
+                    file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
+                                      'empresa': '', 'detalhe': f'{_proc["detalhe"]} — empresa não identificada'})
+                    logger.info('[agendado] %s: evento sem empresa identificada — deixado em NOVO', info['name'])
+                    batch_processed += 1
+                    continue
+                logger.info('[agendado] %s: %s → movendo para ERROS',
+                            info['name'], _clf['descr_evento'])
                 totals['ok'] += 1
                 file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
                                   'empresa': _proc['empresa_nome'],
                                   'detalhe': _proc['detalhe']})
                 try:
-                    pasta_imp_ev = _get_or_create_pasta(
-                        svc.pasta_importados(departamento, _proc['empresa_nome'],
-                                             _proc['dt'], empresa_numero=_proc['empresa_num']))
-                    if svc.move_file(info['path'], f"{pasta_imp_ev}/{info['name']}"):
-                        totals['moved_ok'] += 1
+                    pasta_err_ev = _get_or_create_pasta(
+                        svc.pasta_erros(departamento, _proc['empresa_nome'],
+                                        _proc['dt'], empresa_numero=_proc['empresa_num']))
+                    if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
+                        totals['moved_err'] += 1
                         batch_moved += 1
                     else:
                         file_logs.append({'arquivo': info['name'], 'resultado': 'erro',
                                           'empresa': _proc['empresa_nome'],
-                                          'detalhe': 'Falha ao mover evento para IMPORTADOS'})
+                                          'detalhe': 'Falha ao mover evento para ERROS'})
                 except DropboxAuthError:
                     logger.warning('[agendado] Falha de auth ao mover evento %s', info['name'])
                 batch_processed += 1
@@ -2443,6 +2461,77 @@ def api_log_importacoes():
         r['iniciado_em'] = _fmt_ts(r.get('iniciado_em'))
         r['concluido_em'] = _fmt_ts(r.get('concluido_em'))
     return jsonify({'rows': rows})
+
+
+@escrita_fiscal.route('/api/historico')
+@login_required
+def api_historico():
+    """Histórico de importações + empresas não cadastradas (visível a todos os usuários)."""
+    import json as _json
+
+    _brt = ZoneInfo('America/Sao_Paulo')
+
+    def _fmt_ts(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            else:
+                v = v.astimezone(_brt)
+            return v.strftime('%d/%m/%Y %H:%M')
+        try:
+            s = str(v).strip().replace('T', ' ')
+            if len(s) < 19:
+                return s[:16]
+            dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
+            dt = dt.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
+            return dt.strftime('%d/%m/%Y %H:%M')
+        except Exception:
+            return str(v)[:16]
+
+    rows = execute_query(
+        "SELECT id, iniciado_em, concluido_em, departamento, origem, "
+        "ok, dup, err, moved_ok, moved_err, skipped, detalhes "
+        "FROM scheduler_import_log "
+        "ORDER BY iniciado_em DESC LIMIT 30",
+        fetch=True,
+    ) or []
+
+    # Agrega empresas não cadastradas com contagem de arquivos distintos
+    unreg: dict = {}  # cnpj_key → {cnpj, nome, files: set}
+    for r in rows:
+        detalhes_raw = r.pop('detalhes', None)
+        r['iniciado_em'] = _fmt_ts(r.get('iniciado_em'))
+        r['concluido_em'] = _fmt_ts(r.get('concluido_em'))
+        if not detalhes_raw:
+            continue
+        try:
+            file_logs = _json.loads(detalhes_raw) if isinstance(detalhes_raw, str) else (detalhes_raw or [])
+            for entry in file_logs:
+                if entry.get('resultado') != 'ignorado':
+                    continue
+                detalhe = entry.get('detalhe', '')
+                if 'Empresa não cadastrada' not in detalhe:
+                    continue
+                m = re.search(r'CNPJ: ([0-9./\-]+)', detalhe)
+                cnpj_raw = m.group(1).strip() if m else ''
+                cnpj_key = re.sub(r'\D', '', cnpj_raw) or (entry.get('empresa', '') or '')[:30]
+                nome = (entry.get('empresa', '') or cnpj_raw or 'Desconhecido').strip()
+                arquivo = entry.get('arquivo', '')
+                if cnpj_key not in unreg:
+                    unreg[cnpj_key] = {'cnpj': cnpj_raw, 'nome': nome, 'files': set()}
+                if arquivo:
+                    unreg[cnpj_key]['files'].add(arquivo)
+        except Exception:
+            pass
+
+    unreg_list = sorted(
+        [{'cnpj': v['cnpj'], 'nome': v['nome'], 'qtd': len(v['files'])} for v in unreg.values()],
+        key=lambda x: (x.get('nome') or '').lower(),
+    )
+
+    return jsonify({'rows': rows, 'unregistered': unreg_list})
 
 
 @escrita_fiscal.route('/conf-compras/api/horario-agendado', methods=['GET'])
@@ -3404,10 +3493,9 @@ def _process_evento(clf: dict, file_name: str, xml_raw: str,
                 _ev_nome = ev_found['nome_razao_social']
                 _ev_num = ev_found.get('numero_cliente') or None
 
-    # Empresa não identificada → pasta genérica dentro de IMPORTADOS
+    # Empresa não identificada → deixa em NOVO (skip)
     if not _ev_nome:
-        _ev_nome = 'EVENTOS'
-        _ev_num = None
+        return {'empresa_nome': None, 'empresa_num': None, 'dt': dh, 'detalhe': descr}
 
     # Operação de banco conforme tipo
     tipo = clf.get('tipo', 'evento_outro')
