@@ -9,6 +9,7 @@ Estrutura de pastas por departamento:
 import logging
 import re
 import os
+import threading
 from datetime import datetime
 from typing import Optional
 
@@ -78,6 +79,7 @@ class DropboxService:
     def __init__(self):
         self._dbx = None
         self._departamento_root_cache: dict[str, str] = {}
+        self._client_lock = threading.Lock()  # protege criação/renovação do cliente
 
     # ------------------------------------------------------------------
     # Autenticação
@@ -88,24 +90,29 @@ class DropboxService:
         return value.strip() if isinstance(value, str) else value
 
     def _client(self):
+        # Fast path: sem lock se cliente já existe (evita contenção desnecessária)
         if self._dbx is not None:
             return self._dbx
-        try:
-            import dropbox as dropbox_sdk
-            refresh_token = self._cfg('DROPBOX_REFRESH_TOKEN')
-            app_key = self._cfg('DROPBOX_APP_KEY')
-            app_secret = self._cfg('DROPBOX_APP_SECRET')
-            if refresh_token and app_key and app_secret:
-                self._dbx = dropbox_sdk.Dropbox(
-                    oauth2_refresh_token=refresh_token,
-                    app_key=app_key,
-                    app_secret=app_secret,
-                    timeout=60,
-                )
+        # Slow path: apenas um thread cria/renova o cliente por vez
+        with self._client_lock:
+            if self._dbx is not None:  # double-check após adquirir lock
                 return self._dbx
-        except Exception as exc:
-            logger.error('Erro ao criar cliente Dropbox: %s', exc)
-        return None
+            try:
+                import dropbox as dropbox_sdk
+                refresh_token = self._cfg('DROPBOX_REFRESH_TOKEN')
+                app_key = self._cfg('DROPBOX_APP_KEY')
+                app_secret = self._cfg('DROPBOX_APP_SECRET')
+                if refresh_token and app_key and app_secret:
+                    self._dbx = dropbox_sdk.Dropbox(
+                        oauth2_refresh_token=refresh_token,
+                        app_key=app_key,
+                        app_secret=app_secret,
+                        timeout=60,
+                    )
+                    return self._dbx
+            except Exception as exc:
+                logger.error('Erro ao criar cliente Dropbox: %s', exc)
+            return None
 
     def is_configured(self) -> bool:
         return bool(
@@ -187,7 +194,8 @@ class DropboxService:
                 raise
             except Exception as exc:
                 if self._is_auth_error(exc):
-                    self._dbx = None
+                    with self._client_lock:
+                        self._dbx = None
                     if _attempt == 0:
                         logger.info('Dropbox list_folder: token expirado, renovando silenciosamente...')
                         continue
@@ -213,7 +221,8 @@ class DropboxService:
                 return True
             except Exception as exc:
                 if self._is_auth_error(exc):
-                    self._dbx = None
+                    with self._client_lock:
+                        self._dbx = None
                     if _attempt == 0:
                         logger.info('Dropbox _path_exists: token expirado, renovando silenciosamente...')
                         continue
@@ -280,7 +289,8 @@ class DropboxService:
                     return response.content
                 except Exception as exc:
                     if self._is_auth_error(exc):
-                        self._dbx = None
+                        with self._client_lock:
+                            self._dbx = None  # força renovação; lock garante que só 1 thread invalida
                         if _auth_try == 0:
                             logger.info('Dropbox download_file: token expirado, renovando silenciosamente...')
                             continue
@@ -308,7 +318,8 @@ class DropboxService:
                 return
             except Exception as exc:
                 if self._is_auth_error(exc):
-                    self._dbx = None
+                    with self._client_lock:
+                        self._dbx = None
                     if _attempt == 0:
                         logger.info('Dropbox ensure_folder: token expirado, renovando silenciosamente...')
                         continue
@@ -329,7 +340,8 @@ class DropboxService:
                 return True
             except Exception as exc:
                 if self._is_auth_error(exc):
-                    self._dbx = None
+                    with self._client_lock:
+                        self._dbx = None
                     if _attempt == 0:
                         logger.info('Dropbox move_file: token expirado, renovando silenciosamente...')
                         continue
