@@ -115,7 +115,39 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 .prod-vinculo select { flex:1; padding:4px 8px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:12px; background:#f8fafc; }
 .prod-vinculo button { padding:5px 10px; border-radius:6px; border:none; background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(34,197,94,.3); }
 .prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
-.vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
+.vinculado-badge { background:#dcfce7; color:#166634; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
+
+/* ---- Dropbox modal ---- */
+.dbx-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:1100; display:none; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); }
+.dbx-modal-overlay.open { display:flex; }
+.dbx-modal { background:#fff; border-radius:20px; width:660px; max-width:100%; max-height:calc(100vh - 60px); display:flex; flex-direction:column; overflow:hidden; box-shadow:0 32px 80px rgba(0,0,0,.28); transform:scale(.96); opacity:0; transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s ease; }
+.dbx-modal-overlay.open .dbx-modal { transform:scale(1); opacity:1; }
+.dbx-modal-header { display:flex; align-items:center; justify-content:space-between; padding:18px 26px; background:linear-gradient(135deg,#0052cc,#2563eb 60%,#1d9bf0); border-radius:20px 20px 0 0; }
+.dbx-modal-header h3 { font-size:16px; font-weight:700; color:#fff; margin:0; }
+.dbx-modal-header .dbx-close-btn { background:rgba(255,255,255,.18); border:none; font-size:18px; color:#fff; cursor:pointer; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; }
+.dbx-modal-body { padding:26px; overflow-y:auto; flex:1; }
+.dbx-modal-body label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; display:block; margin-bottom:5px; letter-spacing:.5px; }
+.dbx-modal-body select { width:100%; padding:9px 13px; border:1.5px solid #e2e8f0; border-radius:10px; font-size:13px; color:#1e293b; background:#f8fafc; margin-bottom:16px; }
+.dbx-modal-footer { padding:16px 26px; border-top:1.5px solid #e2e8f0; display:flex; gap:10px; justify-content:flex-end; border-radius:0 0 20px 20px; }
+.dbx-empresa-ac { min-width:100%; }
+.dbx-empresa-ac input[type=text] { border:1.5px solid #d1d5db; background:#fff; color:#1e293b; }
+#dbxResult { margin-top:16px; border-radius:14px; font-size:13px; display:none; overflow:hidden; border:1.5px solid #e2e8f0; background:#f8fafc; }
+#dbxResult.ok { border-color:#86efac; background:#f0fdf4; }
+#dbxResult.err { border-color:#fca5a5; background:#fef2f2; }
+#dbxResult.info { border-color:#93c5fd; background:#eff6ff; }
+#dbxResult.warn { border-color:#fbbf24; background:#fffbeb; }
+.dbx-res-head { display:flex; align-items:flex-start; gap:12px; padding:14px 16px 12px; }
+.dbx-res-icon { flex-shrink:0; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; }
+.dbx-res-text { flex:1; min-width:0; }
+.dbx-res-text strong { display:block; font-size:13.5px; font-weight:700; margin-bottom:2px; }
+#dbxResult.ok .dbx-res-icon { background:#dcfce7; color:#16a34a; }
+#dbxResult.ok .dbx-res-text { color:#166534; }
+#dbxResult.err .dbx-res-icon { background:#fee2e2; color:#dc2626; }
+#dbxResult.err .dbx-res-text { color:#991b1b; }
+#dbxResult.info .dbx-res-icon { background:#dbeafe; color:#2563eb; }
+#dbxResult.info .dbx-res-text { color:#1d4ed8; }
+#dbxResult.warn .dbx-res-icon { background:#fef3c7; color:#d97706; }
+#dbxResult.warn .dbx-res-text { color:#92400e; }
 </style>
 {% endblock %}
 
@@ -155,6 +187,24 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </select>
     </div>
     <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+    {% if dropbox_configured %}
+    <button onclick="openDbxModal()"
+            style="margin-left:auto;background:rgba(0,97,255,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+        <i class="fab fa-dropbox"></i> Importar XML
+    </button>
+    {% endif %}
+    <button onclick="openLogModal()"
+            title="Ver histórico de importações"
+            style="background:rgba(100,116,139,.12);color:#475569;border:1.5px solid rgba(100,116,139,.25);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <i class="fas fa-history"></i> Log
+    </button>
+    {% if current_user.is_admin() %}
+    <button onclick="executarAgendada()" id="btnExecAgendada"
+            title="Executa agora a importação Dropbox do departamento Fiscal"
+            style="background:rgba(5,150,105,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <i class="fas fa-play-circle"></i> Executar Agora
+    </button>
+    {% endif %}
 </div>
 
 <!-- KPIs -->
@@ -221,6 +271,16 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                     <option value="">— Todos —</option>
                     <option value="UPLOAD">Upload Manual</option>
                     <option value="DROPBOX">Dropbox</option>
+                </select>
+            </div>
+            <div>
+                <label>Cadastro de Produtos</label>
+                <select id="f_vinc_status">
+                    <option value="">— Todos —</option>
+                    <option value="completo">🟢 Tudo cadastrado</option>
+                    <option value="incompleto">⚠️ Incompleto (parcial + sem)</option>
+                    <option value="parcial">🟡 Cadastro parcial</option>
+                    <option value="sem">🔴 Sem cadastro</option>
                 </select>
             </div>
             <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
@@ -557,27 +617,29 @@ function clearFilters() {
     document.getElementById('f_dest_cnpj_sel').value = '';
     document.getElementById('f_dest_uf').value = '';
     document.getElementById('f_origem').value = '';
+    document.getElementById('f_vinc_status').value = '';
     currentPage = 1;
     chavesCurrentPage = 1;
     applyFilters();
 }
 function getFilters() {
     return {
-        cliente_id: currentClienteId,
-        grupo_id:   currentGrupoId,
-        data_ini:   document.getElementById('f_data_ini').value,
-        data_fim:   document.getElementById('f_data_fim').value,
-        dest_cnpj:  document.getElementById('f_dest_cnpj_sel').value,
-        dest_uf:    document.getElementById('f_dest_uf').value,
-        num_nota:   document.getElementById('f_num_nota').value,
-        cfop:       document.getElementById('f_cfop').value,
-        chave:      document.getElementById('f_chave').value,
-        emit_cnpj:  document.getElementById('f_emit_cnpj').value,
-        vmin:       document.getElementById('f_vmin').value,
-        vmax:       document.getElementById('f_vmax').value,
-        origem:     document.getElementById('f_origem').value,
-        descricao:  document.getElementById('f_descricao').value,
-        ncm:        document.getElementById('f_ncm').value,
+        cliente_id:  currentClienteId,
+        grupo_id:    currentGrupoId,
+        data_ini:    document.getElementById('f_data_ini').value,
+        data_fim:    document.getElementById('f_data_fim').value,
+        dest_cnpj:   document.getElementById('f_dest_cnpj_sel').value,
+        dest_uf:     document.getElementById('f_dest_uf').value,
+        num_nota:    document.getElementById('f_num_nota').value,
+        cfop:        document.getElementById('f_cfop').value,
+        chave:       document.getElementById('f_chave').value,
+        emit_cnpj:   document.getElementById('f_emit_cnpj').value,
+        vmin:        document.getElementById('f_vmin').value,
+        vmax:        document.getElementById('f_vmax').value,
+        origem:      document.getElementById('f_origem').value,
+        vinc_status: document.getElementById('f_vinc_status').value,
+        descricao:   document.getElementById('f_descricao').value,
+        ncm:         document.getElementById('f_ncm').value,
     };
 }
 function applyFilters() {
@@ -1028,5 +1090,435 @@ function exportarCSV() {
             a.click();
         });
 }
+
+// ===========================================================================
+// MODAL DROPBOX — importar XML (mesmo fluxo de conf_compras)
+// ===========================================================================
+const DBX_POLL_INTERVAL_MS = 2000;
+let _dbxJobId = null, _dbxPollTimer = null;
+
+function fmtCNPJ(s) {
+    if (!s || s.length < 14) return s || '';
+    const d = s.replace(/\D/g,'');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+    return s;
+}
+function _fmtPeriodo(p) {
+    if (!p) return '—';
+    const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const pts = String(p).split('/');
+    if (pts.length === 2) { const mi = parseInt(pts[0],10)-1; return (mn[mi]||pts[0])+'/'+pts[1]; }
+    return p;
+}
+function _toggleSection(header) {
+    const body = header.nextElementSibling;
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : '';
+    const icon = header.querySelector('.imp-chevron');
+    if (icon) icon.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// ---- autocomplete empresa no modal Dropbox ----
+let dbxAcActiveIndex = -1;
+function onDbxEmpresaInput() {
+    const q = document.getElementById('dbxEmpresaInput').value.trim().toLowerCase();
+    renderDbxEmpresaDropdown(q);
+    document.getElementById('dbxEmpresaClear').style.display = q ? '' : 'none';
+}
+function onDbxEmpresaFocus() {
+    const currentId = document.getElementById('dbxEmpresa').value;
+    if (currentId) document.getElementById('dbxEmpresaInput').value = '';
+    renderDbxEmpresaDropdown(document.getElementById('dbxEmpresaInput').value.trim().toLowerCase());
+}
+function onDbxEmpresaBlur() {
+    setTimeout(function() {
+        const currentId = document.getElementById('dbxEmpresa').value;
+        const input = document.getElementById('dbxEmpresaInput');
+        if (currentId && input.value === '') {
+            const found = empresasData.find(e => e.id == currentId);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
+}
+function renderDbxEmpresaDropdown(q) {
+    const list = document.getElementById('dbxEmpresaAcList');
+    dbxAcActiveIndex = -1;
+    const filtered = !q ? empresasData : empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    if (!filtered.length) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.map(e =>
+            `<div class="cc-ac-item${e.id===''?' all':''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectDbxEmpresa('${e.id}','${e.nome.replace(/'/g,"\\'")}')">${e.nome}</div>`
+        ).join('');
+    }
+    list.style.display = '';
+}
+function onDbxEmpresaKeydown(e) {
+    const list = document.getElementById('dbxEmpresaAcList');
+    const items = list.querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') { dbxAcActiveIndex = Math.min(dbxAcActiveIndex+1, items.length-1); items.forEach((el,i)=>el.classList.toggle('active',i===dbxAcActiveIndex)); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { dbxAcActiveIndex = Math.max(dbxAcActiveIndex-1, 0); items.forEach((el,i)=>el.classList.toggle('active',i===dbxAcActiveIndex)); e.preventDefault(); }
+    else if (e.key === 'Enter') { const t = dbxAcActiveIndex>=0?items[dbxAcActiveIndex]:items[0]; if(t) selectDbxEmpresa(t.dataset.id, t.dataset.nome); e.preventDefault(); }
+    else if (e.key === 'Escape') { closeDbxEmpresaDropdown(); }
+}
+function selectDbxEmpresa(id, nome) {
+    document.getElementById('dbxEmpresa').value = id;
+    document.getElementById('dbxEmpresaInput').value = id ? nome : '';
+    document.getElementById('dbxEmpresaClear').style.display = id ? '' : 'none';
+    closeDbxEmpresaDropdown();
+}
+function clearDbxEmpresa() { selectDbxEmpresa('',''); }
+function closeDbxEmpresaDropdown() { document.getElementById('dbxEmpresaAcList').style.display = 'none'; }
+document.addEventListener('click', function(e) {
+    if (document.getElementById('dbxEmpresaAcWrap') && !document.getElementById('dbxEmpresaAcWrap').contains(e.target))
+        closeDbxEmpresaDropdown();
+});
+
+function openDbxModal() {
+    document.getElementById('dbxModalOverlay').classList.add('open');
+    if (currentClienteId) {
+        const found = empresasData.find(e => e.id == currentClienteId);
+        selectDbxEmpresa(currentClienteId, found ? found.nome : '');
+    } else { selectDbxEmpresa('',''); }
+    const grp = document.getElementById('dbxGrupo');
+    if (grp && currentGrupoId) grp.value = currentGrupoId;
+    document.getElementById('dbxResult').style.display = 'none';
+}
+function closeDbxModal() { document.getElementById('dbxModalOverlay').classList.remove('open'); }
+
+function _dbxJobToAcc(data) {
+    const acc = {ok:data.ok||0, dup:data.dup||0, err:data.err||0,
+        skipped:data.skipped||0, moved_ok:data.moved_ok||0, moved_err:data.moved_err||0,
+        impCos:{}, unreg:{}, details:data.details||[]};
+    (data.imported_companies||[]).forEach(c => {
+        const key=(c.numero||'')+'|'+(c.nome||'');
+        acc.impCos[key]={numero:c.numero,nome:c.nome,periodos:c.periodos||[]};
+    });
+    (data.unregistered_companies||[]).forEach(c => { acc.unreg[c.cnpj||c.nome]=c; });
+    return acc;
+}
+
+function _renderImportResult(acc) {
+    const result = document.getElementById('dbxResult');
+    result.style.display = 'block';
+    const {ok:totalOk, dup:totalDup, err:totalErr, skipped:totalSkipped} = acc;
+    const total = totalOk+totalDup+totalErr+totalSkipped;
+    const unreg = Object.values(acc.unreg);
+    const impCos = Object.values(acc.impCos);
+    const details = acc.details||[];
+    if (total===0 && unreg.length===0) {
+        result.className='info';
+        result.innerHTML=`<div class="dbx-res-head"><div class="dbx-res-icon"><i class="fas fa-info-circle"></i></div><div class="dbx-res-text"><strong>Nenhum arquivo novo</strong><span>Nenhum XML encontrado na pasta NOVO.</span></div></div>`;
+        return;
+    }
+    let skin='ok';
+    if (totalErr>0 && totalOk===0 && totalDup===0 && unreg.length===0) skin='err';
+    else if (unreg.length>0 && totalOk===0 && totalDup===0) skin='warn';
+    result.className=skin;
+    let html=`<div style="padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-bottom:1px solid rgba(0,0,0,.08);">`;
+    if(total>0) html+=`<span style="font-size:12px;color:#64748b;font-weight:500;">${total} analisado(s)</span><span style="color:#cbd5e1;font-size:11px;">|</span>`;
+    if(totalOk>0) html+=`<span style="color:#059669;font-weight:700;font-size:13px;">✅ ${totalOk} importada(s)</span>`;
+    if(totalDup>0) html+=`<span style="color:#d97706;font-weight:600;font-size:12px;">🔄 ${totalDup} duplicata(s)</span>`;
+    if(totalErr>0) html+=`<span style="color:#dc2626;font-weight:700;font-size:13px;">❌ ${totalErr} erro(s)</span>`;
+    if(totalSkipped>0) html+=`<span style="color:#6b7280;font-size:12px;">⊘ ${totalSkipped} ignorado(s)</span>`;
+    if(unreg.length>0) html+=`<span style="color:#b45309;font-weight:700;font-size:12px;">⚠️ ${unreg.length} não cadastrada(s)</span>`;
+    if(acc.moved_ok>0||acc.moved_err>0) html+=`<span style="color:#94a3b8;font-size:11px;margin-left:4px;">${acc.moved_ok}→IMPORTADOS ${acc.moved_err}→ERROS</span>`;
+    html+=`</div>`;
+    if(impCos.length>0) {
+        impCos.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+        html+=`<div style="border-bottom:1px solid rgba(0,0,0,.08);">
+          <div onclick="_toggleSection(this)" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#374151;user-select:none;">
+            <i class="fas fa-building" style="color:#2563eb;"></i> Por Empresa / Mês (${impCos.length})
+            <i class="fas fa-chevron-down imp-chevron" style="margin-left:auto;font-size:10px;color:#9ca3af;transition:transform .2s;"></i>
+          </div>
+          <div style="max-height:300px;overflow-y:auto;background:#f8fafc;">`;
+        impCos.forEach(c => {
+            const label=(c.numero?`<strong style="color:#6366f1;">${c.numero}</strong> — `:'')+c.nome;
+            html+=`<div style="padding:7px 16px;border-top:1px solid #e2e8f0;"><div style="font-size:12px;margin-bottom:3px;">${label}</div>`;
+            (c.periodos||[]).forEach(p=>{
+                const periodo=typeof p==='object'?p.periodo:p;
+                const ok_p=typeof p==='object'?(p.ok||0):0, dup_p=typeof p==='object'?(p.dup||0):0, err_p=typeof p==='object'?(p.err||0):0;
+                html+=`<div style="display:flex;gap:6px;padding:2px 8px;font-size:11px;color:#475569;background:#fff;border-radius:5px;margin:2px 0;border:1px solid #e2e8f0;">
+                  <span style="min-width:68px;color:#64748b;font-weight:600;">${_fmtPeriodo(periodo)}</span>
+                  ${ok_p>0?`<span style="color:#059669;font-weight:700;">✅ ${ok_p}</span>`:''}
+                  ${dup_p>0?`<span style="color:#d97706;">🔄 ${dup_p}</span>`:''}
+                  ${err_p>0?`<span style="color:#dc2626;font-weight:700;">❌ ${err_p}</span>`:''}
+                </div>`;
+            });
+            html+=`</div>`;
+        });
+        html+=`</div></div>`;
+    }
+    if(unreg.length>0) {
+        html+=`<div style="border-bottom:1px solid rgba(0,0,0,.08);">
+          <div onclick="_toggleSection(this)" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#92400e;background:#fef9c3;user-select:none;">
+            <i class="fas fa-exclamation-triangle"></i> Não cadastradas (${unreg.length}) — XMLs em NOVO
+            <i class="fas fa-chevron-down imp-chevron" style="margin-left:auto;font-size:10px;transition:transform .2s;"></i>
+          </div>
+          <div style="display:none;max-height:180px;overflow-y:auto;background:#fffbeb;">`;
+        unreg.forEach(c=>{
+            html+=`<div style="padding:7px 16px;border-top:1px solid #fde68a;display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span style="font-family:monospace;background:#fde68a;padding:2px 7px;border-radius:4px;font-size:11px;">${fmtCNPJ(c.cnpj||'')}</span>
+              <span style="font-weight:700;color:#78350f;">${c.nome||'—'}</span>
+              <span style="color:#b45309;font-size:11px;margin-left:auto;">verificar cadastro</span></div>`;
+        });
+        html+=`</div></div>`;
+    }
+    if(details.length>0) {
+        const MAX_SHOW=50, shown=details.slice(0,MAX_SHOW), extra=Math.max(0,totalErr-shown.length);
+        html+=`<div>
+          <div onclick="_toggleSection(this)" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#991b1b;background:#fef2f2;user-select:none;">
+            <i class="fas fa-times-circle"></i> Erros (${shown.length}${extra>0?' de '+totalErr:''})
+            <i class="fas fa-chevron-down imp-chevron" style="margin-left:auto;font-size:10px;color:#ef4444;transition:transform .2s;"></i>
+          </div>
+          <div style="display:none;max-height:220px;overflow-y:auto;background:#fff8f8;">`;
+        shown.forEach(d=>{
+            if(typeof d==='string') { html+=`<div style="padding:5px 16px;border-top:1px solid #fecaca;font-size:11.5px;color:#7f1d1d;font-family:monospace;">${d}</div>`; }
+            else {
+                const arq=`<span style="font-family:monospace;font-size:10.5px;color:#6b7280;">${(d.arquivo||'').slice(0,35)}${(d.arquivo||'').length>35?'…':''}</span>`;
+                const emp=d.empresa?`<span style="font-weight:700;color:#991b1b;">${d.empresa}</span> — `:'';
+                html+=`<div style="padding:5px 16px;border-top:1px solid #fecaca;font-size:12px;color:#7f1d1d;">${arq} ${emp}${d.erro||''}</div>`;
+            }
+        });
+        if(extra>0) html+=`<div style="padding:6px 16px;border-top:1px solid #fecaca;font-size:11px;color:#991b1b;font-style:italic;">… e mais ${extra} erro(s) — consulte o Log.</div>`;
+        html+=`</div></div>`;
+    }
+    result.innerHTML=html;
+}
+
+function _dbxImportFinish() {
+    clearInterval(_dbxPollTimer); _dbxPollTimer=null; _dbxJobId=null;
+    const btn=document.getElementById('btnDbxImportar');
+    btn.disabled=false; btn.innerHTML='<i class="fab fa-dropbox"></i> Importar XML';
+    document.getElementById('btnDbxParar').style.display='none';
+}
+function _dbxPoll() {
+    if (!_dbxJobId) return;
+    fetch(`{{ url_for("escrita_fiscal.api_importar_dropbox_status", job_id="__JID__") }}`.replace('__JID__',_dbxJobId))
+    .then(r=>r.json())
+    .then(data=>{
+        if(data.error) { _dbxImportFinish(); return; }
+        _renderImportResult(_dbxJobToAcc(data));
+        if(data.status==='stopped'||data.status!=='running') {
+            _dbxImportFinish();
+            if((data.ok||0)>0 && (currentClienteId||currentGrupoId)) applyFilters();
+        }
+    }).catch(()=>{});
+}
+function pararImportacao() {
+    if (!_dbxJobId) return;
+    const btn=document.getElementById('btnDbxParar');
+    btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Parando...'; btn.disabled=true;
+    fetch(`{{ url_for("escrita_fiscal.api_importar_dropbox_stop", job_id="__JID__") }}`.replace('__JID__',_dbxJobId),{method:'POST'}).catch(()=>{});
+}
+function executarImportacaoDropbox() {
+    const btn=document.getElementById('btnDbxImportar'), btnParar=document.getElementById('btnDbxParar');
+    btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Importando...';
+    btnParar.style.display=''; btnParar.disabled=false;
+    btnParar.innerHTML='<i class="fas fa-stop-circle"></i> Parar Importação';
+    document.getElementById('dbxResult').style.display='none';
+    const departamento='Fiscal';
+    const cliente_id=document.getElementById('dbxEmpresa').value||null;
+    const grupo_id=document.getElementById('dbxGrupo').value||null;
+    fetch('{{ url_for("escrita_fiscal.api_importar_dropbox_start") }}',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({departamento,cliente_id,grupo_id}),
+    }).then(r=>r.json()).then(data=>{
+        if(data.error){_dbxImportFinish();return;}
+        _dbxJobId=data.job_id;
+        _dbxPollTimer=setInterval(_dbxPoll,DBX_POLL_INTERVAL_MS);
+    }).catch(()=>{_dbxImportFinish();});
+}
+
+// ===========================================================================
+// LOG DE IMPORTAÇÕES
+// ===========================================================================
+function openLogModal() {
+    document.getElementById('logModalOverlay').style.display='flex';
+    carregarLog();
+}
+function closeLogModal() { document.getElementById('logModalOverlay').style.display='none'; }
+function closeLogDetalhe() { document.getElementById('logDetalheOverlay').style.display='none'; }
+
+const _RESULTADO_LABEL = {
+    importado:{label:'Importado',color:'#059669',bg:'#d1fae5'},
+    duplicata:{label:'Duplicata',color:'#d97706',bg:'#fef3c7'},
+    erro:{label:'Erro',color:'#dc2626',bg:'#fee2e2'},
+    ignorado:{label:'Ignorado',color:'#6b7280',bg:'#f3f4f6'},
+    evento:{label:'Evento',color:'#7c3aed',bg:'#ede9fe'},
+};
+function _badgeRes(r) {
+    const s=_RESULTADO_LABEL[r]||{label:r,color:'#64748b',bg:'#f1f5f9'};
+    return `<span style="background:${s.bg};color:${s.color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${s.label}</span>`;
+}
+function carregarLog() {
+    document.getElementById('logTableWrap').innerHTML='<p style="color:#94a3b8;text-align:center;margin-top:40px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
+    fetch('{{ url_for("escrita_fiscal.api_log_importacoes") }}?limit=60')
+    .then(r=>r.json()).then(data=>{
+        const rows=data.rows||[];
+        if(!rows.length){document.getElementById('logTableWrap').innerHTML='<p style="color:#94a3b8;text-align:center;margin-top:40px;">Nenhum registro.</p>';return;}
+        const oc={agendado:'#6366f1',manual:'#059669'};
+        let html=`<table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Data/Hora</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Dept.</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">Origem</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;"></th>
+          </tr></thead><tbody>`;
+        rows.forEach(r=>{
+            const c=oc[r.origem]||'#64748b';
+            html+=`<tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+              <td style="padding:8px 10px;color:#475569;">${r.iniciado_em||''}</td>
+              <td style="padding:8px 10px;font-weight:600;">${r.departamento}</td>
+              <td style="padding:8px 6px;text-align:center;"><span style="background:${c}22;color:${c};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${r.origem}</span></td>
+              <td style="padding:8px 6px;text-align:center;color:#059669;font-weight:700;">${r.ok}</td>
+              <td style="padding:8px 6px;text-align:center;color:#d97706;">${r.dup}</td>
+              <td style="padding:8px 6px;text-align:center;color:#dc2626;">${r.err}</td>
+              <td style="padding:8px 6px;text-align:center;">
+                <button onclick="abrirDetalhe(${r.id})" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer;color:#4f46e5;font-weight:600;">
+                  <i class="fas fa-search"></i> Ver
+                </button></td>
+            </tr>`;
+        });
+        html+='</tbody></table>';
+        document.getElementById('logTableWrap').innerHTML=html;
+    }).catch(()=>{document.getElementById('logTableWrap').innerHTML='<p style="color:#dc2626;text-align:center;">Erro ao carregar log.</p>';});
+}
+function abrirDetalhe(logId) {
+    document.getElementById('logDetalheTitle').innerHTML=`<i class="fas fa-file-alt" style="margin-right:8px;color:#6366f1;"></i>Log #${logId}`;
+    document.getElementById('logDetalheBody').innerHTML='<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Carregando...</p>';
+    document.getElementById('logDetalheOverlay').style.display='flex';
+    fetch(`{{ url_for("escrita_fiscal.api_log_importacoes") }}?log_id=${logId}`)
+    .then(r=>r.json()).then(data=>{
+        const row=data.row||{};
+        const files=Array.isArray(row.detalhes)?row.detalhes:[];
+        let html=`<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;text-align:center;flex:1;min-width:80px;"><div style="font-size:22px;font-weight:800;color:#059669;">${row.ok||0}</div><div style="font-size:11px;color:#6b7280;">Ok</div></div>
+          <div style="background:#fffbeb;border-radius:10px;padding:10px 14px;text-align:center;flex:1;min-width:80px;"><div style="font-size:22px;font-weight:800;color:#d97706;">${row.dup||0}</div><div style="font-size:11px;color:#6b7280;">Dup.</div></div>
+          <div style="background:#fef2f2;border-radius:10px;padding:10px 14px;text-align:center;flex:1;min-width:80px;"><div style="font-size:22px;font-weight:800;color:#dc2626;">${row.err||0}</div><div style="font-size:11px;color:#6b7280;">Erros</div></div>
+          <div style="background:#f9fafb;border-radius:10px;padding:10px 14px;text-align:center;flex:1;min-width:80px;"><div style="font-size:22px;font-weight:800;color:#6b7280;">${row.skipped||0}</div><div style="font-size:11px;color:#6b7280;">Ign.</div></div>
+        </div>`;
+        if(!files.length) {html+='<p style="color:#94a3b8;text-align:center;">Sem detalhes.</p>';}
+        else {
+            html+=`<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+              <th style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:left;">Arquivo</th>
+              <th style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:left;">Empresa</th>
+              <th style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;">Resultado</th>
+              <th style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:left;">Detalhe</th>
+            </tr></thead><tbody>`;
+            files.forEach(f=>{
+                html+=`<tr style="border-bottom:1px solid #f3f4f6;">
+                  <td style="padding:5px 8px;font-family:monospace;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.arquivo||''}">${(f.arquivo||'').slice(0,30)}${(f.arquivo||'').length>30?'…':''}</td>
+                  <td style="padding:5px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.empresa||''}</td>
+                  <td style="padding:5px 8px;text-align:center;">${_badgeRes(f.resultado)}</td>
+                  <td style="padding:5px 8px;color:#6b7280;font-size:11px;">${f.detalhe||''}</td></tr>`;
+            });
+            html+='</tbody></table>';
+        }
+        document.getElementById('logDetalheBody').innerHTML=html;
+    }).catch(()=>{document.getElementById('logDetalheBody').innerHTML='<p style="color:#dc2626;text-align:center;">Erro.</p>';});
+}
+
+// ===========================================================================
+// EXECUTAR AGORA (admin only)
+// ===========================================================================
+let _execTimer = null;
+function executarAgendada() {
+    const btn = document.getElementById('btnExecAgendada');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+    fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({departamento:'Fiscal'}),
+    }).then(r=>r.json()).then(data=>{
+        if(data.error){ btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora'; alert(data.error); return; }
+        const jobId = data.job_id;
+        btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Processando...';
+        function poll(){
+            fetch(`{{ url_for("escrita_fiscal.api_executar_agendada_status", job_id="__JID__") }}`.replace('__JID__',jobId))
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='running'||d.status===undefined){ _execTimer=setTimeout(poll,3000); return; }
+                btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora';
+                const ok=d.ok||0,err=d.err||0,dup=d.dup||0;
+                alert(`Concluído!\n✅ ${ok} importadas | 🔄 ${dup} duplicatas | ❌ ${err} erros\n\n${d.msg||''}`);
+                if(ok>0 && (currentClienteId||currentGrupoId)) applyFilters();
+            }).catch(()=>{ _execTimer=setTimeout(poll,5000); });
+        }
+        _execTimer = setTimeout(poll, 2000);
+    }).catch(()=>{ btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora'; });
+}
 </script>
+
+<!-- Modal Dropbox -->
+<div class="dbx-modal-overlay" id="dbxModalOverlay" onclick="closeDbxModal()">
+<div class="dbx-modal" onclick="event.stopPropagation()">
+    <div class="dbx-modal-header">
+        <h3><i class="fab fa-dropbox" style="margin-right:8px;"></i>Importar XML — Saídas</h3>
+        <button onclick="closeDbxModal()" class="dbx-close-btn">&times;</button>
+    </div>
+    <div class="dbx-modal-body">
+        <label>Empresa emitente (opcional)</label>
+        <div class="cc-empresa-ac dbx-empresa-ac" id="dbxEmpresaAcWrap">
+            <input type="text" id="dbxEmpresaInput" placeholder="— Sem empresa específica —"
+                   autocomplete="off" oninput="onDbxEmpresaInput()" onfocus="onDbxEmpresaFocus()" onblur="onDbxEmpresaBlur()" onkeydown="onDbxEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="dbxEmpresaClear" onclick="clearDbxEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="dbxEmpresa" value="">
+            <div class="cc-ac-dropdown" id="dbxEmpresaAcList" style="display:none;"></div>
+        </div>
+        <label>Grupo (opcional)</label>
+        <select id="dbxGrupo">
+            <option value="">— Sem grupo —</option>
+            {% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}
+        </select>
+        <div id="dbxResult"></div>
+    </div>
+    <div class="dbx-modal-footer">
+        <button onclick="closeDbxModal()" style="background:#f8fafc;border:1.5px solid #e2e8f0;padding:9px 22px;border-radius:10px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;">Fechar</button>
+        <button id="btnDbxParar" onclick="pararImportacao()" style="display:none;background:#ef4444;color:#fff;border:none;padding:9px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-stop-circle"></i> Parar
+        </button>
+        <button id="btnDbxImportar" onclick="executarImportacaoDropbox()"
+                style="background:linear-gradient(135deg,#0052cc,#2563eb);color:#fff;border:none;padding:9px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fab fa-dropbox"></i> Importar XML
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- Modal Log -->
+<div id="logModalOverlay" onclick="closeLogModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;width:min(95vw,900px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1e293b;"><i class="fas fa-history" style="margin-right:8px;color:#6366f1;"></i>Log de Importações</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="carregarLog()" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:#475569;"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button onclick="closeLogModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+        </div>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="logTableWrap">
+        <p style="color:#94a3b8;text-align:center;margin-top:40px;">Carregando...</p>
+    </div>
+</div>
+</div>
+
+<!-- Modal Log Detalhe -->
+<div id="logDetalheOverlay" onclick="closeLogDetalhe()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9100;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;width:min(95vw,820px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 id="logDetalheTitle" style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"></h3>
+        <button onclick="closeLogDetalhe()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="logDetalheBody"></div>
+</div>
+</div>
+
 {% endblock %}

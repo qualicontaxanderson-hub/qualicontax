@@ -8,6 +8,11 @@
     </div>
     {% if is_admin %}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="openImportManualModal()" id="btnImportManual"
+                title="Upload direto de XMLs para teste (sem Dropbox)"
+                style="background:#f1f5f9;color:#374151;border:1.5px solid #d1d5db;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-upload"></i> Importação Manual
+        </button>
         <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
                 title="Executa agora a importação de XMLs {% if departamento %}do departamento {{ departamento }}{% else %}de todos os departamentos{% endif %}"
                 style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);">
@@ -35,7 +40,7 @@
 
     <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="module-tile">
         <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
-            <i class="fas fa-file-search"></i>
+            <i class="fas fa-file-invoice-dollar"></i>
         </div>
         <h3 class="module-tile-title">Conferência de Compras</h3>
         <p class="module-tile-desc">Importe XMLs de NF-e de compras, analise por produto, emissor e muito mais</p>
@@ -347,6 +352,110 @@ function salvarHorario() {
         })
         .catch(() => {});
 })();
+
+// ── Importação Manual ────────────────────────────────────────────────────
+function openImportManualModal() {
+    document.getElementById('importManualOverlay').style.display = 'flex';
+    document.getElementById('importManualResult').style.display = 'none';
+    document.getElementById('importManualForm').reset();
+}
+function closeImportManualModal() {
+    document.getElementById('importManualOverlay').style.display = 'none';
+}
+function submitImportManual() {
+    const form = document.getElementById('importManualForm');
+    const files = document.getElementById('importManualFiles').files;
+    if (!files.length) { alert('Selecione pelo menos um arquivo XML.'); return; }
+    const btn = document.getElementById('btnImportManualSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    const fd = new FormData(form);
+    const t0 = Date.now();
+    fetch('{{ url_for("escrita_fiscal.importar_xml") }}', {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        body: fd,
+    })
+    .then(r => r.json())
+    .then(data => {
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+        const div = document.getElementById('importManualResult');
+        div.style.display = 'block';
+        const ok = data.ok || 0, dup = data.dup || 0, err = data.err || 0;
+        const total = files.length;
+        const throughput = total > 0 ? (total / ((Date.now()-t0)/1000)).toFixed(1) : 0;
+        let html = `<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="background:#f0fdf4;border-radius:8px;padding:8px 14px;text-align:center;flex:1;">
+            <div style="font-size:20px;font-weight:800;color:#059669;">${ok}</div>
+            <div style="font-size:11px;color:#6b7280;">Importadas</div>
+          </div>
+          <div style="background:#fffbeb;border-radius:8px;padding:8px 14px;text-align:center;flex:1;">
+            <div style="font-size:20px;font-weight:800;color:#d97706;">${dup}</div>
+            <div style="font-size:11px;color:#6b7280;">Duplicatas</div>
+          </div>
+          <div style="background:#fef2f2;border-radius:8px;padding:8px 14px;text-align:center;flex:1;">
+            <div style="font-size:20px;font-weight:800;color:#dc2626;">${err}</div>
+            <div style="font-size:11px;color:#6b7280;">Erros</div>
+          </div>
+          <div style="background:#f0f9ff;border-radius:8px;padding:8px 14px;text-align:center;flex:1;">
+            <div style="font-size:20px;font-weight:800;color:#0369a1;">${elapsed}s</div>
+            <div style="font-size:11px;color:#6b7280;">${throughput} arq/s</div>
+          </div>
+        </div>`;
+        if (data.errors && data.errors.length) {
+            html += `<div style="background:#fef2f2;border-radius:8px;padding:10px 14px;font-size:12px;color:#991b1b;">
+              <strong>Erros:</strong><br>${data.errors.map(e=>`• ${e}`).join('<br>')}
+            </div>`;
+        }
+        div.innerHTML = html;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Importar';
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Importar';
+        alert('Erro de conexão ao importar.');
+    });
+}
 </script>
+
+<!-- Modal Importação Manual -->
+<div id="importManualOverlay" onclick="closeImportManualModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,560px);display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:16px 16px 0 0;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b;">
+            <i class="fas fa-upload" style="margin-right:8px;color:#6366f1;"></i>Importação Manual de XMLs
+        </h3>
+        <button onclick="closeImportManualModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="padding:20px 24px;">
+        <p style="font-size:12px;color:#64748b;margin:0 0 16px;line-height:1.5;">
+            Upload direto de XMLs para teste de velocidade de importação (sem Dropbox).<br>
+            As notas são importadas imediatamente sem movimentação de arquivos.
+        </p>
+        <form id="importManualForm" enctype="multipart/form-data">
+            <div style="margin-bottom:14px;">
+                <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;display:block;margin-bottom:5px;">Arquivos XML</label>
+                <input type="file" id="importManualFiles" name="xml_files" multiple accept=".xml"
+                       style="width:100%;padding:8px;border:1.5px dashed #d1d5db;border-radius:8px;font-size:13px;cursor:pointer;background:#f8fafc;">
+            </div>
+        </form>
+        <div id="importManualResult" style="display:none;margin-top:12px;"></div>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;border-radius:0 0 16px 16px;background:#f8fafc;">
+        <button onclick="closeImportManualModal()"
+                style="background:#f1f5f9;border:1.5px solid #e2e8f0;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;">
+            Fechar
+        </button>
+        <button id="btnImportManualSubmit" onclick="submitImportManual()"
+                style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-upload"></i> Importar
+        </button>
+    </div>
+</div>
+</div>
+
 {% endif %}
 {% endblock %}

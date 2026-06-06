@@ -253,6 +253,13 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
             style="background:rgba(100,116,139,.12);color:#475569;border:1.5px solid rgba(100,116,139,.25);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
         <i class="fas fa-history"></i> Log
     </button>
+    {% if current_user.is_admin() %}
+    <button onclick="executarAgendada()" id="btnExecAgendada"
+            title="Executa agora a importação Dropbox do departamento Fiscal"
+            style="background:rgba(5,150,105,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <i class="fas fa-play-circle"></i> Executar Agora
+    </button>
+    {% endif %}
 </div>
 
 <!-- KPIs -->
@@ -1932,6 +1939,34 @@ function abrirDetalhe(logId) {
             document.getElementById('logDetalheBody').innerHTML =
                 '<p style="color:#dc2626;text-align:center;">Erro ao carregar detalhes.</p>';
         });
+}
+
+// ── Executar Agora (admin) ───────────────────────────────────────────────
+let _execTimer = null;
+function executarAgendada() {
+    const btn = document.getElementById('btnExecAgendada');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+    fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({departamento:'Fiscal'}),
+    }).then(r=>r.json()).then(data=>{
+        if(data.error){ btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora'; alert(data.error); return; }
+        const jobId = data.job_id;
+        btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Processando...';
+        function poll(){
+            fetch(`{{ url_for("escrita_fiscal.api_executar_agendada_status", job_id="__JID__") }}`.replace('__JID__',jobId))
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='running'||d.status===undefined){ _execTimer=setTimeout(poll,3000); return; }
+                btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora';
+                const ok=d.ok||0,err=d.err||0,dup=d.dup||0;
+                alert(`Concluído!\n✅ ${ok} importadas | 🔄 ${dup} duplicatas | ❌ ${err} erros\n\n${d.msg||''}`);
+                if(ok>0 && (currentClienteId||currentGrupoId)) applyFilters();
+            }).catch(()=>{ _execTimer=setTimeout(poll,5000); });
+        }
+        _execTimer = setTimeout(poll, 2000);
+    }).catch(()=>{ btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora'; });
 }
 
 </script>
