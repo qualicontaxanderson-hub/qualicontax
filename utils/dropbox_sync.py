@@ -393,14 +393,14 @@ class DropboxService:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
-        return self._build_path(root, 'IMPORTADOS', pasta_empresa, str(dt.year), f'{dt.month:02d}')
+        return self._build_path(root, 'IMPORTADOS', str(dt.year), pasta_empresa, f'{dt.month:02d}.{dt.year}')
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
                     dt: datetime = None, empresa_numero: str = None) -> str:
         dt = dt or datetime.now()
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
-        return self._build_path(root, 'ERROS', pasta_empresa, str(dt.year), f'{dt.month:02d}')
+        return self._build_path(root, 'ERROS', str(dt.year), pasta_empresa, f'{dt.month:02d}.{dt.year}')
 
 
 def normalize_departamento(departamento: str) -> str:
