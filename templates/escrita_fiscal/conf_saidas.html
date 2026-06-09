@@ -188,12 +188,27 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     </div>
     <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
     {% if current_user.is_admin() %}
-    <button onclick="executarAgendada()" id="btnExecAgendada"
+    <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
             title="Executa agora a importação Dropbox do departamento Fiscal"
-            style="background:rgba(5,150,105,.85);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+            style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);white-space:nowrap;">
         <i class="fas fa-play-circle"></i> Executar Agora
     </button>
     {% endif %}
+
+<!-- ===================== MODAL: Resultado Executar Agora ===================== -->
+<div id="execAgendadaOverlay" onclick="closeExecAgendada()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9200;align-items:center;justify-content:center;">
+<div onclick="event.stopPropagation()"
+     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,700px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"><i class="fas fa-play-circle" style="margin-right:8px;color:#059669;"></i>Resultado da Importação</h3>
+        <button onclick="closeExecAgendada()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 24px;" id="execAgendadaBody">
+        <p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Processando...</p>
+    </div>
+</div>
+</div>
 </div>
 
 <!-- KPIs -->
@@ -1415,31 +1430,145 @@ function abrirDetalhe(logId) {
 // ===========================================================================
 // EXECUTAR AGORA (admin only)
 // ===========================================================================
-let _execTimer = null;
-function executarAgendada() {
+// Modal de resultado idêntico ao da tela principal (/escrita-fiscal/).
+let _execAgendadaTimer = null;
+
+function closeExecAgendada() {
+    document.getElementById('execAgendadaOverlay').style.display = 'none';
+}
+
+function _execAgendadaRenderFinal(data) {
     const btn = document.getElementById('btnExecAgendada');
-    if (!btn) return;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
-    fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({departamento:'Fiscal'}),
-    }).then(r=>r.json()).then(data=>{
-        if(data.error){ btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora'; alert(data.error); return; }
-        const jobId = data.job_id;
-        btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Processando...';
-        function poll(){
-            fetch(`{{ url_for("escrita_fiscal.api_executar_agendada_status", job_id="__JID__") }}`.replace('__JID__',jobId))
-            .then(r=>r.json()).then(d=>{
-                if(d.status==='running'||d.status===undefined){ _execTimer=setTimeout(poll,3000); return; }
-                btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora';
-                const ok=d.ok||0,err=d.err||0,dup=d.dup||0;
-                alert(`Concluído!\n✅ ${ok} importadas | 🔄 ${dup} duplicatas | ❌ ${err} erros\n\n${d.msg||''}`);
-                if(ok>0 && (currentClienteId||currentGrupoId)) applyFilters();
-            }).catch(()=>{ _execTimer=setTimeout(poll,5000); });
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora'; }
+    const resumo = data.resumo || {};
+    const deps = Object.keys(resumo);
+    let html = `<div style="background:#f0fdf4;border-radius:10px;padding:12px 16px;margin-bottom:16px;color:#15803d;font-weight:600;font-size:13px;">
+        <i class="fas fa-check-circle"></i> ${data.msg || 'Concluído.'}
+    </div>`;
+    if (deps.length) {
+        html += `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Departamento</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">↩ Dup</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✖ Err</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">⊘ Ign</th>
+          </tr></thead><tbody>`;
+        deps.forEach(d => {
+            const r = resumo[d];
+            const hasActivity = (r.ok + r.dup + r.err + r.skipped) > 0;
+            const rowStyle = hasActivity ? '' : 'color:#94a3b8;';
+            const pasta = r.pasta ? `<br><span style="font-weight:400;font-size:11px;color:#94a3b8;">${r.pasta}</span>` : '';
+            html += `<tr style="border-bottom:1px solid #f1f5f9;${rowStyle}">
+              <td style="padding:7px 10px;font-weight:600;">${d}${pasta}</td>
+              <td style="padding:7px 6px;text-align:center;${hasActivity ? 'color:#059669;font-weight:700;' : ''}">${r.ok}</td>
+              <td style="padding:7px 6px;text-align:center;${r.dup > 0 ? 'color:#d97706;' : ''}">${r.dup}</td>
+              <td style="padding:7px 6px;text-align:center;${r.err > 0 ? 'color:#dc2626;' : ''}">${r.err}</td>
+              <td style="padding:7px 6px;text-align:center;">${r.skipped}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    // ── Por empresa / mês (numero + nome + competência) ───────────────
+    const impCos = data.imported_companies || [];
+    if (impCos.length) {
+        html += `<div style="margin-top:16px;">
+          <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;">
+            <i class="fas fa-building" style="color:#2563eb;margin-right:6px;"></i>Por Empresa / Mês (${impCos.length})
+          </div>`;
+        impCos.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(c => {
+            const label = (c.numero ? `<strong style="color:#6366f1;">${c.numero}</strong> — ` : '') + (c.nome || '—');
+            html += `<div style="padding:7px 0;border-top:1px solid #eef2f7;">
+              <div style="font-size:12.5px;margin-bottom:3px;">${label}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+            (c.periodos || []).forEach(p => {
+                html += `<span style="font-size:11px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;">
+                    <span style="color:#64748b;font-weight:600;">${p.periodo}</span>
+                    ${p.ok > 0 ? ` <span style="color:#059669;font-weight:700;">✅ ${p.ok}</span>` : ''}
+                    ${p.dup > 0 ? ` <span style="color:#d97706;">🔄 ${p.dup}</span>` : ''}
+                    ${p.err > 0 ? ` <span style="color:#dc2626;font-weight:700;">❌ ${p.err}</span>` : ''}
+                  </span>`;
+            });
+            html += `</div></div>`;
+        });
+        html += `</div>`;
+    }
+    if (data.erros && data.erros.length) {
+        html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
+            <strong>Erros:</strong> ${data.erros.join('<br>')}
+        </div>`;
+    }
+    document.getElementById('execAgendadaBody').innerHTML = html;
+    // Atualiza a grade se houver filtro de empresa/grupo ativo (UX original).
+    if (typeof applyFilters === 'function' && (data.ok || 0) > 0 &&
+        typeof currentClienteId !== 'undefined' && (currentClienteId || currentGrupoId)) {
+        applyFilters();
+    }
+}
+
+function _execAgendadaPollStatus(jobId) {
+    const statusUrl = '{{ url_for("escrita_fiscal.api_executar_agendada_status", job_id="__JID__") }}'.replace('__JID__', jobId);
+    fetch(statusUrl)
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            clearInterval(_execAgendadaTimer);
+            _execAgendadaTimer = null;
+            const btn = document.getElementById('btnExecAgendada');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora'; }
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<div style="background:#fef2f2;border-radius:10px;padding:16px;color:#dc2626;font-weight:600;">${data.error}</div>`;
+            return;
         }
-        _execTimer = setTimeout(poll, 2000);
-    }).catch(()=>{ btn.disabled=false; btn.innerHTML='<i class="fas fa-play-circle"></i> Executar Agora'; });
+        const done = data.status === 'done' || data.status === 'error' || data.status === 'stopped';
+        if (!done) {
+            const total = data.total_deps || 1;
+            const completed = data.completed_deps || 0;
+            const cur = data.current_dep ? ` — ${data.current_dep}` : '';
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<p style="color:#94a3b8;text-align:center;margin-top:30px;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Processando Fiscal${cur}… (${completed}/${total})
+                </p>`;
+            return;
+        }
+        clearInterval(_execAgendadaTimer);
+        _execAgendadaTimer = null;
+        _execAgendadaRenderFinal(data);
+    })
+    .catch(() => {});
+}
+
+function executarImportacaoAgendada() {
+    const btn = document.getElementById('btnExecAgendada');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...'; }
+    document.getElementById('execAgendadaBody').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;margin-top:30px;"><i class="fas fa-spinner fa-spin"></i> Iniciando importação do departamento Fiscal…</p>';
+    document.getElementById('execAgendadaOverlay').style.display = 'flex';
+
+    fetch('{{ url_for("escrita_fiscal.api_executar_importacao_agendada") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({departamento: 'Fiscal'}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora'; }
+            document.getElementById('execAgendadaBody').innerHTML =
+                `<div style="background:#fef2f2;border-radius:10px;padding:16px;color:#dc2626;font-weight:600;">${data.error}</div>`;
+            return;
+        }
+        const jobId = data.job_id;
+        if (_execAgendadaTimer) clearInterval(_execAgendadaTimer);
+        _execAgendadaTimer = setInterval(() => _execAgendadaPollStatus(jobId), 3000);
+        _execAgendadaPollStatus(jobId);
+    })
+    .catch(() => {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora'; }
+        document.getElementById('execAgendadaBody').innerHTML =
+            '<p style="color:#dc2626;text-align:center;">Erro de conexão.</p>';
+    });
 }
 </script>
 

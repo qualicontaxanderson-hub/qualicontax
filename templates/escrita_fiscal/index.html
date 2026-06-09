@@ -353,6 +353,30 @@ function _execAgendadaRenderFinal(data) {
         });
         html += '</tbody></table>';
     }
+    // ── Por empresa / mês (numero + nome + competência) ───────────────
+    const impCos = data.imported_companies || [];
+    if (impCos.length) {
+        html += `<div style="margin-top:16px;">
+          <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;">
+            <i class="fas fa-building" style="color:#2563eb;margin-right:6px;"></i>Por Empresa / Mês (${impCos.length})
+          </div>`;
+        impCos.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(c => {
+            const label = (c.numero ? `<strong style="color:#6366f1;">${c.numero}</strong> — ` : '') + (c.nome || '—');
+            html += `<div style="padding:7px 0;border-top:1px solid #eef2f7;">
+              <div style="font-size:12.5px;margin-bottom:3px;">${label}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+            (c.periodos || []).forEach(p => {
+                html += `<span style="font-size:11px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;">
+                    <span style="color:#64748b;font-weight:600;">${p.periodo}</span>
+                    ${p.ok > 0 ? ` <span style="color:#059669;font-weight:700;">✅ ${p.ok}</span>` : ''}
+                    ${p.dup > 0 ? ` <span style="color:#d97706;">🔄 ${p.dup}</span>` : ''}
+                    ${p.err > 0 ? ` <span style="color:#dc2626;font-weight:700;">❌ ${p.err}</span>` : ''}
+                  </span>`;
+            });
+            html += `</div></div>`;
+        });
+        html += `</div>`;
+    }
     if (data.erros && data.erros.length) {
         html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
             <strong>Erros:</strong> ${data.erros.join('<br>')}

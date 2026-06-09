@@ -2063,6 +2063,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
+    _imported_companies: dict = {}   # (num, nome) → {(year, month): {ok, dup, err}}
     _last_seen_key: tuple[str, str] | None = None  # cursor (name_lower, path)
 
     def _get_or_create_pasta(path: str) -> str:
@@ -2254,6 +2255,25 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                                       'numero': _emp_num_log,
                                       'detalhe': _det_log + _comp_log})
 
+                # Sumário por empresa/competência (mesmo padrão do fluxo síncrono).
+                # Em lançamento duplo registra AS DUAS empresas (dest e emit).
+                try:
+                    _period_y = _dt.year if hasattr(_dt, 'year') else now.year
+                    _period_m = _dt.month if hasattr(_dt, 'month') else now.month
+                    _period = (_period_y, _period_m)
+                    _co_keys = [(str(_num or ''), _nome)]
+                    if _cli is not None and _emit_cli_ag is not None:
+                        _co_keys.append((str(_ef_ag.get('numero_cliente') or ''),
+                                         _ef_ag['nome_razao_social']))
+                    for _co_key in _co_keys:
+                        if _co_key not in _imported_companies:
+                            _imported_companies[_co_key] = {}
+                        if _period not in _imported_companies[_co_key]:
+                            _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
+                        _imported_companies[_co_key][_period]['dup' if _dup_log else 'ok'] += 1
+                except Exception:
+                    pass
+
                 # Copia para pasta do emitente quando ambos (dest e emit) são clientes
                 if _cli is not None and _emit_cli_ag is not None:
                     try:
@@ -2330,8 +2350,22 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     except Exception:
         logger.exception('[agendado] Falha ao atualizar log_id=%s', log_id)
 
+    # Converte o sumário por empresa em lista (mesmo formato do fluxo síncrono):
+    # [{numero, nome, periodos: [{periodo, ok, dup, err}]}]
+    imported_companies_list = []
+    for (num, nome), periods_data in sorted(
+            _imported_companies.items(), key=lambda x: x[0][1] or ''):
+        periodos = [
+            {'periodo': f'{m:02d}/{y}', 'ok': s['ok'], 'dup': s['dup'], 'err': s['err']}
+            for (y, m), s in sorted(periods_data.items())
+            if s['ok'] + s['dup'] + s['err'] > 0
+        ]
+        if periodos:
+            imported_companies_list.append({'numero': num, 'nome': nome, 'periodos': periodos})
+
     totals['log_id'] = log_id
     totals['file_logs'] = file_logs
+    totals['imported_companies'] = imported_companies_list
     return totals
 
 
@@ -2349,6 +2383,17 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None', departamentos:
     job['completed_deps'] = 0
     job['resumo'] = {}
     job['erros'] = []
+    job['imported_companies'] = []
+    # Agrega o sumário por empresa/competência de TODOS os departamentos:
+    # (numero, nome) → {'mm/yyyy': {ok, dup, err}}
+    _agg_companies: dict = {}
+
+    def _per_sort_key(p: str):
+        try:
+            _mm, _yy = p.split('/')
+            return (int(_yy), int(_mm))
+        except Exception:
+            return (0, 0)
 
     total_ok = 0
     total_dup = 0
@@ -2377,6 +2422,31 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None', departamentos:
             new_resumo = dict(job['resumo'])
             new_resumo[dep] = dep_entry
             job['resumo'] = new_resumo
+
+            # Junta o imported_companies deste departamento no agregado global,
+            # somando ok/dup/err por (numero, nome, competência).
+            for _co in (result.get('imported_companies') or []):
+                _key = (_co.get('numero') or '', _co.get('nome') or '')
+                _bucket = _agg_companies.setdefault(_key, {})
+                for _p in (_co.get('periodos') or []):
+                    _slot = _bucket.setdefault(_p.get('periodo') or '',
+                                               {'ok': 0, 'dup': 0, 'err': 0})
+                    _slot['ok'] += _p.get('ok', 0)
+                    _slot['dup'] += _p.get('dup', 0)
+                    _slot['err'] += _p.get('err', 0)
+            # Reconstrói a lista para o snapshot do job (lida pelo /status).
+            _imp_list = []
+            for (_num_c, _nome_c), _pers in sorted(
+                    _agg_companies.items(), key=lambda x: x[0][1] or ''):
+                _periodos = [
+                    {'periodo': _pp, 'ok': _ss['ok'], 'dup': _ss['dup'], 'err': _ss['err']}
+                    for _pp, _ss in sorted(_pers.items(), key=lambda kv: _per_sort_key(kv[0]))
+                    if _ss['ok'] + _ss['dup'] + _ss['err'] > 0
+                ]
+                if _periodos:
+                    _imp_list.append({'numero': _num_c, 'nome': _nome_c, 'periodos': _periodos})
+            job['imported_companies'] = _imp_list
+
             total_ok += result['ok']
             total_dup += result['dup']
             total_err += result['err']
