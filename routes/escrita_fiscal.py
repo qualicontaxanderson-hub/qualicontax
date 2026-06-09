@@ -1389,6 +1389,19 @@ def api_importar_dropbox():
                 _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
             except Exception:
                 pass
+            # Copia para pasta do emitente quando ambos (dest e emit) são clientes
+            if _cli is not None and _emit_cli_sync is not None:
+                try:
+                    _emit_nome_sync = _emit_found_sync['nome_razao_social']
+                    _emit_num_sync = _emit_found_sync.get('numero_cliente') or None
+                    pasta_emit_sync = _get_or_create_pasta(
+                        svc.pasta_importados(departamento, _emit_nome_sync, _dt,
+                                             empresa_numero=_emit_num_sync))
+                    if not svc.copy_file(info['path'], f"{pasta_emit_sync}/{info['name']}"):
+                        logger.warning('%s: falha ao copiar para pasta do emitente', info['name'])
+                except Exception as _exc_copy:
+                    logger.warning('%s: erro ao copiar para pasta do emitente: %s',
+                                   info['name'], _exc_copy)
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
             # (pasta criada apenas neste momento, não antecipadamente)
             try:
@@ -1811,6 +1824,20 @@ def _run_import_job(job: dict, departamento: str,
                         _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
                     except Exception:
                         pass
+                    # Copia para pasta do emitente quando ambos (dest e emit) são clientes
+                    if _cli is not None and _emit_cli_job is not None:
+                        try:
+                            _emit_nome_job = _ef_job['nome_razao_social']
+                            _emit_num_job = _ef_job.get('numero_cliente') or None
+                            pasta_emit_job = _get_or_create_pasta(
+                                svc.pasta_importados(departamento, _emit_nome_job, _dt,
+                                                     empresa_numero=_emit_num_job))
+                            if not svc.copy_file(info['path'], f"{pasta_emit_job}/{info['name']}"):
+                                logger.warning('[import_job] %s: falha ao copiar para pasta do emitente',
+                                               info['name'])
+                        except Exception as _exc_copy:
+                            logger.warning('[import_job] %s: erro ao copiar para pasta do emitente: %s',
+                                           info['name'], _exc_copy)
                     try:
                         pasta_imp = _get_or_create_pasta(
                             svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
@@ -2201,6 +2228,20 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
                                       'empresa': _nome, 'detalhe': 'Importado com sucesso → IMPORTADOS'})
 
+                # Copia para pasta do emitente quando ambos (dest e emit) são clientes
+                if _cli is not None and _emit_cli_ag is not None:
+                    try:
+                        _emit_nome_ag = _ef_ag['nome_razao_social']
+                        _emit_num_ag = _ef_ag.get('numero_cliente') or None
+                        pasta_emit_ag = _get_or_create_pasta(
+                            svc.pasta_importados(departamento, _emit_nome_ag, _dt,
+                                                 empresa_numero=_emit_num_ag))
+                        if not svc.copy_file(info['path'], f"{pasta_emit_ag}/{info['name']}"):
+                            logger.warning('[agendado] %s: falha ao copiar para pasta do emitente',
+                                           info['name'])
+                    except Exception as _exc_copy:
+                        logger.warning('[agendado] %s: erro ao copiar para pasta do emitente: %s',
+                                       info['name'], _exc_copy)
                 try:
                     pasta_imp = _get_or_create_pasta(
                         svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
