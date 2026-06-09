@@ -1377,16 +1377,22 @@ def api_importar_dropbox():
             else:
                 ok += 1
             # Registra empresa/período para o sumário do resultado.
+            # Em lançamento duplo (dest e emit ambos clientes), registra AS DUAS
+            # empresas para que ambas apareçam no detalhamento por empresa.
             try:
                 _period_y = _dt.year if hasattr(_dt, 'year') else now.year
                 _period_m = _dt.month if hasattr(_dt, 'month') else now.month
-                _co_key = (str(_num or ''), _nome)
                 _period = (_period_y, _period_m)
-                if _co_key not in _imported_companies:
-                    _imported_companies[_co_key] = {}
-                if _period not in _imported_companies[_co_key]:
-                    _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
-                _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
+                _co_keys = [(str(_num or ''), _nome)]
+                if _cli is not None and _emit_cli_sync is not None:
+                    _co_keys.append((str(_emit_found_sync.get('numero_cliente') or ''),
+                                     _emit_found_sync['nome_razao_social']))
+                for _co_key in _co_keys:
+                    if _co_key not in _imported_companies:
+                        _imported_companies[_co_key] = {}
+                    if _period not in _imported_companies[_co_key]:
+                        _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
+                    _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
             except Exception:
                 pass
             # Copia para pasta do emitente quando ambos (dest e emit) são clientes
@@ -1815,13 +1821,17 @@ def _run_import_job(job: dict, departamento: str,
                     try:
                         _period_y = _dt.year if hasattr(_dt, 'year') else now.year
                         _period_m = _dt.month if hasattr(_dt, 'month') else now.month
-                        _co_key = (str(_num or ''), _nome)
                         _period = (_period_y, _period_m)
-                        if _co_key not in _imported_companies:
-                            _imported_companies[_co_key] = {}
-                        if _period not in _imported_companies[_co_key]:
-                            _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
-                        _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
+                        _co_keys = [(str(_num or ''), _nome)]
+                        if _cli is not None and _emit_cli_job is not None:
+                            _co_keys.append((str(_ef_job.get('numero_cliente') or ''),
+                                             _ef_job['nome_razao_social']))
+                        for _co_key in _co_keys:
+                            if _co_key not in _imported_companies:
+                                _imported_companies[_co_key] = {}
+                            if _period not in _imported_companies[_co_key]:
+                                _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
+                            _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
                     except Exception:
                         pass
                     # Copia para pasta do emitente quando ambos (dest e emit) são clientes
@@ -2219,14 +2229,30 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                 result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
                                         dest_cli=_cli, emit_cli=_emit_cli_ag,
                                         vinculos_cache=_vinculos_cache)
-                if result == 'dup':
+                _dup_log = (result == 'dup')
+                _res_log = 'duplicata' if _dup_log else 'importado'
+                _det_log = ('NF-e já importada anteriormente' if _dup_log
+                            else 'Importado com sucesso → IMPORTADOS')
+                if _dup_log:
                     totals['dup'] += 1
-                    file_logs.append({'arquivo': info['name'], 'resultado': 'duplicata',
-                                      'empresa': _nome, 'detalhe': 'NF-e já importada anteriormente'})
                 else:
                     totals['ok'] += 1
-                    file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
-                                      'empresa': _nome, 'detalhe': 'Importado com sucesso → IMPORTADOS'})
+                # Lista as empresas envolvidas no detalhamento. Em lançamento duplo
+                # (dest e emit ambos clientes), registra AS DUAS empresas.
+                _empresas_log = [(_num, _nome)]
+                if _cli is not None and _emit_cli_ag is not None:
+                    _empresas_log.append((_ef_ag.get('numero_cliente') or None,
+                                          _ef_ag['nome_razao_social']))
+                for _emp_num_log, _emp_nome_log in _empresas_log:
+                    _comp_log = ''
+                    try:
+                        _comp_log = f' ({_dt.month:02d}/{_dt.year})' if hasattr(_dt, 'year') else ''
+                    except Exception:
+                        _comp_log = ''
+                    file_logs.append({'arquivo': info['name'], 'resultado': _res_log,
+                                      'empresa': _emp_nome_log,
+                                      'numero': _emp_num_log,
+                                      'detalhe': _det_log + _comp_log})
 
                 # Copia para pasta do emitente quando ambos (dest e emit) são clientes
                 if _cli is not None and _emit_cli_ag is not None:
