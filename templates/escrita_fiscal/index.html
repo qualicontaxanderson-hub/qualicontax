@@ -129,7 +129,7 @@
 <div id="execAgendadaOverlay" onclick="closeExecAgendada()"
      style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9200;align-items:center;justify-content:center;">
 <div onclick="event.stopPropagation()"
-     style="background:#fff;border-radius:16px;padding:0;width:min(95vw,700px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
+     style="background:#fff;border-radius:16px;padding:0;width:min(96vw,780px);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.22);">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e5e7eb;">
         <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b;"><i class="fas fa-play-circle" style="margin-right:8px;color:#059669;"></i>Resultado da Importação</h3>
         <button onclick="closeExecAgendada()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
@@ -320,17 +320,124 @@ function closeExecAgendada() {
 }
 let _execAgendadaTimer = null;
 
+function _execEsc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _execFmtCnpj(v) {
+    const d = String(v || '').replace(/\D/g, '');
+    if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+    return v || '—';
+}
+
+function _execCopyFallback(msg, done) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = msg;
+        ta.style.position = 'fixed'; ta.style.top = '-9999px'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) { done(); return; }
+    } catch (e) { /* ignore */ }
+    window.prompt('Copie o texto abaixo:', msg);
+}
+
+function _execWhatsappCopy(btnEl, destNome, destCnpj) {
+    const msg = `Esta empresa *${destNome}* (CNPJ ${_execFmtCnpj(destCnpj)}) não está cadastrada no app Qualicontax. Há nota(s) fiscal(is) dela aguardando na pasta NOVO, que só serão lançadas após o cadastro. Pode providenciar o cadastro, por favor? Obrigado!`;
+    const done = () => {
+        if (!btnEl.dataset.orig) btnEl.dataset.orig = btnEl.innerHTML;
+        btnEl.innerHTML = '<i class="fas fa-check"></i> copiado!';
+        setTimeout(() => { btnEl.innerHTML = btnEl.dataset.orig; }, 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(msg).then(done).catch(() => _execCopyFallback(msg, done));
+    } else {
+        _execCopyFallback(msg, done);
+    }
+}
+
 function _execAgendadaRenderFinal(data) {
     const btn = document.getElementById('btnExecAgendada');
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Agora'; }
     const resumo = data.resumo || {};
     const deps = Object.keys(resumo);
-    let html = `<div style="background:#f0fdf4;border-radius:10px;padding:12px 16px;margin-bottom:16px;color:#15803d;font-weight:600;font-size:13px;">
-        <i class="fas fa-check-circle"></i> ${data.msg || 'Concluído.'}
+    const impCos = data.imported_companies || [];
+    const unreg = data.unregistered_companies || [];
+    const nLancadas = data.ok || 0;
+    const nDup = data.dup || 0;
+    const nNaoCad = unreg.length;
+    const nOutros = data.skipped || 0;
+
+    const chip = (label, val, color, bg) =>
+        `<div style="flex:1;min-width:92px;background:${bg};border-radius:10px;padding:10px 12px;text-align:center;">
+           <div style="font-size:20px;font-weight:800;color:${color};line-height:1;">${val}</div>
+           <div style="font-size:11px;color:${color};font-weight:600;margin-top:3px;">${label}</div>
+         </div>`;
+    let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        ${chip('Lançadas', nLancadas, '#15803d', '#f0fdf4')}
+        ${chip('Não cadastradas', nNaoCad, '#b45309', '#fffbeb')}
+        ${chip('Duplicadas', nDup, '#a16207', '#fefce8')}
+        ${chip('Outros', nOutros, '#475569', '#f1f5f9')}
     </div>`;
+    if (data.msg) {
+        html += `<div style="font-size:12px;color:#64748b;margin-bottom:14px;">${_execEsc(data.msg)}</div>`;
+    }
+
+    // ── Notas lançadas por empresa (numero + nome + competência) ──
+    if (impCos.length) {
+        html += `<div style="font-size:12px;font-weight:700;color:#374151;margin:6px 0 8px;">
+            <i class="fas fa-building" style="color:#2563eb;margin-right:6px;"></i>Notas lançadas por empresa (${impCos.length})
+          </div>`;
+        impCos.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(c => {
+            const label = (c.numero ? `<strong style="color:#6366f1;">${_execEsc(c.numero)}</strong> — ` : '') + _execEsc(c.nome || '—');
+            html += `<div style="padding:7px 0;border-top:1px solid #eef2f7;">
+              <div style="font-size:12.5px;margin-bottom:3px;">${label}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+            (c.periodos || []).forEach(p => {
+                html += `<span style="font-size:11px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;">
+                    <span style="color:#64748b;font-weight:600;">${_execEsc(p.periodo)}</span>
+                    ${p.ok > 0 ? ` <span style="color:#059669;font-weight:700;">✅ ${p.ok}</span>` : ''}
+                    ${p.dup > 0 ? ` <span style="color:#d97706;">🔄 ${p.dup}</span>` : ''}
+                    ${p.err > 0 ? ` <span style="color:#dc2626;font-weight:700;">❌ ${p.err}</span>` : ''}
+                  </span>`;
+            });
+            html += `</div></div>`;
+        });
+    }
+
+    // ── Empresas não cadastradas (ficaram na NOVO) ──
+    if (unreg.length) {
+        html += `<div style="font-size:12px;font-weight:700;color:#92400e;margin:18px 0 8px;">
+            <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Empresas não cadastradas (${unreg.length})
+          </div>`;
+        unreg.forEach(c => {
+            const destNome = c.dest_nome || c.nome || '—';
+            const destCnpj = c.dest_cnpj || c.cnpj || '';
+            const emitNome = c.emit_nome || '';
+            const titulo = emitNome
+                ? `${_execEsc(emitNome)} <span style="color:#9ca3af;">→</span> ${_execEsc(destNome)}`
+                : _execEsc(destNome);
+            html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:170px;">
+                  <div style="font-size:12.5px;font-weight:700;color:#78350f;">${titulo}</div>
+                  <div style="font-size:11px;color:#92400e;font-family:monospace;margin-top:2px;">${_execFmtCnpj(destCnpj)}</div>
+                  <div style="font-size:10.5px;color:#b45309;margin-top:3px;"><i class="fas fa-folder-open"></i> ficou na NOVO</div>
+                </div>
+                <button class="exec-wa-btn" data-nome="${_execEsc(destNome)}" data-cnpj="${_execEsc(destCnpj)}"
+                        style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                  <i class="fab fa-whatsapp" style="font-size:15px;"></i> Avisar
+                </button>
+            </div>`;
+        });
+    }
+
+    // ── Detalhes técnicos (recolhido) ──
     if (deps.length) {
-        html += `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+        let tbl = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
           <thead><tr style="background:#f8fafc;font-weight:700;color:#374151;">
             <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Departamento</th>
             <th style="padding:8px 6px;text-align:center;border-bottom:1px solid #e5e7eb;">✔ Ok</th>
@@ -342,47 +449,33 @@ function _execAgendadaRenderFinal(data) {
             const r = resumo[d];
             const hasActivity = (r.ok + r.dup + r.err + r.skipped) > 0;
             const rowStyle = hasActivity ? '' : 'color:#94a3b8;';
-            const pasta = r.pasta ? `<br><span style="font-weight:400;font-size:11px;color:#94a3b8;">${r.pasta}</span>` : '';
-            html += `<tr style="border-bottom:1px solid #f1f5f9;${rowStyle}">
-              <td style="padding:7px 10px;font-weight:600;">${d}${pasta}</td>
+            const pasta = r.pasta ? `<br><span style="font-weight:400;font-size:11px;color:#94a3b8;">${_execEsc(r.pasta)}</span>` : '';
+            tbl += `<tr style="border-bottom:1px solid #f1f5f9;${rowStyle}">
+              <td style="padding:7px 10px;font-weight:600;">${_execEsc(d)}${pasta}</td>
               <td style="padding:7px 6px;text-align:center;${hasActivity ? 'color:#059669;font-weight:700;' : ''}">${r.ok}</td>
               <td style="padding:7px 6px;text-align:center;${r.dup > 0 ? 'color:#d97706;' : ''}">${r.dup}</td>
               <td style="padding:7px 6px;text-align:center;${r.err > 0 ? 'color:#dc2626;' : ''}">${r.err}</td>
               <td style="padding:7px 6px;text-align:center;">${r.skipped}</td>
             </tr>`;
         });
-        html += '</tbody></table>';
+        tbl += '</tbody></table>';
+        html += `<details style="margin-top:18px;">
+            <summary style="cursor:pointer;font-size:12px;color:#64748b;font-weight:600;">Detalhes técnicos</summary>
+            <div style="margin-top:10px;">${tbl}</div>
+          </details>`;
     }
-    // ── Por empresa / mês (numero + nome + competência) ───────────────
-    const impCos = data.imported_companies || [];
-    if (impCos.length) {
-        html += `<div style="margin-top:16px;">
-          <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;">
-            <i class="fas fa-building" style="color:#2563eb;margin-right:6px;"></i>Por Empresa / Mês (${impCos.length})
-          </div>`;
-        impCos.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(c => {
-            const label = (c.numero ? `<strong style="color:#6366f1;">${c.numero}</strong> — ` : '') + (c.nome || '—');
-            html += `<div style="padding:7px 0;border-top:1px solid #eef2f7;">
-              <div style="font-size:12.5px;margin-bottom:3px;">${label}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
-            (c.periodos || []).forEach(p => {
-                html += `<span style="font-size:11px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;">
-                    <span style="color:#64748b;font-weight:600;">${p.periodo}</span>
-                    ${p.ok > 0 ? ` <span style="color:#059669;font-weight:700;">✅ ${p.ok}</span>` : ''}
-                    ${p.dup > 0 ? ` <span style="color:#d97706;">🔄 ${p.dup}</span>` : ''}
-                    ${p.err > 0 ? ` <span style="color:#dc2626;font-weight:700;">❌ ${p.err}</span>` : ''}
-                  </span>`;
-            });
-            html += `</div></div>`;
-        });
-        html += `</div>`;
-    }
+
     if (data.erros && data.erros.length) {
         html += `<div style="margin-top:12px;background:#fef2f2;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:12px;">
-            <strong>Erros:</strong> ${data.erros.join('<br>')}
+            <strong>Erros:</strong> ${data.erros.map(_execEsc).join('<br>')}
         </div>`;
     }
-    document.getElementById('execAgendadaBody').innerHTML = html;
+
+    const bodyEl = document.getElementById('execAgendadaBody');
+    bodyEl.innerHTML = html;
+    bodyEl.querySelectorAll('.exec-wa-btn').forEach(b => {
+        b.addEventListener('click', () => _execWhatsappCopy(b, b.dataset.nome, b.dataset.cnpj));
+    });
 }
 
 function _execAgendadaPollStatus(jobId) {

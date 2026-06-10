@@ -2064,6 +2064,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
     _pastas_criadas: set = set()
     _imported_companies: dict = {}   # (num, nome) → {(year, month): {ok, dup, err}}
+    _unregistered_companies: dict = {}  # dest_cnpj_digits → {dest_nome, dest_cnpj, emit_nome, emit_cnpj}
     _last_seen_key: tuple[str, str] | None = None  # cursor (name_lower, path)
 
     def _get_or_create_pasta(path: str) -> str:
@@ -2217,9 +2218,20 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                 if _nome is None:
                     _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
                     _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+                    _raw_emit_cnpj = parsed['header'].get('emit_cnpj', '')
+                    _emit_nome_xml = (parsed['header'].get('emit_nome', '') or '').strip()
                     logger.info('[agendado] %s: empresa não cadastrada (dest_cnpj=%r, nome=%r) → NOVO',
                                 info['name'], _raw_dest_cnpj, _dest_nome_xml)
-                    totals['skipped'] += 1
+                    # Registra a empresa não cadastrada (dedupe por dest_cnpj). NÃO conta
+                    # como skipped: "não cadastradas" é categoria própria no resultado.
+                    _unreg_key = re.sub(r'\D', '', _raw_dest_cnpj) or _raw_dest_cnpj or info['name']
+                    if _unreg_key not in _unregistered_companies:
+                        _unregistered_companies[_unreg_key] = {
+                            'dest_nome': _dest_nome_xml,
+                            'dest_cnpj': _raw_dest_cnpj,
+                            'emit_nome': _emit_nome_xml,
+                            'emit_cnpj': _raw_emit_cnpj,
+                        }
                     file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
                                       'empresa': _dest_nome_xml or _raw_dest_cnpj,
                                       'detalhe': f'Empresa não cadastrada (CNPJ: {_raw_dest_cnpj})'})
@@ -2366,6 +2378,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     totals['log_id'] = log_id
     totals['file_logs'] = file_logs
     totals['imported_companies'] = imported_companies_list
+    totals['unregistered_companies'] = list(_unregistered_companies.values())
     return totals
 
 
@@ -2384,9 +2397,12 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None', departamentos:
     job['resumo'] = {}
     job['erros'] = []
     job['imported_companies'] = []
+    job['unregistered_companies'] = []
     # Agrega o sumário por empresa/competência de TODOS os departamentos:
     # (numero, nome) → {'mm/yyyy': {ok, dup, err}}
     _agg_companies: dict = {}
+    # Empresas não cadastradas de TODOS os departamentos, dedupe por dest_cnpj.
+    _agg_unregistered: dict = {}
 
     def _per_sort_key(p: str):
         try:
@@ -2446,6 +2462,13 @@ def _run_all_departments_job(job: dict, usuario_id: 'int | None', departamentos:
                 if _periodos:
                     _imp_list.append({'numero': _num_c, 'nome': _nome_c, 'periodos': _periodos})
             job['imported_companies'] = _imp_list
+
+            # Junta as empresas não cadastradas deste departamento (dedupe por dest_cnpj).
+            for _uc in (result.get('unregistered_companies') or []):
+                _uk = re.sub(r'\D', '', _uc.get('dest_cnpj') or '') or (_uc.get('dest_nome') or '')
+                if _uk and _uk not in _agg_unregistered:
+                    _agg_unregistered[_uk] = _uc
+            job['unregistered_companies'] = list(_agg_unregistered.values())
 
             total_ok += result['ok']
             total_dup += result['dup']
