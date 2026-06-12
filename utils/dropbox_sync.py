@@ -329,13 +329,23 @@ class DropboxService:
                 return
 
     def move_file(self, from_path: str, to_path: str) -> bool:
-        """Move um arquivo de from_path para to_path (autorename se já existir)."""
+        """Move um arquivo de from_path para to_path, sobrescrevendo se já existir."""
         for _attempt in range(2):
             dbx = self._client()
             if not dbx:
                 return False
             try:
-                dbx.files_move_v2(from_path, to_path, autorename=True)
+                try:
+                    dbx.files_move_v2(from_path, to_path, autorename=False)
+                except Exception as _e:
+                    if 'conflict' not in str(_e).lower():
+                        raise
+                    # Destino já existe: apaga e repete o move.
+                    # O arquivo fonte permanece em from_path até o segundo move ter êxito.
+                    dbx.files_delete_v2(to_path)
+                    dbx.files_move_v2(from_path, to_path, autorename=False)
+                    logger.info('Arquivo movido (sobrescrito): %s → %s', from_path, to_path)
+                    return True
                 logger.info('Arquivo movido: %s → %s', from_path, to_path)
                 return True
             except Exception as exc:
@@ -350,13 +360,21 @@ class DropboxService:
                 return False
 
     def copy_file(self, from_path: str, to_path: str) -> bool:
-        """Copia um arquivo de from_path para to_path (autorename se já existir)."""
+        """Copia um arquivo de from_path para to_path, sobrescrevendo se já existir."""
         for _attempt in range(2):
             dbx = self._client()
             if not dbx:
                 return False
             try:
-                dbx.files_copy_v2(from_path, to_path, autorename=True)
+                try:
+                    dbx.files_copy_v2(from_path, to_path, autorename=False)
+                except Exception as _e:
+                    if 'conflict' not in str(_e).lower():
+                        raise
+                    dbx.files_delete_v2(to_path)
+                    dbx.files_copy_v2(from_path, to_path, autorename=False)
+                    logger.info('Arquivo copiado (sobrescrito): %s → %s', from_path, to_path)
+                    return True
                 logger.info('Arquivo copiado: %s → %s', from_path, to_path)
                 return True
             except Exception as exc:
