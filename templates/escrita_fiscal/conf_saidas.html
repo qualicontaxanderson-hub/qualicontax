@@ -1532,23 +1532,27 @@ function _execAgendadaRenderFinal(data) {
             <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Empresas não cadastradas (${unreg.length})
           </div>`;
         unreg.forEach(c => {
-            const destNome = c.dest_nome || c.nome || '—';
-            const destCnpj = c.dest_cnpj || c.cnpj || '';
             const emitNome = c.emit_nome || '';
-            const titulo = emitNome
-                ? `${_execEsc(emitNome)} <span style="color:#9ca3af;">→</span> ${_execEsc(destNome)}`
-                : _execEsc(destNome);
-            html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:170px;">
-                  <div style="font-size:12.5px;font-weight:700;color:#78350f;">${titulo}</div>
-                  <div style="font-size:11px;color:#92400e;font-family:monospace;margin-top:2px;">${_execFmtCnpj(destCnpj)}</div>
-                  <div style="font-size:10.5px;color:#b45309;margin-top:3px;"><i class="fas fa-folder-open"></i> ficou na NOVO</div>
-                </div>
-                <button class="exec-wa-btn" data-nome="${_execEsc(destNome)}" data-cnpj="${_execEsc(destCnpj)}"
-                        style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                  <i class="fab fa-whatsapp" style="font-size:15px;"></i> Avisar
-                </button>
-            </div>`;
+            const emitCnpj = c.emit_cnpj || '';
+            const destNome = c.dest_nome || c.nome || '';
+            const destCnpj = c.dest_cnpj || c.cnpj || '';
+            const mkRow = (label, nome, cnpj) => !nome ? '' :
+                `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+                   <div style="flex:1;min-width:0;">
+                     <span style="font-size:10.5px;color:#92400e;font-weight:600;">${label}:</span>
+                     <span style="font-size:12px;font-weight:700;color:#78350f;margin-left:4px;">${_execEsc(nome)}</span>
+                     <span style="font-size:11px;color:#92400e;font-family:monospace;margin-left:6px;">${_execFmtCnpj(cnpj)}</span>
+                   </div>
+                   <button class="exec-wa-btn" data-nome="${_execEsc(nome)}" data-cnpj="${_execEsc(cnpj)}"
+                           style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;">
+                     <i class="fab fa-whatsapp" style="font-size:14px;"></i> Avisar
+                   </button>
+                 </div>`;
+            html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+                ${mkRow('Emitente', emitNome, emitCnpj)}
+                ${mkRow('Destinatário', destNome, destCnpj)}
+                <div style="font-size:10.5px;color:#b45309;margin-top:6px;"><i class="fas fa-folder-open"></i> ficou na NOVO</div>
+              </div>`;
         });
     }
 
