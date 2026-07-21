@@ -1224,9 +1224,9 @@ def api_importar_dropbox():
     analyzed_in_batch = 0
     details = []
     # Empresas detectadas nos XMLs que não têm cadastro no sistema.
-    # Chave: CNPJ dígitos (ou nome do arquivo), Valor: nome da empresa do XML.
+    # Chave: CNPJ dígitos (ou nome do arquivo), Valor: {dest_nome, dest_cnpj, emit_nome, emit_cnpj}.
     unregistered: dict = {}
-    # Sumário de empresas/períodos importados: (numero, nome) → set of (year, month)
+    # Sumário de empresas/períodos importados: (numero, nome) → {(year, month): {ok, dup, err}}
     _imported_companies: dict = {}
 
     for info in files:
@@ -1303,113 +1303,46 @@ def api_importar_dropbox():
 
         try:
             parsed = parse_nfe_xml(content)
-
-            # Extrai data de emissão imediatamente após o parse para que esteja
-            # disponível mesmo se uma exceção ocorrer mais adiante — o bloco
-            # except usa _dt ao mover o arquivo para a pasta ERROS, e sem essa
-            # atribuição antecipada ele usaria `now` (data atual) em vez da data
-            # real do XML.
             _dt = parsed['header'].get('data_emissao') or now
-            if _dt is now:
-                logger.warning('%s: data_emissao ausente no XML, usando data atual', info['name'])
 
-            # ----------------------------------------------------------
-            # Detecta empresa SEMPRE pelo dest_cnpj do XML.
-            # A seleção do modal (cliente_id / grupo_id) é usada apenas
-            # como filtro — nunca para sobrescrever a empresa do XML.
-            # ----------------------------------------------------------
-            dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+            _r = _processar_nota_nfe(
+                parsed, info['name'], content, _cnpj_cliente_cache,
+                _imported_companies, unregistered,
+                vinculos_cache=_vinculos_cache,
+                filter_cnpjs=filter_cnpjs,
+                grupo_id=grupo_id,
+                origem='DROPBOX',
+                now=now,
+            )
+            _dt   = _r['dt']
+            _nome = _r['nome']
+            _num  = _r['num']
 
-            # Aplica filtro ANTES de verificar cadastro: quando empresa/grupo
-            # está selecionado, XMLs de outras empresas são silenciosamente
-            # ignorados (ficam em NOVO). Isso evita que apareçam na lista de
-            # "empresas não cadastradas" quando o usuário filtra por uma empresa.
-            if filter_cnpjs is not None:
-                if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
-                    skipped += 1
-                    analyzed_in_batch += 1
-                    logger.info('%s: dest_cnpj=%r não pertence ao filtro, ignorado',
-                                info['name'], dest_cnpj_digits)
-                    continue
-
-            if len(dest_cnpj_digits) >= 11:
-                found = _find_cliente_by_doc_digits(dest_cnpj_digits, _cnpj_cliente_cache)
-                if found:
-                    _cli = found['id']
-                    _nome = found['nome_razao_social']
-                    _num = found.get('numero_cliente') or None
-                    logger.info('%s: empresa detectada por dest_cnpj → %s', info['name'], _nome)
-
-            # Detecta cliente emitente para geração de registro de saída
-            _emit_cli_sync = None
-            _emit_digits_sync = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
-            if len(_emit_digits_sync) >= 11:
-                _emit_found_sync = _find_cliente_by_doc_digits(_emit_digits_sync, _cnpj_cliente_cache)
-                if _emit_found_sync and _emit_found_sync['id'] != _cli:
-                    _emit_cli_sync = _emit_found_sync['id']
-                    if _nome is None:
-                        # Só emitente encontrado: usa ele para nomear pasta
-                        _nome = _emit_found_sync['nome_razao_social']
-                        _num = _emit_found_sync.get('numero_cliente') or None
-
-            if _nome is None:
-                # Nenhum cliente encontrado como dest NEM emit — não importar.
-                _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
-                _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
-                _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
-                _unreg_label = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
-                unregistered[_unreg_key] = _unreg_label
+            if _r['codigo'] == 'skipped':
+                skipped += 1
                 analyzed_in_batch += 1
-                logger.warning(
-                    '%s: empresa não cadastrada (dest_cnpj=%r, dest_nome=%r) → deixado em NOVO',
-                    info['name'], _raw_dest_cnpj, _dest_nome_xml,
-                )
+                logger.info('%s: dest_cnpj não pertence ao filtro, ignorado', info['name'])
                 continue
-
-            # Salva entrada (se dest encontrado) e/ou saída (se emit encontrado)
-            result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
-                                    dest_cli=_cli,
-                                    emit_cli=_emit_cli_sync,
-                                    grupo_id=grupo_id if _cli is None else None,
-                                    vinculos_cache=_vinculos_cache)
-            if result == 'dup':
+            if _r['codigo'] == 'unregistered':
+                analyzed_in_batch += 1
+                logger.warning('%s: empresa não cadastrada → deixado em NOVO', info['name'])
+                continue
+            if _r['codigo'] == 'dup':
                 dup += 1
             else:
                 ok += 1
-            # Registra empresa/período para o sumário do resultado.
-            # Em lançamento duplo (dest e emit ambos clientes), registra AS DUAS
-            # empresas para que ambas apareçam no detalhamento por empresa.
-            try:
-                _period_y = _dt.year if hasattr(_dt, 'year') else now.year
-                _period_m = _dt.month if hasattr(_dt, 'month') else now.month
-                _period = (_period_y, _period_m)
-                _co_keys = [(str(_num or ''), _nome)]
-                if _cli is not None and _emit_cli_sync is not None:
-                    _co_keys.append((str(_emit_found_sync.get('numero_cliente') or ''),
-                                     _emit_found_sync['nome_razao_social']))
-                for _co_key in _co_keys:
-                    if _co_key not in _imported_companies:
-                        _imported_companies[_co_key] = {}
-                    if _period not in _imported_companies[_co_key]:
-                        _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
-                    _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
-            except Exception:
-                pass
             # Copia para pasta do emitente quando ambos (dest e emit) são clientes
-            if _cli is not None and _emit_cli_sync is not None:
+            if _r['cli'] is not None and _r['emit_cli'] is not None:
                 try:
-                    _emit_nome_sync = _emit_found_sync['nome_razao_social']
-                    _emit_num_sync = _emit_found_sync.get('numero_cliente') or None
                     pasta_emit_sync = _get_or_create_pasta(
-                        svc.pasta_importados(departamento, _emit_nome_sync, _dt,
-                                             empresa_numero=_emit_num_sync))
+                        svc.pasta_importados(departamento, _r['emit_nome'], _dt,
+                                             empresa_numero=_r['emit_num']))
                     if not svc.copy_file(info['path'], f"{pasta_emit_sync}/{info['name']}"):
                         logger.warning('%s: falha ao copiar para pasta do emitente', info['name'])
                 except Exception as _exc_copy:
                     logger.warning('%s: erro ao copiar para pasta do emitente: %s',
                                    info['name'], _exc_copy)
             # Sucesso (incluindo duplicata) → move para IMPORTADOS
-            # (pasta criada apenas neste momento, não antecipadamente)
             try:
                 pasta_imp = _get_or_create_pasta(
                     svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
@@ -1432,9 +1365,6 @@ def api_importar_dropbox():
                     'erro':    str(exc)[:200],
                 })
             logger.exception('Erro ao processar %s', info['name'])
-            # Move para ERROS sempre que ocorre uma exceção.
-            # Quando a empresa foi identificada usa a pasta da empresa; caso
-            # contrário usa DESCONHECIDO para não deixar o arquivo em NOVO.
             _err_empresa = _nome or 'DESCONHECIDO'
             _err_num = _num if _nome else None
             try:
@@ -1479,8 +1409,11 @@ def api_importar_dropbox():
     elif unregistered and files_physically_moved == 0:
         msg += ' Cadastre as empresas e importe novamente para continuar.'
 
-    # Converte o dict {cnpj: nome} em lista ordenada para o frontend.
-    unreg_list = [{'cnpj': k, 'nome': v} for k, v in sorted(unregistered.items(), key=lambda x: x[1])]
+    # Converte para lista ordenada para o frontend (formato rico: dest_nome/dest_cnpj/emit_nome/emit_cnpj).
+    unreg_list = sorted(
+        unregistered.values(),
+        key=lambda x: x.get('dest_nome') or x.get('dest_cnpj') or '',
+    )
 
     # Sumário de empresas importadas com totais por período.
     imported_companies_list = []
@@ -1595,8 +1528,8 @@ def _run_import_job(job: dict, departamento: str,
 
     ok = dup = err = skipped = 0
     moved_ok = moved_err = 0
-    unregistered: dict = {}          # cnpj/key → nome
-    _imported_companies: dict = {}   # (num, nome) → set of (year, month)
+    unregistered: dict = {}          # cnpj/key → {dest_nome, dest_cnpj, emit_nome, emit_cnpj}
+    _imported_companies: dict = {}   # (num, nome) → {(year, month): {ok, dup, err}}
     details: list = []
     _vinculos_cache: dict = {}
     _cnpj_cliente_cache: dict = _build_cliente_doc_cache()
@@ -1611,10 +1544,10 @@ def _run_import_job(job: dict, departamento: str,
 
     def _snapshot() -> None:
         """Grava progresso atual no dict do job (lido pelo endpoint /status)."""
-        unreg_list = [
-            {'cnpj': k, 'nome': v}
-            for k, v in sorted(unregistered.items(), key=lambda x: x[1])
-        ]
+        unreg_list = sorted(
+            unregistered.values(),
+            key=lambda x: x.get('dest_nome') or x.get('dest_cnpj') or '',
+        )
         imp_list = []
         for (num, nome), periods_data in sorted(
                 _imported_companies.items(), key=lambda x: x[0][1] or ''):
@@ -1773,75 +1706,39 @@ def _run_import_job(job: dict, departamento: str,
                 try:
                     parsed = parse_nfe_xml(content)
                     _dt = parsed['header'].get('data_emissao') or now
-                    dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
 
-                    # Aplica filtro de empresa/grupo se ativo.
-                    if filter_cnpjs is not None:
-                        if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
-                            batch_skipped += 1
-                            skipped += 1
-                            batch_processed += 1
-                            continue
+                    _r = _processar_nota_nfe(
+                        parsed, info['name'], content, _cnpj_cliente_cache,
+                        _imported_companies, unregistered,
+                        vinculos_cache=_vinculos_cache,
+                        filter_cnpjs=filter_cnpjs,
+                        grupo_id=grupo_id_val,
+                        origem='DROPBOX',
+                        now=now,
+                    )
+                    _dt   = _r['dt']
+                    _nome = _r['nome']
+                    _num  = _r['num']
 
-                    if len(dest_cnpj_digits) >= 11:
-                        found = _find_cliente_by_doc_digits(dest_cnpj_digits, _cnpj_cliente_cache)
-                        if found:
-                            _cli = found['id']
-                            _nome = found['nome_razao_social']
-                            _num = found.get('numero_cliente') or None
-
-                    # Detecta emitente para registro de saída
-                    _emit_cli_job = None
-                    _emit_digs_job = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
-                    if len(_emit_digs_job) >= 11:
-                        _ef_job = _find_cliente_by_doc_digits(_emit_digs_job, _cnpj_cliente_cache)
-                        if _ef_job and _ef_job['id'] != _cli:
-                            _emit_cli_job = _ef_job['id']
-                            if _nome is None:
-                                _nome = _ef_job['nome_razao_social']
-                                _num = _ef_job.get('numero_cliente') or None
-
-                    if _nome is None:
-                        _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
-                        _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
-                        _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or info['name']
-                        unregistered[_unreg_key] = _dest_nome_xml or _raw_dest_cnpj or 'CNPJ não identificado'
+                    if _r['codigo'] == 'skipped':
+                        batch_skipped += 1
+                        skipped += 1
+                        batch_processed += 1
+                        continue
+                    if _r['codigo'] == 'unregistered':
                         batch_unregistered_this += 1
                         batch_processed += 1
                         continue
-
-                    result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
-                                            dest_cli=_cli, emit_cli=_emit_cli_job,
-                                            grupo_id=grupo_id_val if _cli is None else None,
-                                            vinculos_cache=_vinculos_cache)
-                    if result == 'dup':
+                    if _r['codigo'] == 'dup':
                         dup += 1
                     else:
                         ok += 1
-                    try:
-                        _period_y = _dt.year if hasattr(_dt, 'year') else now.year
-                        _period_m = _dt.month if hasattr(_dt, 'month') else now.month
-                        _period = (_period_y, _period_m)
-                        _co_keys = [(str(_num or ''), _nome)]
-                        if _cli is not None and _emit_cli_job is not None:
-                            _co_keys.append((str(_ef_job.get('numero_cliente') or ''),
-                                             _ef_job['nome_razao_social']))
-                        for _co_key in _co_keys:
-                            if _co_key not in _imported_companies:
-                                _imported_companies[_co_key] = {}
-                            if _period not in _imported_companies[_co_key]:
-                                _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
-                            _imported_companies[_co_key][_period]['dup' if result == 'dup' else 'ok'] += 1
-                    except Exception:
-                        pass
                     # Copia para pasta do emitente quando ambos (dest e emit) são clientes
-                    if _cli is not None and _emit_cli_job is not None:
+                    if _r['cli'] is not None and _r['emit_cli'] is not None:
                         try:
-                            _emit_nome_job = _ef_job['nome_razao_social']
-                            _emit_num_job = _ef_job.get('numero_cliente') or None
                             pasta_emit_job = _get_or_create_pasta(
-                                svc.pasta_importados(departamento, _emit_nome_job, _dt,
-                                                     empresa_numero=_emit_num_job))
+                                svc.pasta_importados(departamento, _r['emit_nome'], _dt,
+                                                     empresa_numero=_r['emit_num']))
                             if not svc.copy_file(info['path'], f"{pasta_emit_job}/{info['name']}"):
                                 logger.warning('[import_job] %s: falha ao copiar para pasta do emitente',
                                                info['name'])
@@ -1872,10 +1769,8 @@ def _run_import_job(job: dict, departamento: str,
                         })
                     if _nome:
                         try:
-                            _pe_y = _dt.year if hasattr(_dt, 'year') else now.year
-                            _pe_m = _dt.month if hasattr(_dt, 'month') else now.month
                             _pe_key = (str(_num or ''), _nome)
-                            _pe_p = (_pe_y, _pe_m)
+                            _pe_p = (_dt.year, _dt.month) if hasattr(_dt, 'year') else (now.year, now.month)
                             if _pe_key not in _imported_companies:
                                 _imported_companies[_pe_key] = {}
                             if _pe_p not in _imported_companies[_pe_key]:
@@ -2195,43 +2090,23 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
             try:
                 parsed = parse_nfe_xml(content)
                 _dt = parsed['header'].get('data_emissao') or now
-                dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
 
-                if len(dest_cnpj_digits) >= 11:
-                    found = _find_cliente_by_doc_digits(dest_cnpj_digits, _cnpj_cliente_cache)
-                    if found:
-                        _cli = found['id']
-                        _nome = found['nome_razao_social']
-                        _num = found.get('numero_cliente') or None
+                _r = _processar_nota_nfe(
+                    parsed, info['name'], content, _cnpj_cliente_cache,
+                    _imported_companies, _unregistered_companies,
+                    vinculos_cache=_vinculos_cache,
+                    origem='DROPBOX',
+                    now=now,
+                )
+                _dt   = _r['dt']
+                _nome = _r['nome']
+                _num  = _r['num']
 
-                # Detecta emitente para registro de saída
-                _emit_cli_ag = None
-                _emit_digs_ag = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
-                if len(_emit_digs_ag) >= 11:
-                    _ef_ag = _find_cliente_by_doc_digits(_emit_digs_ag, _cnpj_cliente_cache)
-                    if _ef_ag and _ef_ag['id'] != _cli:
-                        _emit_cli_ag = _ef_ag['id']
-                        if _nome is None:
-                            _nome = _ef_ag['nome_razao_social']
-                            _num = _ef_ag.get('numero_cliente') or None
-
-                if _nome is None:
+                if _r['codigo'] == 'unregistered':
                     _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
                     _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
-                    _raw_emit_cnpj = parsed['header'].get('emit_cnpj', '')
-                    _emit_nome_xml = (parsed['header'].get('emit_nome', '') or '').strip()
-                    logger.info('[agendado] %s: empresa não cadastrada (dest_cnpj=%r, nome=%r) → NOVO',
-                                info['name'], _raw_dest_cnpj, _dest_nome_xml)
-                    # Registra a empresa não cadastrada (dedupe por dest_cnpj). NÃO conta
-                    # como skipped: "não cadastradas" é categoria própria no resultado.
-                    _unreg_key = re.sub(r'\D', '', _raw_dest_cnpj) or _raw_dest_cnpj or info['name']
-                    if _unreg_key not in _unregistered_companies:
-                        _unregistered_companies[_unreg_key] = {
-                            'dest_nome': _dest_nome_xml,
-                            'dest_cnpj': _raw_dest_cnpj,
-                            'emit_nome': _emit_nome_xml,
-                            'emit_cnpj': _raw_emit_cnpj,
-                        }
+                    logger.info('[agendado] %s: empresa não cadastrada (dest_cnpj=%r) → NOVO',
+                                info['name'], _raw_dest_cnpj)
                     file_logs.append({'arquivo': info['name'], 'resultado': 'ignorado',
                                       'empresa': _dest_nome_xml or _raw_dest_cnpj,
                                       'detalhe': f'Empresa não cadastrada (CNPJ: {_raw_dest_cnpj})'})
@@ -2239,10 +2114,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     batch_processed += 1
                     continue
 
-                result = _save_nfe_dual(parsed, info['name'], 'DROPBOX', content,
-                                        dest_cli=_cli, emit_cli=_emit_cli_ag,
-                                        vinculos_cache=_vinculos_cache)
-                _dup_log = (result == 'dup')
+                _dup_log = (_r['codigo'] == 'dup')
                 _res_log = 'duplicata' if _dup_log else 'importado'
                 _det_log = ('NF-e já importada anteriormente' if _dup_log
                             else 'Importado com sucesso → IMPORTADOS')
@@ -2250,12 +2122,11 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     totals['dup'] += 1
                 else:
                     totals['ok'] += 1
-                # Lista as empresas envolvidas no detalhamento. Em lançamento duplo
-                # (dest e emit ambos clientes), registra AS DUAS empresas.
+
+                # Registra detalhamento por empresa (ambas no lançamento duplo)
                 _empresas_log = [(_num, _nome)]
-                if _cli is not None and _emit_cli_ag is not None:
-                    _empresas_log.append((_ef_ag.get('numero_cliente') or None,
-                                          _ef_ag['nome_razao_social']))
+                if _r['cli'] is not None and _r['emit_cli'] is not None:
+                    _empresas_log.append((_r['emit_num'], _r['emit_nome']))
                 for _emp_num_log, _emp_nome_log in _empresas_log:
                     _comp_log = ''
                     try:
@@ -2267,33 +2138,12 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                                       'numero': _emp_num_log,
                                       'detalhe': _det_log + _comp_log})
 
-                # Sumário por empresa/competência (mesmo padrão do fluxo síncrono).
-                # Em lançamento duplo registra AS DUAS empresas (dest e emit).
-                try:
-                    _period_y = _dt.year if hasattr(_dt, 'year') else now.year
-                    _period_m = _dt.month if hasattr(_dt, 'month') else now.month
-                    _period = (_period_y, _period_m)
-                    _co_keys = [(str(_num or ''), _nome)]
-                    if _cli is not None and _emit_cli_ag is not None:
-                        _co_keys.append((str(_ef_ag.get('numero_cliente') or ''),
-                                         _ef_ag['nome_razao_social']))
-                    for _co_key in _co_keys:
-                        if _co_key not in _imported_companies:
-                            _imported_companies[_co_key] = {}
-                        if _period not in _imported_companies[_co_key]:
-                            _imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
-                        _imported_companies[_co_key][_period]['dup' if _dup_log else 'ok'] += 1
-                except Exception:
-                    pass
-
                 # Copia para pasta do emitente quando ambos (dest e emit) são clientes
-                if _cli is not None and _emit_cli_ag is not None:
+                if _r['cli'] is not None and _r['emit_cli'] is not None:
                     try:
-                        _emit_nome_ag = _ef_ag['nome_razao_social']
-                        _emit_num_ag = _ef_ag.get('numero_cliente') or None
                         pasta_emit_ag = _get_or_create_pasta(
-                            svc.pasta_importados(departamento, _emit_nome_ag, _dt,
-                                                 empresa_numero=_emit_num_ag))
+                            svc.pasta_importados(departamento, _r['emit_nome'], _dt,
+                                                 empresa_numero=_r['emit_num']))
                         if not svc.copy_file(info['path'], f"{pasta_emit_ag}/{info['name']}"):
                             logger.warning('[agendado] %s: falha ao copiar para pasta do emitente',
                                            info['name'])
@@ -3510,6 +3360,134 @@ def _save_nfe_dual(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     if not results:
         raise ValueError('Nenhum cliente (dest/emit) associado a este XML')
     return 'ok' if 'ok' in results else 'dup'
+
+
+def _processar_nota_nfe(
+    parsed: dict,
+    nome_arquivo: str,
+    xml_raw: str,
+    cnpj_cliente_cache: dict,
+    imported_companies: dict,
+    unregistered_companies: dict,
+    *,
+    vinculos_cache: 'dict | None' = None,
+    filter_cnpjs: 'set | None' = None,
+    grupo_id: 'int | None' = None,
+    origem: str = 'DROPBOX',
+    now: 'datetime | None' = None,
+) -> dict:
+    """Processa uma NF-e já parseada: detecta empresas, salva e atualiza sumários.
+
+    Modifica imported_companies e unregistered_companies in-place.
+
+    Retorna dict:
+        codigo      'ok' | 'dup' | 'unregistered' | 'skipped'
+        save_result 'ok' | 'dup' | None
+        cli         id do cliente destinatário (None se não encontrado)
+        nome        nome da empresa (dest ou emit quando só emit, para pasta Dropbox)
+        num         número do cliente (str | None)
+        dt          datetime de emissão
+        emit_cli    id do cliente emitente (None se não for cliente distinto)
+        emit_nome   nome do emitente (None se emit_cli is None)
+        emit_num    número do cliente emitente (None se emit_cli is None)
+    """
+    _now = now or datetime.now()
+    _dt = parsed['header'].get('data_emissao') or _now
+    dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
+
+    _skipped = {
+        'codigo': 'skipped', 'save_result': None, 'cli': None,
+        'nome': None, 'num': None, 'dt': _dt,
+        'emit_cli': None, 'emit_nome': None, 'emit_num': None,
+    }
+
+    # Filtro de empresa/grupo — aplicado apenas quando filter_cnpjs está definido
+    if filter_cnpjs is not None:
+        if len(dest_cnpj_digits) < 11 or dest_cnpj_digits not in filter_cnpjs:
+            return _skipped
+
+    # Detecta destinatário
+    _cli = None
+    _nome = None
+    _num = None
+    if len(dest_cnpj_digits) >= 11:
+        found = _find_cliente_by_doc_digits(dest_cnpj_digits, cnpj_cliente_cache)
+        if found:
+            _cli  = found['id']
+            _nome = found['nome_razao_social']
+            _num  = found.get('numero_cliente') or None
+
+    # Detecta emitente (para gerar registro de saída quando for cliente distinto)
+    _emit_cli  = None
+    _emit_nome = None
+    _emit_num  = None
+    _emit_digits = re.sub(r'\D', '', parsed['header'].get('emit_cnpj', ''))
+    if len(_emit_digits) >= 11:
+        _emit_found = _find_cliente_by_doc_digits(_emit_digits, cnpj_cliente_cache)
+        if _emit_found and _emit_found['id'] != _cli:
+            _emit_cli  = _emit_found['id']
+            _emit_nome = _emit_found['nome_razao_social']
+            _emit_num  = _emit_found.get('numero_cliente') or None
+            if _nome is None:
+                # Só emitente encontrado: usa nome/num dele para nomear a pasta
+                _nome = _emit_nome
+                _num  = _emit_num
+
+    # Empresa não cadastrada — registra no formato rico e retorna sem salvar
+    if _nome is None:
+        _raw_dest_cnpj = parsed['header'].get('dest_cnpj', '')
+        _dest_nome_xml = (parsed['header'].get('dest_nome', '') or '').strip()
+        _raw_emit_cnpj = parsed['header'].get('emit_cnpj', '')
+        _emit_nome_xml = (parsed['header'].get('emit_nome', '') or '').strip()
+        _unreg_key = dest_cnpj_digits or _raw_dest_cnpj or nome_arquivo
+        if _unreg_key not in unregistered_companies:
+            unregistered_companies[_unreg_key] = {
+                'dest_nome': _dest_nome_xml,
+                'dest_cnpj': _raw_dest_cnpj,
+                'emit_nome': _emit_nome_xml,
+                'emit_cnpj': _raw_emit_cnpj,
+            }
+        return {
+            'codigo': 'unregistered', 'save_result': None, 'cli': None,
+            'nome': None, 'num': None, 'dt': _dt,
+            'emit_cli': None, 'emit_nome': None, 'emit_num': None,
+        }
+
+    # Salva a nota (entrada para dest e/ou saída para emit)
+    save_result = _save_nfe_dual(
+        parsed, nome_arquivo, origem, xml_raw,
+        dest_cli=_cli,
+        emit_cli=_emit_cli,
+        grupo_id=grupo_id if _cli is None else None,
+        vinculos_cache=vinculos_cache,
+    )
+
+    # Atualiza sumário por empresa/competência (inclui as duas no lançamento duplo)
+    try:
+        _period = (_dt.year, _dt.month) if hasattr(_dt, 'year') else (_now.year, _now.month)
+        _co_keys = [(str(_num or ''), _nome)]
+        if _cli is not None and _emit_cli is not None:
+            _co_keys.append((str(_emit_num or ''), _emit_nome))
+        for _co_key in _co_keys:
+            if _co_key not in imported_companies:
+                imported_companies[_co_key] = {}
+            if _period not in imported_companies[_co_key]:
+                imported_companies[_co_key][_period] = {'ok': 0, 'dup': 0, 'err': 0}
+            imported_companies[_co_key][_period]['dup' if save_result == 'dup' else 'ok'] += 1
+    except Exception:
+        pass
+
+    return {
+        'codigo': save_result,
+        'save_result': save_result,
+        'cli': _cli,
+        'nome': _nome,
+        'num': _num,
+        'dt': _dt,
+        'emit_cli': _emit_cli,
+        'emit_nome': _emit_nome,
+        'emit_num': _emit_num,
+    }
 
 
 def _classify_xml(content: str) -> dict:
