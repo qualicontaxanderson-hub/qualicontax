@@ -170,6 +170,76 @@ def db_diag():
     return jsonify(info)
 
 
+# ---------------------------------------------------------------------------
+# TEMP diagnóstico de REDE — REMOVER após investigação.
+# (1) Como o mysql.railway.internal resolve: IPv6 privado (fd..) ou IPv4 público?
+# (2) Custa TLS? Compara select1_ms_x3 com ssl_disabled=True vs False (conexão nova).
+# ---------------------------------------------------------------------------
+@app.route('/net-diag')
+def net_diag():
+    import socket, time as _t
+    import mysql.connector
+
+    host = Config.DB_HOST
+    port = int(Config.DB_PORT)
+    out = {'host': host, 'port': port}
+
+    # 1) Resolução DNS: famílias e IPs retornados.
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        addrs = []
+        for fam, _type, _proto, _canon, sockaddr in infos:
+            fam_name = ('IPv6' if fam == socket.AF_INET6
+                        else 'IPv4' if fam == socket.AF_INET else str(fam))
+            addrs.append({'family': fam_name, 'addr': sockaddr[0]})
+        out['resolved'] = addrs
+        out['has_ipv6'] = any(a['family'] == 'IPv6' for a in addrs)
+        out['has_ipv4'] = any(a['family'] == 'IPv4' for a in addrs)
+        # IPv6 privado do Railway começa com fd..; público começa com 2xxx.
+        out['ipv6_privado'] = any(
+            a['family'] == 'IPv6' and a['addr'].lower().startswith('fd')
+            for a in addrs
+        )
+    except Exception as exc:
+        out['resolve_error'] = str(exc)
+
+    # 2) Benchmark com e sem TLS (conexão NOVA, 3x SELECT 1 reusando).
+    def _bench(ssl_disabled):
+        t = _t.perf_counter()
+        conn = mysql.connector.connect(
+            host=host, port=port, database=Config.DB_NAME,
+            user=Config.DB_USER, password=Config.DB_PASSWORD,
+            connection_timeout=Config.DB_CONNECT_TIMEOUT,
+            ssl_disabled=ssl_disabled,
+        )
+        acquire = round((_t.perf_counter() - t) * 1000, 1)
+        cur = conn.cursor()
+        cur.execute("SHOW SESSION STATUS LIKE 'Ssl_cipher'")
+        r = cur.fetchone()
+        cipher = (r[1] if r and len(r) > 1 else '') or '(nenhum)'
+        times = []
+        for _ in range(3):
+            t = _t.perf_counter()
+            cur.execute("SELECT 1")
+            cur.fetchall()
+            times.append(round((_t.perf_counter() - t) * 1000, 1))
+        cur.close()
+        conn.close()
+        return {'acquire_ms': acquire, 'ssl_cipher': cipher, 'select1_ms_x3': times}
+
+    try:
+        out['sem_tls'] = _bench(ssl_disabled=True)
+    except Exception as exc:
+        out['sem_tls_error'] = str(exc)
+    try:
+        out['com_tls'] = _bench(ssl_disabled=False)
+    except Exception as exc:
+        out['com_tls_error'] = str(exc)
+
+    logger.warning('NETDIAG %s', out)
+    return jsonify(out)
+
+
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
