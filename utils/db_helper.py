@@ -1,7 +1,6 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import threading
 import os
-import time
 import mysql.connector
 from mysql.connector import Error, pooling
 from config import Config
@@ -33,7 +32,7 @@ def _get_pool() -> pooling.MySQLConnectionPool:
         _pool = pooling.MySQLConnectionPool(
             pool_name=f'qualicontax_pool_{os.getpid()}',
             pool_size=Config.DB_POOL_SIZE,
-            pool_reset_session=True,
+            pool_reset_session=False,
             host=Config.DB_HOST,
             port=Config.DB_PORT,
             database=Config.DB_NAME,
@@ -42,13 +41,6 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             connection_timeout=Config.DB_CONNECT_TIMEOUT,
             charset='utf8mb4',
             collation='utf8mb4_unicode_ci',
-        )
-        # TEMP diagnóstico — loga o host/porta REAIS usados em runtime (descarta
-        # fallback para host público). Remover após investigação de latência.
-        logger.warning(
-            'DBPOOL criado: host=%s port=%s db=%s pool_size=%s reset_session=%s (pid=%s)',
-            Config.DB_HOST, Config.DB_PORT, Config.DB_NAME,
-            Config.DB_POOL_SIZE, True, os.getpid(),
         )
     return _pool
 
@@ -92,7 +84,6 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         return None
         
     cursor = None
-    _sql_t0 = time.perf_counter()  # TEMP cronômetro (SQLTIME) — remover após diagnóstico
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute(query, params or ())
@@ -129,14 +120,12 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         return None
         
     finally:
-        # TEMP cronômetro (SQLTIME) — remover após diagnóstico.
-        _sql_ms = (time.perf_counter() - _sql_t0) * 1000
-        logger.warning('SQLTIME %8.1f ms | %s', _sql_ms, ' '.join(query.split())[:100])
         try:
             if cursor is not None:
                 cursor.close()
-            if connection.is_connected():
-                connection.close()
+            # close() devolve a conexão ao pool com segurança; sem is_connected()
+            # (COM_PING) por query — era um round-trip extra desnecessário.
+            connection.close()
         except Exception:
             pass
 
@@ -175,7 +164,8 @@ def execute_many(query, data_list):
         try:
             if cursor is not None:
                 cursor.close()
-            if connection.is_connected():
-                connection.close()
+            # close() devolve a conexão ao pool com segurança; sem is_connected()
+            # (COM_PING) — era um round-trip extra desnecessário.
+            connection.close()
         except Exception:
             pass
