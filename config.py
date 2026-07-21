@@ -55,3 +55,8 @@ class Config:
     # Exemplo: /Aplicativos/ESCRITA FISCAL
     DROPBOX_ROOT_FOLDER = os.getenv('DROPBOX_ROOT_FOLDER', '').strip().rstrip('/')
 
+    # Certificado Digital — chave Fernet para cifrar a senha do .pfx.
+    # Chave própria do Qualicontax (independente do NH). Gere com:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    DFE_CRYPTO_KEY = os.getenv('DFE_CRYPTO_KEY', '').strip()
+

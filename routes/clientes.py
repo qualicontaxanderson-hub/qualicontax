@@ -1,4 +1,6 @@
 """Rotas de Clientes - CRUD completo"""
+import re
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
@@ -12,8 +14,15 @@ from models.socio_cliente import SocioCliente
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade
 from models.cadastro_anp import CadastroAnp
+from models.dfe_certificado import DfeCertificado
+from utils import dropbox_sync
+from utils.certificado_digital import (
+    abrir_certificado, cifrar_senha,
+    SenhaInvalidaError, DocumentoNaoEncontradoError, CertificadoError,
+)
 
 clientes = Blueprint('clientes', __name__)
+logger = logging.getLogger(__name__)
 
 
 def _parse_decimal_input(value):
@@ -241,6 +250,7 @@ def detalhes(id):
         f_obrigacoes = executor.submit(Cliente.get_obrigacoes, id)
         f_cadastros_ad = executor.submit(CadastroAdicionalCliente.get_by_cliente, id)
         f_socios = executor.submit(SocioCliente.get_by_cliente, id)
+        f_certificado = executor.submit(DfeCertificado.get_by_cliente, id)
 
     enderecos = f_enderecos.result()
     contatos = f_contatos.result()
@@ -251,6 +261,7 @@ def detalhes(id):
     obrigacoes = f_obrigacoes.result()
     cadastros_adicionais = f_cadastros_ad.result()
     socios = f_socios.result()
+    certificado = f_certificado.result()
     # Compute the active-partner total in Python instead of a separate DB query
     socios_total_percentual = sum(
         float(s.get('percentual_participacao') or 0)
@@ -282,8 +293,169 @@ def detalhes(id):
                          cadastros_adicionais=cadastros_adicionais,
                          cadastros_anp=cadastros_anp,
                          socios=socios,
+                         certificado=certificado,
                          socios_total_percentual=socios_total_percentual,
                           areas_atendimento=AREAS_ATENDIMENTO)
+
+
+# ---------------------------------------------------------------------------
+# Certificado Digital (.pfx) — busca na pasta NOVO e vínculo por empresa
+# ---------------------------------------------------------------------------
+def _alvos_certificado(cliente):
+    """Nomes de arquivo aceitos p/ a empresa: ``{numero}.pfx`` e ``{cnpj}.pfx``."""
+    alvos = set()
+    numero = (cliente.get('numero_cliente') or '').strip()
+    cnpj = re.sub(r'\D', '', cliente.get('cpf_cnpj') or '')
+    if numero:
+        alvos.add(f'{numero}.pfx'.lower())
+    if cnpj:
+        alvos.add(f'{cnpj}.pfx'.lower())
+    return alvos
+
+
+def _localizar_certificado_novo(svc, cliente):
+    """Procura o .pfx da empresa na pasta Certificados/NOVO. Retorna o item ou None.
+
+    A busca é sempre refeita no servidor (não confia em caminho vindo do cliente).
+    """
+    alvos = _alvos_certificado(cliente)
+    if not alvos:
+        return None
+    for item in svc.list_folder(svc.pasta_cert_novo()):
+        if item.get('is_file') and item['name'].lower() in alvos:
+            return item
+    return None
+
+
+@clientes.route('/clientes/<int:id>/certificado/buscar', methods=['POST'])
+@login_required
+def certificado_buscar(id):
+    """Procura sozinho o .pfx da empresa em Certificados/NOVO (sem seleção manual)."""
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        return jsonify({'ok': False, 'erro': 'Cliente não encontrado.'}), 404
+
+    svc = dropbox_sync._service
+    if not svc.is_configured():
+        return jsonify({'ok': False, 'erro': 'Dropbox não configurado. '
+                        'Defina DROPBOX_APP_KEY e DROPBOX_REFRESH_TOKEN.'}), 400
+
+    if not _alvos_certificado(cliente):
+        return jsonify({'ok': False, 'erro': 'Empresa sem número nem CNPJ para localizar o certificado.'}), 400
+
+    try:
+        item = _localizar_certificado_novo(svc, cliente)
+    except dropbox_sync.DropboxAuthError:
+        return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+    except dropbox_sync.DropboxError:
+        return jsonify({'ok': False, 'erro': 'Erro ao acessar o Dropbox. Verifique a conexão.'}), 502
+
+    if item is None:
+        return jsonify({'ok': True, 'encontrado': False,
+                        'erro': 'Certificado não encontrado na pasta NOVO.'}), 200
+
+    return jsonify({'ok': True, 'encontrado': True, 'arquivo': item['name']}), 200
+
+
+@clientes.route('/clientes/<int:id>/certificado/vincular', methods=['POST'])
+@login_required
+def certificado_vincular(id):
+    """Valida a senha, confere o titular, move p/ IMPORTADOS e grava o vínculo."""
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        return jsonify({'ok': False, 'erro': 'Cliente não encontrado.'}), 404
+
+    data = request.get_json(silent=True) or request.form
+    senha = (data.get('senha') or '').strip()
+    if not senha:
+        return jsonify({'ok': False, 'erro': 'Informe a senha do certificado.'}), 400
+
+    svc = dropbox_sync._service
+    if not svc.is_configured():
+        return jsonify({'ok': False, 'erro': 'Dropbox não configurado.'}), 400
+
+    # 1) Reencontra o arquivo na pasta NOVO (não confia em path do cliente).
+    try:
+        item = _localizar_certificado_novo(svc, cliente)
+    except dropbox_sync.DropboxAuthError:
+        return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+    except dropbox_sync.DropboxError:
+        return jsonify({'ok': False, 'erro': 'Erro ao acessar o Dropbox. Verifique a conexão.'}), 502
+    if item is None:
+        return jsonify({'ok': False, 'erro': 'Certificado não encontrado na pasta NOVO.'}), 200
+
+    # 2) Baixa o .pfx em memória.
+    raw = svc.download_file(item['path'])
+    if raw is None:
+        return jsonify({'ok': False, 'erro': 'Falha ao baixar o certificado do Dropbox.'}), 502
+
+    # 3) Valida a senha e extrai o documento do titular.
+    try:
+        info = abrir_certificado(raw, senha)
+    except SenhaInvalidaError:
+        return jsonify({'ok': False, 'erro': 'Senha do certificado incorreta.'}), 200
+    except DocumentoNaoEncontradoError:
+        return jsonify({'ok': False, 'erro': 'Não foi possível identificar o CNPJ/CPF no certificado.'}), 200
+    except CertificadoError as exc:
+        return jsonify({'ok': False, 'erro': f'Certificado inválido: {exc}'}), 200
+
+    # 4) Confere se o certificado é mesmo dessa empresa.
+    doc_cert = info['documento']
+    doc_empresa = re.sub(r'\D', '', cliente.get('cpf_cnpj') or '')
+    if doc_cert != doc_empresa:
+        return jsonify({'ok': False,
+                        'erro': 'O certificado da pasta não é dessa empresa '
+                                f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}), 200
+
+    # 5) Cifra a senha ANTES de mover (se falhar aqui, o .pfx continua em NOVO).
+    try:
+        senha_cifrada = cifrar_senha(senha)
+    except CertificadoError as exc:
+        return jsonify({'ok': False, 'erro': str(exc)}), 500
+
+    # 6) Move + renomeia para IMPORTADOS/{numero} - {razão}/{CNPJ}.pfx
+    origem = item['path']
+    numero = (cliente.get('numero_cliente') or '').strip() or None
+    razao = cliente.get('nome_razao_social') or 'SEM_NOME'
+    pasta_dest = svc.pasta_cert_importados(razao, numero)
+    destino = f'{pasta_dest}/{doc_cert}.pfx'
+    svc.ensure_folder(pasta_dest)
+    try:
+        if not svc.move_file(origem, destino):
+            return jsonify({'ok': False, 'erro': 'Falha ao mover o certificado no Dropbox.'}), 502
+    except dropbox_sync.DropboxAuthError:
+        return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+
+    # 7) Grava o vínculo. Se falhar, tenta devolver o .pfx para NOVO (sem órfão);
+    #    se nem a reversão der certo, loga o caminho para recuperação manual.
+    ok = DfeCertificado.upsert(
+        cliente_id=id, cnpj=doc_cert, tipo_doc=info['tipo_doc'],
+        senha_cifrada=senha_cifrada, dropbox_path=destino, validade=info['validade'],
+    )
+    if not ok:
+        revertido = False
+        try:
+            revertido = svc.move_file(destino, origem)
+        except Exception as exc:
+            logger.error('Falha ao reverter move do certificado %s -> %s: %s',
+                         destino, origem, exc)
+        if revertido:
+            logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s). '
+                         'Arquivo devolvido para NOVO: %s', id, origem)
+            return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
+                            'O certificado foi devolvido para a pasta NOVO — tente novamente.'}), 500
+        logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s) e reversão FALHOU. '
+                     'ARQUIVO ÓRFÃO em: %s', id, destino)
+        return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
+                        f'Atenção: o arquivo ficou em {destino} — avise o suporte.'}), 500
+
+    return jsonify({
+        'ok': True,
+        'documento': doc_cert,
+        'tipo_doc': info['tipo_doc'],
+        'validade': info['validade'].isoformat() if info['validade'] else None,
+        'arquivo': f'{doc_cert}.pfx',
+    }), 200
 
 
 @clientes.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])

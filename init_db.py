@@ -700,6 +700,25 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # ---- Vínculo de Certificado Digital (.pfx) por empresa ----
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS dfe_certificados (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id     INT NOT NULL,
+            cnpj           VARCHAR(14) NOT NULL,
+            tipo_doc       ENUM('CNPJ','CPF') NOT NULL DEFAULT 'CNPJ',
+            senha_cifrada  VARBINARY(512) NOT NULL,
+            dropbox_path   VARCHAR(500) NOT NULL,
+            validade       DATE NULL,
+            criado_em      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_cliente (cliente_id),
+            INDEX idx_cnpj (cnpj),
+            CONSTRAINT fk_dfecert_cliente FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
     print("✓ Migrations concluídas")
 
 

@@ -141,6 +141,12 @@
                     Obrigações ({{ obrigacoes|length }})
                 </a>
             </li>
+            <li class="tabs-item">
+                <a href="#certificado" class="tabs-link">
+                    <i class="fas fa-certificate"></i>
+                    Certificado Digital
+                </a>
+            </li>
         </ul>
 
         <!-- Tab Content -->
@@ -935,6 +941,76 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Certificado Digital Tab -->
+            <div id="certificado" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Certificado Digital (A1)</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="certVinculoAtual">
+                            {% if certificado %}
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <label>Status</label>
+                                    <span class="badge badge-success">Vinculado</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>{{ certificado.tipo_doc }}</label>
+                                    <span>{{ certificado.cnpj }}</span>
+                                </div>
+                                {% if certificado.validade %}
+                                <div class="info-item">
+                                    <label>Validade</label>
+                                    <span>{{ certificado.validade|format_date }}</span>
+                                </div>
+                                {% endif %}
+                                <div class="info-item full-width">
+                                    <label>Arquivo no Dropbox</label>
+                                    <span style="word-break: break-all;">{{ certificado.dropbox_path }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <p style="color:#64748b;">Nenhum certificado vinculado a esta empresa.</p>
+                            {% endif %}
+                        </div>
+
+                        <div style="margin-top:16px;">
+                            <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
+                                Coloque o arquivo <strong>.pfx</strong> na pasta
+                                <code>Certificados/NOVO</code> do Dropbox, nomeado com o
+                                <strong>número da empresa</strong>
+                                ({{ (cliente.numero_cliente or 's/nº') }}.pfx) ou o
+                                <strong>CNPJ</strong>. Depois clique abaixo — o sistema
+                                localiza o arquivo sozinho.
+                            </p>
+
+                            <button type="button" class="btn btn-primary" id="btnCertBuscar"
+                                    onclick="certBuscar({{ cliente.id }})">
+                                <i class="fas fa-certificate"></i>
+                                {{ 'Revincular Certificado' if certificado else 'Vincular Certificado' }}
+                            </button>
+
+                            <div id="certSenhaBox" style="display:none; margin-top:16px; max-width:420px;">
+                                <div class="form-group">
+                                    <label for="certSenha">
+                                        Senha do certificado (<strong id="certArquivoNome"></strong>)
+                                    </label>
+                                    <input type="password" id="certSenha" class="form-control"
+                                           autocomplete="off" placeholder="Digite a senha do .pfx">
+                                </div>
+                                <button type="button" class="btn btn-primary" style="margin-top:10px;"
+                                        id="btnCertVincular" onclick="certVincular({{ cliente.id }})">
+                                    <i class="fas fa-lock"></i> Validar e Vincular
+                                </button>
+                            </div>
+
+                            <div id="certMsg" style="margin-top:14px; display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1342,6 +1418,69 @@ function mostrarToastAnpWpp() {
     if (!t) return;
     t.style.display = 'block';
     setTimeout(function() { t.style.display = 'none'; }, 3000);
+}
+
+// ----- Certificado Digital -----
+function _certMsg(texto, tipo) {
+    var box = document.getElementById('certMsg');
+    if (!box) return;
+    var ok = tipo === 'ok';
+    box.style.display = 'block';
+    box.style.color = ok ? '#166534' : '#991b1b';
+    box.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    box.style.border = '1px solid ' + (ok ? '#16a34a' : '#dc2626');
+    box.style.borderRadius = '6px';
+    box.style.padding = '10px 12px';
+    box.style.fontSize = '13px';
+    box.innerHTML = texto;
+}
+
+function certBuscar(clienteId) {
+    var btn = document.getElementById('btnCertBuscar');
+    btn.disabled = true;
+    _certMsg('Procurando certificado na pasta NOVO...', 'ok');
+    fetch('/clientes/' + clienteId + '/certificado/buscar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        if (d.ok && d.encontrado) {
+            document.getElementById('certArquivoNome').textContent = d.arquivo;
+            document.getElementById('certSenhaBox').style.display = 'block';
+            document.getElementById('certSenha').focus();
+            _certMsg('Certificado <strong>' + d.arquivo + '</strong> encontrado. Informe a senha.', 'ok');
+        } else {
+            document.getElementById('certSenhaBox').style.display = 'none';
+            _certMsg(d.erro || 'Certificado não encontrado na pasta NOVO.', 'erro');
+        }
+    })
+    .catch(function() { btn.disabled = false; _certMsg('Erro de comunicação com o servidor.', 'erro'); });
+}
+
+function certVincular(clienteId) {
+    var senha = document.getElementById('certSenha').value;
+    if (!senha) { _certMsg('Digite a senha do certificado.', 'erro'); return; }
+    var btn = document.getElementById('btnCertVincular');
+    btn.disabled = true;
+    _certMsg('Validando senha e conferindo o titular...', 'ok');
+    fetch('/clientes/' + clienteId + '/certificado/vincular', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({senha: senha})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        if (d.ok) {
+            _certMsg('&#x2705; Certificado vinculado com sucesso (' + d.tipo_doc + ' ' + d.documento + ').', 'ok');
+            setTimeout(function() { window.location.reload(); }, 1200);
+        } else {
+            _certMsg(d.erro || 'Falha ao vincular o certificado.', 'erro');
+        }
+    })
+    .catch(function() { btn.disabled = false; _certMsg('Erro de comunicação com o servidor.', 'erro'); });
 }
 </script>
 

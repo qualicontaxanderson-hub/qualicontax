@@ -441,6 +441,24 @@ class DropboxService:
         root = self.resolve_departamento_root(departamento)
         return self._build_path(root, 'ERROS', str(dt.year), pasta_empresa, f'{dt.month:02d}.{dt.year}')
 
+    # ------------------------------------------------------------------
+    # Helpers de caminho para Certificados Digitais (.pfx)
+    # ------------------------------------------------------------------
+    def pasta_cert_novo(self) -> str:
+        """Pasta onde os .pfx novos são depositados: ``/Certificados/NOVO``.
+
+        Usa ``_build_path`` — funciona tanto em App Folder (caminho relativo)
+        quanto em Full Dropbox (prefixado por ``DROPBOX_ROOT_FOLDER``).
+        """
+        return self._build_path('Certificados', 'NOVO')
+
+    def pasta_cert_importados(self, empresa_nome: str, empresa_numero: str = None) -> str:
+        """Pasta destino do certificado importado, por empresa:
+        ``/Certificados/IMPORTADOS/{numero} - {razão}``.
+        """
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        return self._build_path('Certificados', 'IMPORTADOS', pasta_empresa)
+
 
 def normalize_departamento(departamento: str) -> str:
     """Converte aliases legados para o nome canônico do departamento."""
