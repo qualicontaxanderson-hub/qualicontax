@@ -1,6 +1,7 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import threading
 import os
+import time
 import mysql.connector
 from mysql.connector import Error, pooling
 from config import Config
@@ -84,6 +85,7 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         return None
         
     cursor = None
+    _sql_t0 = time.perf_counter()  # TEMP cronômetro (SQLTIME) — remover após diagnóstico
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute(query, params or ())
@@ -120,6 +122,9 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
         return None
         
     finally:
+        # TEMP cronômetro (SQLTIME) — remover após diagnóstico.
+        _sql_ms = (time.perf_counter() - _sql_t0) * 1000
+        logger.warning('SQLTIME %8.1f ms | %s', _sql_ms, ' '.join(query.split())[:100])
         try:
             if cursor is not None:
                 cursor.close()
