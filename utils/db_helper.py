@@ -43,6 +43,13 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             charset='utf8mb4',
             collation='utf8mb4_unicode_ci',
         )
+        # TEMP diagnóstico — loga o host/porta REAIS usados em runtime (descarta
+        # fallback para host público). Remover após investigação de latência.
+        logger.warning(
+            'DBPOOL criado: host=%s port=%s db=%s pool_size=%s reset_session=%s (pid=%s)',
+            Config.DB_HOST, Config.DB_PORT, Config.DB_NAME,
+            Config.DB_POOL_SIZE, True, os.getpid(),
+        )
     return _pool
 
 

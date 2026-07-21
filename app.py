@@ -117,6 +117,59 @@ def health():
     return jsonify({'status': status, 'db': db_msg, 'uptime_s': uptime}), code
 
 
+# ---------------------------------------------------------------------------
+# TEMP diagnóstico de latência do banco — REMOVER após investigação.
+# Separa o custo de handshake (acquire) do RTT de rede (SELECT 1 reusando a
+# MESMA conexão) e mostra o host REAL em runtime + se há TLS na sessão.
+# ---------------------------------------------------------------------------
+@app.route('/db-diag')
+def db_diag():
+    import time as _t
+    from utils.db_helper import get_db_connection
+
+    info = {
+        'db_host': Config.DB_HOST,
+        'db_port': Config.DB_PORT,
+        'db_name': Config.DB_NAME,
+        'pool_size': Config.DB_POOL_SIZE,
+    }
+
+    # 1) Tempo de AQUISIÇÃO da conexão do pool (inclui handshake se for nova).
+    t = _t.perf_counter()
+    conn = get_db_connection()
+    info['acquire_ms'] = round((_t.perf_counter() - t) * 1000, 1)
+    if conn is None:
+        info['error'] = 'sem conexão'
+        return jsonify(info), 500
+
+    try:
+        cur = conn.cursor()
+        # TLS em uso? (cipher vazio = conexão sem TLS)
+        cur.execute("SHOW SESSION STATUS LIKE 'Ssl_cipher'")
+        row = cur.fetchone()
+        info['ssl_cipher'] = (row[1] if row and len(row) > 1 else '') or '(nenhum)'
+        # Host que o servidor enxerga (confirma para onde conectou de fato).
+        cur.execute("SELECT @@hostname")
+        h = cur.fetchone()
+        info['server_hostname'] = h[0] if h else None
+        # 2) RTT puro: 3x SELECT 1 REUSANDO a MESMA conexão.
+        #    [360,360,360] => latência de rede real ao host.
+        #    [360,2,2]     => 1o execute pagou algo; custo é por-conexão.
+        times = []
+        for _ in range(3):
+            t = _t.perf_counter()
+            cur.execute("SELECT 1")
+            cur.fetchall()
+            times.append(round((_t.perf_counter() - t) * 1000, 1))
+        info['select1_ms_x3'] = times
+        cur.close()
+    finally:
+        conn.close()
+
+    logger.warning('DBDIAG %s', info)
+    return jsonify(info)
+
+
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
