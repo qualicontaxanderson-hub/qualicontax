@@ -545,7 +545,23 @@ def capturar_cliente(cliente_id, dry_run=False):
             'cliente': rotulo, 'ult_nsu': ult_nsu, 'ret_ult_nsu': ret_ult,
             'max_nsu': ret_max, 'docs': len(docs), 'faltam': max(0, ret_max - ret_ult)}
 
-    # DRY-RUN: só lista o que viria. Não grava, não sobe, não avança, não loga cursor.
+    # 656 = consumo indevido: registra o cooldown (proximo_permitido = NOW()+1h)
+    # SEMPRE — inclusive no dry-run —, porque a cota foi consumida de verdade na
+    # SEFAZ (o "teste" não é grátis do lado deles). Mantém o cursor (ult_nsu
+    # inalterado, não avança nem regride) e NÃO grava documento. O ret_ult_nsu
+    # (ultNSU que a SEFAZ mandou usar) já vai na resposta para alimentar o seed.
+    if cStat == '656':
+        execute_query(SQL_NSU_656, (cliente_id, cnpj, ult_nsu, ret_max, status_txt), fetch=False)
+        dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
+                          ret_ult, ret_max, len(docs),
+                          detalhe='dry-run' if dry_run else None)
+        base.update({'consumo_indevido': True, 'dry_run': dry_run,
+                     'mensagem': 'A SEFAZ pediu para aguardar ~1h (consumo indevido). '
+                                 f'Ela informou ultNSU={ret_ult}. O cursor local foi mantido — '
+                                 'a próxima consulta retoma daqui.'})
+        return base
+
+    # DRY-RUN (fora do 656): só lista o que viria. Não grava, não sobe, não avança.
     if dry_run:
         preview = []
         for d in docs:
@@ -553,16 +569,6 @@ def capturar_cliente(cliente_id, dry_run=False):
             preview.append({'nsu': _to_int(d.get('NSU')), 'schema': d.get('schema'),
                             'raiz': raiz, 'chave': chave})
         base.update({'dry_run': True, 'preview': preview})
-        return base
-
-    # 656 = consumo indevido: cursor MANTIDO (não avança nem regride); agenda 1h.
-    if cStat == '656':
-        execute_query(SQL_NSU_656, (cliente_id, cnpj, ult_nsu, ret_max, status_txt), fetch=False)
-        dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
-                          ret_ult, ret_max, len(docs))
-        base.update({'consumo_indevido': True,
-                     'mensagem': 'A SEFAZ pediu para aguardar ~1h (consumo indevido). '
-                                 'O cursor foi mantido — a próxima consulta retoma daqui.'})
         return base
 
     # 138 (documentos) / 137 (nada novo): processa em ordem de NSU, avança só até
@@ -607,3 +613,54 @@ def capturar_cliente(cliente_id, dry_run=False):
                  'outros': n_outro, 'itens': n_itens, 'novo_ult_nsu': nsu_ok,
                  'parada': parada})
     return base
+
+
+def seed_ult_nsu(cliente_id, nsu, usuario_label='?'):
+    """Semeia MANUALMENTE o cursor de NSU de uma empresa (ação consciente do admin).
+
+    Caso de uso: o CNPJ já foi consumido por outro sistema até um NSU alto, a
+    ``dfe_nsu`` local está em 0, e a SEFAZ devolve 656 mandando usar o ultNSU que
+    ela informou. Começar desse NSU PULA os documentos anteriores — quem precisa
+    deles obtém por outro meio (importação manual do XML). Por isso NÃO é
+    automático (nem entra no handler geral do 656, que preserva o cursor): é este
+    caminho separado, explícito, com confirmação e rastro.
+
+    Grava ``ult_nsu = nsu`` e limpa ``proximo_permitido``; deixa rastro em
+    ``dfe_consulta_log`` (evento='seed_manual', quem fez e o valor).
+    """
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        return {'ok': False, 'erro': 'Cliente não encontrado.'}
+    try:
+        nsu = int(nsu)
+    except (TypeError, ValueError):
+        return {'ok': False, 'erro': 'NSU inválido (informe um número).'}
+    if nsu < 0:
+        return {'ok': False, 'erro': 'NSU deve ser um número não negativo.'}
+
+    cnpj = _digitos(cliente.get('cpf_cnpj'))
+    if not cnpj:
+        return {'ok': False, 'erro': 'Cliente sem CNPJ para semear o cursor de NSU.'}
+
+    numero = (cliente.get('numero_cliente') or '').strip() or None
+    razao = cliente.get('nome_razao_social') or 'SEM_NOME'
+    rotulo = f"{numero + ' - ' if numero else ''}{razao}"
+
+    # Upsert do cursor: ult_nsu = nsu, proximo_permitido = NULL (libera). max_nsu
+    # preservado (o 0 no INSERT só vale se a linha ainda não existir).
+    execute_query(
+        "INSERT INTO dfe_nsu "
+        "(cliente_id, cnpj, ult_nsu, max_nsu, ult_consulta, proximo_permitido, ult_status) "
+        "VALUES (%s,%s,%s,0,NOW(),NULL,%s) "
+        "ON DUPLICATE KEY UPDATE ult_nsu=VALUES(ult_nsu), "
+        "  proximo_permitido=NULL, ult_status=VALUES(ult_status)",
+        (cliente_id, cnpj, nsu, f'seed manual por {usuario_label}: ultNSU={nsu}'[:255]),
+        fetch=False,
+    )
+    dfe_log.registrar('seed_manual', cliente_id, cnpj, ult_nsu_env=nsu,
+                      detalhe=f'seed manual por {usuario_label}: ult_nsu={nsu} '
+                              f'(pula documentos anteriores a esse NSU)')
+    return {'ok': True, 'nsu': nsu, 'cliente': rotulo,
+            'mensagem': f'Cursor de NSU do cliente {rotulo} definido em {nsu}. '
+                        f'A próxima captura começa a partir daí (documentos anteriores '
+                        f'não serão capturados).'}

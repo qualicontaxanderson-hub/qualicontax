@@ -1027,6 +1027,24 @@
                                 <i class="fas fa-cloud-download-alt"></i> Capturar agora
                             </button>
                             <div id="dfeMsg" style="margin-top:14px; display:none;"></div>
+
+                            {% if current_user.is_admin() %}
+                            <div style="margin-top:16px; padding:12px; border:1px dashed #d1d5db; border-radius:6px; background:#fafafa;">
+                                <div style="font-size:13px; color:#64748b; margin-bottom:8px;">
+                                    <strong>Ajuste avançado (admin) — semear cursor de NSU.</strong>
+                                    Use só quando a SEFAZ retornar 656 informando um ultNSU e o cursor
+                                    local estiver desalinhado (ex.: o CNPJ já foi consumido por outro
+                                    sistema). <strong>Os documentos anteriores a esse NSU NÃO serão
+                                    capturados</strong> — se precisar deles, obtenha por outro meio
+                                    (importação manual do XML).
+                                </div>
+                                <input type="number" id="dfeSeedNsu" min="0"
+                                       placeholder="ultNSU informado pela SEFAZ"
+                                       style="width:240px; padding:6px; margin-right:6px;">
+                                <button type="button" class="btn" style="background:#b45309; color:#fff;"
+                                        onclick="dfeSeed({{ cliente.id }})">Semear cursor de NSU</button>
+                            </div>
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>
@@ -1545,6 +1563,9 @@ function _dfe(clienteId, url, btnId, textoInicial) {
             _dfeMsg('&#x1F9EA; Teste (nada gravado). ' + linha +
                     ' Documentos no lote: <strong>' + d.docs + '</strong>.', 'ok');
         } else if (d.consumo_indevido) {
+            // 656: pré-preenche o campo de seed com o ultNSU que a SEFAZ mandou usar.
+            var seedInp = document.getElementById('dfeSeedNsu');
+            if (seedInp && d.ret_ult_nsu) seedInp.value = d.ret_ult_nsu;
             _dfeMsg('&#x23F3; ' + (d.mensagem || linha), 'erro');
         } else {
             var extra = 'Notas <strong>' + (d.notas||0) + '</strong> (itens ' + (d.itens||0) +
@@ -1569,6 +1590,28 @@ function dfeConsultar(clienteId) {
 function dfeCapturar(clienteId) {
     _dfe(clienteId, '/clientes/' + clienteId + '/dfe/capturar', 'btnDfeCapturar',
          'Capturando na SEFAZ e gravando os documentos...');
+}
+
+function dfeSeed(clienteId) {
+    var inp = document.getElementById('dfeSeedNsu');
+    var nsu = inp ? (inp.value || '').trim() : '';
+    if (nsu === '' || isNaN(nsu) || parseInt(nsu, 10) < 0) {
+        _dfeMsg('Informe o NSU (número não negativo).', 'erro'); return;
+    }
+    var msg = 'Começar do NSU ' + nsu + ' informado pela SEFAZ.\n\n' +
+              'Os documentos ANTERIORES a esse NSU NAO serao capturados — se voce ' +
+              'precisa deles, obtenha por outro meio (importacao manual do XML).\n\nConfirma?';
+    if (!confirm(msg)) return;
+    fetch('/clientes/' + clienteId + '/dfe/seed-nsu', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nsu: parseInt(nsu, 10)})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) { _dfeMsg('&#x2705; ' + (d.mensagem || 'Cursor de NSU definido.'), 'ok'); }
+        else { _dfeMsg(d.erro || 'Falha ao semear o cursor de NSU.', 'erro'); }
+    })
+    .catch(function() { _dfeMsg('Erro de comunicação com o servidor.', 'erro'); });
 }
 </script>
 

@@ -10,7 +10,8 @@ O scheduler automático fica para a fase seguinte.
 """
 import logging
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
+from flask_login import current_user
 
 from utils.auth_helper import login_required
 from models.cliente import Cliente
@@ -44,3 +45,17 @@ def dfe_consultar(id):
 def dfe_capturar(id):
     """Captura real de UM lote: grava documentos/itens/eventos e avança o cursor."""
     return _executar(id, dry_run=False)
+
+
+@dfe_bp.route('/clientes/<int:id>/dfe/seed-nsu', methods=['POST'])
+@login_required
+def dfe_seed_nsu(id):
+    """Semeia manualmente o cursor de NSU (só ADMIN). Ação consciente e rastreada
+    para o caso de fresh-start com histórico já consumido por outro sistema."""
+    if not getattr(current_user, 'is_admin', lambda: False)():
+        return jsonify({'ok': False, 'erro': 'Apenas administradores podem semear o cursor de NSU.'}), 403
+    data = request.get_json(silent=True) or request.form
+    quem = (getattr(current_user, 'nome', None) or getattr(current_user, 'login', None)
+            or getattr(current_user, 'email', None) or '?')
+    resultado = dfe_captura.seed_ult_nsu(id, data.get('nsu'), usuario_label=quem)
+    return jsonify(resultado), (200 if resultado.get('ok') else 400)
