@@ -1495,8 +1495,15 @@ function certVincular(clienteId) {
     .then(function(d) {
         btn.disabled = false;
         if (d.ok) {
-            _certMsg('&#x2705; Certificado vinculado com sucesso (' + d.tipo_doc + ' ' + d.documento + ').', 'ok');
-            setTimeout(function() { window.location.reload(); }, 1200);
+            var base = '&#x2705; Certificado vinculado com sucesso (' + d.tipo_doc + ' ' + d.documento + ').';
+            if (d.aviso) {
+                // Vínculo por raiz (matriz→filial): destaca e dá tempo de ler antes de recarregar.
+                _certMsg(base + '<br><strong>&#x26A0;&#xFE0F; ' + d.aviso + '</strong>', 'ok');
+                setTimeout(function() { window.location.reload(); }, 5000);
+            } else {
+                _certMsg(base, 'ok');
+                setTimeout(function() { window.location.reload(); }, 1200);
+            }
         } else {
             _certMsg(d.erro || 'Falha ao vincular o certificado.', 'erro');
         }

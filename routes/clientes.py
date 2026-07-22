@@ -357,6 +357,20 @@ def certificado_buscar(id):
     return jsonify({'ok': True, 'encontrado': True, 'arquivo': item['name']}), 200
 
 
+def _fmt_cnpj(doc):
+    """Formata 14 dígitos como CNPJ (XX.XXX.XXX/XXXX-XX); devolve cru se não for 14."""
+    d = re.sub(r'\D', '', str(doc or ''))
+    if len(d) != 14:
+        return d
+    return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+
+
+def _matriz_ou_filial(doc):
+    """'matriz' se a ordem do estabelecimento (dígitos 9–12) for 0001, senão 'filial'."""
+    d = re.sub(r'\D', '', str(doc or ''))
+    return 'matriz' if len(d) == 14 and d[8:12] == '0001' else 'filial'
+
+
 @clientes.route('/clientes/<int:id>/certificado/vincular', methods=['POST'])
 @login_required
 def certificado_vincular(id):
@@ -400,12 +414,25 @@ def certificado_vincular(id):
         return jsonify({'ok': False, 'erro': f'Certificado inválido: {exc}'}), 200
 
     # 4) Confere se o certificado é mesmo dessa empresa.
+    #    O e-CNPJ é emitido para a RAIZ (8 primeiros dígitos) e cobre as filiais.
+    #    Match exato → vincula normal. Match SÓ na raiz (matriz cobrindo filial) →
+    #    vincula, mas com AVISO explícito (flexibilização consciente da regra:
+    #    quero ver na tela p/ não vincular na empresa errada). Raiz diferente →
+    #    recusa. CPF (11 díg.) exige igualdade exata (sem lógica de raiz).
     doc_cert = info['documento']
     doc_empresa = re.sub(r'\D', '', cliente.get('cpf_cnpj') or '')
+    aviso = None
     if doc_cert != doc_empresa:
-        return jsonify({'ok': False,
-                        'erro': 'O certificado da pasta não é dessa empresa '
-                                f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}), 200
+        raiz_ok = (info['tipo_doc'] == 'CNPJ'
+                   and len(doc_cert) == 14 and len(doc_empresa) == 14
+                   and doc_cert[:8] == doc_empresa[:8])
+        if not raiz_ok:
+            return jsonify({'ok': False,
+                            'erro': 'O certificado da pasta não é dessa empresa '
+                                    f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}), 200
+        aviso = (f'Certificado da {_matriz_ou_filial(doc_cert)} {_fmt_cnpj(doc_cert)} '
+                 f'vinculado à {_matriz_ou_filial(doc_empresa)} {_fmt_cnpj(doc_empresa)} '
+                 f'(mesma raiz — o e-CNPJ da matriz cobre as filiais).')
 
     # 5) Cifra a senha ANTES de mover (se falhar aqui, o .pfx continua em NOVO).
     try:
@@ -455,6 +482,7 @@ def certificado_vincular(id):
         'tipo_doc': info['tipo_doc'],
         'validade': info['validade'].isoformat() if info['validade'] else None,
         'arquivo': f'{doc_cert}.pfx',
+        'aviso': aviso,   # preenchido só no vínculo por raiz (matriz→filial)
     }), 200
 
 

@@ -479,7 +479,11 @@ def capturar_cliente(cliente_id, dry_run=False):
         return {'ok': False,
                 'erro': f'O cliente {rotulo} não tem certificado digital vinculado. '
                         f'Vincule o .pfx antes de capturar.'}
-    cnpj = _digitos(vinc.get('cnpj'))
+    # Interessado no distDFeInt = o CNPJ da PRÓPRIA empresa (cliente), não o do
+    # certificado. Importa quando o cert é da MATRIZ e o cliente é FILIAL (mesma
+    # raiz): autentica o mTLS com o cert da matriz, mas consulta os documentos da
+    # FILIAL. Em vínculo exato, é o mesmo CNPJ. Fallback: o CNPJ do cert.
+    cnpj = _digitos(cliente.get('cpf_cnpj')) or _digitos(vinc.get('cnpj'))
 
     # UF -> cUFAutor (nunca chuta; mensagem específica de qual cliente + o que fazer).
     uf = _uf_principal(cliente_id)
