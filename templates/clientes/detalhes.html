@@ -1008,6 +1008,27 @@
 
                             <div id="certMsg" style="margin-top:14px; display:none;"></div>
                         </div>
+
+                        {% if certificado %}
+                        <hr style="margin:20px 0; border:none; border-top:1px solid #e5e7eb;">
+                        <div>
+                            <h4 style="margin:0 0 6px; font-size:15px;">Captura de NF-e (SEFAZ)</h4>
+                            <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
+                                Busca os documentos fiscais destinados a esta empresa na SEFAZ
+                                (distribuição por NSU). <strong>Só leitura</strong> — o sistema nunca manifesta.
+                                Use "Consultar (teste)" primeiro para ver o que viria sem gravar nada.
+                            </p>
+                            <button type="button" class="btn" style="background:#64748b; color:#fff;"
+                                    id="btnDfeConsultar" onclick="dfeConsultar({{ cliente.id }})">
+                                <i class="fas fa-vial"></i> Consultar (teste)
+                            </button>
+                            <button type="button" class="btn btn-primary"
+                                    id="btnDfeCapturar" onclick="dfeCapturar({{ cliente.id }})">
+                                <i class="fas fa-cloud-download-alt"></i> Capturar agora
+                            </button>
+                            <div id="dfeMsg" style="margin-top:14px; display:none;"></div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -1481,6 +1502,66 @@ function certVincular(clienteId) {
         }
     })
     .catch(function() { btn.disabled = false; _certMsg('Erro de comunicação com o servidor.', 'erro'); });
+}
+
+// ----- Captura de NF-e (DFe) -----
+function _dfeMsg(texto, tipo) {
+    var box = document.getElementById('dfeMsg');
+    if (!box) return;
+    var ok = tipo === 'ok';
+    box.style.display = 'block';
+    box.style.color = ok ? '#166534' : '#991b1b';
+    box.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    box.style.border = '1px solid ' + (ok ? '#16a34a' : '#dc2626');
+    box.style.borderRadius = '6px';
+    box.style.padding = '10px 12px';
+    box.style.fontSize = '13px';
+    box.innerHTML = texto;
+}
+
+function _dfe(clienteId, url, btnId, textoInicial) {
+    var btnC = document.getElementById('btnDfeConsultar');
+    var btnK = document.getElementById('btnDfeCapturar');
+    if (btnC) btnC.disabled = true;
+    if (btnK) btnK.disabled = true;
+    _dfeMsg(textoInicial, 'ok');
+    fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'} })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (btnC) btnC.disabled = false;
+        if (btnK) btnK.disabled = false;
+        if (!d.ok) { _dfeMsg(d.erro || 'Falha na captura.', 'erro'); return; }
+        var linha = 'SEFAZ: <strong>' + (d.cStat || '?') + '</strong> ' + (d.xMotivo || '') +
+                    ' &middot; ultNSU ' + d.ret_ult_nsu + ' / maxNSU ' + d.max_nsu +
+                    ' &middot; faltam ' + d.faltam + ' doc(s).';
+        if (d.dry_run) {
+            _dfeMsg('&#x1F9EA; Teste (nada gravado). ' + linha +
+                    ' Documentos no lote: <strong>' + d.docs + '</strong>.', 'ok');
+        } else if (d.consumo_indevido) {
+            _dfeMsg('&#x23F3; ' + (d.mensagem || linha), 'erro');
+        } else {
+            var extra = 'Notas <strong>' + (d.notas||0) + '</strong> (itens ' + (d.itens||0) +
+                        '), resumos ' + (d.resumos||0) + ', eventos ' + (d.eventos||0) +
+                        (d.outros ? (', outros ' + d.outros) : '') + '.';
+            if (d.parada) extra += ' <span style="color:#b45309;">Lote parou em ' + d.parada + '</span>';
+            _dfeMsg('&#x2705; ' + linha + ' ' + extra, 'ok');
+        }
+    })
+    .catch(function() {
+        if (btnC) btnC.disabled = false;
+        if (btnK) btnK.disabled = false;
+        _dfeMsg('Erro de comunicação com o servidor.', 'erro');
+    });
+}
+
+function dfeConsultar(clienteId) {
+    _dfe(clienteId, '/clientes/' + clienteId + '/dfe/consultar', 'btnDfeConsultar',
+         'Consultando a SEFAZ (teste, sem gravar)...');
+}
+
+function dfeCapturar(clienteId) {
+    _dfe(clienteId, '/clientes/' + clienteId + '/dfe/capturar', 'btnDfeCapturar',
+         'Capturando na SEFAZ e gravando os documentos...');
 }
 </script>
 
