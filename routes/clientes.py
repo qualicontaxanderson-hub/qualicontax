@@ -301,30 +301,68 @@ def detalhes(id):
 # ---------------------------------------------------------------------------
 # Certificado Digital (.pfx) — busca na pasta NOVO e vínculo por empresa
 # ---------------------------------------------------------------------------
-def _alvos_certificado(cliente):
-    """Nomes de arquivo aceitos p/ a empresa: ``{numero}.pfx`` e ``{cnpj}.pfx``."""
-    alvos = set()
+def _tokens_certificado(cliente):
+    """Tokens que identificam a empresa no nome do .pfx: número e CNPJ (14 díg.)."""
+    tokens = []
     numero = (cliente.get('numero_cliente') or '').strip()
     cnpj = re.sub(r'\D', '', cliente.get('cpf_cnpj') or '')
     if numero:
-        alvos.add(f'{numero}.pfx'.lower())
+        tokens.append(numero)
     if cnpj:
-        alvos.add(f'{cnpj}.pfx'.lower())
-    return alvos
+        tokens.append(cnpj)
+    return tokens
 
 
-def _localizar_certificado_novo(svc, cliente):
-    """Procura o .pfx da empresa na pasta Certificados/NOVO. Retorna o item ou None.
+# Separadores aceitos entre o token (número/CNPJ) e o resto do nome do arquivo.
+_CERT_SEPARADORES = ('-', '_', ' ')
 
-    A busca é sempre refeita no servidor (não confia em caminho vindo do cliente).
+
+def _nome_casa_token(nome, token):
+    """True se o nome do .pfx (sem a extensão) é o token EXATO, ou começa com o
+    token seguido de um separador (-, _ ou espaço). Case-insensitive.
+
+    O separador obrigatório evita casamento de prefixo ambíguo: a empresa 51 NÃO
+    casa com "515-....pfx" (depois de "51" vem "5", não um separador).
     """
-    alvos = _alvos_certificado(cliente)
-    if not alvos:
-        return None
+    if not token:
+        return False
+    base = nome[:-4] if nome.lower().endswith('.pfx') else nome  # tira a extensão
+    base_l = base.lower()
+    tok_l = str(token).lower()
+    if base_l == tok_l:
+        return True
+    return (base_l.startswith(tok_l)
+            and len(base_l) > len(tok_l)
+            and base_l[len(tok_l)] in _CERT_SEPARADORES)
+
+
+def _localizar_certificados_novo(svc, cliente):
+    """Lista os .pfx da pasta Certificados/NOVO que casam com a empresa (número
+    OU CNPJ, como nome exato ou prefixo + separador). Extensão .pfx/.PFX aceita
+    (case-insensitive).
+
+    Retorna a LISTA de itens casados (0, 1 ou vários). A busca é sempre refeita
+    no servidor (não confia em caminho vindo do cliente). O chamador decide: 0 =
+    não encontrado; 1 = usa; vários = recusa (não escolhe o certificado sozinho).
+    """
+    tokens = _tokens_certificado(cliente)
+    if not tokens:
+        return []
+    achados = []
     for item in svc.list_folder(svc.pasta_cert_novo()):
-        if item.get('is_file') and item['name'].lower() in alvos:
-            return item
-    return None
+        nome = item.get('name') or ''
+        if not item.get('is_file') or not nome.lower().endswith('.pfx'):
+            continue
+        if any(_nome_casa_token(nome, t) for t in tokens):
+            achados.append(item)
+    return achados
+
+
+def _erro_ambiguidade_certificado(achados):
+    """Mensagem quando mais de um .pfx casa com a empresa — lista quais, não escolhe."""
+    nomes = ', '.join(sorted(i.get('name', '?') for i in achados))
+    return ('Mais de um certificado casa com esta empresa na pasta NOVO: '
+            f'{nomes}. Deixe só o arquivo correto na pasta e tente de novo.')
 
 
 @clientes.route('/clientes/<int:id>/certificado/buscar', methods=['POST'])
@@ -340,21 +378,23 @@ def certificado_buscar(id):
         return jsonify({'ok': False, 'erro': 'Dropbox não configurado. '
                         'Defina DROPBOX_APP_KEY e DROPBOX_REFRESH_TOKEN.'}), 400
 
-    if not _alvos_certificado(cliente):
+    if not _tokens_certificado(cliente):
         return jsonify({'ok': False, 'erro': 'Empresa sem número nem CNPJ para localizar o certificado.'}), 400
 
     try:
-        item = _localizar_certificado_novo(svc, cliente)
+        achados = _localizar_certificados_novo(svc, cliente)
     except dropbox_sync.DropboxAuthError:
         return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
     except dropbox_sync.DropboxError:
         return jsonify({'ok': False, 'erro': 'Erro ao acessar o Dropbox. Verifique a conexão.'}), 502
 
-    if item is None:
+    if len(achados) > 1:
+        return jsonify({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}), 200
+    if not achados:
         return jsonify({'ok': True, 'encontrado': False,
                         'erro': 'Certificado não encontrado na pasta NOVO.'}), 200
 
-    return jsonify({'ok': True, 'encontrado': True, 'arquivo': item['name']}), 200
+    return jsonify({'ok': True, 'encontrado': True, 'arquivo': achados[0]['name']}), 200
 
 
 def _fmt_cnpj(doc):
@@ -390,13 +430,16 @@ def certificado_vincular(id):
 
     # 1) Reencontra o arquivo na pasta NOVO (não confia em path do cliente).
     try:
-        item = _localizar_certificado_novo(svc, cliente)
+        achados = _localizar_certificados_novo(svc, cliente)
     except dropbox_sync.DropboxAuthError:
         return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
     except dropbox_sync.DropboxError:
         return jsonify({'ok': False, 'erro': 'Erro ao acessar o Dropbox. Verifique a conexão.'}), 502
-    if item is None:
+    if len(achados) > 1:
+        return jsonify({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}), 200
+    if not achados:
         return jsonify({'ok': False, 'erro': 'Certificado não encontrado na pasta NOVO.'}), 200
+    item = achados[0]
 
     # 2) Baixa o .pfx em memória.
     raw = svc.download_file(item['path'])
