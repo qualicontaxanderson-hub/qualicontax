@@ -11,8 +11,14 @@ Como usar via CLI:
     python init_db.py --dedup      # também executa dedup_nfe_vinculo()
 """
 import sys
+import mysql.connector
+from config import Config
 from utils.db_helper import execute_query, get_last_db_error
 from utils.auth_helper import hash_password
+
+# Advisory lock que serializa as migrations entre os workers do gunicorn.
+_MIGRATION_LOCK = 'qualicontax_migrations'
+_MIGRATION_LOCK_TIMEOUT = 120  # segundos que um worker espera pelo lock
 
 
 def _migrate(sql, fetch=False):
@@ -32,6 +38,52 @@ def _migrate(sql, fetch=False):
 
 
 def run_migrations():
+    """Serializa as migrations entre os workers via advisory lock do MySQL.
+
+    Sem ``--preload``, cada um dos 4 workers do gunicorn chama isto no boot
+    (``MIGRATIONS_DONE`` é env por-processo). O ``GET_LOCK`` garante que só UM roda
+    o DDL por vez — os outros esperam a liberação e seguem (o corpo é idempotente,
+    então a 2ª passagem é no-op rápido). Isso mata a corrida de CREATE/ALTER
+    simultâneos que gerava contenção de metadata lock no boot.
+
+    O lock vive numa conexão DEDICADA (``GET_LOCK`` é por sessão; não pode usar o
+    pool, cujas conexões giram entre chamadas). Se o lock não vier no timeout,
+    outro worker está migrando — seguimos sem reexecutar.
+    """
+    conn = None
+    got_lock = False
+    try:
+        conn = mysql.connector.connect(
+            host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
+            user=Config.DB_USER, password=Config.DB_PASSWORD,
+            connection_timeout=Config.DB_CONNECT_TIMEOUT, autocommit=True,
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT GET_LOCK(%s, %s)", (_MIGRATION_LOCK, _MIGRATION_LOCK_TIMEOUT))
+        got_lock = (cur.fetchone() or [0])[0] == 1
+        cur.close()
+        if not got_lock:
+            print(f"⚠ Migrations: lock '{_MIGRATION_LOCK}' não obtido em "
+                  f"{_MIGRATION_LOCK_TIMEOUT}s — outro worker está migrando. Seguindo.")
+            return
+        _apply_migrations()
+    finally:
+        if conn is not None:
+            try:
+                if got_lock:
+                    _c = conn.cursor()
+                    _c.execute("SELECT RELEASE_LOCK(%s)", (_MIGRATION_LOCK,))
+                    _c.fetchall()
+                    _c.close()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _apply_migrations():
     """
     Cria ou atualiza todas as tabelas do banco de dados.
     Usa CREATE TABLE IF NOT EXISTS + ALTER TABLE incremental para ser idempotente.

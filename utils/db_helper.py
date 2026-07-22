@@ -1,6 +1,7 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import threading
 import os
+import atexit
 import mysql.connector
 from mysql.connector import Error, pooling
 from config import Config
@@ -33,6 +34,11 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             pool_name=f'qualicontax_pool_{os.getpid()}',
             pool_size=Config.DB_POOL_SIZE,
             pool_reset_session=False,
+            # autocommit=True: cada SELECT deixa de abrir uma transação que ficava
+            # VIVA na conexão devolvida ao pool (Sleep) segurando metadata lock em
+            # clientes — o que travava o CREATE ... FK REFERENCES clientes por
+            # ~29min. Com autocommit, não há transação órfã. É a correção-raiz.
+            autocommit=True,
             host=Config.DB_HOST,
             port=Config.DB_PORT,
             database=Config.DB_NAME,
@@ -43,6 +49,41 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             collation='utf8mb4_unicode_ci',
         )
     return _pool
+
+
+def close_pool():
+    """Fecha de verdade todas as conexões do pool (chamado no shutdown).
+
+    mysql.connector não expõe um close() público no pool, então drenamos a fila
+    interna e fechamos cada conexão. Registrado via atexit: cobre a reciclagem de
+    worker do gunicorn (--max-requests) e a troca de container (SIGTERM/graceful),
+    liberando as conexões em vez de deixá-las em Sleep até o wait_timeout (8h).
+    Best-effort e idempotente — nunca levanta.
+    """
+    global _pool
+    pool, _pool = _pool, None
+    if pool is None:
+        return
+    fechadas = 0
+    try:
+        fila = getattr(pool, '_cnx_queue', None)
+        while fila is not None and not fila.empty():
+            try:
+                cnx = fila.get_nowait()
+            except Exception:
+                break
+            try:
+                cnx.close()  # conexão "crua" do pool: close() aqui fecha o socket
+                fechadas += 1
+            except Exception:
+                pass
+    except Exception:
+        pass
+    logger.info('Pool MySQL fechado no shutdown: %d conexão(ões) encerrada(s).', fechadas)
+
+
+# Fecha o pool quando o processo (worker gunicorn ou script) encerra normalmente.
+atexit.register(close_pool)
 
 
 def get_db_connection():
