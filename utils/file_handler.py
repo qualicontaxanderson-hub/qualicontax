@@ -1,5 +1,7 @@
 """Handler para upload e download de arquivos"""
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from werkzeug.utils import secure_filename
 from config import Config
 
@@ -32,9 +34,8 @@ def save_file(file, subfolder=''):
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         
-        # Adiciona timestamp para evitar conflitos
-        from datetime import datetime
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Adiciona timestamp para evitar conflitos (horário de Brasília para o nome).
+        timestamp = datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%Y%m%d_%H%M%S')
         name, ext = os.path.splitext(filename)
         filename = f"{name}_{timestamp}{ext}"
         
@@ -87,9 +88,8 @@ def save_upload_file(file, subfolder='documents'):
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         
-        # Adiciona timestamp para evitar conflitos
-        from datetime import datetime
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Adiciona timestamp para evitar conflitos (horário de Brasília para o nome).
+        timestamp = datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%Y%m%d_%H%M%S')
         name, ext = os.path.splitext(filename)
         filename = f"{name}_{timestamp}{ext}"
         

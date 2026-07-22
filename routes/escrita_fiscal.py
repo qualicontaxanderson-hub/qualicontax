@@ -1205,7 +1205,8 @@ def api_importar_dropbox():
     # Registra o nome do último arquivo deste lote para uso como cursor na próxima chamada.
     last_scanned_out = files[-1]['name'] if files else None
 
-    now = datetime.now()
+    # Vira mês de pasta no Dropbox → horário de Brasília, não now() cru (UTC no Railway).
+    now = datetime.now(ZoneInfo('America/Sao_Paulo'))
     # Cache de pastas já criadas no Dropbox para evitar chamadas redundantes.
     _pastas_criadas: set = set()
     # Cache de vínculos de produto para evitar N×M consultas DB por lote.
@@ -1632,7 +1633,8 @@ def _run_import_job(job: dict, departamento: str,
             batch_skipped = 0
             batch_unregistered_this = 0
             batch_processed = 0
-            now = datetime.now()
+            # Vira mês de pasta no Dropbox → horário de Brasília, não now() cru.
+            now = datetime.now(ZoneInfo('America/Sao_Paulo'))
             # Moves acumulados durante o processamento — executados em paralelo no final.
             pending_moves: list[tuple[str, str, str, str]] = []  # (from, to, type, name)
 
@@ -1928,13 +1930,13 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     departamento = dropbox_sync.normalize_departamento(departamento)
 
     # Cria registro de auditoria antes de iniciar
-    iniciado_em = datetime.now(timezone.utc)
+    # iniciado_em via NOW() do MySQL (relógio do banco em -03:00), não Python.
     log_id = None
     try:
         log_id = execute_query(
             "INSERT INTO scheduler_import_log (iniciado_em, departamento, origem, usuario_id) "
-            "VALUES (%s, %s, %s, %s)",
-            (iniciado_em, departamento, origem, usuario_id), fetch=False,
+            "VALUES (NOW(), %s, %s, %s)",
+            (departamento, origem, usuario_id), fetch=False,
         )
     except Exception:
         logger.exception('[agendado] Falha ao criar registro de log para %r', departamento)
@@ -2198,12 +2200,12 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
     logger.info('[agendado] departamento=%r concluído: %s', departamento, totals)
 
     # Persiste resultado no log de auditoria
-    concluido_em = datetime.now(timezone.utc)
+    # concluido_em via NOW() do MySQL (relógio do banco em -03:00), não Python.
     try:
         execute_query(
-            "UPDATE scheduler_import_log SET concluido_em=%s, ok=%s, dup=%s, err=%s, "
+            "UPDATE scheduler_import_log SET concluido_em=NOW(), ok=%s, dup=%s, err=%s, "
             "moved_ok=%s, moved_err=%s, skipped=%s, detalhes=%s WHERE id=%s",
-            (concluido_em, totals['ok'], totals['dup'], totals['err'],
+            (totals['ok'], totals['dup'], totals['err'],
              totals['moved_ok'], totals['moved_err'], totals['skipped'],
              _json.dumps(file_logs, default=str, ensure_ascii=False),
              log_id),
@@ -2415,29 +2417,20 @@ def api_log_importacoes():
     """
     import json as _json
 
-    _brt = ZoneInfo('America/Sao_Paulo')
-
     def _fmt_ts(v):
-        """Converte timestamp UTC (datetime ou string) para horário de Brasília."""
+        """Formata o timestamp já em horário de Brasília.
+
+        iniciado_em/concluido_em agora são gravados via NOW() do MySQL, com o
+        pool em -03:00 — portanto já vêm em BRT. NÃO reconverte fuso (fazer isso
+        deslocaria -3h). Linhas antigas, gravadas em UTC antes da padronização,
+        exibem +3h — degrau único aceito na migração de fuso.
+        """
         if v is None:
             return None
         if isinstance(v, datetime):
-            if v.tzinfo is None:
-                # naive datetime stored as UTC — convert to BRT
-                v = v.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
-            else:
-                v = v.astimezone(_brt)
             return v.strftime('%Y-%m-%d %H:%M')
-        # String fallback: parse as UTC and convert to BRT
-        try:
-            s = str(v).strip().replace('T', ' ')
-            if len(s) < 19:
-                return s[:16]
-            dt = datetime.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
-            dt = dt.replace(tzinfo=ZoneInfo('UTC')).astimezone(_brt)
-            return dt.strftime('%Y-%m-%d %H:%M')
-        except (ValueError, Exception):
-            return str(v).replace('T', ' ')[:16]
+        s = str(v).strip().replace('T', ' ')
+        return s[:16]
 
     log_id = request.args.get('log_id', type=int)
     if log_id:
@@ -3391,7 +3384,7 @@ def _processar_nota_nfe(
         emit_nome   nome do emitente (None se emit_cli is None)
         emit_num    número do cliente emitente (None se emit_cli is None)
     """
-    _now = now or datetime.now()
+    _now = now or datetime.now(ZoneInfo('America/Sao_Paulo'))
     _dt = parsed['header'].get('data_emissao') or _now
     dest_cnpj_digits = re.sub(r'\D', '', parsed['header'].get('dest_cnpj', ''))
 

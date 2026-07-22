@@ -57,6 +57,7 @@ def run_migrations():
             host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
             user=Config.DB_USER, password=Config.DB_PASSWORD,
             connection_timeout=Config.DB_CONNECT_TIMEOUT, autocommit=True,
+            time_zone='-03:00',  # Brasília (UTC-3), consistente com o pool
         )
         cur = conn.cursor()
         cur.execute("SELECT GET_LOCK(%s, %s)", (_MIGRATION_LOCK, _MIGRATION_LOCK_TIMEOUT))

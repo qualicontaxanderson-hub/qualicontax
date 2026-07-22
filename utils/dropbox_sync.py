@@ -11,6 +11,7 @@ import re
 import os
 import threading
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -461,14 +462,14 @@ class DropboxService:
 
     def pasta_importados(self, departamento: str, empresa_nome: str,
                          dt: datetime = None, empresa_numero: str = None) -> str:
-        dt = dt or datetime.now()
+        dt = dt or datetime.now(ZoneInfo('America/Sao_Paulo'))
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
         return self._build_path(root, 'IMPORTADOS', str(dt.year), pasta_empresa, f'{dt.month:02d}.{dt.year}')
 
     def pasta_erros(self, departamento: str, empresa_nome: str,
                     dt: datetime = None, empresa_numero: str = None) -> str:
-        dt = dt or datetime.now()
+        dt = dt or datetime.now(ZoneInfo('America/Sao_Paulo'))
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         root = self.resolve_departamento_root(departamento)
         return self._build_path(root, 'ERROS', str(dt.year), pasta_empresa, f'{dt.month:02d}.{dt.year}')

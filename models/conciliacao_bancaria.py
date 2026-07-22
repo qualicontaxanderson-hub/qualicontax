@@ -113,12 +113,13 @@ class ConciliacaoBancaria:
             INSERT INTO conciliacoes_bancarias 
             (cliente_id, grupo_id, arquivo_ofx, periodo_inicial, periodo_final,
              saldo_inicial, saldo_final, status, data_importacao)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """
-        data_importacao = datetime.now()
+        # data_importacao via NOW() do MySQL (relógio do banco, já em -03:00),
+        # não datetime.now() do Python — evita divergência de fuso entre gravações.
         return execute_query(query, (
             cliente_id, grupo_id, arquivo_ofx, periodo_inicial, periodo_final,
-            saldo_inicial, saldo_final, status, data_importacao
+            saldo_inicial, saldo_final, status
         ))
     
     @staticmethod

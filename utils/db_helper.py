@@ -47,6 +47,14 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             connection_timeout=Config.DB_CONNECT_TIMEOUT,
             charset='utf8mb4',
             collation='utf8mb4_unicode_ci',
+            # Fuso de Brasília em TODA sessão do pool: NOW()/CURRENT_TIMESTAMP
+            # passam a gravar/ler em horário local, não UTC. Offset fixo '-03:00'
+            # (não 'America/Sao_Paulo'): nomes de fuso exigem as tabelas
+            # mysql.time_zone carregadas, o que a imagem Docker do MySQL normalmente
+            # NÃO tem; e o Brasil não tem horário de verão desde 2019, então o
+            # offset é fixo. Feito na conexão (não SET GLOBAL): sobrevive a restart
+            # do container do MySQL.
+            time_zone='-03:00',
         )
     return _pool
 
