@@ -116,6 +116,43 @@ def _extrair_documento(cert):
     return None, None
 
 
+def carregar_par_chave_cert(pfx_bytes: bytes, senha: str):
+    """Carrega o par ``(private_key, cert, cadeia)`` de um .pfx/PKCS#12.
+
+    Diferente de :func:`abrir_certificado` (que só valida a senha e extrai o
+    documento do titular para a tela), esta função devolve os objetos
+    criptográficos usados para autenticar o handshake TLS mútuo (mTLS) com os
+    webservices da SEFAZ e assinar as mensagens SOAP na captura de DFe.
+
+    Args:
+        pfx_bytes: conteúdo binário do arquivo .pfx.
+        senha: senha do certificado em texto puro.
+
+    Returns:
+        tuple ``(private_key, cert, cadeia)`` onde:
+          - ``private_key``: chave privada (objeto ``cryptography``);
+          - ``cert``: certificado do titular (``x509.Certificate``);
+          - ``cadeia``: lista de certificados intermediários (pode ser vazia).
+
+    Raises:
+        SenhaInvalidaError: senha incorreta.
+        CertificadoError: arquivo inválido/corrompido ou sem chave/certificado.
+    """
+    try:
+        private_key, cert, cadeia = pkcs12.load_key_and_certificates(
+            pfx_bytes, (senha or '').encode())
+    except ValueError as exc:
+        msg = str(exc).lower()
+        if any(k in msg for k in ('mac', 'invalid', 'decrypt', 'password')):
+            raise SenhaInvalidaError('Senha do certificado incorreta.') from exc
+        raise CertificadoError(f'Arquivo de certificado inválido: {exc}') from exc
+
+    if private_key is None or cert is None:
+        raise CertificadoError('Certificado sem chave privada/certificado utilizável.')
+
+    return private_key, cert, list(cadeia or [])
+
+
 def abrir_certificado(pfx_bytes: bytes, senha: str) -> dict:
     """Valida a senha do .pfx e extrai os dados do titular.
 

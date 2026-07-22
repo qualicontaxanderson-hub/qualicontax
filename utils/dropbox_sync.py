@@ -388,6 +388,38 @@ class DropboxService:
                 logger.error('Erro ao copiar %s → %s: %s', from_path, to_path, exc)
                 return False
 
+    def upload_bytes(self, path: str, content: bytes) -> bool:
+        """Envia ``content`` (bytes) para ``path`` no Dropbox, sobrescrevendo.
+
+        Usa ``files_upload`` com ``WriteMode.overwrite`` (idempotente: reenviar
+        o mesmo XML de DFe não gera duplicata). Faz retry silencioso uma vez se
+        o access token estiver expirado, renovando via refresh token.
+
+        Raises:
+            DropboxAuthError: credenciais definitivamente inválidas (após retry).
+        """
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return False
+            try:
+                import dropbox as dropbox_sdk
+                dbx.files_upload(
+                    content, path, mode=dropbox_sdk.files.WriteMode.overwrite)
+                logger.info('Arquivo enviado ao Dropbox: %s (%d bytes)', path, len(content))
+                return True
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox upload_bytes: token expirado, renovando silenciosamente...')
+                        continue
+                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                logger.error('Erro ao enviar %s ao Dropbox: %s', path, exc)
+                return False
+        return False
+
     # ------------------------------------------------------------------
     # Helpers de caminho por departamento
     # ------------------------------------------------------------------
@@ -458,6 +490,23 @@ class DropboxService:
         """
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         return self._build_path('Certificados', 'IMPORTADOS', pasta_empresa)
+
+    # ------------------------------------------------------------------
+    # Helpers de caminho para Documentos Fiscais (DFe / XML)
+    # ------------------------------------------------------------------
+    def pasta_fiscal(self, empresa_nome: str, ano, mes,
+                     empresa_numero: str = None) -> str:
+        """Pasta de documentos fiscais (XML de DFe) da empresa, por ano/mês:
+        ``{ROOT}/EMPRESAS/{numero} - {razão}/Fiscal/{ano}/{mes}``.
+
+        Segue o padrão único por empresa (uma pasta reúne Fiscal, Legalização,
+        Contábil, Pessoal, Certificado). O ano/mês dentro de Fiscal é obrigatório
+        por causa do volume de XML. Reusa ``_build_empresa_folder`` (mesmo
+        ``001 - RAZÃO`` dos certificados) e ``_build_path`` (prefixo raiz).
+        """
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        return self._build_path(
+            'EMPRESAS', pasta_empresa, 'Fiscal', str(ano), f'{int(mes):02d}')
 
 
 def normalize_departamento(departamento: str) -> str:

@@ -719,6 +719,178 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # Incremental: flags de captura automática de DFe (opt-in ligado por padrão).
+    for _col_name, _col_def in [
+        ('modo_automatico', 'TINYINT(1) NOT NULL DEFAULT 1'),
+        ('ativo',           'TINYINT(1) NOT NULL DEFAULT 1'),
+    ]:
+        try:
+            _col_exists = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dfe_certificados' "
+                "AND COLUMN_NAME = %s",
+                (_col_name,), fetch=True, fetch_one=True,
+            ) or {}
+            if _col_exists.get('cnt', 0) == 0:
+                execute_query(
+                    f"ALTER TABLE dfe_certificados ADD COLUMN {_col_name} {_col_def}",
+                    fetch=False,
+                )
+        except Exception:
+            pass
+
+    # ---- Controle de NSU consumido por empresa (schema idêntico ao motor NH) ----
+    # Colunas ult_consulta/proximo_permitido/ult_status batem com o SQL_NSU_OK/656
+    # do NH: proximo_permitido é a trava de cota (SEFAZ pede aguardar 1h no 656).
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS dfe_nsu (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id        INT           NOT NULL,
+            cnpj              VARCHAR(14)   NOT NULL,
+            ult_nsu           BIGINT        NOT NULL DEFAULT 0,
+            max_nsu           BIGINT        NOT NULL DEFAULT 0,
+            ult_consulta      DATETIME      NULL,
+            proximo_permitido DATETIME      NULL,
+            ult_status        VARCHAR(255)  NULL,
+            atualizado_em     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_nsu_cliente (cliente_id),
+            KEY ix_nsu_cnpj (cnpj),
+            CONSTRAINT fk_dfensu_cliente FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # ---- Documentos DFe (SÓ notas; eventos vão em dfe_eventos) ----------------
+    # Schema idêntico ao motor NH (colunas tipo/xml_caminho/manifesto/conferido).
+    # UNIQUE(chave): resumo + completa da mesma nota viram UMA linha; o upsert
+    # (Fase 2) nunca rebaixa completa→resumo e NÃO mexe em situacao (preserva
+    # 'cancelada' setada por evento). Cabeçalho no banco p/ a Conferência de
+    # Compras listar por emissor/valor sem abrir o XML (arquivo fica no Dropbox).
+    # expurgado/expurgado_em: aditivos do Qualicontax p/ o expurgo em lote
+    # (apaga o XML, mantém o registro e marca quando foi apagado).
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS dfe_documentos (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id        INT           NOT NULL,
+            chave             CHAR(44)      NOT NULL,
+            tipo              VARCHAR(6)    NOT NULL,
+            nsu               BIGINT        NULL,
+            schema_dfe        VARCHAR(40)   NULL,
+            resumo            TINYINT(1)    NOT NULL DEFAULT 0,
+            numero            VARCHAR(20)   NULL,
+            serie             VARCHAR(6)    NULL,
+            modelo            VARCHAR(4)    NULL,
+            dh_emissao        DATETIME      NULL,
+            emit_cnpj         VARCHAR(14)   NULL,
+            emit_nome         VARCHAR(160)  NULL,
+            dest_cnpj         VARCHAR(14)   NULL,
+            valor_total       DECIMAL(14,2) NULL,
+            situacao          VARCHAR(20)   NOT NULL DEFAULT 'autorizado',
+            manifesto         VARCHAR(20)   NULL,
+            xml_caminho       VARCHAR(300)  NULL,
+            xml_expira_em     DATE          NULL,
+            expurgado         TINYINT(1)    NOT NULL DEFAULT 0,
+            expurgado_em      DATE          NULL,
+            conferido         TINYINT(1)    NOT NULL DEFAULT 0,
+            criado_em         TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_doc_chave (chave),
+            KEY ix_doc_cliente (cliente_id),
+            KEY ix_doc_tipo (tipo),
+            KEY ix_doc_emit (emit_cnpj),
+            KEY ix_doc_dh (dh_emissao),
+            KEY ix_doc_situacao (situacao),
+            KEY ix_doc_expira (xml_expira_em),
+            CONSTRAINT fk_dfedoc_cliente FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # ---- Itens/produtos de cada documento (schema idêntico ao motor NH) -------
+    # cod_anp/produto_id são específicos do NH (combustível): ficam NULL aqui,
+    # mas mantidos para o INSERT do motor da Fase 2 casar sem reescrita.
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS dfe_itens (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            documento_id      INT            NOT NULL,
+            n_item            INT            NOT NULL,
+            produto_xml       VARCHAR(160)   NULL,
+            cprod_fornecedor  VARCHAR(60)    NULL,
+            cean              VARCHAR(20)    NULL,
+            cod_anp           VARCHAR(12)    NULL,
+            produto_id        INT            NULL,
+            ncm               VARCHAR(10)    NULL,
+            unidade           VARCHAR(6)     NULL,
+            quantidade        DECIMAL(15,4)  NULL,
+            valor_unitario    DECIMAL(15,6)  NULL,
+            valor_total       DECIMAL(14,2)  NULL,
+            criado_em         TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_item (documento_id, n_item),
+            KEY ix_item_anp (cod_anp),
+            KEY ix_item_produto (produto_id),
+            CONSTRAINT fk_dfeitem_doc FOREIGN KEY (documento_id)
+                REFERENCES dfe_documentos(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # ---- Eventos (procEventoNFe): 1 linha por evento, histórico com data/nSeq --
+    # Tabela isolada (uma nota tem VÁRIOS eventos). UNIQUE(chave_evento). Liga na
+    # nota por ch_nfe (valor, não FK): o evento pode chegar ANTES da nota. O
+    # cancelamento também faz UPDATE dfe_documentos SET situacao='cancelada'.
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS dfe_eventos (
+            id            INT           AUTO_INCREMENT PRIMARY KEY,
+            cliente_id    INT           NOT NULL,
+            chave_evento  VARCHAR(60)   NOT NULL,
+            ch_nfe        CHAR(44)      NOT NULL,
+            tp_evento     VARCHAR(6)    NULL,
+            n_seq         INT           NULL,
+            descricao     VARCHAR(160)  NULL,
+            dh_evento     DATETIME      NULL,
+            nsu           BIGINT        NULL,
+            schema_dfe    VARCHAR(40)   NULL,
+            org_cnpj      VARCHAR(14)   NULL,
+            xml_caminho   VARCHAR(300)  NULL,
+            xml_expira_em DATE          NULL,
+            criado_em     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_chave_evento (chave_evento),
+            KEY ix_ev_chnfe (ch_nfe),
+            KEY ix_ev_tp (tp_evento),
+            KEY ix_ev_expira (xml_expira_em),
+            CONSTRAINT fk_dfeev_cliente FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # ---- Log de consultas de DFe (schema idêntico ao dfe_log do NH) -----------
+    # Uma linha por RODADA (inclusive as puladas por cota/lock): sem FK e best-
+    # effort, pra logar NUNCA derrubar a captura. Sem FK em cliente_id de propósito.
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS dfe_consulta_log (
+            id            BIGINT       AUTO_INCREMENT PRIMARY KEY,
+            momento       DATETIME     NOT NULL,
+            origem        VARCHAR(12)  NOT NULL,
+            evento        VARCHAR(14)  NOT NULL,
+            cliente_id    INT          NULL,
+            cnpj          CHAR(14)     NULL,
+            ult_nsu_env   BIGINT       NULL,
+            c_stat        VARCHAR(6)   NULL,
+            x_motivo      VARCHAR(300) NULL,
+            ret_ult_nsu   BIGINT       NULL,
+            ret_max_nsu   BIGINT       NULL,
+            docs          INT          NOT NULL DEFAULT 0,
+            notas         INT          NOT NULL DEFAULT 0,
+            eventos       INT          NOT NULL DEFAULT 0,
+            lote          INT          NULL,
+            detalhe       VARCHAR(300) NULL,
+            criado_em     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY ix_log_momento (momento),
+            KEY ix_log_cstat (c_stat),
+            KEY ix_log_origem_evento (origem, evento)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
     print("✓ Migrations concluídas")
 
 
