@@ -145,7 +145,11 @@ if os.environ.get('MIGRATIONS_DONE') != '1':
         os.environ['MIGRATIONS_DONE'] = '1'
     except Exception:
         import logging as _logging
-        _logging.getLogger(__name__).exception('Falha ao executar migrations.')
+        _logging.getLogger(__name__).exception(
+            'Falha FATAL nas migrations — abortando o boot (schema incompleto).')
+        # Re-levanta: melhor o worker morrer e o deploy falhar RUIDOSAMENTE do que
+        # subir "com sucesso" com schema incompleto (lição da Fase 1).
+        raise
 
 
 # Inicia o scheduler de tarefas agendadas (importação automática às 23:59).

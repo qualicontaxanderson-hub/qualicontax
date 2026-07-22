@@ -11,8 +11,24 @@ Como usar via CLI:
     python init_db.py --dedup      # também executa dedup_nfe_vinculo()
 """
 import sys
-from utils.db_helper import execute_query
+from utils.db_helper import execute_query, get_last_db_error
 from utils.auth_helper import hash_password
+
+
+def _migrate(sql, fetch=False):
+    """Executa um DDL de migration de forma FATAL.
+
+    Ao contrário do ``execute_query`` (que loga o erro e devolve ``None`` para o
+    resto do app seguir), aqui uma falha de ``CREATE``/``ALTER`` levanta
+    ``RuntimeError`` com a query e o erro real do banco — abortando o boot em vez
+    de subir um deploy "com sucesso" e schema incompleto (o que aconteceu na
+    Fase 1). O parâmetro ``fetch`` é aceito só por compatibilidade com o formato
+    das chamadas existentes; migration é sempre DDL não-fetch.
+    """
+    if execute_query(sql, fetch=False) is None:
+        erro = get_last_db_error() or 'sem detalhe do driver (falha de conexão?)'
+        primeira = next((ln.strip() for ln in sql.splitlines() if ln.strip()), sql.strip())
+        raise RuntimeError(f'Migration abortada — {erro} | DDL: {primeira[:180]}')
 
 
 def run_migrations():
@@ -23,7 +39,7 @@ def run_migrations():
     """
 
     # ---- Tabela principal de Usuários ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INT AUTO_INCREMENT PRIMARY KEY,
             nome VARCHAR(255) NOT NULL,
@@ -100,7 +116,7 @@ def run_migrations():
         pass
 
     # ---- Planos de Contas ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS planos_contas (
             id INT AUTO_INCREMENT PRIMARY KEY,
             nome VARCHAR(255) NOT NULL,
@@ -115,7 +131,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS plano_contas_itens (
             id INT AUTO_INCREMENT PRIMARY KEY,
             plano_id INT NOT NULL,
@@ -133,7 +149,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Municípios ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS municipios (
             id INT AUTO_INCREMENT PRIMARY KEY,
             nome VARCHAR(100) NOT NULL,
@@ -147,7 +163,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Contas Correntes (Conciliação Bancária) ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS contas_correntes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
@@ -230,7 +246,7 @@ def run_migrations():
         pass
 
     # ---- NF-e (Conferência de Compras) ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_importacoes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NULL,
@@ -325,7 +341,7 @@ def run_migrations():
     except Exception:
         pass
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_itens (
             id INT AUTO_INCREMENT PRIMARY KEY,
             nfe_id INT NOT NULL,
@@ -371,7 +387,7 @@ def run_migrations():
         )
 
     # ---- Catálogo de Produtos ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_produtos_catalogo (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NULL,
@@ -402,7 +418,7 @@ def run_migrations():
         )
 
     # ---- Categorias e Sub-Categorias de Produtos ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_produto_categorias (
             id INT AUTO_INCREMENT PRIMARY KEY,
             nome VARCHAR(100) NOT NULL,
@@ -411,7 +427,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_produto_subcategorias (
             id INT AUTO_INCREMENT PRIMARY KEY,
             categoria_id INT NOT NULL,
@@ -451,7 +467,7 @@ def run_migrations():
                 )
 
     # ---- Eventos NF-e (CC-e, cancelamento, manifestação) ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_eventos (
             id               INT AUTO_INCREMENT PRIMARY KEY,
             nfe_id           INT NULL,
@@ -471,7 +487,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Regras de vínculo automático (emit_cnpj + cod_xml → produto_catalogo) ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_produto_vinculo (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NULL,
@@ -502,7 +518,7 @@ def run_migrations():
             )
 
     # ---- Cadastros Adicionais de Clientes ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_adicionais_clientes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
@@ -520,7 +536,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Sócios de Clientes ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS socios_clientes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
@@ -554,7 +570,7 @@ def run_migrations():
         pass
 
     # ---- Cadastros ANP ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_anp (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
@@ -588,7 +604,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Sócios do Cadastro ANP ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_anp_socios (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cadastro_anp_id INT NOT NULL,
@@ -599,7 +615,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Produtos do Cadastro ANP ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_anp_produtos (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cadastro_anp_id INT NOT NULL,
@@ -612,7 +628,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Contratos ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS contratos (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
@@ -630,7 +646,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Controle de Acesso ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS perfis_acesso (
             id INT AUTO_INCREMENT PRIMARY KEY,
             nome VARCHAR(100) NOT NULL,
@@ -641,7 +657,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS perfil_permissoes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             perfil_id INT NOT NULL,
@@ -651,7 +667,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS usuario_perfis (
             id INT AUTO_INCREMENT PRIMARY KEY,
             usuario_id INT NOT NULL,
@@ -662,7 +678,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS usuario_empresas_permitidas (
             id INT AUTO_INCREMENT PRIMARY KEY,
             usuario_id INT NOT NULL,
@@ -673,7 +689,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS scheduler_import_log (
             id          INT AUTO_INCREMENT PRIMARY KEY,
             iniciado_em DATETIME NOT NULL,
@@ -692,7 +708,7 @@ def run_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS app_config (
             chave   VARCHAR(100) PRIMARY KEY,
             valor   TEXT NOT NULL,
@@ -701,7 +717,7 @@ def run_migrations():
     """, fetch=False)
 
     # ---- Vínculo de Certificado Digital (.pfx) por empresa ----
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_certificados (
             id             INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id     INT NOT NULL,
@@ -720,29 +736,25 @@ def run_migrations():
     """, fetch=False)
 
     # Incremental: flags de captura automática de DFe (opt-in ligado por padrão).
+    # Fatal via _migrate: o pré-check no INFORMATION_SCHEMA mantém a idempotência
+    # (só altera se a coluna faltar); uma falha REAL do ALTER aborta o boot.
     for _col_name, _col_def in [
         ('modo_automatico', 'TINYINT(1) NOT NULL DEFAULT 1'),
         ('ativo',           'TINYINT(1) NOT NULL DEFAULT 1'),
     ]:
-        try:
-            _col_exists = execute_query(
-                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dfe_certificados' "
-                "AND COLUMN_NAME = %s",
-                (_col_name,), fetch=True, fetch_one=True,
-            ) or {}
-            if _col_exists.get('cnt', 0) == 0:
-                execute_query(
-                    f"ALTER TABLE dfe_certificados ADD COLUMN {_col_name} {_col_def}",
-                    fetch=False,
-                )
-        except Exception:
-            pass
+        _col_exists = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dfe_certificados' "
+            "AND COLUMN_NAME = %s",
+            (_col_name,), fetch=True, fetch_one=True,
+        ) or {}
+        if _col_exists.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE dfe_certificados ADD COLUMN {_col_name} {_col_def}")
 
     # ---- Controle de NSU consumido por empresa (schema idêntico ao motor NH) ----
     # Colunas ult_consulta/proximo_permitido/ult_status batem com o SQL_NSU_OK/656
     # do NH: proximo_permitido é a trava de cota (SEFAZ pede aguardar 1h no 656).
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_nsu (
             id                INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id        INT           NOT NULL,
@@ -768,7 +780,7 @@ def run_migrations():
     # Compras listar por emissor/valor sem abrir o XML (arquivo fica no Dropbox).
     # expurgado/expurgado_em: aditivos do Qualicontax p/ o expurgo em lote
     # (apaga o XML, mantém o registro e marca quando foi apagado).
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_documentos (
             id                INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id        INT           NOT NULL,
@@ -809,7 +821,7 @@ def run_migrations():
     # ---- Itens/produtos de cada documento (schema idêntico ao motor NH) -------
     # cod_anp/produto_id são específicos do NH (combustível): ficam NULL aqui,
     # mas mantidos para o INSERT do motor da Fase 2 casar sem reescrita.
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_itens (
             id                INT AUTO_INCREMENT PRIMARY KEY,
             documento_id      INT            NOT NULL,
@@ -837,7 +849,7 @@ def run_migrations():
     # Tabela isolada (uma nota tem VÁRIOS eventos). UNIQUE(chave_evento). Liga na
     # nota por ch_nfe (valor, não FK): o evento pode chegar ANTES da nota. O
     # cancelamento também faz UPDATE dfe_documentos SET situacao='cancelada'.
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_eventos (
             id            INT           AUTO_INCREMENT PRIMARY KEY,
             cliente_id    INT           NOT NULL,
@@ -866,7 +878,7 @@ def run_migrations():
     # ---- Log de consultas de DFe (schema idêntico ao dfe_log do NH) -----------
     # Uma linha por RODADA (inclusive as puladas por cota/lock): sem FK e best-
     # effort, pra logar NUNCA derrubar a captura. Sem FK em cliente_id de propósito.
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_consulta_log (
             id            BIGINT       AUTO_INCREMENT PRIMARY KEY,
             momento       DATETIME     NOT NULL,

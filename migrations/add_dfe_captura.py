@@ -18,7 +18,19 @@ Idempotente — seguro rodar múltiplas vezes. Espelha o que ``run_migrations()`
 aplica no boot; existe para rodar isoladamente (``python migrations/add_dfe_captura.py``).
 """
 
-from utils.db_helper import execute_query
+from utils.db_helper import execute_query, get_last_db_error
+
+
+def _migrate(sql, fetch=False):
+    """Executa um DDL de migration de forma FATAL (mesma semântica do init_db).
+
+    Se o DDL falhar, levanta RuntimeError com a query + erro real do banco, em vez
+    de deixar o execute_query engolir e o script imprimir "✓ pronta" mentindo.
+    """
+    if execute_query(sql, fetch=False) is None:
+        erro = get_last_db_error() or 'sem detalhe do driver (falha de conexão?)'
+        primeira = next((ln.strip() for ln in sql.splitlines() if ln.strip()), sql.strip())
+        raise RuntimeError(f'Migration abortada — {erro} | DDL: {primeira[:180]}')
 
 
 def _add_column_if_missing(table, column, definition):
@@ -29,7 +41,7 @@ def _add_column_if_missing(table, column, definition):
         (table, column), fetch=True, fetch_one=True,
     ) or {}
     if exists.get('cnt', 0) == 0:
-        execute_query(f"ALTER TABLE {table} ADD COLUMN {column} {definition}", fetch=False)
+        _migrate(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         print(f"✓ Coluna {table}.{column} adicionada")
     else:
         print(f"✓ Coluna {table}.{column} já existe")
@@ -45,7 +57,7 @@ def migrate_add_dfe_captura():
     _add_column_if_missing('dfe_certificados', 'ativo', 'TINYINT(1) NOT NULL DEFAULT 1')
 
     # 2) Controle de NSU por empresa (proximo_permitido = trava de cota 656).
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_nsu (
             id                INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id        INT           NOT NULL,
@@ -67,7 +79,7 @@ def migrate_add_dfe_captura():
     # 3) Documentos DFe (SÓ notas; eventos vão em dfe_eventos). UNIQUE(chave):
     #    resumo + completa viram UMA linha; upsert nunca rebaixa completa→resumo.
     #    expurgado/expurgado_em: aditivos do Qualicontax p/ o expurgo em lote.
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_documentos (
             id                INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id        INT           NOT NULL,
@@ -108,7 +120,7 @@ def migrate_add_dfe_captura():
 
     # 4) Itens/produtos de cada nota. cod_anp/produto_id (combustível NH) ficam
     #    NULL aqui, mas mantidos p/ o INSERT do motor casar sem reescrita.
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_itens (
             id                INT AUTO_INCREMENT PRIMARY KEY,
             documento_id      INT            NOT NULL,
@@ -135,7 +147,7 @@ def migrate_add_dfe_captura():
 
     # 5) Eventos (procEventoNFe). Isolada — uma nota tem VÁRIOS eventos.
     #    Liga na nota por ch_nfe (valor, não FK): evento pode chegar antes da nota.
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_eventos (
             id            INT           AUTO_INCREMENT PRIMARY KEY,
             cliente_id    INT           NOT NULL,
@@ -164,7 +176,7 @@ def migrate_add_dfe_captura():
 
     # 6) Log de consultas (schema idêntico ao dfe_log do NH). Sem FK: logar NUNCA
     #    pode derrubar a captura (best-effort).
-    execute_query("""
+    _migrate("""
         CREATE TABLE IF NOT EXISTS dfe_consulta_log (
             id            BIGINT       AUTO_INCREMENT PRIMARY KEY,
             momento       DATETIME     NOT NULL,
@@ -194,8 +206,10 @@ def migrate_add_dfe_captura():
 
 
 if __name__ == '__main__':
+    import sys
     try:
         migrate_add_dfe_captura()
         print("\n✓ Migração concluída com sucesso!")
     except Exception as e:
         print(f"\n✗ Migração falhou: {e}")
+        sys.exit(1)
