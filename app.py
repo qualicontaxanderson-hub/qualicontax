@@ -1,7 +1,30 @@
 """Aplicação principal Flask - Qualicontax"""
 import os
+import sys
 import time
 import logging
+
+# ---------------------------------------------------------------------------
+# Logging — PRIMEIRA COISA do boot, antes de qualquer import que já emita log.
+# O gunicorn configura apenas os loggers 'gunicorn.*' (com propagate=False);
+# o root fica sem handler e TODO logger.info/warning da aplicação era descartado
+# silenciosamente. force=True garante que esta config vença independente da
+# ordem de import (não mexe nos handlers do gunicorn, que são loggers nomeados).
+# Nível ajustável em runtime pela env LOG_LEVEL (default INFO).
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
+    stream=sys.stdout,
+    format='%(asctime)s %(levelname)s [pid=%(process)d] %(name)s: %(message)s',
+    force=True,
+)
+try:
+    # Railway captura stdout; sem line-buffering os logs de boot podem ficar
+    # presos no buffer e só aparecerem muito depois (ou nunca, se o worker morrer).
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
 from flask import Flask, render_template, jsonify
 from flask_login import LoginManager
 from flask_compress import Compress

@@ -59,3 +59,22 @@ def dfe_seed_nsu(id):
             or getattr(current_user, 'email', None) or '?')
     resultado = dfe_captura.seed_ult_nsu(id, data.get('nsu'), usuario_label=quem)
     return jsonify(resultado), (200 if resultado.get('ok') else 400)
+
+
+@dfe_bp.route('/dfe/sched-status', methods=['GET'])
+@login_required
+def dfe_sched_status():
+    """Diagnóstico do scheduler (só ADMIN): o que ESTE worker enxerga.
+
+    Responde três perguntas, em ordem de confiança:
+      1. A env DFE_SCHED_ATIVO chegou no container? (confiável em qualquer worker)
+      2. O scheduler está rodando neste worker? (só verdade no dono do lock)
+      3. Quais jobs estão registrados e quando disparam? (idem)
+
+    Com --workers 4 no Procfile, a requisição cai em um worker aleatório:
+    recarregue algumas vezes e observe o campo `pid`.
+    """
+    if not getattr(current_user, 'is_admin', lambda: False)():
+        return jsonify({'ok': False, 'erro': 'Apenas administradores.'}), 403
+    from utils import scheduler as _sched
+    return jsonify({'ok': True, **_sched.status()}), 200
