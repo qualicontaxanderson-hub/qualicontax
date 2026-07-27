@@ -64,6 +64,23 @@ _DEPARTAMENTO_DFE = os.getenv('DFE_DEPARTAMENTO', 'Fiscal')
 # ciclo pelo retry (_retry_pendentes).
 _MAX_CHNFE_CICLO = int(os.getenv('DFE_MAX_CHNFE_CICLO', '30'))
 
+# Drenagem multi-lote (padrão captura_massa do NH). Enquanto o distDFeInt devolver
+# 138 (ainda há documentos: ultNSU < maxNSU), consulta em SEQUÊNCIA avançando o
+# cursor, sem esperar o próximo tick do cron. Para em 137 (fim) ou 656 (cota real).
+# O 656 é por NSU desalinhado / consulta ociosa, NÃO por drenar — enquanto vem 138
+# a SEFAZ autoriza consultas consecutivas. Travas de segurança (conservadoras de
+# propósito: prefere-se drenar um backlog grande em ALGUNS ciclos a segurar o worker
+# numa rodada gigante):
+#   _MAX_LOTES_CICLO   teto de lotes por empresa por rodada (60×50 = 3.000 docs/ciclo;
+#                      ex.: um backlog de ~11 mil drena em ~4 ciclos do cron).
+#   _MAX_SEG_EMPRESA   teto de tempo por empresa por rodada (90s: não trava o worker
+#                      nem impede as outras empresas de rodar na mesma rodada).
+#   _INTERVALO_LOTE    pausa de cortesia entre lotes (igual ao NH, ~0.4s).
+# Bateu o teto → para e o resto drena no próximo ciclo (o cursor já ficou salvo).
+_MAX_LOTES_CICLO = int(os.getenv('DFE_MAX_LOTES_CICLO', '60'))
+_MAX_SEG_EMPRESA = int(os.getenv('DFE_MAX_SEG_EMPRESA', '90'))
+_INTERVALO_LOTE = float(os.getenv('DFE_INTERVALO_LOTE_SEG', '0.4'))
+
 
 # ==========================================================================
 # SQLs — destino é a conf-compras (nfe_importacoes/nfe_itens), origem='SEFAZ'.
@@ -612,14 +629,49 @@ def _peek(d):
         return None, None
 
 
-# ==========================================================================
-# Orquestração — captura de UMA rodada (1 requisição) para 1 cliente.
-# ==========================================================================
-def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
-    """Executa UMA consulta ao distDFeInt e (fora do dry-run) grava o lote.
+def _processar_lote(conn, cur, empresa, docs, ctx, nsu_inicial):
+    """Processa UM lote de docZip em ordem de NSU. Avança nsu_ok só APÓS cada doc
+    salvo (retoma de onde parou se cair). Para no 1º doc que falhar OU no corte de
+    656 numa busca por chave (ctx['cortar']). Devolve dict com contagens/nsu_ok/parada."""
+    r = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0,
+         'nsu_ok': nsu_inicial, 'parada': None}
+    for d in docs:
+        nsu = _to_int(d.get('NSU'))
+        try:
+            kind, ni = processar_um_doc(conn, cur, empresa, d, ctx)
+        except Exception as exc:
+            conn.rollback()
+            r['parada'] = f'NSU {nsu}: {exc}'
+            break
+        if kind == 'nota':
+            r['n_nota'] += 1
+            r['n_itens'] += ni
+        elif kind == 'resumo':
+            r['n_resumo'] += 1
+        elif kind == 'evento':
+            r['n_evento'] += 1
+        else:
+            r['n_outro'] += 1
+        r['nsu_ok'] = nsu   # só avança a marca APÓS salvar com sucesso
+        if ctx['cortar']:   # 656 numa busca por chave → para o lote (resumo pendente)
+            r['parada'] = f'NSU {nsu}: {ctx["motivo_corte"]}'
+            break
+    return r
 
-    Devolve um dict estruturado ('ok' + campos). NUNCA faz loop nem manifesta.
-    ``origem`` ('manual' | 'agendado') vai para o dfe_consulta_log.
+
+# ==========================================================================
+# Orquestração — captura de UMA rodada para 1 cliente. DRENA em multi-lote
+# (padrão captura_massa do NH): enquanto vier 138, consulta em sequência.
+# ==========================================================================
+def capturar_cliente(cliente_id, dry_run=False, origem='manual',
+                     max_lotes=1, max_seg=0):
+    """Consulta o distDFeInt e (fora do dry-run) grava os documentos.
+
+    Drenagem: enquanto ``cStat==138`` e ``ultNSU<maxNSU``, consulta lotes em
+    sequência (até ``max_lotes`` ou ``max_seg``), parando em 137 (fim) ou 656
+    (cota → cooldown 1h). ``max_lotes=1`` (default) mantém o comportamento antigo
+    de 1 lote (usado no caminho MANUAL/síncrono); o cron agendado passa os tetos
+    de drenagem. NUNCA manifesta. ``origem`` ('manual'|'agendado') vai para o log.
     """
     cliente = Cliente.get_by_id(cliente_id)
     if not cliente:
@@ -678,7 +730,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
 
     ult_nsu = _ler_ult_nsu(cliente_id)
 
-    # UMA requisição.
+    # Primeiro lote (a drenagem multi-lote começa a partir dele).
     sess = montar_sessao_mtls(cert, chave_priv, cadeia)
     try:
         ret, _fmt = consultar(sess, cnpj, cuf, ult_nsu)
@@ -727,70 +779,104 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
         base.update({'dry_run': True, 'preview': preview})
         return base
 
-    # 138 (documentos) / 137 (nada novo): processa em ordem de NSU, avança só até
-    # o último NSU efetivamente salvo (nsu_ok). Se um doc falha, PARA o lote ali.
+    # 138 (documentos) / 137 (nada novo): DRENA em multi-lote. Contexto do ciclo
+    # (sessão + cota do consChNFe) é ÚNICO para a rodada toda — o teto de 30 buscas
+    # por chave vale para a rodada inteira, não por lote (constraint 5: o loop de
+    # distribuição não dispara milhares de consChNFe).
     empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
                'cnpj': cnpj, 'uf': uf}
-    n_nota = n_resumo = n_evento = n_outro = n_itens = 0
-    nsu_ok = ult_nsu
-    parada = None
-
-    # Contexto do ciclo: sessão mTLS + cnpj/cuf para o consChNFe do resumo, e o
-    # controle de cota (as buscas por chave contam na MESMA cota do 656).
     ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf,
            'chnfe_usadas': 0, 'chnfe_max': _MAX_CHNFE_CICLO,
            'cooldown_656': False, 'cortar': False, 'motivo_corte': None}
 
+    tot = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0}
+    nsu_ok = ult_nsu
+    parada = None
+    n_lotes = 0
+    limite = None
+    inicio = time.monotonic()
+
     conn = _conectar()
     try:
         cur = conn.cursor(dictionary=True)
-        for d in docs:
-            nsu = _to_int(d.get('NSU'))
-            try:
-                kind, ni = processar_um_doc(conn, cur, empresa, d, ctx)
-            except Exception as exc:
-                conn.rollback()
-                parada = f'NSU {nsu}: {exc}'
-                break
-            if kind == 'nota':
-                n_nota += 1
-                n_itens += ni
-            elif kind == 'resumo':
-                n_resumo += 1
-            elif kind == 'evento':
-                n_evento += 1
+        while True:
+            n_lotes += 1
+            rl = _processar_lote(conn, cur, empresa, docs, ctx, nsu_ok)
+            for k in tot:
+                tot[k] += rl[k]
+            nsu_ok = rl['nsu_ok']
+            parada = rl['parada']
+
+            # Constraint 6: grava e AVANÇA o cursor ANTES do próximo lote (cai no
+            # meio → retoma daqui, não reprocessa). 656 numa busca por chave grava
+            # cooldown; senão libera (proximo_permitido = NULL).
+            if ctx['cooldown_656']:
+                execute_query(SQL_NSU_656, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
             else:
-                n_outro += 1
-            nsu_ok = nsu   # só avança a marca APÓS salvar com sucesso
-            if ctx['cortar']:   # 656 numa busca por chave → para o lote (resumo pendente)
-                parada = f'NSU {nsu}: {ctx["motivo_corte"]}'
+                execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
+
+            # Fim da drenagem? doc falhou / 656 (consChNFe) / 137 (chegou no maxNSU).
+            if parada or ctx['cooldown_656']:
                 break
+            if cStat != '138' or ret_ult >= ret_max:
+                break                                    # 137 = em dia → para
+            # Travas de segurança (constraint 3): teto de lotes/tempo por empresa.
+            if n_lotes >= max_lotes:
+                limite = f'teto de {max_lotes} lote(s) na rodada'
+                break
+            if max_seg and (time.monotonic() - inicio) >= max_seg:
+                limite = f'teto de {max_seg}s na rodada'
+                break
+
+            # Próximo lote: pausa de cortesia (NH ~0.4s) e nova consulta a partir do
+            # nsu_ok. Enquanto vem 138 a SEFAZ autoriza consecutivo — não é 656.
+            time.sleep(_INTERVALO_LOTE)
+            try:
+                ret, _fmt = consultar(sess, cnpj, cuf, nsu_ok)
+            except RuntimeError as exc:
+                parada = f'lote {n_lotes + 1}: {exc}'
+                break
+            cStat = _text(ret, 'cStat')
+            xMotivo = _text(ret, 'xMotivo')
+            ret_ult = _to_int(_text(ret, 'ultNSU')) or 0
+            ret_max = _to_int(_text(ret, 'maxNSU')) or 0
+            status_txt = f"{cStat} {xMotivo}"[:255]
+            if cStat == '656':
+                # 656 no meio da drenagem: cursor mantido em nsu_ok, cooldown 1h.
+                execute_query(SQL_NSU_656, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
+                ctx['cooldown_656'] = True
+                parada = '656 (consumo indevido) na distribuição'
+                break
+            lote = _find(ret, 'loteDistDFeInt')
+            docs = [e for e in (lote.iter() if lote is not None else []) if _local(e.tag) == 'docZip']
+            docs.sort(key=lambda e: _to_int(e.get('NSU')) or 0)
         cur.close()
     finally:
         conn.close()
 
-    # Retry dos resumos PENDENTES (antigos + os que ficaram pendentes agora): busca
-    # a completa por chave dentro do orçamento de cota restante do ciclo.
+    # Retry dos resumos PENDENTES (uma vez, no fim da rodada): busca a completa por
+    # chave dentro do orçamento de cota RESTANTE do ciclo (mesmo teto de 30).
     promovidas = _retry_pendentes(empresa, ctx)
-    n_nota += promovidas
+    tot['n_nota'] += promovidas
     if promovidas:
-        n_resumo = max(0, n_resumo - promovidas)
-
-    # Avança ult_nsu até nsu_ok. Se HOUVE 656 numa busca por chave, grava o cooldown
-    # (proximo_permitido = NOW()+1h) em vez de liberar — senão a próxima rodada bate
-    # de novo na cota. Sem 656, libera (proximo_permitido = NULL).
+        tot['n_resumo'] = max(0, tot['n_resumo'] - promovidas)
+    # Se o retry disparou 656, grava o cooldown (o último cursor por-lote era NULL).
     if ctx['cooldown_656']:
         execute_query(SQL_NSU_656, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
-    else:
-        execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
-    dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
-                      ret_ult, ret_max, len(docs), n_nota, n_evento, detalhe=parada,
-                      origem=origem)
 
-    base.update({'notas': n_nota, 'resumos': n_resumo, 'eventos': n_evento,
-                 'outros': n_outro, 'itens': n_itens, 'novo_ult_nsu': nsu_ok,
+    tot_docs = tot['n_nota'] + tot['n_resumo'] + tot['n_evento'] + tot['n_outro']
+    dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
+                      ret_ult, ret_max, tot_docs, tot['n_nota'], tot['n_evento'],
+                      detalhe=(parada or limite), origem=origem)
+
+    base.update({'notas': tot['n_nota'], 'resumos': tot['n_resumo'],
+                 'eventos': tot['n_evento'], 'outros': tot['n_outro'],
+                 'itens': tot['n_itens'], 'docs': tot_docs, 'lotes': n_lotes,
+                 'novo_ult_nsu': nsu_ok, 'max_nsu': ret_max,
+                 'faltam': max(0, ret_max - nsu_ok),
                  'chnfe_usadas': ctx['chnfe_usadas'], 'resumos_promovidos': promovidas,
-                 'cooldown_656_chave': ctx['cooldown_656'], 'parada': parada})
+                 'cooldown_656_chave': ctx['cooldown_656'],
+                 'limite_atingido': limite, 'parada': parada})
     return base
 
 
@@ -910,7 +996,10 @@ def capturar_agendado():
                 n_bloq += 1
                 continue
             try:
-                r = capturar_cliente(cid, dry_run=False, origem='agendado')
+                # Cron DRENA: multi-lote até 137 (fim), 656 (cota) ou os tetos de
+                # segurança por empresa (lotes/tempo). O caminho manual continua 1 lote.
+                r = capturar_cliente(cid, dry_run=False, origem='agendado',
+                                     max_lotes=_MAX_LOTES_CICLO, max_seg=_MAX_SEG_EMPRESA)
             except Exception as exc:
                 n_erro += 1
                 logger.exception('[dfe-sched] erro no cliente_id=%s', cid)
