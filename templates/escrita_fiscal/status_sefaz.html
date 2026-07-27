@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Status da Captura SEFAZ - Qualicontax{% endblock %}
+
+{% block content %}
+<style>
+.ss-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin:18px 0 24px; }
+.ss-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.ss-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; }
+.ss-kpi-value { font-size:26px; font-weight:800; color:#0f172a; line-height:1.1; margin-top:6px; }
+.ss-kpi-sub { font-size:11.5px; color:#94a3b8; margin-top:4px; }
+.ss-kpi.accent-azul   { border-left:4px solid #2563eb; }
+.ss-kpi.accent-verde  { border-left:4px solid #16a34a; }
+.ss-kpi.accent-amarelo{ border-left:4px solid #d97706; }
+.ss-kpi.accent-roxo   { border-left:4px solid #7c3aed; }
+
+.ss-section-title { font-size:14px; font-weight:800; color:#1e293b; margin:26px 0 12px; display:flex; align-items:center; gap:8px; }
+
+.ss-legend { display:flex; align-items:flex-start; gap:9px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:11px 15px; font-size:12.5px; color:#1e40af; line-height:1.5; margin:-6px 0 4px; }
+.ss-legend i { margin-top:2px; color:#2563eb; }
+.ss-legend b { color:#1e3a8a; }
+
+.ss-emp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+.ss-emp { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:15px 17px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.ss-emp-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.ss-emp-nome { font-size:13.5px; font-weight:700; color:#1e293b; line-height:1.3; }
+.ss-emp-num { color:#6366f1; font-weight:800; }
+.ss-badge { padding:3px 11px; border-radius:99px; font-size:11px; font-weight:800; white-space:nowrap; }
+.ss-badge.verde   { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.ss-badge.amarelo { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+.ss-badge.vermelho{ background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.ss-emp-stats { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:#475569; }
+.ss-emp-stats b { color:#0f172a; }
+.ss-emp-foot { margin-top:10px; padding-top:9px; border-top:1px solid #f1f5f9; font-size:11.5px; color:#94a3b8; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.ss-backlog-num { font-weight:800; }
+.ss-backlog-num.zero { color:#16a34a; }
+.ss-backlog-num.pos  { color:#d97706; }
+
+.ss-table-wrap { overflow-x:auto; background:#fff; border:1px solid #e5e7eb; border-radius:14px; }
+table.ss-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.ss-table thead th { background:#f8fafc; text-align:left; padding:10px 12px; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; border-bottom:2px solid #e5e7eb; white-space:nowrap; }
+table.ss-table tbody td { padding:8px 12px; border-bottom:1px solid #f1f5f9; color:#374151; white-space:nowrap; }
+table.ss-table tbody tr:last-child td { border-bottom:none; }
+.ss-pill { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.ss-pill.agendado { background:#eff6ff; color:#1d4ed8; }
+.ss-pill.manual   { background:#f5f3ff; color:#6d28d9; }
+.ss-cstat { font-family:ui-monospace,monospace; font-weight:700; }
+.ss-cstat.ok  { color:#16a34a; }   /* 137/138 */
+.ss-cstat.bad { color:#dc2626; }   /* 656 e erros */
+.ss-muted { color:#94a3b8; }
+.ss-empty { text-align:center; padding:26px; color:#94a3b8; font-size:13px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Status da Captura SEFAZ</h1>
+        <p class="page-subtitle">Somente leitura — a captura roda sozinha pelo cron. Esta tela não consome cota da SEFAZ.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+        <span class="ss-muted" style="font-size:11.5px;"><i class="fas fa-sync-alt"></i> atualiza sozinho a cada 60s</span>
+        <button onclick="location.reload()"
+                style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-rotate-right"></i> Atualizar
+        </button>
+    </div>
+</div>
+
+<!-- TOPO — cards de resumo -->
+<div class="ss-kpis">
+    <div class="ss-kpi accent-azul">
+        <div class="ss-kpi-label">Notas capturadas</div>
+        <div class="ss-kpi-value">{{ topo.total }}</div>
+        <div class="ss-kpi-sub">{{ topo.completas }} completas · {{ topo.resumos }} resumo</div>
+    </div>
+    <div class="ss-kpi accent-verde">
+        <div class="ss-kpi-label">Capturadas hoje</div>
+        <div class="ss-kpi-value">{{ topo.hoje }}</div>
+        <div class="ss-kpi-sub">{{ topo.semana }} na semana · {{ topo.mes }} no mês</div>
+    </div>
+    <div class="ss-kpi accent-amarelo">
+        <div class="ss-kpi-label">Documentos pendentes (SEFAZ)</div>
+        <div class="ss-kpi-value">{{ topo.backlog }}</div>
+        <div class="ss-kpi-sub">NSU a baixar: notas + eventos + resumos</div>
+    </div>
+    <div class="ss-kpi accent-roxo">
+        <div class="ss-kpi-label">Última captura</div>
+        <div class="ss-kpi-value" style="font-size:18px;">{{ topo.ult_consulta or '—' }}</div>
+        <div class="ss-kpi-sub">última consulta de qualquer CNPJ</div>
+    </div>
+</div>
+
+<div class="ss-legend">
+    <i class="fas fa-circle-info"></i>
+    <div><b>Documentos pendentes ≠ notas.</b> Os <b>{{ topo.backlog }} documentos pendentes na SEFAZ</b> contam cada NSU — uma nota, um evento (ex.: cancelamento) ou um resumo. As <b>{{ topo.total }} notas capturadas</b> contam só NF-e. Por isso os pendentes podem ser mais que as notas: <b>nenhuma nota sumiu</b> — eventos e resumos também ocupam NSU na fila.</div>
+</div>
+
+<!-- POR EMPRESA -->
+<div class="ss-section-title"><i class="fas fa-building" style="color:#2563eb;"></i> Por empresa</div>
+{% if empresas %}
+<div class="ss-emp-grid">
+    {% for e in empresas %}
+    <div class="ss-emp">
+        <div class="ss-emp-head">
+            <div class="ss-emp-nome">
+                {% if e.numero %}<span class="ss-emp-num">{{ e.numero }}</span> — {% endif %}{{ e.nome }}
+            </div>
+            <span class="ss-badge {{ e.status_cor }}">{{ e.status_label }}</span>
+        </div>
+        <div class="ss-emp-stats">
+            <span><b>{{ e.total }}</b> notas capturadas</span>
+            <span>{{ e.completas }} completas</span>
+            <span>{{ e.resumos }} resumo</span>
+        </div>
+        <div class="ss-emp-foot">
+            <span><span class="ss-backlog-num {{ 'zero' if e.backlog == 0 else 'pos' }}">{{ e.backlog }}</span> docs pendentes</span>
+            <span><i class="far fa-clock"></i> {{ e.ult_consulta or 'sem consulta' }}</span>
+            {% if e.em_cota %}
+            <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.libera_min }} min</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="ss-empty">Nenhuma empresa com certificado ativo.</div>
+{% endif %}
+
+<!-- HISTÓRICO -->
+<div class="ss-section-title"><i class="fas fa-clock-rotate-left" style="color:#7c3aed;"></i> Histórico (últimas 20 rodadas)</div>
+<div class="ss-table-wrap">
+    <table class="ss-table">
+        <thead>
+            <tr>
+                <th>Momento</th>
+                <th>Empresa</th>
+                <th>Evento</th>
+                <th>Status</th>
+                <th style="text-align:center;">Docs</th>
+                <th style="text-align:center;">Notas</th>
+                <th>Origem</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if historico %}
+                {% for h in historico %}
+                <tr>
+                    <td>{{ h.momento or '—' }}</td>
+                    <td>{{ h.empresa }}</td>
+                    <td>{{ h.evento }}</td>
+                    <td>
+                        {% if h.c_stat %}
+                        <span class="ss-cstat {{ 'bad' if h.c_stat == '656' else 'ok' }}"
+                              title="{{ h.x_motivo or '' }}">{{ h.c_stat }}</span>
+                        {% else %}<span class="ss-muted">—</span>{% endif %}
+                    </td>
+                    <td style="text-align:center;">{{ h.docs }}</td>
+                    <td style="text-align:center;">{{ h.notas }}</td>
+                    <td><span class="ss-pill {{ h.origem }}">{{ h.origem }}</span></td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="7" class="ss-empty">Nenhuma rodada registrada ainda.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh a cada 60s — apenas re-executa as leituras (não consome cota SEFAZ).
+setTimeout(function () { location.reload(); }, 60000);
+</script>
+{% endblock %}

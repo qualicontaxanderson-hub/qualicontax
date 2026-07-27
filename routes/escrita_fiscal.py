@@ -358,6 +358,112 @@ def index():
 
 
 # ---------------------------------------------------------------------------
+# Painel de Status da Captura SEFAZ — SÓ LEITURA (dfe_nsu / dfe_consulta_log /
+# nfe_importacoes). NÃO captura, NÃO consome cota — só mostra o que o cron gravou.
+# ---------------------------------------------------------------------------
+@escrita_fiscal.route('/status-sefaz/')
+@permission_required('escrita_fiscal.conf_compras')
+def status_sefaz():
+    def _fmt(d):
+        return d.strftime('%d/%m/%Y %H:%M') if hasattr(d, 'strftime') else None
+
+    def _i(v):
+        return int(v) if v is not None else 0
+
+    # ---- TOPO: totais de notas SEFAZ + janelas por importado_em ----
+    t = execute_query(
+        "SELECT COUNT(*) AS total, "
+        "  SUM(DATE(importado_em)=CURDATE()) AS hoje, "
+        "  SUM(YEARWEEK(importado_em,1)=YEARWEEK(CURDATE(),1)) AS semana, "
+        "  SUM(YEAR(importado_em)=YEAR(CURDATE()) AND MONTH(importado_em)=MONTH(CURDATE())) AS mes, "
+        "  SUM(COALESCE(incompleta,0)=0) AS completas, "
+        "  SUM(COALESCE(incompleta,0)=1) AS resumos "
+        "FROM nfe_importacoes WHERE origem='SEFAZ'",
+        fetch=True, fetch_one=True,
+    ) or {}
+
+    b = execute_query(
+        "SELECT COALESCE(SUM(GREATEST(max_nsu - ult_nsu, 0)),0) AS backlog, "
+        "  MAX(ult_consulta) AS ult_consulta FROM dfe_nsu",
+        fetch=True, fetch_one=True,
+    ) or {}
+
+    topo = {
+        'total': _i(t.get('total')), 'hoje': _i(t.get('hoje')),
+        'semana': _i(t.get('semana')), 'mes': _i(t.get('mes')),
+        'completas': _i(t.get('completas')), 'resumos': _i(t.get('resumos')),
+        'backlog': _i(b.get('backlog')), 'ult_consulta': _fmt(b.get('ult_consulta')),
+    }
+
+    # ---- POR EMPRESA: uma linha por cliente com certificado ativo ----
+    rows = execute_query(
+        "SELECT c.id, c.numero_cliente, c.nome_razao_social, "
+        "  n.ult_nsu, n.max_nsu, n.ult_consulta, n.proximo_permitido, "
+        "  GREATEST(COALESCE(n.max_nsu,0)-COALESCE(n.ult_nsu,0),0) AS backlog, "
+        "  (n.proximo_permitido IS NOT NULL AND n.proximo_permitido > NOW()) AS em_cota, "
+        "  TIMESTAMPDIFF(MINUTE, NOW(), n.proximo_permitido) AS libera_min, "
+        "  COALESCE(imp.total,0) AS total_notas, "
+        "  COALESCE(imp.completas,0) AS completas, "
+        "  COALESCE(imp.resumos,0) AS resumos "
+        "FROM dfe_certificados dc "
+        "JOIN clientes c ON c.id = dc.cliente_id "
+        "LEFT JOIN dfe_nsu n ON n.cliente_id = dc.cliente_id "
+        "LEFT JOIN ( "
+        "    SELECT cliente_id, COUNT(*) AS total, "
+        "           SUM(COALESCE(incompleta,0)=0) AS completas, "
+        "           SUM(COALESCE(incompleta,0)=1) AS resumos "
+        "    FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada' "
+        "    GROUP BY cliente_id "
+        ") imp ON imp.cliente_id = dc.cliente_id "
+        "WHERE dc.ativo = 1 "
+        "ORDER BY em_cota DESC, backlog DESC, c.numero_cliente",
+        fetch=True,
+    ) or []
+
+    empresas = []
+    for r in rows:
+        backlog = _i(r.get('backlog'))
+        if r.get('em_cota'):
+            label, cor = 'Em cota', 'vermelho'
+        elif backlog > 0:
+            label, cor = 'Baixando', 'amarelo'
+        else:
+            label, cor = 'Em dia', 'verde'
+        empresas.append({
+            'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
+            'total': _i(r.get('total_notas')), 'completas': _i(r.get('completas')),
+            'resumos': _i(r.get('resumos')), 'backlog': backlog,
+            'status_label': label, 'status_cor': cor,
+            'ult_consulta': _fmt(r.get('ult_consulta')),
+            'em_cota': bool(r.get('em_cota')),
+            'libera_min': _i(r.get('libera_min')) if r.get('em_cota') else None,
+        })
+
+    # ---- HISTÓRICO: últimas ~20 rodadas do dfe_consulta_log ----
+    hlog = execute_query(
+        "SELECT l.momento, l.origem, l.evento, l.c_stat, l.x_motivo, "
+        "  l.docs, l.notas, c.numero_cliente, c.nome_razao_social "
+        "FROM dfe_consulta_log l "
+        "LEFT JOIN clientes c ON c.id = l.cliente_id "
+        "ORDER BY l.momento DESC LIMIT 20",
+        fetch=True,
+    ) or []
+    historico = [{
+        'momento': _fmt(h.get('momento')), 'origem': h.get('origem'),
+        'evento': h.get('evento'), 'c_stat': h.get('c_stat'),
+        'x_motivo': h.get('x_motivo'), 'docs': _i(h.get('docs')),
+        'notas': _i(h.get('notas')),
+        'empresa': ((str(h['numero_cliente']) + ' - ' if h.get('numero_cliente') else '')
+                    + (h.get('nome_razao_social') or '—')),
+    } for h in hlog]
+
+    return render_template(
+        'escrita_fiscal/status_sefaz.html',
+        topo=topo, empresas=empresas, historico=historico,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Conferência de Compras — página principal
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/')
