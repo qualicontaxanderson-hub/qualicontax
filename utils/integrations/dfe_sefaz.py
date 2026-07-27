@@ -151,10 +151,35 @@ def montar_soap(documento, cuf, ult_nsu):
     return corpo, ult_nsu_fmt
 
 
-def consultar(sess, documento, cuf, ult_nsu):
-    """Faz UMA requisição ao distDFeInt e devolve (<retDistDFeInt>, ult_nsu_fmt).
-    NUNCA faz loop. Levanta RuntimeError em erro de transporte/HTTP/parse."""
-    soap, ult_nsu_fmt = montar_soap(documento, cuf, ult_nsu)
+def montar_soap_chave(documento, cuf, chave):
+    """SOAP do nfeDistDFeInteresse no modo consChNFe (busca por CHAVE, não por NSU).
+
+    Devolve o nfeProc COMPLETO da nota, quando a SEFAZ o tem disponível — SEM
+    manifestar (é o mesmo distDFeInt, só troca <distNSU> por <consChNFe>). É o
+    caminho que converte um resumo (resNFe) na nota completa."""
+    corpo = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">'
+        '<soap12:Body>'
+        f'<nfeDistDFeInteresse xmlns="{NS_WSDL}">'
+        '<nfeDadosMsg>'
+        f'<distDFeInt xmlns="{NS_NFE}" versao="{VERSAO}">'
+        f'<tpAmb>{TP_AMB}</tpAmb>'
+        f'<cUFAutor>{cuf}</cUFAutor>'
+        f'{tag_interessado(documento)}'
+        f'<consChNFe><chNFe>{_so_digitos(chave)}</chNFe></consChNFe>'
+        '</distDFeInt>'
+        '</nfeDadosMsg>'
+        '</nfeDistDFeInteresse>'
+        '</soap12:Body>'
+        '</soap12:Envelope>'
+    )
+    return corpo
+
+
+def _post_dist(sess, soap):
+    """POST único ao distDFeInt e parse do <retDistDFeInt>. Compartilhado por
+    consultar()/consultar_chave(). Levanta RuntimeError em erro de transporte/HTTP/parse."""
     headers = {
         "Content-Type": ('application/soap+xml; charset=utf-8; '
                          f'action="{NS_WSDL}/nfeDistDFeInteresse"'),
@@ -173,7 +198,20 @@ def consultar(sess, documento, cuf, ult_nsu):
     ret = _find(env, "retDistDFeInt")
     if ret is None:
         raise RuntimeError('resposta da SEFAZ sem <retDistDFeInt>')
-    return ret, ult_nsu_fmt
+    return ret
+
+
+def consultar(sess, documento, cuf, ult_nsu):
+    """Faz UMA requisição ao distDFeInt (distNSU) e devolve (<retDistDFeInt>, ult_nsu_fmt).
+    NUNCA faz loop. Levanta RuntimeError em erro de transporte/HTTP/parse."""
+    soap, ult_nsu_fmt = montar_soap(documento, cuf, ult_nsu)
+    return _post_dist(sess, soap), ult_nsu_fmt
+
+
+def consultar_chave(sess, documento, cuf, chave):
+    """Faz UMA requisição ao distDFeInt no modo consChNFe (por chave) e devolve o
+    <retDistDFeInt>. NUNCA manifesta. Levanta RuntimeError em erro de transporte."""
+    return _post_dist(sess, montar_soap_chave(documento, cuf, chave))
 
 
 # --------------------------------------------------------------------------

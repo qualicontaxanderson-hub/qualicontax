@@ -36,10 +36,12 @@ from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.dfe_certificado import DfeCertificado
 from utils.integrations.dfe_sefaz import (
-    montar_sessao_mtls, consultar, cuf_autor, UfInvalidaError,
+    montar_sessao_mtls, consultar, consultar_chave, cuf_autor, UfInvalidaError,
     _find, _text, _local,
 )
 from utils.integrations import dfe_log
+from utils.nfe_parser import parse_nfe_xml
+from utils.nfe_import import _save_nfe_dual
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +54,28 @@ TP_CANCELAMENTO = "110111"  # tpEvento de cancelamento de NF-e
 _LOCK_CAPTURA = 'dfe_captura'
 _PRAZO_SUAVE_SEG = int(os.getenv('DFE_SCHED_PRAZO_SEG', '960'))  # ~16 min
 
+# Departamento do Dropbox onde a captura arquiva os XML (padrão IMPORTADOS/ERROS,
+# o MESMO do fluxo Dropbox). DFe é documento fiscal → 'Fiscal'.
+_DEPARTAMENTO_DFE = os.getenv('DFE_DEPARTAMENTO', 'Fiscal')
+
+# Teto de buscas por chave (consChNFe) por empresa por rodada. Cada busca é uma
+# requisição à SEFAZ e conta na MESMA cota do 656 — o teto evita estourar. O que
+# passar do teto fica como resumo pendente (incompleta=1) e é retomado no próximo
+# ciclo pelo retry (_retry_pendentes).
+_MAX_CHNFE_CICLO = int(os.getenv('DFE_MAX_CHNFE_CICLO', '30'))
+
 
 # ==========================================================================
 # SQLs — destino é a conf-compras (nfe_importacoes/nfe_itens), origem='SEFAZ'.
 # tipo fixo 'entrada' (ótica do interessado = dono do certificado) → 1 registro,
 # NUNCA a entrada-dupla do fluxo manual. dfe_nsu (adiante) segue como cursor/cota.
+#
+# NOTA (Opção A): o caminho VIVO da nota COMPLETA passou a gravar pelo MESMO core
+# do Dropbox (utils.nfe_import._save_nfe_dual) — ver _importar_nfe_completa. Os
+# SQL_NOTA_* abaixo ficaram LEGADO: são usados só pela migração histórica
+# migrations/backfill_dfe_para_conf_compras.py (dfe_documentos → conf-compras), que
+# ainda os importa. SQL_RESUMO_UPSERT continua VIVO: grava o resumo PENDENTE
+# (resNFe sem completa disponível) como incompleta=1 para retry posterior.
 # ==========================================================================
 
 # UNIQUE efetiva = (chave_acesso, 'entrada'). O IF(origem='SEFAZ', VALUES(x), x)
@@ -190,69 +209,9 @@ def _hoje_brt():
 
 
 # ==========================================================================
-# Extração (nfeProc / resNFe / procEventoNFe)
+# Extração (resNFe / procEventoNFe). A nota COMPLETA (nfeProc) NÃO é mais extraída
+# aqui: passa direto pelo parse_nfe_xml + _save_nfe do fluxo Dropbox (Opção A).
 # ==========================================================================
-def extrair_nota(root):
-    infnfe = _find(root, "infNFe")
-    chave = _chave_de_infnfe(infnfe)
-    if not chave:
-        chave = _digitos(_text(root, "chNFe"))
-        chave = chave if len(chave) == 44 else None
-    if not chave:
-        raise ValueError("nota sem chave de 44 dígitos (infNFe/protNFe)")
-
-    ide = _find(root, "ide")
-    numero = _text(ide, "nNF") if ide is not None else None
-    serie = _text(ide, "serie") if ide is not None else None
-    modelo = _text(ide, "mod") if ide is not None else None
-    dh_txt, ano, mes = _parse_dh(_text(ide, "dhEmi") if ide is not None else None)
-
-    emit = _find(root, "emit")
-    emit_cnpj = _digitos(_text(emit, "CNPJ")) if emit is not None else None
-    emit_nome = _text(emit, "xNome") if emit is not None else None
-    if emit_nome:
-        emit_nome = emit_nome[:160]
-
-    dest = _find(root, "dest")
-    dest_cnpj = None
-    if dest is not None:
-        dest_cnpj = _digitos(_text(dest, "CNPJ") or _text(dest, "CPF")) or None
-
-    total = _find(root, "ICMSTot")
-    valor_total = _text(total, "vNF") if total is not None else _text(root, "vNF")
-
-    prot = _find(root, "protNFe")
-    cstat_prot = _text(prot, "cStat") if prot is not None else None
-    situacao = "denegada" if cstat_prot in ("110", "301", "302", "303") else "autorizado"
-
-    itens = []
-    for det in root.iter():
-        if _local(det.tag) != "det":
-            continue
-        prod = _find(det, "prod")
-        if prod is None:
-            continue
-        itens.append({
-            "n_item": _to_int(det.get("nItem")) or (len(itens) + 1),
-            "produto_xml": (_text(prod, "xProd") or "")[:160] or None,
-            "cprod_fornecedor": (_text(prod, "cProd") or "")[:60] or None,
-            "cean": (_text(prod, "cEAN") or "")[:20] or None,
-            "cod_anp": _text(prod, "cProdANP"),   # só combustível
-            "ncm": _text(prod, "NCM"),
-            "unidade": (_text(prod, "uCom") or "")[:6] or None,
-            "quantidade": _text(prod, "qCom"),
-            "valor_unitario": _text(prod, "vUnCom"),
-            "valor_total": _text(prod, "vProd"),
-        })
-
-    return {
-        "chave": chave, "tipo": "NFe", "numero": numero, "serie": serie,
-        "modelo": modelo, "dh_txt": dh_txt, "ano": ano, "mes": mes,
-        "emit_cnpj": emit_cnpj, "emit_nome": emit_nome, "dest_cnpj": dest_cnpj,
-        "valor_total": valor_total, "situacao": situacao, "itens": itens,
-    }
-
-
 def extrair_evento(root):
     inf = _find(root, "infEvento")
     idv = (inf.get("Id") or inf.get("id") or "") if inf is not None else ""
@@ -348,43 +307,93 @@ def _data_de(dh_txt):
     return (dh_txt or "")[:10] or None
 
 
-def gravar_nota(conn, cur, empresa, nota, xml_bytes):
-    """Nota COMPLETA (nfeProc) → nfe_importacoes (incompleta=0) + itens. Upsert por
-    (chave, 'entrada'); NUNCA sobrescreve linha manual; regrava itens só se a linha
-    é SEFAZ. Arquiva o XML no Dropbox antes de gravar."""
-    ano = nota["ano"] or _hoje_brt().year
-    mes = nota["mes"] or _hoje_brt().month
-    caminho = _caminho_fiscal(empresa, ano, mes, nota["chave"])
-    _subir_xml(caminho, xml_bytes)
+# ==========================================================================
+# Nota COMPLETA → MESMO core do Dropbox (Opção A). A SEFAZ vira só mais uma FONTE
+# de XML: parse_nfe_xml + _save_nfe_dual gravam nfe_importacoes/nfe_itens com TODOS
+# os campos (impostos, cfop, natureza) e o vínculo produto_catalogo_id por item.
+# ==========================================================================
+def _pasta_dfe(empresa, data_emissao, ok=True):
+    """Pasta destino no padrão do Dropbox: {Fiscal}/IMPORTADOS/{ano}/{empresa}/{mês}
+    (ou .../ERROS/...). ano/mês saem da emissão da nota (fallback: hoje BRT)."""
+    dt = data_emissao or _hoje_brt().date()
+    svc = dropbox_sync._service
+    fn = svc.pasta_importados if ok else svc.pasta_erros
+    return fn(_DEPARTAMENTO_DFE, empresa["razao"], dt, empresa.get("numero"))
 
-    cancelada = 1 if nota["situacao"] == "cancelada" else 0
-    cur.execute(SQL_NOTA_UPSERT, (
-        empresa["cliente_id"], f'{nota["chave"]}.xml', nota["chave"],
-        nota["numero"], nota["serie"], _data_de(nota["dh_txt"]),
-        nota["emit_cnpj"], nota["emit_nome"], _uf_da_chave(nota["chave"]),
-        nota["dest_cnpj"], empresa["razao"], empresa.get("uf"),
-        nota["valor_total"], "", "", cancelada, caminho,
-    ))
 
-    cur.execute(SQL_NOTA_ID, (nota["chave"],))
-    row = cur.fetchone()
-    if not row:
-        raise RuntimeError("não recuperou o id da nota após upsert")
-    nfe_id = row["id"]
+def _remover_sefaz_incompleto(chave):
+    """Upgrade resumo→completa: apaga a linha resumo SEFAZ (incompleta=1) e seus
+    itens para a completa poder entrar pelo core (_save_nfe retornaria 'dup' e a
+    descartaria). Guard rígido origem='SEFAZ' AND incompleta=1 → NUNCA toca linha
+    manual (UPLOAD/DROPBOX) nem uma completa já existente."""
+    if not chave:
+        return
+    execute_query(
+        "DELETE it FROM nfe_itens it JOIN nfe_importacoes n ON n.id = it.nfe_id "
+        "WHERE n.chave_acesso=%s AND n.tipo='entrada' AND n.origem='SEFAZ' "
+        "AND n.incompleta=1",
+        (chave,), fetch=False,
+    )
+    execute_query(
+        "DELETE FROM nfe_importacoes "
+        "WHERE chave_acesso=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1",
+        (chave,), fetch=False,
+    )
 
-    n_itens = 0
-    if row["origem"] == "SEFAZ":          # não toca itens de linha manual
-        cur.execute(SQL_ITENS_DEL, (nfe_id,))
-        for it in nota["itens"]:
-            cur.execute(SQL_ITEM_INS, (
-                nfe_id, it["n_item"], it["cprod_fornecedor"], it["produto_xml"],
-                it["ncm"], it["unidade"], it["quantidade"],
-                it["valor_unitario"], it["valor_total"],
-            ))
-            n_itens += 1
 
-    conn.commit()
-    return n_itens
+def _importar_nfe_completa(empresa, xml_bytes):
+    """nfeProc COMPLETO → grava pelo MESMO fluxo do Dropbox e arquiva no padrão
+    IMPORTADOS/ERROS. Devolve o nº de itens. Levanta em falha de parse/gravação
+    (o chamador para o lote e não avança o cursor além deste doc)."""
+    xml_str = xml_bytes.decode("utf-8", "replace")
+    parsed = parse_nfe_xml(xml_str)                 # pode levantar ValueError
+    chave = parsed.get("chave") or parsed["header"].get("chave_acesso") or ""
+    data_emissao = parsed["header"].get("data_emissao")
+
+    try:
+        # Upgrade + gravação pelo core compartilhado. apenas_entrada=True: 1 linha
+        # na ótica do dono do certificado (dest), origem='SEFAZ'.
+        _remover_sefaz_incompleto(chave)
+        _save_nfe_dual(parsed, f"{chave}.xml", "SEFAZ", xml_str,
+                       dest_cli=empresa["cliente_id"], emit_cli=None,
+                       apenas_entrada=True)
+    except Exception:
+        # Importação falhou → arquiva em ERROS (best-effort) e propaga (para o lote).
+        try:
+            _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=False)}/{chave or 'sem_chave'}.xml",
+                       xml_bytes)
+        except Exception:
+            pass
+        raise
+
+    # Sucesso → arquiva em IMPORTADOS (mesmo padrão do Dropbox). Falha aqui aborta
+    # o doc; o retry re-sobe (o _save_nfe vira 'dup', idempotente).
+    _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml", xml_bytes)
+    return len(parsed.get("itens", []))
+
+
+def _docs_do_ret(ret):
+    """Descompacta todos os docZip de um <retDistDFeInt> (consChNFe) em bytes XML."""
+    lote = _find(ret, "loteDistDFeInt")
+    out = []
+    for e in (lote.iter() if lote is not None else []):
+        if _local(e.tag) == "docZip" and e.text:
+            try:
+                out.append(gzip.decompress(base64.b64decode(e.text)))
+            except Exception:
+                continue
+    return out
+
+
+def _primeiro_nfeproc(ret):
+    """Primeiro nfeProc (nota completa) dentro da resposta do consChNFe, ou None."""
+    for xb in _docs_do_ret(ret):
+        try:
+            if _local(ET.fromstring(xb).tag) == "nfeProc":
+                return xb
+        except Exception:
+            continue
+    return None
 
 
 def gravar_evento(conn, cur, empresa, ev, xml_bytes):
@@ -402,9 +411,11 @@ def gravar_evento(conn, cur, empresa, ev, xml_bytes):
 
 
 def gravar_resumo_nota(conn, cur, empresa, res):
-    """resNFe → nfe_importacoes com incompleta=1 (sem itens; o app nunca manifesta).
-    dest = o próprio interessado (o resNFe não traz destinatário). No-op se a chave
-    já existe (não rebaixa completa nem toca manual)."""
+    """resNFe PENDENTE → nfe_importacoes com incompleta=1 (sem itens). Usado quando
+    a completa ainda NÃO foi obtida (teto de cota do ciclo, 656 ou completa
+    indisponível). Fica visível na conf-compras e é retomado pelo _retry_pendentes,
+    que busca a completa por chave (consChNFe) e faz o upgrade. No-op se a chave já
+    existe (não rebaixa completa nem toca manual)."""
     cancelada = 1 if res["situacao"] == "cancelada" else 0
     cur.execute(SQL_RESUMO_UPSERT, (
         empresa["cliente_id"], f'{res["chave"]}.xml', res["chave"],
@@ -416,18 +427,59 @@ def gravar_resumo_nota(conn, cur, empresa, res):
     conn.commit()
 
 
-def processar_um_doc(conn, cur, empresa, d):
+def _processar_resumo(conn, cur, empresa, root, ctx):
+    """resNFe: tenta obter a nota COMPLETA por chave (consChNFe) e gravá-la pelo
+    fluxo Dropbox. Se não der (teto de cota, 656 ou completa indisponível), grava o
+    resumo PENDENTE (incompleta=1) para retry. Devolve (kind, n_itens)."""
+    res = extrair_resumo_nota(root)
+    chave = res["chave"]
+
+    # Teto de buscas por chave no ciclo → não consulta; deixa pendente p/ próximo tick.
+    if ctx["chnfe_usadas"] >= ctx["chnfe_max"]:
+        gravar_resumo_nota(conn, cur, empresa, res)
+        return "resumo", 0
+
+    try:
+        ret = consultar_chave(ctx["sess"], ctx["cnpj"], ctx["cuf"], chave)
+    except RuntimeError:
+        # Falha de transporte/HTTP: não queima o ciclo; deixa pendente.
+        gravar_resumo_nota(conn, cur, empresa, res)
+        return "resumo", 0
+    ctx["chnfe_usadas"] += 1
+
+    if _text(ret, "cStat") == "656":
+        # Consumo indevido na busca por chave: liga o cooldown e CORTA o restante da
+        # rodada desta empresa (não insiste). O resumo fica pendente.
+        ctx["cooldown_656"] = True
+        ctx["cortar"] = True
+        ctx["motivo_corte"] = f"656 (consumo indevido) na busca por chave {chave}"
+        gravar_resumo_nota(conn, cur, empresa, res)
+        return "resumo", 0
+
+    xmlc = _primeiro_nfeproc(ret)
+    if xmlc is None:
+        # A SEFAZ não devolveu a completa (só resumo disponível): fica pendente.
+        gravar_resumo_nota(conn, cur, empresa, res)
+        return "resumo", 0
+
+    ni = _importar_nfe_completa(empresa, xmlc)   # resumo VIRA completa (com upgrade)
+    return "nota", ni
+
+
+def processar_um_doc(conn, cur, empresa, d, ctx):
     """Processa e SALVA um docZip. LEVANTA se falhar ao descompactar/parsear OU
     ao gravar o que DEVE ser gravado — nesse caso o chamador NÃO avança o cursor
-    além deste NSU. Retorna (kind, n_itens) com kind in {nota, resumo, evento, outro}."""
+    além deste NSU. Retorna (kind, n_itens) com kind in {nota, resumo, evento, outro}.
+
+    ``ctx`` carrega a sessão mTLS + cnpj/cuf (para o consChNFe do resumo) e o
+    controle de cota do ciclo (chnfe_usadas/chnfe_max, cooldown_656, cortar)."""
     b64 = d.text or ""
     xml_bytes = gzip.decompress(base64.b64decode(b64))
     root = ET.fromstring(xml_bytes)
     raiz = _local(root.tag)
 
     if raiz == "nfeProc":
-        nota = extrair_nota(root)
-        ni = gravar_nota(conn, cur, empresa, nota, xml_bytes)
+        ni = _importar_nfe_completa(empresa, xml_bytes)
         return "nota", ni
 
     if raiz == "procEventoNFe":
@@ -436,13 +488,51 @@ def processar_um_doc(conn, cur, empresa, d):
         return "evento", 0
 
     if raiz == "resNFe":
-        res = extrair_resumo_nota(root)
-        gravar_resumo_nota(conn, cur, empresa, res)
-        return "resumo", 0
+        return _processar_resumo(conn, cur, empresa, root, ctx)
 
     # cteProc / resCTe / resEvento / outros: NÃO modelados nesta fase (CT-e depois).
     # Não levanta (não trava a fila de NSU); conta e segue.
     return "outro", 0
+
+
+def _retry_pendentes(empresa, ctx):
+    """Retroativo/contínuo: para as linhas resumo SEFAZ ainda incompletas desta
+    empresa, busca a completa por chave (consChNFe) dentro do orçamento de cota
+    RESTANTE do ciclo e faz o upgrade. Resolve os resumos antigos (29) e os que
+    ficaram pendentes por teto/erro. Devolve o nº de resumos promovidos a completa."""
+    if ctx.get("cooldown_656"):
+        return 0
+    restante = ctx["chnfe_max"] - ctx["chnfe_usadas"]
+    if restante <= 0:
+        return 0
+    pend = execute_query(
+        "SELECT chave_acesso FROM nfe_importacoes "
+        "WHERE cliente_id=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1 "
+        "ORDER BY id LIMIT %s",
+        (empresa["cliente_id"], int(restante)), fetch=True,
+    ) or []
+    promovidas = 0
+    for row in pend:
+        if ctx["chnfe_usadas"] >= ctx["chnfe_max"] or ctx.get("cooldown_656"):
+            break
+        chave = row["chave_acesso"]
+        try:
+            ret = consultar_chave(ctx["sess"], ctx["cnpj"], ctx["cuf"], chave)
+        except RuntimeError:
+            continue
+        ctx["chnfe_usadas"] += 1
+        if _text(ret, "cStat") == "656":
+            ctx["cooldown_656"] = True
+            break
+        xmlc = _primeiro_nfeproc(ret)
+        if xmlc is None:
+            continue
+        try:
+            _importar_nfe_completa(empresa, xmlc)
+            promovidas += 1
+        except Exception:
+            logger.exception("[dfe] falha ao promover resumo pendente %s", chave)
+    return promovidas
 
 
 # ==========================================================================
@@ -625,13 +715,19 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
     nsu_ok = ult_nsu
     parada = None
 
+    # Contexto do ciclo: sessão mTLS + cnpj/cuf para o consChNFe do resumo, e o
+    # controle de cota (as buscas por chave contam na MESMA cota do 656).
+    ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf,
+           'chnfe_usadas': 0, 'chnfe_max': _MAX_CHNFE_CICLO,
+           'cooldown_656': False, 'cortar': False, 'motivo_corte': None}
+
     conn = _conectar()
     try:
         cur = conn.cursor(dictionary=True)
         for d in docs:
             nsu = _to_int(d.get('NSU'))
             try:
-                kind, ni = processar_um_doc(conn, cur, empresa, d)
+                kind, ni = processar_um_doc(conn, cur, empresa, d, ctx)
             except Exception as exc:
                 conn.rollback()
                 parada = f'NSU {nsu}: {exc}'
@@ -646,19 +742,35 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
             else:
                 n_outro += 1
             nsu_ok = nsu   # só avança a marca APÓS salvar com sucesso
+            if ctx['cortar']:   # 656 numa busca por chave → para o lote (resumo pendente)
+                parada = f'NSU {nsu}: {ctx["motivo_corte"]}'
+                break
         cur.close()
     finally:
         conn.close()
 
-    # Avança ult_nsu só até nsu_ok; proximo_permitido = NULL (libera).
-    execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
+    # Retry dos resumos PENDENTES (antigos + os que ficaram pendentes agora): busca
+    # a completa por chave dentro do orçamento de cota restante do ciclo.
+    promovidas = _retry_pendentes(empresa, ctx)
+    n_nota += promovidas
+    if promovidas:
+        n_resumo = max(0, n_resumo - promovidas)
+
+    # Avança ult_nsu até nsu_ok. Se HOUVE 656 numa busca por chave, grava o cooldown
+    # (proximo_permitido = NOW()+1h) em vez de liberar — senão a próxima rodada bate
+    # de novo na cota. Sem 656, libera (proximo_permitido = NULL).
+    if ctx['cooldown_656']:
+        execute_query(SQL_NSU_656, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
+    else:
+        execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
     dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
                       ret_ult, ret_max, len(docs), n_nota, n_evento, detalhe=parada,
                       origem=origem)
 
     base.update({'notas': n_nota, 'resumos': n_resumo, 'eventos': n_evento,
                  'outros': n_outro, 'itens': n_itens, 'novo_ult_nsu': nsu_ok,
-                 'parada': parada})
+                 'chnfe_usadas': ctx['chnfe_usadas'], 'resumos_promovidos': promovidas,
+                 'cooldown_656_chave': ctx['cooldown_656'], 'parada': parada})
     return base
 
 
