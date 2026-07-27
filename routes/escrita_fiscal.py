@@ -481,7 +481,7 @@ def api_notas():
                    n.dest_cnpj, n.dest_nome,
                    n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
                    n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.nome_arquivo,
-                   n.importado_em, n.cliente_id, n.grupo_id,
+                   n.importado_em, n.atualizado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
                    COALESCE(ic.qtd_itens, 0) AS qtd_itens,
@@ -527,7 +527,7 @@ def api_notas():
     _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
     for r in all_rows:
         row = {k: v for k, v in r.items() if k not in _window_cols}
-        for k in ('data_emissao', 'importado_em'):
+        for k in ('data_emissao', 'importado_em', 'atualizado_em'):
             if row.get(k) and hasattr(row[k], 'isoformat'):
                 row[k] = row[k].isoformat()
         for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):

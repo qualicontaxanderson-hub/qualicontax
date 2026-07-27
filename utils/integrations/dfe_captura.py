@@ -350,6 +350,20 @@ def _importar_nfe_completa(empresa, xml_bytes):
     chave = parsed.get("chave") or parsed["header"].get("chave_acesso") or ""
     data_emissao = parsed["header"].get("data_emissao")
 
+    # Se havia um RESUMO SEFAZ anterior (incompleta=1), guarda a data da 1ª
+    # importação. Como o upgrade é DELETE+INSERT, a completa nova nasceria com
+    # importado_em=agora; restaurando o valor original, o ON UPDATE marca
+    # atualizado_em=agora → a conf-compras mostra "ATUALIZADO" (resumo→completa).
+    importado_orig = None
+    if chave:
+        _prev = execute_query(
+            "SELECT importado_em FROM nfe_importacoes "
+            "WHERE chave_acesso=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1 "
+            "ORDER BY id LIMIT 1",
+            (chave,), fetch=True, fetch_one=True,
+        )
+        importado_orig = _prev.get("importado_em") if _prev else None
+
     try:
         # Upgrade + gravação pelo core compartilhado. apenas_entrada=True: 1 linha
         # na ótica do dono do certificado (dest), origem='SEFAZ'.
@@ -357,6 +371,12 @@ def _importar_nfe_completa(empresa, xml_bytes):
         _save_nfe_dual(parsed, f"{chave}.xml", "SEFAZ", xml_str,
                        dest_cli=empresa["cliente_id"], emit_cli=None,
                        apenas_entrada=True)
+        if importado_orig is not None:
+            execute_query(
+                "UPDATE nfe_importacoes SET importado_em=%s "
+                "WHERE chave_acesso=%s AND tipo='entrada' AND origem='SEFAZ'",
+                (importado_orig, chave), fetch=False,
+            )
     except Exception:
         # Importação falhou → arquiva em ERROS (best-effort) e propaga (para o lote).
         try:

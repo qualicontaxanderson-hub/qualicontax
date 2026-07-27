@@ -38,7 +38,7 @@ from utils.integrations.dfe_captura import _importar_nfe_completa
 # Completas antigas do fluxo próprio: origem SEFAZ, completas (incompleta=0) e ainda
 # apontando o XML por arquivo (xml_caminho preenchido = não passou pelo core novo).
 SQL_COMPLETAS = """
-    SELECT n.id, n.chave_acesso, n.xml_caminho, n.cliente_id,
+    SELECT n.id, n.chave_acesso, n.xml_caminho, n.cliente_id, n.importado_em,
            c.nome_razao_social AS razao, c.numero_cliente AS numero
     FROM nfe_importacoes n
     JOIN clientes c ON c.id = n.cliente_id
@@ -117,6 +117,15 @@ def apply():
                        'numero': (d.get('numero') or None),
                        'razao': d['razao']}
             n_itens = _importar_nfe_completa(empresa, xml_bytes)
+            # Reprocesso é uma limpeza silenciosa (completa→completa, não
+            # resumo→completa): preserva a data original e mantém importado_em ==
+            # atualizado_em para a nota continuar como "IMPORTADO" (não "ATUALIZADO").
+            if d.get('importado_em') is not None:
+                execute_query(
+                    "UPDATE nfe_importacoes SET importado_em=%s, atualizado_em=%s "
+                    "WHERE chave_acesso=%s AND tipo='entrada' AND origem='SEFAZ'",
+                    (d['importado_em'], d['importado_em'], chave), fetch=False,
+                )
             total_itens += n_itens
             ok += 1
         except Exception as exc:

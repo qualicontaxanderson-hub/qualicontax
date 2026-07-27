@@ -143,6 +143,11 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .badge-resumo  { background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:99px; font-size:9px;  font-weight:700; margin-left:4px; }
 .cc-empresa-pill { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 .cc-grupo-pill   { background:#e9d5ff; color:#7c3aed; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+/* Badge de quando a nota entrou/foi atualizada (coluna Importação). Mesma pegada
+   dos pills acima: AZUL "IMPORTADO" (1ª importação) / ROXO "ATUALIZADO" (reprocessada). */
+.cc-data-pill            { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+.cc-data-pill.importado  { background:#dbeafe; color:#1d4ed8; }
+.cc-data-pill.atualizado { background:#e9d5ff; color:#7c3aed; }
 
 /* Delete button */
 .btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
@@ -397,7 +402,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                 <tr>
                     <th>Data</th>
                     <th>Nº / Série</th>
-                    <th>Empresa</th>
+                    <th>Importação</th>
                     <th>Emitente</th>
                     <th>UF</th>
                     <th>CFOP</th>
@@ -965,9 +970,15 @@ function loadNotas() {
                 return;
             }
             tbody.innerHTML = data.rows.map(r => {
-                const empPill = r.empresa_nome
-                    ? `<span class="cc-empresa-pill">${r.empresa_nome}</span>`
-                    : (r.grupo_nome ? `<span class="cc-grupo-pill">${r.grupo_nome}</span>` : '<span style="color:#d1d5db">—</span>');
+                // Coluna "Importação": AZUL "IMPORTADO" na 1ª importação; ROXO
+                // "ATUALIZADO" se a nota foi reprocessada depois (atualizado_em >
+                // importado_em) — ex.: resumo SEFAZ que virou completa.
+                const _atualizada = r.atualizado_em && r.importado_em && r.atualizado_em > r.importado_em;
+                const dataPill = r.importado_em
+                    ? (_atualizada
+                        ? `<span class="cc-data-pill atualizado" title="Reprocessada/atualizada em ${fmtDate(r.atualizado_em)}">ATUALIZADO ${fmtDate(r.atualizado_em)}</span>`
+                        : `<span class="cc-data-pill importado" title="Importada em ${fmtDate(r.importado_em)}">IMPORTADO ${fmtDate(r.importado_em)}</span>`)
+                    : '<span style="color:#d1d5db">—</span>';
                 const total = r.qtd_itens || 0;
                 const vinc  = r.itens_vinculados || 0;
                 let dotCls, dotTip;
@@ -978,7 +989,7 @@ function loadNotas() {
                 return `<tr class="cc-row-clickable" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
-                    <td>${empPill}</td>
+                    <td>${dataPill}</td>
                     <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
                     <td>${r.emit_uf||'—'}</td>
                     <td>${r.cfop||'—'}</td>

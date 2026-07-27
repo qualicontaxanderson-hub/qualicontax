@@ -324,6 +324,7 @@ def _apply_migrations():
             xml_raw MEDIUMTEXT,
             origem ENUM('UPLOAD','DROPBOX') NOT NULL DEFAULT 'UPLOAD',
             importado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_chave (chave_acesso),
             INDEX idx_emit_cnpj (emit_cnpj),
             INDEX idx_data (data_emissao),
@@ -373,6 +374,34 @@ def _apply_migrations():
                 execute_query(f"ALTER TABLE nfe_importacoes ADD COLUMN {_col} {_defn}", fetch=False)
         except Exception:
             pass
+
+    # Incremental: atualizado_em em nfe_importacoes (badge IMPORTADO/ATUALIZADO na
+    # conf-compras). Alimenta a lógica: atualizado_em > importado_em → "ATUALIZADO"
+    # (ex.: resumo SEFAZ que virou completa), senão "IMPORTADO". Linhas antigas
+    # recebem o CURRENT_TIMESTAMP do ALTER — como = importado_em na prática, ficam
+    # como "IMPORTADO" até serem de fato atualizadas.
+    try:
+        _atu_exists = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' "
+            "AND COLUMN_NAME = 'atualizado_em'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if _atu_exists.get('cnt', 0) == 0:
+            execute_query(
+                "ALTER TABLE nfe_importacoes ADD COLUMN atualizado_em TIMESTAMP "
+                "DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+                fetch=False,
+            )
+            # Alinha atualizado_em = importado_em nas linhas já existentes, para que
+            # notas antigas NÃO apareçam falsamente como "ATUALIZADO".
+            execute_query(
+                "UPDATE nfe_importacoes SET atualizado_em = importado_em "
+                "WHERE atualizado_em IS NULL OR atualizado_em <> importado_em",
+                fetch=False,
+            )
+    except Exception:
+        pass
 
     # Incremental: troca UNIQUE (chave_acesso) → (chave_acesso, tipo)
     try:
