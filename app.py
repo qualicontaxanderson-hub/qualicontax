@@ -177,9 +177,13 @@ if os.environ.get('MIGRATIONS_DONE') != '1':
         raise
 
 
-# Inicia o scheduler de tarefas agendadas (importação automática às 23:59).
-# A função init_scheduler usa um lock de arquivo para garantir que apenas um
-# dos workers do gunicorn execute o scheduler.
+# Inicia o scheduler de tarefas agendadas.
+#
+# Roda in-process no worker do gunicorn que adquire o file-lock. Cobre o job
+# NOTURNO (importação automática 1x/dia). A captura de DFe (*/20) NÃO depende mais
+# deste scheduler: ela é disparada pelo Railway Cron (cron_captura_dfe.py). Por
+# isso o job de DFe in-process fica DESLIGADO no serviço web via DFE_SCHED_ATIVO=0
+# (evita disparo duplo com o Cron).
 try:
     from utils.scheduler import init_scheduler
     init_scheduler(app)

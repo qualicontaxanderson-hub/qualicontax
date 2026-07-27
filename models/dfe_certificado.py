@@ -49,7 +49,7 @@ class DfeCertificado:
             SELECT dc.id, dc.cliente_id, dc.cnpj, dc.tipo_doc, dc.dropbox_path,
                    dc.validade, dc.modo_automatico, dc.ativo,
                    c.numero_cliente, c.nome_razao_social,
-                   ec.estado AS uf
+                   ec.estado AS uf, n.ult_consulta, n.proximo_permitido
             FROM dfe_certificados dc
             JOIN clientes c ON c.id = dc.cliente_id
             LEFT JOIN enderecos_clientes ec ON ec.id = (
@@ -58,10 +58,11 @@ class DfeCertificado:
                 ORDER BY e.principal DESC, e.id ASC
                 LIMIT 1
             )
+            LEFT JOIN dfe_nsu n ON n.cliente_id = dc.cliente_id
             WHERE dc.modo_automatico = 1
               AND dc.ativo = 1
               AND c.situacao = 'ATIVO'
-            ORDER BY c.numero_cliente
+            ORDER BY COALESCE(n.ult_consulta, '1970-01-01') ASC, c.numero_cliente
         """
         return execute_query(query, fetch=True) or []
 

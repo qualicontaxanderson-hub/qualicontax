@@ -84,6 +84,12 @@ def _job_importar_todos(app):
 
 def _job_captura_dfe(app):
     """Job agendado: uma rodada de captura de DFe (NF-e) das empresas ativas."""
+    # PRIMEIRA linha, antes de QUALQUER guard/lock: prova definitiva de que o
+    # APScheduler realmente DISPAROU o job. Se esta linha não aparecer nos Deploy
+    # Logs a cada tick, o problema é o scheduler (não sendo escalonado / worker
+    # reciclado / container suspenso), não a lógica de captura. WARNING para
+    # sobreviver a qualquer LOG_LEVEL. Ver também _registrar_job_dfe.
+    logger.warning('[scheduler] >>> _job_captura_dfe DISPARADO (pid=%s).', os.getpid())
     with app.app_context():
         try:
             from utils.integrations import dfe_captura
@@ -137,6 +143,28 @@ def _registrar_job_dfe(app) -> None:
     except Exception:
         logger.exception(
             '[scheduler] DFE_SCHED_MINUTE inválido (%r) — job de DFe NÃO registrado.', minute)
+
+
+def _registrar_jobs(app) -> tuple[int, int]:
+    """Registra os jobs no ``_scheduler`` já criado.
+
+    Sempre registra o job NOTURNO. O job de captura de DFe só entra se
+    DFE_SCHED_ATIVO=1 — no serviço web isso fica em 0 (a captura roda pelo Railway
+    Cron, cron_captura_dfe.py), então na prática só o noturno é registrado aqui.
+    Retorna (hora, minuto) do noturno para o log de boot do chamador.
+    """
+    hour, minute = _get_saved_time()
+    _scheduler.add_job(
+        _job_importar_todos,
+        trigger=CronTrigger(hour=hour, minute=minute, timezone='America/Sao_Paulo'),
+        args=[app],
+        id=_JOB_ID,
+        replace_existing=True,
+        misfire_grace_time=600,  # 10 minutos de tolerância para misfire
+    )
+    # Job de captura de DFe (Fase 3) — só entra se DFE_SCHED_ATIVO=1.
+    _registrar_job_dfe(app)
+    return hour, minute
 
 
 def status() -> dict:
@@ -243,19 +271,8 @@ def init_scheduler(app) -> bool:
         logger.info('[scheduler] Outro worker já detém o lock — scheduler não iniciado aqui.')
         return False
 
-    hour, minute = _get_saved_time()
-
     _scheduler = BackgroundScheduler(daemon=True, timezone='America/Sao_Paulo')
-    _scheduler.add_job(
-        _job_importar_todos,
-        trigger=CronTrigger(hour=hour, minute=minute, timezone='America/Sao_Paulo'),
-        args=[app],
-        id=_JOB_ID,
-        replace_existing=True,
-        misfire_grace_time=600,  # 10 minutos de tolerância para misfire
-    )
-    # Job de captura de DFe (Fase 3) — só entra se DFE_SCHED_ATIVO=1.
-    _registrar_job_dfe(app)
+    hour, minute = _registrar_jobs(app)
     _scheduler.start()
     logger.info('[scheduler] BackgroundScheduler iniciado (job às %02d:%02d BRT).', hour, minute)
     return True

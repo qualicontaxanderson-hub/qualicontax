@@ -18,6 +18,9 @@ Cuidados de fuso:
 """
 import base64
 import gzip
+import logging
+import os
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 
@@ -38,11 +41,17 @@ from utils.integrations.dfe_sefaz import (
 )
 from utils.integrations import dfe_log
 
+logger = logging.getLogger(__name__)
+
 # Fuso de Brasília (offset fixo; Brasil sem horário de verão desde 2019).
 _TZ_BR = timezone(timedelta(hours=-3))
 
 DIAS_RETENCAO = 90          # janela até xml_expira_em (expurgo em lote na fase futura)
 TP_CANCELAMENTO = "110111"  # tpEvento de cancelamento de NF-e
+
+# Scheduler (Fase 3): lock global + prazo suave por rodada.
+_LOCK_CAPTURA = 'dfe_captura'
+_PRAZO_SUAVE_SEG = int(os.getenv('DFE_SCHED_PRAZO_SEG', '960'))  # ~16 min
 
 
 # ==========================================================================
@@ -461,10 +470,11 @@ def _peek(d):
 # ==========================================================================
 # Orquestração — captura de UMA rodada (1 requisição) para 1 cliente.
 # ==========================================================================
-def capturar_cliente(cliente_id, dry_run=False):
+def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
     """Executa UMA consulta ao distDFeInt e (fora do dry-run) grava o lote.
 
     Devolve um dict estruturado ('ok' + campos). NUNCA faz loop nem manifesta.
+    ``origem`` ('manual' | 'agendado') vai para o dfe_consulta_log.
     """
     cliente = Cliente.get_by_id(cliente_id)
     if not cliente:
@@ -515,7 +525,8 @@ def capturar_cliente(cliente_id, dry_run=False):
     if bloqueio:
         faltam = bloqueio.get('faltam_min')
         if not dry_run:
-            dfe_log.registrar('pulado_cota', cliente_id, cnpj, detalhe=f'faltam ~{faltam} min')
+            dfe_log.registrar('pulado_cota', cliente_id, cnpj,
+                              detalhe=f'faltam ~{faltam} min', origem=origem)
         return {'ok': False, 'bloqueado': True, 'faltam_min': faltam,
                 'erro': f'A SEFAZ pediu para aguardar (consumo indevido anterior). '
                         f'Faltam ~{faltam} min para a próxima consulta deste CNPJ.'}
@@ -528,7 +539,7 @@ def capturar_cliente(cliente_id, dry_run=False):
         ret, _fmt = consultar(sess, cnpj, cuf, ult_nsu)
     except RuntimeError as exc:
         if not dry_run:
-            dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu, detalhe=str(exc))
+            dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu, detalhe=str(exc), origem=origem)
         return {'ok': False, 'erro': f'Falha ao consultar a SEFAZ: {exc}'}
 
     cStat = _text(ret, 'cStat')
@@ -554,7 +565,7 @@ def capturar_cliente(cliente_id, dry_run=False):
         execute_query(SQL_NSU_656, (cliente_id, cnpj, ult_nsu, ret_max, status_txt), fetch=False)
         dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
                           ret_ult, ret_max, len(docs),
-                          detalhe='dry-run' if dry_run else None)
+                          detalhe='dry-run' if dry_run else None, origem=origem)
         base.update({'consumo_indevido': True, 'dry_run': dry_run,
                      'mensagem': 'A SEFAZ pediu para aguardar ~1h (consumo indevido). '
                                  f'Ela informou ultNSU={ret_ult}. O cursor local foi mantido — '
@@ -607,7 +618,8 @@ def capturar_cliente(cliente_id, dry_run=False):
     # Avança ult_nsu só até nsu_ok; proximo_permitido = NULL (libera).
     execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
     dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
-                      ret_ult, ret_max, len(docs), n_nota, n_evento, detalhe=parada)
+                      ret_ult, ret_max, len(docs), n_nota, n_evento, detalhe=parada,
+                      origem=origem)
 
     base.update({'notas': n_nota, 'resumos': n_resumo, 'eventos': n_evento,
                  'outros': n_outro, 'itens': n_itens, 'novo_ult_nsu': nsu_ok,
@@ -664,3 +676,117 @@ def seed_ult_nsu(cliente_id, nsu, usuario_label='?'):
             'mensagem': f'Cursor de NSU do cliente {rotulo} definido em {nsu}. '
                         f'A próxima captura começa a partir daí (documentos anteriores '
                         f'não serão capturados).'}
+
+
+def _conectar_lock():
+    """Conexão dedicada (autocommit, fuso -03:00) para segurar o GET_LOCK global
+    durante toda a rodada agendada."""
+    return mysql.connector.connect(
+        host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
+        user=Config.DB_USER, password=Config.DB_PASSWORD,
+        connection_timeout=Config.DB_CONNECT_TIMEOUT,
+        autocommit=True, time_zone='-03:00',
+    )
+
+
+def capturar_agendado():
+    """Rodada agendada (Fase 3): consulta as empresas com captura ligada, uma por
+    vez, na ordem 'mais atrasada primeiro' (listar_para_captura), respeitando o
+    cooldown do 656 e um prazo suave. O que não deu tempo vai no próximo tick.
+
+    Protegida por GET_LOCK('dfe_captura', 0) — uma consulta simultânea por deploy
+    (a 2ª camada, além do file-lock por container do scheduler). Loga a rodada e
+    cada empresa em dfe_consulta_log com origem='agendado'. NUNCA manifesta.
+
+    Só roda com DFE_SCHED_ATIVO=1 (defesa; normalmente o job nem é registrado).
+    """
+    # PRIMEIRA linha, antes do guard DFE_SCHED_ATIVO e do GET_LOCK: prova de que
+    # a rodada foi invocada. Se _job_captura_dfe loga o disparo mas ESTA linha
+    # não aparece, o problema está entre o job e aqui (import/app_context/exceção).
+    # WARNING para sobreviver a qualquer LOG_LEVEL.
+    logger.warning('[dfe-sched] >>> capturar_agendado INVOCADO (pid=%s).', os.getpid())
+    if os.getenv('DFE_SCHED_ATIVO', '0').strip() != '1':
+        logger.warning('[dfe-sched] capturar_agendado ABORTADO: DFE_SCHED_ATIVO != 1.')
+        return
+
+    lock_conn = None
+    got_lock = False
+    try:
+        lock_conn = _conectar_lock()
+        cur = lock_conn.cursor()
+        cur.execute("SELECT GET_LOCK(%s, 0)", (_LOCK_CAPTURA,))
+        got_lock = (cur.fetchone() or [0])[0] == 1
+        cur.close()
+        if not got_lock:
+            dfe_log.registrar('pulado_lock', origem='agendado',
+                              detalhe='outro worker/deploy já está capturando')
+            logger.info('[dfe-sched] lock ocupado — pulando este tick.')
+            return
+
+        empresas = DfeCertificado.listar_para_captura()
+        if not empresas:
+            logger.info('[dfe-sched] nenhuma empresa com captura ligada.')
+            return
+
+        prazo = time.monotonic() + _PRAZO_SUAVE_SEG
+        n_proc = n_bloq = n_semuf = n_erro = 0
+        tot_notas = tot_docs = 0
+        for emp in empresas:
+            if time.monotonic() > prazo:
+                logger.info('[dfe-sched] prazo suave (%ds) atingido; resto no próximo tick.',
+                            _PRAZO_SUAVE_SEG)
+                break
+            cid = emp['cliente_id']
+            # Pré-check de cooldown (SQL barato): pula quem está em espera sem
+            # baixar o .pfx nem montar o mTLS.
+            if _bloqueado_por_cota(cid):
+                n_bloq += 1
+                continue
+            try:
+                r = capturar_cliente(cid, dry_run=False, origem='agendado')
+            except Exception as exc:
+                n_erro += 1
+                logger.exception('[dfe-sched] erro no cliente_id=%s', cid)
+                dfe_log.registrar('erro', cid, _digitos(emp.get('cnpj')),
+                                  origem='agendado', detalhe=str(exc)[:300])
+                continue
+            if not r.get('ok'):
+                if r.get('bloqueado'):
+                    n_bloq += 1
+                elif r.get('sem_uf'):
+                    n_semuf += 1
+                    logger.info('[dfe-sched] cliente_id=%s pulado: sem UF no endereço.', cid)
+                else:
+                    n_erro += 1
+                continue
+            if r.get('consumo_indevido'):
+                n_bloq += 1
+                continue
+            n_proc += 1
+            tot_notas += r.get('notas', 0) or 0
+            tot_docs += r.get('docs', 0) or 0
+
+        total = len(empresas)
+        if total > 0 and n_bloq == total:
+            dfe_log.registrar('pulado_cota', origem='agendado',
+                              detalhe=f'todas as {total} empresas em cooldown')
+            logger.info('[dfe-sched] todas as %d empresas em cooldown — ciclo pulado.', total)
+        logger.info('[dfe-sched] rodada: %d empresa(s) | proc=%d bloq=%d semUF=%d erro=%d '
+                    '| notas=%d docs=%d', total, n_proc, n_bloq, n_semuf, n_erro,
+                    tot_notas, tot_docs)
+    except Exception:
+        logger.exception('[dfe-sched] falha inesperada na rodada agendada.')
+    finally:
+        if lock_conn is not None:
+            try:
+                if got_lock:
+                    _c = lock_conn.cursor()
+                    _c.execute("SELECT RELEASE_LOCK(%s)", (_LOCK_CAPTURA,))
+                    _c.fetchall()
+                    _c.close()
+            except Exception:
+                pass
+            try:
+                lock_conn.close()
+            except Exception:
+                pass
