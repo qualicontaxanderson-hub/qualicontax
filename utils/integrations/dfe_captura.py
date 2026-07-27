@@ -46,7 +46,6 @@ logger = logging.getLogger(__name__)
 # Fuso de Brasília (offset fixo; Brasil sem horário de verão desde 2019).
 _TZ_BR = timezone(timedelta(hours=-3))
 
-DIAS_RETENCAO = 90          # janela até xml_expira_em (expurgo em lote na fase futura)
 TP_CANCELAMENTO = "110111"  # tpEvento de cancelamento de NF-e
 
 # Scheduler (Fase 3): lock global + prazo suave por rodada.
@@ -55,61 +54,71 @@ _PRAZO_SUAVE_SEG = int(os.getenv('DFE_SCHED_PRAZO_SEG', '960'))  # ~16 min
 
 
 # ==========================================================================
-# SQLs — copiados verbatim do motor NH (schema alinhado na Fase 1).
+# SQLs — destino é a conf-compras (nfe_importacoes/nfe_itens), origem='SEFAZ'.
+# tipo fixo 'entrada' (ótica do interessado = dono do certificado) → 1 registro,
+# NUNCA a entrada-dupla do fluxo manual. dfe_nsu (adiante) segue como cursor/cota.
 # ==========================================================================
-SQL_DOC_UPSERT = (
-    "INSERT INTO dfe_documentos "
-    "(cliente_id, chave, tipo, nsu, schema_dfe, resumo, numero, serie, modelo, "
-    " dh_emissao, emit_cnpj, emit_nome, dest_cnpj, valor_total, situacao, "
-    " xml_caminho, xml_expira_em) "
-    "VALUES (%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+
+# UNIQUE efetiva = (chave_acesso, 'entrada'). O IF(origem='SEFAZ', VALUES(x), x)
+# em cada coluna GARANTE que a captura NUNCA sobrescreve uma linha manual
+# (UPLOAD/DROPBOX) — a manual é mais rica; origem nunca muda no conflito. E
+# incompleta=IF(origem='SEFAZ',0,...) promove resumo→completa (nunca ao contrário).
+SQL_NOTA_UPSERT = (
+    "INSERT INTO nfe_importacoes "
+    "(cliente_id, tipo, nome_arquivo, chave_acesso, num_nota, serie, data_emissao, "
+    " emit_cnpj, emit_nome, emit_uf, dest_cnpj, dest_nome, dest_uf, valor_total, "
+    " cfop, natureza_operacao, origem, cancelada, xml_caminho, incompleta) "
+    "VALUES (%s,'entrada',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'SEFAZ',%s,%s,0) "
     "ON DUPLICATE KEY UPDATE "
-    "  nsu=VALUES(nsu), schema_dfe=VALUES(schema_dfe), numero=VALUES(numero), "
-    "  serie=VALUES(serie), modelo=VALUES(modelo), dh_emissao=VALUES(dh_emissao), "
-    "  emit_cnpj=VALUES(emit_cnpj), emit_nome=VALUES(emit_nome), "
-    "  dest_cnpj=VALUES(dest_cnpj), valor_total=VALUES(valor_total), "
-    "  xml_caminho=VALUES(xml_caminho), xml_expira_em=VALUES(xml_expira_em), "
-    "  resumo=VALUES(resumo)"   # nota COMPLETA chegou: se a linha era resumo(1), vira 0
-    # NÃO mexe em situacao no UPDATE: preserva 'cancelada' setada por evento.
+    "  num_nota=IF(origem='SEFAZ',VALUES(num_nota),num_nota), "
+    "  serie=IF(origem='SEFAZ',VALUES(serie),serie), "
+    "  data_emissao=IF(origem='SEFAZ',VALUES(data_emissao),data_emissao), "
+    "  emit_cnpj=IF(origem='SEFAZ',VALUES(emit_cnpj),emit_cnpj), "
+    "  emit_nome=IF(origem='SEFAZ',VALUES(emit_nome),emit_nome), "
+    "  emit_uf=IF(origem='SEFAZ',VALUES(emit_uf),emit_uf), "
+    "  dest_cnpj=IF(origem='SEFAZ',VALUES(dest_cnpj),dest_cnpj), "
+    "  dest_nome=IF(origem='SEFAZ',VALUES(dest_nome),dest_nome), "
+    "  dest_uf=IF(origem='SEFAZ',VALUES(dest_uf),dest_uf), "
+    "  valor_total=IF(origem='SEFAZ',VALUES(valor_total),valor_total), "
+    "  cancelada=IF(origem='SEFAZ',VALUES(cancelada),cancelada), "
+    "  xml_caminho=IF(origem='SEFAZ',VALUES(xml_caminho),xml_caminho), "
+    "  incompleta=IF(origem='SEFAZ',0,incompleta)"
 )
 
-# resNFe: grava resumo=1. Se a chave JÁ existe (nota completa ou outro resumo),
-# NÃO sobrescreve nada — completa vale mais que resumo (nunca rebaixa).
+# resNFe → linha incompleta=1 (sem itens). No conflito é NO-OP: não rebaixa uma
+# completa e não toca linha manual. (Mesma regra do resumo no motor NH.)
 SQL_RESUMO_UPSERT = (
-    "INSERT INTO dfe_documentos "
-    "(cliente_id, chave, tipo, nsu, schema_dfe, resumo, numero, serie, modelo, "
-    " dh_emissao, emit_cnpj, emit_nome, dest_cnpj, valor_total, situacao, "
-    " xml_caminho, xml_expira_em) "
-    "VALUES (%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL) "
-    "ON DUPLICATE KEY UPDATE chave=chave"   # no-op: nunca rebaixa nota completa
+    "INSERT INTO nfe_importacoes "
+    "(cliente_id, tipo, nome_arquivo, chave_acesso, num_nota, serie, data_emissao, "
+    " emit_cnpj, emit_nome, emit_uf, dest_cnpj, dest_nome, dest_uf, valor_total, "
+    " origem, cancelada, incompleta) "
+    "VALUES (%s,'entrada',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'SEFAZ',%s,1) "
+    "ON DUPLICATE KEY UPDATE chave_acesso=chave_acesso"
 )
 
-SQL_DOC_ID = "SELECT id FROM dfe_documentos WHERE chave = %s"
-
-SQL_ITEM_UPSERT = (
-    "INSERT INTO dfe_itens "
-    "(documento_id, n_item, produto_xml, cprod_fornecedor, cean, cod_anp, "
-    " produto_id, ncm, unidade, quantidade, valor_unitario, valor_total) "
-    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
-    "ON DUPLICATE KEY UPDATE "
-    "  produto_xml=VALUES(produto_xml), cprod_fornecedor=VALUES(cprod_fornecedor), "
-    "  cean=VALUES(cean), cod_anp=VALUES(cod_anp), produto_id=VALUES(produto_id), "
-    "  ncm=VALUES(ncm), unidade=VALUES(unidade), quantidade=VALUES(quantidade), "
-    "  valor_unitario=VALUES(valor_unitario), valor_total=VALUES(valor_total)"
+# id + origem da linha: origem diz se a nota é NOSSA (SEFAZ) ou manual — só
+# regravamos itens quando é SEFAZ (nunca mexemos nos itens de uma linha manual).
+SQL_NOTA_ID = (
+    "SELECT id, origem FROM nfe_importacoes WHERE chave_acesso = %s AND tipo = 'entrada'"
 )
 
-SQL_EVENTO_UPSERT = (
-    "INSERT INTO dfe_eventos "
-    "(cliente_id, chave_evento, ch_nfe, tp_evento, n_seq, descricao, dh_evento, "
-    " nsu, schema_dfe, org_cnpj, xml_caminho, xml_expira_em) "
-    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
-    "ON DUPLICATE KEY UPDATE "
-    "  descricao=VALUES(descricao), dh_evento=VALUES(dh_evento), nsu=VALUES(nsu), "
-    "  schema_dfe=VALUES(schema_dfe), org_cnpj=VALUES(org_cnpj), "
-    "  xml_caminho=VALUES(xml_caminho), xml_expira_em=VALUES(xml_expira_em)"
+# Itens: nfe_itens não tem UNIQUE(nfe_id,n_item) → DELETE + re-INSERT (idempotente
+# por nota). produto_catalogo_id fica NULL: o vínculo é feito depois, pela UI que
+# já existe. cfop/impostos por item ficam vazios/0 nesta fase (MVP).
+SQL_ITENS_DEL = "DELETE FROM nfe_itens WHERE nfe_id = %s"
+SQL_ITEM_INS = (
+    "INSERT INTO nfe_itens "
+    "(nfe_id, num_item, codigo_produto, descricao, ncm, cfop, unidade, "
+    " quantidade, valor_unitario, valor_total, produto_catalogo_id) "
+    "VALUES (%s,%s,%s,%s,%s,'',%s,%s,%s,%s,NULL)"
 )
 
-SQL_CANCELA_NOTA = "UPDATE dfe_documentos SET situacao='cancelada' WHERE chave = %s"
+# Cancelamento (procEventoNFe): reflete só na flag da nota, e SÓ em linha SEFAZ
+# (linha manual é intocada). Demais eventos: XML arquivado no Dropbox, sem linha.
+SQL_CANCELA_NOTA = (
+    "UPDATE nfe_importacoes SET cancelada=1 "
+    "WHERE chave_acesso = %s AND tipo='entrada' AND origem='SEFAZ'"
+)
 
 # NSU: max_nsu=0 significa "a SEFAZ não informou" (o 656 não traz maxNSU), NUNCA
 # "zero documentos" — o 0 preserva o valor atual; só um maxNSU real (>0) atualiza.
@@ -319,72 +328,98 @@ def _subir_xml(caminho, xml_bytes):
 # ==========================================================================
 # Gravação (transação por documento, na conexão dedicada)
 # ==========================================================================
-def gravar_nota(conn, cur, empresa, nota, xml_bytes, nsu, schema, expira):
+CUF_TO_UF = {
+    "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP",
+    "17": "TO", "21": "MA", "22": "PI", "23": "CE", "24": "RN", "25": "PB",
+    "26": "PE", "27": "AL", "28": "SE", "29": "BA", "31": "MG", "32": "ES",
+    "33": "RJ", "35": "SP", "41": "PR", "42": "SC", "43": "RS", "50": "MS",
+    "51": "MT", "52": "GO", "53": "DF",
+}
+
+
+def _uf_da_chave(chave):
+    """UF do emitente pelos 2 primeiros dígitos (cUF) da chave de 44 — serve para
+    nota completa E resumo (a chave sempre está presente)."""
+    return CUF_TO_UF.get((chave or "")[:2])
+
+
+def _data_de(dh_txt):
+    """'YYYY-MM-DD HH:MM:SS' -> 'YYYY-MM-DD' (a coluna data_emissao é DATE)."""
+    return (dh_txt or "")[:10] or None
+
+
+def gravar_nota(conn, cur, empresa, nota, xml_bytes):
+    """Nota COMPLETA (nfeProc) → nfe_importacoes (incompleta=0) + itens. Upsert por
+    (chave, 'entrada'); NUNCA sobrescreve linha manual; regrava itens só se a linha
+    é SEFAZ. Arquiva o XML no Dropbox antes de gravar."""
     ano = nota["ano"] or _hoje_brt().year
     mes = nota["mes"] or _hoje_brt().month
     caminho = _caminho_fiscal(empresa, ano, mes, nota["chave"])
     _subir_xml(caminho, xml_bytes)
 
-    cur.execute(SQL_DOC_UPSERT, (
-        empresa["cliente_id"], nota["chave"], nota["tipo"], nsu, schema,
-        nota["numero"], nota["serie"], nota["modelo"], nota["dh_txt"],
-        nota["emit_cnpj"], nota["emit_nome"], nota["dest_cnpj"],
-        nota["valor_total"], nota["situacao"], caminho, expira,
+    cancelada = 1 if nota["situacao"] == "cancelada" else 0
+    cur.execute(SQL_NOTA_UPSERT, (
+        empresa["cliente_id"], f'{nota["chave"]}.xml', nota["chave"],
+        nota["numero"], nota["serie"], _data_de(nota["dh_txt"]),
+        nota["emit_cnpj"], nota["emit_nome"], _uf_da_chave(nota["chave"]),
+        nota["dest_cnpj"], empresa["razao"], empresa.get("uf"),
+        nota["valor_total"], "", "", cancelada, caminho,
     ))
-    cur.execute(SQL_DOC_ID, (nota["chave"],))
+
+    cur.execute(SQL_NOTA_ID, (nota["chave"],))
     row = cur.fetchone()
-    documento_id = row["id"] if row else None
-    if not documento_id:
-        raise RuntimeError("não recuperou documento_id após upsert")
+    if not row:
+        raise RuntimeError("não recuperou o id da nota após upsert")
+    nfe_id = row["id"]
 
     n_itens = 0
-    for it in nota["itens"]:
-        cur.execute(SQL_ITEM_UPSERT, (
-            documento_id, it["n_item"], it["produto_xml"],
-            it["cprod_fornecedor"], it["cean"], it["cod_anp"],
-            None, it["ncm"], it["unidade"], it["quantidade"],
-            it["valor_unitario"], it["valor_total"],
-        ))
-        n_itens += 1
+    if row["origem"] == "SEFAZ":          # não toca itens de linha manual
+        cur.execute(SQL_ITENS_DEL, (nfe_id,))
+        for it in nota["itens"]:
+            cur.execute(SQL_ITEM_INS, (
+                nfe_id, it["n_item"], it["cprod_fornecedor"], it["produto_xml"],
+                it["ncm"], it["unidade"], it["quantidade"],
+                it["valor_unitario"], it["valor_total"],
+            ))
+            n_itens += 1
 
     conn.commit()
     return n_itens
 
 
-def gravar_evento(conn, cur, empresa, ev, xml_bytes, nsu, schema, expira):
+def gravar_evento(conn, cur, empresa, ev, xml_bytes):
+    """procEventoNFe → arquiva o XML no Dropbox; se for CANCELAMENTO, marca a nota
+    (cancelada=1), só em linha SEFAZ. Demais eventos ficam só no Dropbox."""
     ano = ev["ano"] or _hoje_brt().year
     mes = ev["mes"] or _hoje_brt().month
     # Arquiva pelo Id do evento (não pela chNFe, para não colidir com a nota).
     caminho = _caminho_fiscal(empresa, ano, mes, ev["chave_evento"])
     _subir_xml(caminho, xml_bytes)
 
-    cur.execute(SQL_EVENTO_UPSERT, (
-        empresa["cliente_id"], ev["chave_evento"], ev["ch_nfe"], ev["tp_evento"],
-        ev["n_seq"], ev["descricao"], ev["dh_txt"], nsu, schema,
-        ev["org_cnpj"], caminho, expira,
-    ))
     if ev["tp_evento"] == TP_CANCELAMENTO and ev["ch_nfe"]:
         cur.execute(SQL_CANCELA_NOTA, (ev["ch_nfe"],))
     conn.commit()
 
 
-def gravar_resumo_nota(conn, cur, empresa, res, nsu, schema):
-    # dest = o próprio interessado (o resNFe não traz o destinatário).
+def gravar_resumo_nota(conn, cur, empresa, res):
+    """resNFe → nfe_importacoes com incompleta=1 (sem itens; o app nunca manifesta).
+    dest = o próprio interessado (o resNFe não traz destinatário). No-op se a chave
+    já existe (não rebaixa completa nem toca manual)."""
+    cancelada = 1 if res["situacao"] == "cancelada" else 0
     cur.execute(SQL_RESUMO_UPSERT, (
-        empresa["cliente_id"], res["chave"], res["tipo"], nsu, schema,
-        res["numero"], res["serie"], res["modelo"], res["dh_txt"],
-        res["emit_cnpj"], res["emit_nome"], empresa["cnpj"],
-        res["valor_total"], res["situacao"],
+        empresa["cliente_id"], f'{res["chave"]}.xml', res["chave"],
+        res["numero"], res["serie"], _data_de(res["dh_txt"]),
+        res["emit_cnpj"], res["emit_nome"], _uf_da_chave(res["chave"]),
+        empresa["cnpj"], empresa["razao"], empresa.get("uf"),
+        res["valor_total"], cancelada,
     ))
     conn.commit()
 
 
-def processar_um_doc(conn, cur, empresa, d, expira):
+def processar_um_doc(conn, cur, empresa, d):
     """Processa e SALVA um docZip. LEVANTA se falhar ao descompactar/parsear OU
     ao gravar o que DEVE ser gravado — nesse caso o chamador NÃO avança o cursor
     além deste NSU. Retorna (kind, n_itens) com kind in {nota, resumo, evento, outro}."""
-    schema = d.get("schema") or None
-    nsu = _to_int(d.get("NSU"))
     b64 = d.text or ""
     xml_bytes = gzip.decompress(base64.b64decode(b64))
     root = ET.fromstring(xml_bytes)
@@ -392,17 +427,17 @@ def processar_um_doc(conn, cur, empresa, d, expira):
 
     if raiz == "nfeProc":
         nota = extrair_nota(root)
-        ni = gravar_nota(conn, cur, empresa, nota, xml_bytes, nsu, schema, expira)
+        ni = gravar_nota(conn, cur, empresa, nota, xml_bytes)
         return "nota", ni
 
     if raiz == "procEventoNFe":
         ev = extrair_evento(root)
-        gravar_evento(conn, cur, empresa, ev, xml_bytes, nsu, schema, expira)
+        gravar_evento(conn, cur, empresa, ev, xml_bytes)
         return "evento", 0
 
     if raiz == "resNFe":
         res = extrair_resumo_nota(root)
-        gravar_resumo_nota(conn, cur, empresa, res, nsu, schema)
+        gravar_resumo_nota(conn, cur, empresa, res)
         return "resumo", 0
 
     # cteProc / resCTe / resEvento / outros: NÃO modelados nesta fase (CT-e depois).
@@ -584,8 +619,8 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
 
     # 138 (documentos) / 137 (nada novo): processa em ordem de NSU, avança só até
     # o último NSU efetivamente salvo (nsu_ok). Se um doc falha, PARA o lote ali.
-    empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao, 'cnpj': cnpj}
-    expira = (_hoje_brt() + timedelta(days=DIAS_RETENCAO)).date()
+    empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
+               'cnpj': cnpj, 'uf': uf}
     n_nota = n_resumo = n_evento = n_outro = n_itens = 0
     nsu_ok = ult_nsu
     parada = None
@@ -596,7 +631,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual'):
         for d in docs:
             nsu = _to_int(d.get('NSU'))
             try:
-                kind, ni = processar_um_doc(conn, cur, empresa, d, expira)
+                kind, ni = processar_um_doc(conn, cur, empresa, d)
             except Exception as exc:
                 conn.rollback()
                 parada = f'NSU {nsu}: {exc}'

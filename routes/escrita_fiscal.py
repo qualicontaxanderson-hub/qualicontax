@@ -440,7 +440,11 @@ def api_notas():
     if f_vmax:
         where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
-    if f_origem:
+    if f_origem == 'SEFAZ':
+        where.append("n.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("n.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
     if f_vinc_status == 'completo':
@@ -472,7 +476,7 @@ def api_notas():
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
                    n.dest_cnpj, n.dest_nome,
                    n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
-                   n.cfop, n.natureza_operacao, n.origem, n.nome_arquivo,
+                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.nome_arquivo,
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
@@ -3936,7 +3940,11 @@ def api_notas_saidas():
     if f_vmax:
         where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
-    if f_origem:
+    if f_origem == 'SEFAZ':
+        where.append("n.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("n.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
     if f_vinc_status == 'completo':
@@ -3966,7 +3974,7 @@ def api_notas_saidas():
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
                    n.dest_cnpj, n.dest_nome, n.dest_uf,
                    n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
-                   n.cfop, n.natureza_operacao, n.origem, n.nome_arquivo,
+                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.nome_arquivo,
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,

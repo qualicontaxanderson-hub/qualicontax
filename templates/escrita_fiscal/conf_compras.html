@@ -139,6 +139,8 @@ table.cc-table tr.cc-row-clickable:hover td { background:#f0fdf4; cursor:pointer
 table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:#166534; }
 .badge-upload  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-sefaz   { background:#ede9fe; color:#6d28d9; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-resumo  { background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:99px; font-size:9px;  font-weight:700; margin-left:4px; }
 .cc-empresa-pill { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 .cc-grupo-pill   { background:#e9d5ff; color:#7c3aed; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 
@@ -329,9 +331,9 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
             <div>
                 <label>Origem</label>
                 <select id="f_origem">
-                    <option value="">— Todos —</option>
-                    <option value="UPLOAD">Upload Manual</option>
-                    <option value="DROPBOX">Dropbox</option>
+                    <option value="">— Todas —</option>
+                    <option value="MANUAL">Manual (Upload/Dropbox)</option>
+                    <option value="SEFAZ">SEFAZ (DFe)</option>
                 </select>
             </div>
             <div>
@@ -984,7 +986,7 @@ function loadNotas() {
                     <td style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
                     <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
                     <td class="money">${fmtBRL(r.valor_icms)}</td>
-                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span></td>
+                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''}</td>
                     <td onclick="event.stopPropagation()">
                         <button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
                             <i class="fas fa-trash-alt"></i>

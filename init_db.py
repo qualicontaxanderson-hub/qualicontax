@@ -394,6 +394,40 @@ def _apply_migrations():
     except Exception:
         pass
 
+    # Incremental: captura SEFAZ (Fase 3) reusa a conf-compras. origem += 'SEFAZ';
+    # xml_caminho = ponteiro do XML no Dropbox (SEFAZ não usa xml_raw); incompleta
+    # = 1 para resumo (resNFe sem itens, porque o app nunca manifesta).
+    try:
+        _enum = execute_query(
+            "SELECT COLUMN_TYPE AS t FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' "
+            "AND COLUMN_NAME = 'origem'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if 'SEFAZ' not in (_enum.get('t') or ''):
+            execute_query(
+                "ALTER TABLE nfe_importacoes MODIFY origem "
+                "ENUM('UPLOAD','DROPBOX','SEFAZ') NOT NULL DEFAULT 'UPLOAD'",
+                fetch=False,
+            )
+    except Exception:
+        pass
+
+    for _col, _defn in [
+        ('xml_caminho', 'VARCHAR(300) NULL'),
+        ('incompleta',  'TINYINT(1) NOT NULL DEFAULT 0'),
+    ]:
+        try:
+            _ex = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' AND COLUMN_NAME = %s",
+                (_col,), fetch=True, fetch_one=True,
+            ) or {}
+            if _ex.get('cnt', 0) == 0:
+                execute_query(f"ALTER TABLE nfe_importacoes ADD COLUMN {_col} {_defn}", fetch=False)
+        except Exception:
+            pass
+
     _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_itens (
             id INT AUTO_INCREMENT PRIMARY KEY,

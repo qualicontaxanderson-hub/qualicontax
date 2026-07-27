@@ -1,17 +1,18 @@
 """
 Script de migração: infraestrutura de captura automática de DFe (Fase 1).
 
-Schema ALINHADO AO MOTOR NH (a Fase 2 é lift-and-shift do NH): os nomes de
-coluna batem com os INSERT/UPDATE do motor (SQL_DOC_UPSERT, SQL_ITEM_UPSERT,
-SQL_EVENTO_UPSERT, SQL_NSU_OK/656, dfe_log.registrar), para não obrigar reescrita
-de query depois.
+ATIVAS: ``dfe_nsu`` (cursor/cota) e ``dfe_consulta_log`` (observabilidade) — o
+motor ainda usa as duas. As demais (``dfe_documentos``/``dfe_itens``/``dfe_eventos``)
+são LEGADO: na Fase 3 o motor passou a gravar a nota DIRETO na conf-compras
+(``nfe_importacoes``/``nfe_itens``, origem='SEFAZ') — ver dfe_captura.SQL_NOTA_UPSERT.
+Ficam criadas (sem drop) mas não recebem mais escrita.
 
 - Adiciona ``modo_automatico``/``ativo`` em ``dfe_certificados`` (opt-in ligado).
-- Cria ``dfe_nsu``          (controle de NSU + trava de cota proximo_permitido).
-- Cria ``dfe_documentos``   (SÓ notas; cabeçalho indexado; XML no Dropbox).
-- Cria ``dfe_itens``        (itens/produtos de cada nota).
-- Cria ``dfe_eventos``      (procEventoNFe: histórico, 1 linha por evento).
-- Cria ``dfe_consulta_log`` (observabilidade: 1 linha por rodada/consulta).
+- Cria ``dfe_nsu``          (controle de NSU + trava de cota proximo_permitido). [ATIVA]
+- Cria ``dfe_documentos``   (legado — não mais escrita; motor grava em nfe_importacoes).
+- Cria ``dfe_itens``        (legado — idem).
+- Cria ``dfe_eventos``      (legado — idem; cancelamento vira flag em nfe_importacoes).
+- Cria ``dfe_consulta_log`` (observabilidade: 1 linha por rodada/consulta). [ATIVA]
 
 CT-e fica para fase futura (dfe_cte/dfe_cte_nfe NÃO são criadas aqui).
 Idempotente — seguro rodar múltiplas vezes. Espelha o que ``run_migrations()``
