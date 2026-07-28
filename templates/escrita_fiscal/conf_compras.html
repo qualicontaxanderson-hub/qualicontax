@@ -1297,7 +1297,14 @@ function vincularProduto(itemId, clienteId, grupoId) {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
-        }).catch(() => {/* silent: UI already updated */});
+        })
+        .then(r => r.json().catch(() => ({})))
+        .then(d => {
+            // O servidor recusa memorizar quando a NF-e não tem empresa definida.
+            // Sem isto o badge otimista mentiria: nada foi salvo.
+            if (d && d.error) reverterVinculo(itemId, clienteId, grupoId, d.error);
+        })
+        .catch(() => {/* falha de rede: UI já atualizada */});
     } else if (produtoId && !prodNome) {
         // Catalog not ready (shouldn't happen after Promise.all, but handle defensively)
         const btn = wrap.querySelector('button');
@@ -1311,6 +1318,8 @@ function vincularProduto(itemId, clienteId, grupoId) {
                 wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
                     <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
                 panelModified = true;
+            } else if (data.error) {
+                reverterVinculo(itemId, clienteId, grupoId, data.error);
             }
         }).catch(() => {
             if (btn) { btn.disabled = false; btn.textContent = 'Vincular'; }
@@ -1321,6 +1330,18 @@ function vincularProduto(itemId, clienteId, grupoId) {
             <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
         panelModified = true;
     }
+}
+
+// Desfaz o badge otimista quando o servidor recusou o vínculo, devolvendo o
+// select + botão e mostrando o motivo.
+function reverterVinculo(itemId, clienteId, grupoId, msg) {
+    const wrap = document.getElementById('vinculo_' + itemId);
+    if (wrap) {
+        const opts = buildProdOpts(null);
+        wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
+            <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
+    }
+    alert(msg);
 }
 
 function desvincular(itemId) {
@@ -1369,6 +1390,10 @@ function vincularTodos() {
                         <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
                 });
             }
+        } else if (data.error) {
+            // Recusado (ex.: NF-e sem empresa) — desfaz o otimismo recarregando o painel.
+            alert(data.error);
+            openPanel(currentNfeId);
         }
     })
     .catch(() => alert('Erro ao vincular todos.'));

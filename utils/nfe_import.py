@@ -20,10 +20,14 @@ _MAX_XML_SIZE = 16_000_000  # MEDIUMTEXT max is 16 MB
 
 
 def _lookup_vinculo(codigo_produto: str, cliente_id, grupo_id,
-                    prefetch_rows: list, cli_ramos: set):
+                    prefetch_rows: list):
     """
     In-memory vinculos lookup using pre-fetched rows.
-    Priority order matches _auto_vincular_db: empresa → grupo → ramo → global.
+    Priority order matches _auto_vincular_db: empresa → grupo.
+
+    Regras de ramo de atividade e globais são ignoradas mesmo que as linhas
+    ainda existam (Fase 1 do redesenho): a memorização de um cliente não pode
+    classificar as notas de outro.
     """
     if not codigo_produto:
         return None
@@ -38,17 +42,6 @@ def _lookup_vinculo(codigo_produto: str, cliente_id, grupo_id,
         for r in rows:
             if r['grupo_id'] == grupo_id and r['cliente_id'] is None:
                 return r['produto_catalogo_id']
-    # 3. Ramo de atividade
-    if cli_ramos:
-        for r in rows:
-            if (r['cliente_id'] is None and r['grupo_id'] is None
-                    and r.get('ramo_atividade_id') in cli_ramos):
-                return r['produto_catalogo_id']
-    # 4. Global
-    for r in rows:
-        if (r['cliente_id'] is None and r['grupo_id'] is None
-                and r.get('ramo_atividade_id') is None):
-            return r['produto_catalogo_id']
     return None
 
 
@@ -125,34 +118,17 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         _vrows = vinculos_cache[_vkey]
     else:
         _vrows = execute_query(
-            "SELECT codigo_produto_xml, cliente_id, grupo_id, ramo_atividade_id, "
+            "SELECT codigo_produto_xml, cliente_id, grupo_id, "
             "produto_catalogo_id FROM nfe_produto_vinculo WHERE emit_cnpj = %s",
             (_emit_cnpj,), fetch=True,
         ) or []
         if vinculos_cache is not None:
             vinculos_cache[_vkey] = _vrows
 
-    # Pre-fetch ramos for this client (one query per unique client per batch).
-    _rkey = f'__ramos__{cli}'
-    if vinculos_cache is not None and _rkey in vinculos_cache:
-        _cli_ramos = vinculos_cache[_rkey]
-    else:
-        _cli_ramos = set()
-        if cli:
-            _ramo_rows = execute_query(
-                "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao "
-                "WHERE cliente_id = %s",
-                (cli,), fetch=True,
-            ) or []
-            _cli_ramos = {r['ramo_atividade_id'] for r in _ramo_rows
-                          if r.get('ramo_atividade_id')}
-        if vinculos_cache is not None:
-            vinculos_cache[_rkey] = _cli_ramos
-
     items_data = []
     for item in parsed.get('itens', []):
-        # In-memory priority lookup: empresa → grupo → ramo → global.
-        prod_id = _lookup_vinculo(item['codigo_produto'], cli, grp, _vrows, _cli_ramos)
+        # In-memory priority lookup: empresa → grupo.
+        prod_id = _lookup_vinculo(item['codigo_produto'], cli, grp, _vrows)
         items_data.append((
             nfe_id, item['num_item'], item['codigo_produto'],
             item['descricao'], item['ncm'], item['cfop'],

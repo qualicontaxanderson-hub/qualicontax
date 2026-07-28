@@ -177,22 +177,38 @@ def _find_cliente_by_doc_digits(doc_digits: str, cache: dict) -> dict | None:
 
 
 
-def _upsert_vinculo(cliente_id, grupo_id, ramo_atividade_id,
-                    emit_cnpj, codigo_produto_xml,
-                    descricao_produto_xml, produto_catalogo_id):
-    """Insert-or-update nfe_produto_vinculo usando operador NULL-safe (<=>).
-    O ON DUPLICATE KEY UPDATE padrão não funciona quando cliente_id/grupo_id
-    são NULL porque MySQL permite múltiplas linhas (NULL, NULL, ...) no índice UNIQUE.
+def _exigir_empresa(cliente_id):
+    """Valida o escopo obrigatório da memorização (Fase 1: sempre por empresa).
+
+    Sem cliente_id não existe escopo possível: gravar assim produziria uma linha
+    com as 3 FKs nulas (a "global silenciosa"), que reaplicava o de-para de um
+    cliente em todos os outros. Erro explícito em vez de vazamento.
     """
+    if not cliente_id:
+        raise ValueError('Memorização exige empresa (cliente_id) definida.')
+    return int(cliente_id)
+
+
+def _upsert_vinculo(cliente_id, emit_cnpj, codigo_produto_xml,
+                    descricao_produto_xml, produto_catalogo_id):
+    """Insert-or-update de uma memorização no escopo EMPRESA.
+
+    grupo_id e ramo_atividade_id são gravados SEMPRE como NULL: memorização de
+    grupo é decisão explícita do usuário (Fase 3) e memorização por ramo foi
+    descontinuada. Continua sendo SELECT+INSERT/UPDATE em vez de ON DUPLICATE KEY
+    porque o UNIQUE uk_vinculo não protege linhas com NULL (MySQL permite N).
+    """
+    cliente_id = _exigir_empresa(cliente_id)
+
     existing = execute_query(
         """SELECT id FROM nfe_produto_vinculo
-            WHERE cliente_id        <=> %s
-              AND grupo_id          <=> %s
-              AND ramo_atividade_id <=> %s
-              AND emit_cnpj         =   %s
-              AND codigo_produto_xml=   %s
+            WHERE cliente_id         = %s
+              AND grupo_id          IS NULL
+              AND ramo_atividade_id IS NULL
+              AND emit_cnpj          = %s
+              AND codigo_produto_xml = %s
             LIMIT 1""",
-        (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml),
+        (cliente_id, emit_cnpj, codigo_produto_xml),
         fetch=True, fetch_one=True,
     )
     if existing:
@@ -209,22 +225,23 @@ def _upsert_vinculo(cliente_id, grupo_id, ramo_atividade_id,
                    (cliente_id, grupo_id, ramo_atividade_id,
                     emit_cnpj, codigo_produto_xml,
                     descricao_produto_xml, produto_catalogo_id)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (cliente_id, grupo_id, ramo_atividade_id,
-             emit_cnpj, codigo_produto_xml,
+               VALUES (%s, NULL, NULL, %s, %s, %s, %s)""",
+            (cliente_id, emit_cnpj, codigo_produto_xml,
              descricao_produto_xml, produto_catalogo_id),
         )
 
 
-def _upsert_vinculo_batch(cliente_id, grupo_id, ramo_atividade_id,
-                          emit_cnpj, codigo_desc_map: dict, produto_catalogo_id):
+def _upsert_vinculo_batch(cliente_id, emit_cnpj, codigo_desc_map: dict,
+                          produto_catalogo_id):
     """Batch version of _upsert_vinculo for multiple product codes at once.
 
     codigo_desc_map: {codigo_produto_xml: descricao_produto_xml}
 
     Performs 3 queries (SELECT + UPDATE + INSERT) instead of 2×N queries,
     reducing 40-second "Aplicar a Todos" to sub-second for any NF-e size.
+    Mesmo escopo de _upsert_vinculo: sempre empresa, nunca grupo/ramo/global.
     """
+    cliente_id = _exigir_empresa(cliente_id)
     if not codigo_desc_map or not emit_cnpj:
         return
 
@@ -233,12 +250,12 @@ def _upsert_vinculo_batch(cliente_id, grupo_id, ramo_atividade_id,
 
     existing_rows = execute_query(
         f"""SELECT id, codigo_produto_xml FROM nfe_produto_vinculo
-             WHERE cliente_id        <=> %s
-               AND grupo_id          <=> %s
-               AND ramo_atividade_id <=> %s
-               AND emit_cnpj         =   %s
+             WHERE cliente_id         = %s
+               AND grupo_id          IS NULL
+               AND ramo_atividade_id IS NULL
+               AND emit_cnpj          = %s
                AND codigo_produto_xml IN ({ph})""",
-        (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, *codigos),
+        (cliente_id, emit_cnpj, *codigos),
         fetch=True,
     ) or []
 
@@ -256,12 +273,12 @@ def _upsert_vinculo_batch(cliente_id, grupo_id, ramo_atividade_id,
     # Batch INSERT new rows
     new_codes = [cod for cod in codigos if cod not in existing_map]
     if new_codes:
-        values_ph = ','.join(['(%s,%s,%s,%s,%s,%s,%s)'] * len(new_codes))
+        values_ph = ','.join(['(%s,NULL,NULL,%s,%s,%s,%s)'] * len(new_codes))
         params: list = []
         for cod in new_codes:
             params.extend([
-                cliente_id, grupo_id, ramo_atividade_id,
-                emit_cnpj, cod, codigo_desc_map[cod], produto_catalogo_id,
+                cliente_id, emit_cnpj, cod,
+                codigo_desc_map[cod], produto_catalogo_id,
             ])
         execute_query(
             f"""INSERT INTO nfe_produto_vinculo
@@ -836,16 +853,15 @@ def api_sugestao_produto():
     if not emit_cnpj or not codigo_xml:
         return jsonify({'produto_id': None})
 
-    # Procura vínculo registrado (específico por empresa → grupo → global)
+    # Procura vínculo registrado (empresa → grupo). Regras de ramo/global não são
+    # mais resolvidas: memorização é por empresa (Fase 1).
     row = None
     for cli, grp in [
         (int(cliente_id) if cliente_id else None, None),
         (None, int(grupo_id) if grupo_id else None),
-        (None, None),
     ]:
-        q = ("SELECT produto_catalogo_id FROM nfe_produto_vinculo "
-             "WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
-             "AND cliente_id %s AND grupo_id %s LIMIT 1")
+        if cli is None and grp is None:
+            continue
         cli_cond = '= %s' if cli is not None else 'IS NULL'
         grp_cond = '= %s' if grp is not None else 'IS NULL'
         query = (f"SELECT produto_catalogo_id FROM nfe_produto_vinculo "
@@ -888,30 +904,35 @@ def api_vincular_produto():
     if not item:
         return jsonify({'error': 'Item não encontrado'}), 404
 
+    cli = item.get('cliente_id')
+
+    # Memorizar exige empresa: sem ela a regra não teria escopo e virava global.
+    # Validado ANTES de qualquer UPDATE para não aplicar o pedido pela metade.
+    if salvar_regra and produto_id and not cli:
+        return jsonify({
+            'error': 'NF-e sem empresa definida — não é possível memorizar. '
+                     'Defina a empresa da nota ou desmarque "salvar regra".'
+        }), 400
+
     # Atualiza o vínculo no item
     execute_query(
         "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
         (produto_id, item_id),
     )
 
-    # Salva regra de auto-vínculo e aplica retroativamente em todos os itens históricos
+    # Salva regra de auto-vínculo e aplica retroativamente nos itens históricos
+    # DESTA MESMA EMPRESA.
     if salvar_regra and produto_id:
         emit_cnpj = item['emit_cnpj']
         cod = item['codigo_produto']
-        cli = item.get('cliente_id')
-        grp = item.get('grupo_id')
         # Descrição do produto conforme XML
         descricao_xml = item.get('descricao') or ''
-        # Ramo de atividade do cliente (para escopo da regra global)
-        ramo_id = _get_ramo_cliente(cli)
-        # Salva regra para a empresa/grupo específico
-        _upsert_vinculo(cli, grp, None, emit_cnpj, cod, descricao_xml, produto_id)
-        # Salva regra com escopo de ramo de atividade
-        _upsert_vinculo(None, None, ramo_id, emit_cnpj, cod, descricao_xml, produto_id)
+        # Regra no escopo da empresa (único escopo automático na Fase 1)
+        _upsert_vinculo(cli, emit_cnpj, cod, descricao_xml, produto_id)
 
-        # Aplica retroativamente em todos os itens históricos do mesmo
-        # emit_cnpj + codigo_produto que ainda estão sem vínculo (exceto o item atual,
-        # que já foi atualizado acima).
+        # Aplica retroativamente nos itens históricos do mesmo
+        # emit_cnpj + codigo_produto que ainda estão sem vínculo, restrito à
+        # empresa da regra (exceto o item atual, já atualizado acima).
         if emit_cnpj and cod:
             execute_query(
                 """UPDATE nfe_itens i
@@ -919,9 +940,10 @@ def api_vincular_produto():
                    SET i.produto_catalogo_id = %s
                    WHERE i.produto_catalogo_id IS NULL
                      AND n.emit_cnpj = %s
+                     AND n.cliente_id = %s
                      AND i.codigo_produto = %s
                      AND i.id != %s""",
-                (produto_id, emit_cnpj, cod, item_id),
+                (produto_id, emit_cnpj, cli, cod, item_id),
             )
 
     # Nome do produto vinculado — returned so the caller can update the UI
@@ -3183,15 +3205,20 @@ def api_vincular_todos():
     if not nota:
         return jsonify({'error': 'NF-e não encontrada'}), 404
 
+    emit_cnpj = nota['emit_cnpj']
+    cli = nota.get('cliente_id')
+
+    # Mesma regra de api_vincular_produto: sem empresa não há escopo para memorizar.
+    if not cli:
+        return jsonify({
+            'error': 'NF-e sem empresa definida — não é possível memorizar. '
+                     'Defina a empresa da nota antes de aplicar a todos.'
+        }), 400
+
     itens = execute_query(
         "SELECT id, codigo_produto, descricao FROM nfe_itens WHERE nfe_id = %s",
         (nfe_id,), fetch=True,
     ) or []
-
-    emit_cnpj = nota['emit_cnpj']
-    cli = nota.get('cliente_id')
-    grp = nota.get('grupo_id')
-    ramo_id = _get_ramo_cliente(cli)
 
     if not itens:
         prod = execute_query(
@@ -3213,11 +3240,11 @@ def api_vincular_todos():
     unique_codes = {it['codigo_produto']: it.get('descricao') or ''
                     for it in itens if it.get('codigo_produto')}
 
-    # Batch upsert rules for all unique codes: 6 queries instead of N×4
-    _upsert_vinculo_batch(cli, grp, None, emit_cnpj, unique_codes, produto_id)
-    _upsert_vinculo_batch(None, None, ramo_id, emit_cnpj, unique_codes, produto_id)
+    # Batch upsert rules for all unique codes: 3 queries instead of N×2
+    _upsert_vinculo_batch(cli, emit_cnpj, unique_codes, produto_id)
 
-    # Retroactive apply: single batch UPDATE covering all historical items for all unique codes
+    # Retroactive apply: single batch UPDATE covering all historical items for
+    # all unique codes — restrito à empresa da nota.
     if emit_cnpj and unique_codes:
         item_ids_ph = ','.join(['%s'] * len(item_ids))
         cod_ph = ','.join(['%s'] * len(unique_codes))
@@ -3227,9 +3254,10 @@ def api_vincular_todos():
                SET i.produto_catalogo_id = %s
                WHERE i.produto_catalogo_id IS NULL
                  AND n.emit_cnpj = %s
+                 AND n.cliente_id = %s
                  AND i.codigo_produto IN ({cod_ph})
                  AND i.id NOT IN ({item_ids_ph})""",
-            tuple([produto_id, emit_cnpj] + list(unique_codes.keys()) + item_ids),
+            tuple([produto_id, emit_cnpj, cli] + list(unique_codes.keys()) + item_ids),
         )
 
     prod = execute_query(
@@ -3721,17 +3749,6 @@ def _process_evento(clf: dict, file_name: str, xml_raw: str,
     }
 
 
-def _get_ramo_cliente(cliente_id):
-    """Retorna o primeiro ramo_atividade_id do cliente, ou None."""
-    if not cliente_id:
-        return None
-    row = execute_query(
-        "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s LIMIT 1",
-        (cliente_id,), fetch=True, fetch_one=True,
-    )
-    return row['ramo_atividade_id'] if row else None
-
-
 def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id,
                    cache: dict | None = None):
     """
@@ -3757,7 +3774,11 @@ def _auto_vincular(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id,
 def _auto_vincular_db(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id):
     """
     Tenta encontrar um vínculo automático registrado para o par emit_cnpj + codigo_produto.
-    Busca na ordem: empresa específica → grupo → ramo de atividade → global.
+    Busca na ordem: empresa específica → grupo.
+
+    Regras de ramo de atividade e globais NÃO são mais resolvidas — mesmo que as
+    linhas ainda existam na tabela (limpeza é a Fase 2). Era esse fallback que
+    fazia o de-para de um cliente classificar as notas de todos os outros.
     """
     if not emit_cnpj or not codigo_produto:
         return None
@@ -3783,90 +3804,44 @@ def _auto_vincular_db(emit_cnpj: str, codigo_produto: str, cliente_id, grupo_id)
         if row:
             return row['produto_catalogo_id']
 
-    # 2. Ramo de atividade do cliente
-    if cliente_id:
-        ramos = execute_query(
-            "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s",
-            (cliente_id,), fetch=True,
-        ) or []
-        ramo_ids = [r['ramo_atividade_id'] for r in ramos if r.get('ramo_atividade_id')]
-        if ramo_ids:
-            placeholders = ','.join(['%s'] * len(ramo_ids))
-            row = execute_query(
-                f"SELECT produto_catalogo_id FROM nfe_produto_vinculo "
-                f"WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
-                f"AND cliente_id IS NULL AND grupo_id IS NULL "
-                f"AND ramo_atividade_id IN ({placeholders}) LIMIT 1",
-                tuple([emit_cnpj, codigo_produto] + ramo_ids),
-                fetch=True, fetch_one=True,
-            )
-            if row:
-                return row['produto_catalogo_id']
-
-    # 3. Global (sem empresa, grupo ou ramo)
-    row = execute_query(
-        "SELECT produto_catalogo_id FROM nfe_produto_vinculo "
-        "WHERE emit_cnpj = %s AND codigo_produto_xml = %s "
-        "AND cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL LIMIT 1",
-        (emit_cnpj, codigo_produto), fetch=True, fetch_one=True,
-    )
-    if row:
-        return row['produto_catalogo_id']
-
     return None
 
 
 def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id) -> dict:
     """
     Versão batch de _auto_vincular_db: recebe uma lista de codigos_produto e
-    retorna um dict {codigo_produto: produto_catalogo_id} em 2 queries ao invés
-    de disparar até 5 queries sequenciais.
-    Respeita a mesma prioridade: empresa(1) → grupo(2) → ramo(3) → global(4).
+    retorna um dict {codigo_produto: produto_catalogo_id} em 1 query ao invés
+    de disparar N consultas sequenciais.
+    Respeita a mesma prioridade: empresa(1) → grupo(2). Ramo e global não são
+    mais resolvidos (Fase 1) — sem empresa nem grupo não há o que reaplicar.
     """
     if not emit_cnpj or not codigos:
         return {}
+    if not cliente_id and not grupo_id:
+        return {}
 
-    # Query 1 (only when needed): fetch ramo_ids for this client
-    ramo_ids: list = []
-    if cliente_id:
-        ramos = execute_query(
-            "SELECT ramo_atividade_id FROM cliente_ramo_atividade_relacao WHERE cliente_id = %s",
-            (cliente_id,), fetch=True,
-        ) or []
-        ramo_ids = [r['ramo_atividade_id'] for r in ramos if r.get('ramo_atividade_id')]
-
-    # Query 2: single combined lookup with all 4 scopes as OR, priority via CASE
+    # Query única: escopos como OR, prioridade via CASE.
+    # Os parâmetros seguem a ORDEM DE APARIÇÃO no SQL: o CASE fica no SELECT,
+    # portanto vem antes dos do WHERE (emit_cnpj/códigos) e dos do escopo.
     ph_c = ','.join(['%s'] * len(codigos))
-    params: list = [emit_cnpj] + list(codigos)
-
-    scope_or_parts = []
-    case_parts = []
+    case_parts, case_params = [], []
+    scope_or_parts, scope_params = [], []
 
     if cliente_id:
-        scope_or_parts.append("(cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
         case_parts.append("WHEN cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL THEN 1")
-        params += [cliente_id, cliente_id]
+        case_params.append(cliente_id)
+        scope_or_parts.append("(cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
+        scope_params.append(cliente_id)
 
     if grupo_id:
-        scope_or_parts.append("(grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL)")
         case_parts.append("WHEN grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL THEN 2")
-        params += [grupo_id, grupo_id]
+        case_params.append(grupo_id)
+        scope_or_parts.append("(grupo_id = %s AND cliente_id IS NULL AND ramo_atividade_id IS NULL)")
+        scope_params.append(grupo_id)
 
-    if ramo_ids:
-        ph_r = ','.join(['%s'] * len(ramo_ids))
-        scope_or_parts.append(
-            f"(ramo_atividade_id IN ({ph_r}) AND cliente_id IS NULL AND grupo_id IS NULL)"
-        )
-        case_parts.append(
-            f"WHEN ramo_atividade_id IN ({ph_r}) AND cliente_id IS NULL AND grupo_id IS NULL THEN 3"
-        )
-        params += ramo_ids + ramo_ids  # once for OR, once for CASE
-
-    # Always include global scope
-    scope_or_parts.append("(cliente_id IS NULL AND grupo_id IS NULL AND ramo_atividade_id IS NULL)")
-
-    case_sql = "CASE " + " ".join(case_parts) + " ELSE 4 END" if case_parts else "4"
+    case_sql = "CASE " + " ".join(case_parts) + " ELSE 9 END"
     scope_sql = " OR ".join(scope_or_parts)
+    params = case_params + [emit_cnpj] + list(codigos) + scope_params
 
     rows = execute_query(
         f"SELECT codigo_produto_xml, produto_catalogo_id, {case_sql} AS priority "
@@ -3885,6 +3860,7 @@ def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id) ->
         cod = r['codigo_produto_xml']
         if cod not in result:
             result[cod] = r['produto_catalogo_id']
+    return result
 
 
 # ===========================================================================
