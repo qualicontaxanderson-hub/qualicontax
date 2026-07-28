@@ -309,6 +309,44 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
     return clauses, params
 
 
+def _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=None):
+    """Filtro empresa/grupo para CT-e (a empresa é o TOMADOR do frete).
+
+    Mesma forma do ``_empresa_where`` das entradas, trocando ``dest_cnpj`` por
+    ``tomador_cnpj``: o fallback cobre CT-e gravados sem ``cliente_id`` (importação
+    futura pelo Dropbox). Na captura SEFAZ o ``cliente_id`` sempre vem preenchido —
+    é o dono do certificado —, então o fallback nem entra em jogo.
+    """
+    if params is None:
+        params = []
+    clauses = []
+    if f_cliente_id:
+        cid = int(f_cliente_id)
+        clauses.append(
+            f"({alias}.cliente_id = %s"
+            f" OR ({alias}.cliente_id IS NULL"
+            f"     AND REPLACE(REPLACE(REPLACE({alias}.tomador_cnpj,'.',''),'/',''),'-','')"
+            f"       = (SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','')"
+            f"            FROM clientes WHERE id = %s)))"
+        )
+        params.append(cid)
+        params.append(cid)
+    if f_grupo_id:
+        gid = int(f_grupo_id)
+        clauses.append(
+            f"({alias}.grupo_id = %s"
+            f" OR ({alias}.grupo_id IS NULL"
+            f"     AND REPLACE(REPLACE(REPLACE({alias}.tomador_cnpj,'.',''),'/',''),'-','')"
+            f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
+            f"             FROM clientes c"
+            f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
+            f"             WHERE cgr.grupo_id = %s)))"
+        )
+        params.append(gid)
+        params.append(gid)
+    return clauses, params
+
+
 def _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=None):
     """Filtro empresa/grupo para Saídas (cliente = emitente do XML)."""
     if params is None:
@@ -4185,3 +4223,220 @@ def excluir_lote_saidas():
     return jsonify({'ok': True, 'deleted': total})
 
     return result
+
+
+# ===========================================================================
+# CONFERÊNCIA DE CT-e (fretes) — /escrita-fiscal/conf-cte/
+#
+# Tela ESPELHO da Conferência de Entradas, mas lendo de cte_documentos/cte_nfe.
+# ROTA E ENDPOINT PRÓPRIOS (conf_cte): nada aqui reaproveita a rota de
+# conf_compras — as duas telas são independentes.
+#
+# SOMENTE LEITURA. Não importa, não exclui, não manifesta (no CT-e nem existe
+# manifestação). Quem grava é a captura (utils/integrations/cte_captura.py).
+# ===========================================================================
+@escrita_fiscal.route('/conf-cte/')
+@permission_required('escrita_fiscal.conf_cte')
+def conf_cte():
+    empresas = _get_empresas()
+    grupos = _get_grupos()
+    # Transportadoras que já apareceram como emitentes de CT-e (para o filtro).
+    transportadoras = execute_query(
+        "SELECT DISTINCT emit_cnpj, emit_nome FROM cte_documentos "
+        "WHERE emit_cnpj <> '' ORDER BY emit_nome",
+        fetch=True,
+    ) or []
+
+    # KPIs começam zerados — o JS preenche ao buscar (igual à tela de Entradas).
+    stats = {'total_ctes': 0, 'total_frete': 0, 'total_icms': 0,
+             'total_cancelados': 0, 'total_nfes': 0}
+
+    return render_template(
+        'escrita_fiscal/conf_cte.html',
+        stats=stats,
+        transportadoras=transportadoras,
+        empresas=empresas,
+        grupos=grupos,
+        uf_list=_UF_LIST,
+    )
+
+
+@escrita_fiscal.route('/conf-cte/api/ctes')
+@login_required
+def api_ctes():
+    """Lista paginada de CT-e + KPIs da seleção (window functions, 1 round-trip)."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+    f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    f_tomador = request.args.get('tomador_cnpj', '').strip()
+    f_data_ini = request.args.get('data_ini', '').strip()
+    f_data_fim = request.args.get('data_fim', '').strip()
+    f_chave = request.args.get('chave', '').strip()
+    f_num_cte = request.args.get('num_cte', '').strip()
+    f_modelo = request.args.get('modelo', '').strip()
+    f_uf_ini = request.args.get('uf_ini', '').strip()
+    f_uf_fim = request.args.get('uf_fim', '').strip()
+    f_vmin = request.args.get('vmin', '').strip()
+    f_vmax = request.args.get('vmax', '').strip()
+    f_origem = request.args.get('origem', '').strip()
+    f_cancelado = request.args.get('cancelado', '').strip()
+    f_papel = request.args.get('papel', '').strip()
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 50
+
+    where, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
+
+    if f_emit_cnpj:
+        where.append('t.emit_cnpj = %s')
+        params.append(f_emit_cnpj)
+    if f_tomador:
+        where.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
+        params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
+    if f_data_ini:
+        where.append('t.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('t.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('t.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_cte:
+        where.append('t.num_cte = %s')
+        params.append(f_num_cte)
+    if f_modelo:
+        where.append('t.modelo = %s')
+        params.append(f_modelo)
+    if f_uf_ini:
+        where.append('t.uf_ini = %s')
+        params.append(f_uf_ini)
+    if f_uf_fim:
+        where.append('t.uf_fim = %s')
+        params.append(f_uf_fim)
+    if f_vmin:
+        where.append('t.valor_frete >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('t.valor_frete <= %s')
+        params.append(float(f_vmax))
+    if f_origem == 'SEFAZ':
+        where.append("t.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("t.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
+        where.append('t.origem = %s')
+        params.append(f_origem)
+    if f_cancelado == '1':
+        where.append('t.cancelado = 1')
+    elif f_cancelado == '0':
+        where.append('t.cancelado = 0')
+    if f_papel:
+        where.append('t.papel_cliente = %s')
+        params.append(f_papel)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    offset = (page - 1) * per_page
+
+    all_rows = execute_query(
+        f"""SELECT t.id, t.chave_acesso, t.modelo, t.num_cte, t.serie,
+                   t.data_emissao, t.cfop, t.natureza_operacao,
+                   t.tp_cte, t.tp_serv, t.modal,
+                   t.emit_cnpj, t.emit_nome, t.emit_uf,
+                   t.rem_nome, t.rem_uf, t.dest_nome, t.dest_uf,
+                   t.tomador_cnpj, t.tomador_nome, t.tomador_papel, t.papel_cliente,
+                   t.uf_ini, t.mun_ini, t.uf_fim, t.mun_fim,
+                   t.valor_frete, t.valor_icms, t.aliq_icms, t.cst_icms,
+                   t.cancelado, t.origem, t.importado_em, t.atualizado_em,
+                   t.cliente_id, t.grupo_id,
+                   cl.nome_razao_social AS empresa_nome,
+                   g.nome AS grupo_nome,
+                   COALESCE(nf.qtd, 0) AS qtd_nfes,
+                   COUNT(*) OVER() AS _total,
+                   COALESCE(SUM(t.valor_frete) OVER(), 0) AS _kpi_frete,
+                   COALESCE(SUM(t.valor_icms)  OVER(), 0) AS _kpi_icms,
+                   COALESCE(SUM(t.cancelado)   OVER(), 0) AS _kpi_cancelados,
+                   COALESCE(SUM(COALESCE(nf.qtd,0)) OVER(), 0) AS _kpi_nfes
+              FROM cte_documentos t
+              LEFT JOIN clientes cl ON cl.id = t.cliente_id
+              LEFT JOIN grupos_clientes g ON g.id = t.grupo_id
+              LEFT JOIN (
+                  SELECT cte_id, COUNT(*) AS qtd FROM cte_nfe GROUP BY cte_id
+              ) nf ON nf.cte_id = t.id
+              {where_sql}
+             ORDER BY t.data_emissao DESC, t.id DESC
+             LIMIT %s OFFSET %s""",
+        tuple(params) + (per_page, offset),
+        fetch=True,
+    ) or []
+
+    first = all_rows[0] if all_rows else {}
+    total = int(first.get('_total') or 0)
+    kpi = {
+        'total_frete': float(first.get('_kpi_frete') or 0),
+        'total_icms': float(first.get('_kpi_icms') or 0),
+        'total_cancelados': int(first.get('_kpi_cancelados') or 0),
+        'total_nfes': int(first.get('_kpi_nfes') or 0),
+    }
+    if not all_rows:
+        total = 0
+        kpi = {'total_frete': 0, 'total_icms': 0, 'total_cancelados': 0, 'total_nfes': 0}
+
+    _window_cols = {'_total', '_kpi_frete', '_kpi_icms', '_kpi_cancelados', '_kpi_nfes'}
+    rows = []
+    for r in all_rows:
+        row = {k: v for k, v in r.items() if k not in _window_cols}
+        for k in ('data_emissao', 'importado_em', 'atualizado_em'):
+            if row.get(k) and hasattr(row[k], 'isoformat'):
+                row[k] = row[k].isoformat()
+        for k in ('valor_frete', 'valor_icms', 'aliq_icms'):
+            row[k] = float(row.get(k) or 0)
+        rows.append(row)
+
+    return jsonify({'total': total, 'page': page, 'per_page': per_page,
+                    'rows': rows, 'kpi': kpi})
+
+
+@escrita_fiscal.route('/conf-cte/api/nfes/<int:cte_id>')
+@login_required
+def api_cte_nfes(cte_id):
+    """NF-e transportadas por um CT-e — o "detalhe" da linha.
+
+    Marca quais dessas chaves JÁ existem na Conferência de Entradas (LEFT JOIN por
+    chave_acesso): é o cruzamento frete x nota que dá valor à tela.
+    """
+    cte = execute_query(
+        "SELECT id, chave_acesso, modelo, num_cte, serie, data_emissao, "
+        "       emit_cnpj, emit_nome, tomador_nome, tomador_papel, papel_cliente, "
+        "       valor_frete, valor_icms, uf_ini, mun_ini, uf_fim, mun_fim, "
+        "       natureza_operacao, cancelado, origem, xml_caminho "
+        "FROM cte_documentos WHERE id = %s",
+        (cte_id,), fetch=True, fetch_one=True,
+    )
+    if not cte:
+        return jsonify({'erro': 'CT-e não encontrado'}), 404
+
+    if cte.get('data_emissao') and hasattr(cte['data_emissao'], 'isoformat'):
+        cte['data_emissao'] = cte['data_emissao'].isoformat()
+    for k in ('valor_frete', 'valor_icms'):
+        cte[k] = float(cte.get(k) or 0)
+
+    nfes = execute_query(
+        "SELECT n.id, n.chave_nfe, n.num_nota, n.serie, n.valor, "
+        "       imp.id AS nfe_id, imp.num_nota AS imp_num, imp.serie AS imp_serie, "
+        "       imp.emit_nome AS imp_emit, imp.data_emissao AS imp_data, "
+        "       imp.valor_total AS imp_valor "
+        "FROM cte_nfe n "
+        "LEFT JOIN nfe_importacoes imp "
+        "       ON imp.chave_acesso = n.chave_nfe AND imp.tipo = 'entrada' "
+        "WHERE n.cte_id = %s ORDER BY n.id",
+        (cte_id,), fetch=True,
+    ) or []
+
+    for n in nfes:
+        if n.get('imp_data') and hasattr(n['imp_data'], 'isoformat'):
+            n['imp_data'] = n['imp_data'].isoformat()
+        for k in ('valor', 'imp_valor'):
+            n[k] = float(n[k]) if n.get(k) is not None else None
+        n['na_conferencia'] = n.get('nfe_id') is not None
+
+    return jsonify({'cte': cte, 'nfes': nfes})

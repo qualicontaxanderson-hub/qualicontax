@@ -1,0 +1,794 @@
+{% extends "base.html" %}
+{% block title %}Conferência de CT-e - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Espelha as classes cc-* da Conferência de Entradas (conf_compras.html), com a
+   paleta TEAL do CT-e para as duas telas não se confundirem à primeira vista.
+   Prefixo próprio (ct-) só onde o comportamento difere. */
+
+/* ---- Layout ---- */
+.cc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.cc-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.cc-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ---- Empresa selector bar ---- */
+.cc-empresa-bar { background:linear-gradient(135deg,#134e4a,#0d9488); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(13,148,136,.25); }
+.cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
+.cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#134e4a; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
+.cc-empresa-ac { position:relative; min-width:320px; }
+.cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#134e4a; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
+.cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
+.cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
+.cc-ac-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:9999; max-height:260px; overflow-y:auto; }
+.cc-ac-item { padding:8px 12px; font-size:13px; color:#1e293b; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+.cc-ac-item:last-child { border-bottom:none; }
+.cc-ac-item:hover, .cc-ac-item.active { background:#f0fdfa; color:#0f766e; }
+.cc-ac-item.all { color:#64748b; font-style:italic; }
+.cc-ac-empty { padding:10px 12px; font-size:12px; color:#94a3b8; text-align:center; }
+.cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
+.cc-scope-badge.empresa { background:#99f6e4; color:#0f766e; }
+.cc-scope-badge.grupo   { background:#e9d5ff; color:#7c3aed; }
+.cc-scope-badge.global  { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+
+/* ---- KPI cards ---- */
+.cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+.cc-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.cc-kpi:nth-child(1) { background:linear-gradient(135deg,#134e4a,#0d9488); }
+.cc-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.cc-kpi:nth-child(3) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.cc-kpi:nth-child(4) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.cc-kpi:nth-child(5) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.cc-kpi-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
+.cc-kpi-value { font-size:20px; font-weight:800; color:#fff; margin-top:4px; }
+
+/* ---- Filters ---- */
+.cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+.cc-filters-head { display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:0; }
+.cc-filters-head h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
+.cc-filter-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+.cc-filter-grid label { font-size:10px; font-weight:700; color:#94a3b8; display:block; margin-bottom:3px; text-transform:uppercase; }
+.cc-filter-grid input, .cc-filter-grid select { width:100%; padding:6px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; background:#f8fafc; }
+.cc-filter-grid input:focus, .cc-filter-grid select:focus { border-color:#0d9488; outline:none; background:#fff; }
+.cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
+
+/* ---- Tabs ---- */
+.cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; align-items:center; justify-content:space-between; }
+.cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
+.cc-tab:hover { color:#1e293b; background:#f1f5f9; }
+.cc-tab.active { color:#0f766e; border-bottom-color:#0d9488; background:#f0fdfa; }
+
+/* ---- Table ---- */
+.cc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); overflow-x:auto; }
+table.cc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:1180px; }
+table.cc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+table.cc-table tr.cc-row-clickable:hover td { background:#f0fdfa; cursor:pointer; }
+table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:#0f766e; }
+
+/* Badges — MESMO padrão da tela de Entradas (origem + IMPORTADO/ATUALIZADO) */
+.badge-upload  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-sefaz   { background:#ede9fe; color:#6d28d9; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-cancel  { background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:99px; font-size:9px; font-weight:700; margin-left:4px; }
+.cc-data-pill            { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+.cc-data-pill.importado  { background:#dbeafe; color:#1d4ed8; }
+.cc-data-pill.atualizado { background:#e9d5ff; color:#7c3aed; }
+/* Modelo do documento: 57 CT-e | 67 CT-e OS | 64 GTV-e */
+.ct-modelo { padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; font-family:ui-monospace,monospace; }
+.ct-modelo.m57 { background:#ccfbf1; color:#0f766e; }
+.ct-modelo.m67 { background:#e0e7ff; color:#4338ca; }
+.ct-modelo.m64 { background:#fef3c7; color:#92400e; }
+.ct-modelo.mx  { background:#f1f5f9; color:#64748b; }
+/* Papel do cliente no CT-e (foco = tomador) */
+.ct-papel { padding:2px 7px; border-radius:99px; font-size:9.5px; font-weight:700; white-space:nowrap; }
+.ct-papel.tomador { background:#ccfbf1; color:#0f766e; }
+.ct-papel.outro   { background:#f1f5f9; color:#64748b; }
+.ct-trajeto { font-size:11px; color:#64748b; white-space:nowrap; }
+.ct-nfe-count { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; background:#e0f2fe; color:#075985; }
+.ct-nfe-count.zero { background:#f1f5f9; color:#94a3b8; }
+
+/* ---- Pagination / Empty / Loading ---- */
+.cc-pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; padding:4px 0; }
+.cc-pagination button { padding:5px 14px; border:1.5px solid #e2e8f0; border-radius:7px; background:#fff; cursor:pointer; font-weight:600; color:#374151; }
+.cc-pagination button:hover { background:#f1f5f9; }
+.cc-pagination button:disabled { opacity:.4; cursor:not-allowed; }
+.cc-empty { text-align:center; padding:40px 20px; color:#94a3b8; }
+.cc-empty i { font-size:36px; margin-bottom:10px; display:block; }
+.cc-loading { text-align:center; padding:30px; color:#64748b; display:none; }
+.cc-loading i { animation:spin 1s linear infinite; font-size:22px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ---- Painel de detalhe (NF-e transportadas) ---- */
+.cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
+.cc-panel-overlay.open { display:flex; }
+.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:1000px; max-width:100%; max-height:92vh; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#134e4a,#0d9488); border-radius:16px 16px 0 0; }
+.cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
+.cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
+.cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; text-align:right; }
+.panel-cte-info { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px 20px; margin-bottom:16px; background:linear-gradient(135deg,#f0fdfa,#ccfbf1); border-radius:10px; padding:14px 16px; border:1.5px solid #5eead4; }
+.panel-cte-info dt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
+.panel-cte-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0; word-break:break-word; }
+table.cc-items-table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:10px; overflow:hidden; }
+table.cc-items-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; padding:8px 10px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-items-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; color:#334155; }
+table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
+.ct-vinc { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
+.ct-vinc.sim { background:#dcfce7; color:#166534; }
+.ct-vinc.nao { background:#fef3c7; color:#92400e; }
+
+/* Chaves XML */
+.chave-cell { font-family:ui-monospace,monospace; font-size:11px; color:#374151; word-break:break-all; }
+.btn-copy-chave { background:transparent; border:1px solid #d1d5db; color:#374151; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.btn-copy-chave:hover { background:#f0fdfa; border-color:#5eead4; color:#0f766e; }
+.btn-copy-chave.copied { background:#ccfbf1; border-color:#5eead4; color:#0f766e; }
+.cc-chaves-toolbar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f8fafc; border-bottom:1.5px solid #e2e8f0; gap:10px; flex-wrap:wrap; }
+.cc-chaves-count { font-size:12px; color:#64748b; font-weight:600; }
+
+/* Aviso read-only */
+.ct-readonly { display:flex; align-items:flex-start; gap:9px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:10px 14px; font-size:12.5px; color:#115e59; line-height:1.5; margin-bottom:14px; }
+.ct-readonly i { margin-top:2px; color:#0d9488; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cc-header">
+    <div>
+        <a href="{{ url_for('escrita_fiscal.index') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
+            <i class="fas fa-arrow-left"></i> Escrita Fiscal
+        </a>
+        <h1 style="margin-top:4px;"><i class="fas fa-truck" style="color:#0d9488;margin-right:8px;"></i>Conferência de CT-e</h1>
+    </div>
+    <div class="cc-actions">
+        <a href="{{ url_for('escrita_fiscal.status_sefaz') }}" class="btn"
+           style="background:#6366f1;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
+            <i class="fas fa-satellite-dish"></i> Status da Captura
+        </a>
+        <button onclick="exportarCSV()"
+                style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">
+            <i class="fas fa-download"></i> CSV
+        </button>
+    </div>
+</div>
+
+<div class="ct-readonly">
+    <i class="fas fa-circle-info"></i>
+    <div><b>Tela somente leitura.</b> Os CT-e chegam pela captura automática na SEFAZ
+    (CTeDistribuicaoDFe) — esta tela não importa, não altera e não exclui nada. O app
+    <b>nunca manifesta</b>; no CT-e não existe manifestação do destinatário.</div>
+</div>
+
+<!-- Seletor empresa / grupo -->
+<div class="cc-empresa-bar">
+    <label><i class="fas fa-building"></i> Visualizar por</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="cc-empresa-ac" id="empresaAcWrap">
+            <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
+                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="sel_empresa" value="">
+            <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
+        </div>
+        <span style="color:rgba(255,255,255,.5);font-size:11px;">OU</span>
+        <select id="sel_grupo" onchange="onGrupoChange()">
+            <option value="">— Todos os Grupos —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+</div>
+
+<!-- KPIs -->
+<div class="cc-kpis">
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Total de CT-e</div>
+        <div class="cc-kpi-value" id="kpiCtes">{{ stats.total_ctes or 0 }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Valor do Frete</div>
+        <div class="cc-kpi-value" id="kpiFrete">{{ stats.total_frete | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">ICMS</div>
+        <div class="cc-kpi-value" id="kpiICMS">{{ stats.total_icms | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Cancelados</div>
+        <div class="cc-kpi-value" id="kpiCancelados">{{ stats.total_cancelados or 0 }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">NF-e Transportadas</div>
+        <div class="cc-kpi-value" id="kpiNfes">{{ stats.total_nfes or 0 }}</div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="cc-filters">
+    <div class="cc-filters-head" onclick="toggleFilters()">
+        <h3><i class="fas fa-filter" style="color:#0d9488;margin-right:4px;"></i>Filtros</h3>
+        <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
+    </div>
+    <div id="filterBody">
+        <div class="cc-filter-grid">
+            <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
+            <div>
+                <label>Transportadora (CNPJ)</label>
+                <select id="f_emit_cnpj" style="text-transform:uppercase;">
+                    <option value="">— Todas —</option>
+                    {% for e in transportadoras %}
+                    <option value="{{ e.emit_cnpj }}">{{ e.emit_nome }} ({{ e.emit_cnpj }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div><label>CNPJ do Tomador</label><input type="text" id="f_tomador_cnpj" placeholder="Parcial ou completo"></div>
+            <div><label>Nº do CT-e</label><input type="text" id="f_num_cte" placeholder="Ex: 000123"></div>
+            <div>
+                <label>Modelo</label>
+                <select id="f_modelo">
+                    <option value="">— Todos —</option>
+                    <option value="57">57 — CT-e</option>
+                    <option value="67">67 — CT-e OS</option>
+                    <option value="64">64 — GTV-e</option>
+                </select>
+            </div>
+            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
+            <div>
+                <label>UF Início</label>
+                <select id="f_uf_ini">
+                    <option value="">— Todas —</option>
+                    {% for uf in uf_list %}<option value="{{ uf }}">{{ uf }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>UF Fim</label>
+                <select id="f_uf_fim">
+                    <option value="">— Todas —</option>
+                    {% for uf in uf_list %}<option value="{{ uf }}">{{ uf }}</option>{% endfor %}
+                </select>
+            </div>
+            <div><label>Frete Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Frete Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
+            <div>
+                <label>Origem</label>
+                <select id="f_origem">
+                    <option value="">— Todas —</option>
+                    <option value="SEFAZ">SEFAZ (DFe)</option>
+                    <option value="MANUAL">Manual (Upload/Dropbox)</option>
+                </select>
+            </div>
+            <div>
+                <label>Papel da Empresa</label>
+                <select id="f_papel">
+                    <option value="">— Todos —</option>
+                    <option value="tomador">Tomador (paga o frete)</option>
+                    <option value="remetente">Remetente</option>
+                    <option value="destinatario">Destinatário</option>
+                    <option value="expedidor">Expedidor</option>
+                    <option value="recebedor">Recebedor</option>
+                    <option value="emitente">Emitente (transportadora)</option>
+                </select>
+            </div>
+            <div>
+                <label>Situação</label>
+                <select id="f_cancelado">
+                    <option value="">— Todas —</option>
+                    <option value="0">Autorizados</option>
+                    <option value="1">Cancelados</option>
+                </select>
+            </div>
+        </div>
+        <div class="cc-filter-actions">
+            <button onclick="applyFilters()"
+                    style="background:#0d9488;color:#fff;border:none;padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+            <button onclick="clearFilters()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;">
+                <i class="fas fa-times"></i> Limpar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="cc-tabs">
+    <div class="cc-tab active" data-tab="ctes" onclick="switchTab('ctes')">
+        <i class="fas fa-truck"></i> CT-e
+        <span id="tabBadgeCtes" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+    <div class="cc-tab" data-tab="chaves" onclick="switchTab('chaves')">
+        <i class="fas fa-key"></i> Chaves XML
+        <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+</div>
+
+<div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
+
+<!-- Tab: CT-e -->
+<div id="tab-ctes">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Nº / Série</th>
+                    <th>Importação</th>
+                    <th>Mod.</th>
+                    <th>Transportadora</th>
+                    <th>Tomador</th>
+                    <th>Remetente → Destinatário</th>
+                    <th>Trajeto</th>
+                    <th style="text-align:center;">NF-e</th>
+                    <th style="text-align:right;">Frete R$</th>
+                    <th style="text-align:right;">ICMS</th>
+                    <th>Origem</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyCtes">
+                <tr><td colspan="12" class="cc-empty"><i class="fas fa-truck"></i>Selecione uma empresa e clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationCtes"></div>
+</div>
+
+<!-- Tab: Chaves XML -->
+<div id="tab-chaves" style="display:none;">
+    <div class="cc-table-wrap">
+        <div class="cc-chaves-toolbar">
+            <span class="cc-chaves-count" id="chavesCount">0 chave(s)</span>
+            <button onclick="copiarTodasChaves()"
+                    style="background:linear-gradient(135deg,#0d9488,#0f766e);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-copy"></i> Copiar Todas
+            </button>
+        </div>
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Transportadora</th>
+                    <th>Chave de Acesso do CT-e</th>
+                    <th style="text-align:center;">Copiar</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyChaves">
+                <tr><td colspan="4" class="cc-empty"><i class="fas fa-key"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationChaves"></div>
+</div>
+
+<!-- ===================== PAINEL: NF-e transportadas ===================== -->
+<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()">
+<div class="cc-panel" onclick="event.stopPropagation()">
+    <div class="cc-panel-header">
+        <h3 id="panelTitle">NF-e transportadas pelo CT-e</h3>
+        <button onclick="closePanel()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;line-height:32px;">&times;</button>
+    </div>
+    <div class="cc-panel-body" id="panelBody">
+        <div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>
+    </div>
+    <div class="cc-panel-footer">
+        <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Fechar</button>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ===========================================================================
+// Conferência de CT-e — somente leitura. Nenhum endpoint de escrita é chamado
+// aqui: só /conf-cte/api/ctes e /conf-cte/api/nfes/<id>.
+// ===========================================================================
+const empresasData = [
+    {id:'', nome:'— Todas as Empresas —'},
+    {% for e in empresas %}
+    {id:'{{ e.id }}', nome:{{ ((e.numero_cliente ~ ' - ' if e.numero_cliente else '') ~ e.nome_razao_social) | tojson }}},
+    {% endfor %}
+];
+
+const URL_API_NFES = '{{ url_for("escrita_fiscal.api_cte_nfes", cte_id=0) }}';
+
+let currentClienteId = '';
+let currentGrupoId = '';
+let currentPage = 1;
+let chavesCurrentPage = 1;
+let currentTab = 'ctes';
+let hasSearched = false;
+let lastRows = [];
+const _controllers = {};
+
+function _fetchWithAbort(key, url) {
+    if (_controllers[key]) _controllers[key].abort();
+    _controllers[key] = new AbortController();
+    return fetch(url, {signal: _controllers[key].signal});
+}
+function _isAbort(err) { return err && err.name === 'AbortError'; }
+
+// ---- Autocomplete de empresa (mesmo comportamento da tela de Entradas) ----
+let acActiveIndex = -1;
+function onEmpresaInput() {
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+    document.getElementById('sel_empresa_clear').style.display = q ? '' : 'none';
+}
+function onEmpresaFocus() {
+    if (document.getElementById('sel_empresa').value) {
+        document.getElementById('sel_empresa_input').value = '';
+    }
+    renderEmpresaDropdown(document.getElementById('sel_empresa_input').value.trim().toLowerCase());
+}
+function onEmpresaBlur() {
+    setTimeout(function () {
+        const id = document.getElementById('sel_empresa').value;
+        const input = document.getElementById('sel_empresa_input');
+        if (id && input.value === '') {
+            const found = empresasData.find(e => e.id == id);
+            if (found) input.value = found.nome;
+        }
+    }, 200);
+}
+function renderEmpresaDropdown(q) {
+    const list = document.getElementById('empresaAcList');
+    acActiveIndex = -1;
+    const filtered = !q ? empresasData
+        : empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    list.innerHTML = filtered.length === 0
+        ? '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>'
+        : filtered.map(e => `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`).join('');
+    list.style.display = '';
+}
+function onEmpresaKeydown(e) {
+    const items = document.getElementById('empresaAcList').querySelectorAll('.cc-ac-item');
+    if (e.key === 'ArrowDown') {
+        acActiveIndex = Math.min(acActiveIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        acActiveIndex = Math.max(acActiveIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        const t = acActiveIndex >= 0 ? items[acActiveIndex] : items[0];
+        if (t) selectEmpresa(t.dataset.id, t.dataset.nome);
+        e.preventDefault();
+    } else if (e.key === 'Escape') {
+        closeEmpresaDropdown();
+    }
+}
+function selectEmpresa(id, nome) {
+    document.getElementById('sel_empresa').value = id;
+    document.getElementById('sel_empresa_input').value = id ? nome : '';
+    document.getElementById('sel_empresa_clear').style.display = id ? '' : 'none';
+    closeEmpresaDropdown();
+    onEmpresaChange();
+}
+function clearEmpresa() { selectEmpresa('', ''); }
+function closeEmpresaDropdown() { document.getElementById('empresaAcList').style.display = 'none'; }
+document.addEventListener('click', function (e) {
+    if (!document.getElementById('empresaAcWrap').contains(e.target)) closeEmpresaDropdown();
+});
+
+function onEmpresaChange() {
+    currentClienteId = document.getElementById('sel_empresa').value;
+    if (currentClienteId) {
+        document.getElementById('sel_grupo').value = '';
+        currentGrupoId = '';
+        updateScopeBadge('empresa', document.getElementById('sel_empresa_input').value);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+}
+function onGrupoChange() {
+    currentGrupoId = document.getElementById('sel_grupo').value;
+    if (currentGrupoId) {
+        document.getElementById('sel_empresa').value = '';
+        document.getElementById('sel_empresa_input').value = '';
+        document.getElementById('sel_empresa_clear').style.display = 'none';
+        currentClienteId = '';
+        const s = document.getElementById('sel_grupo');
+        updateScopeBadge('grupo', s.options[s.selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+}
+function updateScopeBadge(type, label) {
+    const b = document.getElementById('scopeBadge');
+    b.className = 'cc-scope-badge ' + type;
+    const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
+    b.innerHTML = `<i class="${icons[type]}"></i> ${label}`;
+}
+
+// ---- Tabs / filtros ----
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.cc-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    ['ctes','chaves'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
+    });
+    if (hasSearched) loadActiveTab();
+}
+function toggleFilters() {
+    const b = document.getElementById('filterBody');
+    const c = document.getElementById('filterChevron');
+    const hidden = b.style.display === 'none';
+    b.style.display = hidden ? '' : 'none';
+    c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
+}
+function clearFilters() {
+    ['f_data_ini','f_data_fim','f_tomador_cnpj','f_num_cte','f_chave','f_vmin','f_vmax'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    ['f_emit_cnpj','f_modelo','f_uf_ini','f_uf_fim','f_origem','f_papel','f_cancelado'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    currentPage = 1;
+    applyFilters();
+}
+function getFilters() {
+    return {
+        cliente_id: currentClienteId,
+        grupo_id: currentGrupoId,
+        data_ini: document.getElementById('f_data_ini').value,
+        data_fim: document.getElementById('f_data_fim').value,
+        emit_cnpj: document.getElementById('f_emit_cnpj').value,
+        tomador_cnpj: document.getElementById('f_tomador_cnpj').value,
+        num_cte: document.getElementById('f_num_cte').value,
+        modelo: document.getElementById('f_modelo').value,
+        chave: document.getElementById('f_chave').value,
+        uf_ini: document.getElementById('f_uf_ini').value,
+        uf_fim: document.getElementById('f_uf_fim').value,
+        vmin: document.getElementById('f_vmin').value,
+        vmax: document.getElementById('f_vmax').value,
+        origem: document.getElementById('f_origem').value,
+        papel: document.getElementById('f_papel').value,
+        cancelado: document.getElementById('f_cancelado').value,
+    };
+}
+function applyFilters() {
+    currentPage = 1;
+    chavesCurrentPage = 1;
+    hasSearched = true;
+    loadActiveTab();
+}
+function loadActiveTab() {
+    if (currentTab === 'ctes') loadCtes();
+    else loadChaves();
+}
+
+// ---- Formatters ----
+function fmtBRL(v) {
+    return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtDate(v) {
+    if (!v) return '—';
+    const p = v.toString().substring(0, 10).split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : v;
+}
+function esc(s) {
+    return (s == null ? '' : String(s)).replace(/[&<>"]/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function showLoad() { document.getElementById('loadingIndicator').style.display='block'; }
+function hideLoad() { document.getElementById('loadingIndicator').style.display='none'; }
+
+// Badge IMPORTADO/ATUALIZADO — mesma regra da tela de Entradas.
+function dataPill(r) {
+    if (!r.importado_em) return '<span style="color:#d1d5db">—</span>';
+    const atualizado = r.atualizado_em && r.atualizado_em > r.importado_em;
+    return atualizado
+        ? `<span class="cc-data-pill atualizado" title="Reprocessado/atualizado em ${fmtDate(r.atualizado_em)}">ATUALIZADO ${fmtDate(r.atualizado_em)}</span>`
+        : `<span class="cc-data-pill importado" title="Importado em ${fmtDate(r.importado_em)}">IMPORTADO ${fmtDate(r.importado_em)}</span>`;
+}
+function modeloBadge(m) {
+    const cls = ['57','67','64'].includes(m) ? 'm'+m : 'mx';
+    return `<span class="ct-modelo ${cls}" title="${m === '57' ? 'CT-e' : m === '67' ? 'CT-e OS' : m === '64' ? 'GTV-e' : 'modelo ' + (m||'?')}">${m||'—'}</span>`;
+}
+
+// ---- Lista de CT-e ----
+function loadCtes() {
+    const params = new URLSearchParams({...getFilters(), page: currentPage});
+    showLoad();
+    document.getElementById('tbodyCtes').innerHTML = '';
+    _fetchWithAbort('ctes', '{{ url_for("escrita_fiscal.api_ctes") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            lastRows = data.rows || [];
+            document.getElementById('tabBadgeCtes').textContent = data.total;
+            document.getElementById('kpiCtes').textContent = data.total;
+            if (data.kpi) {
+                document.getElementById('kpiFrete').textContent = fmtBRL(data.kpi.total_frete);
+                document.getElementById('kpiICMS').textContent = fmtBRL(data.kpi.total_icms);
+                document.getElementById('kpiCancelados').textContent = data.kpi.total_cancelados;
+                document.getElementById('kpiNfes').textContent = data.kpi.total_nfes;
+            }
+            const tbody = document.getElementById('tbodyCtes');
+            if (!lastRows.length) {
+                tbody.innerHTML = '<tr><td colspan="12" class="cc-empty"><i class="fas fa-truck"></i><br>Nenhum CT-e encontrado</td></tr>';
+                document.getElementById('paginationCtes').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = lastRows.map(r => {
+                const papelCls = r.papel_cliente === 'tomador' ? 'tomador' : 'outro';
+                const nfeCls = r.qtd_nfes > 0 ? '' : ' zero';
+                const trajeto = (r.uf_ini || r.uf_fim)
+                    ? `${esc(r.mun_ini||'')}/${esc(r.uf_ini||'—')} → ${esc(r.mun_fim||'')}/${esc(r.uf_fim||'—')}` : '—';
+                return `<tr class="cc-row-clickable" onclick="openPanel(${r.id})">
+                    <td>${fmtDate(r.data_emissao)}</td>
+                    <td>${esc(r.num_cte)||'—'} / ${esc(r.serie)||'—'}</td>
+                    <td>${dataPill(r)}</td>
+                    <td>${modeloBadge(r.modelo)}</td>
+                    <td title="${esc(r.emit_cnpj)}" style="text-transform:uppercase;">${esc(r.emit_nome||r.emit_cnpj)||'—'}</td>
+                    <td style="text-transform:uppercase;">
+                        ${esc(r.tomador_nome)||'—'}
+                        <br><span class="ct-papel ${papelCls}" title="Papel da empresa neste CT-e">${esc(r.papel_cliente||'—')}</span>
+                    </td>
+                    <td style="text-transform:uppercase;font-size:11.5px;">
+                        ${esc(r.rem_nome)||'—'}<br>→ ${esc(r.dest_nome)||'—'}
+                    </td>
+                    <td class="ct-trajeto">${trajeto}</td>
+                    <td style="text-align:center;">
+                        <span class="ct-nfe-count${nfeCls}"><i class="fas fa-file-invoice"></i> ${r.qtd_nfes}</span>
+                    </td>
+                    <td class="money"><strong>${fmtBRL(r.valor_frete)}</strong></td>
+                    <td class="money">${fmtBRL(r.valor_icms)}</td>
+                    <td>
+                        <span class="badge-${(r.origem||'sefaz').toLowerCase()}">${esc(r.origem)}</span>
+                        ${r.cancelado ? '<span class="badge-cancel" title="CT-e cancelado por evento">CANCELADO</span>' : ''}
+                    </td>
+                </tr>`;
+            }).join('');
+            renderPagination('paginationCtes', data.total, data.per_page, data.page, p => { currentPage = p; loadCtes(); });
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+// ---- Aba Chaves XML (reusa o mesmo endpoint; só muda a apresentação) ----
+function loadChaves() {
+    const params = new URLSearchParams({...getFilters(), page: chavesCurrentPage});
+    showLoad();
+    _fetchWithAbort('chaves', '{{ url_for("escrita_fiscal.api_ctes") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const rows = data.rows || [];
+            lastRows = rows;
+            document.getElementById('tabBadgeChaves').textContent = data.total;
+            document.getElementById('chavesCount').textContent = data.total + ' chave(s)';
+            const tbody = document.getElementById('tbodyChaves');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="cc-empty"><i class="fas fa-key"></i><br>Nenhum CT-e encontrado</td></tr>';
+                document.getElementById('paginationChaves').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = rows.map(r => `<tr>
+                <td>${fmtDate(r.data_emissao)}</td>
+                <td style="text-transform:uppercase;">${esc(r.emit_nome)||'—'}</td>
+                <td class="chave-cell">${esc(r.chave_acesso)}</td>
+                <td style="text-align:center;">
+                    <button class="btn-copy-chave" onclick="copiarChave('${esc(r.chave_acesso)}', this)">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </td>
+            </tr>`).join('');
+            renderPagination('paginationChaves', data.total, data.per_page, data.page, p => { chavesCurrentPage = p; loadChaves(); });
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+function copiarChave(chave, btn) {
+    navigator.clipboard.writeText(chave).then(() => {
+        const html = btn.innerHTML;
+        btn.classList.add('copied');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiado';
+        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = html; }, 1500);
+    });
+}
+function copiarTodasChaves() {
+    if (!lastRows.length) { alert('Nada para copiar — faça uma busca primeiro.'); return; }
+    navigator.clipboard.writeText(lastRows.map(r => r.chave_acesso).join('\n'))
+        .then(() => alert(lastRows.length + ' chave(s) copiada(s).'));
+}
+
+// ---- Paginação ----
+function renderPagination(elId, total, perPage, page, onGo) {
+    const el = document.getElementById(elId);
+    const pages = Math.ceil(total / perPage);
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button ${page <= 1 ? 'disabled' : ''} id="${elId}_prev"><i class="fas fa-chevron-left"></i></button>
+        <span style="color:#64748b;">Página <strong>${page}</strong> de ${pages} · ${total} registro(s)</span>
+        <button ${page >= pages ? 'disabled' : ''} id="${elId}_next"><i class="fas fa-chevron-right"></i></button>`;
+    const prev = document.getElementById(elId+'_prev');
+    const next = document.getElementById(elId+'_next');
+    if (prev && page > 1) prev.onclick = () => onGo(page - 1);
+    if (next && page < pages) next.onclick = () => onGo(page + 1);
+}
+
+// ---- Painel: NF-e transportadas ----
+function openPanel(cteId) {
+    document.getElementById('panelOverlay').classList.add('open');
+    const body = document.getElementById('panelBody');
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+    // url_for com um id placeholder e troca no fim: não depende de concatenar
+    // caminho na mão (que quebraria se o prefixo do blueprint mudasse).
+    fetch(URL_API_NFES.replace(/0$/, cteId))
+        .then(r => r.json())
+        .then(d => {
+            if (d.erro) { body.innerHTML = `<p style="color:#dc2626;">${esc(d.erro)}</p>`; return; }
+            const c = d.cte;
+            document.getElementById('panelTitle').textContent =
+                `CT-e ${c.num_cte || '—'}/${c.serie || '—'} — NF-e transportadas`;
+            const info = `<dl class="panel-cte-info">
+                <div><dt>Transportadora</dt><dd style="text-transform:uppercase;">${esc(c.emit_nome)||'—'}</dd></div>
+                <div><dt>Tomador (${esc(c.tomador_papel)||'—'})</dt><dd style="text-transform:uppercase;">${esc(c.tomador_nome)||'—'}</dd></div>
+                <div><dt>Emissão</dt><dd>${fmtDate(c.data_emissao)}</dd></div>
+                <div><dt>Modelo</dt><dd>${modeloBadge(c.modelo)}</dd></div>
+                <div><dt>Valor do frete</dt><dd>${fmtBRL(c.valor_frete)}</dd></div>
+                <div><dt>ICMS</dt><dd>${fmtBRL(c.valor_icms)}</dd></div>
+                <div><dt>Trajeto</dt><dd>${esc(c.mun_ini||'')}/${esc(c.uf_ini||'')} → ${esc(c.mun_fim||'')}/${esc(c.uf_fim||'')}</dd></div>
+                <div><dt>Papel da empresa</dt><dd>${esc(c.papel_cliente)||'—'}</dd></div>
+                <div style="grid-column:1/-1;"><dt>Chave do CT-e</dt><dd class="chave-cell">${esc(c.chave_acesso)}</dd></div>
+                ${c.xml_caminho ? `<div style="grid-column:1/-1;"><dt>XML no Dropbox</dt><dd style="font-size:11.5px;color:#475569;">${esc(c.xml_caminho)}</dd></div>` : ''}
+            </dl>`;
+
+            let tabela;
+            if (!d.nfes.length) {
+                tabela = `<div class="cc-empty" style="background:#fff;border-radius:10px;">
+                    <i class="fas fa-file-invoice"></i>
+                    Este CT-e não declara NF-e transportadas.
+                    <div style="font-size:12px;margin-top:6px;">Normal em CT-e OS (modelo 67) e em fretes sem NF-e vinculada no XML.</div>
+                </div>`;
+            } else {
+                tabela = `<table class="cc-items-table">
+                    <thead><tr>
+                        <th>#</th><th>Chave da NF-e</th><th>Nº / Série</th>
+                        <th class="r">Valor</th><th>Na Conferência de Entradas?</th>
+                    </tr></thead>
+                    <tbody>${d.nfes.map((n, i) => `<tr>
+                        <td>${i+1}</td>
+                        <td class="chave-cell">${esc(n.chave_nfe) || '<span style="color:#94a3b8">(nota em papel)</span>'}</td>
+                        <td>${esc(n.imp_num || n.num_nota) || '—'} / ${esc(n.imp_serie || n.serie) || '—'}</td>
+                        <td class="r">${n.imp_valor != null ? fmtBRL(n.imp_valor) : (n.valor != null ? fmtBRL(n.valor) : '—')}</td>
+                        <td>${n.na_conferencia
+                            ? `<span class="ct-vinc sim" title="${esc(n.imp_emit||'')}"><i class="fas fa-check"></i> Sim</span>`
+                            : '<span class="ct-vinc nao"><i class="fas fa-minus"></i> Não importada</span>'}</td>
+                    </tr>`).join('')}</tbody>
+                </table>
+                <p style="font-size:11.5px;color:#64748b;margin-top:10px;">
+                    "Não importada" significa que a NF-e citada no CT-e ainda não existe na
+                    Conferência de Entradas — pode ter sido emitida para outra empresa ou
+                    ainda não ter sido capturada.
+                </p>`;
+            }
+            body.innerHTML = info + tabela;
+        })
+        .catch(() => { body.innerHTML = '<p style="color:#dc2626;">Falha ao carregar as NF-e deste CT-e.</p>'; });
+}
+function closePanel() { document.getElementById('panelOverlay').classList.remove('open'); }
+
+// ---- CSV (client-side, do que está na tela) ----
+function exportarCSV() {
+    if (!lastRows.length) { alert('Faça uma busca antes de exportar.'); return; }
+    const cols = ['data_emissao','modelo','num_cte','serie','emit_cnpj','emit_nome',
+                  'tomador_cnpj','tomador_nome','tomador_papel','papel_cliente',
+                  'rem_nome','dest_nome','uf_ini','uf_fim','valor_frete','valor_icms',
+                  'cancelado','origem','chave_acesso'];
+    const linhas = [cols.join(';')].concat(lastRows.map(r =>
+        cols.map(c => `"${String(r[c] == null ? '' : r[c]).replace(/"/g, '""')}"`).join(';')));
+    const blob = new Blob(['\ufeff' + linhas.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'conf_cte.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+</script>
+{% endblock %}

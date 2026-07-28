@@ -14,6 +14,7 @@ PERMISSION_CATALOG = {
         # O código da permissão continua conf_compras (não renomeado, para não
         # invalidar os perfis já cadastrados) — só o rótulo mudou.
         'escrita_fiscal.conf_compras':    'Conferência de Entradas',
+        'escrita_fiscal.conf_cte':        'Conferência de CT-e',
         'escrita_fiscal.conf_saidas':     'Conferência de Saídas',
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',
         'escrita_fiscal.memorizacoes':    'Memorizações',
