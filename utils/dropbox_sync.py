@@ -422,6 +422,68 @@ class DropboxService:
         return False
 
     # ------------------------------------------------------------------
+    # Conta / quota (SOMENTE LEITURA)
+    # ------------------------------------------------------------------
+    def get_space_usage(self) -> dict:
+        """Espaço usado/total da conta via ``users_get_space_usage``.
+
+        SÓ LEITURA — não escreve, não apaga, não move nada. Devolve bytes crus
+        (a formatação é de quem exibe):
+
+            {'usado': int, 'total': int, 'tipo': 'individual'|'team'|'desconhecido'}
+
+        ``total`` vem 0 quando a conta não tem quota informada (ex.: allocation
+        do tipo 'other' em contas Business antigas) — quem exibe deve tratar
+        como "sem limite conhecido" em vez de dividir por zero.
+
+        Numa conta de EQUIPE, ``usado`` é o consumo do usuário do token e
+        ``total`` é a alocação da equipe.
+
+        Raises:
+            DropboxAuthError: credenciais inválidas (após 1 retry silencioso).
+            DropboxError: qualquer outro erro (rede, API, token não configurado).
+        """
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                raise DropboxError(
+                    'Cliente Dropbox não disponível. '
+                    'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+                )
+            try:
+                uso = dbx.users_get_space_usage()
+                usado = int(getattr(uso, 'used', 0) or 0)
+                aloc = getattr(uso, 'allocation', None)
+                total, tipo = 0, 'desconhecido'
+                if aloc is not None:
+                    if aloc.is_individual():
+                        total = int(getattr(aloc.get_individual(), 'allocated', 0) or 0)
+                        tipo = 'individual'
+                    elif aloc.is_team():
+                        eq = aloc.get_team()
+                        total = int(getattr(eq, 'allocated', 0) or 0)
+                        tipo = 'team'
+                logger.info('Dropbox space usage: usado=%s total=%s tipo=%s',
+                            usado, total, tipo)
+                return {'usado': usado, 'total': total, 'tipo': tipo}
+            except (DropboxAuthError, DropboxError):
+                raise
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox get_space_usage: token expirado, renovando...')
+                        continue
+                    logger.error('Dropbox get_space_usage ERRO: %s', exc)
+                    raise DropboxAuthError(
+                        'Credenciais Dropbox inválidas ou expiradas. '
+                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                    ) from exc
+                logger.error('Dropbox get_space_usage ERRO: %s', exc)
+                raise DropboxError(f'Erro ao consultar o espaço do Dropbox: {exc}') from exc
+
+    # ------------------------------------------------------------------
     # Helpers de caminho por departamento
     # ------------------------------------------------------------------
     def resolve_departamento_root(self, departamento: str) -> str:

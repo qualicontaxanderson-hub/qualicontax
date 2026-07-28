@@ -1,0 +1,187 @@
+# -*- coding: utf-8 -*-
+"""Indicador de espaço do Dropbox — leitura CACHEADA, pronta para exibir.
+
+SOMENTE LEITURA. Chama ``DropboxService.get_space_usage`` (users/get_space_usage)
+e nada mais: não lista, não move, não apaga.
+
+Por que existe um cache
+-----------------------
+O painel admin recarrega à vontade (e tem auto-refresh em outras telas). Bater na
+API do Dropbox a cada render gastaria rate limit sem necessidade — a quota de uma
+conta muda devagar. O resultado é guardado em ``app_config`` (a mesma tabela
+chave/valor do horário do scheduler) com TTL de 1h por padrão, então em regime
+normal há **1 chamada por hora**, não uma por refresh.
+
+O TTL é comparado com o relógio do BANCO (``TIMESTAMPDIFF`` sobre
+``app_config.updated_at``), nunca com ``datetime.now()`` do Python — mesma
+disciplina de fuso adotada na captura de DFe, e evita divergência entre workers.
+
+Degradação: se a API falhar, devolve o ÚLTIMO valor conhecido marcado como
+``stale`` (com o erro ao lado). A tela do admin nunca quebra nem fica em branco
+por causa de uma indisponibilidade do Dropbox.
+"""
+import json
+import logging
+import os
+
+from utils.db_helper import execute_query
+
+logger = logging.getLogger(__name__)
+
+_CONFIG_KEY = 'dropbox_space_cache'
+_TTL_SEG = int(os.getenv('DROPBOX_SPACE_TTL_SEG', '3600'))   # 1h
+
+# Faixas do semáforo (percentual de uso).
+_LIMITE_ATENCAO = 70
+_LIMITE_CRITICO = 90
+
+
+# --------------------------------------------------------------------------
+# Formatação (pt-BR: vírgula decimal). Base binária com rótulo GB/TB — é assim
+# que o próprio Dropbox mostra (2 TB = 2 TiB = 2.199.023.255.552 bytes).
+# --------------------------------------------------------------------------
+_UNIDADES = (('TB', 1024 ** 4), ('GB', 1024 ** 3), ('MB', 1024 ** 2), ('KB', 1024))
+
+
+def formatar_bytes(n) -> str:
+    """1993027683123 -> '1,8 TB'; 62813466624 -> '58,5 GB'; 0 -> '0 B'.
+
+    Sem casa decimal quando o valor é redondo na unidade (2199023255552 -> '2 TB'),
+    porque "2,0 TB" no rótulo do plano fica estranho.
+
+    ``None`` (valor desconhecido) devolve '—', NÃO '0 B': mostrar zero para algo
+    que não sabemos seria um número errado com cara de certo.
+    """
+    if n is None or n == '':
+        return '—'
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return '—'
+    if n <= 0:
+        return '0 B'
+    for rotulo, fator in _UNIDADES:
+        if n >= fator:
+            v = n / fator
+            txt = f'{v:.0f}' if abs(v - round(v)) < 0.05 else f'{v:.1f}'
+            return f'{txt.replace(".", ",")} {rotulo}'
+    return f'{n} B'
+
+
+def _cor(pct):
+    """verde até 70% · amarelo 70–90% · vermelho acima de 90%."""
+    if pct is None:
+        return 'cinza'
+    if pct > _LIMITE_CRITICO:
+        return 'vermelho'
+    if pct >= _LIMITE_ATENCAO:
+        return 'amarelo'
+    return 'verde'
+
+
+def _montar(usado, total, tipo='desconhecido'):
+    """Monta o dict de exibição a partir dos bytes crus."""
+    usado = int(usado or 0)
+    total = int(total or 0)
+    livre = max(0, total - usado) if total else None
+    # total=0 -> quota não informada pela API: mostra o usado, sem % nem barra
+    # (dividir por zero aqui viraria erro 500 numa tela só de leitura).
+    pct = round(usado / total * 100, 1) if total else None
+
+    if total:
+        texto = (f'{formatar_bytes(usado)} de {formatar_bytes(total)} '
+                 f'— {formatar_bytes(livre)} livres')
+    else:
+        texto = f'{formatar_bytes(usado)} usados (cota não informada pelo Dropbox)'
+
+    return {
+        'ok': True,
+        'usado': usado, 'total': total, 'livre': livre,
+        'usado_fmt': formatar_bytes(usado),
+        'total_fmt': formatar_bytes(total) if total else '—',
+        'livre_fmt': formatar_bytes(livre) if livre is not None else '—',
+        'pct': pct,
+        'pct_fmt': f'{pct:.1f}'.replace('.', ',') if pct is not None else '—',
+        'pct_barra': min(100, pct) if pct is not None else 0,
+        'cor': _cor(pct),
+        'tipo': tipo,
+        'texto': texto,
+        'stale': False,
+        'erro': None,
+        'idade_seg': 0,
+    }
+
+
+# --------------------------------------------------------------------------
+# Cache em app_config
+# --------------------------------------------------------------------------
+def _ler_cache():
+    """Devolve (payload_dict, idade_em_segundos) ou (None, None).
+
+    A idade sai do relógio do BANCO — não do Python.
+    """
+    try:
+        row = execute_query(
+            "SELECT valor, TIMESTAMPDIFF(SECOND, updated_at, NOW()) AS idade "
+            "FROM app_config WHERE chave = %s",
+            (_CONFIG_KEY,), fetch=True, fetch_one=True,
+        )
+        if not row or not row.get('valor'):
+            return None, None
+        return json.loads(row['valor']), int(row.get('idade') or 0)
+    except Exception:
+        logger.warning('[dropbox-space] cache ilegível; será renovado.', exc_info=True)
+        return None, None
+
+
+def _gravar_cache(payload):
+    try:
+        execute_query(
+            "INSERT INTO app_config (chave, valor) VALUES (%s, %s) "
+            "ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()",
+            (_CONFIG_KEY, json.dumps(payload)), fetch=False,
+        )
+    except Exception:
+        # Cache é otimização: falhar aqui não pode derrubar a tela.
+        logger.warning('[dropbox-space] falha ao gravar o cache.', exc_info=True)
+
+
+def get_space(force: bool = False) -> dict:
+    """Espaço do Dropbox pronto para o template. NUNCA levanta exceção.
+
+    Args:
+        force: ignora o TTL e consulta a API agora (botão "Atualizar" do admin).
+
+    Returns dict com ``ok``, ``texto``, ``pct``, ``cor``, ``stale``, ``erro``,
+    ``idade_seg`` e os valores brutos/formatados. Com ``ok=False`` a tela mostra
+    o motivo em vez da barra.
+    """
+    from utils import dropbox_sync   # import tardio: evita ciclo e custo no boot
+
+    cache, idade = _ler_cache()
+
+    if not force and cache and idade is not None and idade < _TTL_SEG:
+        cache['idade_seg'] = idade
+        return cache
+
+    if not dropbox_sync.is_configured():
+        return {'ok': False, 'stale': False, 'idade_seg': idade or 0,
+                'erro': 'Dropbox não configurado (DROPBOX_REFRESH_TOKEN, '
+                        'DROPBOX_APP_KEY e DROPBOX_APP_SECRET).',
+                'cor': 'cinza', 'pct': None, 'pct_barra': 0}
+
+    try:
+        bruto = dropbox_sync._service.get_space_usage()
+    except Exception as exc:
+        # Degradação: preferimos um número velho e rotulado como velho a um
+        # painel vazio. Não regrava o cache (preserva updated_at e a idade real).
+        logger.warning('[dropbox-space] consulta falhou: %s', exc)
+        if cache:
+            cache.update({'stale': True, 'erro': str(exc), 'idade_seg': idade or 0})
+            return cache
+        return {'ok': False, 'stale': False, 'idade_seg': 0, 'erro': str(exc),
+                'cor': 'cinza', 'pct': None, 'pct_barra': 0}
+
+    payload = _montar(bruto['usado'], bruto['total'], bruto.get('tipo'))
+    _gravar_cache(payload)
+    return payload

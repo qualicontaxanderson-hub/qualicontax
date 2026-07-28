@@ -14,7 +14,26 @@ configuracoes = Blueprint('configuracoes', __name__, url_prefix='/configuracoes'
 @configuracoes.route('/')
 @permission_required('configuracoes.index')
 def index():
-    return render_template('configuracoes/index.html')
+    # Espaço do Dropbox: SÓ para admin e SÓ leitura (users/get_space_usage), com
+    # cache de 1h em app_config — o render normal não bate na API do Dropbox.
+    # Consultado apenas para admin para que um refresh de não-admin nem chegue
+    # perto de gastar rate limit.
+    espaco = None
+    if current_user.is_admin():
+        from utils.dropbox_space import get_space
+        espaco = get_space()
+    return render_template('configuracoes/index.html', dropbox_espaco=espaco)
+
+
+@configuracoes.route('/dropbox/espaco/atualizar', methods=['POST'])
+@admin_required
+def dropbox_espaco_atualizar():
+    """Força a releitura do espaço do Dropbox, ignorando o TTL do cache.
+
+    Continua SOMENTE LEITURA: o 'atualizar' é do cache local, não do Dropbox.
+    """
+    from utils.dropbox_space import get_space
+    return jsonify(get_space(force=True)), 200
 
 
 # ===========================================================================

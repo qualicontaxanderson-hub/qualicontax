@@ -8,6 +8,123 @@
     </div>
 </div>
 
+{% if dropbox_espaco %}
+<!-- ============ Armazenamento Dropbox (admin, somente leitura) ============ -->
+<style>
+.dbx-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 20px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.dbx-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.dbx-tit { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; color:#1e293b; }
+.dbx-tit i { color:#0061ff; font-size:16px; }
+.dbx-pct { font-size:22px; font-weight:800; line-height:1; }
+.dbx-pct.verde { color:#16a34a; } .dbx-pct.amarelo { color:#d97706; }
+.dbx-pct.vermelho { color:#dc2626; } .dbx-pct.cinza { color:#94a3b8; }
+.dbx-bar { height:10px; border-radius:99px; background:#f1f5f9; overflow:hidden; }
+.dbx-bar-fill { height:100%; border-radius:99px; transition:width .4s ease; }
+.dbx-bar-fill.verde { background:linear-gradient(90deg,#22c55e,#16a34a); }
+.dbx-bar-fill.amarelo { background:linear-gradient(90deg,#fbbf24,#d97706); }
+.dbx-bar-fill.vermelho { background:linear-gradient(90deg,#f87171,#dc2626); }
+.dbx-bar-fill.cinza { background:#cbd5e1; }
+.dbx-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:9px; font-size:12px; color:#64748b; }
+.dbx-texto { font-size:13.5px; font-weight:600; color:#334155; }
+.dbx-btn { background:#f1f5f9; color:#475569; border:1.5px solid #e2e8f0; padding:6px 13px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+.dbx-btn:hover { background:#e2e8f0; }
+.dbx-btn:disabled { opacity:.6; cursor:default; }
+.dbx-alerta { margin-top:10px; padding:9px 13px; border-radius:9px; font-size:12.5px; line-height:1.5; }
+.dbx-alerta.amarelo { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+.dbx-alerta.vermelho { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+.dbx-alerta.cinza { background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
+</style>
+
+<div class="dbx-card">
+    <div class="dbx-head">
+        <div class="dbx-tit">
+            <i class="fab fa-dropbox"></i> Armazenamento Dropbox
+            <span style="font-weight:600;color:#94a3b8;font-size:11px;">somente leitura</span>
+        </div>
+        {% if dropbox_espaco.ok and dropbox_espaco.pct is not none %}
+        <div class="dbx-pct {{ dropbox_espaco.cor }}" id="dbxPct">{{ dropbox_espaco.pct_fmt }}%</div>
+        {% endif %}
+    </div>
+
+    {% if dropbox_espaco.ok %}
+    <div class="dbx-bar">
+        <div class="dbx-bar-fill {{ dropbox_espaco.cor }}" id="dbxBar"
+             style="width:{{ dropbox_espaco.pct_barra }}%;"></div>
+    </div>
+    <div class="dbx-foot">
+        <span class="dbx-texto" id="dbxTexto">{{ dropbox_espaco.texto }}</span>
+        <span style="display:flex;align-items:center;gap:10px;">
+            <span id="dbxIdade">
+                {% if dropbox_espaco.idade_seg < 60 %}atualizado agora
+                {% elif dropbox_espaco.idade_seg < 3600 %}atualizado há {{ (dropbox_espaco.idade_seg // 60) }} min
+                {% else %}atualizado há {{ (dropbox_espaco.idade_seg // 3600) }} h{% endif %}
+            </span>
+            <button class="dbx-btn" id="dbxBtn" onclick="atualizarEspacoDropbox()">
+                <i class="fas fa-rotate-right"></i> Atualizar
+            </button>
+        </span>
+    </div>
+        {% if dropbox_espaco.stale %}
+        <div class="dbx-alerta cinza" id="dbxAviso">
+            <i class="fas fa-triangle-exclamation"></i>
+            Mostrando o último valor conhecido — a consulta ao Dropbox falhou:
+            {{ dropbox_espaco.erro }}
+        </div>
+        {% elif dropbox_espaco.cor == 'vermelho' %}
+        <div class="dbx-alerta vermelho">
+            <i class="fas fa-circle-exclamation"></i>
+            <b>Espaço crítico ({{ dropbox_espaco.pct_fmt }}%).</b>
+            Restam {{ dropbox_espaco.livre_fmt }}. A importação de XMLs e a captura da SEFAZ
+            gravam arquivos no Dropbox — sem espaço, elas passam a falhar.
+        </div>
+        {% elif dropbox_espaco.cor == 'amarelo' %}
+        <div class="dbx-alerta amarelo">
+            <i class="fas fa-triangle-exclamation"></i>
+            Espaço em atenção ({{ dropbox_espaco.pct_fmt }}%). Restam {{ dropbox_espaco.livre_fmt }}.
+        </div>
+        {% endif %}
+    {% else %}
+    <div class="dbx-alerta cinza">
+        <i class="fas fa-circle-info"></i> {{ dropbox_espaco.erro or 'Espaço indisponível.' }}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// "Atualizar" ignora o TTL do cache e relê a quota. Continua só leitura.
+async function atualizarEspacoDropbox() {
+    const btn = document.getElementById('dbxBtn');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
+    try {
+        const r = await fetch('{{ url_for("configuracoes.dropbox_espaco_atualizar") }}',
+                              {method: 'POST'});
+        const d = await r.json();
+        if (d.ok) {
+            const bar = document.getElementById('dbxBar');
+            const pct = document.getElementById('dbxPct');
+            const cores = ['verde', 'amarelo', 'vermelho', 'cinza'];
+            document.getElementById('dbxTexto').textContent = d.texto;
+            document.getElementById('dbxIdade').textContent =
+                d.stale ? 'valor anterior (falha na consulta)' : 'atualizado agora';
+            if (bar) { bar.classList.remove(...cores); bar.classList.add(d.cor);
+                       bar.style.width = (d.pct_barra || 0) + '%'; }
+            if (pct) { pct.classList.remove(...cores); pct.classList.add(d.cor);
+                       pct.textContent = (d.pct_fmt || '—') + '%'; }
+        } else {
+            alert('Não foi possível consultar o Dropbox: ' + (d.erro || 'erro desconhecido'));
+        }
+    } catch (e) {
+        alert('Falha ao consultar o espaço do Dropbox: ' + e);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+</script>
+{% endif %}
+
 <div class="module-tiles">
 
     <a href="{{ url_for('configuracoes.usuarios') }}" class="module-tile">
