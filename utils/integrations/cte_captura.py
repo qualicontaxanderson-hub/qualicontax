@@ -100,6 +100,54 @@ SQL_NSU_656 = (
 )
 
 
+_TABELAS_EXIGIDAS = ('cte_documentos', 'cte_nfe', 'dfe_nsu_cte')
+_schema_ok = False   # cacheia só o resultado POSITIVO (ver _schema_pronto)
+
+
+def _schema_pronto():
+    """As tabelas de CT-e existem neste banco?
+
+    Por que isto existe: o processo do CRON **não roda migrations** (de propósito —
+    ver cron_captura_dfe.py; quem migra é o boot do serviço web). Num deploy, o Cron
+    pode disparar ANTES de o web subir e migrar. Sem esta checagem, a rodada iria à
+    SEFAZ, gastaria cota de verdade (que conta para o 656) e falharia na gravação de
+    todo documento — o pior dos mundos: custo sem resultado.
+
+    Cacheia apenas o TRUE: um FALSE é transitório (a migration vai rodar) e não deve
+    ficar preso na memória do worker.
+    """
+    global _schema_ok
+    if _schema_ok:
+        return True
+    # Blindado de propósito: este é um GUARD — se ele mesmo levantar exceção,
+    # derruba a rodada que deveria proteger. Qualquer resposta inesperada do
+    # execute_query vira "não pronto" (conservador: não vai à SEFAZ).
+    try:
+        row = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (%s, %s, %s)",
+            _TABELAS_EXIGIDAS, fetch=True, fetch_one=True,
+        )
+        if isinstance(row, dict) and int(row.get('cnt') or 0) == len(_TABELAS_EXIGIDAS):
+            _schema_ok = True
+            return True
+    except Exception:
+        logger.warning('[cte] checagem de schema falhou; tratando como não pronto.',
+                       exc_info=True)
+    return False
+
+
+def _erro_schema():
+    return {
+        'ok': False, 'schema_pendente': True,
+        'erro': 'As tabelas de CT-e ainda não existem neste banco '
+                f'({", ".join(_TABELAS_EXIGIDAS)}). Elas são criadas no boot do '
+                'serviço web (run_migrations) ou rodando '
+                '"python migrations/add_cte_captura.py". A captura foi abortada '
+                'ANTES de consultar a SEFAZ para não gastar cota sem ter onde gravar.',
+    }
+
+
 def _bloqueado_por_cota(cliente_id):
     """Linha com faltam_min se a SEFAZ ainda pediu para aguardar, ou None.
     Comparação 100% no relógio do banco (NOW()), nunca no do Python."""
@@ -268,6 +316,11 @@ def _preparar(cliente_id, origem, dry_run=False, checar_cota=True):
     mesmo formato das rotas ({'ok': False, 'erro': ...}), com as MESMAS mensagens
     orientadas a ação do motor de NF-e.
     """
+    # Choke point único: schema antes de tudo. Vale para o caminho MANUAL e para o
+    # AGENDADO, e roda antes do download do .pfx e de qualquer requisição à SEFAZ.
+    if not _schema_pronto():
+        return None, _erro_schema()
+
     cliente = Cliente.get_by_id(cliente_id)
     if not cliente:
         return None, {'ok': False, 'erro': 'Cliente não encontrado.'}
@@ -552,7 +605,14 @@ def seed_ult_nsu_cte(cliente_id, nsu, usuario_label='?'):
     razao = cliente.get('nome_razao_social') or 'SEM_NOME'
     rotulo = f"{numero + ' - ' if numero else ''}{razao}"
 
-    execute_query(
+    if not _schema_pronto():
+        return _erro_schema()
+
+    # O retorno do execute_query é VERIFICADO: ele engole o erro do driver e devolve
+    # None. Sem esta checagem, um INSERT que falhou (tabela ausente, FK de
+    # cliente_id) devolveria "cursor definido em N" com nada gravado — e a captura
+    # seguiria do zero, com o operador achando que semeou.
+    if execute_query(
         "INSERT INTO dfe_nsu_cte "
         "(cliente_id, cnpj, ult_nsu, max_nsu, ult_consulta, proximo_permitido, ult_status) "
         "VALUES (%s,%s,%s,0,NOW(),NULL,%s) "
@@ -560,7 +620,26 @@ def seed_ult_nsu_cte(cliente_id, nsu, usuario_label='?'):
         "  proximo_permitido=NULL, ult_status=VALUES(ult_status)",
         (cliente_id, cnpj, nsu, f'seed manual (CT-e) por {usuario_label}: ultNSU={nsu}'[:255]),
         fetch=False,
+    ) is None:
+        from utils.db_helper import get_last_db_error
+        erro = get_last_db_error() or 'sem detalhe do driver'
+        logger.error('[cte] seed do cursor falhou (cliente_id=%s, nsu=%s): %s',
+                     cliente_id, nsu, erro)
+        return {'ok': False,
+                'erro': f'Falha ao gravar o cursor de NSU de CT-e no banco: {erro}'}
+
+    # Confirmação por LEITURA: só respondemos "definido em N" depois de ver o valor
+    # persistido (o upsert pode não ter afetado linha por outro motivo).
+    conf = execute_query(
+        "SELECT ult_nsu FROM dfe_nsu_cte WHERE cliente_id = %s",
+        (cliente_id,), fetch=True, fetch_one=True,
     )
+    if not conf or int(conf.get('ult_nsu') or -1) != nsu:
+        gravado = conf.get('ult_nsu') if conf else None
+        return {'ok': False,
+                'erro': f'O cursor de CT-e não ficou com o valor esperado '
+                        f'(esperado {nsu}, no banco {gravado!r}). Nada foi assumido.'}
+
     dfe_log.registrar('seed_manual', cliente_id, cnpj, ult_nsu_env=nsu,
                       detalhe=f'seed manual de CT-e por {usuario_label}: ult_nsu={nsu} '
                               f'(pula documentos anteriores a esse NSU)',
@@ -588,6 +667,17 @@ def capturar_cte_agendado():
     logger.warning('[cte-sched] >>> capturar_cte_agendado INVOCADO (pid=%s).', os.getpid())
     if os.getenv('CTE_SCHED_ATIVO', '0').strip() != '1':
         logger.warning('[cte-sched] ABORTADO: CTE_SCHED_ATIVO != 1.')
+        return
+
+    # Schema antes do lock e antes de qualquer empresa: se as tabelas ainda não
+    # existem (Cron subiu antes do web migrar), aborta a rodada INTEIRA sem gastar
+    # cota. O próximo tick pega o banco já migrado.
+    if not _schema_pronto():
+        dfe_log.registrar('pulado_schema', origem='agendado', servico='cte',
+                          detalhe='tabelas de CT-e ausentes; aguardando a migration')
+        logger.warning('[cte-sched] ABORTADO: tabelas de CT-e ainda não existem '
+                       '(%s). O boot do web cria; próximo tick tenta de novo.',
+                       ', '.join(_TABELAS_EXIGIDAS))
         return
 
     lock_conn = None
