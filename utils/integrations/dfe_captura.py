@@ -3,10 +3,10 @@
 Motor de captura de NF-e via distDFeInt (lift-and-shift do nh-transportes).
 
 SÓ CONSULTA E SALVA. **NUNCA MANIFESTA** (só distribuição por NSU).
-Escopo desta fase: NF-e (nfeProc / resNFe / procEventoNFe). CT-e (cteProc/resCTe)
-é reconhecido mas NÃO gravado ainda (fase futura) — é contado como 'outro' para
-não travar a fila de NSU. Não filtra por modelo (55/65): grava tudo o que vier,
-preenchendo a coluna ``modelo``.
+Escopo: NF-e (nfeProc / resNFe / procEventoNFe) — este webservice distribui SÓ
+documentos de NF-e. CT-e vem de outro serviço (CTeDistribuicaoDFe) e é capturado
+por ``utils/integrations/cte_captura.py``, com cursor e cota independentes. Não
+filtra por modelo (55/65): grava tudo o que vier, preenchendo a coluna ``modelo``.
 
 Cuidados de fuso:
   (1) proximo_permitido (cota do 656) é comparado SEMPRE em SQL (NOW()), nunca
@@ -527,8 +527,10 @@ def processar_um_doc(conn, cur, empresa, d, ctx):
     if raiz == "resNFe":
         return _processar_resumo(conn, cur, empresa, root, ctx)
 
-    # cteProc / resCTe / resEvento / outros: NÃO modelados nesta fase (CT-e depois).
-    # Não levanta (não trava a fila de NSU); conta e segue.
+    # resEvento / schema desconhecido: conta e segue (não trava a fila de NSU).
+    # CT-e NÃO cai aqui: o NFeDistribuicaoDFe distribui só documentos de NF-e.
+    # A captura de CT-e vive em utils/integrations/cte_captura.py, contra o
+    # CTeDistribuicaoDFe, com cursor (dfe_nsu_cte) e cota 656 próprios.
     return "outro", 0
 
 

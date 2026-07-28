@@ -1019,6 +1019,134 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # ---- Captura de CT-e (fretes) — tabelas próprias + cursor isolado ----------
+    # CT-e vem de OUTRO webservice (CTeDistribuicaoDFe), com sequência de NSU e
+    # cota 656 próprias — por isso o cursor é dfe_nsu_cte, não uma coluna no
+    # dfe_nsu (que serve o motor de NF-e em produção).
+    # ESPELHO: migrations/add_cte_captura.py (mesmo DDL, para rodar à mão).
+    # Ao mexer aqui, mexa lá também.
+    #
+    # cte_documentos: UNIQUE (chave_acesso, cliente_id) — o mesmo CT-e pode
+    # interessar a dois clientes do escritório (transportadora + tomador); cada um
+    # tem a sua linha e papel_cliente diz em que papel ele aparece.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS cte_documentos (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id        INT           NULL,
+            grupo_id          INT           NULL,
+            papel_cliente     VARCHAR(14)   NOT NULL DEFAULT 'tomador',
+            chave_acesso      CHAR(44)      NOT NULL,
+            modelo            VARCHAR(2)    NULL,
+            num_cte           VARCHAR(20)   DEFAULT '',
+            serie             VARCHAR(6)    DEFAULT '',
+            data_emissao      DATE          NULL,
+            dh_emissao        DATETIME      NULL,
+            cfop              VARCHAR(10)   DEFAULT '',
+            natureza_operacao VARCHAR(255)  DEFAULT '',
+            tp_cte            VARCHAR(1)    NULL,
+            tp_serv           VARCHAR(1)    NULL,
+            modal             VARCHAR(2)    NULL,
+            emit_cnpj         VARCHAR(18)   DEFAULT '',
+            emit_nome         VARCHAR(255)  DEFAULT '',
+            emit_uf           VARCHAR(2)    DEFAULT '',
+            rem_cnpj          VARCHAR(18)   DEFAULT '',
+            rem_nome          VARCHAR(255)  DEFAULT '',
+            rem_uf            VARCHAR(2)    DEFAULT '',
+            dest_cnpj         VARCHAR(18)   DEFAULT '',
+            dest_nome         VARCHAR(255)  DEFAULT '',
+            dest_uf           VARCHAR(2)    DEFAULT '',
+            exped_cnpj        VARCHAR(18)   DEFAULT '',
+            exped_nome        VARCHAR(255)  DEFAULT '',
+            receb_cnpj        VARCHAR(18)   DEFAULT '',
+            receb_nome        VARCHAR(255)  DEFAULT '',
+            toma_cod          VARCHAR(1)    NULL,
+            tomador_cnpj      VARCHAR(18)   DEFAULT '',
+            tomador_nome      VARCHAR(255)  DEFAULT '',
+            tomador_papel     VARCHAR(14)   DEFAULT '',
+            uf_ini            VARCHAR(2)    DEFAULT '',
+            mun_ini           VARCHAR(120)  DEFAULT '',
+            uf_fim            VARCHAR(2)    DEFAULT '',
+            mun_fim           VARCHAR(120)  DEFAULT '',
+            valor_frete       DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            valor_receber     DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            valor_bc_icms     DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            valor_icms        DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            aliq_icms         DECIMAL(7,4)  NOT NULL DEFAULT 0.0000,
+            cst_icms          VARCHAR(2)    DEFAULT '',
+            valor_tot_trib    DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            cancelado         TINYINT(1)    NOT NULL DEFAULT 0,
+            protocolo         VARCHAR(20)   DEFAULT '',
+            nsu               BIGINT        NULL,
+            origem            ENUM('UPLOAD','DROPBOX','SEFAZ') NOT NULL DEFAULT 'SEFAZ',
+            nome_arquivo      VARCHAR(500)  NOT NULL DEFAULT '',
+            xml_raw           MEDIUMTEXT    NULL,
+            xml_caminho       VARCHAR(300)  NULL,
+            importado_em      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_cte_chave_cliente (chave_acesso, cliente_id),
+            KEY ix_cte_cliente (cliente_id),
+            KEY ix_cte_grupo (grupo_id),
+            KEY ix_cte_chave (chave_acesso),
+            KEY ix_cte_emit (emit_cnpj),
+            KEY ix_cte_tomador (tomador_cnpj),
+            KEY ix_cte_data (data_emissao),
+            KEY ix_cte_origem (origem)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # NF-e transportadas pelo CT-e (infCTeNorm/infDoc/infNFe e o infNF antigo).
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS cte_nfe (
+            id         INT AUTO_INCREMENT PRIMARY KEY,
+            cte_id     INT           NOT NULL,
+            chave_nfe  CHAR(44)      NULL,
+            num_nota   VARCHAR(20)   DEFAULT '',
+            serie      VARCHAR(6)    DEFAULT '',
+            valor      DECIMAL(15,2) NULL,
+            criado_em  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_cte_nfe (cte_id, chave_nfe),
+            KEY ix_ctenfe_chave (chave_nfe),
+            CONSTRAINT fk_ctenfe_cte FOREIGN KEY (cte_id)
+                REFERENCES cte_documentos(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # Cursor/cota do CTeDistribuicaoDFe — cópia fiel do dfe_nsu, tabela separada.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS dfe_nsu_cte (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id        INT           NOT NULL,
+            cnpj              VARCHAR(14)   NOT NULL,
+            ult_nsu           BIGINT        NOT NULL DEFAULT 0,
+            max_nsu           BIGINT        NOT NULL DEFAULT 0,
+            ult_consulta      DATETIME      NULL,
+            proximo_permitido DATETIME      NULL,
+            ult_status        VARCHAR(255)  NULL,
+            atualizado_em     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_nsucte_cliente (cliente_id),
+            KEY ix_nsucte_cnpj (cnpj),
+            CONSTRAINT fk_dfensucte_cliente FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # servico em dfe_consulta_log: 'nfe' (default; preserva o histórico) | 'cte'.
+    try:
+        _srv = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dfe_consulta_log' "
+            "AND COLUMN_NAME = 'servico'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if _srv.get('cnt', 0) == 0:
+            execute_query(
+                "ALTER TABLE dfe_consulta_log ADD COLUMN servico "
+                "VARCHAR(4) NOT NULL DEFAULT 'nfe'",
+                fetch=False,
+            )
+    except Exception:
+        pass
+
     print("✓ Migrations concluídas")
 
 

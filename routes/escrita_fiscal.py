@@ -395,6 +395,35 @@ def status_sefaz():
         'backlog': _i(b.get('backlog')), 'ult_consulta': _fmt(b.get('ult_consulta')),
     }
 
+    # ---- TOPO CT-e: mesma leitura, na tabela própria (cte_documentos/dfe_nsu_cte).
+    # CT-e não tem resumo (a distribuição entrega o documento completo), então aqui
+    # não há a divisão completas/resumos — o recorte útil é o valor do frete.
+    tc = execute_query(
+        "SELECT COUNT(*) AS total, "
+        "  SUM(DATE(importado_em)=CURDATE()) AS hoje, "
+        "  SUM(YEARWEEK(importado_em,1)=YEARWEEK(CURDATE(),1)) AS semana, "
+        "  SUM(YEAR(importado_em)=YEAR(CURDATE()) AND MONTH(importado_em)=MONTH(CURDATE())) AS mes, "
+        "  COALESCE(SUM(valor_frete),0) AS valor_frete, "
+        "  SUM(papel_cliente='tomador') AS tomados, "
+        "  SUM(cancelado=1) AS cancelados "
+        "FROM cte_documentos WHERE origem='SEFAZ'",
+        fetch=True, fetch_one=True,
+    ) or {}
+
+    bc = execute_query(
+        "SELECT COALESCE(SUM(GREATEST(max_nsu - ult_nsu, 0)),0) AS backlog, "
+        "  MAX(ult_consulta) AS ult_consulta FROM dfe_nsu_cte",
+        fetch=True, fetch_one=True,
+    ) or {}
+
+    topo_cte = {
+        'total': _i(tc.get('total')), 'hoje': _i(tc.get('hoje')),
+        'semana': _i(tc.get('semana')), 'mes': _i(tc.get('mes')),
+        'tomados': _i(tc.get('tomados')), 'cancelados': _i(tc.get('cancelados')),
+        'valor_frete': float(tc.get('valor_frete') or 0),
+        'backlog': _i(bc.get('backlog')), 'ult_consulta': _fmt(bc.get('ult_consulta')),
+    }
+
     # ---- POR EMPRESA: uma linha por cliente com certificado ativo ----
     rows = execute_query(
         "SELECT c.id, c.numero_cliente, c.nome_razao_social, "
@@ -404,10 +433,18 @@ def status_sefaz():
         "  TIMESTAMPDIFF(MINUTE, NOW(), n.proximo_permitido) AS libera_min, "
         "  COALESCE(imp.total,0) AS total_notas, "
         "  COALESCE(imp.completas,0) AS completas, "
-        "  COALESCE(imp.resumos,0) AS resumos "
+        "  COALESCE(imp.resumos,0) AS resumos, "
+        "  nc.ult_nsu AS cte_ult_nsu, nc.ult_consulta AS cte_ult_consulta, "
+        "  GREATEST(COALESCE(nc.max_nsu,0)-COALESCE(nc.ult_nsu,0),0) AS cte_backlog, "
+        "  (nc.proximo_permitido IS NOT NULL AND nc.proximo_permitido > NOW()) AS cte_em_cota, "
+        "  TIMESTAMPDIFF(MINUTE, NOW(), nc.proximo_permitido) AS cte_libera_min, "
+        "  COALESCE(ct.total,0) AS cte_total, "
+        "  COALESCE(ct.tomados,0) AS cte_tomados, "
+        "  COALESCE(ct.valor_frete,0) AS cte_valor_frete "
         "FROM dfe_certificados dc "
         "JOIN clientes c ON c.id = dc.cliente_id "
         "LEFT JOIN dfe_nsu n ON n.cliente_id = dc.cliente_id "
+        "LEFT JOIN dfe_nsu_cte nc ON nc.cliente_id = dc.cliente_id "
         "LEFT JOIN ( "
         "    SELECT cliente_id, COUNT(*) AS total, "
         "           SUM(COALESCE(incompleta,0)=0) AS completas, "
@@ -415,6 +452,13 @@ def status_sefaz():
         "    FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada' "
         "    GROUP BY cliente_id "
         ") imp ON imp.cliente_id = dc.cliente_id "
+        "LEFT JOIN ( "
+        "    SELECT cliente_id, COUNT(*) AS total, "
+        "           SUM(papel_cliente='tomador') AS tomados, "
+        "           SUM(valor_frete) AS valor_frete "
+        "    FROM cte_documentos WHERE origem='SEFAZ' "
+        "    GROUP BY cliente_id "
+        ") ct ON ct.cliente_id = dc.cliente_id "
         "WHERE dc.ativo = 1 "
         "ORDER BY em_cota DESC, backlog DESC, c.numero_cliente",
         fetch=True,
@@ -429,6 +473,13 @@ def status_sefaz():
             label, cor = 'Baixando', 'amarelo'
         else:
             label, cor = 'Em dia', 'verde'
+        cte_backlog = _i(r.get('cte_backlog'))
+        if r.get('cte_em_cota'):
+            cte_label, cte_cor = 'Em cota', 'vermelho'
+        elif cte_backlog > 0:
+            cte_label, cte_cor = 'Baixando', 'amarelo'
+        else:
+            cte_label, cte_cor = 'Em dia', 'verde'
         empresas.append({
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
             'total': _i(r.get('total_notas')), 'completas': _i(r.get('completas')),
@@ -437,12 +488,21 @@ def status_sefaz():
             'ult_consulta': _fmt(r.get('ult_consulta')),
             'em_cota': bool(r.get('em_cota')),
             'libera_min': _i(r.get('libera_min')) if r.get('em_cota') else None,
+            # CT-e: cursor e cota próprios, então status próprio por empresa.
+            'cte_total': _i(r.get('cte_total')),
+            'cte_tomados': _i(r.get('cte_tomados')),
+            'cte_valor_frete': float(r.get('cte_valor_frete') or 0),
+            'cte_backlog': cte_backlog,
+            'cte_status_label': cte_label, 'cte_status_cor': cte_cor,
+            'cte_ult_consulta': _fmt(r.get('cte_ult_consulta')),
+            'cte_em_cota': bool(r.get('cte_em_cota')),
+            'cte_libera_min': _i(r.get('cte_libera_min')) if r.get('cte_em_cota') else None,
         })
 
-    # ---- HISTÓRICO: últimas ~20 rodadas do dfe_consulta_log ----
+    # ---- HISTÓRICO: últimas ~20 rodadas do dfe_consulta_log (NF-e + CT-e) ----
     hlog = execute_query(
         "SELECT l.momento, l.origem, l.evento, l.c_stat, l.x_motivo, "
-        "  l.docs, l.notas, c.numero_cliente, c.nome_razao_social "
+        "  l.docs, l.notas, l.servico, c.numero_cliente, c.nome_razao_social "
         "FROM dfe_consulta_log l "
         "LEFT JOIN clientes c ON c.id = l.cliente_id "
         "ORDER BY l.momento DESC LIMIT 20",
@@ -452,14 +512,14 @@ def status_sefaz():
         'momento': _fmt(h.get('momento')), 'origem': h.get('origem'),
         'evento': h.get('evento'), 'c_stat': h.get('c_stat'),
         'x_motivo': h.get('x_motivo'), 'docs': _i(h.get('docs')),
-        'notas': _i(h.get('notas')),
+        'notas': _i(h.get('notas')), 'servico': (h.get('servico') or 'nfe'),
         'empresa': ((str(h['numero_cliente']) + ' - ' if h.get('numero_cliente') else '')
                     + (h.get('nome_razao_social') or '—')),
     } for h in hlog]
 
     return render_template(
         'escrita_fiscal/status_sefaz.html',
-        topo=topo, empresas=empresas, historico=historico,
+        topo=topo, topo_cte=topo_cte, empresas=empresas, historico=historico,
     )
 
 

@@ -12,6 +12,7 @@
 .ss-kpi.accent-verde  { border-left:4px solid #16a34a; }
 .ss-kpi.accent-amarelo{ border-left:4px solid #d97706; }
 .ss-kpi.accent-roxo   { border-left:4px solid #7c3aed; }
+.ss-kpi.accent-teal   { border-left:4px solid #0d9488; }
 
 .ss-section-title { font-size:14px; font-weight:800; color:#1e293b; margin:26px 0 12px; display:flex; align-items:center; gap:8px; }
 
@@ -43,6 +44,11 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
 .ss-pill { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .ss-pill.agendado { background:#eff6ff; color:#1d4ed8; }
 .ss-pill.manual   { background:#f5f3ff; color:#6d28d9; }
+.ss-pill.nfe { background:#f0fdf4; color:#15803d; }
+.ss-pill.cte { background:#f0fdfa; color:#0f766e; }
+.ss-emp-cte { margin-top:10px; padding-top:9px; border-top:1px dashed #e2e8f0; }
+.ss-emp-cte-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+.ss-emp-cte-tit { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:#0f766e; }
 .ss-cstat { font-family:ui-monospace,monospace; font-weight:700; }
 .ss-cstat.ok  { color:#16a34a; }   /* 137/138 */
 .ss-cstat.bad { color:#dc2626; }   /* 656 e erros */
@@ -64,7 +70,8 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
     </div>
 </div>
 
-<!-- TOPO — cards de resumo -->
+<!-- TOPO — cards de resumo (NF-e) -->
+<div class="ss-section-title" style="margin-top:14px;"><i class="fas fa-file-invoice-dollar" style="color:#2563eb;"></i> NF-e (notas)</div>
 <div class="ss-kpis">
     <div class="ss-kpi accent-azul">
         <div class="ss-kpi-label">Notas capturadas</div>
@@ -93,6 +100,36 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
     <div><b>Documentos pendentes ≠ notas.</b> Os <b>{{ topo.backlog }} documentos pendentes na SEFAZ</b> contam cada NSU — uma nota, um evento (ex.: cancelamento) ou um resumo. As <b>{{ topo.total }} notas capturadas</b> contam só NF-e. Por isso os pendentes podem ser mais que as notas: <b>nenhuma nota sumiu</b> — eventos e resumos também ocupam NSU na fila.</div>
 </div>
 
+<!-- TOPO CT-e — webservice separado (CTeDistribuicaoDFe), fila e cota próprias -->
+<div class="ss-section-title"><i class="fas fa-truck" style="color:#0d9488;"></i> CT-e (fretes)</div>
+<div class="ss-kpis">
+    <div class="ss-kpi accent-teal">
+        <div class="ss-kpi-label">CT-e capturados</div>
+        <div class="ss-kpi-value">{{ topo_cte.total }}</div>
+        <div class="ss-kpi-sub">{{ topo_cte.tomados }} como tomador · {{ topo_cte.cancelados }} cancelado(s)</div>
+    </div>
+    <div class="ss-kpi accent-verde">
+        <div class="ss-kpi-label">Capturados hoje</div>
+        <div class="ss-kpi-value">{{ topo_cte.hoje }}</div>
+        <div class="ss-kpi-sub">{{ topo_cte.semana }} na semana · {{ topo_cte.mes }} no mês</div>
+    </div>
+    <div class="ss-kpi accent-amarelo">
+        <div class="ss-kpi-label">CT-e pendentes (SEFAZ)</div>
+        <div class="ss-kpi-value">{{ topo_cte.backlog }}</div>
+        <div class="ss-kpi-sub">NSU a baixar na fila de CT-e</div>
+    </div>
+    <div class="ss-kpi accent-roxo">
+        <div class="ss-kpi-label">Valor total de frete</div>
+        <div class="ss-kpi-value" style="font-size:20px;">{{ topo_cte.valor_frete | format_currency }}</div>
+        <div class="ss-kpi-sub">última captura: {{ topo_cte.ult_consulta or '—' }}</div>
+    </div>
+</div>
+
+<div class="ss-legend" style="background:#f0fdfa;border-color:#99f6e4;color:#115e59;">
+    <i class="fas fa-circle-info" style="color:#0d9488;"></i>
+    <div><b>CT-e tem fila própria.</b> O <b>CTeDistribuicaoDFe</b> é outro webservice: cursor de NSU e cota de 1h (656) <b>independentes</b> da NF-e — capturar CT-e não gasta a cota de NF-e. E CT-e <b>não tem resumo</b>: o documento já vem completo, então não existe linha incompleta esperando complemento.</div>
+</div>
+
 <!-- POR EMPRESA -->
 <div class="ss-section-title"><i class="fas fa-building" style="color:#2563eb;"></i> Por empresa</div>
 {% if empresas %}
@@ -117,6 +154,24 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
             <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.libera_min }} min</span>
             {% endif %}
         </div>
+        <div class="ss-emp-cte">
+            <div class="ss-emp-cte-head">
+                <span class="ss-emp-cte-tit"><i class="fas fa-truck"></i> CT-e</span>
+                <span class="ss-badge {{ e.cte_status_cor }}">{{ e.cte_status_label }}</span>
+            </div>
+            <div class="ss-emp-stats">
+                <span><b>{{ e.cte_total }}</b> CT-e</span>
+                <span>{{ e.cte_tomados }} como tomador</span>
+                <span>{{ e.cte_valor_frete | format_currency }} de frete</span>
+            </div>
+            <div class="ss-emp-foot" style="border-top:none;padding-top:6px;margin-top:4px;">
+                <span><span class="ss-backlog-num {{ 'zero' if e.cte_backlog == 0 else 'pos' }}">{{ e.cte_backlog }}</span> pendentes</span>
+                <span><i class="far fa-clock"></i> {{ e.cte_ult_consulta or 'sem consulta' }}</span>
+                {% if e.cte_em_cota %}
+                <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.cte_libera_min }} min</span>
+                {% endif %}
+            </div>
+        </div>
     </div>
     {% endfor %}
 </div>
@@ -131,11 +186,12 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
         <thead>
             <tr>
                 <th>Momento</th>
+                <th>Serviço</th>
                 <th>Empresa</th>
                 <th>Evento</th>
                 <th>Status</th>
                 <th style="text-align:center;">Docs</th>
-                <th style="text-align:center;">Notas</th>
+                <th style="text-align:center;" title="Notas (NF-e) ou CT-e gravados na rodada">Gravados</th>
                 <th>Origem</th>
             </tr>
         </thead>
@@ -144,6 +200,7 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
                 {% for h in historico %}
                 <tr>
                     <td>{{ h.momento or '—' }}</td>
+                    <td><span class="ss-pill {{ h.servico }}">{{ 'CT-e' if h.servico == 'cte' else 'NF-e' }}</span></td>
                     <td>{{ h.empresa }}</td>
                     <td>{{ h.evento }}</td>
                     <td>
@@ -158,7 +215,7 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
                 </tr>
                 {% endfor %}
             {% else %}
-                <tr><td colspan="7" class="ss-empty">Nenhuma rodada registrada ainda.</td></tr>
+                <tr><td colspan="8" class="ss-empty">Nenhuma rodada registrada ainda.</td></tr>
             {% endif %}
         </tbody>
     </table>

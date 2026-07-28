@@ -31,6 +31,16 @@ isso o SERVIÇO DE CRON precisa de ``DFE_SCHED_ATIVO=1`` no ambiente. No serviç
 WEB, ao contrário, ``DFE_SCHED_ATIVO=0`` mantém o job de DFe in-process DESLIGADO,
 evitando disparo duplo. O Cron é a única fonte.
 
+CT-e na mesma rodada
+--------------------
+Depois da rodada de NF-e, roda a de CT-e (``CTeDistribuicaoDFe``), sob a flag
+``CTE_SCHED_ATIVO=1``. São webservices distintos, com cursor e cota 656
+independentes e locks diferentes — uma não atrapalha a outra, e a de CT-e tem
+prazo suave próprio (``CTE_SCHED_PRAZO_SEG``, default 480s) para as duas caberem
+no tick do cron. Falha em uma NÃO impede a outra. Se a soma começar a estourar o
+intervalo do Cron, basta um segundo serviço de Cron com
+``python cron_captura_dfe.py --so-cte``.
+
 Exit code
 ---------
 ``capturar_agendado()`` engole as próprias exceções (loga e segue), então a
@@ -60,14 +70,32 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> int:
-    logger.warning('[cron-dfe] >>> Cron de captura de DFe INICIADO (pid=%s).', os.getpid())
-    try:
-        from utils.integrations import dfe_captura
-    except Exception:
-        logger.exception('[cron-dfe] Falha ao importar dfe_captura — abortando.')
-        return 1
-    # capturar_agendado() trata suas próprias exceções internamente; não relança.
-    dfe_captura.capturar_agendado()
+    # --so-cte / --so-nfe permitem separar em dois serviços de Cron sem mudar
+    # código (ver docstring). Sem flag, roda as duas na sequência.
+    so_cte = '--so-cte' in sys.argv
+    so_nfe = '--so-nfe' in sys.argv
+
+    logger.warning('[cron-dfe] >>> Cron de captura de DFe INICIADO (pid=%s, nfe=%s, cte=%s).',
+                   os.getpid(), not so_cte, not so_nfe)
+
+    if not so_cte:
+        try:
+            from utils.integrations import dfe_captura
+        except Exception:
+            logger.exception('[cron-dfe] Falha ao importar dfe_captura — abortando.')
+            return 1
+        # capturar_agendado() trata suas próprias exceções internamente; não relança.
+        dfe_captura.capturar_agendado()
+
+    # CT-e: rodada separada, cota/cursor próprios. Blindada para que uma falha no
+    # import ou na rodada de CT-e NÃO invalide a captura de NF-e que já rodou.
+    if not so_nfe:
+        try:
+            from utils.integrations import cte_captura
+            cte_captura.capturar_cte_agendado()
+        except Exception:
+            logger.exception('[cron-dfe] Rodada de CT-e falhou (a de NF-e não é afetada).')
+
     logger.warning('[cron-dfe] >>> Cron de captura de DFe CONCLUIDO (pid=%s).', os.getpid())
     return 0
 
