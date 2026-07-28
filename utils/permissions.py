@@ -11,7 +11,9 @@ na tela de edição de perfis de acesso.
 PERMISSION_CATALOG = {
     'Escrita Fiscal': {
         'escrita_fiscal.index':           'Acessar Escrita Fiscal',
-        'escrita_fiscal.conf_compras':    'Conferência de Compras',
+        # O código da permissão continua conf_compras (não renomeado, para não
+        # invalidar os perfis já cadastrados) — só o rótulo mudou.
+        'escrita_fiscal.conf_compras':    'Conferência de Entradas',
         'escrita_fiscal.conf_saidas':     'Conferência de Saídas',
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',
         'escrita_fiscal.memorizacoes':    'Memorizações',
