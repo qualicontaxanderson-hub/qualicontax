@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Configurações - Qualicontax{% endblock %}
 {% block content %}
+{% if dropbox_espaco and dropbox_espaco.alerta %}
+<!-- Alerta destacado: espaço do Dropbox acima do limite (85% por padrão).
+     Usa as classes .alert globais, a mesma linguagem visual dos flash messages. -->
+<div class="alert {{ 'alert-danger' if dropbox_espaco.alerta_nivel == 'vermelho' else 'alert-warning' }}"
+     style="margin-bottom:18px;">
+    <i class="fas fa-{{ 'circle-exclamation' if dropbox_espaco.alerta_nivel == 'vermelho' else 'triangle-exclamation' }}"></i>
+    <span>
+        <b>{{ dropbox_espaco.alerta_texto }}.</b>
+        Restam apenas {{ dropbox_espaco.livre_fmt }} de {{ dropbox_espaco.total_fmt }}.
+        A importação de XMLs e a captura da SEFAZ gravam arquivos no Dropbox — sem
+        espaço, elas passam a falhar.
+    </span>
+</div>
+{% endif %}
+
 <div class="page-header">
     <div>
         <h1 class="page-title">Configurações</h1>
@@ -70,19 +85,9 @@
             Mostrando o último valor conhecido — a consulta ao Dropbox falhou:
             {{ dropbox_espaco.erro }}
         </div>
-        {% elif dropbox_espaco.cor == 'vermelho' %}
-        <div class="dbx-alerta vermelho">
-            <i class="fas fa-circle-exclamation"></i>
-            <b>Espaço crítico ({{ dropbox_espaco.pct_fmt }}%).</b>
-            Restam {{ dropbox_espaco.livre_fmt }}. A importação de XMLs e a captura da SEFAZ
-            gravam arquivos no Dropbox — sem espaço, elas passam a falhar.
-        </div>
-        {% elif dropbox_espaco.cor == 'amarelo' %}
-        <div class="dbx-alerta amarelo">
-            <i class="fas fa-triangle-exclamation"></i>
-            Espaço em atenção ({{ dropbox_espaco.pct_fmt }}%). Restam {{ dropbox_espaco.livre_fmt }}.
-        </div>
         {% endif %}
+        {# O aviso de espaço alto NÃO se repete aqui: ele já aparece como banner
+           destacado no topo da página (>= 85%). A barra colorida basta no card. #}
     {% else %}
     <div class="dbx-alerta cinza">
         <i class="fas fa-circle-info"></i> {{ dropbox_espaco.erro or 'Espaço indisponível.' }}
@@ -91,6 +96,11 @@
 </div>
 
 <script>
+// Estado do alerta no momento do render (server-side). Se um "Atualizar" cruzar o
+// limite (para cima ou para baixo), recarregamos a página para o banner do topo
+// entrar/sair — em vez de duplicar o markup do banner aqui no JS.
+const DBX_ALERTA_INICIAL = {{ 'true' if dropbox_espaco.alerta else 'false' }};
+
 // "Atualizar" ignora o TTL do cache e relê a quota. Continua só leitura.
 async function atualizarEspacoDropbox() {
     const btn = document.getElementById('dbxBtn');
@@ -112,6 +122,7 @@ async function atualizarEspacoDropbox() {
                        bar.style.width = (d.pct_barra || 0) + '%'; }
             if (pct) { pct.classList.remove(...cores); pct.classList.add(d.cor);
                        pct.textContent = (d.pct_fmt || '—') + '%'; }
+            if (!!d.alerta !== DBX_ALERTA_INICIAL) { location.reload(); return; }
         } else {
             alert('Não foi possível consultar o Dropbox: ' + (d.erro || 'erro desconhecido'));
         }

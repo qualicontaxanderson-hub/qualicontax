@@ -31,9 +31,14 @@ logger = logging.getLogger(__name__)
 _CONFIG_KEY = 'dropbox_space_cache'
 _TTL_SEG = int(os.getenv('DROPBOX_SPACE_TTL_SEG', '3600'))   # 1h
 
-# Faixas do semáforo (percentual de uso).
+# Faixas do semáforo da BARRA (percentual de uso).
 _LIMITE_ATENCAO = 70
 _LIMITE_CRITICO = 90
+
+# Limite do ALERTA destacado no topo das Configurações. Deliberadamente diferente
+# do semáforo: a barra fica amarela já em 70% (informação passiva), mas o banner
+# só aparece em 85% — assim o aviso mantém peso em vez de virar paisagem.
+_LIMITE_ALERTA = int(os.getenv('DROPBOX_SPACE_ALERTA_PCT', '85'))
 
 
 # --------------------------------------------------------------------------
@@ -88,12 +93,16 @@ def _montar(usado, total, tipo='desconhecido'):
     # (dividir por zero aqui viraria erro 500 numa tela só de leitura).
     pct = round(usado / total * 100, 1) if total else None
 
-    if total:
-        texto = (f'{formatar_bytes(usado)} de {formatar_bytes(total)} '
-                 f'— {formatar_bytes(livre)} livres')
-    else:
-        texto = f'{formatar_bytes(usado)} usados (cota não informada pelo Dropbox)'
+    pct_fmt = f'{pct:.1f}'.replace('.', ',') if pct is not None else '—'
 
+    if total:
+        texto = (f'Usando {formatar_bytes(usado)} de {formatar_bytes(total)} '
+                 f'({pct_fmt}%) — {formatar_bytes(livre)} livre')
+    else:
+        texto = f'Usando {formatar_bytes(usado)} (cota não informada pelo Dropbox)'
+
+    # Alerta destacado no topo das Configurações a partir de _LIMITE_ALERTA.
+    alerta = pct is not None and pct >= _LIMITE_ALERTA
     return {
         'ok': True,
         'usado': usado, 'total': total, 'livre': livre,
@@ -101,11 +110,16 @@ def _montar(usado, total, tipo='desconhecido'):
         'total_fmt': formatar_bytes(total) if total else '—',
         'livre_fmt': formatar_bytes(livre) if livre is not None else '—',
         'pct': pct,
-        'pct_fmt': f'{pct:.1f}'.replace('.', ',') if pct is not None else '—',
+        'pct_fmt': pct_fmt,
         'pct_barra': min(100, pct) if pct is not None else 0,
         'cor': _cor(pct),
         'tipo': tipo,
         'texto': texto,
+        'alerta': alerta,
+        'alerta_nivel': ('vermelho' if (pct is not None and pct > _LIMITE_CRITICO)
+                         else 'amarelo') if alerta else None,
+        'alerta_texto': (f'Dropbox em {pct_fmt}% — considere limpar XMLs antigos'
+                         if alerta else None),
         'stale': False,
         'erro': None,
         'idade_seg': 0,
