@@ -438,7 +438,7 @@ def status_sefaz():
         "  SUM(YEAR(importado_em)=YEAR(CURDATE()) AND MONTH(importado_em)=MONTH(CURDATE())) AS mes, "
         "  SUM(COALESCE(incompleta,0)=0) AS completas, "
         "  SUM(COALESCE(incompleta,0)=1) AS resumos "
-        "FROM nfe_importacoes WHERE origem='SEFAZ'",
+        "FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada'",
         fetch=True, fetch_one=True,
     ) or {}
 
@@ -647,7 +647,8 @@ def conf_compras():
     empresas = _get_empresas()
     grupos = _get_grupos()
     emitentes = execute_query(
-        "SELECT DISTINCT emit_cnpj, emit_nome FROM nfe_importacoes ORDER BY emit_nome",
+        "SELECT DISTINCT emit_cnpj, emit_nome FROM nfe_importacoes "
+        "WHERE tipo='entrada' ORDER BY emit_nome",
         fetch=True,
     ) or []
 

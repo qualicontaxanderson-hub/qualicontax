@@ -39,7 +39,10 @@ def _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=None):
     else:
         # Evita mutar a lista recebida pelo chamador.
         params = list(params)
-    clauses = []
+    # Análise Fiscal = COMPRAS (entradas). Sem este filtro, as linhas tipo='saida'
+    # da captura SEFAZ (cliente_id = o vendedor) entrariam na análise de compras do
+    # próprio vendedor e inflariam valor/ICMS. Escopo de tipo é obrigatório aqui.
+    clauses = [f"{alias}.tipo = 'entrada'"]
     if f_cliente_id:
         cid = int(f_cliente_id)
         clauses.append(

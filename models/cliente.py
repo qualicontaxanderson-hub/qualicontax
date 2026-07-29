@@ -26,7 +26,23 @@ class Cliente:
         self.data_inicio_contrato = data_inicio_contrato
         self.situacao = situacao
         self.observacoes = observacoes
-    
+
+    @staticmethod
+    def index_cpf_cnpj():
+        """Mapa {cpf_cnpj_só_dígitos: id} de todos os clientes.
+
+        Usado pela captura SEFAZ para resolver o EMITENTE de uma nota contra a base
+        de clientes UMA vez por rodada (evita 1 query por nota). Ignora CPF/CNPJ
+        vazios ou com menos de 11 dígitos.
+        """
+        rows = execute_query(
+            "SELECT id, "
+            "  REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-',''),' ','') AS d "
+            "FROM clientes WHERE cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
+            fetch=True,
+        ) or []
+        return {r['d']: r['id'] for r in rows if r.get('d') and len(r['d']) >= 11}
+
     @staticmethod
     def get_by_id(cliente_id):
         """

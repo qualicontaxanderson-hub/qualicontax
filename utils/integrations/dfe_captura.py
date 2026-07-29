@@ -358,6 +358,16 @@ def _pasta_dfe(empresa, data_emissao, ok=True):
     return fn(_DEPARTAMENTO_DFE, empresa["razao"], dt, empresa.get("numero"))
 
 
+def _pasta_saidas(empresa_emit, data_emissao):
+    """Pasta da SAÍDA (nota emitida por um cliente), aninhada sob o EMITENTE:
+    {Fiscal}/IMPORTADOS/{ano}/{nº - razão emitente}/SAIDAS/{mês.ano}. ``empresa_emit``
+    é o dict {razao, numero} do cliente emitente (o vendedor)."""
+    dt = data_emissao or _hoje_brt().date()
+    svc = dropbox_sync._service
+    return svc.pasta_saidas(_DEPARTAMENTO_DFE, empresa_emit["razao"], dt,
+                            empresa_emit.get("numero"))
+
+
 def _remover_sefaz_incompleto(chave):
     """Upgrade resumo→completa: apaga a linha resumo SEFAZ (incompleta=1) e seus
     itens para a completa poder entrar pelo core (_save_nfe retornaria 'dup' e a
@@ -378,14 +388,26 @@ def _remover_sefaz_incompleto(chave):
     )
 
 
-def _importar_nfe_completa(empresa, xml_bytes):
+def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
     """nfeProc COMPLETO → grava pelo MESMO fluxo do Dropbox e arquiva no padrão
     IMPORTADOS/ERROS. Devolve o nº de itens. Levanta em falha de parse/gravação
-    (o chamador para o lote e não avança o cursor além deste doc)."""
+    (o chamador para o lote e não avança o cursor além deste doc).
+
+    ``cli_index`` é o mapa {cnpj_dígitos: cliente_id} da rodada (Cliente.index_cpf_cnpj).
+    Quando o EMITENTE da nota também é cliente cadastrado (≠ o dono do certificado),
+    grava TAMBÉM a linha de SAÍDA dele (dual-save), como o fluxo Dropbox já faz — é
+    a venda entre dois clientes que o distDFeInt entrega e antes era descartada."""
     xml_str = xml_bytes.decode("utf-8", "replace")
     parsed = parse_nfe_xml(xml_str)                 # pode levantar ValueError
     chave = parsed.get("chave") or parsed["header"].get("chave_acesso") or ""
     data_emissao = parsed["header"].get("data_emissao")
+
+    # Emitente é cliente cadastrado (e não a própria empresa capturadora)? → saída.
+    emit_cli = None
+    if cli_index:
+        emit_cli = cli_index.get(_digitos(parsed["header"].get("emit_cnpj")))
+        if emit_cli == empresa["cliente_id"]:
+            emit_cli = None
 
     # Se havia um RESUMO SEFAZ anterior (incompleta=1), guarda a data da 1ª
     # importação. Como o upgrade é DELETE+INSERT, a completa nova nasceria com
@@ -402,12 +424,13 @@ def _importar_nfe_completa(empresa, xml_bytes):
         importado_orig = _prev.get("importado_em") if _prev else None
 
     try:
-        # Upgrade + gravação pelo core compartilhado. apenas_entrada=True: 1 linha
-        # na ótica do dono do certificado (dest), origem='SEFAZ'.
+        # Upgrade + gravação pelo core compartilhado. Entrada na ótica do dono do
+        # certificado (dest); + saída na ótica do emitente QUANDO ele é cliente.
+        # O _save_nfe_dual grava cada linha por (chave, tipo) — a entrada existente
+        # vira 'dup' (intocada) e só a saída nova é inserida.
         _remover_sefaz_incompleto(chave)
         _save_nfe_dual(parsed, f"{chave}.xml", "SEFAZ", xml_str,
-                       dest_cli=empresa["cliente_id"], emit_cli=None,
-                       apenas_entrada=True)
+                       dest_cli=empresa["cliente_id"], emit_cli=emit_cli)
         if importado_orig is not None:
             execute_query(
                 "UPDATE nfe_importacoes SET importado_em=%s "
@@ -426,6 +449,22 @@ def _importar_nfe_completa(empresa, xml_bytes):
     # Sucesso → arquiva em IMPORTADOS (mesmo padrão do Dropbox). Falha aqui aborta
     # o doc; o retry re-sobe (o _save_nfe vira 'dup', idempotente).
     _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml", xml_bytes)
+
+    # Saída (emit é cliente) → arquiva TAMBÉM sob o emitente em .../SAIDAS/{mês}.
+    # Best-effort: a linha no banco já entrou; falha aqui não aborta o doc (diferente
+    # do arquivo da entrada acima, que é o principal).
+    if emit_cli:
+        emit_cliente = Cliente.get_by_id(emit_cli)
+        if emit_cliente:
+            empresa_emit = {
+                "razao": emit_cliente.get("nome_razao_social") or "SEM_NOME",
+                "numero": (emit_cliente.get("numero_cliente") or "").strip() or None,
+            }
+            try:
+                _subir_xml(f"{_pasta_saidas(empresa_emit, data_emissao)}/{chave}.xml", xml_bytes)
+            except Exception:
+                logger.warning("[dfe] saída gravada, mas falha ao arquivar XML sob o "
+                               "emitente (cliente_id=%s, chave=%s)", emit_cli, chave)
     return len(parsed.get("itens", []))
 
 
@@ -519,7 +558,7 @@ def _processar_resumo(conn, cur, empresa, root, ctx):
         gravar_resumo_nota(conn, cur, empresa, res)
         return "resumo", 0
 
-    ni = _importar_nfe_completa(empresa, xmlc)   # resumo VIRA completa (com upgrade)
+    ni = _importar_nfe_completa(empresa, xmlc, ctx.get("cli_index"))  # resumo VIRA completa
     return "nota", ni
 
 
@@ -536,7 +575,7 @@ def processar_um_doc(conn, cur, empresa, d, ctx):
     raiz = _local(root.tag)
 
     if raiz == "nfeProc":
-        ni = _importar_nfe_completa(empresa, xml_bytes)
+        ni = _importar_nfe_completa(empresa, xml_bytes, ctx.get("cli_index"))
         return "nota", ni
 
     if raiz == "procEventoNFe":
@@ -587,7 +626,7 @@ def _retry_pendentes(empresa, ctx):
         if xmlc is None:
             continue
         try:
-            _importar_nfe_completa(empresa, xmlc)
+            _importar_nfe_completa(empresa, xmlc, ctx.get("cli_index"))
             promovidas += 1
         except Exception:
             logger.exception("[dfe] falha ao promover resumo pendente %s", chave)
@@ -813,7 +852,10 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
                'cnpj': cnpj, 'uf': uf}
     ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf,
            'chnfe_usadas': 0, 'chnfe_max': _MAX_CHNFE_CICLO,
-           'cooldown_656': False, 'cortar': False, 'motivo_corte': None}
+           'cooldown_656': False, 'cortar': False, 'motivo_corte': None,
+           # Índice CNPJ→cliente_id da base, montado 1x por rodada: resolve o
+           # emitente (saída entre clientes) sem 1 query por nota.
+           'cli_index': Cliente.index_cpf_cnpj()}
 
     tot = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0}
     nsu_ok = ult_nsu

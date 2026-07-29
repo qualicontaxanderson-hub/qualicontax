@@ -536,6 +536,18 @@ class DropboxService:
         root = self.resolve_departamento_root(departamento)
         return self._build_path(root, 'ERROS', str(dt.year), pasta_empresa, f'{dt.month:02d}.{dt.year}')
 
+    def pasta_saidas(self, departamento: str, empresa_nome: str,
+                     dt: datetime = None, empresa_numero: str = None) -> str:
+        """Saídas (NF-e emitidas pela empresa) capturadas via SEFAZ, aninhadas sob a
+        pasta do EMITENTE, separadas das entradas:
+        ``{root}/IMPORTADOS/{ano}/{numero - razão}/SAIDAS/{mês.ano}/``.
+        """
+        dt = dt or datetime.now(ZoneInfo('America/Sao_Paulo'))
+        pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
+        root = self.resolve_departamento_root(departamento)
+        return self._build_path(root, 'IMPORTADOS', str(dt.year), pasta_empresa,
+                                'SAIDAS', f'{dt.month:02d}.{dt.year}')
+
     # ------------------------------------------------------------------
     # Helpers de caminho para Certificados Digitais (.pfx)
     # ------------------------------------------------------------------
