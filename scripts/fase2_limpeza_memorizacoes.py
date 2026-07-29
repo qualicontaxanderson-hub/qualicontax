@@ -275,6 +275,12 @@ def aplicar(cnx, cur, apagar_esperado, itens_esperado):
     print('APLICANDO (transação única)')
     print('=' * 78)
 
+    # Com autocommit=False, os SELECTs do relatório e do guard já abriram uma
+    # transação implícita — o driver recusa start_transaction() sobre ela.
+    # Encerra a transação de leitura antes de abrir a de escrita.
+    if cnx.in_transaction:
+        cnx.rollback()
+
     cnx.start_transaction()
     try:
         cur.execute(INS_BKP_REGRAS)
