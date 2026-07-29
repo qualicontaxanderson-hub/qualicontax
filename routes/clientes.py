@@ -262,6 +262,10 @@ def detalhes(id):
     cadastros_adicionais = f_cadastros_ad.result()
     socios = f_socios.result()
     certificado = f_certificado.result()
+    # Classificação da validade p/ a aba Certificado Digital (VENCIDO/vencendo/OK).
+    if certificado:
+        certificado['cert_status'] = DfeCertificado.classificar_validade(
+            certificado.get('validade'))
     # Compute the active-partner total in Python instead of a separate DB query
     socios_total_percentual = sum(
         float(s.get('percentual_participacao') or 0)
@@ -455,6 +459,16 @@ def certificado_vincular(id):
         return jsonify({'ok': False, 'erro': 'Não foi possível identificar o CNPJ/CPF no certificado.'}), 200
     except CertificadoError as exc:
         return jsonify({'ok': False, 'erro': f'Certificado inválido: {exc}'}), 200
+
+    # 3b) BLOQUEIO: certificado VENCIDO não vincula — vincular só criaria um vínculo
+    #     que já nasce quebrado (a SEFAZ recusa o mTLS com HTTP 403). Só bloqueia o
+    #     vencido; um cert válido, mesmo vencendo em breve (laranja), vincula normal.
+    if info['validade'] and DfeCertificado.classificar_validade(
+            info['validade'])['nivel'] == 'vencido':
+        return jsonify({'ok': False,
+                        'erro': f'Certificado vencido em {info["validade"].strftime("%d/%m/%Y")} '
+                                '— não é possível vincular um certificado vencido. '
+                                'Renove e tente de novo.'}), 200
 
     # 4) Confere se o certificado é mesmo dessa empresa.
     #    O e-CNPJ é emitido para a RAIZ (8 primeiros dígitos) e cobre as filiais.

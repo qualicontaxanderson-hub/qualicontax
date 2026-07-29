@@ -70,6 +70,21 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
     </div>
 </div>
 
+<!-- BANNER de certificados vencidos/vencendo — reusa as classes .alert globais
+     (mesma linguagem visual do alerta de espaço do Dropbox), zero CSS novo. -->
+{% if cert_alerta and cert_alerta.mostrar %}
+<div class="alert {{ 'alert-danger' if cert_alerta.nivel == 'vermelho' else 'alert-warning' }}"
+     style="margin:14px 0 4px;">
+    <i class="fas fa-{{ 'circle-exclamation' if cert_alerta.nivel == 'vermelho' else 'triangle-exclamation' }}"></i>
+    <span>
+        {% if cert_alerta.n_vencidos %}<b>{{ cert_alerta.n_vencidos }} certificado(s) VENCIDO(S).</b> {% endif %}
+        {% if cert_alerta.n_venc %}<b>{{ cert_alerta.n_venc }} vencendo em ≤{{ cert_alerta.dias }} dias.</b> {% endif %}
+        Um certificado vencido faz a SEFAZ recusar o mTLS (HTTP 403) e a captura para
+        <b>sem aviso</b> — renove antes de vencer. Detalhes na seção <b>Certificados</b> abaixo.
+    </span>
+</div>
+{% endif %}
+
 <!-- TOPO — cards de resumo (NF-e) -->
 <div class="ss-section-title" style="margin-top:14px;"><i class="fas fa-file-invoice-dollar" style="color:#2563eb;"></i> NF-e (notas)</div>
 <div class="ss-kpis">
@@ -140,7 +155,13 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
             <div class="ss-emp-nome">
                 {% if e.numero %}<span class="ss-emp-num">{{ e.numero }}</span> — {% endif %}{{ e.nome }}
             </div>
+            {% if e.cert_nivel == 'vencido' %}
+            <span class="ss-badge vermelho">Certificado vencido em {{ e.cert_validade }}</span>
+            {% elif e.cert_nivel == 'laranja' %}
+            <span class="ss-badge amarelo">Cert vence em {{ e.cert_dias }} dias</span>
+            {% else %}
             <span class="ss-badge {{ e.status_cor }}">{{ e.status_label }}</span>
+            {% endif %}
         </div>
         <div class="ss-emp-stats">
             <span><b>{{ e.total }}</b> notas capturadas</span>
@@ -178,6 +199,44 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
 {% else %}
 <div class="ss-empty">Nenhuma empresa com certificado ativo.</div>
 {% endif %}
+
+<!-- CERTIFICADOS — validade e dias até vencer (só leitura). Reusa .ss-table/.ss-legend,
+     zero CSS novo: o status é o próprio emoji (🔴/🟠/🟡/✅). -->
+<div class="ss-section-title"><i class="fas fa-id-card" style="color:#2563eb;"></i> Certificados</div>
+<div class="ss-legend">
+    <i class="fas fa-circle-info"></i>
+    <div><b>Validade dos certificados A1.</b>
+        🔴 <b>vencido</b> · 🟠 vence em ≤{{ cert_alerta.dias if cert_alerta else 30 }}d ·
+        🟡 vence em ≤{{ cert_alerta.dias_amarelo if cert_alerta else 60 }}d · ✅ ok.
+        Um certificado <b>vencido</b> faz a SEFAZ recusar o mTLS (HTTP 403) e a captura
+        para <b>sem aviso</b> — por isso este bloco. Ordenado do mais próximo de vencer.</div>
+</div>
+<div class="ss-table-wrap">
+    <table class="ss-table">
+        <thead>
+            <tr>
+                <th>Empresa</th>
+                <th>Validade</th>
+                <th style="text-align:center;">Dias até vencer</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if certificados %}
+                {% for cert in certificados %}
+                <tr>
+                    <td>{% if cert.numero %}<span class="ss-emp-num">{{ cert.numero }}</span> — {% endif %}{{ cert.nome }}</td>
+                    <td>{{ cert.validade or '—' }}</td>
+                    <td style="text-align:center;">{% if cert.dias is not none %}{{ cert.dias }}{% else %}<span class="ss-muted">—</span>{% endif %}</td>
+                    <td>{{ cert.emoji }} {{ cert.status }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="4" class="ss-empty">Nenhum certificado ativo.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
 
 <!-- HISTÓRICO -->
 <div class="ss-section-title"><i class="fas fa-clock-rotate-left" style="color:#7c3aed;"></i> Histórico (últimas 20 rodadas)</div>

@@ -50,7 +50,7 @@ from utils.cte_import import _save_cte, marcar_cte_cancelado
 # Fundação compartilhada com o motor de NF-e (mesma semântica, um só lugar).
 from utils.integrations.dfe_captura import (
     _digitos, _to_int, _parse_dh, _hoje_brt, _uf_principal, _conectar_lock,
-    _caminho_fiscal, _subir_xml, _pasta_dfe,
+    _caminho_fiscal, _subir_xml, _pasta_dfe, _detalhe_403,
 )
 
 logger = logging.getLogger(__name__)
@@ -379,6 +379,7 @@ def _preparar(cliente_id, origem, dry_run=False, checar_cota=True):
     ctx = {
         'sess': montar_sessao_mtls(cert, chave_priv, cadeia),
         'cnpj': cnpj, 'cuf': cuf, 'rotulo': rotulo,
+        'validade': vinc.get('validade'),   # p/ traduzir um 403 em 'cert vencido'
         'empresa': {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
                     'cnpj': cnpj, 'uf': uf},
     }
@@ -408,7 +409,10 @@ def capturar_cte_cliente(cliente_id, dry_run=False, origem='manual',
         ret, _fmt = consultar(sess, cnpj, cuf, ult_nsu)
     except RuntimeError as exc:
         if not dry_run:
-            dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu, detalhe=str(exc),
+            # 403 + cert vencido → 'Certificado vencido em DD/MM/AAAA' (mesma
+            # tradução da NF-e; o cursor de CT-e é próprio mas o cert é o mesmo).
+            dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu,
+                              detalhe=_detalhe_403(exc, ctx['validade']),
                               origem=origem, servico='cte')
         return {'ok': False, 'erro': f'Falha ao consultar a SEFAZ (CT-e): {exc}'}
 

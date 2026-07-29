@@ -1,5 +1,6 @@
 """Blueprint Escrita Fiscal — Conferência de Compras (NF-e)."""
 import logging
+import os
 import re
 import threading
 import xml.etree.ElementTree as ET
@@ -24,6 +25,7 @@ from utils import import_jobs
 from utils.nfe_import import (
     _MAX_XML_SIZE, _save_nfe, _save_nfe_dual, _lookup_vinculo,
 )
+from models.dfe_certificado import DfeCertificado
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -422,6 +424,9 @@ def status_sefaz():
     def _fmt(d):
         return d.strftime('%d/%m/%Y %H:%M') if hasattr(d, 'strftime') else None
 
+    def _fmt_data(d):
+        return d.strftime('%d/%m/%Y') if hasattr(d, 'strftime') else None
+
     def _i(v):
         return int(v) if v is not None else 0
 
@@ -481,7 +486,7 @@ def status_sefaz():
 
     # ---- POR EMPRESA: uma linha por cliente com certificado ativo ----
     rows = execute_query(
-        "SELECT c.id, c.numero_cliente, c.nome_razao_social, "
+        "SELECT c.id, c.numero_cliente, c.nome_razao_social, dc.validade AS cert_validade, "
         "  n.ult_nsu, n.max_nsu, n.ult_consulta, n.proximo_permitido, "
         "  GREATEST(COALESCE(n.max_nsu,0)-COALESCE(n.ult_nsu,0),0) AS backlog, "
         "  (n.proximo_permitido IS NOT NULL AND n.proximo_permitido > NOW()) AS em_cota, "
@@ -535,8 +540,13 @@ def status_sefaz():
             cte_label, cte_cor = 'Baixando', 'amarelo'
         else:
             cte_label, cte_cor = 'Em dia', 'verde'
+        # Certificado vencido/vencendo SOBREPÕE o status normal do card: sem cert
+        # válido a empresa não captura, então "Em dia" seria enganoso (ver a 495).
+        cs = DfeCertificado.classificar_validade(r.get('cert_validade'))
         empresas.append({
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
+            'cert_nivel': cs['nivel'], 'cert_dias': cs['dias'],
+            'cert_validade': _fmt_data(r.get('cert_validade')),
             'total': _i(r.get('total_notas')), 'completas': _i(r.get('completas')),
             'resumos': _i(r.get('resumos')), 'backlog': backlog,
             'status_label': label, 'status_cor': cor,
@@ -572,9 +582,59 @@ def status_sefaz():
                     + (h.get('nome_razao_social') or '—')),
     } for h in hlog]
 
+    # ---- CERTIFICADOS: validade + dias até vencer (SÓ LEITURA de dfe_certificados).
+    # Objetivo: nenhum certificado vence em silêncio — um cert vencido faz a SEFAZ
+    # recusar o mTLS (HTTP 403) e a captura para sem aviso (ver _detalhe_403). Limiares
+    # por env: laranja (<= CERT_ALERTA_DIAS, default 30) e amarelo (<= CERT_ALERTA_AMARELO,
+    # default 60). O amarelo nunca fica abaixo do laranja (senão a faixa some).
+    laranja = max(0, int(os.getenv('CERT_ALERTA_DIAS', '30')))
+    amarelo = max(laranja, int(os.getenv('CERT_ALERTA_AMARELO', '60')))
+    crows = execute_query(
+        "SELECT c.numero_cliente, c.nome_razao_social, dc.validade, "
+        "  DATEDIFF(dc.validade, CURDATE()) AS dias "
+        "FROM dfe_certificados dc "
+        "JOIN clientes c ON c.id = dc.cliente_id "
+        "WHERE dc.ativo = 1 "
+        "ORDER BY dc.validade IS NULL, dc.validade ASC",   # mais próximo de vencer 1º
+        fetch=True,
+    ) or []
+
+    certificados = []
+    n_vencidos = n_venc_laranja = 0
+    for r in crows:
+        dias = r.get('dias')
+        dias = int(dias) if dias is not None else None
+        if dias is None:
+            emoji, status = '⚪', 'sem validade cadastrada'
+        elif dias < 0:
+            emoji, status = '🔴', f'Vencido há {-dias} dia(s)'
+            n_vencidos += 1
+        elif dias <= laranja:
+            emoji, status = '🟠', f'Vence em {dias} dia(s)'
+            n_venc_laranja += 1
+        elif dias <= amarelo:
+            emoji, status = '🟡', f'Vence em {dias} dia(s)'
+        else:
+            emoji, status = '✅', 'OK'
+        certificados.append({
+            'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
+            'validade': _fmt_data(r.get('validade')), 'dias': dias,
+            'emoji': emoji, 'status': status,
+        })
+
+    # Banner (mesmo padrão do alerta do Dropbox): só aparece se há VENCIDO ou vencendo
+    # em <= laranja dias. Vermelho se há vencido; senão amarelo.
+    cert_alerta = {
+        'mostrar': (n_vencidos > 0 or n_venc_laranja > 0),
+        'nivel': 'vermelho' if n_vencidos > 0 else 'amarelo',
+        'n_vencidos': n_vencidos, 'n_venc': n_venc_laranja,
+        'dias': laranja, 'dias_amarelo': amarelo,
+    }
+
     return render_template(
         'escrita_fiscal/status_sefaz.html',
         topo=topo, topo_cte=topo_cte, empresas=empresas, historico=historico,
+        certificados=certificados, cert_alerta=cert_alerta,
     )
 
 

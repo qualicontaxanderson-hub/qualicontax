@@ -954,7 +954,13 @@
                             <div class="info-grid">
                                 <div class="info-item">
                                     <label>Status</label>
+                                    {% if certificado.cert_status and certificado.cert_status.nivel == 'vencido' %}
+                                    <span class="badge badge-danger">VENCIDO em {{ certificado.validade|format_date }}</span>
+                                    {% elif certificado.cert_status and certificado.cert_status.nivel == 'laranja' %}
+                                    <span class="badge badge-warning">VENCE EM {{ certificado.cert_status.dias }} DIAS</span>
+                                    {% else %}
                                     <span class="badge badge-success">Vinculado</span>
+                                    {% endif %}
                                 </div>
                                 <div class="info-item">
                                     <label>{{ certificado.tipo_doc }}</label>
@@ -963,7 +969,13 @@
                                 {% if certificado.validade %}
                                 <div class="info-item">
                                     <label>Validade</label>
+                                    {% if certificado.cert_status and certificado.cert_status.nivel == 'vencido' %}
+                                    <span style="color:#dc2626; font-weight:700;">{{ certificado.validade|format_date }}</span>
+                                    {% elif certificado.cert_status and certificado.cert_status.nivel == 'laranja' %}
+                                    <span style="color:#d97706; font-weight:700;">{{ certificado.validade|format_date }}</span>
+                                    {% else %}
                                     <span>{{ certificado.validade|format_date }}</span>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                                 <div class="info-item full-width">

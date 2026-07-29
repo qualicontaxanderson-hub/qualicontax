@@ -1,9 +1,40 @@
 """Modelo do vínculo de Certificado Digital (tabela dfe_certificados)."""
+import os
+from datetime import datetime, timezone, timedelta
+
 from utils.db_helper import execute_query
+
+# Fuso de Brasília (mesma base do motor de captura, dfe_captura._hoje_brt): a
+# classificação de validade usa a data de -03:00, não a do servidor (UTC no Railway).
+_TZ_BR = timezone(timedelta(hours=-3))
 
 
 class DfeCertificado:
     """Vínculo do certificado digital (.pfx) de uma empresa."""
+
+    @staticmethod
+    def classificar_validade(validade):
+        """Fonte ÚNICA da regra de alerta de validade (detalhe do cliente, painel de
+        status, bloqueio de vínculo): 🔴 ``vencido`` (validade < hoje) · 🟠 ``laranja``
+        (vence em <= ``CERT_ALERTA_DIAS``, default 30) · ✅ ``ok``. ``hoje`` é a data de
+        Brasília (-03:00). Um cert VENCIDO faz a SEFAZ recusar o mTLS (HTTP 403), então
+        os três consumidores dessa regra partem daqui para não divergir.
+
+        Devolve ``{'dias': int|None, 'nivel': str, 'laranja': int}``. ``dias`` é
+        negativo quando já venceu e None quando não há validade utilizável
+        (``nivel='sem_data'``).
+        """
+        laranja = max(0, int(os.getenv('CERT_ALERTA_DIAS', '30')))
+        if not validade or not hasattr(validade, 'year'):
+            return {'dias': None, 'nivel': 'sem_data', 'laranja': laranja}
+        dias = (validade - datetime.now(_TZ_BR).date()).days
+        if dias < 0:
+            nivel = 'vencido'
+        elif dias <= laranja:
+            nivel = 'laranja'
+        else:
+            nivel = 'ok'
+        return {'dias': dias, 'nivel': nivel, 'laranja': laranja}
 
     @staticmethod
     def get_by_cliente(cliente_id):

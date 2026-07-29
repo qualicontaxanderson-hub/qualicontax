@@ -225,6 +225,26 @@ def _hoje_brt():
     return datetime.now(_TZ_BR)
 
 
+def _detalhe_403(exc, validade):
+    """Traduz o erro de transporte da SEFAZ para uma causa LEGÍVEL quando for HTTP
+    403 (a SEFAZ recusou o certificado no handshake mTLS) E o certificado estiver
+    VENCIDO. Nesse caso devolve 'Certificado vencido em DD/MM/AAAA' — o que o Painel
+    de Status passa a mostrar no lugar do '403' cru (a causa real do 403 silencioso).
+
+    Nos demais casos devolve ``str(exc)`` inalterado: não é 403 (outro erro de
+    transporte), não temos a validade, ou é 403 com o cert ainda no prazo (aí o 403
+    tem outra causa — revogação, CNPJ sem credenciamento — e não se mascara).
+
+    ``validade`` é o ``dfe_certificados.validade`` (date) da empresa, ou None.
+    """
+    txt = str(exc)
+    if '403' not in txt or not validade or not hasattr(validade, 'year'):
+        return txt
+    if validade < _hoje_brt().date():
+        return f'Certificado vencido em {validade.strftime("%d/%m/%Y")}'
+    return txt
+
+
 # ==========================================================================
 # Extração (resNFe / procEventoNFe). A nota COMPLETA (nfeProc) NÃO é mais extraída
 # aqui: passa direto pelo parse_nfe_xml + _save_nfe do fluxo Dropbox (Opção A).
@@ -738,7 +758,11 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
         ret, _fmt = consultar(sess, cnpj, cuf, ult_nsu)
     except RuntimeError as exc:
         if not dry_run:
-            dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu, detalhe=str(exc), origem=origem)
+            # 403 + cert vencido → 'Certificado vencido em DD/MM/AAAA' no log/painel,
+            # no lugar do 'HTTP 403' cru. É a 1ª requisição da rodada — onde um cert
+            # vencido falha; a drenagem (multi-lote) só roda após esta dar 200.
+            dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu,
+                              detalhe=_detalhe_403(exc, vinc.get('validade')), origem=origem)
         return {'ok': False, 'erro': f'Falha ao consultar a SEFAZ: {exc}'}
 
     cStat = _text(ret, 'cStat')
