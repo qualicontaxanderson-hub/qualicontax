@@ -13,7 +13,7 @@ from flask import (
 )
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
-from utils.db_helper import execute_query, execute_many
+from utils.db_helper import execute_query, execute_many, transacao
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
 from utils.dropbox_sync import DropboxAuthError, DropboxError
@@ -3310,7 +3310,24 @@ def memorizacoes():
         fetch=True,
     ) or []
 
-    return render_template('escrita_fiscal/memorizacoes.html', rows=rows, catalogo=catalogo)
+    # Empresas para o modal de clonagem: só as que já têm memorização ou já
+    # estão num set — clonar com uma empresa sem histórico nenhum é o caso de
+    # "copiar tudo de A para B", que continua permitido pelo próprio seletor.
+    empresas_clone = execute_query(
+        """SELECT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj,
+                  (SELECT COUNT(*) FROM nfe_produto_vinculo v
+                    WHERE v.cliente_id = c.id
+                      AND v.grupo_id IS NULL AND v.ramo_atividade_id IS NULL) AS regras,
+                  (SELECT m.set_id FROM memo_clone_membro m
+                    WHERE m.cliente_id = c.id LIMIT 1) AS clone_set_id
+             FROM clientes c
+            WHERE c.situacao = 'ATIVO'
+            ORDER BY c.nome_razao_social""",
+        fetch=True,
+    ) or []
+
+    return render_template('escrita_fiscal/memorizacoes.html', rows=rows,
+                           catalogo=catalogo, empresas_clone=empresas_clone)
 
 
 # ---------------------------------------------------------------------------
@@ -3409,6 +3426,395 @@ def memorizacoes_excluir(vid):
         return jsonify({'ok': True})
     flash('Memorização excluída.', 'success')
     return redirect(url_for('escrita_fiscal.memorizacoes'))
+
+
+# ===========================================================================
+# Clone de Memorizações (Fase 3a) — merge entre empresas "iguais"
+# ===========================================================================
+# Mecanismo próprio, independente de grupos_clientes. Um "set de clone" agrupa
+# empresas cujas memorizações de escopo EMPRESA devem ser idênticas. Esta fase
+# implementa só a ação de clonar (merge + decisão de conflito + retroativo); a
+# sincronização contínua e o "Reverter Clonagem" são a Fase 3b.
+
+# Pares por statement no retroativo — evita montar um WHERE gigante de uma vez.
+_CLONE_CHUNK = 200
+
+
+def _clone_resolver_membros(cliente_ids):
+    """Expande a seleção com os membros dos sets já existentes.
+
+    Devolve (membros ordenados, set_id existente ou None, {id: dados do cliente}).
+    Levanta ValueError com mensagem pronta para a tela.
+    """
+    try:
+        ids = sorted({int(c) for c in (cliente_ids or []) if c})
+    except (TypeError, ValueError):
+        raise ValueError('Lista de empresas inválida.')
+    if len(ids) < 2:
+        raise ValueError('Selecione pelo menos 2 empresas para clonar.')
+
+    ph = ','.join(['%s'] * len(ids))
+    validos = execute_query(
+        f"SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE id IN ({ph})",
+        tuple(ids), fetch=True,
+    ) or []
+    if len(validos) != len(ids):
+        raise ValueError('Alguma das empresas selecionadas não existe mais.')
+
+    vinc = execute_query(
+        f"SELECT set_id, cliente_id FROM memo_clone_membro WHERE cliente_id IN ({ph})",
+        tuple(ids), fetch=True,
+    ) or []
+    sets = {v['set_id'] for v in vinc}
+    if len(sets) > 1:
+        raise ValueError(
+            'As empresas selecionadas já pertencem a sets de clone diferentes. '
+            'Junte-as a partir de um set só ou reverta um dos clones antes.')
+    set_id = sets.pop() if sets else None
+
+    membros = set(ids)
+    if set_id:
+        atuais = execute_query(
+            "SELECT cliente_id FROM memo_clone_membro WHERE set_id = %s",
+            (set_id,), fetch=True,
+        ) or []
+        membros |= {r['cliente_id'] for r in atuais}
+
+    nomes = {c['id']: c for c in validos}
+    faltam = [m for m in membros if m not in nomes]
+    if faltam:
+        ph2 = ','.join(['%s'] * len(faltam))
+        extra = execute_query(
+            f"SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE id IN ({ph2})",
+            tuple(faltam), fetch=True,
+        ) or []
+        nomes.update({c['id']: c for c in extra})
+
+    return sorted(membros), set_id, nomes
+
+
+def _clone_regras_dos_membros(membros):
+    ph = ','.join(['%s'] * len(membros))
+    return execute_query(
+        f"""SELECT v.id, v.cliente_id, v.emit_cnpj, v.codigo_produto_xml,
+                   v.produto_catalogo_id, v.descricao_produto_xml,
+                   p.nome AS produto_nome
+              FROM nfe_produto_vinculo v
+              LEFT JOIN nfe_produtos_catalogo p ON p.id = v.produto_catalogo_id
+             WHERE v.cliente_id IN ({ph})
+               AND v.grupo_id IS NULL AND v.ramo_atividade_id IS NULL""",
+        tuple(membros), fetch=True,
+    ) or []
+
+
+def _clone_montar_pares(membros, regras):
+    """Agrupa a UNIÃO dos pares (emit_cnpj + cProd) e classifica cada um.
+
+    situacao: 'conflito' (produtos diferentes entre membros),
+              'copiar'   (concordam, mas falta membro),
+              'ok'       (todos os membros já têm, e concordam).
+    """
+    por_par = {}
+    for r in regras:
+        por_par.setdefault((r['emit_cnpj'], r['codigo_produto_xml']), {})[r['cliente_id']] = r
+
+    saida = {}
+    for chave, por_cliente in por_par.items():
+        produtos = {r['produto_catalogo_id'] for r in por_cliente.values()}
+        if len(produtos) > 1:
+            situacao, alvo = 'conflito', None
+        elif len(por_cliente) >= len(membros):
+            situacao, alvo = 'ok', next(iter(produtos))
+        else:
+            situacao, alvo = 'copiar', next(iter(produtos))
+        descricao = next((r.get('descricao_produto_xml') for r in por_cliente.values()
+                          if r.get('descricao_produto_xml')), '')
+        saida[chave] = {'por_cliente': por_cliente, 'situacao': situacao,
+                        'alvo': alvo, 'descricao': descricao}
+    return saida
+
+
+def _clone_cond_pares(bloco, com_alvo=True):
+    """(sql, params) com um OR por par. com_alvo restringe a itens que MUDARIAM."""
+    ors, params = [], []
+    for emit, cod, alvo, _desc in bloco:
+        if com_alvo:
+            ors.append("(n.emit_cnpj = %s AND i.codigo_produto = %s "
+                       "AND (i.produto_catalogo_id IS NULL OR i.produto_catalogo_id <> %s))")
+            params += [emit, cod, alvo]
+        else:
+            ors.append("(n.emit_cnpj = %s AND i.codigo_produto = %s)")
+            params += [emit, cod]
+    return ' OR '.join(ors), params
+
+
+def _clone_contar_itens(membros, alvos):
+    """Itens de ENTRADA dos membros que MUDARIAM de classificação. Read-only."""
+    if not alvos:
+        return 0
+    ph_m = ','.join(['%s'] * len(membros))
+    total = 0
+    for i in range(0, len(alvos), _CLONE_CHUNK):
+        cond, p_cond = _clone_cond_pares(alvos[i:i + _CLONE_CHUNK])
+        row = execute_query(
+            f"""SELECT COUNT(*) AS qtd
+                  FROM nfe_itens i
+                  JOIN nfe_importacoes n ON n.id = i.nfe_id
+                 WHERE n.tipo = 'entrada' AND n.cliente_id IN ({ph_m})
+                   AND ({cond})""",
+            tuple(list(membros) + p_cond), fetch=True, fetch_one=True,
+        ) or {}
+        total += int(row.get('qtd') or 0)
+    return total
+
+
+def _clone_preview(cliente_ids):
+    """Passo 1 — read-only. Não altera absolutamente nada."""
+    membros, set_id, nomes = _clone_resolver_membros(cliente_ids)
+    pares = _clone_montar_pares(membros, _clone_regras_dos_membros(membros))
+
+    conflitos, alvos, n_copiar, n_ok = [], [], 0, 0
+    for (emit, cod), info in sorted(pares.items()):
+        if info['situacao'] == 'conflito':
+            conflitos.append({
+                'emit_cnpj': emit,
+                'codigo_produto_xml': cod,
+                'descricao': info['descricao'],
+                'opcoes': [{
+                    'cliente_id': cid,
+                    'empresa': (nomes.get(cid) or {}).get('nome_razao_social') or f'#{cid}',
+                    'produto_id': r['produto_catalogo_id'],
+                    'produto_nome': r['produto_nome'] or '(produto removido do catálogo)',
+                } for cid, r in sorted(info['por_cliente'].items())],
+            })
+            continue
+        if info['situacao'] == 'copiar':
+            n_copiar += 1
+        else:
+            n_ok += 1
+        alvos.append((emit, cod, info['alvo'], info['descricao']))
+
+    return {
+        'membros': [{
+            'cliente_id': m,
+            'numero_cliente': (nomes.get(m) or {}).get('numero_cliente'),
+            'nome': (nomes.get(m) or {}).get('nome_razao_social') or f'#{m}',
+            'regras': sum(1 for p in pares.values() if m in p['por_cliente']),
+        } for m in membros],
+        'set_id': set_id,
+        'set_novo': set_id is None,
+        'total_pares': len(pares),
+        'pares_copiar': n_copiar,
+        'pares_ja_ok': n_ok,
+        'conflitos': conflitos,
+        'itens_reclassificar': _clone_contar_itens(membros, alvos),
+        'itens_em_conflito': _clone_contar_itens(
+            membros, [(c['emit_cnpj'], c['codigo_produto_xml'], -1, '') for c in conflitos]),
+    }
+
+
+def _clone_aplicar(cliente_ids, decisoes):
+    """Passo 2 — grava. Backup ANTES, tudo numa transação, com conferência."""
+    membros, set_id, nomes = _clone_resolver_membros(cliente_ids)
+    pares = _clone_montar_pares(membros, _clone_regras_dos_membros(membros))
+
+    # Monta os alvos a partir do estado do banco; do cliente só vêm as decisões
+    # de conflito, e cada uma precisa ser um dos produtos realmente em disputa.
+    alvos, pendentes = [], []
+    for (emit, cod), info in sorted(pares.items()):
+        if info['situacao'] != 'conflito':
+            alvos.append((emit, cod, info['alvo'], info['descricao']))
+            continue
+        escolhido = (decisoes or {}).get(f'{emit}|{cod}')
+        if escolhido is None:
+            pendentes.append(f'{emit} / {cod}')
+            continue
+        opcoes = {r['produto_catalogo_id'] for r in info['por_cliente'].values()}
+        if int(escolhido) not in opcoes:
+            raise ValueError(
+                f'Decisão inválida para {emit} / {cod}: o produto escolhido não é '
+                f'nenhum dos que estão em conflito.')
+        alvos.append((emit, cod, int(escolhido), info['descricao']))
+
+    if pendentes:
+        raise ValueError('Há conflitos sem decisão: ' + ', '.join(pendentes[:5])
+                         + ('…' if len(pendentes) > 5 else ''))
+    if not alvos:
+        raise ValueError('Nada a clonar: as empresas selecionadas não têm memorizações.')
+
+    ph_m = ','.join(['%s'] * len(membros))
+
+    with transacao() as cur:
+        # 1. Set + membros + operação (âncora do rollback)
+        if set_id is None:
+            cur.execute("INSERT INTO memo_clone_set (criado_em) VALUES (CURRENT_TIMESTAMP)")
+            set_id = cur.lastrowid
+        cur.execute("SELECT cliente_id FROM memo_clone_membro WHERE set_id = %s", (set_id,))
+        ja_membros = {r['cliente_id'] for r in cur.fetchall()}
+        for m in membros:
+            if m not in ja_membros:
+                cur.execute(
+                    "INSERT INTO memo_clone_membro (set_id, cliente_id) VALUES (%s, %s)",
+                    (set_id, m))
+        cur.execute("INSERT INTO memo_clone_op (set_id) VALUES (%s)", (set_id,))
+        op_id = cur.lastrowid
+
+        # 2. Estado atual das regras, relido DENTRO da transação
+        cur.execute(
+            f"""SELECT id, cliente_id, emit_cnpj, codigo_produto_xml, produto_catalogo_id
+                  FROM nfe_produto_vinculo
+                 WHERE cliente_id IN ({ph_m})
+                   AND grupo_id IS NULL AND ramo_atividade_id IS NULL""",
+            tuple(membros))
+        atual = {(r['cliente_id'], r['emit_cnpj'], r['codigo_produto_xml']): r
+                 for r in cur.fetchall()}
+
+        bkp, a_inserir = [], []
+        upd_por_alvo = defaultdict(list)
+        for emit, cod, alvo, desc in alvos:
+            for m in membros:
+                r = atual.get((m, emit, cod))
+                if r is None:
+                    a_inserir.append((m, emit, cod, desc, alvo))
+                    bkp.append((op_id, 'INSERT', None, m, emit, cod, None, alvo))
+                elif r['produto_catalogo_id'] != alvo:
+                    upd_por_alvo[alvo].append(r['id'])
+                    bkp.append((op_id, 'UPDATE', r['id'], m, emit, cod,
+                                r['produto_catalogo_id'], alvo))
+
+        # 3. BACKUP das regras ANTES de qualquer escrita nelas
+        for i in range(0, len(bkp), _CLONE_CHUNK):
+            bloco = bkp[i:i + _CLONE_CHUNK]
+            ph = ','.join(['(%s,%s,%s,%s,%s,%s,%s,%s)'] * len(bloco))
+            cur.execute(
+                f"""INSERT INTO memo_clone_regras_bkp_fase3a
+                        (op_id, acao, vinculo_id, cliente_id, emit_cnpj,
+                         codigo_produto_xml, produto_antes, produto_depois)
+                    VALUES {ph}""",
+                tuple(x for linha in bloco for x in linha))
+
+        # 4. Escrita das regras
+        for alvo, ids in upd_por_alvo.items():
+            for i in range(0, len(ids), _CLONE_CHUNK):
+                bloco = ids[i:i + _CLONE_CHUNK]
+                ph = ','.join(['%s'] * len(bloco))
+                cur.execute(
+                    f"UPDATE nfe_produto_vinculo SET produto_catalogo_id = %s "
+                    f"WHERE id IN ({ph})", tuple([alvo] + bloco))
+        for i in range(0, len(a_inserir), _CLONE_CHUNK):
+            bloco = a_inserir[i:i + _CLONE_CHUNK]
+            ph = ','.join(['(%s,NULL,NULL,%s,%s,%s,%s)'] * len(bloco))
+            cur.execute(
+                f"""INSERT INTO nfe_produto_vinculo
+                        (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj,
+                         codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)
+                    VALUES {ph}""",
+                tuple(x for linha in bloco for x in linha))
+
+        # 5. BACKUP dos itens que o retroativo vai reclassificar (antes + depois)
+        for i in range(0, len(alvos), _CLONE_CHUNK):
+            bloco = alvos[i:i + _CLONE_CHUNK]
+            cases, p_case = [], []
+            for emit, cod, alvo, _d in bloco:
+                cases.append("WHEN n.emit_cnpj = %s AND i.codigo_produto = %s THEN %s")
+                p_case += [emit, cod, alvo]
+            cond, p_cond = _clone_cond_pares(bloco)
+            cur.execute(
+                f"""INSERT INTO memo_clone_itens_bkp_fase3a
+                        (op_id, item_id, produto_antes, produto_depois,
+                         cliente_id, emit_cnpj, codigo_produto)
+                    SELECT %s, i.id, i.produto_catalogo_id,
+                           CASE {' '.join(cases)} END,
+                           n.cliente_id, n.emit_cnpj, i.codigo_produto
+                      FROM nfe_itens i
+                      JOIN nfe_importacoes n ON n.id = i.nfe_id
+                     WHERE n.tipo = 'entrada' AND n.cliente_id IN ({ph_m})
+                       AND ({cond})""",
+                tuple([op_id] + p_case + list(membros) + p_cond))
+
+        # 6. Retroativo — o backup é quem dirige o UPDATE, como na Fase 2
+        cur.execute(
+            """UPDATE nfe_itens i
+                 JOIN memo_clone_itens_bkp_fase3a b
+                   ON b.item_id = i.id AND b.op_id = %s
+                  SET i.produto_catalogo_id = b.produto_depois""",
+            (op_id,))
+        itens_reclassificados = cur.rowcount
+
+        # 7. Conferência antes do commit
+        cur.execute("SELECT COUNT(*) AS c FROM memo_clone_itens_bkp_fase3a WHERE op_id = %s",
+                    (op_id,))
+        n_bkp_itens = int(cur.fetchone()['c'])
+        cur.execute("SELECT COUNT(*) AS c FROM memo_clone_regras_bkp_fase3a WHERE op_id = %s",
+                    (op_id,))
+        n_bkp_regras = int(cur.fetchone()['c'])
+        if itens_reclassificados != n_bkp_itens:
+            raise RuntimeError(
+                f'Contagens não fecharam: {itens_reclassificados} itens atualizados '
+                f'vs {n_bkp_itens} no backup. Nada foi gravado.')
+        if n_bkp_regras != len(bkp):
+            raise RuntimeError(
+                f'Contagens não fecharam: {n_bkp_regras} regras no backup '
+                f'vs {len(bkp)} previstas. Nada foi gravado.')
+
+    return {
+        'ok': True,
+        'set_id': set_id,
+        'op_id': op_id,
+        'membros': membros,
+        'regras_criadas': len(a_inserir),
+        'regras_sobrescritas': len(bkp) - len(a_inserir),
+        'itens_reclassificados': itens_reclassificados,
+        'rollback_sql': _clone_rollback_sql(op_id, set_id),
+    }
+
+
+def _clone_rollback_sql(op_id, set_id):
+    return (
+        f"-- desfaz a clonagem op_id={op_id}\n"
+        f"UPDATE nfe_itens i JOIN memo_clone_itens_bkp_fase3a b\n"
+        f"     ON b.item_id = i.id AND b.op_id = {op_id}\n"
+        f"   SET i.produto_catalogo_id = b.produto_antes;\n"
+        f"UPDATE nfe_produto_vinculo v JOIN memo_clone_regras_bkp_fase3a b\n"
+        f"     ON b.vinculo_id = v.id AND b.op_id = {op_id} AND b.acao = 'UPDATE'\n"
+        f"   SET v.produto_catalogo_id = b.produto_antes;\n"
+        f"DELETE v FROM nfe_produto_vinculo v JOIN memo_clone_regras_bkp_fase3a b\n"
+        f"     ON b.op_id = {op_id} AND b.acao = 'INSERT'\n"
+        f"    AND b.cliente_id = v.cliente_id AND b.emit_cnpj = v.emit_cnpj\n"
+        f"    AND b.codigo_produto_xml = v.codigo_produto_xml\n"
+        f" WHERE v.grupo_id IS NULL AND v.ramo_atividade_id IS NULL;\n"
+        f"-- e, se quiser desfazer o set inteiro:\n"
+        f"DELETE FROM memo_clone_membro WHERE set_id = {set_id};\n"
+        f"DELETE FROM memo_clone_set WHERE id = {set_id};"
+    )
+
+
+@escrita_fiscal.route('/memorizacoes/clone/preview', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_clone_preview():
+    data = request.get_json(force=True) or {}
+    try:
+        return jsonify({'ok': True, **_clone_preview(data.get('cliente_ids'))})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@escrita_fiscal.route('/memorizacoes/clone/aplicar', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_clone_aplicar():
+    data = request.get_json(force=True) or {}
+    try:
+        resultado = _clone_aplicar(data.get('cliente_ids'), data.get('decisoes') or {})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.exception('Falha ao aplicar clonagem de memorizações')
+        return jsonify({'error': f'Falha ao aplicar: {e}'}), 500
+    logger.info('Clonagem aplicada: op_id=%s set_id=%s membros=%s regras=+%s/~%s itens=%s',
+                resultado['op_id'], resultado['set_id'], resultado['membros'],
+                resultado['regras_criadas'], resultado['regras_sobrescritas'],
+                resultado['itens_reclassificados'])
+    return jsonify(resultado)
 
 
 # _lookup_vinculo, _save_nfe e _save_nfe_dual foram movidos para utils/nfe_import.py

@@ -2,6 +2,7 @@
 import threading
 import os
 import atexit
+from contextlib import contextmanager
 import mysql.connector
 from mysql.connector import Error, pooling
 from config import Config
@@ -108,6 +109,69 @@ def get_db_connection():
         logger.error(f"Erro ao obter conexão do pool MySQL: {e}")
         print(f"Erro ao obter conexão do pool MySQL: {e}")
         return None
+
+
+@contextmanager
+def transacao():
+    """Cursor dentro de UMA transação — para operações multi-statement.
+
+    ``execute_query`` não serve para isso: o pool é ``autocommit=True`` e cada
+    chamada pega uma conexão diferente, então um passo não pode ser desfeito
+    quando o seguinte falha. Aqui a conexão é a mesma do início ao fim, commita
+    no final do bloco e faz rollback em qualquer exceção.
+
+    A transação é aberta com ``start_transaction()`` (START TRANSACTION), e NÃO
+    mexendo no atributo ``autocommit``. O motivo é concreto: ``get_db_connection()``
+    devolve um ``PooledMySQLConnection``, que delega leitura de atributos e
+    chamadas de método para a conexão real mas NÃO delega atribuição — um
+    ``cnx.autocommit = False`` gravaria o valor no objeto wrapper e a sessão
+    MySQL continuaria em autocommit. O bloco pareceria transacional, cada
+    statement commitaria sozinho e o ``rollback()`` não desfaria nada (validado
+    contra o banco real antes desta correção).
+
+    Como START TRANSACTION se encerra no commit/rollback, a sessão volta para o
+    pool exatamente como veio — importante porque o pool usa
+    ``pool_reset_session=False`` e não limpa nada entre usos.
+
+    Uso:
+        with transacao() as cur:
+            cur.execute('INSERT ...', params)
+            cur.execute('UPDATE ...', params)
+    """
+    connection = get_db_connection()
+    if connection is None:
+        raise RuntimeError('Não foi possível obter conexão com o banco de dados')
+
+    cursor = None
+    try:
+        # Defensivo: se a conexão veio do pool com transação aberta, encerra
+        # antes — START TRANSACTION sobre transação aberta levanta.
+        try:
+            if connection.in_transaction:
+                connection.rollback()
+        except Exception:
+            pass
+
+        connection.start_transaction()
+        cursor = connection.cursor(dictionary=True)
+        yield cursor
+        connection.commit()
+    except Exception:
+        try:
+            connection.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            if cursor is not None:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            connection.close()
+        except Exception:
+            pass
 
 
 def execute_query(query, params=None, fetch=False, fetch_one=False):

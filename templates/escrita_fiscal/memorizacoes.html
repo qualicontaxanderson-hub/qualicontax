@@ -64,10 +64,16 @@ table.mem-table tr:hover td { background:#f8fafc; }
         </a>
         <h1 style="margin-top:4px;"><i class="fas fa-memory" style="color:#8b5cf6;margin-right:8px;"></i>Memorizações Fiscais</h1>
     </div>
-    <a href="{{ url_for('escrita_fiscal.conf_compras') }}"
-       style="background:#22c55e;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
-        <i class="fas fa-file-search"></i> Conferência de Entradas
-    </a>
+    <div style="display:flex;gap:10px;align-items:center;">
+        <button onclick="abrirClone()"
+           style="background:#8b5cf6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+            <i class="fas fa-clone"></i> Clonar
+        </button>
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}"
+           style="background:#22c55e;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
+            <i class="fas fa-file-search"></i> Conferência de Entradas
+        </a>
+    </div>
 </div>
 
 <div class="mem-stats">
@@ -216,6 +222,66 @@ table.mem-table tr:hover td { background:#f8fafc; }
 </div>
 </div>
 
+<!-- Clone: passo 1 — escolher as empresas do set -->
+<div class="mem-overlay" id="cloneOverlay" onclick="fecharClone()">
+<div class="mem-modal" style="width:640px;" onclick="event.stopPropagation()">
+    <div class="mem-modal-header" style="background:linear-gradient(135deg,#5b21b6,#8b5cf6);">
+        <h3><i class="fas fa-clone" style="margin-right:8px;"></i>Clonar Memorizações</h3>
+        <button onclick="fecharClone()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;">&times;</button>
+    </div>
+    <div class="mem-modal-body">
+        <p style="font-size:12.5px;color:#475569;margin:0 0 14px;">
+            Escolha as empresas que devem ter as <strong>mesmas memorizações</strong>.
+            O sistema junta as regras das duas, copia o que falta e pergunta o que fazer
+            quando elas discordam. Nada é gravado antes da sua confirmação.
+        </p>
+        <input type="text" id="cloneBusca" placeholder="🔍 Filtrar empresa..." oninput="filtrarEmpresasClone()"
+               style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;margin-bottom:10px;">
+        <div id="cloneEmpresas" style="max-height:320px;overflow-y:auto;border:1.5px solid #e2e8f0;border-radius:8px;">
+        {% for e in empresas_clone %}
+            <label class="clone-emp" data-nome="{{ (e.nome_razao_social or '')|lower }} {{ e.numero_cliente or '' }}"
+                   style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;font-size:13px;">
+                <input type="checkbox" value="{{ e.id }}" data-set="{{ e.clone_set_id or '' }}">
+                <span style="flex:1;">
+                    {% if e.numero_cliente %}<span style="color:#22c55e;font-weight:700;">#{{ e.numero_cliente }}</span> — {% endif %}
+                    {{ e.nome_razao_social }}
+                    <span style="color:#94a3b8;font-family:monospace;font-size:10px;">{{ e.cpf_cnpj or '' }}</span>
+                </span>
+                <span style="font-size:10px;font-weight:700;color:#64748b;white-space:nowrap;">{{ e.regras }} regra(s)</span>
+                {% if e.clone_set_id %}<span class="badge-grupo" title="Já está num set de clone">set {{ e.clone_set_id }}</span>{% endif %}
+            </label>
+        {% endfor %}
+        </div>
+        <div id="cloneErro" style="display:none;margin-top:12px;padding:10px 12px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:12.5px;"></div>
+    </div>
+    <div class="mem-modal-footer">
+        <button onclick="fecharClone()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;">Cancelar</button>
+        <button id="btnAnalisar" onclick="analisarClone()"
+                style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-search"></i> Analisar
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- Clone: passo 2 — resumo + decisão dos conflitos -->
+<div class="mem-overlay" id="decisaoOverlay" onclick="fecharDecisao()">
+<div class="mem-modal" style="width:820px;" onclick="event.stopPropagation()">
+    <div class="mem-modal-header" style="background:linear-gradient(135deg,#5b21b6,#8b5cf6);">
+        <h3><i class="fas fa-code-branch" style="margin-right:8px;"></i>Revisar clonagem</h3>
+        <button onclick="fecharDecisao()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;">&times;</button>
+    </div>
+    <div class="mem-modal-body" id="decisaoBody"></div>
+    <div class="mem-modal-footer">
+        <button onclick="fecharDecisao()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;">Cancelar</button>
+        <button id="btnAplicarClone" onclick="aplicarClone()"
+                style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="fas fa-check"></i> Aplicar clonagem
+        </button>
+    </div>
+</div>
+</div>
+
 <!-- Empresas Modal -->
 <div class="mem-overlay" id="empOverlay" onclick="fecharEmpresas()">
 <div class="mem-modal" onclick="event.stopPropagation()">
@@ -342,6 +408,161 @@ function verEmpresas(id, fornecedor, codigo) {
 
 function fecharEmpresas() {
     document.getElementById('empOverlay').classList.remove('open');
+}
+
+// ---- Clone de memorizações (Fase 3a) ----
+let clonePreview = null;
+
+function abrirClone() {
+    document.getElementById('cloneErro').style.display = 'none';
+    document.getElementById('cloneOverlay').classList.add('open');
+}
+
+function fecharClone() {
+    document.getElementById('cloneOverlay').classList.remove('open');
+}
+
+function fecharDecisao() {
+    document.getElementById('decisaoOverlay').classList.remove('open');
+}
+
+function filtrarEmpresasClone() {
+    const txt = document.getElementById('cloneBusca').value.toLowerCase().trim();
+    document.querySelectorAll('.clone-emp').forEach(el => {
+        el.style.display = (!txt || el.dataset.nome.includes(txt)) ? '' : 'none';
+    });
+}
+
+function empresasSelecionadas() {
+    return Array.from(document.querySelectorAll('#cloneEmpresas input:checked'))
+                .map(i => parseInt(i.value));
+}
+
+function mostrarErroClone(msg) {
+    const el = document.getElementById('cloneErro');
+    el.textContent = msg;
+    el.style.display = '';
+}
+
+function analisarClone() {
+    const ids = empresasSelecionadas();
+    if (ids.length < 2) { mostrarErroClone('Selecione pelo menos 2 empresas.'); return; }
+    const btn = document.getElementById('btnAnalisar');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analisando...';
+    fetch('/escrita-fiscal/memorizacoes/clone/preview', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cliente_ids: ids}),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.ok) { mostrarErroClone(d.error || 'Falha ao analisar.'); return; }
+        clonePreview = d;
+        fecharClone();
+        renderDecisao(d);
+        document.getElementById('decisaoOverlay').classList.add('open');
+    })
+    .catch(() => mostrarErroClone('Falha ao analisar.'))
+    .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Analisar'; });
+}
+
+function renderDecisao(d) {
+    const membros = d.membros.map(m =>
+        `<li>${m.numero_cliente ? '<strong>#' + m.numero_cliente + '</strong> — ' : ''}${m.nome}
+         <span style="color:#94a3b8;">(${m.regras} regra(s) hoje)</span></li>`).join('');
+
+    let html = `
+      <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">
+            ${d.set_novo ? 'Novo set de clone' : 'Estendendo o set ' + d.set_id}
+        </div>
+        <ul style="margin:0 0 12px 18px;font-size:13px;color:#1e293b;">${membros}</ul>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;">
+          <div><strong style="font-size:18px;color:#7c3aed;">${d.pares_copiar}</strong> par(es) a copiar</div>
+          <div><strong style="font-size:18px;color:#16a34a;">${d.pares_ja_ok}</strong> já iguais</div>
+          <div><strong style="font-size:18px;color:${d.conflitos.length ? '#dc2626' : '#94a3b8'};">${d.conflitos.length}</strong> conflito(s)</div>
+          <div><strong style="font-size:18px;color:#2563eb;">${d.itens_reclassificar}</strong> item(ns) a (re)classificar</div>
+        </div>
+      </div>`;
+
+    if (d.conflitos.length) {
+        html += `<p style="font-size:12.5px;color:#b91c1c;margin:0 0 10px;">
+            <i class="fas fa-exclamation-triangle"></i>
+            As empresas discordam nos pares abaixo. Escolha o produto correto de cada um —
+            ele será gravado em <strong>todas</strong> as empresas do set.
+            ${d.itens_em_conflito} item(ns) dependem dessas decisões.
+        </p>`;
+        d.conflitos.forEach((c, idx) => {
+            const opcoes = c.opcoes.map(o => `
+                <label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:7px;cursor:pointer;font-size:12.5px;">
+                    <input type="radio" name="conf_${idx}" value="${o.produto_id}" data-par="${c.emit_cnpj}|${c.codigo_produto_xml}">
+                    <span style="flex:1;"><strong>${o.produto_nome}</strong>
+                        <span style="color:#94a3b8;">— hoje em ${o.empresa}</span></span>
+                </label>`).join('');
+            html += `
+              <div class="conflito-item" style="border:1.5px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:10px;background:#fffbfb;">
+                <div style="font-size:11px;color:#64748b;font-family:monospace;margin-bottom:2px;">
+                    ${c.emit_cnpj} &nbsp;·&nbsp; cProd ${c.codigo_produto_xml}
+                </div>
+                <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:8px;text-transform:uppercase;">
+                    ${c.descricao || '(sem descrição no XML)'}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;">${opcoes}</div>
+              </div>`;
+        });
+    } else {
+        html += `<p style="font-size:13px;color:#16a34a;margin:0;">
+            <i class="fas fa-check-circle"></i> Nenhum conflito — o merge é direto.</p>`;
+    }
+
+    html += `<div id="decisaoErro" style="display:none;margin-top:12px;padding:10px 12px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:12.5px;"></div>`;
+    document.getElementById('decisaoBody').innerHTML = html;
+}
+
+function aplicarClone() {
+    if (!clonePreview) return;
+    const decisoes = {};
+    let faltando = 0;
+    clonePreview.conflitos.forEach((c, idx) => {
+        const sel = document.querySelector(`input[name="conf_${idx}"]:checked`);
+        if (sel) decisoes[sel.dataset.par] = parseInt(sel.value);
+        else faltando++;
+    });
+    const erroEl = document.getElementById('decisaoErro');
+    if (faltando) {
+        erroEl.textContent = `Faltam ${faltando} decisão(ões) de conflito.`;
+        erroEl.style.display = '';
+        return;
+    }
+    const total = clonePreview.itens_reclassificar + clonePreview.itens_em_conflito;
+    if (!confirm(`Aplicar a clonagem?\n\nRegras serão igualadas entre ${clonePreview.membros.length} empresa(s) `
+                 + `e até ${total} item(ns) serão (re)classificados.\n\nHá backup para desfazer.`)) return;
+
+    const btn = document.getElementById('btnAplicarClone');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aplicando...';
+    fetch('/escrita-fiscal/memorizacoes/clone/aplicar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            cliente_ids: clonePreview.membros.map(m => m.cliente_id),
+            decisoes: decisoes,
+        }),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.ok) {
+            erroEl.textContent = d.error || 'Falha ao aplicar.';
+            erroEl.style.display = '';
+            return;
+        }
+        alert(`Clonagem aplicada (set ${d.set_id}, operação ${d.op_id}).\n\n`
+              + `Regras criadas: ${d.regras_criadas}\n`
+              + `Regras sobrescritas: ${d.regras_sobrescritas}\n`
+              + `Itens reclassificados: ${d.itens_reclassificados}`);
+        location.reload();
+    })
+    .catch(() => { erroEl.textContent = 'Falha ao aplicar.'; erroEl.style.display = ''; })
+    .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Aplicar clonagem'; });
 }
 
 function excluirMem(id) {
