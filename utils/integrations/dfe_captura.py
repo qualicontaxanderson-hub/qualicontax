@@ -192,6 +192,26 @@ def _to_int(v):
     return int(d) if d else None
 
 
+def _mesmo_titular(cnpj_a, cnpj_b):
+    """True se os dois documentos são o MESMO titular — o mesmo casamento que a
+    captura já usa para "matriz cobre filial":
+
+      * CNPJ (14 díg.): compara pela RAIZ (8 primeiros dígitos). Matriz e filiais
+        compartilham a raiz, então uma nota destinada a outra filial do MESMO grupo
+        do dono do certificado ainda conta como entrada dele.
+      * CPF (11 díg.): compara os 11 dígitos inteiros (não há "raiz").
+
+    Documento vazio ou com menos de 11 dígitos NUNCA casa (retorna False) — é o que
+    barra a nota só-autXML (dono do cert não é o destinatário)."""
+    a = _digitos(cnpj_a)
+    b = _digitos(cnpj_b)
+    if len(a) < 11 or len(b) < 11:
+        return False
+    if len(a) == 14 and len(b) == 14:
+        return a[:8] == b[:8]
+    return a == b
+
+
 def _parse_dh(s):
     """'2026-07-22T09:30:00-03:00' -> ('2026-07-22 09:30:00', 2026, 7), CONVERTENDO
     o offset para Brasília (-03:00). Assim o dh_emissao grava em BRT e o ano/mês
@@ -394,13 +414,28 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
     (o chamador para o lote e não avança o cursor além deste doc).
 
     ``cli_index`` é o mapa {cnpj_dígitos: cliente_id} da rodada (Cliente.index_cpf_cnpj).
-    Quando o EMITENTE da nota também é cliente cadastrado (≠ o dono do certificado),
-    grava TAMBÉM a linha de SAÍDA dele (dual-save), como o fluxo Dropbox já faz — é
-    a venda entre dois clientes que o distDFeInt entrega e antes era descartada."""
+
+    ENTRADA (ótica do dono do certificado): SÓ é criada quando o DESTINATÁRIO da nota
+    é REALMENTE o dono do cert (casa por raiz — matriz cobre filial). Se o dono é
+    apenas AUTORIZADO a baixar o XML (autXML) e não é o destinatário, a nota NÃO vira
+    entrada dele — era isso que criava a "entrada fantasma da Qualicontax".
+
+    SAÍDA (ótica do emitente): quando o EMITENTE também é cliente cadastrado (≠ o dono
+    do certificado), grava a linha de SAÍDA dele (dual-save) — a venda entre dois
+    clientes que o distDFeInt entrega. Independe de a entrada ter sido criada ou não.
+
+    Se a nota não é entrada do dono NEM saída de um cliente (autXML puro de terceiros),
+    nada é gravado (e um eventual resumo fantasma anterior é removido); devolve 0."""
     xml_str = xml_bytes.decode("utf-8", "replace")
     parsed = parse_nfe_xml(xml_str)                 # pode levantar ValueError
     chave = parsed.get("chave") or parsed["header"].get("chave_acesso") or ""
     data_emissao = parsed["header"].get("data_emissao")
+
+    # Guard do autXML: entrada do dono só quando o dest da nota é o próprio dono do
+    # cert (raiz — matriz cobre filial). Caso contrário (só autXML), dest_cli=None.
+    dest_cli = (empresa["cliente_id"]
+                if _mesmo_titular(parsed["header"].get("dest_cnpj"), empresa["cnpj"])
+                else None)
 
     # Emitente é cliente cadastrado (e não a própria empresa capturadora)? → saída.
     emit_cli = None
@@ -409,12 +444,21 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
         if emit_cli == empresa["cliente_id"]:
             emit_cli = None
 
+    # autXML puro: dono não é dest e emitente não é cliente → nada nosso. Remove um
+    # eventual resumo fantasma (o resumo assume dono=dest) e sai sem gravar linha.
+    if dest_cli is None and emit_cli is None:
+        _remover_sefaz_incompleto(chave)
+        logger.info("[dfe] nota autXML ignorada (dono do cert não é dest e emitente "
+                    "não é cliente): chave=%s", chave)
+        return 0
+
     # Se havia um RESUMO SEFAZ anterior (incompleta=1), guarda a data da 1ª
     # importação. Como o upgrade é DELETE+INSERT, a completa nova nasceria com
     # importado_em=agora; restaurando o valor original, o ON UPDATE marca
     # atualizado_em=agora → a conf-compras mostra "ATUALIZADO" (resumo→completa).
+    # Só interessa quando de fato criamos a entrada do dono.
     importado_orig = None
-    if chave:
+    if dest_cli is not None and chave:
         _prev = execute_query(
             "SELECT importado_em FROM nfe_importacoes "
             "WHERE chave_acesso=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1 "
@@ -425,13 +469,13 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
 
     try:
         # Upgrade + gravação pelo core compartilhado. Entrada na ótica do dono do
-        # certificado (dest); + saída na ótica do emitente QUANDO ele é cliente.
+        # certificado (só se dest_cli); + saída na ótica do emitente QUANDO cliente.
         # O _save_nfe_dual grava cada linha por (chave, tipo) — a entrada existente
         # vira 'dup' (intocada) e só a saída nova é inserida.
         _remover_sefaz_incompleto(chave)
         _save_nfe_dual(parsed, f"{chave}.xml", "SEFAZ", xml_str,
-                       dest_cli=empresa["cliente_id"], emit_cli=emit_cli)
-        if importado_orig is not None:
+                       dest_cli=dest_cli, emit_cli=emit_cli)
+        if dest_cli is not None and importado_orig is not None:
             execute_query(
                 "UPDATE nfe_importacoes SET importado_em=%s "
                 "WHERE chave_acesso=%s AND tipo='entrada' AND origem='SEFAZ'",
@@ -446,9 +490,11 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
             pass
         raise
 
-    # Sucesso → arquiva em IMPORTADOS (mesmo padrão do Dropbox). Falha aqui aborta
-    # o doc; o retry re-sobe (o _save_nfe vira 'dup', idempotente).
-    _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml", xml_bytes)
+    # Sucesso → arquiva em IMPORTADOS (mesmo padrão do Dropbox), sob o DONO do cert,
+    # só quando a entrada dele foi criada. Falha aqui aborta o doc; o retry re-sobe
+    # (o _save_nfe vira 'dup', idempotente).
+    if dest_cli is not None:
+        _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml", xml_bytes)
 
     # Saída (emit é cliente) → arquiva TAMBÉM sob o emitente em .../SAIDAS/{mês}.
     # Best-effort: a linha no banco já entrou; falha aqui não aborta o doc (diferente
@@ -511,7 +557,17 @@ def gravar_resumo_nota(conn, cur, empresa, res):
     a completa ainda NÃO foi obtida (teto de cota do ciclo, 656 ou completa
     indisponível). Fica visível na conf-compras e é retomado pelo _retry_pendentes,
     que busca a completa por chave (consChNFe) e faz o upgrade. No-op se a chave já
-    existe (não rebaixa completa nem toca manual)."""
+    existe (não rebaixa completa nem toca manual).
+
+    GUARD do autXML aqui: o resumo assume dono do cert = destinatário e grava a
+    entrada dele. Diferente da completa, o schema resNFe NÃO carrega o destinatário
+    (só chNFe, emitente, dhEmi, vNF, cSit) — não há dest_cnpj para checar. Na prática
+    isso é seguro porque o distDFeInt só ENTREGA resNFe a quem é o destinatário da
+    nota (autXML/emitente vêm como nfeProc completo, tratado com guard em
+    _importar_nfe_completa). E se ainda assim um resumo fantasma escapar, ele se
+    autocorrige no upgrade: _processar_resumo busca a completa por chave e chama
+    _importar_nfe_completa, que — vendo dest ≠ dono — remove o resumo (via
+    _remover_sefaz_incompleto) e NÃO recria a entrada."""
     cancelada = 1 if res["situacao"] == "cancelada" else 0
     cur.execute(SQL_RESUMO_UPSERT, (
         empresa["cliente_id"], f'{res["chave"]}.xml', res["chave"],
