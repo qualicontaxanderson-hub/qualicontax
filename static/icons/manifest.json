@@ -1,11 +1,11 @@
 {
-  "name": "Grupo NH",
-  "short_name": "NH",
+  "name": "Qualicontax",
+  "short_name": "Qualicontax",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
-  "theme_color": "#07569C",
+  "theme_color": "#00A85A",
   "icons": [
     {
       "src": "/static/icons/icon-192.png",
