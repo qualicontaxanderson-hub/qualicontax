@@ -113,14 +113,17 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     # per item, which caused gunicorn worker timeouts on large batches).
     # Results are shared via vinculos_cache across NF-es from the same emitente.
     _emit_cnpj = h['emit_cnpj']
-    _vkey = f'__vrows__{_emit_cnpj}'
+    # Vínculo é escopado por TIPO: memorização de Compras (entrada) NÃO classifica
+    # Saídas e vice-versa. A key do cache inclui o tipo para não misturar.
+    _vkey = f'__vrows__{tipo}__{_emit_cnpj}'
     if vinculos_cache is not None and _vkey in vinculos_cache:
         _vrows = vinculos_cache[_vkey]
     else:
         _vrows = execute_query(
             "SELECT codigo_produto_xml, cliente_id, grupo_id, "
-            "produto_catalogo_id FROM nfe_produto_vinculo WHERE emit_cnpj = %s",
-            (_emit_cnpj,), fetch=True,
+            "produto_catalogo_id FROM nfe_produto_vinculo "
+            "WHERE emit_cnpj = %s AND tipo = %s",
+            (_emit_cnpj, tipo), fetch=True,
         ) or []
         if vinculos_cache is not None:
             vinculos_cache[_vkey] = _vrows
