@@ -5,7 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>{% block title %}Qualicontax{% endblock %}</title>
-    
+
+    <!-- Favicon (aba do navegador) -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+
+    <!-- Ícones PWA -->
+    <link rel="apple-touch-icon" sizes="180x180"
+          href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32"
+          href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+    <link rel="manifest"
+          href="{{ url_for('static', filename='icons/manifest.json') }}">
+    <meta name="theme-color" content="#07569C">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="NH">
+
     <!-- Preconnect para CDNs externos (reduz latência de DNS+TCP) -->
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
