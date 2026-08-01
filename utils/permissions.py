@@ -16,6 +16,7 @@ PERMISSION_CATALOG = {
         'escrita_fiscal.conf_compras':    'Conferência de Entradas',
         'escrita_fiscal.conf_cte':        'Conferência de CT-e',
         'escrita_fiscal.conf_saidas':     'Conferência de Saídas',
+        'escrita_fiscal.q_robo':          'Painel do Q-Robô',
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',
         'escrita_fiscal.memorizacoes':    'Memorizações',
     },

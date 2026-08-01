@@ -26,6 +26,7 @@ from utils.nfe_import import (
     _MAX_XML_SIZE, _save_nfe, _save_nfe_dual, _lookup_vinculo,
 )
 from models.dfe_certificado import DfeCertificado
+from models.robo_config import RoboConfig
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -4373,6 +4374,92 @@ def conf_saidas():
         dropbox_configured=dropbox_ok,
         uf_list=_UF_LIST,
         dropbox_folder=Config.DROPBOX_XML_FOLDER,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Painel do Q-Robô — Fase 2.1: MONITOR, somente leitura.
+# Nenhuma escrita em robo_config aqui. Ligar/desligar, data de captura,
+# reprocessar histórico, token e cadastro de posto entram nas fases seguintes.
+# ---------------------------------------------------------------------------
+
+# Limiares do semáforo, em minutos sem contato do robô.
+_QROBO_VERDE   = 15     # 🟢 até 15 min
+_QROBO_LARANJA = 180    # 🟠 15 min a 3h · 🔴 acima de 3h
+
+
+def _qrobo_ha(minutos):
+    """'agora' / 'há 12 min' / 'há 6h20' / 'há 3 dias' a partir de minutos."""
+    if minutos is None:
+        return '—'
+    minutos = int(minutos)
+    if minutos < 1:
+        return 'agora'
+    if minutos < 60:
+        return f'há {minutos} min'
+    if minutos < 2880:                       # até 48h mostra hora cheia
+        h, m = divmod(minutos, 60)
+        return f'há {h}h{m:02d}'
+    return f'há {minutos // 1440} dias'
+
+
+def _qrobo_status(min_sem_contato):
+    """(classe_css, rótulo) do semáforo a partir dos minutos sem contato.
+
+    O robô chama touch_ultimo_contato a CADA contato, inclusive quando está
+    desligado ou sem nada para enviar (routes/robo_saidas.py). Então silêncio
+    aqui significa que o processo não está rodando — não que faltou nota."""
+    if min_sem_contato is None:
+        return 'cinza', 'nunca contatou'
+    if min_sem_contato < _QROBO_VERDE:
+        return 'verde', 'ativo'
+    if min_sem_contato < _QROBO_LARANJA:
+        return 'amarelo', f'atenção — {_qrobo_ha(min_sem_contato)}'
+    return 'vermelho', f'parado {_qrobo_ha(min_sem_contato)}'
+
+
+def _qrobo_dt(valor, com_hora=True):
+    """Formata datetime/date vindo do banco (já em BRT) para dd/mm/aaaa HH:MM."""
+    if not hasattr(valor, 'strftime'):
+        return None
+    return valor.strftime('%d/%m/%Y %H:%M' if com_hora else '%d/%m/%Y')
+
+
+@escrita_fiscal.route('/conf-saidas/q-robo')
+@permission_required('escrita_fiscal.q_robo')
+def q_robo_painel():
+    """Monitor dos robôs de captura de saídas (um card/linha por posto)."""
+    postos = []
+    resumo = {'total': 0, 'verde': 0, 'amarelo': 0, 'vermelho': 0, 'cinza': 0,
+              'saidas': 0, 'desligados': 0}
+    for r in RoboConfig.listar_painel():
+        cls, rotulo = _qrobo_status(r.get('min_sem_contato'))
+        total_saidas = int(r.get('total_saidas') or 0)
+        ativo = bool(r.get('ativo'))
+        postos.append({
+            'cliente_id':     r['cliente_id'],
+            'numero':         r.get('numero_cliente') or '—',
+            'razao':          r.get('nome_razao_social') or '(cliente removido)',
+            'status_cls':     cls,
+            'status_txt':     rotulo,
+            'ultimo_contato': _qrobo_dt(r.get('robo_ultimo_contato')),
+            'ultima_captura': _qrobo_dt(r.get('ultima_captura')),
+            'captura_ha':     _qrobo_ha(r.get('min_ultima_captura')),
+            'data_captura':   _qrobo_dt(r.get('data_inicio_captura'), com_hora=False),
+            'ativo':          ativo,
+            'total_saidas':   total_saidas,
+            'reset_seq':      int(r.get('robo_reset_seq') or 0),
+        })
+        resumo['total']  += 1
+        resumo[cls]      += 1
+        resumo['saidas'] += total_saidas
+        if not ativo:
+            resumo['desligados'] += 1
+
+    return render_template(
+        'escrita_fiscal/q_robo.html',
+        postos=postos, resumo=resumo,
+        limiar_verde=_QROBO_VERDE, limiar_laranja=_QROBO_LARANJA,
     )
 
 

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Painel do Q-Robô - Qualicontax{% endblock %}
+
+{% block content %}
+<style>
+.qr-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin:18px 0 20px; }
+.qr-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.qr-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; }
+.qr-kpi-value { font-size:26px; font-weight:800; color:#0f172a; line-height:1.1; margin-top:6px; }
+.qr-kpi-sub { font-size:11.5px; color:#94a3b8; margin-top:4px; }
+.qr-kpi.accent-azul    { border-left:4px solid #2563eb; }
+.qr-kpi.accent-verde   { border-left:4px solid #16a34a; }
+.qr-kpi.accent-vermelho{ border-left:4px solid #dc2626; }
+.qr-kpi.accent-roxo    { border-left:4px solid #7c3aed; }
+
+.qr-legend { display:flex; align-items:flex-start; gap:9px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:11px 15px; font-size:12.5px; color:#1e40af; line-height:1.6; margin-bottom:16px; }
+.qr-legend i { margin-top:3px; color:#2563eb; }
+.qr-legend b { color:#1e3a8a; }
+
+.qr-table-wrap { overflow-x:auto; background:#fff; border:1px solid #e5e7eb; border-radius:14px; }
+table.qr-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.qr-table thead th { background:#f8fafc; text-align:left; padding:10px 12px; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; border-bottom:2px solid #e5e7eb; white-space:nowrap; }
+table.qr-table tbody td { padding:11px 12px; border-bottom:1px solid #f1f5f9; color:#374151; vertical-align:middle; }
+table.qr-table tbody tr:last-child td { border-bottom:none; }
+table.qr-table tbody tr:hover { background:#fafbfc; }
+
+.qr-posto-num { color:#6366f1; font-weight:800; }
+.qr-posto-nome { font-weight:700; color:#1e293b; text-transform:uppercase; font-size:12.5px; }
+
+.qr-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:99px; font-size:11.5px; font-weight:800; white-space:nowrap; }
+.qr-badge.verde    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.qr-badge.amarelo  { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+.qr-badge.vermelho { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.qr-badge.cinza    { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+.qr-dot { width:8px; height:8px; border-radius:99px; flex:0 0 8px; }
+.qr-dot.verde { background:#16a34a; } .qr-dot.amarelo { background:#d97706; }
+.qr-dot.vermelho { background:#dc2626; } .qr-dot.cinza { background:#94a3b8; }
+
+.qr-onoff { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:8px; font-size:11px; font-weight:800; }
+.qr-onoff.on  { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+.qr-onoff.off { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+
+.qr-sub { font-size:11px; color:#94a3b8; margin-top:2px; }
+.qr-num { font-variant-numeric:tabular-nums; font-weight:700; color:#0f172a; }
+.qr-muted { color:#94a3b8; }
+.qr-empty { text-align:center; padding:30px; color:#94a3b8; font-size:13px; }
+.qr-fase { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px 14px; font-size:12px; color:#92400e; margin-bottom:16px; }
+</style>
+
+<div class="cc-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+    <div>
+        <a href="{{ url_for('escrita_fiscal.conf_saidas') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
+            <i class="fas fa-arrow-left"></i> Conferência de Saídas
+        </a>
+        <h1 style="margin-top:4px;font-size:22px;font-weight:700;color:#1e293b;">
+            <i class="fas fa-robot" style="color:#7c3aed;margin-right:8px;"></i>Painel do Q-Robô
+        </h1>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+        <span class="qr-muted" style="font-size:11.5px;"><i class="fas fa-sync-alt"></i> atualiza sozinho a cada 60s</span>
+        <button onclick="location.reload()"
+                style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;">
+            <i class="fas fa-rotate-right"></i> Atualizar
+        </button>
+    </div>
+</div>
+
+<div class="qr-fase">
+    <i class="fas fa-circle-info"></i>
+    <b>Fase 2.1 — monitor somente leitura.</b> Ligar/desligar, data de captura,
+    reprocessar histórico, token e cadastro de posto entram nas próximas fases.
+</div>
+
+<div class="qr-kpis">
+    <div class="qr-kpi accent-azul">
+        <div class="qr-kpi-label">Postos com robô</div>
+        <div class="qr-kpi-value">{{ resumo.total }}</div>
+        <div class="qr-kpi-sub">{{ resumo.desligados }} desligado(s) no painel</div>
+    </div>
+    <div class="qr-kpi accent-verde">
+        <div class="qr-kpi-label">Capturando agora</div>
+        <div class="qr-kpi-value">{{ resumo.verde }}</div>
+        <div class="qr-kpi-sub">contato há menos de {{ limiar_verde }} min</div>
+    </div>
+    <div class="qr-kpi accent-vermelho">
+        <div class="qr-kpi-label">Parados</div>
+        <div class="qr-kpi-value">{{ resumo.vermelho + resumo.cinza }}</div>
+        <div class="qr-kpi-sub">{{ resumo.amarelo }} em atenção</div>
+    </div>
+    <div class="qr-kpi accent-roxo">
+        <div class="qr-kpi-label">Saídas capturadas</div>
+        <div class="qr-kpi-value">{{ '{:,}'.format(resumo.saidas).replace(',', '.') }}</div>
+        <div class="qr-kpi-sub">total acumulado, origem Q-ROBO</div>
+    </div>
+</div>
+
+<div class="qr-legend">
+    <i class="fas fa-traffic-light"></i>
+    <span>
+        <b>🟢 ativo</b> = contato há menos de {{ limiar_verde }} min ·
+        <b>🟠 atenção</b> = entre {{ limiar_verde }} min e {{ (limiar_laranja / 60) | int }}h ·
+        <b>🔴 parado</b> = mais de {{ (limiar_laranja / 60) | int }}h sem contato.<br>
+        O robô avisa a nuvem a <b>cada</b> contato, mesmo desligado ou sem nota nova —
+        então silêncio significa que o <b>processo não está rodando</b> no posto
+        (máquina desligada, robô fechado), e não simplesmente que não houve venda.
+    </span>
+</div>
+
+<div class="qr-table-wrap">
+    <table class="qr-table">
+        <thead>
+            <tr>
+                <th>Posto</th>
+                <th>Status</th>
+                <th>Última captura</th>
+                <th>Data de captura</th>
+                <th style="text-align:center;">Robô</th>
+                <th style="text-align:right;">Total de saídas</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in postos %}
+            <tr>
+                <td>
+                    <span class="qr-posto-num">{{ p.numero }}</span>
+                    <span class="qr-posto-nome">— {{ p.razao }}</span>
+                    <div class="qr-sub">cliente_id {{ p.cliente_id }}{% if p.reset_seq %} · reset_seq {{ p.reset_seq }}{% endif %}</div>
+                </td>
+                <td>
+                    <span class="qr-badge {{ p.status_cls }}">
+                        <span class="qr-dot {{ p.status_cls }}"></span>{{ p.status_txt }}
+                    </span>
+                    <div class="qr-sub">
+                        {% if p.ultimo_contato %}contato {{ p.ultimo_contato }}{% else %}sem registro de contato{% endif %}
+                    </div>
+                </td>
+                <td>
+                    {% if p.ultima_captura %}
+                        <span class="qr-num">{{ p.ultima_captura }}</span>
+                        <div class="qr-sub">{{ p.captura_ha }}</div>
+                    {% else %}
+                        <span class="qr-muted">nenhuma saída capturada</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if p.data_captura %}
+                        {{ p.data_captura }}
+                    {% else %}
+                        <span class="qr-muted">sem data — captura tudo</span>
+                    {% endif %}
+                </td>
+                <td style="text-align:center;">
+                    <span class="qr-onoff {{ 'on' if p.ativo else 'off' }}">
+                        <i class="fas fa-{{ 'circle-check' if p.ativo else 'circle-pause' }}"></i>
+                        {{ 'Ligado' if p.ativo else 'Desligado' }}
+                    </span>
+                </td>
+                <td style="text-align:right;">
+                    <span class="qr-num">{{ '{:,}'.format(p.total_saidas).replace(',', '.') }}</span>
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="qr-empty">
+                <i class="fas fa-robot"></i><br>Nenhum posto com robô cadastrado.
+            </td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+// Recarrega sozinho — a página é só leitura, nada se perde no reload.
+setTimeout(function () { location.reload(); }, 60000);
+</script>
+{% endblock %}
