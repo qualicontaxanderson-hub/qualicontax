@@ -1213,6 +1213,69 @@ def _apply_migrations():
     except Exception:
         pass
 
+    # ---- Q-Robô: config por posto + Portal do Instalador (auditoria) ----------
+    # A robo_config nasceu em migrations/add_robo_config.py (Fase 1 do Q-Robô).
+    # Repetida aqui como IF NOT EXISTS para que um banco novo suba completo: sem
+    # ela, o ALTER de autoria logo abaixo abortaria o boot.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS robo_config (
+            id                  INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id          INT NOT NULL,
+            data_inicio_captura DATE NULL,
+            robo_token          VARCHAR(64) NULL,
+            robo_reset_seq      INT NOT NULL DEFAULT 0,
+            ativo               TINYINT(1) NOT NULL DEFAULT 1,
+            robo_ultimo_contato DATETIME NULL,
+            criado_em           TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em       TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_robo_cliente (cliente_id),
+            UNIQUE KEY uk_robo_token (robo_token),
+            CONSTRAINT fk_robo_cliente FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # Trilha append-only do Portal do Instalador: cada chave gerada/regerada e
+    # cada download do .exe. SEM foreign key de propósito — excluir cliente ou
+    # usuário não pode apagar a auditoria. Guarda SNAPSHOT de nome/número/razão
+    # (histórico tem que continuar legível) e só o PREFIXO do token.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS qrobo_auditoria (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            acao              ENUM('CHAVE_GERADA','CHAVE_REGERADA','DOWNLOAD_INSTALADOR') NOT NULL,
+            origem            ENUM('PORTAL','ADMIN') NOT NULL DEFAULT 'PORTAL',
+            usuario_id        INT           NULL,
+            usuario_nome      VARCHAR(150)  NOT NULL,
+            cliente_id        INT           NULL,
+            numero_cliente    VARCHAR(20)   NULL,
+            razao_social      VARCHAR(255)  NULL,
+            token_prefixo     VARCHAR(12)   NULL,
+            instalador_versao VARCHAR(20)   NULL,
+            ip                VARCHAR(45)   NULL,
+            user_agent        VARCHAR(255)  NULL,
+            criado_em         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_qra_usuario (usuario_id, criado_em),
+            KEY idx_qra_cliente (cliente_id, criado_em),
+            KEY idx_qra_acao    (acao, criado_em)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
+    # Autoria da chave VIGENTE (a trilha completa fica em qrobo_auditoria).
+    # Aditivas e NULL/DEFAULT: as linhas existentes seguem válidas.
+    for _col, _defn in [
+        ('token_gerado_em',  'DATETIME NULL'),
+        ('token_gerado_por', 'INT NULL'),
+        ('token_versao',     'INT NOT NULL DEFAULT 1'),
+    ]:
+        _ex = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'robo_config' "
+            "AND COLUMN_NAME = %s",
+            (_col,), fetch=True, fetch_one=True,
+        ) or {}
+        if _ex.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE robo_config ADD COLUMN {_col} {_defn}")
+
     print("✓ Migrations concluídas")
 
 
