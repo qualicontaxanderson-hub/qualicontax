@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal do Instalador — Q-Robô</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { min-height:100vh; font-size:14px; color:#1e293b; background:#f8fafc;
+               font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }
+        .topo { background:#fff; border-bottom:1px solid #e5e7eb; padding:14px 20px;
+                display:flex; align-items:center; justify-content:space-between; gap:14px;
+                flex-wrap:wrap; }
+        .topo-esq { display:flex; align-items:center; gap:12px; }
+        .topo-logo { width:40px; height:40px; object-fit:contain; border-radius:9px; }
+        .topo-tit { font-size:15px; font-weight:800; color:#0f172a; line-height:1.25; }
+        .topo-sub { font-size:11.5px; color:#64748b; }
+        .topo-dir { display:flex; align-items:center; gap:14px; font-size:12px; color:#64748b; }
+        .sair { color:#dc2626; text-decoration:none; font-weight:700; font-size:12px;
+                border:1px solid #fecaca; background:#fef2f2; padding:7px 14px; border-radius:8px; }
+        .conteudo { max-width:940px; margin:0 auto; padding:22px 20px 60px; }
+        .faixa { display:flex; align-items:flex-start; gap:10px; background:#eff6ff;
+                 border:1px solid #bfdbfe; border-radius:12px; padding:12px 15px;
+                 font-size:12.5px; color:#1e40af; line-height:1.6; margin-bottom:20px; }
+        .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+        .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:20px;
+                box-shadow:0 1px 3px rgba(0,0,0,.04); }
+        .card h2 { font-size:14px; font-weight:800; color:#0f172a; margin-bottom:6px; }
+        .card p { font-size:12.5px; color:#64748b; line-height:1.6; margin-bottom:14px; }
+        .btn { display:inline-block; width:100%; text-align:center; padding:12px;
+               border:none; border-radius:10px; font-size:13px; font-weight:700;
+               cursor:pointer; text-decoration:none; }
+        .btn.verde { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
+        .btn.azul  { background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; }
+        .btn:disabled, .btn.off { background:#f1f5f9; color:#94a3b8; cursor:not-allowed;
+                                  border:1px dashed #cbd5e1; }
+        .breve { display:block; margin-top:9px; font-size:11px; color:#94a3b8; text-align:center; }
+        .hist { margin-top:22px; }
+        .hist .vazio { background:#fff; border:1px dashed #e2e8f0; border-radius:14px;
+                       padding:28px; text-align:center; color:#94a3b8; font-size:12.5px; }
+        .aviso { border-radius:10px; padding:11px 14px; font-size:12.5px; margin-bottom:16px;
+                 background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
+        .selo { display:inline-flex; align-items:center; gap:6px; padding:4px 11px;
+                border-radius:99px; background:#f0fdf4; border:1px solid #bbf7d0;
+                color:#15803d; font-size:11px; font-weight:800; }
+        @media (max-width:520px) { .topo-dir .relogio { display:none; } }
+    </style>
+</head>
+<body>
+<div class="topo">
+    <div class="topo-esq">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="" class="topo-logo">
+        <div>
+            <div class="topo-tit">Portal do Instalador — Q-Robô</div>
+            <div class="topo-sub">{{ usuario.nome }}</div>
+        </div>
+    </div>
+    <div class="topo-dir">
+        {% if escopo_restrito %}<span class="selo">SESSÃO RESTRITA</span>{% endif %}
+        <span class="relogio">expira em ~{{ restam_min }} min sem uso</span>
+        <a href="{{ url_for('qrobo.sair') }}" class="sair">SAIR</a>
+    </div>
+</div>
+
+<div class="conteudo">
+    {% with mensagens = get_flashed_messages() %}
+      {% for msg in mensagens %}<div class="aviso">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+
+    <div class="faixa">
+        Esta sessão serve <b>só para instalar o Q-Robô</b>: baixar o instalador e gerar a
+        chave do posto. Ela <b>não abre nenhuma tela com dado fiscal</b> — e é encerrada ao
+        fechar o navegador ou após 2 horas sem uso.
+    </div>
+
+    <div class="cards">
+        <div class="card">
+            <h2>1. Baixar o instalador</h2>
+            <p>Baixa a versão validada do <b>qrobo.exe</b> para instalar nesta máquina.
+               O download fica registrado no seu histórico.</p>
+            <button class="btn off" disabled>BAIXAR INSTALADOR</button>
+            <span class="breve">disponível na Fase 4</span>
+        </div>
+
+        <div class="card">
+            <h2>2. Gerar a chave do posto</h2>
+            <p>Informe o <b>número do cliente</b>. O sistema mostra a razão social para
+               você conferir e só então gera a chave.</p>
+            <button class="btn off" disabled>GERAR CHAVE</button>
+            <span class="breve">disponível na Fase 3</span>
+        </div>
+    </div>
+
+    <div class="hist">
+        <div class="card">
+            <h2>Seu histórico</h2>
+            <p>Instalações que <b>você</b> fez: chaves geradas (empresa + data/hora) e a
+               última vez que baixou o instalador.</p>
+            <div class="vazio">O histórico aparece aqui a partir da Fase 3.</div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -20,6 +20,12 @@ PERMISSION_CATALOG = {
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',
         'escrita_fiscal.memorizacoes':    'Memorizações',
     },
+    'Q-Robô': {
+        # Portal do Instalador (/qrobo): quem pode entrar na sessão de escopo
+        # restrito para baixar o instalador e gerar a chave do posto. NÃO dá
+        # acesso a nenhuma tela fiscal — o gate em routes/qrobo.py bloqueia.
+        'qrobo.instalador':               'Portal do Instalador',
+    },
     'Contábil': {
         'contabil.index':                 'Acessar Contábil',
         'contabil.conciliacoes':          'Conciliações Bancárias',

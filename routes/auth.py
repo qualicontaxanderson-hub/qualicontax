@@ -1,5 +1,5 @@
 """Rotas de autenticação (login/logout)"""
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, current_user
 from models.usuario import Usuario
 from utils.auth_helper import verify_password
@@ -34,6 +34,11 @@ def login():
             
             # Faz login
             login_user(user, remember=remember)
+            # Login pela porta normal SEMPRE limpa o escopo do Portal do
+            # Instalador: sem isso, quem tivesse usado /qrobo antes neste
+            # navegador continuaria preso ao gate restrito no app completo.
+            session.pop('qrobo_escopo', None)
+            session.pop('qrobo_visto_em', None)
             flash(f'Bem-vindo(a), {user.nome}!', 'success')
             
             # Redireciona para página solicitada ou dashboard

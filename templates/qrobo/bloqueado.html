@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acesso bloqueado — Portal do Instalador</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { min-height:100vh; display:flex; align-items:center; justify-content:center;
+               padding:24px 16px; background:#f8fafc; font-size:14px; color:#1e293b;
+               font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }
+        .card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; max-width:520px;
+                width:100%; padding:34px 32px; box-shadow:0 10px 30px -10px rgba(0,0,0,.15);
+                text-align:center; }
+        .icone { width:62px; height:62px; margin:0 auto 18px; border-radius:50%;
+                 background:#fef2f2; border:1px solid #fecaca; display:flex;
+                 align-items:center; justify-content:center; font-size:28px; }
+        h1 { font-size:19px; font-weight:800; color:#0f172a; margin-bottom:10px; }
+        p { font-size:13px; color:#64748b; line-height:1.7; margin-bottom:14px; }
+        .destino { display:inline-block; background:#f8fafc; border:1px solid #e2e8f0;
+                   border-radius:8px; padding:7px 12px; font-family:ui-monospace,Consolas,monospace;
+                   font-size:12px; color:#475569; margin-bottom:18px; word-break:break-all; }
+        .acoes { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:6px; }
+        .btn { text-decoration:none; padding:11px 20px; border-radius:9px; font-size:13px;
+               font-weight:700; display:inline-block; }
+        .btn.verde { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
+        .btn.cinza { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+        .nota { margin-top:20px; padding-top:16px; border-top:1px solid #f1f5f9;
+                font-size:11.5px; color:#94a3b8; line-height:1.65; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="icone">🔒</div>
+
+    {% if sem_permissao %}
+        <h1>Sua conta não tem acesso ao Portal do Instalador</h1>
+        <p>A credencial está correta, mas falta o perfil <b>Instalador</b>.
+           Peça ao administrador para liberar.</p>
+        <div class="acoes">
+            <a href="{{ url_for('qrobo.sair') }}" class="btn cinza">SAIR</a>
+        </div>
+    {% elif csrf %}
+        <h1>Formulário expirado</h1>
+        <p>A página ficou aberta tempo demais ou foi reenviada. Volte ao portal e
+           refaça a operação — nada foi alterado.</p>
+        <div class="acoes">
+            <a href="{{ url_for('qrobo.index') }}" class="btn verde">VOLTAR AO PORTAL</a>
+        </div>
+    {% else %}
+        <h1>Fora do escopo desta sessão</h1>
+        <p>Você entrou pelo <b>Portal do Instalador</b>. Esta sessão só acessa o download do
+           instalador e a geração de chave — <b>nenhuma tela com dado fiscal</b>.</p>
+        {% if destino %}<div class="destino">{{ destino }}</div>{% endif %}
+        <p>Para usar o sistema completo, saia do portal e entre pela tela de login normal
+           do Qualicontax (no escritório).</p>
+        <div class="acoes">
+            <a href="{{ url_for('qrobo.index') }}" class="btn verde">VOLTAR AO PORTAL</a>
+            <a href="{{ url_for('qrobo.sair') }}" class="btn cinza">SAIR DO PORTAL</a>
+        </div>
+    {% endif %}
+
+    <div class="nota">
+        Este bloqueio é do servidor, não da tela: vale mesmo digitando o endereço na barra.
+    </div>
+</div>
+</body>
+</html>

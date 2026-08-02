@@ -84,6 +84,7 @@ from routes.configuracoes import configuracoes as configuracoes_bp
 from routes.adicionais import adicionais
 from routes.dfe import dfe_bp
 from routes.robo_saidas import robo_saidas
+from routes.qrobo import qrobo, gate_escopo_instalador
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -105,6 +106,13 @@ app.register_blueprint(configuracoes_bp)
 app.register_blueprint(adicionais)
 app.register_blueprint(dfe_bp)
 app.register_blueprint(robo_saidas)
+app.register_blueprint(qrobo)
+
+# Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo
+# restrito. Registrado no APP (não no blueprint) de propósito: precisa rodar
+# antes de TODO request, senão bastaria digitar /escrita-fiscal/... na barra
+# para escapar. Sessão sem o escopo não é tocada — o app segue igual para todos.
+app.before_request(gate_escopo_instalador)
 
 
 # Template filters
