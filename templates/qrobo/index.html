@@ -36,6 +36,11 @@
         .btn:disabled, .btn.off { background:#f1f5f9; color:#94a3b8; cursor:not-allowed;
                                   border:1px dashed #cbd5e1; }
         .breve { display:block; margin-top:9px; font-size:11px; color:#94a3b8; text-align:center; }
+        .meta { display:flex; gap:6px; flex-wrap:wrap; align-items:center; font-size:11.5px;
+                color:#64748b; margin-bottom:13px; }
+        .selo-v { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; font-weight:800;
+                  padding:2px 9px; border-radius:99px; font-size:10.5px; }
+        .hash { font-family:ui-monospace,Consolas,monospace; color:#94a3b8; }
         .hist { margin-top:22px; }
         .hist .vazio { border:1px dashed #e2e8f0; border-radius:12px;
                        padding:24px; text-align:center; color:#94a3b8; font-size:12.5px; }
@@ -95,10 +100,21 @@
     <div class="cards">
         <div class="card">
             <h2>1. Baixar o instalador</h2>
-            <p>Baixa a versão validada do <b>qrobo.exe</b> para instalar nesta máquina.
-               O download fica registrado no seu histórico.</p>
-            <button class="btn off" disabled>BAIXAR INSTALADOR</button>
-            <span class="breve">disponível na Fase 4</span>
+            {% if instalador.ok %}
+                <p>Versão validada do <b>{{ instalador.nome }}</b>. O download fica
+                   registrado no seu histórico.</p>
+                <div class="meta">
+                    {% if instalador.rotulo %}<span class="selo-v">v{{ instalador.rotulo }}</span>{% endif %}
+                    <span>{{ (instalador.tamanho / 1048576) | round(1) }} MB</span>
+                    {% if instalador.modificado %}<span>· publicado em {{ instalador.modificado.strftime('%d/%m/%Y') }}</span>{% endif %}
+                    {% if instalador.hash_curto %}<span class="hash">· {{ instalador.hash_curto }}</span>{% endif %}
+                </div>
+                <a href="{{ url_for('qrobo.instalador') }}" class="btn azul">BAIXAR INSTALADOR</a>
+            {% else %}
+                <p>{{ instalador.erro }}</p>
+                <button class="btn off" disabled>INSTALADOR INDISPONÍVEL</button>
+                <span class="breve">avise o escritório — o arquivo não está na pasta</span>
+            {% endif %}
         </div>
 
         <div class="card">

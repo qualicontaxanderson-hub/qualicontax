@@ -208,6 +208,45 @@ class DropboxService:
                 logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
                 raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
 
+    def file_metadata(self, path: str):
+        """Metadados de UM arquivo, ou None se não existir.
+
+        Diferente de ``list_folder``, devolve o ``content_hash`` — a impressão
+        digital determinística do conteúdo, que o Portal do Instalador usa para
+        registrar na auditoria QUAL binário foi servido (não dá para ficar
+        desatualizada como um rótulo de versão escrito à mão).
+        """
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                raise DropboxError(
+                    'Cliente Dropbox não disponível. '
+                    'Verifique se DROPBOX_REFRESH_TOKEN e DROPBOX_APP_KEY estão configurados.'
+                )
+            try:
+                md = dbx.files_get_metadata(path)
+                return {
+                    'name': md.name,
+                    'path': md.path_display or md.path_lower,
+                    'size': getattr(md, 'size', 0),
+                    'modified': getattr(md, 'server_modified', None),
+                    'content_hash': getattr(md, 'content_hash', None),
+                }
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox file_metadata: token expirado, renovando...')
+                        continue
+                    raise DropboxAuthError(
+                        'Credenciais Dropbox inválidas ou expiradas. '
+                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+                    ) from exc
+                if 'not_found' in str(exc):
+                    return None
+                raise DropboxError(f'Erro ao ler metadados de {path!r}: {exc}') from exc
+
     def _path_exists(self, path: str) -> bool:
         """Retorna True se o caminho existe no Dropbox."""
         for _attempt in range(2):

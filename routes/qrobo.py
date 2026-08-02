@@ -34,12 +34,14 @@ from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
 
+from io import BytesIO
+
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, session, jsonify)
+                   flash, session, jsonify, send_file)
 from flask_login import login_user, logout_user, current_user
 
 from models.usuario import Usuario
-from utils import qrobo_chaves
+from utils import qrobo_chaves, qrobo_instalador
 from utils.auth_helper import verify_password
 
 logger = logging.getLogger(__name__)
@@ -273,7 +275,59 @@ def index():
         'qrobo/index.html',
         historico=qrobo_chaves.historico_usuario(current_user.id, limite=30),
         ultimo_download=qrobo_chaves.ultimo_download(current_user.id),
+        instalador=qrobo_instalador.manifesto(),
         **_contexto_base())
+
+
+# --- Instalador: download autenticado e auditado --------------------------
+@qrobo.route('/instalador')
+@instalador_required
+def instalador():
+    """Serve o qrobo.exe da pasta /Q-Robo da Dropbox.
+
+    Nunca sai por /static (seria público e mataria a auditoria). O caminho vem
+    SEMPRE do manifesto — nada do que o usuário manda vira caminho de arquivo.
+    """
+    m = qrobo_instalador.manifesto()
+    if not m['ok']:
+        logger.warning('[qrobo] download indisponível: %s | %s',
+                       m.get('erro'), m.get('detalhe'))
+        flash(f"{m['erro']} Avise o escritório — não dá para instalar agora.", 'danger')
+        return redirect(url_for('qrobo.index'))
+
+    dados = qrobo_instalador.baixar(m['caminho'])
+    if not dados:
+        flash('O instalador está na pasta, mas não consegui baixá-lo agora. '
+              'Tente de novo em instantes.', 'danger')
+        return redirect(url_for('qrobo.index'))
+
+    # Audita ANTES de enviar: download interrompido no meio ainda é um download
+    # entregue ao instalador. Melhor sobrar registro do que faltar.
+    ip, ua = qrobo_chaves.contexto_request()
+    qrobo_chaves.registrar_download(current_user.id, current_user.nome,
+                                    versao=m['versao'],
+                                    origem=qrobo_chaves.ORIGEM_PORTAL,
+                                    ip=ip, user_agent=ua)
+    logger.info('[qrobo] instalador %s (%s bytes, versao=%s) baixado por %s (id=%s)',
+                m['nome'], len(dados), m['versao'], current_user.nome, current_user.id)
+    return send_file(BytesIO(dados), as_attachment=True,
+                     download_name=m['nome_download'],
+                     mimetype='application/octet-stream')
+
+
+@qrobo.route('/instalador/status')
+@instalador_required
+def instalador_status():
+    """Diagnóstico read-only: o que o app enxerga na pasta do Dropbox.
+
+    Não devolve o arquivo — só nome, tamanho, data, content_hash e avisos. É por
+    aqui que se confere o caminho em produção sem precisar baixar 11 MB.
+    """
+    m = qrobo_instalador.manifesto()
+    m['pasta'] = qrobo_instalador.pasta()
+    if m.get('modificado') is not None:
+        m['modificado'] = str(m['modificado'])
+    return jsonify(m), (200 if m['ok'] else 503)
 
 
 # --- Passo 1: número -> confere a razão social (NÃO gera nada) -------------
