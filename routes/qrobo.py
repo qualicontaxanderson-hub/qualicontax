@@ -30,13 +30,16 @@ import hmac
 import logging
 import secrets
 import time
+from datetime import datetime
 from functools import wraps
+from zoneinfo import ZoneInfo
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify)
 from flask_login import login_user, logout_user, current_user
 
 from models.usuario import Usuario
+from utils import qrobo_chaves
 from utils.auth_helper import verify_password
 
 logger = logging.getLogger(__name__)
@@ -156,6 +159,16 @@ def csrf_token():
     return tok
 
 
+def _rotaciona_csrf():
+    """Queima o token atual e emite outro.
+
+    Usado depois de gerar uma chave: F5 na página do resultado reenviaria o
+    POST e geraria uma chave NOVA, invalidando a que o instalador acabou de
+    colar no robô. Com o token queimado, o reenvio morre em 400.
+    """
+    session[CHAVE_CSRF] = secrets.token_urlsafe(32)
+
+
 def csrf_valido():
     enviado = (request.form.get('csrf_token')
                or request.headers.get('X-CSRF-Token') or '')
@@ -239,17 +252,133 @@ def login():
                            expirado=bool(request.args.get('expirado')))
 
 
+def _hoje_brt():
+    """Data de hoje em BRT (o processo roda em UTC no Railway — date.today()
+    viraria 'amanhã' depois das 21h e o serviço recusaria como data futura)."""
+    return datetime.now(ZoneInfo('America/Sao_Paulo')).date()
+
+
+def _contexto_base():
+    ocioso = segundos_ocioso() or 0
+    return {'usuario': current_user,
+            'restam_min': max(0, (OCIOSO_SEGUNDOS - ocioso) // 60),
+            'escopo_restrito': _sessao_instalador()}
+
+
 @qrobo.route('/')
 @instalador_required
 def index():
-    """Painel do instalador. Fase 2 entrega a casca; as ações vêm nas fases 3 e 4."""
-    ocioso = segundos_ocioso() or 0
+    """Painel do instalador: baixar o .exe, gerar chave e o histórico DELE."""
     return render_template(
         'qrobo/index.html',
-        usuario=current_user,
-        restam_min=max(0, (OCIOSO_SEGUNDOS - ocioso) // 60),
-        escopo_restrito=_sessao_instalador(),
-    )
+        historico=qrobo_chaves.historico_usuario(current_user.id, limite=30),
+        ultimo_download=qrobo_chaves.ultimo_download(current_user.id),
+        **_contexto_base())
+
+
+# --- Passo 1: número -> confere a razão social (NÃO gera nada) -------------
+_ERRO_RESOLVER = {
+    'numero_vazio': 'Informe o número do cliente.',
+    'nao_encontrado': 'Nenhum cliente com o número {n}. Confira no cadastro — '
+                      'o número é exato ("023" não é o mesmo que "23").',
+    'ambiguo': 'Existe mais de um cliente com o número {n}. Fale com o escritório '
+               'antes de instalar — não gerei nada.',
+}
+
+
+@qrobo.route('/resolver', methods=['POST'])
+@instalador_required
+@exige_csrf
+def resolver():
+    """Resolve o número e mostra a razão social para conferência.
+
+    Devolve SÓ a identidade do cliente da vez (número, razão social, CNPJ,
+    situação) e o estado do robô dele. Nada de nota, valor ou movimento — o
+    portal não tem por onde ver dado fiscal.
+    """
+    numero = (request.form.get('numero') or '').strip()
+    res = qrobo_chaves.resolver_numero(numero)
+
+    if not res['ok']:
+        logger.info('[qrobo] resolver %r recusado: %s (user=%s)',
+                    numero, res['erro'], current_user.id)
+        flash(_ERRO_RESOLVER.get(res['erro'], 'Não foi possível localizar o cliente.')
+              .format(n=numero), 'danger')
+        return redirect(url_for('qrobo.index'))
+
+    return render_template('qrobo/confirmar.html',
+                           cliente=res['cliente'], robo=res['robo'],
+                           hoje=_hoje_brt().isoformat(), **_contexto_base())
+
+
+# --- Passo 2: confirmado -> gera (ou regera com dupla confirmação) ---------
+_ERRO_GERAR = {
+    'cliente_inexistente': 'Cliente não encontrado. Recomece pelo número.',
+    'data_invalida': 'Data de início inválida. Use o seletor de data do campo.',
+    'data_futura': 'A data de início não pode ser no futuro — o robô ignoraria '
+                   'tudo que fosse emitido até lá.',
+}
+
+
+@qrobo.route('/gerar', methods=['POST'])
+@instalador_required
+@exige_csrf
+def gerar():
+    numero = (request.form.get('numero') or '').strip()
+    cliente_id = (request.form.get('cliente_id') or '').strip()
+    data_inicio = (request.form.get('data_inicio') or '').strip()
+    confirmou = request.form.get('confirmar_regeracao') == '1'
+
+    # Integridade: o número TEM que continuar apontando para o mesmo cliente.
+    # Protege contra formulário adulterado e contra o cadastro ter mudado
+    # enquanto a tela de conferência ficava aberta.
+    res = qrobo_chaves.resolver_numero(numero)
+    if not res['ok'] or str(res['cliente']['cliente_id']) != cliente_id:
+        logger.warning('[qrobo] gerar abortado: numero=%r não confere com cliente_id=%r '
+                       '(user=%s)', numero, cliente_id, current_user.id)
+        flash('A conferência não bateu com o cadastro. Recomece pelo número — '
+              'nada foi gerado.', 'danger')
+        return redirect(url_for('qrobo.index'))
+
+    cliente, robo = res['cliente'], res['robo']
+    ja_tem_chave = robo is not None
+
+    # Dupla confirmação obrigatória para regerar: a chave atual morre e o robô
+    # instalado para de enviar (401) até ser reconfigurado.
+    if ja_tem_chave and not confirmou:
+        flash('Este posto já tem chave. Marque a confirmação para substituir.', 'warning')
+        return render_template('qrobo/confirmar.html', cliente=cliente, robo=robo,
+                               hoje=_hoje_brt().isoformat(),
+                               faltou_confirmar=True, **_contexto_base())
+
+    ip, ua = qrobo_chaves.contexto_request()
+    r = qrobo_chaves.gerar_chave(
+        cliente['cliente_id'], current_user.id, current_user.nome,
+        regerar=ja_tem_chave, data_inicio=data_inicio or None,
+        origem=qrobo_chaves.ORIGEM_PORTAL, ip=ip, user_agent=ua)
+
+    if not r['ok']:
+        # 'ja_existe' aqui = alguém criou a config entre a conferência e o envio.
+        if r['erro'] == 'ja_existe':
+            flash('Este posto passou a ter uma chave agora há pouco. Confira e '
+                  'confirme de novo se quiser substituir.', 'warning')
+            return render_template('qrobo/confirmar.html', cliente=cliente,
+                                   robo=r['robo'], hoje=_hoje_brt().isoformat(),
+                                   **_contexto_base())
+        logger.warning('[qrobo] gerar falhou para cliente_id=%s: %s',
+                       cliente['cliente_id'], r['erro'])
+        flash(_ERRO_GERAR.get(r['erro'], 'Não foi possível gerar a chave.'), 'danger')
+        return render_template('qrobo/confirmar.html', cliente=cliente, robo=robo,
+                               hoje=_hoje_brt().isoformat(), **_contexto_base())
+
+    # Queima o token do formulário: F5 nesta página não gera outra chave.
+    _rotaciona_csrf()
+    logger.info('[qrobo] %s por %s (id=%s) para cliente_id=%s versao=%s',
+                r['acao'], current_user.nome, current_user.id,
+                cliente['cliente_id'], r['versao'])
+    return render_template('qrobo/chave.html', resultado=r, cliente=cliente,
+                           regerada=(r['acao'] == qrobo_chaves.ACAO_REGERADA),
+                           **_contexto_base())
 
 
 @qrobo.route('/sair')

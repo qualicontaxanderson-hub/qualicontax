@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conferir empresa — Portal do Instalador</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { min-height:100vh; font-size:14px; color:#1e293b; background:#f8fafc;
+               font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }
+        .topo { background:#fff; border-bottom:1px solid #e5e7eb; padding:14px 20px;
+                display:flex; align-items:center; justify-content:space-between; gap:14px; }
+        .topo-tit { font-size:15px; font-weight:800; color:#0f172a; }
+        .topo-sub { font-size:11.5px; color:#64748b; }
+        .sair { color:#dc2626; text-decoration:none; font-weight:700; font-size:12px;
+                border:1px solid #fecaca; background:#fef2f2; padding:7px 14px; border-radius:8px; }
+        .conteudo { max-width:660px; margin:0 auto; padding:24px 20px 60px; }
+        .voltar { display:inline-block; margin-bottom:14px; font-size:12.5px; color:#64748b;
+                  text-decoration:none; font-weight:600; }
+        .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:24px;
+                box-shadow:0 1px 3px rgba(0,0,0,.04); margin-bottom:16px; }
+        .passo { font-size:11px; font-weight:800; letter-spacing:.04em; color:#2563eb;
+                 text-transform:uppercase; margin-bottom:10px; }
+        h1 { font-size:17px; font-weight:800; color:#0f172a; margin-bottom:16px; }
+        .empresa { background:#f0fdf4; border:2px solid #bbf7d0; border-radius:12px;
+                   padding:18px 20px; margin-bottom:18px; }
+        .empresa .razao { font-size:18px; font-weight:800; color:#14532d; line-height:1.35;
+                          text-transform:uppercase; margin-bottom:10px; }
+        .linha { display:flex; gap:8px; font-size:12.5px; color:#166534; margin-top:5px; }
+        .linha b { min-width:74px; color:#15803d; font-weight:700; }
+        .aviso { border-radius:10px; padding:13px 16px; font-size:12.5px; line-height:1.65;
+                 margin-bottom:16px; }
+        .aviso.alerta   { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+        .aviso.perigo   { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; }
+        .aviso.info     { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
+        .campo { margin-bottom:18px; }
+        .campo label { display:block; font-size:12px; font-weight:700; color:#374151;
+                       margin-bottom:6px; }
+        .campo input[type=date] { width:100%; max-width:230px; padding:11px 13px;
+                                  border:1.5px solid #e5e7eb; border-radius:10px; font-size:14px; }
+        .campo .dica { font-size:11.5px; color:#94a3b8; margin-top:6px; line-height:1.55; }
+        .confirma { display:flex; gap:10px; align-items:flex-start; background:#fef2f2;
+                    border:1px solid #fecaca; border-radius:10px; padding:13px 15px;
+                    margin-bottom:16px; }
+        .confirma input { margin-top:2px; width:17px; height:17px; flex:0 0 17px; }
+        .confirma label { font-size:12.5px; color:#b91c1c; line-height:1.6; font-weight:600; }
+        .acoes { display:flex; gap:10px; flex-wrap:wrap; }
+        .btn { padding:13px 22px; border:none; border-radius:10px; font-size:13.5px;
+               font-weight:800; cursor:pointer; text-decoration:none; display:inline-block;
+               text-align:center; }
+        .btn.verde  { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; flex:1; }
+        .btn.laranja{ background:linear-gradient(135deg,#ea580c,#c2410c); color:#fff; flex:1; }
+        .btn.cinza  { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+        .robo-atual { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;
+                      padding:14px 16px; font-size:12.5px; color:#475569; line-height:1.75;
+                      margin-bottom:16px; }
+        .robo-atual b { color:#0f172a; }
+    </style>
+</head>
+<body>
+<div class="topo">
+    <div>
+        <div class="topo-tit">Portal do Instalador — Q-Robô</div>
+        <div class="topo-sub">{{ usuario.nome }}</div>
+    </div>
+    <a href="{{ url_for('qrobo.sair') }}" class="sair">SAIR</a>
+</div>
+
+<div class="conteudo">
+    <a href="{{ url_for('qrobo.index') }}" class="voltar">← voltar</a>
+
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="aviso {{ 'perigo' if categoria == 'danger' else ('alerta' if categoria == 'warning' else 'info') }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="card">
+        <div class="passo">Passo 2 de 3 — conferência</div>
+        <h1>É esta a empresa?</h1>
+
+        <div class="empresa">
+            <div class="razao">{{ cliente.razao_social }}</div>
+            <div class="linha"><b>Número:</b> {{ cliente.numero_cliente }}</div>
+            <div class="linha"><b>CNPJ/CPF:</b> {{ cliente.cpf_cnpj }}</div>
+            <div class="linha"><b>Situação:</b> {{ cliente.situacao }}</div>
+        </div>
+
+        {% if cliente.situacao != 'ATIVO' %}
+        <div class="aviso alerta">
+            Atenção: este cliente está como <b>{{ cliente.situacao }}</b> no cadastro.
+            Confirme com o escritório antes de instalar.
+        </div>
+        {% endif %}
+
+        {% if robo %}
+        <div class="robo-atual">
+            Este posto <b>já tem uma chave</b> (versão {{ robo.token_versao }}).<br>
+            {% if robo.token_gerado_em %}
+              Gerada em <b>{{ robo.token_gerado_em.strftime('%d/%m/%Y às %H:%M') }}</b>
+              {% if robo.token_gerado_por_nome %}por <b>{{ robo.token_gerado_por_nome }}</b>{% endif %}.<br>
+            {% else %}
+              Gerada antes do portal existir (sem registro de autoria).<br>
+            {% endif %}
+            Robô {{ 'LIGADO' if robo.ativo else 'DESLIGADO' }} ·
+            captura desde
+            <b>{% if robo.data_inicio_captura %}{{ robo.data_inicio_captura.strftime('%d/%m/%Y') }}{% else %}— (sem data){% endif %}</b>
+        </div>
+
+        <div class="aviso perigo">
+            <b>Gerar outra chave INVALIDA a atual.</b> O robô que estiver instalado
+            neste posto <b>para de enviar</b> assim que a chave for trocada, e só volta
+            depois de configurado com a chave nova. Só siga se você está reinstalando
+            esta máquina agora.
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('qrobo.gerar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="numero" value="{{ cliente.numero_cliente }}">
+            <input type="hidden" name="cliente_id" value="{{ cliente.cliente_id }}">
+
+            <div class="campo">
+                <label for="data_inicio">Capturar notas a partir de</label>
+                <input type="date" id="data_inicio" name="data_inicio" max="{{ hoje }}"
+                       value="{% if robo and robo.data_inicio_captura %}{{ robo.data_inicio_captura.isoformat() }}{% else %}{{ hoje }}{% endif %}">
+                <div class="dica">
+                    O padrão é <b>hoje</b> — o robô manda o que for emitido daqui pra frente.
+                    Para puxar movimento antigo, o escritório ajusta depois.
+                </div>
+            </div>
+
+            {% if robo %}
+            <div class="confirma">
+                <input type="checkbox" id="confirmar_regeracao" name="confirmar_regeracao"
+                       value="1" required {% if faltou_confirmar %}autofocus{% endif %}>
+                <label for="confirmar_regeracao">
+                    Entendi que a chave atual deste posto vai <b>parar de funcionar</b>
+                    e que o robô só volta a enviar depois de reconfigurado.
+                </label>
+            </div>
+            {% endif %}
+
+            <div class="acoes">
+                <a href="{{ url_for('qrobo.index') }}" class="btn cinza">NÃO É ESTA</a>
+                {% if robo %}
+                    <button type="submit" class="btn laranja">SIM — SUBSTITUIR A CHAVE</button>
+                {% else %}
+                    <button type="submit" class="btn verde">SIM — GERAR A CHAVE</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

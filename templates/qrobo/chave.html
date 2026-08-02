@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chave gerada — Portal do Instalador</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { min-height:100vh; font-size:14px; color:#1e293b; background:#f8fafc;
+               font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }
+        .topo { background:#fff; border-bottom:1px solid #e5e7eb; padding:14px 20px;
+                display:flex; align-items:center; justify-content:space-between; gap:14px; }
+        .topo-tit { font-size:15px; font-weight:800; color:#0f172a; }
+        .topo-sub { font-size:11.5px; color:#64748b; }
+        .sair { color:#dc2626; text-decoration:none; font-weight:700; font-size:12px;
+                border:1px solid #fecaca; background:#fef2f2; padding:7px 14px; border-radius:8px; }
+        .conteudo { max-width:660px; margin:0 auto; padding:24px 20px 60px; }
+        .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:26px 24px;
+                box-shadow:0 1px 3px rgba(0,0,0,.04); }
+        .passo { font-size:11px; font-weight:800; letter-spacing:.04em; color:#16a34a;
+                 text-transform:uppercase; margin-bottom:10px; }
+        h1 { font-size:19px; font-weight:800; color:#0f172a; margin-bottom:6px; }
+        .sub { font-size:13px; color:#64748b; margin-bottom:20px; line-height:1.6; }
+        .sub b { color:#0f172a; text-transform:uppercase; }
+        .chave-area { background:#0f172a; border-radius:12px; padding:18px; margin-bottom:12px; }
+        .chave-rot { font-size:10.5px; font-weight:800; letter-spacing:.06em; color:#64748b;
+                     text-transform:uppercase; margin-bottom:9px; }
+        .chave { font-family:ui-monospace, Consolas, 'Courier New', monospace; font-size:13.5px;
+                 color:#4ade80; word-break:break-all; line-height:1.75; user-select:all; }
+        .btn-copiar { width:100%; padding:13px; border:none; border-radius:10px; cursor:pointer;
+                      background:linear-gradient(135deg,#16a34a,#15803d); color:#fff;
+                      font-size:14px; font-weight:800; margin-bottom:16px; }
+        .btn-copiar.ok { background:#15803d; }
+        .aviso { border-radius:10px; padding:13px 16px; font-size:12.5px; line-height:1.7;
+                 margin-bottom:16px; }
+        .aviso.alerta { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+        .aviso.info   { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
+        .resumo { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;
+                  padding:14px 16px; font-size:12.5px; color:#475569; line-height:1.85;
+                  margin-bottom:18px; }
+        .resumo b { color:#0f172a; }
+        .acoes { display:flex; gap:10px; flex-wrap:wrap; }
+        .btn { padding:12px 20px; border-radius:10px; font-size:13px; font-weight:700;
+               text-decoration:none; display:inline-block; text-align:center; }
+        .btn.cinza { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; flex:1; }
+        ol { margin:8px 0 0 20px; }
+        ol li { margin-bottom:5px; }
+    </style>
+</head>
+<body>
+<div class="topo">
+    <div>
+        <div class="topo-tit">Portal do Instalador — Q-Robô</div>
+        <div class="topo-sub">{{ usuario.nome }}</div>
+    </div>
+    <a href="{{ url_for('qrobo.sair') }}" class="sair">SAIR</a>
+</div>
+
+<div class="conteudo">
+    <div class="card">
+        <div class="passo">Passo 3 de 3 — {{ 'chave substituída' if regerada else 'chave gerada' }}</div>
+        <h1>{{ 'Chave substituída com sucesso' if regerada else 'Chave gerada com sucesso' }}</h1>
+        <div class="sub">Empresa: <b>{{ cliente.razao_social }}</b> · nº {{ cliente.numero_cliente }}</div>
+
+        <div class="chave-area">
+            <div class="chave-rot">Chave de acesso do robô</div>
+            <div class="chave" id="chave">{{ resultado.token }}</div>
+        </div>
+        <button class="btn-copiar" id="btnCopiar" onclick="copiar()">COPIAR CHAVE</button>
+
+        <div class="aviso alerta">
+            <b>Copie agora.</b> Esta chave aparece <b>uma única vez</b> — por segurança, ela
+            não fica visível em nenhuma tela depois que você sair daqui. Se perder, é só
+            gerar outra (o posto volta a precisar de reconfiguração).
+        </div>
+
+        <div class="resumo">
+            Captura a partir de <b>{{ resultado.data_inicio_captura.strftime('%d/%m/%Y') }}</b><br>
+            Robô <b>{{ 'LIGADO' if resultado.ativo else 'DESLIGADO' }}</b> ·
+            versão da chave <b>{{ resultado.versao }}</b><br>
+            Registrado no seu histórico e na auditoria do escritório.
+        </div>
+
+        {% if regerada %}
+        <div class="aviso info">
+            A chave anterior <b>já não vale mais</b>. Configure o robô desta máquina com a
+            chave nova agora — enquanto isso, este posto não envia nada.
+        </div>
+        {% endif %}
+
+        <div class="aviso info">
+            <b>Próximos passos na máquina:</b>
+            <ol>
+                <li>Instale o <b>qrobo.exe</b> (botão de download no portal).</li>
+                <li>Cole esta chave na configuração do robô.</li>
+                <li>Confirme que a empresa que aparece no robô é <b>{{ cliente.razao_social }}</b>.</li>
+            </ol>
+        </div>
+
+        <div class="acoes">
+            <a href="{{ url_for('qrobo.index') }}" class="btn cinza">VOLTAR AO PORTAL</a>
+        </div>
+    </div>
+</div>
+
+<script>
+function copiar() {
+    var txt = document.getElementById('chave').innerText.trim();
+    var btn = document.getElementById('btnCopiar');
+    function ok() { btn.textContent = 'CHAVE COPIADA'; btn.classList.add('ok');
+                    setTimeout(function(){ btn.textContent = 'COPIAR CHAVE';
+                                           btn.classList.remove('ok'); }, 2500); }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(txt).then(ok, selecionar);
+    } else { selecionar(); }
+}
+function selecionar() {
+    // Fallback: seleciona a chave para o Ctrl+C manual.
+    var r = document.createRange(); r.selectNodeContents(document.getElementById('chave'));
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    try { document.execCommand('copy'); } catch (e) {}
+    document.getElementById('btnCopiar').textContent = 'SELECIONADA — use Ctrl+C';
+}
+</script>
+</body>
+</html>
