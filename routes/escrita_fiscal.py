@@ -27,6 +27,7 @@ from utils.nfe_import import (
 )
 from models.dfe_certificado import DfeCertificado
 from models.robo_config import RoboConfig
+from utils import qrobo_chaves
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -4425,10 +4426,14 @@ def _qrobo_dt(valor, com_hora=True):
     return valor.strftime('%d/%m/%Y %H:%M' if com_hora else '%d/%m/%Y')
 
 
-@escrita_fiscal.route('/conf-saidas/q-robo')
-@permission_required('escrita_fiscal.q_robo')
-def q_robo_painel():
-    """Monitor dos robôs de captura de saídas (um card/linha por posto)."""
+_QROBO_AUD_FILTROS = {
+    'chaves': (qrobo_chaves.ACAO_GERADA, qrobo_chaves.ACAO_REGERADA),
+    'downloads': (qrobo_chaves.ACAO_DOWNLOAD,),
+}
+
+
+def _qrobo_painel_contexto(**extra):
+    """Monta o contexto do painel (monitor + auditoria). Só leitura."""
     postos = []
     resumo = {'total': 0, 'verde': 0, 'amarelo': 0, 'vermelho': 0, 'cinza': 0,
               'saidas': 0, 'desligados': 0}
@@ -4456,11 +4461,129 @@ def q_robo_painel():
         if not ativo:
             resumo['desligados'] += 1
 
-    return render_template(
-        'escrita_fiscal/q_robo.html',
-        postos=postos, resumo=resumo,
-        limiar_verde=_QROBO_VERDE, limiar_laranja=_QROBO_LARANJA,
-    )
+    # ---- Auditoria do Portal do Instalador --------------------------------
+    filtro = (request.args.get('aud') or 'todas').strip()
+    acoes = _QROBO_AUD_FILTROS.get(filtro)
+    trilha = qrobo_chaves.historico_geral(limite=300)
+    if acoes:
+        trilha = [t for t in trilha if t['acao'] in acoes]
+    aud_resumo = {
+        'chaves': sum(1 for t in trilha if t['acao'] in _QROBO_AUD_FILTROS['chaves']),
+        'downloads': sum(1 for t in trilha if t['acao'] == qrobo_chaves.ACAO_DOWNLOAD),
+    }
+
+    ctx = {
+        'postos': postos, 'resumo': resumo,
+        'limiar_verde': _QROBO_VERDE, 'limiar_laranja': _QROBO_LARANJA,
+        'trilha': trilha, 'aud_filtro': filtro, 'aud_resumo': aud_resumo,
+        'hoje': datetime.now(ZoneInfo('America/Sao_Paulo')).date().isoformat(),
+        'csrf_token': _qrobo_csrf_token(),
+        'confirmacao': None, 'chave': None,
+    }
+    ctx.update(extra)
+    return ctx
+
+
+@escrita_fiscal.route('/conf-saidas/q-robo')
+@permission_required('escrita_fiscal.q_robo')
+def q_robo_painel():
+    """Monitor dos robôs + auditoria do Portal do Instalador (somente leitura)."""
+    return render_template('escrita_fiscal/q_robo.html', **_qrobo_painel_contexto())
+
+
+# ---------------------------------------------------------------------------
+# Geração de chave PELO PAINEL (origem='ADMIN')
+#
+# Mesmo serviço do portal (utils/qrobo_chaves) — a trava do número, a data que
+# nunca fica NULL e a auditoria atômica são as mesmas. Muda só a origem
+# registrada na trilha e a tela. O CSRF é o mesmo do portal: gerar chave é ação
+# sensível, e reusar o helper custa uma linha.
+# ---------------------------------------------------------------------------
+def _qrobo_csrf_token():
+    from routes.qrobo import csrf_token
+    return csrf_token()
+
+
+def _qrobo_csrf_ok():
+    from routes.qrobo import csrf_valido
+    return csrf_valido()
+
+
+@escrita_fiscal.route('/conf-saidas/q-robo/resolver', methods=['POST'])
+@permission_required('escrita_fiscal.q_robo')
+def q_robo_resolver():
+    """Número -> razão social para conferência. NÃO gera nada."""
+    if not _qrobo_csrf_ok():
+        flash('Formulário expirado. Tente de novo.', 'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+
+    numero = (request.form.get('numero') or '').strip()
+    res = qrobo_chaves.resolver_numero(numero)
+    if not res['ok']:
+        msgs = {'numero_vazio': 'Informe o número do cliente.',
+                'nao_encontrado': f'Nenhum cliente com o número {numero}. '
+                                  'O número é exato ("023" ≠ "23").',
+                'ambiguo': f'Mais de um cliente com o número {numero} — '
+                           'resolva o cadastro antes. Nada foi gerado.'}
+        flash(msgs.get(res['erro'], 'Não foi possível localizar o cliente.'), 'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+
+    return render_template('escrita_fiscal/q_robo.html',
+                           **_qrobo_painel_contexto(confirmacao=res))
+
+
+@escrita_fiscal.route('/conf-saidas/q-robo/gerar', methods=['POST'])
+@permission_required('escrita_fiscal.q_robo')
+def q_robo_gerar():
+    if not _qrobo_csrf_ok():
+        flash('Formulário expirado. Tente de novo.', 'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+
+    numero = (request.form.get('numero') or '').strip()
+    cliente_id = (request.form.get('cliente_id') or '').strip()
+    data_inicio = (request.form.get('data_inicio') or '').strip()
+    confirmou = request.form.get('confirmar_regeracao') == '1'
+
+    # Reconfere número -> cliente_id (formulário adulterado / cadastro alterado).
+    res = qrobo_chaves.resolver_numero(numero)
+    if not res['ok'] or str(res['cliente']['cliente_id']) != cliente_id:
+        logger.warning('[q-robo/admin] gerar abortado: numero=%r x cliente_id=%r',
+                       numero, cliente_id)
+        flash('A conferência não bateu com o cadastro. Recomece — nada foi gerado.',
+              'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+
+    ja_tem = res['robo'] is not None
+    if ja_tem and not confirmou:
+        flash('Este posto já tem chave. Marque a confirmação para substituir.', 'warning')
+        return render_template('escrita_fiscal/q_robo.html',
+                               **_qrobo_painel_contexto(confirmacao=res,
+                                                        faltou_confirmar=True))
+
+    ip, ua = qrobo_chaves.contexto_request()
+    r = qrobo_chaves.gerar_chave(
+        res['cliente']['cliente_id'], current_user.id, current_user.nome,
+        regerar=ja_tem, data_inicio=data_inicio or None,
+        origem=qrobo_chaves.ORIGEM_ADMIN, ip=ip, user_agent=ua)
+
+    if not r['ok']:
+        msgs = {'data_futura': 'A data de início não pode ser no futuro.',
+                'data_invalida': 'Data de início inválida.',
+                'ja_existe': 'Este posto passou a ter chave agora há pouco. '
+                             'Confira e confirme de novo.',
+                'cliente_inexistente': 'Cliente não encontrado.'}
+        flash(msgs.get(r['erro'], 'Não foi possível gerar a chave.'), 'danger')
+        return render_template('escrita_fiscal/q_robo.html',
+                               **_qrobo_painel_contexto(confirmacao=res))
+
+    # Queima o token: F5 na tela da chave não gera outra.
+    from routes.qrobo import _rotaciona_csrf
+    _rotaciona_csrf()
+    logger.info('[q-robo/admin] %s por %s (id=%s) para cliente_id=%s versao=%s',
+                r['acao'], current_user.nome, current_user.id,
+                res['cliente']['cliente_id'], r['versao'])
+    return render_template('escrita_fiscal/q_robo.html',
+                           **_qrobo_painel_contexto(chave=r))
 
 
 @escrita_fiscal.route('/conf-saidas/api/notas')

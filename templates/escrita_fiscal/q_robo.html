@@ -45,6 +45,42 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 .qr-muted { color:#94a3b8; }
 .qr-empty { text-align:center; padding:30px; color:#94a3b8; font-size:13px; }
 .qr-fase { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px 14px; font-size:12px; color:#92400e; margin-bottom:16px; }
+
+/* ---- Instalação / chaves / auditoria (Fase 5) ---- */
+.qr-sec { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:20px 22px; margin-top:20px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.qr-sec-h { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+.qr-sec-t { font-size:15px; font-weight:800; color:#0f172a; }
+.qr-sec-p { font-size:12.5px; color:#64748b; line-height:1.6; margin-bottom:16px; }
+.qr-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.qr-form label { display:block; font-size:11px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px; }
+.qr-form input[type=text], .qr-form input[type=date] { padding:10px 13px; border:1.5px solid #e5e7eb; border-radius:9px; font-size:14px; font-weight:600; }
+.qr-form input[type=text] { width:190px; }
+.qr-btn { padding:11px 20px; border:none; border-radius:9px; font-size:13px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-block; }
+.qr-btn.roxo    { background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; }
+.qr-btn.verde   { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
+.qr-btn.laranja { background:linear-gradient(135deg,#ea580c,#c2410c); color:#fff; }
+.qr-btn.cinza   { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+.qr-conf { background:#f0fdf4; border:2px solid #bbf7d0; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+.qr-conf .razao { font-size:17px; font-weight:800; color:#14532d; text-transform:uppercase; margin-bottom:8px; }
+.qr-conf .li { font-size:12.5px; color:#166534; margin-top:4px; }
+.qr-conf .li b { display:inline-block; min-width:84px; color:#15803d; }
+.qr-perigo { background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:13px 16px; font-size:12.5px; color:#b91c1c; line-height:1.65; margin-bottom:14px; }
+.qr-ok { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:13px 16px; font-size:12.5px; color:#166534; line-height:1.65; margin-bottom:14px; }
+.qr-chave-box { background:#0f172a; border-radius:12px; padding:16px 18px; margin:12px 0; }
+.qr-chave-box .rot { font-size:10px; font-weight:800; letter-spacing:.06em; color:#64748b; text-transform:uppercase; margin-bottom:8px; }
+.qr-chave-box .val { font-family:ui-monospace,Consolas,monospace; font-size:13px; color:#4ade80; word-break:break-all; line-height:1.7; user-select:all; }
+.qr-check { display:flex; gap:9px; align-items:flex-start; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+.qr-check input { margin-top:2px; width:16px; height:16px; flex:0 0 16px; }
+.qr-check label { font-size:12.5px; color:#b91c1c; line-height:1.6; font-weight:600; }
+.qr-filtros { display:flex; gap:7px; flex-wrap:wrap; }
+.qr-filtro { font-size:11.5px; font-weight:700; padding:6px 13px; border-radius:99px; text-decoration:none; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; }
+.qr-filtro.on { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+.qr-acao { display:inline-block; padding:3px 9px; border-radius:99px; font-size:10px; font-weight:800; white-space:nowrap; }
+.qr-acao.nova  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.qr-acao.troca { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+.qr-acao.down  { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+.qr-org { font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+.qr-mono { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#94a3b8; }
 </style>
 
 <div class="cc-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
@@ -67,8 +103,9 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 
 <div class="qr-fase">
     <i class="fas fa-circle-info"></i>
-    <b>Fase 2.1 — monitor somente leitura.</b> Ligar/desligar, data de captura,
-    reprocessar histórico, token e cadastro de posto entram nas próximas fases.
+    <b>Monitor + chaves.</b> Aqui você acompanha os robôs, gera a chave de um posto
+    e vê a auditoria completa do Portal do Instalador. Ligar/desligar, reprocessar
+    histórico e cadastro de posto entram nas próximas fases.
 </div>
 
 <div class="qr-kpis">
@@ -168,8 +205,205 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
     </table>
 </div>
 
+{# ------------------------------------------------------------------ #}
+{# CHAVE DO POSTO — gerar por número (mesmo serviço do portal)         #}
+{# ------------------------------------------------------------------ #}
+<div class="qr-sec">
+    <div class="qr-sec-h">
+        <div class="qr-sec-t"><i class="fas fa-key" style="color:#7c3aed;"></i> Chave do posto</div>
+    </div>
+
+    {% if chave %}
+        {# ---- resultado: a chave, uma vez ---- #}
+        <div class="qr-ok">
+            <b>{{ 'Chave substituída' if chave.acao == 'CHAVE_REGERADA' else 'Chave gerada' }}</b>
+            para <b>{{ chave.cliente.numero_cliente }} — {{ chave.cliente.razao_social }}</b>
+            · captura a partir de <b>{{ chave.data_inicio_captura.strftime('%d/%m/%Y') }}</b>
+            · versão da chave <b>{{ chave.versao }}</b>
+        </div>
+        <div class="qr-chave-box">
+            <div class="rot">Chave de acesso do robô</div>
+            <div class="val" id="qrChave">{{ chave.token }}</div>
+        </div>
+        <div class="qr-perigo">
+            <b>Copie agora.</b> A chave aparece uma única vez — não fica visível em
+            nenhuma tela depois.
+            {% if chave.acao == 'CHAVE_REGERADA' %}
+            A chave anterior <b>já não vale mais</b>: este posto não envia nada até o
+            robô ser reconfigurado.
+            {% endif %}
+        </div>
+        <button class="qr-btn verde" onclick="qrCopiar()">COPIAR CHAVE</button>
+        <a href="{{ url_for('escrita_fiscal.q_robo_painel') }}" class="qr-btn cinza">CONCLUIR</a>
+
+    {% elif confirmacao %}
+        {# ---- passo 2: conferir a razão social ---- #}
+        <div class="qr-sec-p">Confira a empresa antes de gerar:</div>
+        <div class="qr-conf">
+            <div class="razao">{{ confirmacao.cliente.razao_social }}</div>
+            <div class="li"><b>Número:</b> {{ confirmacao.cliente.numero_cliente }}</div>
+            <div class="li"><b>CNPJ/CPF:</b> {{ confirmacao.cliente.cpf_cnpj }}</div>
+            <div class="li"><b>Situação:</b> {{ confirmacao.cliente.situacao }}</div>
+            <div class="li"><b>cliente_id:</b> {{ confirmacao.cliente.cliente_id }}</div>
+        </div>
+
+        {% if confirmacao.robo %}
+        <div class="qr-perigo">
+            Este posto <b>já tem chave</b> (versão {{ confirmacao.robo.token_versao }}{% if confirmacao.robo.token_gerado_em %},
+            gerada em {{ confirmacao.robo.token_gerado_em.strftime('%d/%m/%Y %H:%M') }}{% if confirmacao.robo.token_gerado_por_nome %}
+            por {{ confirmacao.robo.token_gerado_por_nome }}{% endif %}{% endif %}).
+            Gerar outra <b>invalida a atual</b> e o robô instalado <b>para de enviar</b>
+            até ser reconfigurado.
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('escrita_fiscal.q_robo_gerar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="numero" value="{{ confirmacao.cliente.numero_cliente }}">
+            <input type="hidden" name="cliente_id" value="{{ confirmacao.cliente.cliente_id }}">
+
+            <div class="qr-form" style="margin-bottom:14px;">
+                <div>
+                    <label for="data_inicio">Capturar a partir de</label>
+                    <input type="date" id="data_inicio" name="data_inicio" max="{{ hoje }}"
+                           value="{% if confirmacao.robo and confirmacao.robo.data_inicio_captura %}{{ confirmacao.robo.data_inicio_captura.isoformat() }}{% else %}{{ hoje }}{% endif %}">
+                </div>
+            </div>
+
+            {% if confirmacao.robo %}
+            <div class="qr-check">
+                <input type="checkbox" id="conf_reg" name="confirmar_regeracao" value="1" required>
+                <label for="conf_reg">Entendi que a chave atual deste posto vai
+                    <b>parar de funcionar</b> e que o robô só volta a enviar depois de
+                    reconfigurado com a chave nova.</label>
+            </div>
+            {% endif %}
+
+            <a href="{{ url_for('escrita_fiscal.q_robo_painel') }}" class="qr-btn cinza">CANCELAR</a>
+            {% if confirmacao.robo %}
+                <button type="submit" class="qr-btn laranja">SUBSTITUIR A CHAVE</button>
+            {% else %}
+                <button type="submit" class="qr-btn verde">GERAR A CHAVE</button>
+            {% endif %}
+        </form>
+
+    {% else %}
+        {# ---- passo 1: o número ---- #}
+        <div class="qr-sec-p">
+            Informe o <b>número do cliente</b>. A razão social aparece para conferência —
+            a chave só é gerada depois disso. Mesmo serviço usado pelo Portal do
+            Instalador, e tudo entra na auditoria abaixo.
+        </div>
+        <form method="POST" action="{{ url_for('escrita_fiscal.q_robo_resolver') }}"
+              class="qr-form" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div>
+                <label for="numero">Número do cliente</label>
+                <input type="text" id="numero" name="numero" required
+                       inputmode="numeric" placeholder="ex.: 23">
+            </div>
+            <button type="submit" class="qr-btn roxo">CONFERIR EMPRESA</button>
+        </form>
+    {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# AUDITORIA — tudo que foi feito no portal e no painel                #}
+{# ------------------------------------------------------------------ #}
+<div class="qr-sec">
+    <div class="qr-sec-h">
+        <div>
+            <div class="qr-sec-t"><i class="fas fa-clipboard-list" style="color:#7c3aed;"></i> Auditoria do Q-Robô</div>
+            <div class="qr-sec-p" style="margin:4px 0 0;">
+                {{ aud_resumo.chaves }} chave(s) · {{ aud_resumo.downloads }} download(s)
+                — 300 registros mais recentes.
+            </div>
+        </div>
+        <div class="qr-filtros">
+            <a href="{{ url_for('escrita_fiscal.q_robo_painel') }}"
+               class="qr-filtro {{ 'on' if aud_filtro == 'todas' else '' }}">Tudo</a>
+            <a href="{{ url_for('escrita_fiscal.q_robo_painel', aud='chaves') }}"
+               class="qr-filtro {{ 'on' if aud_filtro == 'chaves' else '' }}">Chaves</a>
+            <a href="{{ url_for('escrita_fiscal.q_robo_painel', aud='downloads') }}"
+               class="qr-filtro {{ 'on' if aud_filtro == 'downloads' else '' }}">Downloads</a>
+        </div>
+    </div>
+
+    <div class="qr-table-wrap">
+        <table class="qr-table">
+            <thead>
+                <tr>
+                    <th>Quando</th>
+                    <th>Quem</th>
+                    <th>O quê</th>
+                    <th>Empresa</th>
+                    <th>Detalhe</th>
+                    <th>Origem</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in trilha %}
+                <tr>
+                    <td class="qr-num" style="white-space:nowrap;">
+                        {{ t.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                    </td>
+                    <td>
+                        {{ t.usuario_nome }}
+                        {% if t.ip %}<div class="qr-sub qr-mono">{{ t.ip }}</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if t.acao == 'CHAVE_GERADA' %}
+                            <span class="qr-acao nova">CHAVE GERADA</span>
+                        {% elif t.acao == 'CHAVE_REGERADA' %}
+                            <span class="qr-acao troca">CHAVE SUBSTITUÍDA</span>
+                        {% else %}
+                            <span class="qr-acao down">INSTALADOR BAIXADO</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.razao_social %}
+                            <span class="qr-posto-num">{{ t.numero_cliente }}</span>
+                            <span class="qr-posto-nome">— {{ t.razao_social }}</span>
+                        {% else %}
+                            <span class="qr-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="qr-mono">
+                        {% if t.token_prefixo %}chave {{ t.token_prefixo }}…{% endif %}
+                        {% if t.instalador_versao %}{{ t.instalador_versao }}{% endif %}
+                    </td>
+                    <td><span class="qr-org">{{ t.origem }}</span></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="6" class="qr-empty">
+                    <i class="fas fa-clipboard-list"></i><br>
+                    Nada registrado ainda — nenhuma chave gerada nem instalador baixado
+                    pelo portal.
+                </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <script>
-// Recarrega sozinho — a página é só leitura, nada se perde no reload.
+function qrCopiar() {
+    var el = document.getElementById('qrChave');
+    if (!el) return;
+    var txt = el.innerText.trim();
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(txt);
+    } else {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { document.execCommand('copy'); } catch (e) {}
+    }
+    event.target.textContent = 'CHAVE COPIADA';
+}
+{% if not confirmacao and not chave %}
+// Recarrega sozinho — só quando a tela é de leitura. Durante a conferência ou
+// com a chave na tela o reload apagaria o que o operador precisa ver.
 setTimeout(function () { location.reload(); }, 60000);
+{% endif %}
 </script>
 {% endblock %}
