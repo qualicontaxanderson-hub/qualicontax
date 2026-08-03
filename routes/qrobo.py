@@ -41,7 +41,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_user, logout_user, current_user
 
 from models.usuario import Usuario
-from utils import qrobo_chaves, qrobo_instalador
+from utils import qrobo_chaves, qrobo_instalador, qrobo_status
 from utils.auth_helper import verify_password
 
 logger = logging.getLogger(__name__)
@@ -276,7 +276,29 @@ def index():
         historico=qrobo_chaves.historico_usuario(current_user.id, limite=30),
         ultimo_download=qrobo_chaves.ultimo_download(current_user.id),
         instalador=qrobo_instalador.manifesto(),
+        meus_postos=qrobo_status.meus_postos(current_user.id),
         **_contexto_base())
+
+
+# --- Status ao vivo do posto (só operacional, nada fiscal) ----------------
+@qrobo.route('/status/<int:cliente_id>')
+@instalador_required
+def status(cliente_id):
+    """Sinal de vida do robô daquele posto: quando foi o último contato.
+
+    Só responde por posto em que ESTE colaborador gerou chave — senão o portal
+    viraria uma sonda para descobrir quem tem robô e há quanto tempo está
+    parado. Devolve tempo e semáforo; nenhuma nota, valor ou contagem.
+    """
+    if not qrobo_status.pode_ver_status(current_user.id, cliente_id):
+        logger.warning('[qrobo] %s pediu status do cliente_id=%s sem ter gerado chave.',
+                       current_user.id, cliente_id)
+        return jsonify({'status': 'fora_do_escopo'}), 403
+
+    st = qrobo_status.status_posto(cliente_id)
+    if not st:
+        return jsonify({'status': 'sem_config', 'cliente_id': cliente_id}), 404
+    return jsonify(st)
 
 
 # --- Instalador: download autenticado e auditado --------------------------
@@ -315,6 +337,32 @@ def instalador():
                      mimetype='application/octet-stream')
 
 
+@qrobo.route('/manual')
+@instalador_required
+def manual():
+    """Serve o PDF de instruções da mesma pasta /Q-Robo.
+
+    Sem auditoria de propósito: manual é instrução, não é ação sobre o posto —
+    a trilha existe para chave gerada e instalador baixado. Fica só a linha de
+    log. Se não houver PDF na pasta, o portal nem mostra o botão; quem chegar
+    aqui pela URL leva um aviso, não um erro.
+    """
+    m = (qrobo_instalador.manifesto() or {}).get('manual')
+    if not m:
+        flash('O manual ainda não está disponível na pasta do instalador.', 'warning')
+        return redirect(url_for('qrobo.index'))
+
+    dados = qrobo_instalador.baixar(m['caminho'])
+    if not dados:
+        flash('Não consegui baixar o manual agora. Tente de novo em instantes.', 'danger')
+        return redirect(url_for('qrobo.index'))
+
+    logger.info('[qrobo] manual %s (%s bytes) baixado por %s (id=%s)',
+                m['nome'], len(dados), current_user.nome, current_user.id)
+    return send_file(BytesIO(dados), as_attachment=True,
+                     download_name=m['nome'], mimetype='application/pdf')
+
+
 @qrobo.route('/instalador/status')
 @instalador_required
 def instalador_status():
@@ -340,22 +388,54 @@ _ERRO_RESOLVER = {
 }
 
 
+@qrobo.route('/buscar')
+@instalador_required
+def buscar():
+    """Busca de empresa por número, nome ou CNPJ — SÓ IDENTIDADE.
+
+    Endpoint PRÓPRIO do portal, de propósito: o /api/clientes/search do app
+    está fora da allowlist do escopo restrito (e devolve mais campos do que o
+    instalador precisa ver). Aqui saem apenas número, razão social, CNPJ e
+    situação, com teto de resultados e mínimo de caracteres.
+    """
+    termo = (request.args.get('q') or '').strip()
+    achados = qrobo_chaves.buscar_clientes(termo)
+    return jsonify({
+        'termo': termo,
+        'total': len(achados),
+        'clientes': [{'cliente_id': c['cliente_id'],
+                      'numero_cliente': c['numero_cliente'] or '',
+                      'razao_social': c['razao_social'],
+                      'cpf_cnpj': c['cpf_cnpj'] or '',
+                      'situacao': c['situacao'],
+                      'tem_robo': bool(c['tem_robo'])} for c in achados],
+    })
+
+
 @qrobo.route('/resolver', methods=['POST'])
 @instalador_required
 @exige_csrf
 def resolver():
-    """Resolve o número e mostra a razão social para conferência.
+    """Mostra a razão social para conferência. NÃO gera nada.
 
-    Devolve SÓ a identidade do cliente da vez (número, razão social, CNPJ,
-    situação) e o estado do robô dele. Nada de nota, valor ou movimento — o
-    portal não tem por onde ver dado fiscal.
+    Aceita o número digitado OU o cliente_id escolhido na busca. Devolve SÓ a
+    identidade do cliente da vez (número, razão social, CNPJ, situação) e o
+    estado do robô dele. Nada de nota, valor ou movimento — o portal não tem
+    por onde ver dado fiscal.
     """
     numero = (request.form.get('numero') or '').strip()
-    res = qrobo_chaves.resolver_numero(numero)
+    cliente_id = (request.form.get('cliente_id') or '').strip()
+
+    # Escolha na lista de busca não tem ambiguidade a resolver: a identidade
+    # já veio cravada. Digitar o número mantém a trava do número exato.
+    if cliente_id:
+        res = qrobo_chaves.resolver_cliente_id(cliente_id)
+    else:
+        res = qrobo_chaves.resolver_numero(numero)
 
     if not res['ok']:
-        logger.info('[qrobo] resolver %r recusado: %s (user=%s)',
-                    numero, res['erro'], current_user.id)
+        logger.info('[qrobo] resolver %r/%r recusado: %s (user=%s)',
+                    numero, cliente_id, res['erro'], current_user.id)
         flash(_ERRO_RESOLVER.get(res['erro'], 'Não foi possível localizar o cliente.')
               .format(n=numero), 'danger')
         return redirect(url_for('qrobo.index'))
@@ -367,7 +447,7 @@ def resolver():
 
 # --- Passo 2: confirmado -> gera (ou regera com dupla confirmação) ---------
 _ERRO_GERAR = {
-    'cliente_inexistente': 'Cliente não encontrado. Recomece pelo número.',
+    'cliente_inexistente': 'Cliente não encontrado. Recomece pela busca.',
     'data_invalida': 'Data de início inválida. Use o seletor de data do campo.',
     'data_futura': 'A data de início não pode ser no futuro — o robô ignoraria '
                    'tudo que fosse emitido até lá.',
@@ -383,14 +463,14 @@ def gerar():
     data_inicio = (request.form.get('data_inicio') or '').strip()
     confirmou = request.form.get('confirmar_regeracao') == '1'
 
-    # Integridade: o número TEM que continuar apontando para o mesmo cliente.
-    # Protege contra formulário adulterado e contra o cadastro ter mudado
-    # enquanto a tela de conferência ficava aberta.
-    res = qrobo_chaves.resolver_numero(numero)
-    if not res['ok'] or str(res['cliente']['cliente_id']) != cliente_id:
-        logger.warning('[qrobo] gerar abortado: numero=%r não confere com cliente_id=%r '
-                       '(user=%s)', numero, cliente_id, current_user.id)
-        flash('A conferência não bateu com o cadastro. Recomece pelo número — '
+    # Integridade: o cliente TEM que continuar sendo o que apareceu na tela de
+    # conferência. Reconfere pelo id e exige que o número ainda bata com o que
+    # foi mostrado — pega formulário adulterado e cadastro alterado no meio.
+    res = qrobo_chaves.resolver_cliente_id(cliente_id)
+    if not res['ok'] or (res['cliente']['numero_cliente'] or '') != numero:
+        logger.warning('[qrobo] gerar abortado: cliente_id=%r não confere com numero=%r '
+                       '(user=%s)', cliente_id, numero, current_user.id)
+        flash('A conferência não bateu com o cadastro. Recomece a busca — '
               'nada foi gerado.', 'danger')
         return redirect(url_for('qrobo.index'))
 
@@ -432,6 +512,7 @@ def gerar():
                 cliente['cliente_id'], r['versao'])
     return render_template('qrobo/chave.html', resultado=r, cliente=cliente,
                            regerada=(r['acao'] == qrobo_chaves.ACAO_REGERADA),
+                           st=qrobo_status.status_posto(cliente['cliente_id']),
                            **_contexto_base())
 
 

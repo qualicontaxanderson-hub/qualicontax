@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 SUBPASTA = 'Q-Robo'
 NOME_PADRAO = 'qrobo.exe'
 NOME_VERSAO = 'version.txt'
+NOME_MANUAL = 'Manual_Instalacao_Q-Robo.pdf'
 HASH_CURTO = 8
 VERSAO_MAX = 20            # tamanho da coluna instalador_versao
 SEM_VERSAO = 's/v'
@@ -61,44 +62,69 @@ def _rotulo_version_txt():
         return None
 
 
-def _escolhe_exe(entradas):
-    """qrobo.exe é o nome canônico. Se não estiver lá, pega o .exe mais recente
-    e avisa — melhor servir algo identificado do que falhar calado."""
-    exes = [e for e in entradas if e.get('is_file')
-            and e.get('name', '').lower().endswith('.exe')]
-    if not exes:
+def _escolher(entradas, sufixo, canonico):
+    """Escolhe UM arquivo da pasta: o de nome canônico, senão o mais recente.
+
+    Melhor servir algo identificado (avisando) do que falhar calado quando o
+    Anderson renomeia o arquivo.
+    """
+    achados = [e for e in entradas if e.get('is_file')
+               and e.get('name', '').lower().endswith(sufixo)]
+    if not achados:
         return None, []
-    canonico = next((e for e in exes if e['name'].lower() == NOME_PADRAO), None)
-    if canonico:
-        extras = [e['name'] for e in exes if e is not canonico]
-        avisos = ([f'Há outros .exe na pasta ({", ".join(extras)}); '
-                   f'servindo o {NOME_PADRAO}.'] if extras else [])
-        return canonico, avisos
-    recente = sorted(exes, key=lambda e: e.get('modified') or '')[-1]
-    return recente, [f'Não achei {NOME_PADRAO}; servindo o .exe mais recente '
+    exato = next((e for e in achados if e['name'].lower() == canonico.lower()), None)
+    if exato:
+        extras = [e['name'] for e in achados if e is not exato]
+        avisos = ([f'Há outros {sufixo} na pasta ({", ".join(extras)}); '
+                   f'servindo o {canonico}.'] if extras else [])
+        return exato, avisos
+    recente = sorted(achados, key=lambda e: e.get('modified') or '')[-1]
+    return recente, [f'Não achei {canonico}; servindo o {sufixo} mais recente '
                      f'({recente["name"]}).']
+
+
+def _escolhe_exe(entradas):
+    return _escolher(entradas, '.exe', NOME_PADRAO)
+
+
+def _manual_da_pasta(entradas, caminho_pasta):
+    """Manual em PDF da pasta, ou None. NUNCA derruba o instalador: se não tem
+    PDF lá, o portal simplesmente não mostra o botão."""
+    arquivo, avisos = _escolher(entradas, '.pdf', NOME_MANUAL)
+    if not arquivo:
+        return None
+    return {'nome': arquivo['name'],
+            'caminho': f'{caminho_pasta}/{arquivo["name"]}',
+            'tamanho': arquivo.get('size') or 0,
+            'avisos': avisos}
 
 
 def manifesto():
     """Retrato do que o app enxerga na pasta. SOMENTE LEITURA, nunca levanta.
 
     ok=True  -> {'nome','caminho','tamanho','modificado','content_hash',
-                 'hash_curto','rotulo','versao','nome_download','avisos'}
-    ok=False -> {'erro': <texto para a tela>, 'detalhe': <técnico>, 'caminho'}
+                 'hash_curto','rotulo','versao','nome_download','avisos','manual'}
+    ok=False -> {'erro': <texto para a tela>, 'detalhe': <técnico>, 'caminho',
+                 'manual'}
+
+    ``manual`` (PDF de instruções) sai da MESMA listagem — uma chamada só ao
+    Dropbox por carregamento de página — e é independente do .exe: pasta sem
+    instalador ainda pode ter manual, e vice-versa.
     """
     caminho_pasta = None
     try:
         svc = dropbox_sync._service
         if not svc.is_configured():
-            return {'ok': False, 'caminho': None,
+            return {'ok': False, 'caminho': None, 'manual': None,
                     'erro': 'Dropbox não configurado neste ambiente.',
                     'detalhe': 'DROPBOX_REFRESH_TOKEN/APP_KEY/APP_SECRET ausentes.'}
 
         caminho_pasta = pasta()
         entradas = svc.list_folder(caminho_pasta) or []
+        manual = _manual_da_pasta(entradas, caminho_pasta)
         arquivo, avisos = _escolhe_exe(entradas)
         if not arquivo:
-            return {'ok': False, 'caminho': caminho_pasta,
+            return {'ok': False, 'caminho': caminho_pasta, 'manual': manual,
                     'erro': f'Nenhum .exe em {caminho_pasta}.',
                     'detalhe': f'{len(entradas)} item(ns): '
                                f'{[e.get("name") for e in entradas]}'}
@@ -123,10 +149,11 @@ def manifesto():
                 'modificado': md.get('modified'),
                 'content_hash': content_hash, 'hash_curto': hash_curto,
                 'rotulo': rotulo, 'versao': versao,
-                'nome_download': nome_download, 'avisos': avisos}
+                'nome_download': nome_download, 'avisos': avisos,
+                'manual': manual}
     except Exception as exc:
         logger.warning('[qrobo] falha ao ler o instalador no Dropbox: %s', exc)
-        return {'ok': False, 'caminho': caminho_pasta,
+        return {'ok': False, 'caminho': caminho_pasta, 'manual': None,
                 'erro': 'Não consegui ler a pasta do instalador no Dropbox.',
                 'detalhe': str(exc)[:300]}
 

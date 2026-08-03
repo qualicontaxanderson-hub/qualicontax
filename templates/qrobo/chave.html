@@ -46,6 +46,33 @@
         .btn.cinza { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; flex:1; }
         ol { margin:8px 0 0 20px; }
         ol li { margin-bottom:5px; }
+
+        /* Conferência da instalação */
+        .conf-box { border:1.5px solid #e2e8f0; border-radius:12px; padding:16px 18px;
+                    margin-bottom:18px; background:#fcfcfd; }
+        .conf-topo { display:flex; align-items:flex-start; justify-content:space-between;
+                     gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+        .conf-tit { font-size:14px; font-weight:800; color:#0f172a; }
+        .conf-sub { font-size:12px; color:#64748b; line-height:1.6; margin-top:3px;
+                    max-width:380px; }
+        .conf-selo { display:inline-flex; align-items:center; gap:7px; padding:5px 13px;
+                     border-radius:99px; font-size:11.5px; font-weight:800; white-space:nowrap; }
+        .conf-selo .pt { width:8px; height:8px; border-radius:99px; flex:0 0 8px; }
+        .conf-selo.verde    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+        .conf-selo.verde .pt{ background:#16a34a; }
+        .conf-selo.amarelo  { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+        .conf-selo.amarelo .pt { background:#d97706; }
+        .conf-selo.vermelho { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+        .conf-selo.vermelho .pt{ background:#dc2626; }
+        .conf-selo.cinza    { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+        .conf-selo.cinza .pt{ background:#94a3b8; }
+        .conf-linha { font-size:12.5px; color:#475569; margin-bottom:12px; }
+        .btn-verificar { width:100%; padding:11px; border:1.5px solid #cbd5e1; border-radius:9px;
+                         background:#fff; color:#334155; font-size:13px; font-weight:800;
+                         cursor:pointer; }
+        .btn-verificar:hover { background:#f8fafc; }
+        .btn-verificar:disabled { opacity:.6; cursor:default; }
+        .conf-nota { font-size:11px; color:#94a3b8; line-height:1.6; margin-top:9px; }
     </style>
 </head>
 <body>
@@ -95,7 +122,43 @@
                 <li>Instale o <b>qrobo.exe</b> (botão de download no portal).</li>
                 <li>Cole esta chave na configuração do robô.</li>
                 <li>Confirme que a empresa que aparece no robô é <b>{{ cliente.razao_social }}</b>.</li>
+                <li>Volte aqui e clique em <b>Verificar agora</b> — o posto tem que dar sinal de vida.</li>
             </ol>
+        </div>
+
+        {# ---- Status ao vivo: o posto já falou com a nuvem? ---- #}
+        <div class="conf-box" id="confBox" data-cliente="{{ cliente.cliente_id }}">
+            <div class="conf-topo">
+                <div>
+                    <div class="conf-tit">Conferir a instalação</div>
+                    <div class="conf-sub" id="confSub">
+                        {% if st and st.confirmado %}
+                            Este posto já se comunicou com a nuvem depois da chave nova.
+                        {% else %}
+                            Assim que o robô rodar com esta chave, ele avisa a nuvem e o
+                            sinal aparece aqui.
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="conf-selo {{ (st.status if st else 'cinza') }}" id="confSelo">
+                    <span class="pt"></span>
+                    <span id="confRotulo">{{ st.rotulo if st else 'sem configuração' }}</span>
+                </span>
+            </div>
+            <div class="conf-linha" id="confLinha">
+                {% if st and st.ja_deu_sinal %}
+                    Último contato do robô: <b>{{ st.ultimo_contato }}</b> ({{ st.ha }})
+                {% else %}
+                    Ainda <b>nenhum contato</b> registrado para este posto.
+                {% endif %}
+            </div>
+            <button class="btn-verificar" id="btnVerificar" onclick="verificar()">
+                VERIFICAR AGORA
+            </button>
+            <div class="conf-nota">
+                O robô avisa a nuvem a cada ciclo, mesmo sem nota nova — então o sinal
+                confirma que o <b>processo está rodando</b> na máquina.
+            </div>
         </div>
 
         <div class="acoes">
@@ -115,6 +178,38 @@ function copiar() {
         navigator.clipboard.writeText(txt).then(ok, selecionar);
     } else { selecionar(); }
 }
+// Status ao vivo do posto: pergunta ao /qrobo/status/<id> (só operacional).
+var confBusy = false;
+function verificar() {
+    if (confBusy) return;
+    confBusy = true;
+    var box = document.getElementById('confBox');
+    var btn = document.getElementById('btnVerificar');
+    var selo = document.getElementById('confSelo');
+    btn.disabled = true; btn.textContent = 'VERIFICANDO…';
+    fetch('/qrobo/status/' + box.getAttribute('data-cliente'),
+          { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+            if (!s) { document.getElementById('confLinha').textContent =
+                        'Não consegui consultar agora. Tente de novo em instantes.'; return; }
+            selo.className = 'conf-selo ' + s.status;
+            document.getElementById('confRotulo').textContent = s.rotulo;
+            document.getElementById('confLinha').innerHTML = s.ja_deu_sinal
+                ? 'Último contato do robô: <b>' + s.ultimo_contato + '</b> (' + s.ha + ')'
+                : 'Ainda <b>nenhum contato</b> registrado para este posto.';
+            document.getElementById('confSub').textContent = s.confirmado
+                ? 'Este posto já se comunicou com a nuvem depois da chave nova.'
+                : 'Assim que o robô rodar com esta chave, ele avisa a nuvem e o sinal aparece aqui.';
+        })
+        .catch(function () {
+            document.getElementById('confLinha').textContent = 'Sem resposta. Verifique a internet da máquina.';
+        })
+        .then(function () {
+            confBusy = false; btn.disabled = false; btn.textContent = 'VERIFICAR AGORA';
+        });
+}
+
 function selecionar() {
     // Fallback: seleciona a chave para o Ctrl+C manual.
     var r = document.createRange(); r.selectNodeContents(document.getElementById('chave'));

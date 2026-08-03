@@ -33,6 +33,8 @@
                cursor:pointer; text-decoration:none; }
         .btn.verde { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
         .btn.azul  { background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; }
+        .btn.claro { background:#fff; color:#1d4ed8; border:1.5px solid #bfdbfe; margin-top:9px; }
+        .btn.claro:hover { background:#eff6ff; }
         .btn:disabled, .btn.off { background:#f1f5f9; color:#94a3b8; cursor:not-allowed;
                                   border:1px dashed #cbd5e1; }
         .breve { display:block; margin-top:9px; font-size:11px; color:#94a3b8; text-align:center; }
@@ -47,6 +49,28 @@
         .num { width:100%; padding:12px 14px; border:1.5px solid #e5e7eb; border-radius:10px;
                font-size:15px; font-weight:700; margin-bottom:10px; letter-spacing:.02em; }
         .num:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.12); }
+        .busca-wrap { position:relative; }
+        .lista { position:absolute; z-index:30; left:0; right:0; top:calc(100% - 6px);
+                 background:#fff; border:1px solid #e2e8f0; border-radius:11px;
+                 box-shadow:0 12px 28px -8px rgba(0,0,0,.22); max-height:290px;
+                 overflow-y:auto; }
+        .item { padding:11px 13px; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+        .item:last-child { border-bottom:none; }
+        .item:hover, .item.sel { background:#f0fdf4; }
+        .item .r { font-size:13px; font-weight:700; color:#0f172a; line-height:1.35; }
+        .item .d { font-size:11.5px; color:#64748b; margin-top:3px;
+                   display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+        .item .n { color:#16a34a; font-weight:800; }
+        .tag-mini { font-size:9.5px; font-weight:800; padding:1px 7px; border-radius:99px; }
+        .tag-mini.robo { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+        .tag-mini.inat { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+        .lista .vazio2 { padding:14px 13px; font-size:12px; color:#94a3b8; }
+        .escolhido { display:none; align-items:center; gap:9px; background:#f0fdf4;
+                     border:1.5px solid #bbf7d0; border-radius:10px; padding:10px 13px;
+                     margin-bottom:10px; font-size:12.5px; color:#166534; }
+        .escolhido b { color:#14532d; }
+        .escolhido .x { margin-left:auto; cursor:pointer; color:#15803d; font-weight:800;
+                        border:none; background:none; font-size:15px; }
         .tab-wrap { overflow-x:auto; border:1px solid #e5e7eb; border-radius:10px; }
         table.tab { width:100%; border-collapse:collapse; font-size:12.5px; }
         table.tab thead th { background:#f8fafc; text-align:left; padding:9px 12px; font-size:10px;
@@ -62,6 +86,22 @@
         .selo-acao.nova  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
         .selo-acao.troca { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
         .selo-acao.down  { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+        .selo-st { display:inline-flex; align-items:center; gap:6px; padding:4px 11px;
+                   border-radius:99px; font-size:11px; font-weight:800; white-space:nowrap; }
+        .selo-st .pt { width:7px; height:7px; border-radius:99px; flex:0 0 7px; }
+        .selo-st.verde    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+        .selo-st.verde .pt{ background:#16a34a; }
+        .selo-st.amarelo  { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+        .selo-st.amarelo .pt { background:#d97706; }
+        .selo-st.vermelho { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+        .selo-st.vermelho .pt { background:#dc2626; }
+        .selo-st.cinza    { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+        .selo-st.cinza .pt{ background:#94a3b8; }
+        .btn-mini { padding:6px 12px; border:1.5px solid #cbd5e1; border-radius:8px;
+                    background:#fff; color:#334155; font-size:11px; font-weight:800;
+                    cursor:pointer; white-space:nowrap; }
+        .btn-mini:hover { background:#f8fafc; }
+        .btn-mini:disabled { opacity:.6; cursor:default; }
         .aviso { border-radius:10px; padding:11px 14px; font-size:12.5px; margin-bottom:16px;
                  background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
         .selo { display:inline-flex; align-items:center; gap:6px; padding:4px 11px;
@@ -91,12 +131,6 @@
       {% for msg in mensagens %}<div class="aviso">{{ msg }}</div>{% endfor %}
     {% endwith %}
 
-    <div class="faixa">
-        Esta sessão serve <b>só para instalar o Q-Robô</b>: baixar o instalador e gerar a
-        chave do posto. Ela <b>não abre nenhuma tela com dado fiscal</b> — e é encerrada ao
-        fechar o navegador ou após 2 horas sem uso.
-    </div>
-
     <div class="cards">
         <div class="card">
             <h2>1. Baixar o instalador</h2>
@@ -115,20 +149,78 @@
                 <button class="btn off" disabled>INSTALADOR INDISPONÍVEL</button>
                 <span class="breve">avise o escritório — o arquivo não está na pasta</span>
             {% endif %}
+            {# Manual é opcional: sem PDF na pasta, o botão simplesmente não existe. #}
+            {% if instalador.manual %}
+                <a href="{{ url_for('qrobo.manual') }}" class="btn claro">
+                    BAIXAR MANUAL (PDF)
+                </a>
+                <span class="breve">{{ instalador.manual.nome }}{% if instalador.manual.tamanho %} · {{ (instalador.manual.tamanho / 1048576) | round(1) }} MB{% endif %}</span>
+            {% endif %}
         </div>
 
         <div class="card">
             <h2>2. Gerar a chave do posto</h2>
             <p>Informe o <b>número do cliente</b>. A razão social aparece para você
                conferir — a chave só é gerada depois disso.</p>
-            <form method="POST" action="{{ url_for('qrobo.resolver') }}" autocomplete="off">
+            <form method="POST" action="{{ url_for('qrobo.resolver') }}" autocomplete="off"
+                  id="frmBusca">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="text" name="numero" class="num" required autofocus
-                       inputmode="numeric" placeholder="número do cliente (ex.: 23)">
+                <input type="hidden" name="cliente_id" id="clienteId" value="">
+                <div class="escolhido" id="escolhido">
+                    <span id="escolhidoTxt"></span>
+                    <button type="button" class="x" onclick="qrLimpar()" title="trocar">&times;</button>
+                </div>
+                <div class="busca-wrap">
+                    <input type="text" name="numero" id="busca" class="num" required autofocus
+                           placeholder="número, nome ou CNPJ (ex.: 23 ou aliança)"
+                           aria-autocomplete="list" aria-controls="listaBusca">
+                    <div class="lista" id="listaBusca" hidden></div>
+                </div>
                 <button type="submit" class="btn verde">CONFERIR EMPRESA</button>
             </form>
         </div>
     </div>
+
+    {% if meus_postos %}
+    <div class="hist">
+        <div class="card">
+            <h2>Meus postos</h2>
+            <p>Postos em que <b>você</b> gerou chave, com o sinal de vida do robô agora.
+               O robô avisa a nuvem a cada ciclo, mesmo sem nota nova — então
+               <b>verde é processo rodando</b> na máquina.</p>
+            <div class="tab-wrap">
+            <table class="tab" id="tabPostos">
+                <thead>
+                    <tr><th>Posto</th><th>Sinal do robô</th><th>Último contato</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for p in meus_postos %}
+                    <tr data-cliente="{{ p.cliente_id }}">
+                        <td>
+                            <b>{{ p.numero_cliente or '—' }}</b> — {{ p.razao_social or '(cliente removido)' }}
+                            <div class="fraco">chave gerada em {{ p.gerada_em }}{% if p.vezes > 1 %} · {{ p.vezes }}ª vez{% endif %}</div>
+                        </td>
+                        <td>
+                            <span class="selo-st {{ p.status }}" data-cel="selo">
+                                <span class="pt"></span><span data-cel="rotulo">{{ p.rotulo }}</span>
+                            </span>
+                            {% if not p.ativo %}<div class="fraco">robô desligado no painel</div>{% endif %}
+                        </td>
+                        <td class="quando" data-cel="contato">
+                            {% if p.ja_deu_sinal %}{{ p.ultimo_contato }}<div class="fraco">{{ p.ha }}</div>
+                            {% else %}<span class="fraco">nenhum ainda</span>{% endif %}
+                        </td>
+                        <td style="text-align:right;">
+                            <button class="btn-mini" onclick="qrStatus(this)">VERIFICAR</button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="hist">
         <div class="card">
@@ -164,8 +256,13 @@
                         <td>
                             {% if h.razao_social %}
                                 <b>{{ h.numero_cliente }}</b> — {{ h.razao_social }}
+                            {% elif h.acao == 'DOWNLOAD_INSTALADOR' %}
+                                Instalador do Q-Robô, baixado por você
+                                <div class="fraco">
+                                    {% if h.instalador_versao %}versão {{ h.instalador_versao }}{% else %}versão não identificada{% endif %}
+                                </div>
                             {% else %}
-                                <span class="fraco">—{% if h.instalador_versao %} v{{ h.instalador_versao }}{% endif %}</span>
+                                <span class="fraco">—</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -179,5 +276,118 @@
         </div>
     </div>
 </div>
+
+<script>
+// Status ao vivo de um posto na tabela "Meus postos" — só operacional.
+function qrStatus(btn) {
+    var tr = btn.closest('tr');
+    var id = tr.getAttribute('data-cliente');
+    btn.disabled = true; btn.textContent = '...';
+    fetch('/qrobo/status/' + id, { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+            if (!s) return;
+            var selo = tr.querySelector('[data-cel="selo"]');
+            selo.className = 'selo-st ' + s.status;
+            tr.querySelector('[data-cel="rotulo"]').textContent = s.rotulo;
+            tr.querySelector('[data-cel="contato"]').innerHTML = s.ja_deu_sinal
+                ? s.ultimo_contato + '<div class="fraco">' + s.ha + '</div>'
+                : '<span class="fraco">nenhum ainda</span>';
+        })
+        .catch(function () {})
+        .then(function () { btn.disabled = false; btn.textContent = 'VERIFICAR'; });
+}
+
+// Autocomplete do portal: bate em /qrobo/buscar (endpoint próprio, dentro da
+// allowlist do escopo restrito) e devolve SÓ identidade. Escolher da lista
+// manda o cliente_id; digitar só o número mantém o caminho antigo.
+(function () {
+    var campo = document.getElementById('busca');
+    var lista = document.getElementById('listaBusca');
+    var hidden = document.getElementById('clienteId');
+    var caixa = document.getElementById('escolhido');
+    var caixaTxt = document.getElementById('escolhidoTxt');
+    var timer = null, req = 0, itens = [], sel = -1;
+
+    function esconder() { lista.hidden = true; lista.innerHTML = ''; itens = []; sel = -1; }
+
+    window.qrLimpar = function () {
+        hidden.value = ''; caixa.style.display = 'none';
+        campo.value = ''; campo.readOnly = false; campo.focus();
+    };
+
+    function escolher(c) {
+        hidden.value = c.cliente_id;
+        campo.value = c.numero_cliente || c.razao_social;
+        campo.readOnly = true;
+        caixaTxt.innerHTML = 'Selecionado: <b>' + (c.numero_cliente ? c.numero_cliente + ' — ' : '')
+                           + c.razao_social + '</b>';
+        caixa.style.display = 'flex';
+        esconder();
+    }
+
+    function desenhar(dados) {
+        lista.innerHTML = '';
+        itens = dados.clientes || [];
+        if (!itens.length) {
+            lista.innerHTML = '<div class="vazio2">Nada encontrado para "'
+                            + (dados.termo || '') + '".</div>';
+            lista.hidden = false;
+            return;
+        }
+        itens.forEach(function (c, i) {
+            var d = document.createElement('div');
+            d.className = 'item';
+            d.setAttribute('data-i', i);
+            var tags = '';
+            if (c.tem_robo) tags += '<span class="tag-mini robo">JÁ TEM ROBÔ</span>';
+            if (c.situacao !== 'ATIVO') tags += '<span class="tag-mini inat">' + c.situacao + '</span>';
+            d.innerHTML = '<div class="r">' + c.razao_social + '</div>'
+                        + '<div class="d">'
+                        + (c.numero_cliente ? '<span class="n">nº ' + c.numero_cliente + '</span>' : '')
+                        + (c.cpf_cnpj ? '<span>' + c.cpf_cnpj + '</span>' : '')
+                        + tags + '</div>';
+            d.onclick = function () { escolher(c); };
+            lista.appendChild(d);
+        });
+        lista.hidden = false;
+    }
+
+    function marcar() {
+        Array.prototype.forEach.call(lista.children, function (el, i) {
+            el.classList.toggle('sel', i === sel);
+        });
+    }
+
+    campo.addEventListener('input', function () {
+        hidden.value = '';                       // digitou de novo: perde a escolha
+        caixa.style.display = 'none';
+        clearTimeout(timer);
+        var q = campo.value.trim();
+        if (q.length < 2) { esconder(); return; }
+        // 250ms de espera: não dispara uma consulta por tecla.
+        timer = setTimeout(function () {
+            var meu = ++req;
+            fetch('{{ url_for("qrobo.buscar") }}?q=' + encodeURIComponent(q),
+                  { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : { clientes: [] }; })
+                .then(function (d) { if (meu === req) desenhar(d); })
+                .catch(function () { esconder(); });   // sem rede: o número digitado ainda vale
+        }, 250);
+    });
+
+    campo.addEventListener('keydown', function (e) {
+        if (lista.hidden || !itens.length) return;
+        if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, itens.length - 1); marcar(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); marcar(); e.preventDefault(); }
+        else if (e.key === 'Enter' && sel >= 0) { escolher(itens[sel]); e.preventDefault(); }
+        else if (e.key === 'Escape') { esconder(); }
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!lista.contains(e.target) && e.target !== campo) esconder();
+    });
+})();
+</script>
 </body>
 </html>

@@ -27,7 +27,7 @@ from utils.nfe_import import (
 )
 from models.dfe_certificado import DfeCertificado
 from models.robo_config import RoboConfig
-from utils import qrobo_chaves
+from utils import qrobo_chaves, qrobo_status
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -4384,39 +4384,13 @@ def conf_saidas():
 # reprocessar histórico, token e cadastro de posto entram nas fases seguintes.
 # ---------------------------------------------------------------------------
 
-# Limiares do semáforo, em minutos sem contato do robô.
-_QROBO_VERDE   = 15     # 🟢 até 15 min
-_QROBO_LARANJA = 180    # 🟠 15 min a 3h · 🔴 acima de 3h
-
-
-def _qrobo_ha(minutos):
-    """'agora' / 'há 12 min' / 'há 6h20' / 'há 3 dias' a partir de minutos."""
-    if minutos is None:
-        return '—'
-    minutos = int(minutos)
-    if minutos < 1:
-        return 'agora'
-    if minutos < 60:
-        return f'há {minutos} min'
-    if minutos < 2880:                       # até 48h mostra hora cheia
-        h, m = divmod(minutos, 60)
-        return f'há {h}h{m:02d}'
-    return f'há {minutos // 1440} dias'
-
-
-def _qrobo_status(min_sem_contato):
-    """(classe_css, rótulo) do semáforo a partir dos minutos sem contato.
-
-    O robô chama touch_ultimo_contato a CADA contato, inclusive quando está
-    desligado ou sem nada para enviar (routes/robo_saidas.py). Então silêncio
-    aqui significa que o processo não está rodando — não que faltou nota."""
-    if min_sem_contato is None:
-        return 'cinza', 'nunca contatou'
-    if min_sem_contato < _QROBO_VERDE:
-        return 'verde', 'ativo'
-    if min_sem_contato < _QROBO_LARANJA:
-        return 'amarelo', f'atenção — {_qrobo_ha(min_sem_contato)}'
-    return 'vermelho', f'parado {_qrobo_ha(min_sem_contato)}'
+# Semáforo: a regra mora em utils/qrobo_status.py e é a MESMA que o portal usa
+# (o instalador precisa ver o mesmo verde/amarelo/vermelho que você vê aqui).
+# Os nomes locais ficam como apelido para não mexer no resto do arquivo.
+_QROBO_VERDE   = qrobo_status.LIMIAR_VERDE
+_QROBO_LARANJA = qrobo_status.LIMIAR_LARANJA
+_qrobo_ha      = qrobo_status.ha
+_qrobo_status  = qrobo_status.classificar
 
 
 def _qrobo_dt(valor, com_hora=True):
@@ -4518,9 +4492,14 @@ def q_robo_resolver():
         return redirect(url_for('escrita_fiscal.q_robo_painel'))
 
     numero = (request.form.get('numero') or '').strip()
-    res = qrobo_chaves.resolver_numero(numero)
+    cliente_id = (request.form.get('cliente_id') or '').strip()
+    # Escolha na busca vem por id (sem ambiguidade); digitar mantém a trava do
+    # número exato.
+    res = (qrobo_chaves.resolver_cliente_id(cliente_id) if cliente_id
+           else qrobo_chaves.resolver_numero(numero))
     if not res['ok']:
         msgs = {'numero_vazio': 'Informe o número do cliente.',
+                'cliente_inexistente': 'Cliente não encontrado.',
                 'nao_encontrado': f'Nenhum cliente com o número {numero}. '
                                   'O número é exato ("023" ≠ "23").',
                 'ambiguo': f'Mais de um cliente com o número {numero} — '
@@ -4544,11 +4523,12 @@ def q_robo_gerar():
     data_inicio = (request.form.get('data_inicio') or '').strip()
     confirmou = request.form.get('confirmar_regeracao') == '1'
 
-    # Reconfere número -> cliente_id (formulário adulterado / cadastro alterado).
-    res = qrobo_chaves.resolver_numero(numero)
-    if not res['ok'] or str(res['cliente']['cliente_id']) != cliente_id:
-        logger.warning('[q-robo/admin] gerar abortado: numero=%r x cliente_id=%r',
-                       numero, cliente_id)
+    # Reconfere pelo id e exige que o número ainda seja o que apareceu na tela
+    # (formulário adulterado / cadastro alterado durante a conferência).
+    res = qrobo_chaves.resolver_cliente_id(cliente_id)
+    if not res['ok'] or (res['cliente']['numero_cliente'] or '') != numero:
+        logger.warning('[q-robo/admin] gerar abortado: cliente_id=%r x numero=%r',
+                       cliente_id, numero)
         flash('A conferência não bateu com o cadastro. Recomece — nada foi gerado.',
               'danger')
         return redirect(url_for('escrita_fiscal.q_robo_painel'))

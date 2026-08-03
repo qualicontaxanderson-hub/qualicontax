@@ -81,6 +81,13 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 .qr-acao.down  { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
 .qr-org { font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
 .qr-mono { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#94a3b8; }
+.qr-lista { position:absolute; z-index:40; left:0; width:420px; top:100%; background:#fff; border:1px solid #e2e8f0; border-radius:11px; box-shadow:0 12px 28px -8px rgba(0,0,0,.22); max-height:300px; overflow-y:auto; }
+.qr-item { padding:10px 13px; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+.qr-item:last-child { border-bottom:none; }
+.qr-item:hover, .qr-item.sel { background:#faf5ff; }
+.qr-item .r { font-size:13px; font-weight:700; color:#0f172a; }
+.qr-item .d { font-size:11.5px; color:#64748b; margin-top:2px; }
+.qr-lista .vazio2 { padding:13px; font-size:12px; color:#94a3b8; }
 </style>
 
 <div class="cc-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
@@ -295,15 +302,18 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
             Instalador, e tudo entra na auditoria abaixo.
         </div>
         <form method="POST" action="{{ url_for('escrita_fiscal.q_robo_resolver') }}"
-              class="qr-form" autocomplete="off">
+              class="qr-form" autocomplete="off" id="qrFrmBusca">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <div>
-                <label for="numero">Número do cliente</label>
-                <input type="text" id="numero" name="numero" required
-                       inputmode="numeric" placeholder="ex.: 23">
+            <input type="hidden" name="cliente_id" id="qrClienteId" value="">
+            <div style="position:relative;">
+                <label for="qrBusca">Número, nome ou CNPJ</label>
+                <input type="text" id="qrBusca" name="numero" required
+                       style="width:320px;" placeholder="ex.: 23 ou aliança">
+                <div class="qr-lista" id="qrLista" hidden></div>
             </div>
             <button type="submit" class="qr-btn roxo">CONFERIR EMPRESA</button>
         </form>
+        <div id="qrEscolhido" class="qr-ok" style="display:none;margin-top:12px;"></div>
     {% endif %}
 </div>
 
@@ -364,6 +374,12 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
                         {% if t.razao_social %}
                             <span class="qr-posto-num">{{ t.numero_cliente }}</span>
                             <span class="qr-posto-nome">— {{ t.razao_social }}</span>
+                        {% elif t.acao == 'DOWNLOAD_INSTALADOR' %}
+                            <span class="qr-posto-nome">Instalador do Q-Robô</span>
+                            <div class="qr-sub">
+                                baixado por <b>{{ t.usuario_nome }}</b> ·
+                                {% if t.instalador_versao %}versão {{ t.instalador_versao }}{% else %}versão não identificada{% endif %}
+                            </div>
                         {% else %}
                             <span class="qr-muted">—</span>
                         {% endif %}
@@ -400,6 +416,78 @@ function qrCopiar() {
     }
     event.target.textContent = 'CHAVE COPIADA';
 }
+// Autocomplete do painel: aqui a sessão é normal, então usa a busca que já
+// existe no app (/api/clientes/search) — não o endpoint do portal.
+(function () {
+    var campo = document.getElementById('qrBusca');
+    if (!campo) return;
+    var lista = document.getElementById('qrLista');
+    var hidden = document.getElementById('qrClienteId');
+    var box = document.getElementById('qrEscolhido');
+    var timer = null, req = 0, itens = [], sel = -1;
+
+    function esconder() { lista.hidden = true; lista.innerHTML = ''; itens = []; sel = -1; }
+
+    function escolher(c) {
+        hidden.value = c.id;
+        campo.value = c.nome_razao_social;
+        box.innerHTML = 'Selecionado: <b>' + c.nome_razao_social + '</b>'
+                      + (c.cpf_cnpj ? ' · ' + c.cpf_cnpj : '')
+                      + ' — confira na próxima tela antes de gerar.';
+        box.style.display = 'block';
+        esconder();
+    }
+
+    campo.addEventListener('input', function () {
+        hidden.value = ''; box.style.display = 'none';
+        clearTimeout(timer);
+        var q = campo.value.trim();
+        if (q.length < 2) { esconder(); return; }
+        timer = setTimeout(function () {
+            var meu = ++req;
+            fetch('/api/clientes/search?q=' + encodeURIComponent(q))
+                .then(function (r) { return r.ok ? r.json() : { clientes: [] }; })
+                .then(function (d) {
+                    if (meu !== req) return;
+                    itens = (d.clientes || []).slice(0, 15);
+                    lista.innerHTML = '';
+                    if (!itens.length) {
+                        lista.innerHTML = '<div class="vazio2">Nada encontrado.</div>';
+                        lista.hidden = false; return;
+                    }
+                    itens.forEach(function (c, i) {
+                        var el = document.createElement('div');
+                        el.className = 'qr-item';
+                        el.innerHTML = '<div class="r">' + c.nome_razao_social + '</div>'
+                                     + '<div class="d">' + (c.cpf_cnpj || '')
+                                     + (c.situacao !== 'ATIVO' ? ' · ' + c.situacao : '') + '</div>';
+                        el.onclick = function () { escolher(c); };
+                        lista.appendChild(el);
+                    });
+                    lista.hidden = false;
+                })
+                .catch(esconder);
+        }, 250);
+    });
+
+    campo.addEventListener('keydown', function (e) {
+        if (lista.hidden || !itens.length) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            sel = e.key === 'ArrowDown' ? Math.min(sel + 1, itens.length - 1)
+                                        : Math.max(sel - 1, 0);
+            Array.prototype.forEach.call(lista.children, function (el, i) {
+                el.classList.toggle('sel', i === sel);
+            });
+            e.preventDefault();
+        } else if (e.key === 'Enter' && sel >= 0) { escolher(itens[sel]); e.preventDefault(); }
+        else if (e.key === 'Escape') { esconder(); }
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!lista.contains(e.target) && e.target !== campo) esconder();
+    });
+})();
+
 {% if not confirmacao and not chave %}
 // Recarrega sozinho — só quando a tela é de leitura. Durante a conferência ou
 // com a chave na tela o reload apagaria o que o operador precisa ver.

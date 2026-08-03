@@ -110,6 +110,81 @@ def resolver_numero(numero):
             'robo': estado_robo(cli['id'])}
 
 
+def resolver_cliente_id(cliente_id):
+    """Mesmo retorno de ``resolver_numero``, mas partindo do cliente_id.
+
+    Serve para quando o instalador ESCOLHE numa lista de busca: aí não há
+    ambiguidade a resolver — a identidade já veio cravada.
+    """
+    try:
+        cid = int(cliente_id)
+    except (TypeError, ValueError):
+        return {'ok': False, 'erro': 'cliente_inexistente'}
+
+    cli = execute_query(
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, situacao "
+        "  FROM clientes WHERE id = %s", (cid,), fetch=True, fetch_one=True)
+    if not cli:
+        return {'ok': False, 'erro': 'cliente_inexistente', 'cliente_id': cid}
+
+    return {'ok': True,
+            'cliente': {'cliente_id': cli['id'],
+                        'numero_cliente': cli['numero_cliente'],
+                        'razao_social': cli['nome_razao_social'],
+                        'cpf_cnpj': cli['cpf_cnpj'],
+                        'situacao': cli['situacao']},
+            'robo': estado_robo(cli['id'])}
+
+
+# Mínimo de caracteres para buscar — 2, o mesmo do /api/clientes/search do app.
+# Não sobe para 3: existe posto com nome curto no cadastro ("AUTO POSTO JK"),
+# e exigir 3 letras deixaria o instalador sem achá-lo pelo nome.
+MIN_TERMO_TEXTO = 2
+MIN_TERMO_NUMERO = 2
+LIMITE_BUSCA = 15
+
+
+def buscar_clientes(termo, limite=LIMITE_BUSCA):
+    """Busca por número OU parte da razão social OU CNPJ. SÓ IDENTIDADE.
+
+    Espelha o padrão do app (LIKE '%termo%', ordenado por nome, com teto), mas
+    é um caminho PRÓPRIO do portal: devolve apenas número, razão social, CNPJ e
+    situação — nada de e-mail, contrato, regime ou qualquer dado fiscal.
+
+    Devolve [] quando o termo é curto demais — quem chama não precisa tratar.
+    """
+    termo = (termo or '').strip()
+    so_digitos = _digitos(termo)
+    minimo = MIN_TERMO_NUMERO if so_digitos and so_digitos == termo else MIN_TERMO_TEXTO
+    if len(termo) < minimo:
+        return []
+
+    # Escapa os curingas do LIKE: '100%' procura o texto, não um prefixo.
+    seguro = termo.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    padrao = f'%{seguro}%'
+    limite = max(1, min(int(limite or LIMITE_BUSCA), 50))
+
+    return execute_query(
+        "SELECT id AS cliente_id, numero_cliente, nome_razao_social AS razao_social, "
+        "       cpf_cnpj, situacao, "
+        "       (SELECT COUNT(*) FROM robo_config r WHERE r.cliente_id = c.id) AS tem_robo "
+        "  FROM clientes c "
+        " WHERE c.numero_cliente = %s "
+        "    OR c.numero_cliente LIKE %s "
+        "    OR c.nome_razao_social LIKE %s "
+        "    OR REGEXP_REPLACE(COALESCE(c.cpf_cnpj, ''), '[^0-9]', '') LIKE %s "
+        " ORDER BY (c.numero_cliente = %s) DESC, c.situacao = 'ATIVO' DESC, "
+        "          c.nome_razao_social "
+        " LIMIT %s",
+        (termo, padrao, padrao, f'%{so_digitos}%' if so_digitos else '\x00',
+         termo, limite),
+        fetch=True) or []
+
+
+def _digitos(texto):
+    return re.sub(r'\D', '', texto or '')
+
+
 def estado_robo(cliente_id):
     """Estado do robô do cliente (ou None). NUNCA devolve o robo_token."""
     return execute_query(
