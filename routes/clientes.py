@@ -428,6 +428,12 @@ def certificado_vincular(id):
     if not senha:
         return jsonify({'ok': False, 'erro': 'Informe a senha do certificado.'}), 400
 
+    # Fase 2: vínculo por PROCURAÇÃO (e-CPF do contador / terceiro autorizado).
+    # Só surte efeito quando o titular do .pfx NÃO for a empresa (passo 4); no
+    # caminho normal (titular == empresa) o checkbox é ignorado de propósito.
+    procuracao_pedida = str(data.get('procuracao') or '').strip().lower() in (
+        '1', 'true', 'on', 'sim')
+
     svc = dropbox_sync._service
     if not svc.is_configured():
         return jsonify({'ok': False, 'erro': 'Dropbox não configurado.'}), 400
@@ -475,21 +481,51 @@ def certificado_vincular(id):
     #    Match exato → vincula normal. Match SÓ na raiz (matriz cobrindo filial) →
     #    vincula, mas com AVISO explícito (flexibilização consciente da regra:
     #    quero ver na tela p/ não vincular na empresa errada). Raiz diferente →
-    #    recusa. CPF (11 díg.) exige igualdade exata (sem lógica de raiz).
+    #    recusa — SALVO se o vínculo foi pedido como PROCURAÇÃO. CPF (11 díg.)
+    #    exige igualdade exata (sem lógica de raiz).
+    #
+    #    ORDEM DOS RAMOS (importa):
+    #      a) doc_cert == doc_empresa  -> caminho NORMAL, intocado. Cobre PJ+e-CNPJ
+    #         (14 díg.) e PF+e-CPF (11 díg.) igualmente: a comparação é entre
+    #         strings de dígitos, sem olhar tipo_doc nem comprimento.
+    #      b) procuração                -> AGNÓSTICA DE TIPO. Só "titular ≠ empresa
+    #         E procuracao=1". Vale e-CPF (contador) e e-CNPJ (escritório).
+    #      c) raiz                      -> CNPJ-only, como sempre foi.
     doc_cert = info['documento']
     doc_empresa = re.sub(r'\D', '', cliente.get('cpf_cnpj') or '')
     aviso = None
+    procuracao = 0
     if doc_cert != doc_empresa:
-        raiz_ok = (info['tipo_doc'] == 'CNPJ'
-                   and len(doc_cert) == 14 and len(doc_empresa) == 14
-                   and doc_cert[:8] == doc_empresa[:8])
-        if not raiz_ok:
-            return jsonify({'ok': False,
-                            'erro': 'O certificado da pasta não é dessa empresa '
-                                    f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}), 200
-        aviso = (f'Certificado da {_matriz_ou_filial(doc_cert)} {_fmt_cnpj(doc_cert)} '
-                 f'vinculado à {_matriz_ou_filial(doc_empresa)} {_fmt_cnpj(doc_empresa)} '
-                 f'(mesma raiz — o e-CNPJ da matriz cobre as filiais).')
+        if procuracao_pedida:
+            # PROCURAÇÃO: titular de terceiro é o caso de uso, não o erro.
+            # SEM checagem de tipo_doc/comprimento de propósito — e-CPF (11) e
+            # e-CNPJ (14) são igualmente válidos como certificado de terceiro.
+            #
+            # Guarda: a empresa PRECISA ter CPF/CNPJ próprio. Sem ele,
+            # dfe_captura.py (`cliente.cpf_cnpj or vinc.cnpj`) cairia no FALLBACK
+            # e consultaria a SEFAZ com o documento do CONTADOR — trazendo os
+            # documentos dele para dentro desta empresa.
+            if not doc_empresa:
+                return jsonify({'ok': False,
+                                'erro': 'Esta empresa está sem CPF/CNPJ cadastrado. '
+                                        'Cadastre o documento antes de vincular um '
+                                        'certificado de procuração — sem ele a captura '
+                                        'consultaria a SEFAZ com o documento do titular '
+                                        'do certificado, e não com o desta empresa.'}), 200
+            procuracao = 1
+            aviso = (f'Certificado de TERCEIRO (procuração) — titular {doc_cert} '
+                     f'≠ empresa {doc_empresa}. Confira.')
+        else:
+            raiz_ok = (info['tipo_doc'] == 'CNPJ'
+                       and len(doc_cert) == 14 and len(doc_empresa) == 14
+                       and doc_cert[:8] == doc_empresa[:8])
+            if not raiz_ok:
+                return jsonify({'ok': False,
+                                'erro': 'O certificado da pasta não é dessa empresa '
+                                        f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}), 200
+            aviso = (f'Certificado da {_matriz_ou_filial(doc_cert)} {_fmt_cnpj(doc_cert)} '
+                     f'vinculado à {_matriz_ou_filial(doc_empresa)} {_fmt_cnpj(doc_empresa)} '
+                     f'(mesma raiz — o e-CNPJ da matriz cobre as filiais).')
 
     # 5) Cifra a senha ANTES de mover (se falhar aqui, o .pfx continua em NOVO).
     try:
@@ -510,11 +546,27 @@ def certificado_vincular(id):
     except dropbox_sync.DropboxAuthError:
         return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
 
+    # 6b) O UNIQUE (cliente_id) faz o upsert SUBSTITUIR o vínculo anterior em
+    #     SILÊNCIO. Lê o que está saindo de cena ANTES de gravar, para dizer na
+    #     tela qual certificado foi trocado. MVP: segue 1 certificado por empresa
+    #     (o modelo multi-cert entrada+saída fica para depois).
+    anterior = DfeCertificado.get_by_cliente(id)
+    substituicao = None
+    if anterior and (anterior.get('dropbox_path') or '') != destino:
+        _val = anterior.get('validade')
+        substituicao = (
+            f'Substituiu o certificado anterior desta empresa '
+            f'({anterior.get("tipo_doc")} {anterior.get("cnpj")}'
+            + (f', válido até {_val.strftime("%d/%m/%Y")}' if _val else '')
+            + f'). O arquivo antigo continua no Dropbox em '
+              f'{anterior.get("dropbox_path")} e deixou de ser usado.')
+
     # 7) Grava o vínculo. Se falhar, tenta devolver o .pfx para NOVO (sem órfão);
     #    se nem a reversão der certo, loga o caminho para recuperação manual.
     ok = DfeCertificado.upsert(
         cliente_id=id, cnpj=doc_cert, tipo_doc=info['tipo_doc'],
         senha_cifrada=senha_cifrada, dropbox_path=destino, validade=info['validade'],
+        procuracao=procuracao,
     )
     if not ok:
         revertido = False
@@ -537,9 +589,11 @@ def certificado_vincular(id):
         'ok': True,
         'documento': doc_cert,
         'tipo_doc': info['tipo_doc'],
+        'procuracao': procuracao,
         'validade': info['validade'].isoformat() if info['validade'] else None,
         'arquivo': f'{doc_cert}.pfx',
-        'aviso': aviso,   # preenchido só no vínculo por raiz (matriz→filial)
+        'aviso': aviso,                 # vínculo por raiz (matriz→filial) OU procuração
+        'substituicao': substituicao,   # preenchido só quando trocou um cert anterior
     }), 200
 
 

@@ -966,6 +966,12 @@
                                     <label>{{ certificado.tipo_doc }}</label>
                                     <span>{{ certificado.cnpj }}</span>
                                 </div>
+                                {% if certificado.procuracao %}
+                                <div class="info-item">
+                                    <label>Vínculo</label>
+                                    <span class="badge badge-warning">PROCURAÇÃO (terceiro)</span>
+                                </div>
+                                {% endif %}
                                 {% if certificado.validade %}
                                 <div class="info-item">
                                     <label>Validade</label>
@@ -1012,6 +1018,32 @@
                                     <input type="password" id="certSenha" class="form-control"
                                            autocomplete="off" placeholder="Digite a senha do .pfx">
                                 </div>
+
+                                <div class="form-group" style="margin-top:12px;">
+                                    <label style="display:flex; align-items:flex-start; gap:8px;
+                                                  font-weight:400; cursor:pointer;">
+                                        <input type="checkbox" id="certProcuracao" style="margin-top:3px;">
+                                        <span>Certificado de <strong>procuração</strong>
+                                            (contador / terceiro autorizado)<br>
+                                            <small style="color:#64748b;">Marque quando o titular do .pfx
+                                            NÃO for esta empresa — ex.: e-CPF do contador. Sem marcar, um
+                                            titular diferente continua sendo recusado. A captura automática
+                                            nasce DESLIGADA neste caso.</small>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                {% if certificado %}
+                                <div style="margin-top:10px; padding:10px 12px; border-radius:6px;
+                                            background:#fffbeb; border:1px solid #f59e0b;
+                                            color:#92400e; font-size:13px;">
+                                    <strong>&#x26A0;&#xFE0F; Já existe certificado vinculado</strong>
+                                    ({{ certificado.tipo_doc }} {{ certificado.cnpj }}{% if certificado.validade %},
+                                    válido até {{ certificado.validade|format_date }}{% endif %}).
+                                    Vincular outro <strong>substitui</strong> este registro — a empresa
+                                    segue com 1 certificado só.
+                                </div>
+                                {% endif %}
                                 <button type="button" class="btn btn-primary" style="margin-top:10px;"
                                         id="btnCertVincular" onclick="certVincular({{ cliente.id }})">
                                     <i class="fas fa-lock"></i> Validar e Vincular
@@ -1513,23 +1545,28 @@ function certBuscar(clienteId) {
 function certVincular(clienteId) {
     var senha = document.getElementById('certSenha').value;
     if (!senha) { _certMsg('Digite a senha do certificado.', 'erro'); return; }
+    var proc = document.getElementById('certProcuracao');
     var btn = document.getElementById('btnCertVincular');
     btn.disabled = true;
     _certMsg('Validando senha e conferindo o titular...', 'ok');
     fetch('/clientes/' + clienteId + '/certificado/vincular', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({senha: senha})
+        body: JSON.stringify({senha: senha, procuracao: (proc && proc.checked) ? 1 : 0})
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
         btn.disabled = false;
         if (d.ok) {
             var base = '&#x2705; Certificado vinculado com sucesso (' + d.tipo_doc + ' ' + d.documento + ').';
-            if (d.aviso) {
-                // Vínculo por raiz (matriz→filial): destaca e dá tempo de ler antes de recarregar.
-                _certMsg(base + '<br><strong>&#x26A0;&#xFE0F; ' + d.aviso + '</strong>', 'ok');
-                setTimeout(function() { window.location.reload(); }, 5000);
+            var extra = '';
+            if (d.substituicao) { extra += '<br><strong>&#x267B;&#xFE0F; ' + d.substituicao + '</strong>'; }
+            if (d.aviso) { extra += '<br><strong>&#x26A0;&#xFE0F; ' + d.aviso + '</strong>'; }
+            if (extra) {
+                // Vínculo por raiz (matriz→filial) ou procuração / troca de cert:
+                // destaca e dá tempo de ler antes de recarregar.
+                _certMsg(base + extra, 'ok');
+                setTimeout(function() { window.location.reload(); }, 6000);
             } else {
                 _certMsg(base, 'ok');
                 setTimeout(function() { window.location.reload(); }, 1200);

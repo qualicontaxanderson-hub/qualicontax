@@ -923,6 +923,9 @@ def _apply_migrations():
     for _col_name, _col_def in [
         ('modo_automatico', 'TINYINT(1) NOT NULL DEFAULT 1'),
         ('ativo',           'TINYINT(1) NOT NULL DEFAULT 1'),
+        # Fase 2: vínculo por PROCURAÇÃO (titular do .pfx ≠ empresa). Default 0 —
+        # todo vínculo anterior continua sendo "titular == empresa".
+        ('procuracao',      'TINYINT(1) NOT NULL DEFAULT 0'),
     ]:
         _col_exists = execute_query(
             "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "

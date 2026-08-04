@@ -43,8 +43,8 @@ class DfeCertificado:
         Não retorna a senha cifrada (não é usada na tela).
         """
         query = """
-            SELECT id, cliente_id, cnpj, tipo_doc, dropbox_path, validade,
-                   criado_em, atualizado_em
+            SELECT id, cliente_id, cnpj, tipo_doc, procuracao, dropbox_path,
+                   validade, criado_em, atualizado_em
             FROM dfe_certificados
             WHERE cliente_id = %s
         """
@@ -77,8 +77,8 @@ class DfeCertificado:
         causa rejeição na SEFAZ, então nunca se chuta a UF.
         """
         query = """
-            SELECT dc.id, dc.cliente_id, dc.cnpj, dc.tipo_doc, dc.dropbox_path,
-                   dc.validade, dc.modo_automatico, dc.ativo,
+            SELECT dc.id, dc.cliente_id, dc.cnpj, dc.tipo_doc, dc.procuracao,
+                   dc.dropbox_path, dc.validade, dc.modo_automatico, dc.ativo,
                    c.numero_cliente, c.nome_razao_social,
                    ec.estado AS uf, n.ult_consulta, n.proximo_permitido
             FROM dfe_certificados dc
@@ -98,20 +98,36 @@ class DfeCertificado:
         return execute_query(query, fetch=True) or []
 
     @staticmethod
-    def upsert(cliente_id, cnpj, tipo_doc, senha_cifrada, dropbox_path, validade=None):
-        """Insere ou atualiza o vínculo (1 certificado vigente por empresa)."""
+    def upsert(cliente_id, cnpj, tipo_doc, senha_cifrada, dropbox_path,
+               validade=None, procuracao=0):
+        """Insere ou atualiza o vínculo (1 certificado vigente por empresa).
+
+        ``procuracao=1`` marca que o titular do .pfx NÃO é a empresa (contador /
+        terceiro autorizado). O UNIQUE (cliente_id) mantém 1 certificado por
+        empresa: um segundo vínculo SUBSTITUI o anterior (ver certificado_vincular,
+        que avisa na tela o que saiu de cena).
+
+        ``modo_automatico``: procuração nasce com 0 (captura desligada — teste
+        controlado, liga-se na mão depois). Certificado normal nasce com 1, e num
+        REVÍNCULO o valor anterior é PRESERVADO (não religa o que foi desligado).
+        """
         query = """
             INSERT INTO dfe_certificados
-                (cliente_id, cnpj, tipo_doc, senha_cifrada, dropbox_path, validade)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (cliente_id, cnpj, tipo_doc, senha_cifrada, dropbox_path, validade,
+                 procuracao, modo_automatico)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 cnpj = VALUES(cnpj),
                 tipo_doc = VALUES(tipo_doc),
                 senha_cifrada = VALUES(senha_cifrada),
                 dropbox_path = VALUES(dropbox_path),
-                validade = VALUES(validade)
+                validade = VALUES(validade),
+                procuracao = VALUES(procuracao),
+                modo_automatico = IF(VALUES(procuracao) = 1, 0, modo_automatico)
         """
+        proc = int(procuracao or 0)
         return execute_query(
             query,
-            (cliente_id, cnpj, tipo_doc, senha_cifrada, dropbox_path, validade),
+            (cliente_id, cnpj, tipo_doc, senha_cifrada, dropbox_path, validade,
+             proc, 0 if proc else 1),
         )
