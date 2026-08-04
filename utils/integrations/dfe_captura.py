@@ -180,6 +180,22 @@ SQL_NSU_656 = (
     "  ult_status=VALUES(ult_status)"
 )
 
+# 137 (fim de fila: nada novo / em dia). Grava o cursor IGUAL ao OK, mas com um
+# cooldown CURTO (65 min) em vez de liberar (NULL). Motivo: o distDFeInt cobra
+# ~1h de espera depois que se alcança o maxNSU; como o cron roda */20, sem esta
+# folga ele re-consulta em ~20 min e leva 656 (consumo indevido). 65 = 60 + 5 de
+# margem para não raspar no limite. NÃO afeta o 138 (tem mais doc → continua
+# drenando sem cooldown) nem o valor de 1h do 656.
+SQL_NSU_137 = (
+    "INSERT INTO dfe_nsu "
+    "(cliente_id, cnpj, ult_nsu, max_nsu, ult_consulta, proximo_permitido, ult_status) "
+    "VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL 65 MINUTE,%s) "
+    "ON DUPLICATE KEY UPDATE "
+    "  ult_nsu=VALUES(ult_nsu), " + _MAX_NSU + ", "
+    "  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL 65 MINUTE, "
+    "  ult_status=VALUES(ult_status)"
+)
+
 
 # ==========================================================================
 # Helpers de parsing
@@ -695,10 +711,16 @@ def _retry_pendentes(empresa, ctx):
 # ==========================================================================
 def _bloqueado_por_cota(cliente_id):
     """Retorna a linha com faltam_min se a SEFAZ ainda pediu para aguardar
-    (proximo_permitido > NOW()), ou None. Comparação 100% no relógio do banco."""
+    (proximo_permitido > NOW()), ou None. Comparação 100% no relógio do banco.
+
+    Traz também ``ult_status`` para o chamador distinguir o MOTIVO do cooldown na
+    mensagem ao usuário: '137 ...' = em dia (nada novo); '656 ...' = consumo
+    indevido. O HH:MM da liberação sai de ``proximo_permitido`` formatado em Python
+    (evita '%H' num SQL parametrizado)."""
     return execute_query(
         "SELECT proximo_permitido, "
-        "TIMESTAMPDIFF(MINUTE, NOW(), proximo_permitido) AS faltam_min "
+        "TIMESTAMPDIFF(MINUTE, NOW(), proximo_permitido) AS faltam_min, "
+        "ult_status "
         "FROM dfe_nsu WHERE cliente_id = %s "
         "AND proximo_permitido IS NOT NULL AND proximo_permitido > NOW()",
         (cliente_id,), fetch=True, fetch_one=True,
@@ -897,12 +919,23 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     bloqueio = _bloqueado_por_cota(cliente_id)
     if bloqueio:
         faltam = bloqueio.get('faltam_min')
+        pp = bloqueio.get('proximo_permitido')
+        libera = pp.strftime('%H:%M') if hasattr(pp, 'strftime') else None
+        # '137 ...' = em dia (o cooldown novo); qualquer outro (656) = consumo
+        # indevido. Mensagem clara para o caminho manual — nada de "erro seco".
+        em_dia = (bloqueio.get('ult_status') or '').startswith('137')
         if not dry_run:
             dfe_log.registrar('pulado_cota', cliente_id, cnpj,
                               detalhe=_det(f'faltam ~{faltam} min'), origem=origem)
+        if em_dia:
+            quando = f'às {libera}' if libera else f'em ~{faltam} min'
+            msg = (f'Empresa em dia — nenhum documento novo por enquanto. '
+                   f'A SEFAZ libera nova consulta {quando}.')
+        else:
+            msg = (f'A SEFAZ pediu para aguardar (consumo indevido anterior). '
+                   f'Faltam ~{faltam} min para a próxima consulta deste CNPJ.')
         return {'ok': False, 'bloqueado': True, 'faltam_min': faltam,
-                'erro': f'A SEFAZ pediu para aguardar (consumo indevido anterior). '
-                        f'Faltam ~{faltam} min para a próxima consulta deste CNPJ.'}
+                'em_dia': em_dia, 'libera_hhmm': libera, 'erro': msg}
 
     ult_nsu = _ler_ult_nsu(cliente_id)
 
@@ -1048,6 +1081,14 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     # Se o retry disparou 656, grava o cooldown (o último cursor por-lote era NULL).
     if ctx['cooldown_656']:
         execute_query(SQL_NSU_656, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
+    # Fim de fila (137 / em dia, sem 656): sela um cooldown de 65 min para o cron
+    # (*/20) não re-consultar em ~20 min e tomar 656. Só quando NÃO paramos por teto
+    # de lotes/tempo (limite is None → aí ainda há doc a drenar, retoma no próximo
+    # tick sem espera) E o cursor alcançou o maxNSU (ret_ult >= ret_max = em dia).
+    # O último write por-lote foi SQL_NSU_OK (proximo_permitido=NULL); este re-grava
+    # o MESMO cursor só trocando o cooldown para NOW()+65min.
+    elif limite is None and ret_ult >= ret_max:
+        execute_query(SQL_NSU_137, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
 
     tot_docs = tot['n_nota'] + tot['n_resumo'] + tot['n_evento'] + tot['n_outro']
     dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
