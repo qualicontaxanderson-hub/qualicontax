@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify,
+    flash, jsonify, send_file,
 )
+from io import BytesIO
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
 from utils.db_helper import execute_query, execute_many, transacao
@@ -914,6 +915,87 @@ def api_notas():
         'total': total, 'page': page, 'per_page': per_page, 'rows': rows,
         'kpi': kpi,
     })
+
+
+# ---------------------------------------------------------------------------
+# Export de nota (Fase 1: por nota) — XML e PDF. Reaproveitado por conf-compras
+# e conf-saidas. Fonte do XML = nfe_importacoes.xml_raw (banco), que é o nfeProc
+# completo (com protNFe) — NÃO usa Dropbox. O guard de acesso segue o TIPO da
+# nota, igual às telas que a listam: entrada→conf_compras, saída→conf_saidas.
+# ---------------------------------------------------------------------------
+def _carregar_nota_export(nfe_id):
+    """Retorna (nota, None) pronta para exportar, ou (None, (msg, status)) com uma
+    resposta amigável para o chamador devolver direto. Cobre: nota inexistente
+    (404), sem permissão para o tipo (403) e resumo/xml vazio (404)."""
+    nota = execute_query(
+        "SELECT xml_raw, chave_acesso, incompleta, tipo "
+        "FROM nfe_importacoes WHERE id = %s",
+        (nfe_id,), fetch=True, fetch_one=True,
+    )
+    if not nota:
+        return None, ('Nota não encontrada.', 404)
+    # Mesma proteção das telas de conferência (admin passa via has_permission).
+    codigo = ('escrita_fiscal.conf_saidas' if nota.get('tipo') == 'saida'
+              else 'escrita_fiscal.conf_compras')
+    if not current_user.has_permission(codigo):
+        return None, ('Você não tem permissão para baixar esta nota.', 403)
+    if nota.get('incompleta') or not (nota.get('xml_raw') or '').strip():
+        return None, ('Esta nota é só um resumo da SEFAZ — o XML completo não está '
+                      'disponível para exportar.', 404)
+    return nota, None
+
+
+@escrita_fiscal.route('/nota/<int:nfe_id>/xml')
+@login_required
+def nota_xml(nfe_id):
+    """Baixa o XML (nfeProc) da nota direto do banco (nfe_importacoes.xml_raw)."""
+    nota, erro = _carregar_nota_export(nfe_id)
+    if erro:
+        return erro
+    chave = nota.get('chave_acesso') or str(nfe_id)
+    return send_file(BytesIO(nota['xml_raw'].encode('utf-8')), as_attachment=True,
+                     download_name=f'{chave}.xml', mimetype='application/xml')
+
+
+@escrita_fiscal.route('/nota/<int:nfe_id>/pdf')
+@login_required
+def nota_pdf(nfe_id):
+    """Gera e baixa o DANFE/DACTE em PDF a partir do xml_raw (nfeProc autorizado).
+
+    Modelo pelos dígitos 21-22 da chave: 55=DANFE, 57=DACTE, 65=NFC-e (a lib ainda
+    não gera DANFCE → 400 amigável). A geração é BLINDADA: se o XML não for o
+    proc autorizado esperado e a lib falhar, devolve erro amigável, nunca 500."""
+    nota, erro = _carregar_nota_export(nfe_id)
+    if erro:
+        return erro
+    chave = nota.get('chave_acesso') or ''
+    xml_raw = nota['xml_raw']
+    modelo = chave[20:22] if len(chave) >= 22 else ''
+
+    if modelo == '65':
+        return ('PDF de NFC-e (modelo 65) em breve — a biblioteca ainda não gera o '
+                'DANFCE. Use o XML por enquanto.', 400)
+    try:
+        if modelo == '57':
+            # NOTA: CT-e não é gravado em nfe_importacoes (fica em cte_documentos),
+            # então este ramo é INALCANÇÁVEL vindo de conf-compras/conf-saidas —
+            # lá só há 55/65. Fica pronto para um export de CT-e que reuse este
+            # endpoint com a fonte certa (cte_documentos.xml_raw).
+            from brazilfiscalreport.dacte import Dacte
+            doc = Dacte(xml=xml_raw)
+        else:
+            # 55 (e qualquer outro NF-e): DANFE.
+            from brazilfiscalreport.danfe import Danfe
+            doc = Danfe(xml=xml_raw)
+        # fpdf2 (base da lib): output() sem destino devolve o PDF como bytearray.
+        pdf_bytes = bytes(doc.output())
+    except Exception:
+        logging.getLogger(__name__).exception(
+            '[export] falha ao gerar PDF da nfe_id=%s (chave=%s)', nfe_id, chave)
+        return ('Não foi possível gerar o PDF desta nota (o XML pode estar fora do '
+                'padrão esperado). Baixe o XML por enquanto.', 422)
+    return send_file(BytesIO(pdf_bytes), as_attachment=True,
+                     download_name=f'{chave or nfe_id}.pdf', mimetype='application/pdf')
 
 
 # ---------------------------------------------------------------------------

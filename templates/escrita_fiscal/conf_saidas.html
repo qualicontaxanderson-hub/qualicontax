@@ -68,6 +68,8 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .cc-empresa-pill { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 .cc-grupo-pill   { background:#e9d5ff; color:#7c3aed; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 .btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
+.btn-exp { background:transparent; border:none; color:#6b7280; padding:4px 6px; border-radius:5px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-flex; }
+.btn-exp:hover { background:#f0fdf4; color:#166534; }
 .btn-del:hover { background:#fee2e2; }
 
 /* ---- Pagination ---- */
@@ -665,6 +667,21 @@ function applyFilters() {
     loadActiveTab();
 }
 
+// ---- Export XML/PDF por nota (Fase 1) ----
+// Saídas são sempre completas; ainda assim respeitamos !incompleta por simetria.
+// PDF só para modelo 55/57 (chave díg. 21-22); NFC-e (65) sem botão de PDF.
+function exportBtns(r) {
+    if (r.incompleta) return '';
+    const modelo = (r.chave_acesso || '').substr(20, 2);
+    let html = `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/xml" title="Baixar XML"
+                   onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`;
+    if (modelo === '55' || modelo === '57') {
+        html += `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/pdf" title="Baixar PDF (DANFE/DACTE)"
+                    onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
+    }
+    return html;
+}
+
 // ---- Formatters ----
 function fmtBRL(v) { return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtNum(v,d) { return parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:d||2,maximumFractionDigits:d||4}); }
@@ -725,6 +742,7 @@ function loadNotas() {
                     <td class="money">${fmtBRL(r.valor_icms)}</td>
                     <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span></td>
                     <td onclick="event.stopPropagation()">
+                        ${exportBtns(r)}
                         <button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
                             <i class="fas fa-trash-alt"></i>
                         </button>

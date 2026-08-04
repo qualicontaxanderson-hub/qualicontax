@@ -15,3 +15,4 @@ certifi==2024.8.30
 APScheduler==3.10.4
 Flask-Compress==1.17
 defusedxml==0.7.1
+brazilfiscalreport[dacte]==1.0.1
