@@ -443,6 +443,22 @@
                     <label for="observacoes">Observações</label>
                     <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
                 </div>
+
+                <div class="form-group" style="margin-top:18px; padding-top:16px;
+                                               border-top:1px solid #e5e7eb;">
+                    <label style="display:flex; align-items:flex-start; gap:8px;
+                                  font-weight:400; cursor:pointer;">
+                        <input type="checkbox" id="is_contador" name="is_contador" value="1"
+                               style="margin-top:3px;"
+                               {% if cliente and cliente.is_contador %}checked{% endif %}>
+                        <span><strong>Este cadastro é um Contador</strong><br>
+                            <small style="color:#64748b;">Marque para que este cadastro possa
+                            ser vinculado como contador responsável de outros clientes. O
+                            certificado digital continua sendo vinculado normalmente aqui,
+                            com o titular igual a este cadastro.</small>
+                        </span>
+                    </label>
+                </div>
             </div>
         </div>
 

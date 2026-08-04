@@ -57,7 +57,7 @@ class Cliente:
         query = """
             SELECT id, numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
-                   porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade, data_inicio_contrato, situacao, observacoes
+                   porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade, data_inicio_contrato, situacao, observacoes, is_contador
             FROM clientes
             WHERE id = %s
         """

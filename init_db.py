@@ -736,6 +736,32 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # ---- Cadastro de CONTADOR + vínculo N:N cliente <-> contador ----
+    # "Contador" é um CADASTRO de cliente marcado (is_contador=1) com o
+    # certificado DELE. Um cliente aponta para vários contadores.
+    _col_contador = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clientes' "
+        "AND COLUMN_NAME = 'is_contador'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _col_contador.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE clientes ADD COLUMN is_contador TINYINT(1) NOT NULL DEFAULT 0")
+
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS cliente_contadores (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id  INT          NOT NULL,
+            contador_id INT          NOT NULL,
+            finalidade  VARCHAR(30)  NULL,
+            criado_em   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_cliente_contador (cliente_id, contador_id),
+            KEY ix_cc_contador (contador_id),
+            CONSTRAINT fk_cc_cliente  FOREIGN KEY (cliente_id)  REFERENCES clientes(id) ON DELETE CASCADE,
+            CONSTRAINT fk_cc_contador FOREIGN KEY (contador_id) REFERENCES clientes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
     # Incremental: coluna telefone em socios_clientes
     try:
         _telefone_socio_exists = execute_query(

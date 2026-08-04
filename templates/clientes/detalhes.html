@@ -946,6 +946,105 @@
             <div id="certificado" class="tab-pane">
                 <div class="card">
                     <div class="card-header">
+                        <h3 class="card-title">Contadores responsáveis</h3>
+                    </div>
+                    <div class="card-body">
+                        <p style="color:#64748b; font-size:13px; margin-bottom:14px;">
+                            Contadores (cadastros marcados como Contador) responsáveis por esta
+                            empresa. Cada um usa o certificado digital DELE — vinculado na tela
+                            do próprio cadastro do contador.
+                        </p>
+
+                        {% if contadores %}
+                        <table class="table" style="width:100%; font-size:14px;">
+                            <thead>
+                                <tr>
+                                    <th>Contador</th><th>Documento</th><th>Finalidade</th>
+                                    <th>Certificado</th><th style="width:90px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for ct in contadores %}
+                                <tr>
+                                    <td>
+                                        {% if ct.numero_cliente %}{{ ct.numero_cliente }} - {% endif %}
+                                        {{ ct.nome_razao_social }}
+                                    </td>
+                                    <td>{{ ct.cpf_cnpj }}</td>
+                                    <td>{{ ct.finalidade or '—' }}</td>
+                                    <td>
+                                        {% if ct.tem_certificado %}
+                                        <span class="badge badge-success">{{ ct.cert_tipo_doc }} {{ ct.cert_doc }}</span>
+                                        {% else %}
+                                        <span class="badge badge-warning">SEM CERTIFICADO</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="POST"
+                                              action="{{ url_for('clientes.desvincular_contador', cliente_id=cliente.id, contador_id=ct.id) }}"
+                                              onsubmit="return confirm('Remover {{ ct.nome_razao_social }} dos contadores desta empresa?');">
+                                            <button type="submit" class="btn btn-sm"
+                                                    style="background:#fee2e2; color:#991b1b;">
+                                                <i class="fas fa-times"></i> Remover
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+
+                        {% if contadores | rejectattr('tem_certificado') | list %}
+                        <div style="margin-top:10px; padding:10px 12px; border-radius:6px;
+                                    background:#fffbeb; border:1px solid #f59e0b;
+                                    color:#92400e; font-size:13px;">
+                            <strong>&#x26A0;&#xFE0F;</strong> Há contador vinculado
+                            <strong>sem certificado</strong>. O vínculo só serve para captura
+                            quando o contador tiver o .pfx dele vinculado no próprio cadastro.
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <p style="color:#64748b;">Nenhum contador vinculado a esta empresa.</p>
+                        {% endif %}
+
+                        <hr style="margin:18px 0; border:none; border-top:1px solid #e5e7eb;">
+                        {% if contadores_disponiveis %}
+                        <form method="POST"
+                              action="{{ url_for('clientes.vincular_contador', cliente_id=cliente.id) }}"
+                              style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                            <div class="form-group" style="margin:0; min-width:280px;">
+                                <label for="contador_id">Adicionar contador</label>
+                                <select id="contador_id" name="contador_id" class="form-control" required>
+                                    <option value="">Selecione...</option>
+                                    {% for ct in contadores_disponiveis %}
+                                    <option value="{{ ct.id }}">
+                                        {% if ct.numero_cliente %}{{ ct.numero_cliente }} - {% endif %}{{ ct.nome_razao_social }}
+                                        {% if not ct.tem_certificado %} (sem certificado){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin:0; min-width:180px;">
+                                <label for="finalidade">Finalidade (opcional)</label>
+                                <input type="text" id="finalidade" name="finalidade"
+                                       class="form-control" maxlength="30"
+                                       placeholder="ex.: fiscal, contabil">
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Vincular
+                            </button>
+                        </form>
+                        {% else %}
+                        <p style="color:#64748b; font-size:13px;">
+                            Nenhum cadastro disponível. Marque um cadastro como
+                            <strong>Contador</strong> na tela de edição dele para poder vinculá-lo aqui.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
                         <h3 class="card-title">Certificado Digital (A1)</h3>
                     </div>
                     <div class="card-body">
@@ -1017,20 +1116,6 @@
                                     </label>
                                     <input type="password" id="certSenha" class="form-control"
                                            autocomplete="off" placeholder="Digite a senha do .pfx">
-                                </div>
-
-                                <div class="form-group" style="margin-top:12px;">
-                                    <label style="display:flex; align-items:flex-start; gap:8px;
-                                                  font-weight:400; cursor:pointer;">
-                                        <input type="checkbox" id="certProcuracao" style="margin-top:3px;">
-                                        <span>Certificado de <strong>procuração</strong>
-                                            (contador / terceiro autorizado)<br>
-                                            <small style="color:#64748b;">Marque quando o titular do .pfx
-                                            NÃO for esta empresa — ex.: e-CPF do contador. Sem marcar, um
-                                            titular diferente continua sendo recusado. A captura automática
-                                            nasce DESLIGADA neste caso.</small>
-                                        </span>
-                                    </label>
                                 </div>
 
                                 {% if certificado %}

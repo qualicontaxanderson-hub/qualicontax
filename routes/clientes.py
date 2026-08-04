@@ -15,6 +15,7 @@ from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade
 from models.cadastro_anp import CadastroAnp
 from models.dfe_certificado import DfeCertificado
+from models.cliente_contador import ClienteContador
 from utils import dropbox_sync
 from utils.certificado_digital import (
     abrir_certificado, cifrar_senha,
@@ -178,6 +179,11 @@ def novo():
         cliente_id = Cliente.create(data)
         
         if cliente_id:
+            # Marca de CONTADOR (fora do INSERT: a lista de colunas do create()
+            # é explícita e não inclui is_contador).
+            if request.form.get('is_contador'):
+                ClienteContador.marcar_como_contador(cliente_id, 1)
+
             # Adicionar aos ramos de atividade selecionados (múltiplos)
             ramos_ids = request.form.getlist('ramos_atividade_ids')
             for ramo_id in ramos_ids:
@@ -240,7 +246,7 @@ def detalhes(id):
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
     
-    with ThreadPoolExecutor(max_workers=9) as executor:
+    with ThreadPoolExecutor(max_workers=11) as executor:
         f_enderecos = executor.submit(EnderecoCliente.get_by_cliente, id)
         f_contatos = executor.submit(ContatoCliente.get_by_cliente, id)
         f_grupos = executor.submit(Cliente.get_grupos, id)
@@ -251,6 +257,8 @@ def detalhes(id):
         f_cadastros_ad = executor.submit(CadastroAdicionalCliente.get_by_cliente, id)
         f_socios = executor.submit(SocioCliente.get_by_cliente, id)
         f_certificado = executor.submit(DfeCertificado.get_by_cliente, id)
+        f_contadores = executor.submit(ClienteContador.contadores_do_cliente, id)
+        f_contadores_disp = executor.submit(ClienteContador.listar_contadores)
 
     enderecos = f_enderecos.result()
     contatos = f_contatos.result()
@@ -262,6 +270,13 @@ def detalhes(id):
     cadastros_adicionais = f_cadastros_ad.result()
     socios = f_socios.result()
     certificado = f_certificado.result()
+    contadores = f_contadores.result()
+    # Dropdown "adicionar": só is_contador=1, menos os JÁ VINCULADOS e o PRÓPRIO
+    # cadastro (um cadastro não é contador de si mesmo). Compara sempre c['id']
+    # (int) com o id da rota — nunca o dict inteiro.
+    _ja = {c['id'] for c in contadores}
+    contadores_disponiveis = [c for c in f_contadores_disp.result()
+                              if c['id'] != id and c['id'] not in _ja]
     # Classificação da validade p/ a aba Certificado Digital (VENCIDO/vencendo/OK).
     if certificado:
         certificado['cert_status'] = DfeCertificado.classificar_validade(
@@ -298,6 +313,8 @@ def detalhes(id):
                          cadastros_anp=cadastros_anp,
                          socios=socios,
                          certificado=certificado,
+                         contadores=contadores,
+                         contadores_disponiveis=contadores_disponiveis,
                          socios_total_percentual=socios_total_percentual,
                           areas_atendimento=AREAS_ATENDIMENTO)
 
@@ -661,6 +678,14 @@ def editar(id):
             
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
             if sucesso is not None:
+                # Marca de CONTADOR (fora do UPDATE, que tem lista de colunas
+                # explícita). Desmarcar pode ser RECUSADO se o cadastro ainda
+                # for contador de alguém.
+                r_cont = ClienteContador.marcar_como_contador(
+                    id, 1 if request.form.get('is_contador') else 0)
+                if not r_cont.get('ok') and r_cont.get('erro'):
+                    flash(r_cont['erro'], 'warning')
+
                 # Gerenciar ramos de atividade (múltiplos)
                 ramos_ids_novos = request.form.getlist('ramos_atividade_ids')
                 cliente_ramos_atuais = RamoAtividade.get_by_cliente(id)
@@ -989,6 +1014,34 @@ def excluir_socio(id):
         flash('Erro ao excluir sócio!', 'danger')
 
     return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
+@clientes.route('/clientes/<int:cliente_id>/contadores/vincular', methods=['POST'])
+@login_required
+def vincular_contador(cliente_id):
+    """Liga um contador (cadastro is_contador=1) a este cliente."""
+    r = ClienteContador.vincular_contador(
+        cliente_id,
+        request.form.get('contador_id'),
+        request.form.get('finalidade'),
+    )
+    if r.get('ok'):
+        flash(f'Contador {r.get("contador", "")} vinculado com sucesso!', 'success')
+    else:
+        flash(r.get('erro') or 'Falha ao vincular o contador.', 'danger')
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#certificado')
+
+
+@clientes.route('/clientes/<int:cliente_id>/contadores/<int:contador_id>/desvincular',
+                methods=['POST'])
+@login_required
+def desvincular_contador(cliente_id, contador_id):
+    """Remove o vínculo cliente <-> contador."""
+    r = ClienteContador.desvincular_contador(cliente_id, contador_id)
+    flash('Contador desvinculado.' if r.get('ok')
+          else (r.get('erro') or 'Falha ao desvincular.'),
+          'success' if r.get('ok') else 'danger')
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#certificado')
 
 
 @clientes.route('/clientes/<int:cliente_id>/adicionar-grupo', methods=['POST'])
