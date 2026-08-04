@@ -114,10 +114,44 @@ escrita_fiscal = Blueprint('escrita_fiscal', __name__, url_prefix='/escrita-fisc
 # Helpers internos
 # ---------------------------------------------------------------------------
 def _get_empresas():
+    # Ordena pelo NÚMERO do cliente (crescente), não pelo nome: é assim que o
+    # escritório se refere às empresas, e o seletor mostra "número - nome".
+    # numero_cliente é varchar, então o CAST evita 10 vir antes de 9; o nome
+    # entra como desempate para o caso de número vazio/repetido.
     return execute_query(
-        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
+        "WHERE situacao='ATIVO' "
+        "ORDER BY CAST(numero_cliente AS UNSIGNED), nome_razao_social",
         fetch=True,
     ) or []
+
+
+# ---------------------------------------------------------------------------
+# Filtros multi-valor
+#
+# Os <select> de emitente/destinatário/transportadora e de UF viraram
+# multi-seleção. O front manda os valores escolhidos numa string separada por
+# vírgula (uma string simples atravessa tanto a query string quanto o corpo
+# JSON do excluir-lote sem virar lista aninhada). Aqui a string volta a ser
+# lista e vira "= %s" (1 valor) ou "IN (%s, %s, ...)" (vários).
+# Valor único continua funcionando — nada quebra para quem manda só um.
+# ---------------------------------------------------------------------------
+def _filtro_lista(valor):
+    """'a,b' -> ['a', 'b']; '' -> []. Também aceita lista (corpo JSON)."""
+    itens = valor if isinstance(valor, (list, tuple)) else str(valor or '').split(',')
+    return [str(i).strip() for i in itens if str(i).strip()]
+
+
+def _clausula_in(coluna, valores, params):
+    """Devolve a cláusula e EMPILHA os params na ordem em que os %s aparecem.
+
+    Deve ser chamada no mesmo ponto em que a cláusula entra no WHERE, para a
+    ordem dos placeholders bater com a dos parâmetros."""
+    if len(valores) == 1:
+        params.append(valores[0])
+        return f'{coluna} = %s'
+    params.extend(valores)
+    return f"{coluna} IN ({', '.join(['%s'] * len(valores))})"
 
 
 def _get_grupos():
@@ -884,13 +918,13 @@ def conf_compras():
 def api_notas():
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
-    f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    f_emit_cnpj = _filtro_lista(request.args.get('emit_cnpj', ''))
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
     f_chave = request.args.get('chave', '').strip()
     f_num_nota = request.args.get('num_nota', '').strip()
     f_cfop = request.args.get('cfop', '').strip()
-    f_emit_uf = request.args.get('emit_uf', '').strip()
+    f_emit_uf = _filtro_lista(request.args.get('emit_uf', ''))
     f_dest_cnpj = request.args.get('dest_cnpj', '').strip()
     f_vmin = request.args.get('vmin', '').strip()
     f_vmax = request.args.get('vmax', '').strip()
@@ -903,8 +937,7 @@ def api_notas():
     where = ["n.tipo = 'entrada'"] + extra_clauses
 
     if f_emit_cnpj:
-        where.append('n.emit_cnpj = %s')
-        params.append(f_emit_cnpj)
+        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
     if f_data_ini:
         where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
@@ -921,8 +954,7 @@ def api_notas():
         where.append('n.cfop LIKE %s')
         params.append(f'{f_cfop}%')
     if f_emit_uf:
-        where.append('n.emit_uf = %s')
-        params.append(f_emit_uf)
+        where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
     if f_dest_cnpj:
         where.append('n.dest_cnpj LIKE %s')
         params.append(f'%{f_dest_cnpj}%')
@@ -1372,7 +1404,7 @@ def api_por_produto():
     f_grupo_id = request.args.get('grupo_id', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
-    f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    f_emit_cnpj = _filtro_lista(request.args.get('emit_cnpj', ''))
     f_ncm = request.args.get('ncm', '').strip()
     f_descricao = request.args.get('descricao', '').strip()
 
@@ -1386,8 +1418,7 @@ def api_por_produto():
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
     if f_emit_cnpj:
-        where.append('n.emit_cnpj = %s')
-        params.append(f_emit_cnpj)
+        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
     if f_ncm:
         where.append('i.ncm LIKE %s')
         params.append(f'{f_ncm}%')
@@ -1438,8 +1469,8 @@ def api_resumo_produtos():
     f_grupo_id   = request.args.get('grupo_id', '').strip()
     f_data_ini   = request.args.get('data_ini', '').strip()
     f_data_fim   = request.args.get('data_fim', '').strip()
-    f_emit_cnpj  = request.args.get('emit_cnpj', '').strip()
-    f_emit_uf    = request.args.get('emit_uf', '').strip()
+    f_emit_cnpj  = _filtro_lista(request.args.get('emit_cnpj', ''))
+    f_emit_uf    = _filtro_lista(request.args.get('emit_uf', ''))
 
     where, params = ["n.tipo = 'entrada'"], []
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
@@ -1451,11 +1482,9 @@ def api_resumo_produtos():
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
     if f_emit_cnpj:
-        where.append('n.emit_cnpj = %s')
-        params.append(f_emit_cnpj)
+        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
     if f_emit_uf:
-        where.append('n.emit_uf = %s')
-        params.append(f_emit_uf)
+        where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
@@ -3252,13 +3281,13 @@ def excluir_lote():
     data = request.get_json(silent=True) or {}
     f_cliente_id = str(data.get('cliente_id', '')).strip()
     f_grupo_id   = str(data.get('grupo_id', '')).strip()
-    f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
+    f_emit_cnpj  = _filtro_lista(data.get('emit_cnpj', ''))
     f_data_ini   = str(data.get('data_ini', '')).strip()
     f_data_fim   = str(data.get('data_fim', '')).strip()
     f_chave      = str(data.get('chave', '')).strip()
     f_num_nota   = str(data.get('num_nota', '')).strip()
     f_cfop       = str(data.get('cfop', '')).strip()
-    f_emit_uf    = str(data.get('emit_uf', '')).strip()
+    f_emit_uf    = _filtro_lista(data.get('emit_uf', ''))
     f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
     f_vmin       = str(data.get('vmin', '')).strip()
     f_vmax       = str(data.get('vmax', '')).strip()
@@ -3269,8 +3298,7 @@ def excluir_lote():
     where.extend(extra_clauses)
 
     if f_emit_cnpj:
-        where.append('n.emit_cnpj = %s')
-        params.append(f_emit_cnpj)
+        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
     if f_data_ini:
         where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
@@ -3287,8 +3315,7 @@ def excluir_lote():
         where.append('n.cfop LIKE %s')
         params.append(f'{f_cfop}%')
     if f_emit_uf:
-        where.append('n.emit_uf = %s')
-        params.append(f_emit_uf)
+        where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
     if f_dest_cnpj:
         where.append('n.dest_cnpj LIKE %s')
         params.append(f'%{f_dest_cnpj}%')
@@ -4876,13 +4903,13 @@ def q_robo_gerar():
 def api_notas_saidas():
     f_cliente_id  = request.args.get('cliente_id', '').strip()
     f_grupo_id    = request.args.get('grupo_id', '').strip()
-    f_dest_cnpj   = request.args.get('dest_cnpj', '').strip()
+    f_dest_cnpj   = _filtro_lista(request.args.get('dest_cnpj', ''))
     f_data_ini    = request.args.get('data_ini', '').strip()
     f_data_fim    = request.args.get('data_fim', '').strip()
     f_chave       = request.args.get('chave', '').strip()
     f_num_nota    = request.args.get('num_nota', '').strip()
     f_cfop        = request.args.get('cfop', '').strip()
-    f_dest_uf     = request.args.get('dest_uf', '').strip()
+    f_dest_uf     = _filtro_lista(request.args.get('dest_uf', ''))
     f_emit_cnpj   = request.args.get('emit_cnpj', '').strip()
     f_vmin        = request.args.get('vmin', '').strip()
     f_vmax        = request.args.get('vmax', '').strip()
@@ -4895,8 +4922,8 @@ def api_notas_saidas():
     where = ["n.tipo = 'saida'"] + extra_clauses
 
     if f_dest_cnpj:
-        where.append('n.dest_cnpj LIKE %s')
-        params.append(f'%{f_dest_cnpj}%')
+        # Vem do <select>: CNPJ exato, nao mais busca parcial.
+        where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
     if f_data_ini:
         where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
@@ -4913,8 +4940,7 @@ def api_notas_saidas():
         where.append('n.cfop LIKE %s')
         params.append(f'{f_cfop}%')
     if f_dest_uf:
-        where.append('n.dest_uf = %s')
-        params.append(f_dest_uf)
+        where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
     if f_emit_cnpj:
         where.append('n.emit_cnpj LIKE %s')
         params.append(f'%{f_emit_cnpj}%')
@@ -5059,7 +5085,7 @@ def api_por_produto_saidas():
     f_grupo_id   = request.args.get('grupo_id', '').strip()
     f_data_ini   = request.args.get('data_ini', '').strip()
     f_data_fim   = request.args.get('data_fim', '').strip()
-    f_dest_cnpj  = request.args.get('dest_cnpj', '').strip()
+    f_dest_cnpj  = _filtro_lista(request.args.get('dest_cnpj', ''))
     f_ncm        = request.args.get('ncm', '').strip()
     f_descricao  = request.args.get('descricao', '').strip()
 
@@ -5073,8 +5099,7 @@ def api_por_produto_saidas():
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
     if f_dest_cnpj:
-        where.append('n.dest_cnpj LIKE %s')
-        params.append(f'%{f_dest_cnpj}%')
+        where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
     if f_ncm:
         where.append('i.ncm LIKE %s')
         params.append(f'{f_ncm}%')
@@ -5125,13 +5150,13 @@ def excluir_lote_saidas():
     data = request.get_json(silent=True) or {}
     f_cliente_id = str(data.get('cliente_id', '')).strip()
     f_grupo_id   = str(data.get('grupo_id', '')).strip()
-    f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
+    f_dest_cnpj  = _filtro_lista(data.get('dest_cnpj', ''))
     f_data_ini   = str(data.get('data_ini', '')).strip()
     f_data_fim   = str(data.get('data_fim', '')).strip()
     f_chave      = str(data.get('chave', '')).strip()
     f_num_nota   = str(data.get('num_nota', '')).strip()
     f_cfop       = str(data.get('cfop', '')).strip()
-    f_dest_uf    = str(data.get('dest_uf', '')).strip()
+    f_dest_uf    = _filtro_lista(data.get('dest_uf', ''))
     f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
     f_vmin       = str(data.get('vmin', '')).strip()
     f_vmax       = str(data.get('vmax', '')).strip()
@@ -5142,8 +5167,7 @@ def excluir_lote_saidas():
     where.extend(extra_clauses)
 
     if f_dest_cnpj:
-        where.append('n.dest_cnpj LIKE %s')
-        params.append(f'%{f_dest_cnpj}%')
+        where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
     if f_data_ini:
         where.append('n.data_emissao >= %s')
         params.append(f_data_ini)
@@ -5160,8 +5184,7 @@ def excluir_lote_saidas():
         where.append('n.cfop LIKE %s')
         params.append(f'{f_cfop}%')
     if f_dest_uf:
-        where.append('n.dest_uf = %s')
-        params.append(f_dest_uf)
+        where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
     if f_emit_cnpj:
         where.append('n.emit_cnpj LIKE %s')
         params.append(f'%{f_emit_cnpj}%')
@@ -5223,15 +5246,15 @@ def api_ctes():
     """Lista paginada de CT-e + KPIs da seleção (window functions, 1 round-trip)."""
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
-    f_emit_cnpj = request.args.get('emit_cnpj', '').strip()
+    f_emit_cnpj = _filtro_lista(request.args.get('emit_cnpj', ''))
     f_tomador = request.args.get('tomador_cnpj', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
     f_chave = request.args.get('chave', '').strip()
     f_num_cte = request.args.get('num_cte', '').strip()
     f_modelo = request.args.get('modelo', '').strip()
-    f_uf_ini = request.args.get('uf_ini', '').strip()
-    f_uf_fim = request.args.get('uf_fim', '').strip()
+    f_uf_ini = _filtro_lista(request.args.get('uf_ini', ''))
+    f_uf_fim = _filtro_lista(request.args.get('uf_fim', ''))
     f_vmin = request.args.get('vmin', '').strip()
     f_vmax = request.args.get('vmax', '').strip()
     f_origem = request.args.get('origem', '').strip()
@@ -5243,8 +5266,7 @@ def api_ctes():
     where, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
 
     if f_emit_cnpj:
-        where.append('t.emit_cnpj = %s')
-        params.append(f_emit_cnpj)
+        where.append(_clausula_in('t.emit_cnpj', f_emit_cnpj, params))
     if f_tomador:
         where.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
         params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
@@ -5264,11 +5286,9 @@ def api_ctes():
         where.append('t.modelo = %s')
         params.append(f_modelo)
     if f_uf_ini:
-        where.append('t.uf_ini = %s')
-        params.append(f_uf_ini)
+        where.append(_clausula_in('t.uf_ini', f_uf_ini, params))
     if f_uf_fim:
-        where.append('t.uf_fim = %s')
-        params.append(f_uf_fim)
+        where.append(_clausula_in('t.uf_fim', f_uf_fim, params))
     if f_vmin:
         where.append('t.valor_frete >= %s')
         params.append(float(f_vmin))

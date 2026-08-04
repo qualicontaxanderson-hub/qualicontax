@@ -2,6 +2,7 @@
 {% block title %}Conferência de CT-e - Qualicontax{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
 <style>
 /* Espelha as classes cc-* da Conferência de Entradas (conf_compras.html), com a
    paleta TEAL do CT-e para as duas telas não se confundirem à primeira vista.
@@ -87,6 +88,18 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .ct-trajeto { font-size:11px; color:#64748b; white-space:nowrap; }
 .ct-nfe-count { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; background:#e0f2fe; color:#075985; }
 .ct-nfe-count.zero { background:#f1f5f9; color:#94a3b8; }
+
+/* ---- Tom Select (filtros com busca + multi-seleção) ---- */
+/* Alinha o componente ao visual dos outros campos do filtro. */
+.cc-filter-grid .ts-wrapper { width:100%; }
+.cc-filter-grid .ts-control { border:1.5px solid #e2e8f0; border-radius:7px; background:#f8fafc; font-size:13px; padding:3px 8px; min-height:33px; }
+.cc-filter-grid .ts-wrapper.focus .ts-control { border-color:#0d9488; background:#fff; box-shadow:none; }
+.cc-filter-grid .ts-control > input { font-size:13px; }
+.cc-filter-grid .ts-control .item { background:#ccfbf1; color:#0f766e; border-radius:5px; font-size:11px; font-weight:700; padding:1px 5px; margin:1px 3px 1px 0; }
+.cc-filter-grid .ts-control .item .remove { border-left-color:rgba(0,0,0,.12); padding:0 4px; }
+.ts-dropdown { font-size:12.5px; border:1.5px solid #e2e8f0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); }
+.ts-dropdown .active { background:#0d9488; color:#fff; }
+.ts-dropdown .no-results { color:#94a3b8; }
 
 /* ---- Botões de período rápido (Atual / Mês anterior / Ano) ---- */
 .btn-periodo { display:inline-flex; align-items:center; gap:5px; border:none; color:#fff; padding:7px 13px; border-radius:99px; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(15,23,42,.18); transition:transform .12s ease, box-shadow .12s ease, background .12s ease; }
@@ -243,9 +256,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
                o que existe na empresa escolhida (ver /conf-cte/api/opcoes-filtros). #}
             <div>
                 <label>Transportadora (CNPJ)</label>
-                <select id="f_emit_cnpj" style="text-transform:uppercase;">
-                    <option value="">— Todas —</option>
-                </select>
+                <select id="f_emit_cnpj" multiple placeholder="Todas — digite para buscar"></select>
             </div>
             <div><label>CNPJ do Tomador</label><input type="text" id="f_tomador_cnpj" placeholder="Parcial ou completo"></div>
             <div><label>Nº do CT-e</label><input type="text" id="f_num_cte" placeholder="Ex: 000123"></div>
@@ -261,15 +272,11 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
             <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
             <div>
                 <label>UF Início</label>
-                <select id="f_uf_ini">
-                    <option value="">— Todas —</option>
-                </select>
+                <select id="f_uf_ini" multiple placeholder="Todas"></select>
             </div>
             <div>
                 <label>UF Fim</label>
-                <select id="f_uf_fim">
-                    <option value="">— Todas —</option>
-                </select>
+                <select id="f_uf_fim" multiple placeholder="Todas"></select>
             </div>
             <div><label>Frete Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
             <div><label>Frete Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
@@ -402,6 +409,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
 // ===========================================================================
 // Conferência de CT-e — somente leitura. Nenhum endpoint de escrita é chamado
@@ -530,26 +538,49 @@ function updateScopeBadge(type, label) {
 
 // ---- Opções dos filtros por empresa ----
 // Transportadora e UFs saem do MESMO escopo da listagem (o endpoint reusa
-// _empresa_where_cte, com o fallback por CNPJ do tomador), então a lista nunca
-// oferece uma opção que a tabela não tem. Sem empresa/grupo, só "— Todas —".
-function _esc(s) {
-    return String(s == null ? '' : s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// _empresa_where_cte, com o fallback por CNPJ do tomador) e do mesmo período.
+// São Tom Select: dá para digitar parte do nome e escolher vários. Sem
+// empresa/grupo, ficam vazios.
+let tsEmit = null, tsUfIni = null, tsUfFim = null;   // instâncias do Tom Select
+
+// Cada tag adicionada/removida dispara um change; o debounce junta os cliques
+// seguidos numa busca só. O guard evita o alerta de "selecione uma empresa".
+let _buscaTimer = null;
+function agendarBusca() {
+    clearTimeout(_buscaTimer);
+    _buscaTimer = setTimeout(() => {
+        if (currentClienteId || currentGrupoId) applyFilters();
+    }, 300);
 }
-function _preencheSelect(id, opcoes, rotulo) {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const anterior = sel.value;
-    sel.innerHTML = `<option value="">${rotulo}</option>` +
-        opcoes.map(o => `<option value="${_esc(o.valor)}">${_esc(o.texto)}</option>`).join('');
-    // Preserva a escolha do usuário se ela continuar existindo no novo escopo.
-    if (anterior && opcoes.some(o => o.valor === anterior)) sel.value = anterior;
+function _initFiltrosBusca() {
+    const base = {
+        plugins: ['remove_button'],
+        maxOptions: null,        // a lista já vem recortada por empresa + período
+        hideSelected: true,
+        onChange: agendarBusca,  // muda o filtro → busca sozinho
+    };
+    tsEmit  = new TomSelect('#f_emit_cnpj', base);
+    tsUfIni = new TomSelect('#f_uf_ini', base);
+    tsUfFim = new TomSelect('#f_uf_fim', base);
+}
+document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
+
+function _preencheTS(ts, opcoes) {
+    if (!ts) return;
+    const anteriores = ts.getValue();  // o que estava marcado
+    ts.clear(true);                    // silent: não dispara busca
+    ts.clearOptions();
+    ts.addOptions(opcoes.map(o => ({value: String(o.valor), text: String(o.texto)})));
+    // Remarca só o que ainda existe no novo escopo/período.
+    const mantidos = (Array.isArray(anteriores) ? anteriores : [anteriores])
+        .filter(v => v && ts.options[v]);
+    if (mantidos.length) ts.setValue(mantidos, true);
 }
 function carregarOpcoesFiltros() {
-    const ufs = id => _preencheSelect(id, [], '— Todas —');
     if (!currentClienteId && !currentGrupoId) {
-        _preencheSelect('f_emit_cnpj', [], '— Todas —');
-        ufs('f_uf_ini'); ufs('f_uf_fim');
+        _preencheTS(tsEmit, []);
+        _preencheTS(tsUfIni, []);
+        _preencheTS(tsUfFim, []);
         return;
     }
     // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
@@ -562,13 +593,12 @@ function carregarOpcoesFiltros() {
     fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_cte") }}?' + p)
         .then(r => r.json())
         .then(d => {
-            _preencheSelect('f_emit_cnpj',
-                (d.cnpjs || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})),
-                '— Todas —');
-            _preencheSelect('f_uf_ini', (d.ufs_ini || []).map(u => ({valor: u, texto: u})), '— Todas —');
-            _preencheSelect('f_uf_fim', (d.ufs_fim || []).map(u => ({valor: u, texto: u})), '— Todas —');
+            _preencheTS(tsEmit,
+                (d.cnpjs || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
+            _preencheTS(tsUfIni, (d.ufs_ini || []).map(u => ({valor: u, texto: u})));
+            _preencheTS(tsUfFim, (d.ufs_fim || []).map(u => ({valor: u, texto: u})));
         })
-        .catch(() => {});  // silencioso: os selects continuam com "— Todas —"
+        .catch(() => {});  // silencioso: os filtros continuam vazios
 }
 
 // ---- Datas rápidas ----
@@ -627,9 +657,11 @@ function clearFilters() {
     ['f_data_ini','f_data_fim','f_tomador_cnpj','f_num_cte','f_chave','f_vmin','f_vmax'].forEach(id => {
         document.getElementById(id).value = '';
     });
-    ['f_emit_cnpj','f_modelo','f_uf_ini','f_uf_fim','f_origem','f_papel','f_cancelado'].forEach(id => {
+    ['f_modelo','f_origem','f_papel','f_cancelado'].forEach(id => {
         document.getElementById(id).value = '';
     });
+    // Os multi (Tom Select) limpam pela instância, não pelo .value do <select>.
+    [tsEmit, tsUfIni, tsUfFim].forEach(ts => { if (ts) ts.clear(true); });
     currentPage = 1;
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
     // um Buscar puxaria a base inteira da empresa.
@@ -641,13 +673,14 @@ function getFilters() {
         grupo_id: currentGrupoId,
         data_ini: document.getElementById('f_data_ini').value,
         data_fim: document.getElementById('f_data_fim').value,
-        emit_cnpj: document.getElementById('f_emit_cnpj').value,
+        // Multi: os valores viram "a,b,c" — string simples atravessa a query string.
+        emit_cnpj: tsEmit ? tsEmit.getValue().join(',') : '',
         tomador_cnpj: document.getElementById('f_tomador_cnpj').value,
         num_cte: document.getElementById('f_num_cte').value,
         modelo: document.getElementById('f_modelo').value,
         chave: document.getElementById('f_chave').value,
-        uf_ini: document.getElementById('f_uf_ini').value,
-        uf_fim: document.getElementById('f_uf_fim').value,
+        uf_ini: tsUfIni ? tsUfIni.getValue().join(',') : '',
+        uf_fim: tsUfFim ? tsUfFim.getValue().join(',') : '',
         vmin: document.getElementById('f_vmin').value,
         vmax: document.getElementById('f_vmax').value,
         origem: document.getElementById('f_origem').value,
