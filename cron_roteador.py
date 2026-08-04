@@ -304,7 +304,7 @@ def rodar():
         return
 
     conn = _conectar_lock()
-    cur = conn.cursor()
+    cur = conn.cursor(buffered=True)
     cur.execute("SELECT GET_LOCK('roteador', 0)")
     if (cur.fetchone() or [0])[0] != 1:
         logger.info('[roteador] lock ocupado — outro tick em andamento; pulando.')
@@ -414,10 +414,17 @@ def rodar():
     finally:
         try:
             cur.execute("SELECT RELEASE_LOCK('roteador')")
+            cur.fetchall()
         except Exception:
             pass
-        cur.close()
-        conn.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def main() -> int:
