@@ -206,6 +206,16 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 .prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
 .vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
 
+/* ---- Preview da nota (DANFE dentro de um iframe) ---- */
+.nf-prev-overlay { position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:9200; display:none; align-items:center; justify-content:center; }
+.nf-prev-overlay.open { display:flex; }
+.nf-prev-box { background:#fff; border-radius:14px; width:92vw; height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+.nf-prev-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; background:linear-gradient(135deg,#1e3a5f,#2563eb); flex-shrink:0; }
+.nf-prev-header h3 { margin:0; font-size:13.5px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nf-prev-close { background:rgba(255,255,255,.15); border:none; font-size:18px; color:#fff; cursor:pointer; width:32px; height:32px; border-radius:8px; line-height:32px; flex-shrink:0; }
+.nf-prev-close:hover { background:rgba(255,255,255,.28); }
+.nf-prev-frame { flex:1; width:100%; border:none; background:#525659; }
+
 </style>
 {% endblock %}
 
@@ -530,6 +540,17 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
             Fechar
         </button>
     </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Visualizar a nota (DANFE) ===================== -->
+<div class="nf-prev-overlay" id="prevOverlay" onclick="fecharPreview()">
+<div class="nf-prev-box" onclick="event.stopPropagation()">
+    <div class="nf-prev-header">
+        <h3 id="prevTitle"><i class="fas fa-eye" style="margin-right:8px;"></i>Visualizar Nota</h3>
+        <button class="nf-prev-close" onclick="fecharPreview()" title="Fechar (Esc)">&times;</button>
+    </div>
+    <iframe id="prevFrame" class="nf-prev-frame" title="Visualização da nota"></iframe>
 </div>
 </div>
 
@@ -927,21 +948,51 @@ function applyFilters() {
     loadActiveTab();
 }
 
-// ---- Export XML/PDF por nota (Fase 1) ----
-// XML: só nota completa (!incompleta). PDF: completa E modelo 55/57 (chave díg.
-// 21-22); NFC-e (65) fica sem botão de PDF. Links diretos aos endpoints; o
-// stopPropagation evita abrir o painel de itens ao clicar.
+// ---- Export/visualização por nota (Fase 1) ----
+// XML: só nota completa (!incompleta). Olhinho e PDF: completa E modelo 55/57
+// (chave díg. 21-22); NFC-e (65) fica só com o XML. Links diretos aos endpoints;
+// o stopPropagation evita abrir o painel de itens ao clicar.
+// Ordem: 👁 (visualizar) · XML · PDF.
 function exportBtns(r) {
     if (r.incompleta) return '';
     const modelo = (r.chave_acesso || '').substr(20, 2);
-    let html = `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/xml" title="Baixar XML"
-                   onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`;
-    if (modelo === '55' || modelo === '57') {
+    const temPdf = (modelo === '55' || modelo === '57');
+    // Rótulo do cabeçalho do modal. Vai dentro de um atributo onclick entre
+    // aspas simples — as aspas são removidas por segurança.
+    const rot = `Nota ${r.num_nota||'—'}/${r.serie||'—'} · ${r.chave_acesso||''}`.replace(/['"\\]/g, '');
+    let html = '';
+    if (temPdf) {
+        html += `<button class="btn-exp" title="Visualizar a nota (DANFE)"
+                    onclick="event.stopPropagation(); abrirPreview(${r.id}, '${rot}')"><i class="fas fa-eye"></i></button>`;
+    }
+    html += `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/xml" title="Baixar XML"
+                onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`;
+    if (temPdf) {
         html += `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/pdf" title="Baixar PDF (DANFE/DACTE)"
                     onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
     }
     return html;
 }
+
+// ---- Preview da nota em modal ----
+// Reaproveita o MESMO endpoint do PDF com ?inline=1 (Content-Disposition inline);
+// o <iframe> então renderiza no visualizador nativo do browser em vez de baixar.
+function abrirPreview(id, rotulo) {
+    document.getElementById('prevTitle').innerHTML =
+        '<i class="fas fa-eye" style="margin-right:8px;"></i>' + (rotulo || ('Nota ' + id));
+    document.getElementById('prevFrame').src = `/escrita-fiscal/nota/${id}/pdf?inline=1`;
+    document.getElementById('prevOverlay').classList.add('open');
+}
+function fecharPreview() {
+    const ov = document.getElementById('prevOverlay');
+    if (!ov || !ov.classList.contains('open')) return;
+    ov.classList.remove('open');
+    document.getElementById('prevFrame').src = '';  // para o carregamento do PDF
+}
+// Esc fecha o preview (só age quando ele está aberto).
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') fecharPreview();
+});
 
 // ---- Formatters ----
 function fmtBRL(v) {

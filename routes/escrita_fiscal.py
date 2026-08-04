@@ -960,11 +960,15 @@ def nota_xml(nfe_id):
 @escrita_fiscal.route('/nota/<int:nfe_id>/pdf')
 @login_required
 def nota_pdf(nfe_id):
-    """Gera e baixa o DANFE/DACTE em PDF a partir do xml_raw (nfeProc autorizado).
+    """Gera o DANFE/DACTE em PDF a partir do xml_raw (nfeProc autorizado).
 
     Modelo pelos dígitos 21-22 da chave: 55=DANFE, 57=DACTE, 65=NFC-e (a lib ainda
     não gera DANFCE → 400 amigável). A geração é BLINDADA: se o XML não for o
-    proc autorizado esperado e a lib falhar, devolve erro amigável, nunca 500."""
+    proc autorizado esperado e a lib falhar, devolve erro amigável, nunca 500.
+
+    ?inline=1 → Content-Disposition: inline, para o <iframe> do modal de
+    visualização renderizar o PDF em vez de baixar. Sem o parâmetro continua
+    attachment (download), como sempre foi. A geração é a MESMA nos dois casos."""
     nota, erro = _carregar_nota_export(nfe_id)
     if erro:
         return erro
@@ -994,7 +998,8 @@ def nota_pdf(nfe_id):
             '[export] falha ao gerar PDF da nfe_id=%s (chave=%s)', nfe_id, chave)
         return ('Não foi possível gerar o PDF desta nota (o XML pode estar fora do '
                 'padrão esperado). Baixe o XML por enquanto.', 422)
-    return send_file(BytesIO(pdf_bytes), as_attachment=True,
+    inline = request.args.get('inline') in ('1', 'true', 'sim')
+    return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
                      download_name=f'{chave or nfe_id}.pdf', mimetype='application/pdf')
 
 
