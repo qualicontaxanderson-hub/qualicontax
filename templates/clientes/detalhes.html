@@ -1138,10 +1138,27 @@
                             <div id="certMsg" style="margin-top:14px; display:none;"></div>
                         </div>
 
-                        {% if certificado %}
+                        {# Captura disponível quando há cert PRÓPRIO **ou** um contador
+                           vinculado com certificado — espelha a eleição que
+                           dfe_captura._resolver_certificado faz no backend. #}
+                        {% set contador_cert = (contadores | selectattr('tem_certificado') | first) %}
+                        {% if certificado or contador_cert %}
                         <hr style="margin:20px 0; border:none; border-top:1px solid #e5e7eb;">
                         <div>
                             <h4 style="margin:0 0 6px; font-size:15px;">Captura de NF-e (SEFAZ)</h4>
+
+                            {% if not certificado and contador_cert %}
+                            <div style="margin-bottom:12px; padding:10px 12px; border-radius:6px;
+                                        background:#eff6ff; border:1px solid #3b82f6;
+                                        color:#1e40af; font-size:13px;">
+                                Esta empresa não tem certificado próprio. A captura vai usar o
+                                certificado do contador
+                                <strong>{{ contador_cert.numero_cliente }} - {{ contador_cert.nome_razao_social }}</strong>
+                                ({{ contador_cert.cert_tipo_doc }} {{ contador_cert.cert_doc }}).
+                                A consulta continua sendo feita com o CNPJ <strong>desta empresa</strong>.
+                            </div>
+                            {% endif %}
+
                             <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
                                 Busca os documentos fiscais destinados a esta empresa na SEFAZ
                                 (distribuição por NSU). <strong>Só leitura</strong> — o sistema nunca manifesta.
