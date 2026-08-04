@@ -73,8 +73,16 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .btn-del:hover { background:#fee2e2; }
 
 /* ---- Botões de período rápido (Atual / Mês anterior / Ano) ---- */
-.btn-periodo { background:#f1f5f9; border:1.5px solid #e2e8f0; color:#475569; padding:6px 10px; border-radius:7px; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
-.btn-periodo:hover { background:#e2e8f0; color:#1e293b; }
+.btn-periodo { display:inline-flex; align-items:center; gap:5px; border:none; color:#fff; padding:7px 13px; border-radius:99px; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(15,23,42,.18); transition:transform .12s ease, box-shadow .12s ease, background .12s ease; }
+.btn-periodo:hover { transform:translateY(-1px); box-shadow:0 5px 12px rgba(15,23,42,.26); }
+.btn-periodo:active { transform:translateY(0); }
+.btn-periodo i { font-size:10.5px; opacity:.9; }
+.btn-periodo.verde { background:#16a34a; }
+.btn-periodo.verde:hover { background:#15803d; }
+.btn-periodo.azul  { background:#2563eb; }
+.btn-periodo.azul:hover  { background:#1d4ed8; }
+.btn-periodo.roxo  { background:#7c3aed; }
+.btn-periodo.roxo:hover  { background:#6d28d9; }
 
 /* ---- Preview da nota (DANFE dentro de um iframe) ---- */
 .nf-prev-overlay { position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:9200; display:none; align-items:center; justify-content:center; }
@@ -263,18 +271,18 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     </div>
     <div id="filterBody">
         <div class="cc-filter-grid">
-            <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
-            <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
+            <div><label>Data Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
             {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
             <div>
                 <label>Período rápido</label>
                 <div style="display:flex;gap:6px;">
-                    <button type="button" class="btn-periodo" onclick="setPeriodo('atual')"
-                            title="Do dia 1º do mês corrente até hoje">Atual</button>
-                    <button type="button" class="btn-periodo" onclick="setPeriodo('anterior')"
-                            title="Mês passado inteiro (dia 1 ao último dia)">Mês anterior</button>
-                    <button type="button" class="btn-periodo" onclick="setPeriodo('ano')"
-                            title="De 1º de janeiro até hoje">Ano</button>
+                    <button type="button" class="btn-periodo verde" onclick="setPeriodo('atual')"
+                            title="Do dia 1º do mês corrente até hoje"><i class="fas fa-calendar-day"></i>Atual</button>
+                    <button type="button" class="btn-periodo azul" onclick="setPeriodo('anterior')"
+                            title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
+                    <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
+                            title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
                 </div>
             </div>
             {# Destinatário e UF nascem vazios: carregarOpcoesFiltros() preenche com o
@@ -674,7 +682,13 @@ function carregarOpcoesFiltros() {
         _preencheSelect('f_dest_uf', [], '— Todos —');
         return;
     }
-    const p = new URLSearchParams({cliente_id: currentClienteId || '', grupo_id: currentGrupoId || ''});
+    // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
+    const p = new URLSearchParams({
+        cliente_id: currentClienteId || '',
+        grupo_id: currentGrupoId || '',
+        data_ini: document.getElementById('f_data_ini').value,
+        data_fim: document.getElementById('f_data_fim').value,
+    });
     fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_saidas") }}?' + p)
         .then(r => r.json())
         .then(d => {
@@ -710,14 +724,16 @@ function setPeriodo(tipo, buscar) {
     }
     document.getElementById('f_data_ini').value = _iso(ini);
     document.getElementById('f_data_fim').value = _iso(fim);
+    carregarOpcoesFiltros();   // opções do novo período, antes de listar
     if (buscar !== false) applyFilters();
 }
 
 // Trocou a empresa/grupo: repovoa os selects, joga a data para os últimos 45
 // dias e já busca — a tela abre com resultado em vez de tabela vazia.
 function aoMudarEscopo() {
-    carregarOpcoesFiltros();
+    // setPeriodo já chama carregarOpcoesFiltros(); sem escopo, só esvazia.
     if (currentClienteId || currentGrupoId) setPeriodo('45d');
+    else carregarOpcoesFiltros();
 }
 
 function toggleFilters() {

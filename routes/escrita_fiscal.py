@@ -413,7 +413,23 @@ def _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=None):
 #
 # Sem empresa nem grupo devolve listas vazias: a busca já exige escopo, então
 # não faz sentido oferecer opção nenhuma antes disso.
+#
+# O recorte de DATA entra no mesmo WHERE: as opções acompanham o período que
+# está na tela, então um fornecedor que não apareceu no mês some do dropdown.
 # ---------------------------------------------------------------------------
+def _clausulas_data(alias, f_data_ini, f_data_fim):
+    """Recorte por data_emissao — a mesma coluna e as mesmas comparações que as
+    APIs de listagem usam, para as opções baterem com o que a tabela mostra."""
+    clauses, params = [], []
+    if f_data_ini:
+        clauses.append(f'{alias}.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        clauses.append(f'{alias}.data_emissao <= %s')
+        params.append(f_data_fim)
+    return clauses, params
+
+
 def _opcoes_cnpjs_ufs(tabela, alias, where_sql, params, cnpj_col, nome_col, uf_cols):
     """Roda o DISTINCT de CNPJ+nome e o de cada coluna de UF dentro do escopo.
 
@@ -443,13 +459,18 @@ def _opcoes_cnpjs_ufs(tabela, alias, where_sql, params, cnpj_col, nome_col, uf_c
 @escrita_fiscal.route('/conf-compras/api/opcoes-filtros')
 @login_required
 def api_opcoes_filtros():
-    """Emitentes e UFs de emitente que existem nas ENTRADAS daquela empresa."""
+    """Emitentes e UFs de emitente nas ENTRADAS da empresa, dentro do período."""
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
     if not f_cliente_id and not f_grupo_id:
         return jsonify({'cnpjs': [], 'ufs': []})
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'entrada'"] + extra)
+    d_clauses, d_params = _clausulas_data(
+        'n', request.args.get('data_ini', '').strip(),
+        request.args.get('data_fim', '').strip())
+    # A ordem das cláusulas define a ordem dos %s — os params da data vêm depois.
+    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'entrada'"] + extra + d_clauses)
+    params = params + d_params
     cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
                                    'emit_cnpj', 'emit_nome', ['emit_uf'])
     return jsonify({'cnpjs': cnpjs, 'ufs': ufs['emit_uf']})
@@ -458,13 +479,17 @@ def api_opcoes_filtros():
 @escrita_fiscal.route('/conf-saidas/api/opcoes-filtros')
 @login_required
 def api_opcoes_filtros_saidas():
-    """Destinatários e UFs de destinatário que existem nas SAÍDAS da empresa."""
+    """Destinatários e UFs nas SAÍDAS da empresa, dentro do período."""
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
     if not f_cliente_id and not f_grupo_id:
         return jsonify({'cnpjs': [], 'ufs': []})
     extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'saida'"] + extra)
+    d_clauses, d_params = _clausulas_data(
+        'n', request.args.get('data_ini', '').strip(),
+        request.args.get('data_fim', '').strip())
+    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'saida'"] + extra + d_clauses)
+    params = params + d_params
     cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
                                    'dest_cnpj', 'dest_nome', ['dest_uf'])
     return jsonify({'cnpjs': cnpjs, 'ufs': ufs['dest_uf']})
@@ -473,15 +498,20 @@ def api_opcoes_filtros_saidas():
 @escrita_fiscal.route('/conf-cte/api/opcoes-filtros')
 @login_required
 def api_opcoes_filtros_cte():
-    """Transportadoras e UFs de início/fim que existem nos CT-e da empresa."""
+    """Transportadoras e UFs de início/fim nos CT-e da empresa, no período."""
     f_cliente_id = request.args.get('cliente_id', '').strip()
     f_grupo_id = request.args.get('grupo_id', '').strip()
     if not f_cliente_id and not f_grupo_id:
         return jsonify({'cnpjs': [], 'ufs_ini': [], 'ufs_fim': []})
     extra, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
+    # cte_documentos também tem data_emissao — é a coluna que api_ctes filtra.
+    d_clauses, d_params = _clausulas_data(
+        't', request.args.get('data_ini', '').strip(),
+        request.args.get('data_fim', '').strip())
     # Diferente das notas, aqui não há cláusula de tipo; sem escopo o WHERE
     # ficaria vazio — mas o early-return acima garante que extra nunca é vazio.
-    where_sql = 'WHERE ' + ' AND '.join(extra)
+    where_sql = 'WHERE ' + ' AND '.join(extra + d_clauses)
+    params = params + d_params
     cnpjs, ufs = _opcoes_cnpjs_ufs('cte_documentos', 't', where_sql, params,
                                    'emit_cnpj', 'emit_nome', ['uf_ini', 'uf_fim'])
     return jsonify({'cnpjs': cnpjs, 'ufs_ini': ufs['uf_ini'], 'ufs_fim': ufs['uf_fim']})
