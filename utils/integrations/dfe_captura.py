@@ -35,6 +35,7 @@ from utils.certificado_digital import (
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.dfe_certificado import DfeCertificado
+from models.cliente_contador import ClienteContador
 from utils.integrations.dfe_sefaz import (
     montar_sessao_mtls, consultar, consultar_chave, cuf_autor, UfInvalidaError,
     _find, _text, _local,
@@ -776,6 +777,38 @@ def _processar_lote(conn, cur, empresa, docs, ctx, nsu_inicial):
     return r
 
 
+def _resolver_certificado(cliente_id):
+    """Elege UM certificado para autenticar o mTLS deste cliente.
+
+    Ordem:
+      (i)  certificado PRÓPRIO do cliente — comportamento de sempre;
+      (ii) certificado de um CONTADOR vinculado. O contador tem o cert DELE,
+           vinculado normalmente no cadastro dele (titular == cadastro), então
+           aqui é só uma LEITURA do vínculo existente — nada de terceiro é
+           gravado em dfe_certificados do cliente.
+
+    Com vários contadores, elege o PRIMEIRO com certificado na ordem de
+    ``contadores_do_cliente`` (razão social) — determinístico, sem sortear.
+
+    Devolve ``(vinc, dono_id, rotulo)``: ``rotulo`` é None no cert próprio e
+    'contador 5002 - ALBERT ...' quando veio de terceiro. ``(None, None, None)``
+    quando não há certificado utilizável.
+    """
+    vinc = DfeCertificado.get_by_cliente(cliente_id)
+    if vinc and vinc.get('dropbox_path'):
+        return vinc, cliente_id, None
+
+    for ct in ClienteContador.contadores_do_cliente(cliente_id):
+        if not ct.get('tem_certificado'):
+            continue
+        v = DfeCertificado.get_by_cliente(ct['id'])
+        if v and v.get('dropbox_path'):
+            rot = (f"contador {ct.get('numero_cliente') or ct['id']} - "
+                   f"{ct.get('nome_razao_social')}")
+            return v, ct['id'], rot
+    return None, None, None
+
+
 # ==========================================================================
 # Orquestração — captura de UMA rodada para 1 cliente. DRENA em multi-lote
 # (padrão captura_massa do NH): enquanto vier 138, consulta em sequência.
@@ -798,16 +831,42 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     razao = cliente.get('nome_razao_social') or 'SEM_NOME'
     rotulo = f"{numero + ' - ' if numero else ''}{razao}"
 
-    vinc = DfeCertificado.get_by_cliente(cliente_id)
-    if not vinc or not vinc.get('dropbox_path'):
+    # Cert PRÓPRIO ou, na falta dele, o de um CONTADOR vinculado (Parte 2).
+    vinc, cert_dono_id, cert_rotulo = _resolver_certificado(cliente_id)
+    if not vinc:
         return {'ok': False,
-                'erro': f'O cliente {rotulo} não tem certificado digital vinculado. '
-                        f'Vincule o .pfx antes de capturar.'}
+                'erro': f'O cliente {rotulo} não tem certificado digital vinculado, '
+                        f'nem contador vinculado com certificado. Vincule o .pfx do '
+                        f'cliente, ou um contador que já tenha o certificado dele.'}
+
+    def _det(txt):
+        """Anexa a origem do certificado ao 'detalhe' do log — só quando de terceiro."""
+        if not cert_rotulo:
+            return txt
+        return f'{txt} | cert: {cert_rotulo}' if txt else f'cert: {cert_rotulo}'
+
+    if cert_rotulo:
+        logger.info('[dfe] cliente_id=%s (%s) usando certificado de TERCEIRO: %s',
+                    cliente_id, rotulo, cert_rotulo)
+
     # Interessado no distDFeInt = o CNPJ da PRÓPRIA empresa (cliente), não o do
     # certificado. Importa quando o cert é da MATRIZ e o cliente é FILIAL (mesma
     # raiz): autentica o mTLS com o cert da matriz, mas consulta os documentos da
-    # FILIAL. Em vínculo exato, é o mesmo CNPJ. Fallback: o CNPJ do cert.
-    cnpj = _digitos(cliente.get('cpf_cnpj')) or _digitos(vinc.get('cnpj'))
+    # FILIAL. Em vínculo exato, é o mesmo CNPJ.
+    #
+    # O fallback histórico "usa o CNPJ do cert" só é seguro com cert PRÓPRIO (mesma
+    # entidade). Com cert de CONTADOR ele consultaria os documentos PESSOAIS do
+    # contador como se fossem da empresa — por isso, nesse caso, exige documento
+    # próprio em vez de cair no fallback.
+    cnpj = _digitos(cliente.get('cpf_cnpj'))
+    if not cnpj:
+        if cert_rotulo:
+            return {'ok': False,
+                    'erro': f'O cliente {rotulo} está sem CPF/CNPJ cadastrado. Com '
+                            f'certificado de contador, o documento da empresa é '
+                            f'obrigatório — sem ele a consulta traria os documentos '
+                            f'do contador. Cadastre o CPF/CNPJ da empresa.'}
+        cnpj = _digitos(vinc.get('cnpj'))
 
     # UF -> cUFAutor (nunca chuta; mensagem específica de qual cliente + o que fazer).
     uf = _uf_principal(cliente_id)
@@ -818,7 +877,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
                 'erro': f'O cliente {rotulo} está sem UF no endereço principal. '
                         f'Cadastre o estado (UF) no endereço principal para ativar a captura.'}
 
-    senha_cif = DfeCertificado.get_senha_cifrada(cliente_id)
+    senha_cif = DfeCertificado.get_senha_cifrada(cert_dono_id)
     if not senha_cif:
         return {'ok': False, 'erro': f'Certificado do cliente {rotulo} sem senha armazenada.'}
     try:
@@ -840,7 +899,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
         faltam = bloqueio.get('faltam_min')
         if not dry_run:
             dfe_log.registrar('pulado_cota', cliente_id, cnpj,
-                              detalhe=f'faltam ~{faltam} min', origem=origem)
+                              detalhe=_det(f'faltam ~{faltam} min'), origem=origem)
         return {'ok': False, 'bloqueado': True, 'faltam_min': faltam,
                 'erro': f'A SEFAZ pediu para aguardar (consumo indevido anterior). '
                         f'Faltam ~{faltam} min para a próxima consulta deste CNPJ.'}
@@ -857,7 +916,8 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
             # no lugar do 'HTTP 403' cru. É a 1ª requisição da rodada — onde um cert
             # vencido falha; a drenagem (multi-lote) só roda após esta dar 200.
             dfe_log.registrar('erro', cliente_id, cnpj, ult_nsu,
-                              detalhe=_detalhe_403(exc, vinc.get('validade')), origem=origem)
+                              detalhe=_det(_detalhe_403(exc, vinc.get('validade'))),
+                              origem=origem)
         return {'ok': False, 'erro': f'Falha ao consultar a SEFAZ: {exc}'}
 
     cStat = _text(ret, 'cStat')
@@ -872,7 +932,8 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
 
     base = {'ok': True, 'cStat': cStat, 'xMotivo': xMotivo, 'cnpj': cnpj,
             'cliente': rotulo, 'ult_nsu': ult_nsu, 'ret_ult_nsu': ret_ult,
-            'max_nsu': ret_max, 'docs': len(docs), 'faltam': max(0, ret_max - ret_ult)}
+            'max_nsu': ret_max, 'docs': len(docs), 'faltam': max(0, ret_max - ret_ult),
+            'cert_origem': cert_rotulo or 'certificado próprio'}
 
     # 656 = consumo indevido: registra o cooldown (proximo_permitido = NOW()+1h)
     # SEMPRE — inclusive no dry-run —, porque a cota foi consumida de verdade na
@@ -883,7 +944,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
         execute_query(SQL_NSU_656, (cliente_id, cnpj, ult_nsu, ret_max, status_txt), fetch=False)
         dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
                           ret_ult, ret_max, len(docs),
-                          detalhe='dry-run' if dry_run else None, origem=origem)
+                          detalhe=_det('dry-run' if dry_run else None), origem=origem)
         base.update({'consumo_indevido': True, 'dry_run': dry_run,
                      'mensagem': 'A SEFAZ pediu para aguardar ~1h (consumo indevido). '
                                  f'Ela informou ultNSU={ret_ult}. O cursor local foi mantido — '
@@ -991,7 +1052,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     tot_docs = tot['n_nota'] + tot['n_resumo'] + tot['n_evento'] + tot['n_outro']
     dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
                       ret_ult, ret_max, tot_docs, tot['n_nota'], tot['n_evento'],
-                      detalhe=(parada or limite), origem=origem)
+                      detalhe=_det(parada or limite), origem=origem)
 
     base.update({'notas': tot['n_nota'], 'resumos': tot['n_resumo'],
                  'eventos': tot['n_evento'], 'outros': tot['n_outro'],
