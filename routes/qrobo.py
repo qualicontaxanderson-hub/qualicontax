@@ -305,7 +305,7 @@ def status(cliente_id):
 @qrobo.route('/instalador')
 @instalador_required
 def instalador():
-    """Serve o qrobo.exe da pasta /Q-Robo da Dropbox.
+    """Serve o qualicontax.zip da pasta /Q-Robo da Dropbox.
 
     Nunca sai por /static (seria público e mataria a auditoria). O caminho vem
     SEMPRE do manifesto — nada do que o usuário manda vira caminho de arquivo.
@@ -334,7 +334,7 @@ def instalador():
                 m['nome'], len(dados), m['versao'], current_user.nome, current_user.id)
     return send_file(BytesIO(dados), as_attachment=True,
                      download_name=m['nome_download'],
-                     mimetype='application/octet-stream')
+                     mimetype='application/zip')
 
 
 @qrobo.route('/manual')

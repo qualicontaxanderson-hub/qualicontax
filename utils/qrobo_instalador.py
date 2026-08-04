@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Instalador do Q-Robô servido a partir da Dropbox (Fase 4).
 
-O Anderson coloca o .exe VALIDADO em:
+O Anderson coloca o pacote VALIDADO em:
 
-    C:\\Users\\...\\Dropbox\\Aplicativos\\QUALICONTAX\\Q-Robo\\qrobo.exe
+    C:\\Users\\...\\Dropbox\\Aplicativos\\QUALICONTAX\\Q-Robo\\qualicontax.zip
 
 O app só LÊ. Nada de Actions publicando, nada de segredo novo: a raiz da app no
 Dropbox JÁ é ``/Aplicativos/QUALICONTAX`` (é lá que ``Certificados/`` e
@@ -12,10 +12,10 @@ Dropbox JÁ é ``/Aplicativos/QUALICONTAX`` (é lá que ``Certificados/`` e
 
 VERSÃO — duas fontes, e a que importa não depende de ninguém lembrar:
 
-  content_hash (Dropbox)  impressão digital determinística do binário. É a
+  content_hash (Dropbox)  impressão digital determinística do pacote. É a
                           verdade sobre QUAL arquivo foi baixado.
   version.txt (opcional)  rótulo humano ("3.4") que o Anderson escreve ao lado
-                          do .exe quando valida. Some ou fica velho? A
+                          do pacote quando valida. Some ou fica velho? A
                           impressão digital continua identificando.
 
 Na auditoria grava ``3.4+a1b2c3d4`` (ou ``s/v+a1b2c3d4`` sem rótulo), que cabe
@@ -31,7 +31,7 @@ from utils import dropbox_sync
 logger = logging.getLogger(__name__)
 
 SUBPASTA = 'Q-Robo'
-NOME_PADRAO = 'qrobo.exe'
+NOME_PADRAO = 'qualicontax.zip'
 NOME_VERSAO = 'version.txt'
 NOME_MANUAL = 'Manual_Instalacao_Q-Robo.pdf'
 HASH_CURTO = 8
@@ -83,8 +83,8 @@ def _escolher(entradas, sufixo, canonico):
                      f'({recente["name"]}).']
 
 
-def _escolhe_exe(entradas):
-    return _escolher(entradas, '.exe', NOME_PADRAO)
+def _escolhe_pacote(entradas):
+    return _escolher(entradas, '.zip', NOME_PADRAO)
 
 
 def _manual_da_pasta(entradas, caminho_pasta):
@@ -122,10 +122,10 @@ def manifesto():
         caminho_pasta = pasta()
         entradas = svc.list_folder(caminho_pasta) or []
         manual = _manual_da_pasta(entradas, caminho_pasta)
-        arquivo, avisos = _escolhe_exe(entradas)
+        arquivo, avisos = _escolhe_pacote(entradas)
         if not arquivo:
             return {'ok': False, 'caminho': caminho_pasta, 'manual': manual,
-                    'erro': f'Nenhum .exe em {caminho_pasta}.',
+                    'erro': f'Nenhum pacote (.zip) em {caminho_pasta}.',
                     'detalhe': f'{len(entradas)} item(ns): '
                                f'{[e.get("name") for e in entradas]}'}
 
@@ -137,9 +137,10 @@ def manifesto():
 
         versao = f'{rotulo or SEM_VERSAO}+{hash_curto}'[:VERSAO_MAX] if hash_curto \
             else (rotulo or SEM_VERSAO)[:VERSAO_MAX]
-        base = arquivo['name'][:-4] if arquivo['name'].lower().endswith('.exe') \
-            else arquivo['name']
-        nome_download = f'{base}-{rotulo}.exe' if rotulo else arquivo['name']
+        # Baixa com o nome canônico intacto ('qualicontax.zip'): assim o "Extrair
+        # tudo" do Windows cria C:\qualicontax. A versão (content_hash+version.txt)
+        # continua na auditoria — não precisa ir no nome do arquivo.
+        nome_download = arquivo['name']
 
         if not content_hash:
             avisos.append('Dropbox não devolveu content_hash — a auditoria fica '
@@ -159,7 +160,7 @@ def manifesto():
 
 
 def baixar(caminho):
-    """Bytes do .exe, ou None. O caminho vem do manifesto — nunca do usuário."""
+    """Bytes do pacote, ou None. O caminho vem do manifesto — nunca do usuário."""
     try:
         return dropbox_sync._service.download_file(caminho)
     except Exception as exc:
