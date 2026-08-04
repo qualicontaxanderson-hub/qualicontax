@@ -115,6 +115,82 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
     <div><b>Documentos pendentes ≠ notas.</b> Os <b>{{ topo.backlog }} documentos pendentes na SEFAZ</b> contam cada NSU — uma nota, um evento (ex.: cancelamento) ou um resumo. As <b>{{ topo.total }} notas capturadas</b> contam só NF-e. Por isso os pendentes podem ser mais que as notas: <b>nenhuma nota sumiu</b> — eventos e resumos também ocupam NSU na fila.</div>
 </div>
 
+<!-- SAÍDAS — mesma fonte (nfe_importacoes/SEFAZ), recorte tipo='saida'.
+     Zero CSS novo: reusa .ss-kpis/.ss-kpi/.ss-table/.ss-legend. -->
+<div class="ss-section-title"><i class="fas fa-file-export" style="color:#b45309;"></i> NF-e — saídas (notas emitidas)</div>
+<div class="ss-kpis">
+    <div class="ss-kpi accent-amarelo">
+        <div class="ss-kpi-label">Saídas capturadas</div>
+        <div class="ss-kpi-value">{{ topo_saida.total }}</div>
+        <div class="ss-kpi-sub">
+            {{ topo_saida.completas }} completas
+            {%- if topo_saida.resumos %} · {{ topo_saida.resumos }} resumo{% endif %}
+            · {{ topo_saida.empresas }} empresa(s)
+        </div>
+    </div>
+    <div class="ss-kpi accent-verde">
+        <div class="ss-kpi-label">Saídas capturadas hoje</div>
+        <div class="ss-kpi-value">{{ topo_saida.hoje }}</div>
+        <div class="ss-kpi-sub">{{ topo_saida.semana }} na semana · {{ topo_saida.mes }} no mês</div>
+    </div>
+    <div class="ss-kpi accent-azul">
+        <div class="ss-kpi-label">Valor total das saídas</div>
+        <div class="ss-kpi-value" style="font-size:20px;">{{ topo_saida.valor | format_currency }}</div>
+        <div class="ss-kpi-sub">soma das notas emitidas capturadas</div>
+    </div>
+    <div class="ss-kpi accent-roxo">
+        <div class="ss-kpi-label">Última saída capturada</div>
+        <div class="ss-kpi-value" style="font-size:18px;">{{ topo_saida.ult_captura or '—' }}</div>
+        <div class="ss-kpi-sub">momento da importação</div>
+    </div>
+</div>
+
+<div class="ss-legend" style="background:#fffbeb;border-color:#fcd34d;color:#92400e;">
+    <i class="fas fa-circle-info" style="color:#b45309;"></i>
+    <div><b>As saídas chegam “de carona”.</b> A SEFAZ entrega o documento a quem é
+    <b>destinatário</b> ou <b>autorizado (autXML)</b> — nunca a quem emitiu. Então a saída
+    só aparece quando a nota cai no cursor de <i>outra</i> empresa (o comprador, ou o
+    escritório no autXML) e o sistema reconhece o emitente como cliente. Por isso esta
+    lista pode conter empresas <b>sem certificado</b>, e por isso ela <b>não é o
+    faturamento completo</b> de ninguém: é só o que passou por algum cursor nosso.</div>
+</div>
+
+{% if saidas_empresas %}
+<div class="ss-table-wrap">
+    <table class="ss-table">
+        <thead>
+            <tr>
+                <th>Empresa (emitente)</th>
+                <th style="text-align:center;">Notas</th>
+                <th style="text-align:right;">Valor total</th>
+                <th>Período (emissão)</th>
+                <th>Última captura</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in saidas_empresas %}
+            <tr>
+                <td>
+                    {% if s.numero %}<span class="ss-emp-num">{{ s.numero }}</span> — {% endif %}{{ s.nome }}
+                    {% if s.sem_cert %}
+                    <span class="ss-badge amarelo" style="margin-left:6px;"
+                          title="Esta empresa não tem certificado vinculado: as saídas dela só aparecem porque caíram no cursor de outra empresa.">sem captura própria</span>
+                    {% endif %}
+                    <div style="font-size:11px;color:#64748b;">{{ s.emit_cnpj }}</div>
+                </td>
+                <td style="text-align:center;"><b>{{ s.qtd }}</b></td>
+                <td style="text-align:right;">{{ s.valor | format_currency }}</td>
+                <td>{{ s.de }}{% if s.ate and s.ate != s.de %} a {{ s.ate }}{% endif %}</td>
+                <td>{{ s.ult_captura or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="ss-empty">Nenhuma saída capturada da SEFAZ até agora.</div>
+{% endif %}
+
 <!-- TOPO CT-e — webservice separado (CTeDistribuicaoDFe), fila e cota próprias -->
 <div class="ss-section-title"><i class="fas fa-truck" style="color:#0d9488;"></i> CT-e (fretes)</div>
 <div class="ss-kpis">

@@ -459,6 +459,65 @@ def status_sefaz():
         'backlog': _i(b.get('backlog')), 'ult_consulta': _fmt(b.get('ult_consulta')),
     }
 
+    # ---- TOPO SAÍDA: mesma leitura do topo de entrada, com tipo='saida'.
+    # A saída NÃO tem resumo: o resumo (resNFe) sempre entra como 'entrada' na
+    # ótica do dono do certificado (ver dfe_captura.SQL_NOTA_RESUMO_UPSERT, que
+    # fixa tipo='entrada'). Por isso aqui o recorte útil é o VALOR, não
+    # completas/resumos — a conferência é de faturamento, não de completude.
+    s = execute_query(
+        "SELECT COUNT(*) AS total, "
+        "  SUM(DATE(importado_em)=CURDATE()) AS hoje, "
+        "  SUM(YEARWEEK(importado_em,1)=YEARWEEK(CURDATE(),1)) AS semana, "
+        "  SUM(YEAR(importado_em)=YEAR(CURDATE()) AND MONTH(importado_em)=MONTH(CURDATE())) AS mes, "
+        "  SUM(COALESCE(incompleta,0)=0) AS completas, "
+        "  SUM(COALESCE(incompleta,0)=1) AS resumos, "
+        "  COALESCE(SUM(valor_total),0) AS valor, "
+        "  COUNT(DISTINCT cliente_id) AS empresas, "
+        "  MAX(importado_em) AS ult_captura "
+        "FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='saida'",
+        fetch=True, fetch_one=True,
+    ) or {}
+
+    topo_saida = {
+        'total': _i(s.get('total')), 'hoje': _i(s.get('hoje')),
+        'semana': _i(s.get('semana')), 'mes': _i(s.get('mes')),
+        'completas': _i(s.get('completas')), 'resumos': _i(s.get('resumos')),
+        'empresas': _i(s.get('empresas')),
+        'valor': float(s.get('valor') or 0),
+        'ult_captura': _fmt(s.get('ult_captura')),
+    }
+
+    # ---- SAÍDAS POR EMPRESA: agregado pelo EMITENTE. Diferente do bloco "Por
+    # empresa" (que parte de dfe_certificados), aqui a chave é quem EMITIU a
+    # nota — por isso aparece empresa sem certificado: a saída chega de carona
+    # no cursor de outra empresa (autXML / nota do comprador), não por captura
+    # própria. tem_cert alimenta a marcação "sem captura própria" na tela.
+    # GROUP BY com todas as colunas não agregadas: o servidor está com
+    # only_full_group_by ligado.
+    srows = execute_query(
+        "SELECT n.cliente_id, c.numero_cliente, c.nome_razao_social, "
+        "  MAX(n.emit_cnpj) AS emit_cnpj, COUNT(*) AS qtd, "
+        "  COALESCE(SUM(n.valor_total),0) AS valor, "
+        "  MIN(n.data_emissao) AS de, MAX(n.data_emissao) AS ate, "
+        "  MAX(n.importado_em) AS ult_captura, "
+        "  (SELECT COUNT(*) FROM dfe_certificados d WHERE d.cliente_id = n.cliente_id) AS tem_cert "
+        "FROM nfe_importacoes n "
+        "LEFT JOIN clientes c ON c.id = n.cliente_id "
+        "WHERE n.origem='SEFAZ' AND n.tipo='saida' "
+        "GROUP BY n.cliente_id, c.numero_cliente, c.nome_razao_social "
+        "ORDER BY qtd DESC, valor DESC",
+        fetch=True,
+    ) or []
+
+    saidas_empresas = [{
+        'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social') or '—',
+        'emit_cnpj': r.get('emit_cnpj'), 'qtd': _i(r.get('qtd')),
+        'valor': float(r.get('valor') or 0),
+        'de': _fmt_data(r.get('de')), 'ate': _fmt_data(r.get('ate')),
+        'ult_captura': _fmt(r.get('ult_captura')),
+        'sem_cert': not _i(r.get('tem_cert')),
+    } for r in srows]
+
     # ---- TOPO CT-e: mesma leitura, na tabela própria (cte_documentos/dfe_nsu_cte).
     # CT-e não tem resumo (a distribuição entrega o documento completo), então aqui
     # não há a divisão completas/resumos — o recorte útil é o valor do frete.
@@ -639,6 +698,7 @@ def status_sefaz():
         'escrita_fiscal/status_sefaz.html',
         topo=topo, topo_cte=topo_cte, empresas=empresas, historico=historico,
         certificados=certificados, cert_alerta=cert_alerta,
+        topo_saida=topo_saida, saidas_empresas=saidas_empresas,
     )
 
 
