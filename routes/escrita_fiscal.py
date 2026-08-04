@@ -759,6 +759,8 @@ def conf_compras():
         emitentes=emitentes,
         empresas=empresas,
         grupos=grupos,
+        # Só admin enxerga o botão de excluir (o gate real está na rota).
+        is_admin=current_user.is_admin(),
         dropbox_configured=dropbox_ok,
         uf_list=_UF_LIST,
         dropbox_folder=Config.DROPBOX_XML_FOLDER,
@@ -3105,6 +3107,19 @@ def api_configurar_horario_agendado():
 @escrita_fiscal.route('/conf-compras/excluir/<int:nfe_id>', methods=['POST'])
 @login_required
 def excluir_nfe(nfe_id):
+    """Exclui uma nota. SÓ ADMIN — este é o gate real: esconder o botão no
+    front não impede um não-admin de chamar a URL na mão. Usa o mecanismo que já
+    existe no app: Usuario.is_admin() (tipo_usuario == 'ADMIN'). Usada pelas duas
+    telas (conf-compras e conf-saidas)."""
+    if not current_user.is_admin():
+        logger.warning('[excluir_nfe] usuário %s (não-admin) tentou excluir a nfe_id=%s',
+                       getattr(current_user, 'id', '?'), nfe_id)
+        msg = 'Apenas administradores podem excluir notas fiscais.'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'error': msg}), 403
+        flash(msg, 'error')
+        return redirect(url_for('escrita_fiscal.conf_compras'))
+
     execute_query("DELETE FROM nfe_importacoes WHERE id = %s", (nfe_id,))
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'ok': True})
@@ -3118,6 +3133,13 @@ def excluir_nfe(nfe_id):
 @escrita_fiscal.route('/conf-compras/excluir-lote', methods=['POST'])
 @login_required
 def excluir_lote():
+    """Exclui TODAS as notas de entrada que batem com os filtros. SÓ ADMIN —
+    mesmo gate do excluir_nfe, aplicado antes de montar qualquer WHERE."""
+    if not current_user.is_admin():
+        logger.warning('[excluir_lote] usuário %s (não-admin) tentou excluir em lote (entradas)',
+                       getattr(current_user, 'id', '?'))
+        return jsonify({'error': 'Apenas administradores podem excluir notas fiscais.'}), 403
+
     data = request.get_json(silent=True) or {}
     f_cliente_id = str(data.get('cliente_id', '')).strip()
     f_grupo_id   = str(data.get('grupo_id', '')).strip()
@@ -4549,6 +4571,8 @@ def conf_saidas():
         destinatarios=destinatarios,
         empresas=empresas,
         grupos=grupos,
+        # Só admin enxerga o botão de excluir (o gate real está na rota).
+        is_admin=current_user.is_admin(),
         dropbox_configured=dropbox_ok,
         uf_list=_UF_LIST,
         dropbox_folder=Config.DROPBOX_XML_FOLDER,
@@ -4987,6 +5011,13 @@ def api_por_produto_saidas():
 @escrita_fiscal.route('/conf-saidas/excluir-lote', methods=['POST'])
 @login_required
 def excluir_lote_saidas():
+    """Exclui TODAS as notas de saída que batem com os filtros. SÓ ADMIN —
+    mesmo gate do excluir_nfe, aplicado antes de montar qualquer WHERE."""
+    if not current_user.is_admin():
+        logger.warning('[excluir_lote_saidas] usuário %s (não-admin) tentou excluir em lote (saídas)',
+                       getattr(current_user, 'id', '?'))
+        return jsonify({'error': 'Apenas administradores podem excluir notas fiscais.'}), 403
+
     data = request.get_json(silent=True) or {}
     f_cliente_id = str(data.get('cliente_id', '')).strip()
     f_grupo_id   = str(data.get('grupo_id', '')).strip()

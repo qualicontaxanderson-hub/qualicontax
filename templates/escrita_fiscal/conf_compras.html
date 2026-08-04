@@ -396,12 +396,15 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <i class="fas fa-key"></i> Chaves XML
         <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
     </div>
+    {# Excluir em lote: só ADMIN. O gate real é a rota /conf-compras/excluir-lote. #}
+    {% if is_admin %}
     <div style="margin-left:auto;">
         <button onclick="excluirLote()"
                 style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
             <i class="fas fa-trash-alt"></i> Excluir em Lote
         </button>
     </div>
+    {% endif %}
 </div>
 
 <div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
@@ -994,6 +997,16 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') fecharPreview();
 });
 
+// Só ADMIN vê o botão de excluir. O gate de verdade está na rota
+// /conf-compras/excluir/<id>, que devolve 403 para não-admin.
+const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+function delBtn(r) {
+    if (!IS_ADMIN) return '';
+    return `<button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
+                <i class="fas fa-trash-alt"></i>
+            </button>`;
+}
+
 // ---- Formatters ----
 function fmtBRL(v) {
     return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1069,9 +1082,7 @@ function loadNotas() {
                     <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''}</td>
                     <td onclick="event.stopPropagation()">
                         ${exportBtns(r)}
-                        <button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
+                        ${delBtn(r)}
                     </td>
                 </tr>`;
             }).join('');
@@ -1192,7 +1203,12 @@ function excluirNfe(id, btn) {
     fetch(`/escrita-fiscal/conf-compras/excluir/${id}`,
         { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'} })
         .then(r => r.json())
-        .then(() => { btn.closest('tr').remove(); applyFilters(); })
+        // 403 de não-admin volta como {error: ...} — não remove a linha.
+        .then(data => {
+            if (data && data.error) { alert(data.error); return; }
+            btn.closest('tr').remove();
+            applyFilters();
+        })
         .catch(() => alert('Erro ao excluir.'));
 }
 
@@ -1213,7 +1229,8 @@ function excluirLote() {
             alert(`${data.deleted} nota(s) excluída(s) com sucesso.`);
             applyFilters();
         } else {
-            alert('Erro ao excluir em lote.');
+            // 403 de não-admin volta como {error: ...} — mostra a msg do servidor.
+            alert(data.error || 'Erro ao excluir em lote.');
         }
     })
     .catch(() => alert('Erro ao excluir em lote.'));
