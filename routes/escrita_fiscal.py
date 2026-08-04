@@ -26,6 +26,7 @@ from utils.nfe_import import (
     _MAX_XML_SIZE, _save_nfe, _save_nfe_dual, _lookup_vinculo,
 )
 from models.dfe_certificado import DfeCertificado
+from models.cliente_contador import ClienteContador
 from models.robo_config import RoboConfig
 from utils import qrobo_chaves, qrobo_status
 from config import Config
@@ -487,37 +488,6 @@ def status_sefaz():
         'ult_captura': _fmt(s.get('ult_captura')),
     }
 
-    # ---- SAÍDAS POR EMPRESA: agregado pelo EMITENTE. Diferente do bloco "Por
-    # empresa" (que parte de dfe_certificados), aqui a chave é quem EMITIU a
-    # nota — por isso aparece empresa sem certificado: a saída chega de carona
-    # no cursor de outra empresa (autXML / nota do comprador), não por captura
-    # própria. tem_cert alimenta a marcação "sem captura própria" na tela.
-    # GROUP BY com todas as colunas não agregadas: o servidor está com
-    # only_full_group_by ligado.
-    srows = execute_query(
-        "SELECT n.cliente_id, c.numero_cliente, c.nome_razao_social, "
-        "  MAX(n.emit_cnpj) AS emit_cnpj, COUNT(*) AS qtd, "
-        "  COALESCE(SUM(n.valor_total),0) AS valor, "
-        "  MIN(n.data_emissao) AS de, MAX(n.data_emissao) AS ate, "
-        "  MAX(n.importado_em) AS ult_captura, "
-        "  (SELECT COUNT(*) FROM dfe_certificados d WHERE d.cliente_id = n.cliente_id) AS tem_cert "
-        "FROM nfe_importacoes n "
-        "LEFT JOIN clientes c ON c.id = n.cliente_id "
-        "WHERE n.origem='SEFAZ' AND n.tipo='saida' "
-        "GROUP BY n.cliente_id, c.numero_cliente, c.nome_razao_social "
-        "ORDER BY qtd DESC, valor DESC",
-        fetch=True,
-    ) or []
-
-    saidas_empresas = [{
-        'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social') or '—',
-        'emit_cnpj': r.get('emit_cnpj'), 'qtd': _i(r.get('qtd')),
-        'valor': float(r.get('valor') or 0),
-        'de': _fmt_data(r.get('de')), 'ate': _fmt_data(r.get('ate')),
-        'ult_captura': _fmt(r.get('ult_captura')),
-        'sem_cert': not _i(r.get('tem_cert')),
-    } for r in srows]
-
     # ---- TOPO CT-e: mesma leitura, na tabela própria (cte_documentos/dfe_nsu_cte).
     # CT-e não tem resumo (a distribuição entrega o documento completo), então aqui
     # não há a divisão completas/resumos — o recorte útil é o valor do frete.
@@ -547,42 +517,62 @@ def status_sefaz():
         'backlog': _i(bc.get('backlog')), 'ult_consulta': _fmt(bc.get('ult_consulta')),
     }
 
-    # ---- POR EMPRESA: uma linha por cliente com certificado ativo ----
+    # ---- POR EMPRESA: TODA empresa que CAPTURA, não só quem tem certificado.
+    # A espinha era `FROM dfe_certificados`, o que escondia quem captura por
+    # contador (Parte 2) e quem só recebe "de carona" (saída que caiu no cursor
+    # de outro — ex.: a KET). Agora a base é a UNIÃO de três origens:
+    #   (a) certificado próprio ativo
+    #   (b) contador vinculado
+    #   (c) já tem documento capturado da SEFAZ
+    # UNION (não UNION ALL) para o distinct por cliente. Os agregados vivem em
+    # derived tables com GROUP BY cliente_id — o SELECT externo não agrupa, então
+    # o only_full_group_by do servidor não é problema aqui.
     rows = execute_query(
-        "SELECT c.id, c.numero_cliente, c.nome_razao_social, dc.validade AS cert_validade, "
-        "  n.ult_nsu, n.max_nsu, n.ult_consulta, n.proximo_permitido, "
+        "SELECT c.id, c.numero_cliente, c.nome_razao_social, "
+        "  dc.validade AS cert_validade, dc.tipo_doc AS cert_tipo_doc, dc.cnpj AS cert_doc, "
+        "  n.ult_consulta, n.proximo_permitido, "
         "  GREATEST(COALESCE(n.max_nsu,0)-COALESCE(n.ult_nsu,0),0) AS backlog, "
         "  (n.proximo_permitido IS NOT NULL AND n.proximo_permitido > NOW()) AS em_cota, "
         "  TIMESTAMPDIFF(MINUTE, NOW(), n.proximo_permitido) AS libera_min, "
-        "  COALESCE(imp.total,0) AS total_notas, "
-        "  COALESCE(imp.completas,0) AS completas, "
-        "  COALESCE(imp.resumos,0) AS resumos, "
-        "  nc.ult_nsu AS cte_ult_nsu, nc.ult_consulta AS cte_ult_consulta, "
+        "  COALESCE(ent.total,0) AS ent_total, COALESCE(ent.completas,0) AS ent_completas, "
+        "  COALESCE(ent.resumos,0) AS ent_resumos, ent.ult_captura AS ent_ult, "
+        "  COALESCE(sai.qtd,0) AS sai_qtd, COALESCE(sai.valor,0) AS sai_valor, "
+        "  sai.de AS sai_de, sai.ate AS sai_ate, sai.ult_captura AS sai_ult, "
+        "  nc.ult_consulta AS cte_ult_consulta, "
         "  GREATEST(COALESCE(nc.max_nsu,0)-COALESCE(nc.ult_nsu,0),0) AS cte_backlog, "
         "  (nc.proximo_permitido IS NOT NULL AND nc.proximo_permitido > NOW()) AS cte_em_cota, "
         "  TIMESTAMPDIFF(MINUTE, NOW(), nc.proximo_permitido) AS cte_libera_min, "
-        "  COALESCE(ct.total,0) AS cte_total, "
-        "  COALESCE(ct.tomados,0) AS cte_tomados, "
+        "  COALESCE(ct.total,0) AS cte_total, COALESCE(ct.tomados,0) AS cte_tomados, "
         "  COALESCE(ct.valor_frete,0) AS cte_valor_frete "
-        "FROM dfe_certificados dc "
-        "JOIN clientes c ON c.id = dc.cliente_id "
-        "LEFT JOIN dfe_nsu n ON n.cliente_id = dc.cliente_id "
-        "LEFT JOIN dfe_nsu_cte nc ON nc.cliente_id = dc.cliente_id "
+        "FROM ( "
+        "    SELECT cliente_id AS id FROM dfe_certificados WHERE ativo = 1 "
+        "    UNION SELECT cliente_id FROM cliente_contadores "
+        "    UNION SELECT DISTINCT cliente_id FROM nfe_importacoes "
+        "           WHERE origem='SEFAZ' AND cliente_id IS NOT NULL "
+        ") base "
+        "JOIN clientes c ON c.id = base.id "
+        "LEFT JOIN dfe_certificados dc ON dc.cliente_id = c.id AND dc.ativo = 1 "
+        "LEFT JOIN dfe_nsu     n  ON n.cliente_id  = c.id "
+        "LEFT JOIN dfe_nsu_cte nc ON nc.cliente_id = c.id "
         "LEFT JOIN ( "
         "    SELECT cliente_id, COUNT(*) AS total, "
         "           SUM(COALESCE(incompleta,0)=0) AS completas, "
-        "           SUM(COALESCE(incompleta,0)=1) AS resumos "
-        "    FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada' "
-        "    GROUP BY cliente_id "
-        ") imp ON imp.cliente_id = dc.cliente_id "
+        "           SUM(COALESCE(incompleta,0)=1) AS resumos, "
+        "           MAX(importado_em) AS ult_captura "
+        "    FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada' GROUP BY cliente_id "
+        ") ent ON ent.cliente_id = c.id "
+        "LEFT JOIN ( "
+        "    SELECT cliente_id, COUNT(*) AS qtd, COALESCE(SUM(valor_total),0) AS valor, "
+        "           MIN(data_emissao) AS de, MAX(data_emissao) AS ate, "
+        "           MAX(importado_em) AS ult_captura "
+        "    FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='saida' GROUP BY cliente_id "
+        ") sai ON sai.cliente_id = c.id "
         "LEFT JOIN ( "
         "    SELECT cliente_id, COUNT(*) AS total, "
         "           SUM(papel_cliente='tomador') AS tomados, "
         "           SUM(valor_frete) AS valor_frete "
-        "    FROM cte_documentos WHERE origem='SEFAZ' "
-        "    GROUP BY cliente_id "
-        ") ct ON ct.cliente_id = dc.cliente_id "
-        "WHERE dc.ativo = 1 "
+        "    FROM cte_documentos WHERE origem='SEFAZ' GROUP BY cliente_id "
+        ") ct ON ct.cliente_id = c.id "
         "ORDER BY em_cota DESC, backlog DESC, c.numero_cliente",
         fetch=True,
     ) or []
@@ -590,28 +580,68 @@ def status_sefaz():
     empresas = []
     for r in rows:
         backlog = _i(r.get('backlog'))
+        cert_doc = r.get('cert_doc')
+
+        # FONTE da captura — espelha dfe_captura._resolver_certificado: cert
+        # PRÓPRIO; senão o 1º contador vinculado COM certificado (mesma ordem de
+        # contadores_do_cliente); senão nada. Só consulta contador para quem não
+        # tem cert próprio, então são poucas queries extras.
+        contador = None
+        if not cert_doc:
+            for ctd in ClienteContador.contadores_do_cliente(r['id']):
+                if ctd.get('tem_certificado'):
+                    contador = ctd
+                    break
+
+        if cert_doc:
+            fonte, fonte_icone, fonte_label = 'propria', '🔑', 'Captura própria'
+            fonte_det = f"{r.get('cert_tipo_doc') or ''} {cert_doc}".strip()
+            ef_validade = r.get('cert_validade')          # cert que de fato autentica
+        elif contador:
+            fonte, fonte_icone, fonte_label = 'procuracao', '🤝', 'Por procuração'
+            fonte_det = (f"{contador.get('numero_cliente') or ''} - "
+                         f"{contador.get('nome_razao_social') or ''}").strip(' -')
+            ef_validade = contador.get('cert_validade')
+        else:
+            fonte, fonte_icone, fonte_label = 'carona', '🚏', 'Só de carona'
+            fonte_det = 'sem certificado e sem contador — recebe pelo cursor de outra empresa'
+            ef_validade = None
+
+        # 'Nunca consultou' antes de 'Em dia': sem cursor, "Em dia" seria mentira
+        # (é o caso de quem só recebe de carona, e da empresa recém-vinculada).
         if r.get('em_cota'):
             label, cor = 'Em cota', 'vermelho'
+        elif not r.get('ult_consulta'):
+            label, cor = 'Nunca consultou', 'cinza'
         elif backlog > 0:
             label, cor = 'Baixando', 'amarelo'
         else:
             label, cor = 'Em dia', 'verde'
+
         cte_backlog = _i(r.get('cte_backlog'))
         if r.get('cte_em_cota'):
             cte_label, cte_cor = 'Em cota', 'vermelho'
+        elif not r.get('cte_ult_consulta'):
+            cte_label, cte_cor = 'Nunca consultou', 'cinza'
         elif cte_backlog > 0:
             cte_label, cte_cor = 'Baixando', 'amarelo'
         else:
             cte_label, cte_cor = 'Em dia', 'verde'
-        # Certificado vencido/vencendo SOBREPÕE o status normal do card: sem cert
-        # válido a empresa não captura, então "Em dia" seria enganoso (ver a 495).
-        cs = DfeCertificado.classificar_validade(r.get('cert_validade'))
+        # Validade do cert EFETIVO (próprio ou o do contador) — é ele que a SEFAZ
+        # recusa se estiver vencido, então é dele que o alerta tem de falar.
+        cs = DfeCertificado.classificar_validade(ef_validade)
         empresas.append({
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
+            'fonte': fonte, 'fonte_icone': fonte_icone,
+            'fonte_label': fonte_label, 'fonte_det': fonte_det,
             'cert_nivel': cs['nivel'], 'cert_dias': cs['dias'],
-            'cert_validade': _fmt_data(r.get('cert_validade')),
-            'total': _i(r.get('total_notas')), 'completas': _i(r.get('completas')),
-            'resumos': _i(r.get('resumos')), 'backlog': backlog,
+            'cert_validade': _fmt_data(ef_validade),
+            'ent_total': _i(r.get('ent_total')), 'ent_completas': _i(r.get('ent_completas')),
+            'ent_resumos': _i(r.get('ent_resumos')), 'ent_ult': _fmt(r.get('ent_ult')),
+            'sai_qtd': _i(r.get('sai_qtd')), 'sai_valor': float(r.get('sai_valor') or 0),
+            'sai_de': _fmt_data(r.get('sai_de')), 'sai_ate': _fmt_data(r.get('sai_ate')),
+            'sai_ult': _fmt(r.get('sai_ult')),
+            'backlog': backlog,
             'status_label': label, 'status_cor': cor,
             'ult_consulta': _fmt(r.get('ult_consulta')),
             'em_cota': bool(r.get('em_cota')),
@@ -698,7 +728,7 @@ def status_sefaz():
         'escrita_fiscal/status_sefaz.html',
         topo=topo, topo_cte=topo_cte, empresas=empresas, historico=historico,
         certificados=certificados, cert_alerta=cert_alerta,
-        topo_saida=topo_saida, saidas_empresas=saidas_empresas,
+        topo_saida=topo_saida,
     )
 
 

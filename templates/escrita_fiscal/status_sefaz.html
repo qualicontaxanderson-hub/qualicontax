@@ -46,9 +46,26 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
 .ss-pill.manual   { background:#f5f3ff; color:#6d28d9; }
 .ss-pill.nfe { background:#f0fdf4; color:#15803d; }
 .ss-pill.cte { background:#f0fdfa; color:#0f766e; }
-.ss-emp-cte { margin-top:10px; padding-top:9px; border-top:1px dashed #e2e8f0; }
-.ss-emp-cte-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
-.ss-emp-cte-tit { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:#0f766e; }
+.ss-badge.cinza { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+
+/* faixa "como é capturada" — logo abaixo do nome da empresa */
+.ss-fonte { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; margin:-2px 0 11px;
+            padding:7px 10px; border-radius:9px; font-size:11.5px; line-height:1.35; }
+.ss-fonte b { font-weight:800; }
+.ss-fonte-det { color:#64748b; }
+.ss-fonte.propria    { background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; }
+.ss-fonte.procuracao { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+.ss-fonte.carona     { background:#fffbeb; border:1px solid #fde68a; color:#b45309; }
+
+/* blocos internos do card: entradas / saídas / CT-e */
+.ss-bloco { margin-top:10px; padding-top:9px; border-top:1px dashed #e2e8f0; }
+.ss-bloco-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+.ss-bloco-tit { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; }
+.ss-bloco.entrada .ss-bloco-tit { color:#1d4ed8; }
+.ss-bloco.saida   .ss-bloco-tit { color:#b45309; }
+.ss-bloco.cte     .ss-bloco-tit { color:#0f766e; }
+.ss-selo { padding:2px 7px; border-radius:99px; font-size:9.5px; font-weight:700; text-transform:none;
+           letter-spacing:0; background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
 .ss-cstat { font-family:ui-monospace,monospace; font-weight:700; }
 .ss-cstat.ok  { color:#16a34a; }   /* 137/138 */
 .ss-cstat.bad { color:#dc2626; }   /* 656 e erros */
@@ -155,41 +172,7 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
     faturamento completo</b> de ninguém: é só o que passou por algum cursor nosso.</div>
 </div>
 
-{% if saidas_empresas %}
-<div class="ss-table-wrap">
-    <table class="ss-table">
-        <thead>
-            <tr>
-                <th>Empresa (emitente)</th>
-                <th style="text-align:center;">Notas</th>
-                <th style="text-align:right;">Valor total</th>
-                <th>Período (emissão)</th>
-                <th>Última captura</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in saidas_empresas %}
-            <tr>
-                <td>
-                    {% if s.numero %}<span class="ss-emp-num">{{ s.numero }}</span> — {% endif %}{{ s.nome }}
-                    {% if s.sem_cert %}
-                    <span class="ss-badge amarelo" style="margin-left:6px;"
-                          title="Esta empresa não tem certificado vinculado: as saídas dela só aparecem porque caíram no cursor de outra empresa.">sem captura própria</span>
-                    {% endif %}
-                    <div style="font-size:11px;color:#64748b;">{{ s.emit_cnpj }}</div>
-                </td>
-                <td style="text-align:center;"><b>{{ s.qtd }}</b></td>
-                <td style="text-align:right;">{{ s.valor | format_currency }}</td>
-                <td>{{ s.de }}{% if s.ate and s.ate != s.de %} a {{ s.ate }}{% endif %}</td>
-                <td>{{ s.ult_captura or '—' }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% else %}
-<div class="ss-empty">Nenhuma saída capturada da SEFAZ até agora.</div>
-{% endif %}
+<!-- O detalhe por empresa emitente vive no bloco 📤 de cada card ("Por empresa"). -->
 
 <!-- TOPO CT-e — webservice separado (CTeDistribuicaoDFe), fila e cota próprias -->
 <div class="ss-section-title"><i class="fas fa-truck" style="color:#0d9488;"></i> CT-e (fretes)</div>
@@ -231,37 +214,75 @@ table.ss-table tbody tr:last-child td { border-bottom:none; }
             <div class="ss-emp-nome">
                 {% if e.numero %}<span class="ss-emp-num">{{ e.numero }}</span> — {% endif %}{{ e.nome }}
             </div>
-            {% if e.cert_nivel == 'vencido' %}
-            <span class="ss-badge vermelho">Certificado vencido em {{ e.cert_validade }}</span>
-            {% elif e.cert_nivel == 'laranja' %}
-            <span class="ss-badge amarelo">Cert vence em {{ e.cert_dias }} dias</span>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+                <span class="ss-badge {{ e.status_cor }}">{{ e.status_label }}</span>
+                {% if e.cert_nivel == 'vencido' %}
+                <span class="ss-badge vermelho">Cert vencido {{ e.cert_validade }}</span>
+                {% elif e.cert_nivel == 'laranja' %}
+                <span class="ss-badge amarelo">Cert vence em {{ e.cert_dias }}d</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="ss-fonte {{ e.fonte }}">
+            <span>{{ e.fonte_icone }} <b>{{ e.fonte_label }}</b></span>
+            <span class="ss-fonte-det">{{ e.fonte_det }}{% if e.cert_validade and e.fonte != 'carona' %} · até {{ e.cert_validade }}{% endif %}</span>
+        </div>
+
+        <div class="ss-bloco entrada">
+            <div class="ss-bloco-head"><span class="ss-bloco-tit">📥 Entradas</span></div>
+            {% if e.ent_total %}
+            <div class="ss-emp-stats">
+                <span><b>{{ e.ent_total }}</b> capturadas</span>
+                <span>{{ e.ent_completas }} completas</span>
+                <span>{{ e.ent_resumos }} resumo</span>
+            </div>
             {% else %}
-            <span class="ss-badge {{ e.status_cor }}">{{ e.status_label }}</span>
+            <div class="ss-emp-stats"><span class="ss-muted">nenhuma entrada capturada</span></div>
+            {% endif %}
+            <div class="ss-emp-foot">
+                <span><span class="ss-backlog-num {{ 'zero' if e.backlog == 0 else 'pos' }}">{{ e.backlog }}</span> pendentes</span>
+                <span><i class="far fa-clock"></i> {{ e.ult_consulta or 'sem consulta' }}</span>
+                {% if e.em_cota %}
+                <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.libera_min }} min</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="ss-bloco saida">
+            <div class="ss-bloco-head">
+                <span class="ss-bloco-tit">📤 Saídas</span>
+                {% if e.sai_qtd %}<span class="ss-selo" title="A SEFAZ entrega ao destinatário ou ao autorizado (autXML), nunca a quem emitiu: esta saída chegou pelo cursor de outra empresa.">via autXML (carona)</span>{% endif %}
+            </div>
+            {% if e.sai_qtd %}
+            <div class="ss-emp-stats">
+                <span><b>{{ e.sai_qtd }}</b> notas</span>
+                <span><b>{{ e.sai_valor | format_currency }}</b></span>
+            </div>
+            <div class="ss-emp-foot">
+                <span>{{ e.sai_de }}{% if e.sai_ate and e.sai_ate != e.sai_de %} a {{ e.sai_ate }}{% endif %}</span>
+                <span><i class="far fa-clock"></i> {{ e.sai_ult or '—' }}</span>
+            </div>
+            {% else %}
+            <div class="ss-emp-stats"><span class="ss-muted">nenhuma saída capturada</span></div>
             {% endif %}
         </div>
-        <div class="ss-emp-stats">
-            <span><b>{{ e.total }}</b> notas capturadas</span>
-            <span>{{ e.completas }} completas</span>
-            <span>{{ e.resumos }} resumo</span>
-        </div>
-        <div class="ss-emp-foot">
-            <span><span class="ss-backlog-num {{ 'zero' if e.backlog == 0 else 'pos' }}">{{ e.backlog }}</span> docs pendentes</span>
-            <span><i class="far fa-clock"></i> {{ e.ult_consulta or 'sem consulta' }}</span>
-            {% if e.em_cota %}
-            <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.libera_min }} min</span>
-            {% endif %}
-        </div>
-        <div class="ss-emp-cte">
-            <div class="ss-emp-cte-head">
-                <span class="ss-emp-cte-tit"><i class="fas fa-truck"></i> CT-e</span>
+
+        <div class="ss-bloco cte">
+            <div class="ss-bloco-head">
+                <span class="ss-bloco-tit">🚚 CT-e</span>
                 <span class="ss-badge {{ e.cte_status_cor }}">{{ e.cte_status_label }}</span>
             </div>
+            {% if e.cte_total %}
             <div class="ss-emp-stats">
                 <span><b>{{ e.cte_total }}</b> CT-e</span>
                 <span>{{ e.cte_tomados }} como tomador</span>
                 <span>{{ e.cte_valor_frete | format_currency }} de frete</span>
             </div>
-            <div class="ss-emp-foot" style="border-top:none;padding-top:6px;margin-top:4px;">
+            {% else %}
+            <div class="ss-emp-stats"><span class="ss-muted">nenhum CT-e capturado</span></div>
+            {% endif %}
+            <div class="ss-emp-foot">
                 <span><span class="ss-backlog-num {{ 'zero' if e.cte_backlog == 0 else 'pos' }}">{{ e.cte_backlog }}</span> pendentes</span>
                 <span><i class="far fa-clock"></i> {{ e.cte_ult_consulta or 'sem consulta' }}</span>
                 {% if e.cte_em_cota %}
