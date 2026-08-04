@@ -72,6 +72,10 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .btn-exp:hover { background:#f0fdf4; color:#166534; }
 .btn-del:hover { background:#fee2e2; }
 
+/* ---- Botões de período rápido (Atual / Mês anterior / Ano) ---- */
+.btn-periodo { background:#f1f5f9; border:1.5px solid #e2e8f0; color:#475569; padding:6px 10px; border-radius:7px; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.btn-periodo:hover { background:#e2e8f0; color:#1e293b; }
+
 /* ---- Preview da nota (DANFE dentro de um iframe) ---- */
 .nf-prev-overlay { position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:9200; display:none; align-items:center; justify-content:center; }
 .nf-prev-overlay.open { display:flex; }
@@ -261,22 +265,30 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <div class="cc-filter-grid">
             <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
             <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
+            {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
+            <div>
+                <label>Período rápido</label>
+                <div style="display:flex;gap:6px;">
+                    <button type="button" class="btn-periodo" onclick="setPeriodo('atual')"
+                            title="Do dia 1º do mês corrente até hoje">Atual</button>
+                    <button type="button" class="btn-periodo" onclick="setPeriodo('anterior')"
+                            title="Mês passado inteiro (dia 1 ao último dia)">Mês anterior</button>
+                    <button type="button" class="btn-periodo" onclick="setPeriodo('ano')"
+                            title="De 1º de janeiro até hoje">Ano</button>
+                </div>
+            </div>
+            {# Destinatário e UF nascem vazios: carregarOpcoesFiltros() preenche com o
+               que existe na empresa escolhida (ver /conf-saidas/api/opcoes-filtros). #}
             <div>
                 <label>Destinatário (CNPJ)</label>
                 <select id="f_dest_cnpj_sel" style="text-transform:uppercase;">
                     <option value="">— Todos —</option>
-                    {% for d in destinatarios %}
-                    <option value="{{ d.dest_cnpj }}" style="text-transform:uppercase;">{{ d.dest_nome or d.dest_cnpj }} ({{ d.dest_cnpj }})</option>
-                    {% endfor %}
                 </select>
             </div>
             <div>
                 <label>UF Destinatário</label>
                 <select id="f_dest_uf">
                     <option value="">— Todos —</option>
-                    {% for uf in uf_list %}
-                    <option value="{{ uf }}">{{ uf }}</option>
-                    {% endfor %}
                 </select>
             </div>
             <div><label>Nº da Nota</label><input type="text" id="f_num_nota" placeholder="Ex: 000123"></div>
@@ -604,6 +616,7 @@ function onEmpresaChange() {
         updateScopeBadge('global', 'Visão Global');
     }
     catalogoCache = {};
+    aoMudarEscopo();
 }
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
@@ -617,6 +630,7 @@ function onGrupoChange() {
         updateScopeBadge('global', 'Visão Global');
     }
     catalogoCache = {};
+    aoMudarEscopo();
 }
 function updateScopeBadge(type, label) {
     const b = document.getElementById('scopeBadge');
@@ -637,6 +651,75 @@ function switchTab(tab) {
     if (hasSearched && (currentClienteId || currentGrupoId)) loadActiveTab();
 }
 
+// ---- Opções dos filtros por empresa ----
+// Destinatário e UF saem do MESMO escopo da listagem (o endpoint reusa
+// _empresa_where_saidas, com o fallback por CNPJ), então a lista nunca oferece
+// uma opção que a tabela não tem. Sem empresa/grupo, ficam só com "— Todos —".
+function _esc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _preencheSelect(id, opcoes, rotulo) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const anterior = sel.value;
+    sel.innerHTML = `<option value="">${rotulo}</option>` +
+        opcoes.map(o => `<option value="${_esc(o.valor)}">${_esc(o.texto)}</option>`).join('');
+    // Preserva a escolha do usuário se ela continuar existindo no novo escopo.
+    if (anterior && opcoes.some(o => o.valor === anterior)) sel.value = anterior;
+}
+function carregarOpcoesFiltros() {
+    if (!currentClienteId && !currentGrupoId) {
+        _preencheSelect('f_dest_cnpj_sel', [], '— Todos —');
+        _preencheSelect('f_dest_uf', [], '— Todos —');
+        return;
+    }
+    const p = new URLSearchParams({cliente_id: currentClienteId || '', grupo_id: currentGrupoId || ''});
+    fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_saidas") }}?' + p)
+        .then(r => r.json())
+        .then(d => {
+            _preencheSelect('f_dest_cnpj_sel',
+                (d.cnpjs || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})),
+                '— Todos —');
+            _preencheSelect('f_dest_uf', (d.ufs || []).map(u => ({valor: u, texto: u})), '— Todos —');
+        })
+        .catch(() => {});  // silencioso: os selects continuam com "— Todos —"
+}
+
+// ---- Datas rápidas ----
+// _iso usa o horário LOCAL de propósito: toISOString() converteria para UTC e,
+// à noite, jogaria a data um dia para trás.
+function _iso(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function setPeriodo(tipo, buscar) {
+    const hoje = new Date();
+    let ini, fim;
+    if (tipo === 'atual') {             // 1º do mês corrente → hoje
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        fim = hoje;
+    } else if (tipo === 'anterior') {   // 1º → último dia do mês passado (dia 0 = último do anterior)
+        ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    } else if (tipo === 'ano') {        // 1º de janeiro → hoje
+        ini = new Date(hoje.getFullYear(), 0, 1);
+        fim = hoje;
+    } else {                            // '45d': padrão ao escolher a empresa
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 45);
+        fim = hoje;
+    }
+    document.getElementById('f_data_ini').value = _iso(ini);
+    document.getElementById('f_data_fim').value = _iso(fim);
+    if (buscar !== false) applyFilters();
+}
+
+// Trocou a empresa/grupo: repovoa os selects, joga a data para os últimos 45
+// dias e já busca — a tela abre com resultado em vez de tabela vazia.
+function aoMudarEscopo() {
+    carregarOpcoesFiltros();
+    if (currentClienteId || currentGrupoId) setPeriodo('45d');
+}
+
 function toggleFilters() {
     const b = document.getElementById('filterBody');
     const c = document.getElementById('filterChevron');
@@ -654,7 +737,9 @@ function clearFilters() {
     document.getElementById('f_vinc_status').value = '';
     currentPage = 1;
     chavesCurrentPage = 1;
-    applyFilters();
+    // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
+    // um Buscar puxaria a base inteira da empresa (dezenas de milhares de notas).
+    setPeriodo('45d');  // já dispara applyFilters()
 }
 function getFilters() {
     return {

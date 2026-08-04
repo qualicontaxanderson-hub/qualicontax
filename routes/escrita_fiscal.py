@@ -94,9 +94,6 @@ _TPEVENTO_DESCR: dict = {
     '210240': 'Operação não Realizada',
 }
 
-_UF_LIST = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
-            'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
-
 # Categorias de produtos para Postos de Combustíveis
 CATEGORIAS_COMBUSTIVEL = [
     ('Combustíveis', [
@@ -402,6 +399,92 @@ def _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=None):
         params.append(gid)
         params.append(gid)
     return clauses, params
+
+
+# ---------------------------------------------------------------------------
+# API — opções dos filtros, restritas à empresa/grupo selecionado
+#
+# Antes, os <select> de emitente/destinatário/transportadora e de UF eram
+# montados no render da página com um DISTINCT GLOBAL (todas as empresas):
+# centenas de opções, quase todas sem relação com a empresa que o usuário
+# escolhe depois. Aqui as opções saem do MESMO escopo que a listagem usa —
+# reaproveitando _empresa_where / _empresa_where_saidas / _empresa_where_cte,
+# com o fallback por CNPJ — para a lista nunca divergir do que a tabela mostra.
+#
+# Sem empresa nem grupo devolve listas vazias: a busca já exige escopo, então
+# não faz sentido oferecer opção nenhuma antes disso.
+# ---------------------------------------------------------------------------
+def _opcoes_cnpjs_ufs(tabela, alias, where_sql, params, cnpj_col, nome_col, uf_cols):
+    """Roda o DISTINCT de CNPJ+nome e o de cada coluna de UF dentro do escopo.
+
+    Devolve (cnpjs, {coluna_uf: [uf, ...]}). O MAX(nome) desempata quando o
+    mesmo CNPJ aparece com grafias diferentes entre notas."""
+    cnpjs = execute_query(
+        f"""SELECT {alias}.{cnpj_col} AS cnpj, MAX({alias}.{nome_col}) AS nome
+              FROM {tabela} {alias}
+             {where_sql} AND COALESCE({alias}.{cnpj_col}, '') <> ''
+             GROUP BY {alias}.{cnpj_col}
+             ORDER BY nome""",
+        tuple(params), fetch=True,
+    ) or []
+    ufs = {}
+    for col in uf_cols:
+        rows = execute_query(
+            f"""SELECT DISTINCT {alias}.{col} AS uf
+                  FROM {tabela} {alias}
+                 {where_sql} AND COALESCE({alias}.{col}, '') <> ''
+                 ORDER BY uf""",
+            tuple(params), fetch=True,
+        ) or []
+        ufs[col] = [r['uf'] for r in rows]
+    return cnpjs, ufs
+
+
+@escrita_fiscal.route('/conf-compras/api/opcoes-filtros')
+@login_required
+def api_opcoes_filtros():
+    """Emitentes e UFs de emitente que existem nas ENTRADAS daquela empresa."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+    if not f_cliente_id and not f_grupo_id:
+        return jsonify({'cnpjs': [], 'ufs': []})
+    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'entrada'"] + extra)
+    cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
+                                   'emit_cnpj', 'emit_nome', ['emit_uf'])
+    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['emit_uf']})
+
+
+@escrita_fiscal.route('/conf-saidas/api/opcoes-filtros')
+@login_required
+def api_opcoes_filtros_saidas():
+    """Destinatários e UFs de destinatário que existem nas SAÍDAS da empresa."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+    if not f_cliente_id and not f_grupo_id:
+        return jsonify({'cnpjs': [], 'ufs': []})
+    extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'saida'"] + extra)
+    cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
+                                   'dest_cnpj', 'dest_nome', ['dest_uf'])
+    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['dest_uf']})
+
+
+@escrita_fiscal.route('/conf-cte/api/opcoes-filtros')
+@login_required
+def api_opcoes_filtros_cte():
+    """Transportadoras e UFs de início/fim que existem nos CT-e da empresa."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+    if not f_cliente_id and not f_grupo_id:
+        return jsonify({'cnpjs': [], 'ufs_ini': [], 'ufs_fim': []})
+    extra, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
+    # Diferente das notas, aqui não há cláusula de tipo; sem escopo o WHERE
+    # ficaria vazio — mas o early-return acima garante que extra nunca é vazio.
+    where_sql = 'WHERE ' + ' AND '.join(extra)
+    cnpjs, ufs = _opcoes_cnpjs_ufs('cte_documentos', 't', where_sql, params,
+                                   'emit_cnpj', 'emit_nome', ['uf_ini', 'uf_fim'])
+    return jsonify({'cnpjs': cnpjs, 'ufs_ini': ufs['uf_ini'], 'ufs_fim': ufs['uf_fim']})
 
 
 # ---------------------------------------------------------------------------
@@ -741,11 +824,9 @@ def status_sefaz():
 def conf_compras():
     empresas = _get_empresas()
     grupos = _get_grupos()
-    emitentes = execute_query(
-        "SELECT DISTINCT emit_cnpj, emit_nome FROM nfe_importacoes "
-        "WHERE tipo='entrada' ORDER BY emit_nome",
-        fetch=True,
-    ) or []
+    # Emitentes e UFs não vêm mais daqui: os <select> nascem vazios e são
+    # preenchidos por /conf-compras/api/opcoes-filtros quando o usuário escolhe
+    # a empresa — só com o que existe naquele escopo.
 
     # KPIs começam zerados — serão atualizados via JS ao buscar
     stats = {'total_notas': 0, 'total_valor': 0, 'total_icms': 0,
@@ -756,13 +837,11 @@ def conf_compras():
     return render_template(
         'escrita_fiscal/conf_compras.html',
         stats=stats,
-        emitentes=emitentes,
         empresas=empresas,
         grupos=grupos,
         # Só admin enxerga o botão de excluir (o gate real está na rota).
         is_admin=current_user.is_admin(),
         dropbox_configured=dropbox_ok,
-        uf_list=_UF_LIST,
         dropbox_folder=Config.DROPBOX_XML_FOLDER,
     )
 
@@ -4557,24 +4636,19 @@ def _auto_vincular_batch(emit_cnpj: str, codigos: list, cliente_id, grupo_id,
 def conf_saidas():
     empresas = _get_empresas()
     grupos = _get_grupos()
-    destinatarios = execute_query(
-        "SELECT DISTINCT dest_cnpj, dest_nome FROM nfe_importacoes "
-        "WHERE tipo='saida' ORDER BY dest_nome",
-        fetch=True,
-    ) or []
+    # Destinatários e UFs vêm de /conf-saidas/api/opcoes-filtros ao escolher a
+    # empresa (antes era um DISTINCT global sobre todas as saídas).
     dropbox_ok = dropbox_sync.is_configured()
     stats = {'total_notas': 0, 'total_valor': 0, 'total_icms': 0,
              'total_pis': 0, 'total_cofins': 0}
     return render_template(
         'escrita_fiscal/conf_saidas.html',
         stats=stats,
-        destinatarios=destinatarios,
         empresas=empresas,
         grupos=grupos,
         # Só admin enxerga o botão de excluir (o gate real está na rota).
         is_admin=current_user.is_admin(),
         dropbox_configured=dropbox_ok,
-        uf_list=_UF_LIST,
         dropbox_folder=Config.DROPBOX_XML_FOLDER,
     )
 
@@ -5098,12 +5172,8 @@ def excluir_lote_saidas():
 def conf_cte():
     empresas = _get_empresas()
     grupos = _get_grupos()
-    # Transportadoras que já apareceram como emitentes de CT-e (para o filtro).
-    transportadoras = execute_query(
-        "SELECT DISTINCT emit_cnpj, emit_nome FROM cte_documentos "
-        "WHERE emit_cnpj <> '' ORDER BY emit_nome",
-        fetch=True,
-    ) or []
+    # Transportadoras e UFs vêm de /conf-cte/api/opcoes-filtros ao escolher a
+    # empresa (antes era um DISTINCT global sobre todos os CT-e).
 
     # KPIs começam zerados — o JS preenche ao buscar (igual à tela de Entradas).
     stats = {'total_ctes': 0, 'total_frete': 0, 'total_icms': 0,
@@ -5112,10 +5182,8 @@ def conf_cte():
     return render_template(
         'escrita_fiscal/conf_cte.html',
         stats=stats,
-        transportadoras=transportadoras,
         empresas=empresas,
         grupos=grupos,
-        uf_list=_UF_LIST,
     )
 
 

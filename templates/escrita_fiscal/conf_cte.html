@@ -88,6 +88,10 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .ct-nfe-count { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; background:#e0f2fe; color:#075985; }
 .ct-nfe-count.zero { background:#f1f5f9; color:#94a3b8; }
 
+/* ---- Botões de período rápido (Atual / Mês anterior / Ano) ---- */
+.btn-periodo { background:#f1f5f9; border:1.5px solid #e2e8f0; color:#475569; padding:6px 10px; border-radius:7px; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.btn-periodo:hover { background:#e2e8f0; color:#1e293b; }
+
 /* ---- Pagination / Empty / Loading ---- */
 .cc-pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; padding:4px 0; }
 .cc-pagination button { padding:5px 14px; border:1.5px solid #e2e8f0; border-radius:7px; background:#fff; cursor:pointer; font-weight:600; color:#374151; }
@@ -215,13 +219,24 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
         <div class="cc-filter-grid">
             <div><label>Data Início</label><input type="date" id="f_data_ini"></div>
             <div><label>Data Fim</label><input type="date" id="f_data_fim"></div>
+            {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
+            <div>
+                <label>Período rápido</label>
+                <div style="display:flex;gap:6px;">
+                    <button type="button" class="btn-periodo" onclick="setPeriodo('atual')"
+                            title="Do dia 1º do mês corrente até hoje">Atual</button>
+                    <button type="button" class="btn-periodo" onclick="setPeriodo('anterior')"
+                            title="Mês passado inteiro (dia 1 ao último dia)">Mês anterior</button>
+                    <button type="button" class="btn-periodo" onclick="setPeriodo('ano')"
+                            title="De 1º de janeiro até hoje">Ano</button>
+                </div>
+            </div>
+            {# Transportadora e UFs nascem vazias: carregarOpcoesFiltros() preenche com
+               o que existe na empresa escolhida (ver /conf-cte/api/opcoes-filtros). #}
             <div>
                 <label>Transportadora (CNPJ)</label>
                 <select id="f_emit_cnpj" style="text-transform:uppercase;">
                     <option value="">— Todas —</option>
-                    {% for e in transportadoras %}
-                    <option value="{{ e.emit_cnpj }}">{{ e.emit_nome }} ({{ e.emit_cnpj }})</option>
-                    {% endfor %}
                 </select>
             </div>
             <div><label>CNPJ do Tomador</label><input type="text" id="f_tomador_cnpj" placeholder="Parcial ou completo"></div>
@@ -240,14 +255,12 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
                 <label>UF Início</label>
                 <select id="f_uf_ini">
                     <option value="">— Todas —</option>
-                    {% for uf in uf_list %}<option value="{{ uf }}">{{ uf }}</option>{% endfor %}
                 </select>
             </div>
             <div>
                 <label>UF Fim</label>
                 <select id="f_uf_fim">
                     <option value="">— Todas —</option>
-                    {% for uf in uf_list %}<option value="{{ uf }}">{{ uf }}</option>{% endfor %}
                 </select>
             </div>
             <div><label>Frete Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
@@ -484,6 +497,7 @@ function onEmpresaChange() {
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
+    aoMudarEscopo();
 }
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
@@ -497,12 +511,84 @@ function onGrupoChange() {
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
+    aoMudarEscopo();
 }
 function updateScopeBadge(type, label) {
     const b = document.getElementById('scopeBadge');
     b.className = 'cc-scope-badge ' + type;
     const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
     b.innerHTML = `<i class="${icons[type]}"></i> ${label}`;
+}
+
+// ---- Opções dos filtros por empresa ----
+// Transportadora e UFs saem do MESMO escopo da listagem (o endpoint reusa
+// _empresa_where_cte, com o fallback por CNPJ do tomador), então a lista nunca
+// oferece uma opção que a tabela não tem. Sem empresa/grupo, só "— Todas —".
+function _esc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _preencheSelect(id, opcoes, rotulo) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const anterior = sel.value;
+    sel.innerHTML = `<option value="">${rotulo}</option>` +
+        opcoes.map(o => `<option value="${_esc(o.valor)}">${_esc(o.texto)}</option>`).join('');
+    // Preserva a escolha do usuário se ela continuar existindo no novo escopo.
+    if (anterior && opcoes.some(o => o.valor === anterior)) sel.value = anterior;
+}
+function carregarOpcoesFiltros() {
+    const ufs = id => _preencheSelect(id, [], '— Todas —');
+    if (!currentClienteId && !currentGrupoId) {
+        _preencheSelect('f_emit_cnpj', [], '— Todas —');
+        ufs('f_uf_ini'); ufs('f_uf_fim');
+        return;
+    }
+    const p = new URLSearchParams({cliente_id: currentClienteId || '', grupo_id: currentGrupoId || ''});
+    fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_cte") }}?' + p)
+        .then(r => r.json())
+        .then(d => {
+            _preencheSelect('f_emit_cnpj',
+                (d.cnpjs || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})),
+                '— Todas —');
+            _preencheSelect('f_uf_ini', (d.ufs_ini || []).map(u => ({valor: u, texto: u})), '— Todas —');
+            _preencheSelect('f_uf_fim', (d.ufs_fim || []).map(u => ({valor: u, texto: u})), '— Todas —');
+        })
+        .catch(() => {});  // silencioso: os selects continuam com "— Todas —"
+}
+
+// ---- Datas rápidas ----
+// _iso usa o horário LOCAL de propósito: toISOString() converteria para UTC e,
+// à noite, jogaria a data um dia para trás.
+function _iso(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function setPeriodo(tipo, buscar) {
+    const hoje = new Date();
+    let ini, fim;
+    if (tipo === 'atual') {             // 1º do mês corrente → hoje
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        fim = hoje;
+    } else if (tipo === 'anterior') {   // 1º → último dia do mês passado (dia 0 = último do anterior)
+        ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    } else if (tipo === 'ano') {        // 1º de janeiro → hoje
+        ini = new Date(hoje.getFullYear(), 0, 1);
+        fim = hoje;
+    } else {                            // '45d': padrão ao escolher a empresa
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 45);
+        fim = hoje;
+    }
+    document.getElementById('f_data_ini').value = _iso(ini);
+    document.getElementById('f_data_fim').value = _iso(fim);
+    if (buscar !== false) applyFilters();
+}
+
+// Trocou a empresa/grupo: repovoa os selects, joga a data para os últimos 45
+// dias e já busca — a tela abre com resultado em vez de tabela vazia.
+function aoMudarEscopo() {
+    carregarOpcoesFiltros();
+    if (currentClienteId || currentGrupoId) setPeriodo('45d');
 }
 
 // ---- Tabs / filtros ----
@@ -529,7 +615,9 @@ function clearFilters() {
         document.getElementById(id).value = '';
     });
     currentPage = 1;
-    applyFilters();
+    // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
+    // um Buscar puxaria a base inteira da empresa.
+    setPeriodo('45d');  // já dispara applyFilters()
 }
 function getFilters() {
     return {
@@ -552,6 +640,16 @@ function getFilters() {
     };
 }
 function applyFilters() {
+    // Mesmo guard das telas de Entradas/Saídas: sem empresa ou grupo a busca
+    // varreria os CT-e de todas as empresas. Destaca o seletor e avisa.
+    if (!currentClienteId && !currentGrupoId) {
+        const inp = document.getElementById('sel_empresa_input');
+        inp.style.borderColor = '#ef4444';
+        inp.style.boxShadow = '0 0 0 3px rgba(239,68,68,.2)';
+        setTimeout(() => { inp.style.borderColor = ''; inp.style.boxShadow = ''; }, 2500);
+        alert('Selecione uma Empresa ou um Grupo antes de buscar.');
+        return;
+    }
     currentPage = 1;
     chavesCurrentPage = 1;
     hasSearched = true;
