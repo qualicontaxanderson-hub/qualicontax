@@ -599,11 +599,21 @@ class DropboxService:
         return self._build_path('Certificados', 'NOVO')
 
     def pasta_cert_importados(self, empresa_nome: str, empresa_numero: str = None) -> str:
-        """Pasta destino do certificado importado, por empresa:
-        ``/Certificados/IMPORTADOS/{numero} - {razão}``.
+        """Pasta destino do certificado vinculado, DENTRO da pasta da empresa:
+        ``{ROOT}/EMPRESAS/{numero} - {razão}/CERTIFICADO``.
+
+        Era ``Certificados/IMPORTADOS/{numero} - {razão}`` até a reorganização do
+        Dropbox (raiz só com _ENTRADA e EMPRESAS). Os 24 certificados vigentes já
+        foram movidos para cá na mão; sem esta mudança, um vínculo novo cairia na
+        pasta antiga, fora da convenção. Não repõe caminho de registro existente —
+        ``dfe_certificados.dropbox_path`` guarda o caminho de cada um e já aponta
+        para EMPRESAS.
+
+        A pasta de DEPÓSITO (``pasta_cert_novo``) segue em ``Certificados/NOVO``:
+        é caixa de entrada, não arquivo da empresa.
         """
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
-        return self._build_path('Certificados', 'IMPORTADOS', pasta_empresa)
+        return self._build_path('EMPRESAS', pasta_empresa, 'CERTIFICADO')
 
     # ------------------------------------------------------------------
     # Helpers de caminho para Documentos Fiscais (DFe / XML)
