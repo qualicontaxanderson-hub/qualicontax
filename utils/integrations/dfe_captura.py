@@ -150,11 +150,44 @@ SQL_ITEM_INS = (
     "VALUES (%s,%s,%s,%s,%s,'',%s,%s,%s,%s,NULL)"
 )
 
-# Cancelamento (procEventoNFe): reflete só na flag da nota, e SÓ em linha SEFAZ
-# (linha manual é intocada). Demais eventos: XML arquivado no Dropbox, sem linha.
+# Cancelamento (procEventoNFe): reflete na flag da nota, marcando TODAS as linhas
+# da chave — os dois lados (entrada do comprador + saída do vendedor, do dual-save)
+# e qualquer origem (SEFAZ, DROPBOX, UPLOAD, Q-ROBO). A chave identifica a nota de
+# forma única e o 110111 vem assinado pela SEFAZ: se ela cancelou, cancelou para
+# todo mundo — não há linha "nossa" e linha "manual" nesse quesito. É o mesmo
+# critério que o import do Dropbox já usa (_marcar_cancelada, em routes).
+#
+# O WHERE antigo (tipo='entrada' AND origem='SEFAZ') deixava passar:
+#   * saídas (nenhuma das 35 mil linhas de saída jamais foi marcada);
+#   * notas que entraram pelo Dropbox/Q-Robô, mesmo sendo a MESMA nota.
+#
+# Registro do que o WHERE novo NÃO resolve (ver o diagnóstico do dia):
+#   * evento que chega ANTES da nota — o UPDATE não acha linha e vira no-op; e o
+#     upgrade resumo→completa (DELETE+INSERT) regrava cancelada=0. Foi o que
+#     aconteceu com 3 dos 4 cancelamentos já recebidos. A correção disso é
+#     reconciliar por dfe_eventos (agora populado por gravar_evento), não aqui;
+#   * saída só é marcada quando o evento de fato entra na nossa fila de DFe.
 SQL_CANCELA_NOTA = (
-    "UPDATE nfe_importacoes SET cancelada=1 "
-    "WHERE chave_acesso = %s AND tipo='entrada' AND origem='SEFAZ'"
+    "UPDATE nfe_importacoes SET cancelada=1 WHERE chave_acesso = %s"
+)
+
+# Histórico auditável de TODO evento recebido (não só cancelamento): responde
+# "quando/qual evento cancelou esta nota" e deixa rastro dos demais (CC-e,
+# manifestações de terceiros nas notas do cliente, EPEC...). UNIQUE(chave_evento)
+# → o mesmo evento redistribuído (outro NSU, outro stream) atualiza em vez de
+# duplicar. cliente_id fica FORA do UPDATE de propósito: um evento pode chegar
+# pelo stream de dois clientes (dual-save) e o primeiro que o viu é a referência
+# estável — trocar a cada redistribuição só faria a coluna oscilar.
+SQL_EVENTO_UPSERT = (
+    "INSERT INTO dfe_eventos "
+    "(cliente_id, chave_evento, ch_nfe, tp_evento, n_seq, descricao, dh_evento, "
+    " nsu, schema_dfe, org_cnpj, xml_caminho) "
+    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+    "ON DUPLICATE KEY UPDATE "
+    "  tp_evento=VALUES(tp_evento), n_seq=VALUES(n_seq), "
+    "  descricao=VALUES(descricao), dh_evento=VALUES(dh_evento), "
+    "  nsu=VALUES(nsu), schema_dfe=VALUES(schema_dfe), "
+    "  org_cnpj=VALUES(org_cnpj), xml_caminho=VALUES(xml_caminho)"
 )
 
 # NSU: max_nsu=0 significa "a SEFAZ não informou" (o 656 não traz maxNSU), NUNCA
@@ -556,13 +589,29 @@ def _primeiro_nfeproc(ret):
 
 
 def gravar_evento(conn, cur, empresa, ev, xml_bytes):
-    """procEventoNFe → arquiva o XML no Dropbox; se for CANCELAMENTO, marca a nota
-    (cancelada=1), só em linha SEFAZ. Demais eventos ficam só no Dropbox."""
+    """procEventoNFe → arquiva o XML no Dropbox, registra o evento em dfe_eventos
+    (histórico auditável de TODOS os eventos) e, se for CANCELAMENTO, marca a nota
+    (cancelada=1) em todas as linhas da chave.
+
+    O INSERT do histórico e o UPDATE da flag vão no MESMO commit: ou o evento fica
+    registrado com a nota marcada, ou nada entra."""
     ano = ev["ano"] or _hoje_brt().year
     mes = ev["mes"] or _hoje_brt().month
     # Arquiva pelo Id do evento (não pela chNFe, para não colidir com a nota).
     caminho = _caminho_fiscal(empresa, ano, mes, ev["chave_evento"])
     _subir_xml(caminho, xml_bytes)
+
+    # ch_nfe é NOT NULL na tabela; evento sem chNFe (não deveria existir em NF-e)
+    # fica só no Dropbox, com aviso — melhor do que derrubar a fila de NSU.
+    if ev["ch_nfe"]:
+        cur.execute(SQL_EVENTO_UPSERT, (
+            empresa["cliente_id"], ev["chave_evento"], ev["ch_nfe"], ev["tp_evento"],
+            ev["n_seq"], ev["descricao"], ev["dh_txt"], ev.get("nsu"),
+            (ev.get("schema_dfe") or None), ev["org_cnpj"], caminho[:300],
+        ))
+    else:
+        logger.warning("[dfe] evento sem chNFe — só arquivado no Dropbox: %s",
+                       ev["chave_evento"])
 
     if ev["tp_evento"] == TP_CANCELAMENTO and ev["ch_nfe"]:
         cur.execute(SQL_CANCELA_NOTA, (ev["ch_nfe"],))
@@ -653,6 +702,10 @@ def processar_um_doc(conn, cur, empresa, d, ctx):
 
     if raiz == "procEventoNFe":
         ev = extrair_evento(root)
+        # NSU/schema vivem no envelope docZip (não no XML do evento) — só existem
+        # aqui, onde ``d`` está à mão. Vão para o histórico em dfe_eventos.
+        ev["nsu"] = _to_int(d.get("NSU"))
+        ev["schema_dfe"] = (d.get("schema") or "")[:40] or None
         gravar_evento(conn, cur, empresa, ev, xml_bytes)
         return "evento", 0
 
@@ -1104,6 +1157,127 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
                  'cooldown_656_chave': ctx['cooldown_656'],
                  'limite_atingido': limite, 'parada': parada})
     return base
+
+
+def capturar_por_chave(cliente_id, chave, origem='manual'):
+    """Reconsulta UMA nota pela CHAVE (consChNFe) para promover resumo → completa.
+
+    É o mesmo caminho que ``_processar_resumo`` já usa dentro da captura, exposto
+    para o botão "Capturar documento" da tela: mesma resolução de certificado,
+    mesmo mTLS, UMA requisição (nunca em loop) e a MESMA gravação
+    (``_importar_nfe_completa``). **Não manifesta e não assina nada** — o consChNFe
+    é leitura pura, o mesmo verbo do distDFeInt.
+
+    Devolve dict com:
+      ok=False + bloqueado/consumo_indevido → cota; o chamador pede para tentar
+        mais tarde (a cota é consumida do lado da SEFAZ mesmo sem sucesso);
+      ok=True  + completa=True  → a completa entrou (ou o resumo fantasma foi
+        removido porque a nota não é da empresa — nos dois casos não há mais resumo);
+      ok=True  + completa=False → a SEFAZ só tem o resumo; nada mudou.
+    """
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        return {'ok': False, 'erro': 'Cliente não encontrado.'}
+    numero = (cliente.get('numero_cliente') or '').strip() or None
+    razao = cliente.get('nome_razao_social') or 'SEM_NOME'
+    rotulo = f"{numero + ' - ' if numero else ''}{razao}"
+
+    vinc, cert_dono_id, cert_rotulo = _resolver_certificado(cliente_id)
+    if not vinc:
+        return {'ok': False,
+                'erro': f'O cliente {rotulo} não tem certificado digital vinculado, '
+                        f'nem contador vinculado com certificado.'}
+
+    # Interessado = CNPJ da EMPRESA (não o do certificado) — mesma regra do
+    # capturar_cliente: com cert de contador, cair no CNPJ do cert consultaria os
+    # documentos do contador.
+    cnpj = _digitos(cliente.get('cpf_cnpj'))
+    if not cnpj:
+        if cert_rotulo:
+            return {'ok': False,
+                    'erro': f'O cliente {rotulo} está sem CPF/CNPJ cadastrado. Com '
+                            f'certificado de contador, o documento da empresa é '
+                            f'obrigatório. Cadastre o CPF/CNPJ da empresa.'}
+        cnpj = _digitos(vinc.get('cnpj'))
+
+    uf = _uf_principal(cliente_id)
+    try:
+        cuf = cuf_autor(uf)
+    except UfInvalidaError:
+        return {'ok': False, 'sem_uf': True,
+                'erro': f'O cliente {rotulo} está sem UF no endereço principal.'}
+
+    senha_cif = DfeCertificado.get_senha_cifrada(cert_dono_id)
+    if not senha_cif:
+        return {'ok': False, 'erro': f'Certificado do cliente {rotulo} sem senha armazenada.'}
+    try:
+        senha = decifrar_senha(senha_cif)
+    except CertificadoError as exc:
+        return {'ok': False, 'erro': f'Falha ao decifrar a senha do certificado: {exc}'}
+
+    pfx_bytes = dropbox_sync._service.download_file(vinc['dropbox_path'])
+    if not pfx_bytes:
+        return {'ok': False, 'erro': 'Falha ao baixar o .pfx do Dropbox.'}
+    try:
+        chave_priv, cert, cadeia = carregar_par_chave_cert(pfx_bytes, senha)
+    except CertificadoError as exc:
+        return {'ok': False, 'erro': f'Falha ao abrir o certificado: {exc}'}
+
+    # A busca por chave consome a MESMA cota do distDFeInt: se a SEFAZ já mandou
+    # aguardar, nem tenta (senão renova o castigo).
+    bloqueio = _bloqueado_por_cota(cliente_id)
+    if bloqueio:
+        faltam = bloqueio.get('faltam_min')
+        pp = bloqueio.get('proximo_permitido')
+        libera = pp.strftime('%H:%M') if hasattr(pp, 'strftime') else None
+        quando = f'às {libera}' if libera else f'em ~{faltam} min'
+        return {'ok': False, 'bloqueado': True, 'faltam_min': faltam,
+                'erro': f'A SEFAZ pediu para aguardar. Nova consulta liberada {quando}.'}
+
+    sess = montar_sessao_mtls(cert, chave_priv, cadeia)
+    try:
+        ret = consultar_chave(sess, cnpj, cuf, chave)
+    except RuntimeError as exc:
+        dfe_log.registrar('erro', cliente_id, cnpj, detalhe=str(exc)[:300], origem=origem)
+        return {'ok': False, 'erro': f'Falha ao consultar a SEFAZ: {exc}'}
+
+    cStat = _text(ret, 'cStat')
+    xMotivo = _text(ret, 'xMotivo')
+    dfe_log.registrar('cons_nsu', cliente_id, cnpj, c_stat=cStat, x_motivo=xMotivo,
+                      detalhe=f'capturar por chave {chave}'[:300], origem=origem)
+
+    if cStat == '656':
+        # A cota foi consumida de verdade: sela o cooldown com o cursor ATUAL
+        # (max_nsu=0 preserva o valor existente — ver _MAX_NSU).
+        execute_query(SQL_NSU_656,
+                      (cliente_id, cnpj, _ler_ult_nsu(cliente_id), 0,
+                       f'{cStat} {xMotivo}'[:255]), fetch=False)
+        return {'ok': False, 'consumo_indevido': True,
+                'erro': 'A SEFAZ pediu para aguardar (consumo indevido). '
+                        'Tente novamente mais tarde.'}
+
+    xmlc = _primeiro_nfeproc(ret)
+    if xmlc is None:
+        return {'ok': True, 'completa': False, 'cStat': cStat, 'xMotivo': xMotivo,
+                'mensagem': 'A SEFAZ ainda só tem o resumo desta nota.'}
+
+    empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
+               'cnpj': cnpj, 'uf': uf}
+    try:
+        n_itens = _importar_nfe_completa(empresa, xmlc)
+    except Exception as exc:
+        logger.exception('[dfe] falha ao importar a completa da chave %s', chave)
+        return {'ok': False, 'erro': f'A nota veio da SEFAZ, mas falhou ao gravar: {exc}'}
+
+    # Confirma no banco em vez de assumir: _importar_nfe_completa pode ter concluído
+    # que a nota não é da empresa (autXML) e REMOVIDO o resumo — nos dois casos não
+    # sobra resumo, que é o que a tela precisa saber.
+    ainda = execute_query(
+        "SELECT incompleta FROM nfe_importacoes WHERE chave_acesso = %s AND origem = 'SEFAZ'",
+        (chave,), fetch=True, fetch_one=True)
+    completa = (ainda is None) or (int(ainda.get('incompleta') or 0) == 0)
+    return {'ok': True, 'completa': completa, 'itens': n_itens,
+            'cStat': cStat, 'xMotivo': xMotivo}
 
 
 def seed_ult_nsu(cliente_id, nsu, usuario_label='?'):

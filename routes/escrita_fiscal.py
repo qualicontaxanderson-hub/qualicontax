@@ -1001,7 +1001,8 @@ def api_notas():
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
                    n.dest_cnpj, n.dest_nome,
                    n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
-                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.nome_arquivo,
+                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
+                   n.nome_arquivo,
                    n.importado_em, n.atualizado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
@@ -1147,6 +1148,57 @@ def nota_pdf(nfe_id):
                      download_name=f'{chave or nfe_id}.pdf', mimetype='application/pdf')
 
 
+@escrita_fiscal.route('/nota/<int:nfe_id>/capturar', methods=['POST'])
+@login_required
+def nota_capturar(nfe_id):
+    """Reconsulta a nota pela CHAVE para tentar trazer o XML completo.
+
+    É o botão "Capturar documento" das linhas em RESUMO. Chama o consChNFe (uma
+    requisição, leitura pura — NÃO manifesta, NÃO assina) pelo mesmo motor da
+    captura; a gravação é a mesma do cron. Guard de acesso = a permissão da tela
+    que lista a nota, igual ao export.
+
+    A resposta é sempre 200 quando a consulta aconteceu: `completa` diz se a nota
+    subiu de resumo para completa, e `aguardar` sinaliza cota da SEFAZ. Os códigos
+    de erro ficam para os guards (404/403/400)."""
+    nota = execute_query(
+        "SELECT chave_acesso, cliente_id, tipo, incompleta "
+        "FROM nfe_importacoes WHERE id = %s",
+        (nfe_id,), fetch=True, fetch_one=True,
+    )
+    if not nota:
+        return jsonify({'ok': False, 'erro': 'Nota não encontrada.'}), 404
+
+    codigo = ('escrita_fiscal.conf_saidas' if nota.get('tipo') == 'saida'
+              else 'escrita_fiscal.conf_compras')
+    if not current_user.has_permission(codigo):
+        return jsonify({'ok': False, 'erro': 'Você não tem permissão para esta nota.'}), 403
+    if not nota.get('incompleta'):
+        return jsonify({'ok': False, 'erro': 'Esta nota já está completa.'}), 400
+    if not nota.get('cliente_id'):
+        return jsonify({'ok': False,
+                        'erro': 'Nota sem empresa vinculada — não dá para saber qual '
+                                'certificado usar na consulta.'}), 400
+    chave = (nota.get('chave_acesso') or '').strip()
+    if len(chave) != 44:
+        return jsonify({'ok': False, 'erro': 'Nota sem chave de acesso válida.'}), 400
+
+    # Import local: o motor de captura puxa certificado/Dropbox/SEFAZ e só é
+    # necessário neste endpoint.
+    from utils.integrations import dfe_captura
+
+    r = dfe_captura.capturar_por_chave(nota['cliente_id'], chave, origem='manual')
+
+    if r.get('bloqueado') or r.get('consumo_indevido'):
+        return jsonify({'ok': False, 'aguardar': True,
+                        'erro': r.get('erro') or 'A SEFAZ pediu para aguardar.'})
+    if not r.get('ok'):
+        return jsonify({'ok': False, 'erro': r.get('erro') or 'Não foi possível consultar.'})
+    return jsonify({'ok': True, 'completa': bool(r.get('completa')), 'chave': chave,
+                    'itens': r.get('itens') or 0,
+                    'mensagem': r.get('mensagem') or ''})
+
+
 # ---------------------------------------------------------------------------
 # Export de CT-e — XML e PDF (DACTE). Espelha o export de NF-e acima, com UMA
 # diferença de fundo: em ``cte_documentos`` a coluna ``xml_raw`` está VAZIA em
@@ -1271,6 +1323,8 @@ def excluir_cte(cte_id):
 # entrar nos dois lugares.
 # ---------------------------------------------------------------------------
 _LOTE_MAX_XML = 1000
+# Proibidos em nome de arquivo no Windows (e recusados pelo Dropbox).
+_INVALIDOS_NOME = {ord(c): None for c in '/\\:*?"<>|'}
 # CT-e é mais baixo de propósito: o XML não está no banco, cada um é um download
 # do Dropbox. Mesmo em paralelo, 1000 arquivos estouraria o tempo da requisição.
 _LOTE_MAX_XML_CTE = 200
@@ -1289,6 +1343,52 @@ def _ids_do_lote(data):
             vistos.add(s)
             ids.append(int(s))
     return ids
+
+
+def _sanitiza_nome(txt):
+    """Tira do nome o que Windows/Dropbox não aceitam em arquivo.
+
+    Além dos caracteres proibidos, colapsa espaços e apara ponto/espaço do fim —
+    o Windows recusa silenciosamente nomes terminados assim."""
+    limpo = (txt or '').translate(_INVALIDOS_NOME)
+    return ' '.join(limpo.split()).strip(' .')
+
+
+def _periodo_zip(data):
+    """Período do filtro para o nome do .zip: 'MM.AAAA' quando início e fim caem
+    no mesmo mês, 'MM.AAAA_a_MM.AAAA' quando não, '' quando não há data."""
+    def mes(txt):
+        try:
+            return datetime.strptime(str(txt)[:10], '%Y-%m-%d').strftime('%m.%Y')
+        except (ValueError, TypeError):
+            return None
+    ini, fim = mes(data.get('data_ini')), mes(data.get('data_fim'))
+    if ini and fim:
+        return ini if ini == fim else f'{ini}_a_{fim}'
+    return ini or fim or ''
+
+
+def _nome_zip_lote(data):
+    """'<numero> - <razão> - <período>.zip' da empresa selecionada.
+
+    Em visão por GRUPO usa o nome do grupo (não há número/razão de uma empresa
+    só). Sem escopo ou sem data, a parte que faltar simplesmente não entra."""
+    cid = str(data.get('cliente_id', '')).strip()
+    gid = str(data.get('grupo_id', '')).strip()
+    quem = ''
+    if cid.isdigit():
+        r = execute_query(
+            "SELECT numero_cliente, nome_razao_social FROM clientes WHERE id = %s",
+            (int(cid),), fetch=True, fetch_one=True) or {}
+        numero = str(r.get('numero_cliente') or '').strip()
+        razao = str(r.get('nome_razao_social') or '').strip()
+        quem = f'{numero} - {razao}' if numero and razao else (razao or numero)
+    elif gid.isdigit():
+        r = execute_query("SELECT nome FROM grupos_clientes WHERE id = %s",
+                          (int(gid),), fetch=True, fetch_one=True) or {}
+        quem = str(r.get('nome') or '').strip()
+    partes = [p for p in (_sanitiza_nome(quem), _periodo_zip(data)) if p]
+    return (' - '.join(partes) or 'documentos') + '.zip'
 
 
 def _zip_download(arquivos, nome_zip):
@@ -1504,7 +1604,7 @@ def _gerar_pdf_documento(xml, modelo):
 
 
 # ------------------------------- NF-e (entradas / saídas) -------------------
-def _lote_xml_nfe(escopo, permissao, nome_zip):
+def _lote_xml_nfe(escopo, permissao):
     if not current_user.has_permission(permissao):
         return jsonify({'error': 'Você não tem permissão para exportar estas notas.'}), 403
     data = request.get_json(silent=True) or {}
@@ -1528,10 +1628,10 @@ def _lote_xml_nfe(escopo, permissao, nome_zip):
         tuple(params), fetch=True) or []
     arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
                  (r['xml_raw'] or '').encode('utf-8')) for r in rows]
-    return _zip_download(arquivos, nome_zip)
+    return _zip_download(arquivos, _nome_zip_lote(data))
 
 
-def _lote_pdf_nfe(escopo, permissao, nome_zip):
+def _lote_pdf_nfe(escopo, permissao):
     if not current_user.has_permission(permissao):
         return jsonify({'error': 'Você não tem permissão para exportar estas notas.'}), 403
     data = request.get_json(silent=True) or {}
@@ -1566,31 +1666,31 @@ def _lote_pdf_nfe(escopo, permissao, nome_zip):
     if not arquivos:
         return jsonify({'error': 'Nenhuma das notas marcadas gera PDF — NFC-e (modelo 65) '
                                  'só tem XML.'}), 404
-    return _zip_download(arquivos, nome_zip)
+    return _zip_download(arquivos, _nome_zip_lote(data))
 
 
 @escrita_fiscal.route('/conf-compras/export/xml-lote', methods=['POST'])
 @login_required
 def lote_xml_compras():
-    return _lote_xml_nfe('entrada', 'escrita_fiscal.conf_compras', 'xmls-entradas.zip')
+    return _lote_xml_nfe('entrada', 'escrita_fiscal.conf_compras')
 
 
 @escrita_fiscal.route('/conf-compras/export/pdf-lote', methods=['POST'])
 @login_required
 def lote_pdf_compras():
-    return _lote_pdf_nfe('entrada', 'escrita_fiscal.conf_compras', 'pdfs-entradas.zip')
+    return _lote_pdf_nfe('entrada', 'escrita_fiscal.conf_compras')
 
 
 @escrita_fiscal.route('/conf-saidas/export/xml-lote', methods=['POST'])
 @login_required
 def lote_xml_saidas():
-    return _lote_xml_nfe('saida', 'escrita_fiscal.conf_saidas', 'xmls-saidas.zip')
+    return _lote_xml_nfe('saida', 'escrita_fiscal.conf_saidas')
 
 
 @escrita_fiscal.route('/conf-saidas/export/pdf-lote', methods=['POST'])
 @login_required
 def lote_pdf_saidas():
-    return _lote_pdf_nfe('saida', 'escrita_fiscal.conf_saidas', 'pdfs-saidas.zip')
+    return _lote_pdf_nfe('saida', 'escrita_fiscal.conf_saidas')
 
 
 # ------------------------------------ CT-e ----------------------------------
@@ -1649,7 +1749,7 @@ def lote_xml_cte():
     if not arquivos:
         return jsonify({'error': 'Não foi possível ler os XMLs no Dropbox agora. '
                                  'Tente de novo em instantes.'}), 502
-    return _zip_download(arquivos, 'xmls-cte.zip')
+    return _zip_download(arquivos, _nome_zip_lote(data))
 
 
 @escrita_fiscal.route('/conf-cte/export/pdf-lote', methods=['POST'])
@@ -1686,7 +1786,7 @@ def lote_pdf_cte():
     if not arquivos:
         return jsonify({'error': 'Nenhum dos CT-e marcados gera PDF (só o modelo 57 tem '
                                  'DACTE).'}), 404
-    return _zip_download(arquivos, 'pdfs-cte.zip')
+    return _zip_download(arquivos, _nome_zip_lote(data))
 
 
 # ---------------------------------------------------------------------------
@@ -5527,7 +5627,8 @@ def api_notas_saidas():
                    n.emit_cnpj, n.emit_nome, n.emit_uf,
                    n.dest_cnpj, n.dest_nome, n.dest_uf,
                    n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
-                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.nome_arquivo,
+                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
+                   n.nome_arquivo,
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,

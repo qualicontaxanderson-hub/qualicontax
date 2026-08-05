@@ -207,6 +207,26 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 .prod-vinculo button:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
 .vinculado-badge { background:#dcfce7; color:#166534; padding:3px 8px; border-radius:99px; font-size:10px; font-weight:700; border:1px solid #86efac; }
 
+/* ---- Nota CANCELADA (evento 110111 da SEFAZ) ----
+   Selo vermelho + linha inteira tingida: cancelada NÃO se escritura, então tem
+   que saltar aos olhos antes de o usuário marcar a linha. As regras de :hover
+   vêm DEPOIS da do cc-row-clickable de propósito (mesma especificidade, a
+   última vence) — senão o verde do hover apagaria o aviso. */
+.badge-cancelada { background:#dc2626; color:#fff; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; letter-spacing:.3px; margin-left:6px; white-space:nowrap; }
+table.cc-table tr.cc-row-cancelada td { background:#fef2f2; }
+table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
+
+/* ---- Capturar documento (linha em RESUMO) + toast ---- */
+.btn-capturar { background:#0ea5e9; color:#fff; border:none; padding:2px 9px; border-radius:99px; font-size:10px; font-weight:700; cursor:pointer; margin-left:5px; white-space:nowrap; }
+.btn-capturar:hover:not(:disabled) { background:#0284c7; }
+.btn-capturar:disabled { opacity:.65; cursor:progress; }
+.cc-toast-wrap { position:fixed; right:18px; bottom:18px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+.cc-toast { padding:11px 16px; border-radius:10px; font-size:13px; font-weight:600; color:#fff; box-shadow:0 6px 20px rgba(0,0,0,.22); max-width:380px; animation:ccToastIn .18s ease; }
+.cc-toast.ok    { background:#16a34a; }
+.cc-toast.aviso { background:#f59e0b; color:#3b2a05; }
+.cc-toast.erro  { background:#dc2626; }
+@keyframes ccToastIn { from { transform:translateY(8px); opacity:0; } to { transform:none; opacity:1; } }
+
 /* ---- Export em lote (seleção + botões do topo) ---- */
 .chk-linha, #chkTodos { width:15px; height:15px; cursor:pointer; accent-color:#22c55e; }
 .btn-lote { display:inline-flex; align-items:center; gap:6px; border:none; color:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
@@ -946,6 +966,71 @@ function switchTab(tab) {
     }
 }
 
+// ---- Toast (o projeto não tem um; este é local da tela) ----
+function mostrarToast(msg, tipo, ms) {
+    let wrap = document.getElementById('ccToastWrap');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'ccToastWrap';
+        wrap.className = 'cc-toast-wrap';
+        document.body.appendChild(wrap);
+    }
+    const t = document.createElement('div');
+    t.className = 'cc-toast ' + (tipo || 'ok');
+    t.textContent = msg;
+    wrap.appendChild(t);
+    setTimeout(() => t.remove(), ms || 4500);
+}
+
+// ---- Capturar documento (linhas em RESUMO) ----
+// Reconsulta a nota pela CHAVE na SEFAZ (consChNFe: leitura pura, NÃO manifesta
+// e não assina nada). Veio completa → recarrega a lista e a linha passa a ter
+// olhinho/XML/PDF. Veio só resumo → copia a chave e abre o portal da NF-e, onde
+// o captcha é resolvido À MÃO (não automatizamos isso).
+const PORTAL_NFE = 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx';
+
+function capturarNota(id, btn) {
+    const rotulo = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Capturando...';
+    fetch(`/escrita-fiscal/nota/${id}/capturar`,
+          {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+        .then(r => r.json())
+        .then(d => {
+            if (d.aguardar) { mostrarToast(d.erro, 'aviso', 6000); return; }
+            if (!d.ok) { mostrarToast(d.erro || 'Não foi possível capturar.', 'erro', 6000); return; }
+            if (d.completa) {
+                mostrarToast('Documento completo capturado.', 'ok');
+                loadNotas();   // a linha volta sem RESUMO e com os botões de export
+                return;
+            }
+            abrirNoPortal(d.chave);
+        })
+        .catch(() => mostrarToast('Erro de conexão ao capturar.', 'erro', 6000))
+        .finally(() => { btn.disabled = false; btn.innerHTML = rotulo; });
+}
+
+function abrirNoPortal(chave) {
+    const seguir = () => {
+        // O window.open sai de dentro de um .then(), fora do clique — alguns
+        // bloqueadores barram. Se barrar, a chave já está copiada e o aviso diz
+        // o que fazer.
+        const aba = window.open(PORTAL_NFE, '_blank', 'noopener');
+        if (aba) {
+            mostrarToast('Chave copiada. Cole no portal e resolva o captcha para ver o DANFE.',
+                         'aviso', 7000);
+        } else {
+            mostrarToast('Chave copiada. O navegador bloqueou a aba — abra o portal da NF-e '
+                         'e cole a chave.', 'aviso', 8000);
+        }
+    };
+    if (navigator.clipboard && chave) {
+        navigator.clipboard.writeText(chave).then(seguir).catch(seguir);
+    } else {
+        seguir();
+    }
+}
+
 // ---- Seleção e export em lote ----
 // A checkbox do cabeçalho marca só o que está na PÁGINA (a paginação é
 // server-side); sem nada marcado, o "Baixar XMLs" cai no filtro inteiro —
@@ -978,10 +1063,20 @@ function _baixarZip(url, corpo, btn) {
             }
             const blob = await resp.blob();
             const cd = resp.headers.get('Content-Disposition') || '';
-            const m = cd.match(/filename="?([^";]+)"?/);
+            // O nome tem acento e espaço (razão social), então vem em
+            // filename*=UTF-8''... (RFC 5987); o filename= simples é só o
+            // fallback ASCII, que perde os acentos.
+            const utf8 = cd.match(/filename\*=UTF-8''([^;]+)/i);
+            const simples = cd.match(/filename="?([^";]+)"?/);
+            let nome = 'export.zip';
+            if (utf8) {
+                try { nome = decodeURIComponent(utf8[1]); } catch (e) { nome = utf8[1]; }
+            } else if (simples) {
+                nome = simples[1];
+            }
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = m ? m[1] : 'export.zip';
+            a.download = nome;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -990,16 +1085,28 @@ function _baixarZip(url, corpo, btn) {
         .catch(() => alert('Erro de conexão ao gerar o arquivo.'))
         .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } });
 }
+// Nota cancelada não se escritura. Antes de levar um lote adiante, diz QUANTAS
+// das marcadas estão canceladas e deixa o usuário decidir — bloquear seria pior
+// (às vezes se baixa a cancelada de propósito, para conferência).
+function _confirmaCanceladas() {
+    const n = Array.from(document.querySelectorAll('.chk-linha:checked'))
+        .filter(c => c.dataset.cancelada === '1').length;
+    if (!n) return true;
+    return confirm(`${n} nota(s) marcada(s) está(ão) CANCELADA(S) na SEFAZ — não devem ser `
+                 + `escrituradas.\n\nContinuar mesmo assim?`);
+}
 function baixarXmlLote(btn) {
     const ids = idsMarcados();
     if (!ids.length &&
         !confirm('Nada marcado — baixar os XMLs de TODOS os documentos do filtro atual?')) return;
+    if (!_confirmaCanceladas()) return;
     _baixarZip('/escrita-fiscal/conf-compras/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 function gerarPdfLote(btn) {
     const ids = idsMarcados();
     if (!ids.length) { alert('Marque o que você quer em PDF (no máximo 10).'); return; }
     if (ids.length > 10) { alert('Máximo 10 PDFs por vez (você marcou ' + ids.length + ').'); return; }
+    if (!_confirmaCanceladas()) return;
     _baixarZip('/escrita-fiscal/conf-compras/export/pdf-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 
@@ -1278,10 +1385,16 @@ function loadNotas() {
                 else if (vinc === 0)      { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
                 else if (vinc === total)  { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
                 else                     { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
-                return `<tr class="cc-row-clickable" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
-                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}"></td>
+                // Cancelada na SEFAZ (evento 110111): selo + linha tingida, e o
+                // data-cancelada da checkbox alimenta o aviso do export em lote.
+                const canc = r.cancelada ? 1 : 0;
+                const seloCanc = canc
+                    ? ' <span class="badge-cancelada" title="Nota cancelada na SEFAZ — não escriturar">CANCELADA</span>'
+                    : '';
+                return `<tr class="cc-row-clickable${canc ? ' cc-row-cancelada' : ''}" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
+                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}"></td>
                     <td>${fmtDate(r.data_emissao)}</td>
-                    <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
+                    <td>${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
                     <td>${dataPill}</td>
                     <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
                     <td>${r.emit_uf||'—'}</td>
@@ -1290,7 +1403,7 @@ function loadNotas() {
                     <td style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
                     <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
                     <td class="money">${fmtBRL(r.valor_icms)}</td>
-                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''}</td>
+                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''} ${r.incompleta ? `<button class="btn-capturar" title="Tentar baixar o XML completo na SEFAZ (não manifesta)" onclick="event.stopPropagation(); capturarNota(${r.id}, this)"><i class="fas fa-cloud-download-alt"></i> Capturar</button>` : ''}</td>
                     <td onclick="event.stopPropagation()">
                         ${exportBtns(r)}
                         ${delBtn(r)}
