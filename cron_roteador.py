@@ -75,6 +75,20 @@ MESES = {f'{i:02d}' for i in range(1, 13)}
 
 PASTAS_ORIGEM = ['_ENTRADA', 'Fiscal/IMPORTADOS']
 
+# REGRA DE FERRO: este cron só toca em arquivo .xml. NADA MAIS.
+#
+# A _ENTRADA é a caixa de entrada ÚNICA e PLANA do sistema — chega de tudo nela e
+# cada tipo tem seu consumidor. Em especial, o .pfx de um certificado digital fica
+# na _ENTRADA até alguém clicar em "Vincular Certificado" na tela da empresa (é a
+# rota clientes.certificado_vincular que o move para EMPRESAS/{empresa}/CERTIFICADO,
+# depois de validar a senha e conferir o titular).
+#
+# Portanto: qualquer extensão diferente de .xml (.pfx, .pdf, .zip, ...) é IGNORADA
+# — não move, não renomeia, não apaga, não baixa. A checagem é uma WHITELIST (só
+# passa o que termina em .xml), e não uma lista de proibidos: extensão nova que
+# apareça amanhã já nasce ignorada, sem precisar de manutenção aqui.
+EXTENSAO_PROCESSADA = '.xml'
+
 ATIVO = os.getenv('ROTEADOR_ATIVO', '0').strip() == '1'
 DRYRUN = os.getenv('ROTEADOR_DRYRUN', '1').strip() == '1'
 MAX_ARQ = max(1, int(os.getenv('ROTEADOR_MAX_ARQ', '500')))
@@ -315,7 +329,9 @@ def rodar():
     rodada = datetime.now(_TZ_BR).strftime('%Y%m%d%H%M%S')
     prazo = time.monotonic() + PRAZO_SEG
     n = {'MOVIDO': 0, 'SIMULADO': 0, 'CONFLITO': 0,
-         'REVISAR': 0, 'SEM_MATCH': 0, 'ERRO': 0}
+         'REVISAR': 0, 'SEM_MATCH': 0, 'ERRO': 0,
+         # não-XML deixados em paz (o .pfx à espera de vínculo cai aqui)
+         'IGNORADO': 0}
     vistos = set()          # dedupe intra-rodada por destino
     total = 0
 
@@ -342,7 +358,13 @@ def rodar():
                                 'o resto vai no proximo tick.', PRAZO_SEG)
                     break
                 nome = item.get('name') or ''
-                if not item.get('is_file') or not nome.lower().endswith('.xml'):
+                if not item.get('is_file'):
+                    continue
+                # REGRA DE FERRO (ver EXTENSAO_PROCESSADA no topo): não é .xml,
+                # passa longe. O .pfx aguardando vínculo mora aqui na _ENTRADA e
+                # NÃO pode ser tocado por este cron.
+                if not nome.lower().endswith(EXTENSAO_PROCESSADA):
+                    n['IGNORADO'] += 1
                     continue
                 origem = item.get('path')
                 total += 1
@@ -408,9 +430,10 @@ def rodar():
             break        # respeita teto/prazo saindo das duas pastas
 
         logger.warning('[roteador] rodada %s: %d avaliados | movidos=%d simulados=%d '
-                       'conflitos=%d revisar=%d sem_match=%d erros=%d',
+                       'conflitos=%d revisar=%d sem_match=%d erros=%d | '
+                       'ignorados_nao_xml=%d',
                        rodada, total, n['MOVIDO'], n['SIMULADO'], n['CONFLITO'],
-                       n['REVISAR'], n['SEM_MATCH'], n['ERRO'])
+                       n['REVISAR'], n['SEM_MATCH'], n['ERRO'], n['IGNORADO'])
     finally:
         try:
             cur.execute("SELECT RELEASE_LOCK('roteador')")

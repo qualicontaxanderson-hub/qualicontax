@@ -591,12 +591,21 @@ class DropboxService:
     # Helpers de caminho para Certificados Digitais (.pfx)
     # ------------------------------------------------------------------
     def pasta_cert_novo(self) -> str:
-        """Pasta onde os .pfx novos são depositados: ``/Certificados/NOVO``.
+        """Caixa de entrada onde os .pfx novos são depositados: ``{ROOT}/_ENTRADA``.
 
+        A _ENTRADA é a porta ÚNICA e PLANA do sistema (sem subpastas): todo
+        arquivo chega nela e o app separa por TIPO. Quem consome o quê:
+          * ``.xml`` → cron_roteador arquiva em EMPRESAS/{empresa}/FISCAL/...;
+          * ``.pfx`` → fica aqui até alguém clicar em "Vincular Certificado" na
+            tela da empresa, que então move para EMPRESAS/{empresa}/CERTIFICADO.
+        O roteador ignora tudo que não é .xml, então o certificado à espera de
+        vínculo não corre risco de ser movido por ele.
+
+        Era ``Certificados/NOVO`` antes da reorganização do Dropbox.
         Usa ``_build_path`` — funciona tanto em App Folder (caminho relativo)
         quanto em Full Dropbox (prefixado por ``DROPBOX_ROOT_FOLDER``).
         """
-        return self._build_path('Certificados', 'NOVO')
+        return self._build_path('_ENTRADA')
 
     def pasta_cert_importados(self, empresa_nome: str, empresa_numero: str = None) -> str:
         """Pasta destino do certificado vinculado, DENTRO da pasta da empresa:

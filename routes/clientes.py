@@ -320,7 +320,7 @@ def detalhes(id):
 
 
 # ---------------------------------------------------------------------------
-# Certificado Digital (.pfx) — busca na pasta NOVO e vínculo por empresa
+# Certificado Digital (.pfx) — busca na _ENTRADA e vínculo por empresa
 # ---------------------------------------------------------------------------
 def _tokens_certificado(cliente):
     """Tokens que identificam a empresa no nome do .pfx: número e CNPJ (14 díg.)."""
@@ -358,7 +358,7 @@ def _nome_casa_token(nome, token):
 
 
 def _localizar_certificados_novo(svc, cliente):
-    """Lista os .pfx da pasta Certificados/NOVO que casam com a empresa (número
+    """Lista os .pfx da _ENTRADA que casam com a empresa (número
     OU CNPJ, como nome exato ou prefixo + separador). Extensão .pfx/.PFX aceita
     (case-insensitive).
 
@@ -382,14 +382,14 @@ def _localizar_certificados_novo(svc, cliente):
 def _erro_ambiguidade_certificado(achados):
     """Mensagem quando mais de um .pfx casa com a empresa — lista quais, não escolhe."""
     nomes = ', '.join(sorted(i.get('name', '?') for i in achados))
-    return ('Mais de um certificado casa com esta empresa na pasta NOVO: '
+    return ('Mais de um certificado casa com esta empresa na _ENTRADA: '
             f'{nomes}. Deixe só o arquivo correto na pasta e tente de novo.')
 
 
 @clientes.route('/clientes/<int:id>/certificado/buscar', methods=['POST'])
 @login_required
 def certificado_buscar(id):
-    """Procura sozinho o .pfx da empresa em Certificados/NOVO (sem seleção manual)."""
+    """Procura sozinho o .pfx da empresa na _ENTRADA (sem seleção manual)."""
     cliente = Cliente.get_by_id(id)
     if not cliente:
         return jsonify({'ok': False, 'erro': 'Cliente não encontrado.'}), 404
@@ -413,7 +413,7 @@ def certificado_buscar(id):
         return jsonify({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}), 200
     if not achados:
         return jsonify({'ok': True, 'encontrado': False,
-                        'erro': 'Certificado não encontrado na pasta NOVO.'}), 200
+                        'erro': 'Certificado não encontrado na pasta _ENTRADA.'}), 200
 
     return jsonify({'ok': True, 'encontrado': True, 'arquivo': achados[0]['name']}), 200
 
@@ -455,7 +455,7 @@ def certificado_vincular(id):
     if not svc.is_configured():
         return jsonify({'ok': False, 'erro': 'Dropbox não configurado.'}), 400
 
-    # 1) Reencontra o arquivo na pasta NOVO (não confia em path do cliente).
+    # 1) Reencontra o arquivo na _ENTRADA (não confia em path do cliente).
     try:
         achados = _localizar_certificados_novo(svc, cliente)
     except dropbox_sync.DropboxAuthError:
@@ -465,7 +465,7 @@ def certificado_vincular(id):
     if len(achados) > 1:
         return jsonify({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}), 200
     if not achados:
-        return jsonify({'ok': False, 'erro': 'Certificado não encontrado na pasta NOVO.'}), 200
+        return jsonify({'ok': False, 'erro': 'Certificado não encontrado na pasta _ENTRADA.'}), 200
     item = achados[0]
 
     # 2) Baixa o .pfx em memória.
@@ -596,7 +596,7 @@ def certificado_vincular(id):
             logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s). '
                          'Arquivo devolvido para NOVO: %s', id, origem)
             return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
-                            'O certificado foi devolvido para a pasta NOVO — tente novamente.'}), 500
+                            'O certificado foi devolvido para a pasta _ENTRADA — tente novamente.'}), 500
         logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s) e reversão FALHOU. '
                      'ARQUIVO ÓRFÃO em: %s', id, destino)
         return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
