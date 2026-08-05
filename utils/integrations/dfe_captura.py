@@ -1240,6 +1240,17 @@ def capturar_agendado():
                     logger.info('[dfe-sched] cliente_id=%s pulado: sem UF no endereço.', cid)
                 else:
                     n_erro += 1
+                    # Falha SEM flag = o certificado não chegou a ser usado: .pfx
+                    # que não baixa do Dropbox, senha que não decifra, PFX que não
+                    # abre. Sem esta linha o ciclo pulava a empresa em silêncio —
+                    # foi assim que 22 empresas ficaram 18h fora do ar sem deixar
+                    # um único registro no dfe_consulta_log (o caminho do .pfx
+                    # tinha mudado). Mesmo formato do ramo de exceção acima.
+                    logger.warning('[dfe-sched] cliente_id=%s pulado: %s',
+                                   cid, r.get('erro'))
+                    dfe_log.registrar('erro', cid, _digitos(emp.get('cnpj')),
+                                      origem='agendado',
+                                      detalhe=(r.get('erro') or 'falha não identificada')[:300])
                 continue
             if r.get('consumo_indevido'):
                 n_bloq += 1
