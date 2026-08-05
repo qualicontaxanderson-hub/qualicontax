@@ -27,6 +27,10 @@ from utils import import_jobs
 from utils.nfe_import import (
     _MAX_XML_SIZE, _save_nfe, _save_nfe_dual, _lookup_vinculo,
 )
+# Upload manual de CT-e (fecha as saídas de CT-e). Espelha o de NF-e, mas resolve
+# empresa/papel pelo próprio XML (papel_do_cliente) e grava via _save_cte.
+from utils.cte_parser import parse_cte_xml, papel_do_cliente
+from utils.cte_import import _save_cte
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
 from models.robo_config import RoboConfig
@@ -2418,6 +2422,98 @@ def importar_xml():
         flash(e, 'danger')
 
     return redirect(url_for('escrita_fiscal.conf_compras'))
+
+
+# ---------------------------------------------------------------------------
+# Upload manual de CT-e — fecha as SAÍDAS de CT-e (cliente = transportadora/
+# emitente), que a CTeDistribuicaoDFe não devolve. Espelha o importar_xml da NF-e,
+# com 3 diferenças: aceita .zip de XMLs; só modelo 57; resolve empresa/papel pelo
+# próprio XML (papel_do_cliente contra a base — emitente cliente → SAÍDA).
+# ---------------------------------------------------------------------------
+_CTE_PARTES = ('emit_cnpj', 'rem_cnpj', 'dest_cnpj', 'exped_cnpj', 'receb_cnpj',
+               'tomador_cnpj')
+
+
+@escrita_fiscal.route('/conf-cte/importar', methods=['POST'])
+@login_required
+def importar_cte_xml():
+    """Importa CT-e de XMLs soltos e/ou de um .zip. Grava com origem='UPLOAD' e o
+    XML em ``xml_raw`` (o olhinho/PDF/lote do CT-e já preferem xml_raw — ver
+    _carregar_cte_export). Dedup por (chave, cliente_id): reimportar não duplica
+    (atualiza). Devolve importados / pulados (já existiam) / rejeitados."""
+    if not current_user.has_permission('escrita_fiscal.conf_cte'):
+        return jsonify({'error': 'Você não tem permissão para importar CT-e.'}), 403
+    files = request.files.getlist('xml_files')
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({'error': 'Nenhum arquivo selecionado.'}), 400
+
+    # Coleta os XMLs: soltos e os de dentro de cada .zip (o Anderson manda um zip).
+    xmls, rejeitados, detalhes = [], 0, []
+    for f in files:
+        nome = f.filename or ''
+        low = nome.lower()
+        if low.endswith('.zip'):
+            try:
+                with zipfile.ZipFile(BytesIO(f.read())) as z:
+                    membros = [n for n in z.namelist() if n.lower().endswith('.xml')]
+                    for n in membros:
+                        xmls.append((n.rsplit('/', 1)[-1], z.read(n)))
+                if not membros:
+                    rejeitados += 1
+                    detalhes.append(f'{nome}: zip sem XML dentro.')
+            except zipfile.BadZipFile:
+                rejeitados += 1
+                detalhes.append(f'{nome}: zip inválido/corrompido.')
+        elif low.endswith('.xml'):
+            xmls.append((nome, f.read()))
+        else:
+            rejeitados += 1
+            detalhes.append(f'{nome}: não é XML nem ZIP.')
+
+    cache = _build_cliente_doc_cache()
+    importados = pulados = 0
+    for nome, raw in xmls:
+        try:
+            content = raw.decode('utf-8', 'replace')
+            parsed = parse_cte_xml(content)
+        except Exception as exc:
+            rejeitados += 1
+            detalhes.append(f'{nome}: XML não é um CT-e válido ({exc}).')
+            continue
+        header = parsed['header']
+        chave = header.get('chave_acesso') or ''
+        modelo = header.get('modelo') or (chave[20:22] if len(chave) >= 22 else '')
+        if modelo != '57':
+            rejeitados += 1
+            detalhes.append(f'{nome}: não é CT-e modelo 57 (modelo {modelo or "?"}).')
+            continue
+        # Quais partes são clientes cadastrados → uma linha por cliente, com o papel
+        # real (emitente → SAÍDA; tomador/dest/rem → entrada; os dois → dual).
+        achados = {}   # cliente_id -> cnpj_dígitos
+        for campo in _CTE_PARTES:
+            dig = re.sub(r'\D', '', header.get(campo) or '')
+            if len(dig) < 11:
+                continue
+            hit = _find_cliente_by_doc_digits(dig, cache)
+            if hit and hit['id'] not in achados:
+                achados[hit['id']] = dig
+        if not achados:
+            rejeitados += 1
+            detalhes.append(f'{nome}: nenhuma empresa cadastrada nesse CT-e.')
+            continue
+        novo = False
+        for cid, dig in achados.items():
+            papel = papel_do_cliente(header, dig)
+            if _save_cte(parsed, nome, 'UPLOAD', cliente_id=cid,
+                         xml_raw=content, papel_cliente=papel, cnpj_cliente=dig) == 'ok':
+                novo = True
+        if novo:
+            importados += 1
+        else:
+            pulados += 1
+
+    return jsonify({'ok': True, 'importados': importados, 'pulados': pulados,
+                    'rejeitados': rejeitados, 'detalhes': detalhes[:10]})
 
 
 # ---------------------------------------------------------------------------

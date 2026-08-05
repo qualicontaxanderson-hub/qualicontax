@@ -362,6 +362,11 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
         <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        <button class="btn-lote" style="background:#0052cc;" onclick="document.getElementById('cteUploadInput').click()"
+                title="Importar CT-e de arquivos XML ou de um .zip (empresa e papel são lidos do próprio XML)">
+            <i class="fas fa-file-import"></i> Importar XML
+        </button>
+        <input type="file" id="cteUploadInput" multiple accept=".xml,.zip" style="display:none;" onchange="importarCteXml(this)">
         <button class="btn-lote xml" onclick="baixarXmlLote(this)"
                 title="Os marcados; se nada estiver marcado, todos do filtro atual">
             <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
@@ -695,6 +700,34 @@ function baixarXmlLote(btn) {
     // Modo "tudo do filtro" → ids vazios: o backend exporta por WHERE.
     const ids = selTudoFiltro ? [] : pageIds;
     _baixarZip('/escrita-fiscal/conf-cte/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
+}
+
+// ---- Upload manual de CT-e (XMLs soltos ou um .zip) ----
+// Empresa e papel saem do próprio XML (o emitente cliente vira SAÍDA). Grava com
+// origem='UPLOAD'; dedup por chave. Recarrega a lista ao terminar.
+function importarCteXml(input) {
+    const arquivos = input.files;
+    if (!arquivos || !arquivos.length) return;
+    const btn = document.querySelector('button[onclick*="cteUploadInput"]');
+    const rotulo = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...'; }
+    const fd = new FormData();
+    for (const f of arquivos) fd.append('xml_files', f);
+    input.value = '';   // permite reimportar os mesmos arquivos depois
+    fetch('/escrita-fiscal/conf-cte/importar',
+          {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd})
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) { alert(d.error); return; }
+            let msg = `Importados: ${d.importados}\n`
+                    + `Já existiam (pulados): ${d.pulados}\n`
+                    + `Rejeitados: ${d.rejeitados}`;
+            if (d.detalhes && d.detalhes.length) msg += '\n\n' + d.detalhes.join('\n');
+            alert(msg);
+            if (d.importados || d.pulados) loadCtes();   // atualiza a lista
+        })
+        .catch(() => alert('Erro de conexão ao importar CT-e.'))
+        .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } });
 }
 function gerarPdfLote(btn) {
     const ids = idsMarcados();
