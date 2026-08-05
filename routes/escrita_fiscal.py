@@ -1366,25 +1366,35 @@ def _sanitiza_nome(txt):
     return ' '.join(limpo.split()).strip(' .')
 
 
-def _periodo_zip(data):
-    """Período do filtro para o nome do .zip: 'MM.AAAA' quando início e fim caem
-    no mesmo mês, 'MM.AAAA_a_MM.AAAA' quando não, '' quando não há data."""
-    def mes(txt):
+def _periodo_zip(datas):
+    """Período do nome do .zip a partir das data_emissao das NOTAS que compõem o
+    zip: 'MM.AAAA' quando o menor e o maior mês coincidem, 'MM.AAAA_a_MM.AAAA'
+    quando diferem, '' quando não há data.
+
+    Vem das notas que realmente entram no zip, NÃO do filtro (data_ini/data_fim) —
+    o filtro pode ser mais largo do que a seleção. O min/max é por (ano, mês), não
+    pela string 'MM.AAAA' (que ordenaria 12.2025 depois de 01.2026)."""
+    yms = []
+    for d in (datas or []):
         try:
-            return datetime.strptime(str(txt)[:10], '%Y-%m-%d').strftime('%m.%Y')
+            dt = datetime.strptime(str(d)[:10], '%Y-%m-%d')
         except (ValueError, TypeError):
-            return None
-    ini, fim = mes(data.get('data_ini')), mes(data.get('data_fim'))
-    if ini and fim:
-        return ini if ini == fim else f'{ini}_a_{fim}'
-    return ini or fim or ''
+            continue
+        yms.append((dt.year, dt.month))
+    if not yms:
+        return ''
+    fmt = lambda ym: f'{ym[1]:02d}.{ym[0]}'
+    lo, hi = min(yms), max(yms)
+    return fmt(lo) if lo == hi else f'{fmt(lo)}_a_{fmt(hi)}'
 
 
-def _nome_zip_lote(data):
+def _nome_zip_lote(data, datas):
     """'<numero> - <razão> - <período>.zip' da empresa selecionada.
 
-    Em visão por GRUPO usa o nome do grupo (não há número/razão de uma empresa
-    só). Sem escopo ou sem data, a parte que faltar simplesmente não entra."""
+    ``data`` traz o escopo (empresa/grupo); ``datas`` são as data_emissao das notas
+    que compõem o zip — o período sai do MIN/MAX delas, não do filtro. Em visão por
+    GRUPO usa o nome do grupo (não há número/razão de uma empresa só). Sem escopo ou
+    sem data, a parte que faltar simplesmente não entra."""
     cid = str(data.get('cliente_id', '')).strip()
     gid = str(data.get('grupo_id', '')).strip()
     quem = ''
@@ -1399,7 +1409,7 @@ def _nome_zip_lote(data):
         r = execute_query("SELECT nome FROM grupos_clientes WHERE id = %s",
                           (int(gid),), fetch=True, fetch_one=True) or {}
         quem = str(r.get('nome') or '').strip()
-    partes = [p for p in (_sanitiza_nome(quem), _periodo_zip(data)) if p]
+    partes = [p for p in (_sanitiza_nome(quem), _periodo_zip(datas)) if p]
     return (' - '.join(partes) or 'documentos') + '.zip'
 
 
@@ -1640,11 +1650,11 @@ def _lote_xml_nfe(escopo, permissao):
                                  f'Refine o período ou marque as notas que quer.'}), 413
 
     rows = execute_query(
-        f"SELECT n.id, n.chave_acesso, n.xml_raw FROM nfe_importacoes n {where_sql}",
+        f"SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n {where_sql}",
         tuple(params), fetch=True) or []
     arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
                  (r['xml_raw'] or '').encode('utf-8')) for r in rows]
-    return _zip_download(arquivos, _nome_zip_lote(data))
+    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
 
 
 def _lote_pdf_nfe(escopo, permissao):
@@ -1662,7 +1672,7 @@ def _lote_pdf_nfe(escopo, permissao):
     where, params = _where_lote(escopo, data)
     where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
     rows = execute_query(
-        "SELECT n.id, n.chave_acesso, n.xml_raw FROM nfe_importacoes n "
+        "SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n "
         "WHERE " + ' AND '.join(where), tuple(params), fetch=True) or []
 
     arquivos, ignorados = [], 0
@@ -1682,7 +1692,7 @@ def _lote_pdf_nfe(escopo, permissao):
     if not arquivos:
         return jsonify({'error': 'Nenhuma das notas marcadas gerou PDF (o XML pode estar '
                                  'fora do padrão esperado). Baixe o XML por enquanto.'}), 404
-    return _zip_download(arquivos, _nome_zip_lote(data))
+    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
 
 
 @escrita_fiscal.route('/conf-compras/export/xml-lote', methods=['POST'])
@@ -1758,14 +1768,14 @@ def lote_xml_cte():
                                  f'ou marque os que quer.'}), 413
 
     rows = execute_query(
-        f"SELECT t.id, t.chave_acesso, t.xml_raw, t.xml_caminho "
+        f"SELECT t.id, t.chave_acesso, t.data_emissao, t.xml_raw, t.xml_caminho "
         f"FROM cte_documentos t {where_sql}", tuple(params), fetch=True) or []
     arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml', xml.encode('utf-8'))
                 for r, xml in _xmls_cte(rows)]
     if not arquivos:
         return jsonify({'error': 'Não foi possível ler os XMLs no Dropbox agora. '
                                  'Tente de novo em instantes.'}), 502
-    return _zip_download(arquivos, _nome_zip_lote(data))
+    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
 
 
 @escrita_fiscal.route('/conf-cte/export/pdf-lote', methods=['POST'])
@@ -1785,7 +1795,7 @@ def lote_pdf_cte():
     where, params = _where_lote('cte', data)
     where = list(where) + ["t.modelo = '57'"]
     rows = execute_query(
-        "SELECT t.id, t.chave_acesso, t.modelo, t.xml_raw, t.xml_caminho "
+        "SELECT t.id, t.chave_acesso, t.modelo, t.data_emissao, t.xml_raw, t.xml_caminho "
         "FROM cte_documentos t WHERE " + ' AND '.join(where),
         tuple(params), fetch=True) or []
 
@@ -1802,7 +1812,7 @@ def lote_pdf_cte():
     if not arquivos:
         return jsonify({'error': 'Nenhum dos CT-e marcados gera PDF (só o modelo 57 tem '
                                  'DACTE).'}), 404
-    return _zip_download(arquivos, _nome_zip_lote(data))
+    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
 
 
 # ---------------------------------------------------------------------------
