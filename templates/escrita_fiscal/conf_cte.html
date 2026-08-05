@@ -113,6 +113,10 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .btn-lote.xml:hover:not(:disabled) { background:#115e59; }
 .btn-lote.pdf { background:#b91c1c; }
 .btn-lote.pdf:hover:not(:disabled) { background:#991b1b; }
+/* Faixa "selecionar tudo do filtro" (padrão Gmail) */
+.sel-banner { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:8px; padding:8px 14px; margin-bottom:10px; font-size:13px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+.sel-banner.all { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+.sel-banner a { color:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
 
 /* ---- Tom Select (filtros com busca + multi-seleção) ---- */
 /* Alinha o componente ao visual dos outros campos do filtro. */
@@ -360,7 +364,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
         <button class="btn-lote xml" onclick="baixarXmlLote(this)"
                 title="Os marcados; se nada estiver marcado, todos do filtro atual">
-            <i class="fas fa-file-archive"></i> Baixar XMLs
+            <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
         </button>
         <button class="btn-lote pdf" onclick="gerarPdfLote(this)"
                 title="Só os marcados, no máximo 10 por vez">
@@ -373,6 +377,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
 
 <!-- Tab: CT-e -->
 <div id="tab-ctes">
+    <div id="selBanner" class="sel-banner" style="display:none;"></div>
     <div class="cc-table-wrap">
         <table class="cc-table">
             <thead>
@@ -586,18 +591,63 @@ function updateScopeBadge(type, label) {
 
 // ---- Seleção e export em lote ----
 // A checkbox do cabeçalho marca só o que está na PÁGINA (a paginação é
-// server-side); sem nada marcado, o "Baixar XMLs" cai no filtro inteiro —
-// mesmo comportamento do excluir-lote.
+// server-side). Padrão Gmail: marcar a página oferece "selecionar todos os N do
+// filtro" numa faixa; nesse modo o backend exporta por WHERE (ids vazios). Sem
+// nada marcado, o "Baixar XMLs" também cai no filtro inteiro. (CT-e não é
+// streaming: teto baixo, XML vem do Dropbox — ver _LOTE_MAX_XML_CTE no backend.)
+let ctesTotal = 0;          // total do filtro (data.total do último loadCtes)
+let ctesPerPage = 50;
+let selTudoFiltro = false;  // true = "todos os N do filtro"
+
 function idsMarcados() {
     return Array.from(document.querySelectorAll('.chk-linha:checked')).map(c => c.value);
 }
+function _selPage() { return document.querySelectorAll('.chk-linha:checked').length; }
+function _selPageTotal() { return document.querySelectorAll('.chk-linha').length; }
+
+// Contagem do botão + faixa, conforme a seleção atual.
+function atualizaSelUI() {
+    const pageSel = _selPage();
+    const cnt = document.getElementById('xmlCount');
+    const n = selTudoFiltro ? ctesTotal : pageSel;
+    if (cnt) cnt.textContent = n ? `(${n})` : '';
+    const banner = document.getElementById('selBanner');
+    if (!banner) return;
+    if (selTudoFiltro) {
+        banner.className = 'sel-banner all';
+        banner.style.display = '';
+        banner.innerHTML = `<span><i class="fas fa-check-circle"></i> Todos os ${ctesTotal} do filtro selecionados.</span>`
+            + ` <a onclick="sairTudoFiltro()">voltar para só esta página</a>`;
+    } else if (pageSel && ctesTotal > ctesPerPage && pageSel === _selPageTotal()) {
+        banner.className = 'sel-banner';
+        banner.style.display = '';
+        banner.innerHTML = `<span>Os ${pageSel} desta página estão selecionados.</span>`
+            + ` <a onclick="selecionarTudoFiltro()">Selecionar todos os ${ctesTotal} do filtro</a>`;
+    } else {
+        banner.style.display = 'none';
+    }
+}
+function selecionarTudoFiltro() { selTudoFiltro = true; atualizaSelUI(); }
+function sairTudoFiltro() { selTudoFiltro = false; atualizaSelUI(); }
+
 function marcarTodos(chk) {
     document.querySelectorAll('.chk-linha').forEach(c => { c.checked = chk.checked; });
+    if (!chk.checked) selTudoFiltro = false;   // desmarcar a página sai do modo "tudo"
+    atualizaSelUI();
+}
+// Mudança numa linha sai do modo "tudo do filtro" e sincroniza o cabeçalho.
+function chkLinhaChange() {
+    selTudoFiltro = false;
+    const t = document.getElementById('chkTodos');
+    if (t) t.checked = _selPageTotal() > 0 && _selPage() === _selPageTotal();
+    atualizaSelUI();
 }
 function desmarcarTodos() {
     const t = document.getElementById('chkTodos');
     if (t) t.checked = false;
     document.querySelectorAll('.chk-linha').forEach(c => { c.checked = false; });
+    selTudoFiltro = false;
+    atualizaSelUI();
 }
 
 // O servidor responde .zip quando dá certo e JSON quando não dá (limite
@@ -616,10 +666,20 @@ function _baixarZip(url, corpo, btn) {
             }
             const blob = await resp.blob();
             const cd = resp.headers.get('Content-Disposition') || '';
-            const m = cd.match(/filename="?([^";]+)"?/);
+            // O nome tem acento e espaço (razão social), então vem em
+            // filename*=UTF-8''... (RFC 5987); o filename= simples é só o
+            // fallback ASCII, que perde os acentos.
+            const utf8 = cd.match(/filename\*=UTF-8''([^;]+)/i);
+            const simples = cd.match(/filename="?([^";]+)"?/);
+            let nome = 'export.zip';
+            if (utf8) {
+                try { nome = decodeURIComponent(utf8[1]); } catch (e) { nome = utf8[1]; }
+            } else if (simples) {
+                nome = simples[1];
+            }
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = m ? m[1] : 'export.zip';
+            a.download = nome;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -629,9 +689,11 @@ function _baixarZip(url, corpo, btn) {
         .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } });
 }
 function baixarXmlLote(btn) {
-    const ids = idsMarcados();
-    if (!ids.length &&
+    const pageIds = idsMarcados();
+    if (!selTudoFiltro && !pageIds.length &&
         !confirm('Nada marcado — baixar os XMLs de TODOS os documentos do filtro atual?')) return;
+    // Modo "tudo do filtro" → ids vazios: o backend exporta por WHERE.
+    const ids = selTudoFiltro ? [] : pageIds;
     _baixarZip('/escrita-fiscal/conf-cte/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 function gerarPdfLote(btn) {
@@ -922,6 +984,13 @@ function loadCtes() {
             lastRows = data.rows || [];
             document.getElementById('tabBadgeCtes').textContent = data.total;
             document.getElementById('kpiCtes').textContent = data.total;
+            // Nova página/busca zera a seleção e o modo "tudo do filtro".
+            ctesTotal = data.total || 0;
+            ctesPerPage = data.per_page || 50;
+            selTudoFiltro = false;
+            const _chkTop = document.getElementById('chkTodos');
+            if (_chkTop) _chkTop.checked = false;
+            atualizaSelUI();
             if (data.kpi) {
                 document.getElementById('kpiFrete').textContent = fmtBRL(data.kpi.total_frete);
                 document.getElementById('kpiICMS').textContent = fmtBRL(data.kpi.total_icms);
@@ -940,7 +1009,7 @@ function loadCtes() {
                 const trajeto = (r.uf_ini || r.uf_fim)
                     ? `${esc(r.mun_ini||'')}/${esc(r.uf_ini||'—')} → ${esc(r.mun_fim||'')}/${esc(r.uf_fim||'—')}` : '—';
                 return `<tr class="cc-row-clickable" onclick="openPanel(${r.id})">
-                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}"></td>
+                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" onchange="chkLinhaChange()"></td>
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${esc(r.num_cte)||'—'} / ${esc(r.serie)||'—'}</td>
                     <td>${dataPill(r)}</td>

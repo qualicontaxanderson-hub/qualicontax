@@ -20,3 +20,5 @@ brazilfiscalreport[dacte]==1.0.1
 reportlab==4.4.10
 qrcode==8.2
 Pillow==12.2.0
+# Export de XML em lote via streaming (memória constante em 12k-50k arquivos)
+zipstream-ng==1.9.2

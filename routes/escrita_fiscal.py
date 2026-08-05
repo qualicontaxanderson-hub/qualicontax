@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify, send_file,
+    flash, jsonify, send_file, Response,
 )
 from io import BytesIO
 from flask_login import current_user
@@ -1334,7 +1334,13 @@ def excluir_cte(cte_id):
 # está em produção e apaga dado. Se um filtro novo entrar na tela, precisa
 # entrar nos dois lugares.
 # ---------------------------------------------------------------------------
-_LOTE_MAX_XML = 1000
+# NF-e/NFC-e: teto alto porque o "tudo do filtro" agora sai em STREAMING (zip
+# gerado em memória constante — ver _stream_xml_lote_nfe), então não derruba a
+# requisição nem com dezenas de milhares. Média real ~12 mil/mês por posto.
+_LOTE_MAX_XML = 50000
+# Tamanho do lote (por PK) na leitura do xml_raw no streaming — NUNCA todos de uma
+# vez. 1000 × ~8 KB ≈ 8 MB por lote em memória.
+_LOTE_STREAM_CHUNK = 1000
 # Proibidos em nome de arquivo no Windows (e recusados pelo Dropbox).
 _INVALIDOS_NOME = {ord(c): None for c in '/\\:*?"<>|'}
 # CT-e é mais baixo de propósito: o XML não está no banco, cada um é um download
@@ -1629,11 +1635,61 @@ def _gerar_pdf_documento(xml, modelo):
     return None
 
 
+def _cd_attachment_zip(nome):
+    """Content-Disposition de anexo com o nome em RFC 5987 (filename*=UTF-8''…) — o
+    mesmo que o send_file monta, mas para respostas em STREAMING (Response), onde o
+    cabeçalho é setado à mão. O front lê o filename* p/ preservar acento/espaço."""
+    from urllib.parse import quote
+    ascii_fb = nome.encode('ascii', 'ignore').decode() or 'documentos.zip'
+    return "attachment; filename=\"%s\"; filename*=UTF-8''%s" % (ascii_fb, quote(nome))
+
+
+def _stream_xml_lote_nfe(where_sql, params, nome_zip):
+    """Zip de XML em STREAMING (memória constante) para o caminho 'tudo do filtro',
+    onde o volume chega a dezenas de milhares. Busca id+chave de uma vez (leve: sem
+    xml_raw) e o xml_raw em lotes de _LOTE_STREAM_CHUNK por PK, lidos SÓ na hora de
+    o zipstream gravar cada arquivo (a lib consome o data-generator na iteração).
+    Assim nunca há mais de um lote de XML em memória e o download começa na hora —
+    sem montar centenas de MB antes (evita OOM/timeout do build)."""
+    from zipstream import ZipStream
+
+    meta = execute_query(
+        f"SELECT n.id, n.chave_acesso FROM nfe_importacoes n {where_sql} ORDER BY n.id",
+        tuple(params), fetch=True) or []
+    ids = [m['id'] for m in meta]
+
+    def fonte_xml():
+        # xml_raw na MESMA ordem de ``meta`` (por id), em lotes — cada arquivo do
+        # zip puxa um next() desta fonte, alinhado 1-a-1 com ``meta``.
+        for i in range(0, len(ids), _LOTE_STREAM_CHUNK):
+            lote = ids[i:i + _LOTE_STREAM_CHUNK]
+            ph = ','.join(['%s'] * len(lote))
+            porid = {r['id']: (r['xml_raw'] or '') for r in (execute_query(
+                f"SELECT id, xml_raw FROM nfe_importacoes WHERE id IN ({ph})",
+                tuple(lote), fetch=True) or [])}
+            for _id in lote:
+                yield porid.get(_id, '')
+    cursor = fonte_xml()
+
+    zs = ZipStream(compress_type=zipfile.ZIP_DEFLATED)
+    for m in meta:
+        def dados():
+            xml = next(cursor)   # lido na hora de gravar ESTE arquivo (ordem = meta)
+            if xml:
+                yield xml.encode('utf-8')
+        zs.add(data=dados(), arcname=(m['chave_acesso'] or str(m['id'])) + '.xml')
+
+    resp = Response(zs, mimetype='application/zip')
+    resp.headers['Content-Disposition'] = _cd_attachment_zip(nome_zip)
+    return resp
+
+
 # ------------------------------- NF-e (entradas / saídas) -------------------
 def _lote_xml_nfe(escopo, permissao):
     if not current_user.has_permission(permissao):
         return jsonify({'error': 'Você não tem permissão para exportar estas notas.'}), 403
     data = request.get_json(silent=True) or {}
+    ids = _ids_do_lote(data)
     where, params = _where_lote(escopo, data)
     # Só o que dá para exportar: resumo da SEFAZ e xml vazio não entram no zip.
     where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
@@ -1649,12 +1705,23 @@ def _lote_xml_nfe(escopo, permissao):
         return jsonify({'error': f'{total} notas — o limite é {_LOTE_MAX_XML} por vez. '
                                  f'Refine o período ou marque as notas que quer.'}), 413
 
-    rows = execute_query(
-        f"SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n {where_sql}",
-        tuple(params), fetch=True) or []
-    arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
-                 (r['xml_raw'] or '').encode('utf-8')) for r in rows]
-    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
+    # Seleção da página (ids marcados) → poucos: zip em memória. "Tudo do filtro"
+    # (sem ids) → pode ser dezenas de milhares: zip em STREAMING.
+    if ids:
+        rows = execute_query(
+            f"SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n {where_sql}",
+            tuple(params), fetch=True) or []
+        arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
+                     (r['xml_raw'] or '').encode('utf-8')) for r in rows]
+        return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
+
+    # Nome sai do MIN/MAX do filtro (no streaming não temos as linhas de antemão, e
+    # o cabeçalho com o nome vai ANTES do corpo).
+    per = execute_query(
+        f"SELECT MIN(n.data_emissao) AS mn, MAX(n.data_emissao) AS mx "
+        f"FROM nfe_importacoes n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+    nome = _nome_zip_lote(data, [per.get('mn'), per.get('mx')])
+    return _stream_xml_lote_nfe(where_sql, params, nome)
 
 
 def _lote_pdf_nfe(escopo, permissao):

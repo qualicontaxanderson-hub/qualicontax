@@ -235,6 +235,10 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 .btn-lote.xml:hover:not(:disabled) { background:#115e59; }
 .btn-lote.pdf { background:#b91c1c; }
 .btn-lote.pdf:hover:not(:disabled) { background:#991b1b; }
+/* Faixa "selecionar tudo do filtro" (padrão Gmail) */
+.sel-banner { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:8px; padding:8px 14px; margin-bottom:10px; font-size:13px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+.sel-banner.all { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+.sel-banner a { color:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
 
 /* ---- Tom Select (filtros com busca + multi-seleção) ---- */
 /* Alinha o componente ao visual dos outros campos do filtro. */
@@ -458,7 +462,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
         <button class="btn-lote xml" onclick="baixarXmlLote(this)"
                 title="Os marcados; se nada estiver marcado, todos do filtro atual">
-            <i class="fas fa-file-archive"></i> Baixar XMLs
+            <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
         </button>
         <button class="btn-lote pdf" onclick="gerarPdfLote(this)"
                 title="Só os marcados, no máximo 10 por vez">
@@ -477,6 +481,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 
 <!-- Tab: Notas Fiscais -->
 <div id="tab-notas">
+    <div id="selBanner" class="sel-banner" style="display:none;"></div>
     <div class="cc-table-wrap">
         <table class="cc-table">
             <thead>
@@ -1037,18 +1042,62 @@ function abrirNoPortal(chave) {
 
 // ---- Seleção e export em lote ----
 // A checkbox do cabeçalho marca só o que está na PÁGINA (a paginação é
-// server-side); sem nada marcado, o "Baixar XMLs" cai no filtro inteiro —
-// mesmo comportamento do excluir-lote.
+// server-side). Padrão Gmail: marcar a página oferece "selecionar todas as N do
+// filtro" numa faixa; nesse modo o backend exporta por WHERE (ids vazios), em
+// STREAMING. Sem nada marcado, o "Baixar XMLs" também cai no filtro inteiro.
+let notasTotal = 0;         // total do filtro (data.total do último loadNotas)
+let notasPerPage = 50;
+let selTudoFiltro = false;  // true = "todas as N do filtro"
+
 function idsMarcados() {
     return Array.from(document.querySelectorAll('.chk-linha:checked')).map(c => c.value);
 }
+function _selPage() { return document.querySelectorAll('.chk-linha:checked').length; }
+function _selPageTotal() { return document.querySelectorAll('.chk-linha').length; }
+
+// Contagem do botão + faixa, conforme a seleção atual.
+function atualizaSelUI() {
+    const pageSel = _selPage();
+    const cnt = document.getElementById('xmlCount');
+    const n = selTudoFiltro ? notasTotal : pageSel;
+    if (cnt) cnt.textContent = n ? `(${n})` : '';
+    const banner = document.getElementById('selBanner');
+    if (!banner) return;
+    if (selTudoFiltro) {
+        banner.className = 'sel-banner all';
+        banner.style.display = '';
+        banner.innerHTML = `<span><i class="fas fa-check-circle"></i> Todas as ${notasTotal} do filtro selecionadas.</span>`
+            + ` <a onclick="sairTudoFiltro()">voltar para só esta página</a>`;
+    } else if (pageSel && notasTotal > notasPerPage && pageSel === _selPageTotal()) {
+        banner.className = 'sel-banner';
+        banner.style.display = '';
+        banner.innerHTML = `<span>As ${pageSel} desta página estão selecionadas.</span>`
+            + ` <a onclick="selecionarTudoFiltro()">Selecionar todas as ${notasTotal} do filtro</a>`;
+    } else {
+        banner.style.display = 'none';
+    }
+}
+function selecionarTudoFiltro() { selTudoFiltro = true; atualizaSelUI(); }
+function sairTudoFiltro() { selTudoFiltro = false; atualizaSelUI(); }
+
 function marcarTodos(chk) {
     document.querySelectorAll('.chk-linha').forEach(c => { c.checked = chk.checked; });
+    if (!chk.checked) selTudoFiltro = false;   // desmarcar a página sai do modo "tudo"
+    atualizaSelUI();
+}
+// Mudança numa linha sai do modo "tudo do filtro" e sincroniza o cabeçalho.
+function chkLinhaChange() {
+    selTudoFiltro = false;
+    const t = document.getElementById('chkTodos');
+    if (t) t.checked = _selPageTotal() > 0 && _selPage() === _selPageTotal();
+    atualizaSelUI();
 }
 function desmarcarTodos() {
     const t = document.getElementById('chkTodos');
     if (t) t.checked = false;
     document.querySelectorAll('.chk-linha').forEach(c => { c.checked = false; });
+    selTudoFiltro = false;
+    atualizaSelUI();
 }
 
 // O servidor responde .zip quando dá certo e JSON quando não dá (limite
@@ -1100,10 +1149,12 @@ function _confirmaCanceladas() {
                  + `escrituradas.\n\nContinuar mesmo assim?`);
 }
 function baixarXmlLote(btn) {
-    const ids = idsMarcados();
-    if (!ids.length &&
+    const pageIds = idsMarcados();
+    if (!selTudoFiltro && !pageIds.length &&
         !confirm('Nada marcado — baixar os XMLs de TODOS os documentos do filtro atual?')) return;
     if (!_confirmaCanceladas()) return;
+    // Modo "tudo do filtro" → ids vazios: o backend exporta por WHERE (streaming).
+    const ids = selTudoFiltro ? [] : pageIds;
     _baixarZip('/escrita-fiscal/conf-compras/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 function gerarPdfLote(btn) {
@@ -1358,6 +1409,13 @@ function loadNotas() {
         .then(data => {
             hideLoad();
             document.getElementById('tabBadgeNotas').textContent = data.total;
+            // Nova página/busca zera a seleção e o modo "tudo do filtro".
+            notasTotal = data.total || 0;
+            notasPerPage = data.per_page || 50;
+            selTudoFiltro = false;
+            const _chkTop = document.getElementById('chkTodos');
+            if (_chkTop) _chkTop.checked = false;
+            atualizaSelUI();
             // Atualiza KPI cards
             if (data.kpi) {
                 document.getElementById('kpiNotas').textContent = data.total;
@@ -1396,7 +1454,7 @@ function loadNotas() {
                     ? ' <span class="badge-cancelada" title="Nota cancelada na SEFAZ — não escriturar">CANCELADA</span>'
                     : '';
                 return `<tr class="cc-row-clickable${canc ? ' cc-row-cancelada' : ''}" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
-                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}"></td>
+                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}" onchange="chkLinhaChange()"></td>
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
                     <td>${dataPill}</td>
