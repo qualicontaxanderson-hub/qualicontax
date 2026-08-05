@@ -73,6 +73,15 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .btn-exp:hover { background:#f0fdf4; color:#166534; }
 .btn-del:hover { background:#fee2e2; }
 
+/* ---- Export em lote (seleção + botões do topo) ---- */
+.chk-linha, #chkTodos { width:15px; height:15px; cursor:pointer; accent-color:#22c55e; }
+.btn-lote { display:inline-flex; align-items:center; gap:6px; border:none; color:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.btn-lote:disabled { opacity:.6; cursor:progress; }
+.btn-lote.xml { background:#0f766e; }
+.btn-lote.xml:hover:not(:disabled) { background:#115e59; }
+.btn-lote.pdf { background:#b91c1c; }
+.btn-lote.pdf:hover:not(:disabled) { background:#991b1b; }
+
 /* ---- Tom Select (filtros com busca + multi-seleção) ---- */
 /* Alinha o componente ao visual dos outros campos do filtro. */
 .cc-filter-grid .ts-wrapper { width:100%; }
@@ -365,14 +374,22 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
     </div>
     {# Excluir em lote: só ADMIN. O gate real é a rota /conf-saidas/excluir-lote. #}
-    {% if is_admin %}
-    <div style="margin-left:auto;">
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        <button class="btn-lote xml" onclick="baixarXmlLote(this)"
+                title="Os marcados; se nada estiver marcado, todos do filtro atual">
+            <i class="fas fa-file-archive"></i> Baixar XMLs
+        </button>
+        <button class="btn-lote pdf" onclick="gerarPdfLote(this)"
+                title="Só os marcados, no máximo 10 por vez">
+            <i class="fas fa-file-pdf"></i> Gerar PDF (até 10)
+        </button>
+        {% if is_admin %}
         <button onclick="excluirLote()"
                 style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
             <i class="fas fa-trash-alt"></i> Excluir em Lote
         </button>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
@@ -383,6 +400,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <table class="cc-table">
             <thead>
                 <tr>
+                    <th style="width:34px;text-align:center;"><input type="checkbox" id="chkTodos" onclick="marcarTodos(this)" title="Marcar todos desta página"></th>
                     <th>Data</th>
                     <th>Nº / Série</th>
                     <th>Empresa (Emit.)</th>
@@ -398,7 +416,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                 </tr>
             </thead>
             <tbody id="tbodyNotas">
-                <tr><td colspan="12" class="cc-empty"><i class="fas fa-file-export"></i>Selecione uma empresa e clique em Buscar</td></tr>
+                <tr><td colspan="13" class="cc-empty"><i class="fas fa-file-export"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -669,6 +687,63 @@ function switchTab(tab) {
     if (hasSearched && (currentClienteId || currentGrupoId)) loadActiveTab();
 }
 
+// ---- Seleção e export em lote ----
+// A checkbox do cabeçalho marca só o que está na PÁGINA (a paginação é
+// server-side); sem nada marcado, o "Baixar XMLs" cai no filtro inteiro —
+// mesmo comportamento do excluir-lote.
+function idsMarcados() {
+    return Array.from(document.querySelectorAll('.chk-linha:checked')).map(c => c.value);
+}
+function marcarTodos(chk) {
+    document.querySelectorAll('.chk-linha').forEach(c => { c.checked = chk.checked; });
+}
+function desmarcarTodos() {
+    const t = document.getElementById('chkTodos');
+    if (t) t.checked = false;
+    document.querySelectorAll('.chk-linha').forEach(c => { c.checked = false; });
+}
+
+// O servidor responde .zip quando dá certo e JSON quando não dá (limite
+// estourado, nada exportável, sem permissão) — por isso o Content-Type decide.
+function _baixarZip(url, corpo, btn) {
+    const rotulo = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...'; }
+    fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(corpo)})
+        .then(async resp => {
+            const tipo = resp.headers.get('Content-Type') || '';
+            if (!resp.ok || tipo.indexOf('application/json') >= 0) {
+                const d = await resp.json().catch(() => ({}));
+                alert(d.error || 'Não foi possível gerar o arquivo.');
+                return;
+            }
+            const blob = await resp.blob();
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename="?([^";]+)"?/);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = m ? m[1] : 'export.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        })
+        .catch(() => alert('Erro de conexão ao gerar o arquivo.'))
+        .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } });
+}
+function baixarXmlLote(btn) {
+    const ids = idsMarcados();
+    if (!ids.length &&
+        !confirm('Nada marcado — baixar os XMLs de TODOS os documentos do filtro atual?')) return;
+    _baixarZip('/escrita-fiscal/conf-saidas/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
+}
+function gerarPdfLote(btn) {
+    const ids = idsMarcados();
+    if (!ids.length) { alert('Marque o que você quer em PDF (no máximo 10).'); return; }
+    if (ids.length > 10) { alert('Máximo 10 PDFs por vez (você marcou ' + ids.length + ').'); return; }
+    _baixarZip('/escrita-fiscal/conf-saidas/export/pdf-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
+}
+
 // ---- Opções dos filtros por empresa ----
 // Emitente/destinatário/transportadora e UF saem do MESMO escopo da listagem
 // (o endpoint reusa as funções _empresa_where*, com o fallback por CNPJ) e do
@@ -786,6 +861,7 @@ function clearFilters() {
     chavesCurrentPage = 1;
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
     // um Buscar puxaria a base inteira da empresa (dezenas de milhares de notas).
+    desmarcarTodos();
     setPeriodo('45d');  // já dispara applyFilters()
 }
 function getFilters() {
@@ -913,7 +989,7 @@ function loadNotas() {
             }
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || !data.rows.length) {
-                tbody.innerHTML = '<tr><td colspan="12" class="cc-empty"><i class="fas fa-file-export"></i><br>Nenhuma nota encontrada</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-file-export"></i><br>Nenhuma nota encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }
@@ -928,6 +1004,7 @@ function loadNotas() {
                 else if (vinc === total) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
                 else                    { dotCls = 'amarelo';   dotTip = `Parcial (${vinc}/${total})`; }
                 return `<tr class="cc-row-clickable" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
+                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}"></td>
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}</td>
                     <td>${empPill}</td>

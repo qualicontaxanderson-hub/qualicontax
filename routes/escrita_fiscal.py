@@ -4,6 +4,7 @@ import os
 import re
 import threading
 import xml.etree.ElementTree as ET
+import zipfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -1253,6 +1254,439 @@ def excluir_cte(cte_id):
         return jsonify({'ok': True})
     flash('CT-e excluído.', 'success')
     return redirect(url_for('escrita_fiscal.conf_cte'))
+
+
+# ---------------------------------------------------------------------------
+# Export em LOTE — .zip de XMLs e de PDFs
+#
+# XML: opera sobre a SELEÇÃO (ids marcados) ou, se nada estiver marcado, sobre
+# o FILTRO inteiro da tela — as mesmas cláusulas do excluir-lote. Tem teto: um
+# posto faz milhares de NFC-e por mês, e um zip de tudo derrubaria a requisição.
+# PDF: só por seleção e no máximo _LOTE_MAX_PDF, porque cada PDF é gerado na
+# hora (a lib monta o layout inteiro) — é a operação cara.
+#
+# NOTA: as cláusulas de filtro abaixo espelham as do excluir_lote/
+# excluir_lote_saidas. Preferi duplicar a NÃO mexer no caminho de exclusão, que
+# está em produção e apaga dado. Se um filtro novo entrar na tela, precisa
+# entrar nos dois lugares.
+# ---------------------------------------------------------------------------
+_LOTE_MAX_XML = 1000
+# CT-e é mais baixo de propósito: o XML não está no banco, cada um é um download
+# do Dropbox. Mesmo em paralelo, 1000 arquivos estouraria o tempo da requisição.
+_LOTE_MAX_XML_CTE = 200
+_LOTE_MAX_PDF = 10
+
+
+def _ids_do_lote(data):
+    """IDs marcados na tela. Só inteiros, sem repetição; o resto é descartado."""
+    brutos = data.get('ids') or []
+    if not isinstance(brutos, (list, tuple)):
+        return []
+    vistos, ids = set(), []
+    for b in brutos:
+        s = str(b).strip()
+        if s.isdigit() and s not in vistos:
+            vistos.add(s)
+            ids.append(int(s))
+    return ids
+
+
+def _zip_download(arquivos, nome_zip):
+    """arquivos = [(nome, bytes)] → resposta com o .zip pronto para baixar."""
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for nome, dados in arquivos:
+            z.writestr(nome, dados)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=nome_zip,
+                     mimetype='application/zip')
+
+
+def _where_lote_entradas(data):
+    """Mesmas cláusulas do excluir_lote (entradas), a partir do corpo JSON."""
+    f_cliente_id = str(data.get('cliente_id', '')).strip()
+    f_grupo_id   = str(data.get('grupo_id', '')).strip()
+    f_emit_cnpj  = _filtro_lista(data.get('emit_cnpj', ''))
+    f_data_ini   = str(data.get('data_ini', '')).strip()
+    f_data_fim   = str(data.get('data_fim', '')).strip()
+    f_chave      = str(data.get('chave', '')).strip()
+    f_num_nota   = str(data.get('num_nota', '')).strip()
+    f_cfop       = str(data.get('cfop', '')).strip()
+    f_emit_uf    = _filtro_lista(data.get('emit_uf', ''))
+    f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
+    f_vmin       = str(data.get('vmin', '')).strip()
+    f_vmax       = str(data.get('vmax', '')).strip()
+    f_origem     = str(data.get('origem', '')).strip()
+
+    where = ["n.tipo = 'entrada'"]
+    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
+    if f_emit_cnpj:
+        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_nota:
+        where.append('n.num_nota = %s')
+        params.append(f_num_nota)
+    if f_cfop:
+        where.append('n.cfop LIKE %s')
+        params.append(f'{f_cfop}%')
+    if f_emit_uf:
+        where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
+    if f_dest_cnpj:
+        where.append('n.dest_cnpj LIKE %s')
+        params.append(f'%{f_dest_cnpj}%')
+    if f_vmin:
+        where.append('n.valor_total >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_total <= %s')
+        params.append(float(f_vmax))
+    if f_origem:
+        where.append('n.origem = %s')
+        params.append(f_origem)
+    return where, params
+
+
+def _where_lote_saidas(data):
+    """Mesmas cláusulas do excluir_lote_saidas, a partir do corpo JSON."""
+    f_cliente_id = str(data.get('cliente_id', '')).strip()
+    f_grupo_id   = str(data.get('grupo_id', '')).strip()
+    f_dest_cnpj  = _filtro_lista(data.get('dest_cnpj', ''))
+    f_data_ini   = str(data.get('data_ini', '')).strip()
+    f_data_fim   = str(data.get('data_fim', '')).strip()
+    f_chave      = str(data.get('chave', '')).strip()
+    f_num_nota   = str(data.get('num_nota', '')).strip()
+    f_cfop       = str(data.get('cfop', '')).strip()
+    f_dest_uf    = _filtro_lista(data.get('dest_uf', ''))
+    f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
+    f_vmin       = str(data.get('vmin', '')).strip()
+    f_vmax       = str(data.get('vmax', '')).strip()
+    f_origem     = str(data.get('origem', '')).strip()
+
+    where = ["n.tipo = 'saida'"]
+    extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
+    where.extend(extra)
+    if f_dest_cnpj:
+        where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_nota:
+        where.append('n.num_nota = %s')
+        params.append(f_num_nota)
+    if f_cfop:
+        where.append('n.cfop LIKE %s')
+        params.append(f'{f_cfop}%')
+    if f_dest_uf:
+        where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
+    if f_emit_cnpj:
+        where.append('n.emit_cnpj LIKE %s')
+        params.append(f'%{f_emit_cnpj}%')
+    if f_vmin:
+        where.append('n.valor_total >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_total <= %s')
+        params.append(float(f_vmax))
+    if f_origem:
+        where.append('n.origem = %s')
+        params.append(f_origem)
+    return where, params
+
+
+def _where_lote_cte(data):
+    """Mesmas cláusulas do api_ctes, a partir do corpo JSON."""
+    f_cliente_id = str(data.get('cliente_id', '')).strip()
+    f_grupo_id   = str(data.get('grupo_id', '')).strip()
+    f_emit_cnpj  = _filtro_lista(data.get('emit_cnpj', ''))
+    f_tomador    = str(data.get('tomador_cnpj', '')).strip()
+    f_data_ini   = str(data.get('data_ini', '')).strip()
+    f_data_fim   = str(data.get('data_fim', '')).strip()
+    f_chave      = str(data.get('chave', '')).strip()
+    f_num_cte    = str(data.get('num_cte', '')).strip()
+    f_modelo     = str(data.get('modelo', '')).strip()
+    f_uf_ini     = _filtro_lista(data.get('uf_ini', ''))
+    f_uf_fim     = _filtro_lista(data.get('uf_fim', ''))
+    f_origem     = str(data.get('origem', '')).strip()
+    f_papel      = str(data.get('papel', '')).strip()
+    f_cancelado  = str(data.get('cancelado', '')).strip()
+
+    where, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
+    if f_emit_cnpj:
+        where.append(_clausula_in('t.emit_cnpj', f_emit_cnpj, params))
+    if f_tomador:
+        where.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
+        params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
+    if f_data_ini:
+        where.append('t.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        where.append('t.data_emissao <= %s')
+        params.append(f_data_fim)
+    if f_chave:
+        where.append('t.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_num_cte:
+        where.append('t.num_cte = %s')
+        params.append(f_num_cte)
+    if f_modelo:
+        where.append('t.modelo = %s')
+        params.append(f_modelo)
+    if f_uf_ini:
+        where.append(_clausula_in('t.uf_ini', f_uf_ini, params))
+    if f_uf_fim:
+        where.append(_clausula_in('t.uf_fim', f_uf_fim, params))
+    if f_origem == 'SEFAZ':
+        where.append("t.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("t.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
+        where.append('t.origem = %s')
+        params.append(f_origem)
+    if f_cancelado == '1':
+        where.append('t.cancelado = 1')
+    elif f_cancelado == '0':
+        where.append('t.cancelado = 0')
+    if f_papel:
+        where.append('t.papel_cliente = %s')
+        params.append(f_papel)
+    return where, params
+
+
+def _where_lote(escopo, data):
+    """Monta o WHERE do lote: os IDs marcados quando houver, senão o filtro da
+    tela. Nos dois casos o escopo de empresa entra — assim uma lista de ids
+    forjada não alcança documento de outra empresa."""
+    ids = _ids_do_lote(data)
+    if not ids:
+        if escopo == 'entrada':
+            return _where_lote_entradas(data)
+        if escopo == 'saida':
+            return _where_lote_saidas(data)
+        return _where_lote_cte(data)
+
+    cid = str(data.get('cliente_id', '')).strip()
+    gid = str(data.get('grupo_id', '')).strip()
+    if escopo == 'cte':
+        where, params = _empresa_where_cte(cid, gid, alias='t', params=[])
+        where.append(_clausula_in('t.id', [str(i) for i in ids], params))
+        return where, params
+    fn = _empresa_where if escopo == 'entrada' else _empresa_where_saidas
+    extra, params = fn(cid, gid, alias='n', params=[])
+    where = [f"n.tipo = '{escopo}'"] + extra
+    where.append(_clausula_in('n.id', [str(i) for i in ids], params))
+    return where, params
+
+
+def _gerar_pdf_documento(xml, modelo):
+    """DANFE (55) / DACTE (57) em bytes, ou None se a lib não montar o layout."""
+    if modelo == '57':
+        from brazilfiscalreport.dacte import Dacte
+        return bytes(Dacte(xml=xml).output())
+    if modelo == '55':
+        from brazilfiscalreport.danfe import Danfe
+        return bytes(Danfe(xml=xml).output())
+    return None
+
+
+# ------------------------------- NF-e (entradas / saídas) -------------------
+def _lote_xml_nfe(escopo, permissao, nome_zip):
+    if not current_user.has_permission(permissao):
+        return jsonify({'error': 'Você não tem permissão para exportar estas notas.'}), 403
+    data = request.get_json(silent=True) or {}
+    where, params = _where_lote(escopo, data)
+    # Só o que dá para exportar: resumo da SEFAZ e xml vazio não entram no zip.
+    where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
+    total = int((execute_query(
+        f"SELECT COUNT(*) AS t FROM nfe_importacoes n {where_sql}",
+        tuple(params), fetch=True, fetch_one=True) or {}).get('t', 0))
+    if total == 0:
+        return jsonify({'error': 'Nenhuma nota com XML disponível na seleção/filtro '
+                                 '(resumos da SEFAZ não têm XML).'}), 404
+    if total > _LOTE_MAX_XML:
+        return jsonify({'error': f'{total} notas — o limite é {_LOTE_MAX_XML} por vez. '
+                                 f'Refine o período ou marque as notas que quer.'}), 413
+
+    rows = execute_query(
+        f"SELECT n.id, n.chave_acesso, n.xml_raw FROM nfe_importacoes n {where_sql}",
+        tuple(params), fetch=True) or []
+    arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
+                 (r['xml_raw'] or '').encode('utf-8')) for r in rows]
+    return _zip_download(arquivos, nome_zip)
+
+
+def _lote_pdf_nfe(escopo, permissao, nome_zip):
+    if not current_user.has_permission(permissao):
+        return jsonify({'error': 'Você não tem permissão para exportar estas notas.'}), 403
+    data = request.get_json(silent=True) or {}
+    ids = _ids_do_lote(data)
+    if not ids:
+        return jsonify({'error': 'Marque as notas que quer em PDF '
+                                 f'(no máximo {_LOTE_MAX_PDF}).'}), 400
+    if len(ids) > _LOTE_MAX_PDF:
+        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
+                                 f'(você marcou {len(ids)}).'}), 413
+
+    where, params = _where_lote(escopo, data)
+    where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
+    rows = execute_query(
+        "SELECT n.id, n.chave_acesso, n.xml_raw FROM nfe_importacoes n "
+        "WHERE " + ' AND '.join(where), tuple(params), fetch=True) or []
+
+    arquivos, ignorados = [], 0
+    for r in rows:
+        chave = r['chave_acesso'] or ''
+        modelo = chave[20:22] if len(chave) >= 22 else ''
+        try:
+            pdf = _gerar_pdf_documento(r['xml_raw'], modelo)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                '[export-lote] falha no PDF da nfe_id=%s', r['id'])
+            pdf = None
+        if pdf:
+            arquivos.append(((chave or str(r['id'])) + '.pdf', pdf))
+        else:
+            ignorados += 1
+    if not arquivos:
+        return jsonify({'error': 'Nenhuma das notas marcadas gera PDF — NFC-e (modelo 65) '
+                                 'só tem XML.'}), 404
+    return _zip_download(arquivos, nome_zip)
+
+
+@escrita_fiscal.route('/conf-compras/export/xml-lote', methods=['POST'])
+@login_required
+def lote_xml_compras():
+    return _lote_xml_nfe('entrada', 'escrita_fiscal.conf_compras', 'xmls-entradas.zip')
+
+
+@escrita_fiscal.route('/conf-compras/export/pdf-lote', methods=['POST'])
+@login_required
+def lote_pdf_compras():
+    return _lote_pdf_nfe('entrada', 'escrita_fiscal.conf_compras', 'pdfs-entradas.zip')
+
+
+@escrita_fiscal.route('/conf-saidas/export/xml-lote', methods=['POST'])
+@login_required
+def lote_xml_saidas():
+    return _lote_xml_nfe('saida', 'escrita_fiscal.conf_saidas', 'xmls-saidas.zip')
+
+
+@escrita_fiscal.route('/conf-saidas/export/pdf-lote', methods=['POST'])
+@login_required
+def lote_pdf_saidas():
+    return _lote_pdf_nfe('saida', 'escrita_fiscal.conf_saidas', 'pdfs-saidas.zip')
+
+
+# ------------------------------------ CT-e ----------------------------------
+def _xmls_cte(rows):
+    """Resolve o XML de cada CT-e: banco quando houver, senão Dropbox.
+
+    Os downloads vão em paralelo porque cada um é uma chamada de rede — em
+    série, algumas dezenas já estourariam o tempo da requisição. Quem falhar
+    fica de fora do zip em vez de derrubar o lote inteiro."""
+    pendentes = [r for r in rows if not (r.get('xml_raw') or '').strip()]
+    baixados = {}
+    if pendentes:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futuros = {pool.submit(dropbox_sync.download_xml, r['xml_caminho']): r['id']
+                       for r in pendentes if (r.get('xml_caminho') or '').strip()}
+            for fut in as_completed(futuros):
+                cte_id = futuros[fut]
+                try:
+                    baixados[cte_id] = fut.result()
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        '[export-lote] falha ao baixar XML do cte_id=%s', cte_id)
+    saida = []
+    for r in rows:
+        xml = (r.get('xml_raw') or '').strip() or baixados.get(r['id'])
+        if xml:
+            saida.append((r, xml))
+    return saida
+
+
+@escrita_fiscal.route('/conf-cte/export/xml-lote', methods=['POST'])
+@login_required
+def lote_xml_cte():
+    if not current_user.has_permission('escrita_fiscal.conf_cte'):
+        return jsonify({'error': 'Você não tem permissão para exportar estes CT-e.'}), 403
+    data = request.get_json(silent=True) or {}
+    where, params = _where_lote('cte', data)
+    where = list(where) + ["(COALESCE(t.xml_raw,'') <> '' OR COALESCE(t.xml_caminho,'') <> '')"]
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
+    total = int((execute_query(
+        f"SELECT COUNT(*) AS t FROM cte_documentos t {where_sql}",
+        tuple(params), fetch=True, fetch_one=True) or {}).get('t', 0))
+    if total == 0:
+        return jsonify({'error': 'Nenhum CT-e com XML disponível na seleção/filtro.'}), 404
+    if total > _LOTE_MAX_XML_CTE:
+        return jsonify({'error': f'{total} CT-e — o limite é {_LOTE_MAX_XML_CTE} por vez '
+                                 f'(cada XML é baixado do Dropbox). Refine o período '
+                                 f'ou marque os que quer.'}), 413
+
+    rows = execute_query(
+        f"SELECT t.id, t.chave_acesso, t.xml_raw, t.xml_caminho "
+        f"FROM cte_documentos t {where_sql}", tuple(params), fetch=True) or []
+    arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml', xml.encode('utf-8'))
+                for r, xml in _xmls_cte(rows)]
+    if not arquivos:
+        return jsonify({'error': 'Não foi possível ler os XMLs no Dropbox agora. '
+                                 'Tente de novo em instantes.'}), 502
+    return _zip_download(arquivos, 'xmls-cte.zip')
+
+
+@escrita_fiscal.route('/conf-cte/export/pdf-lote', methods=['POST'])
+@login_required
+def lote_pdf_cte():
+    if not current_user.has_permission('escrita_fiscal.conf_cte'):
+        return jsonify({'error': 'Você não tem permissão para exportar estes CT-e.'}), 403
+    data = request.get_json(silent=True) or {}
+    ids = _ids_do_lote(data)
+    if not ids:
+        return jsonify({'error': 'Marque os CT-e que quer em PDF '
+                                 f'(no máximo {_LOTE_MAX_PDF}).'}), 400
+    if len(ids) > _LOTE_MAX_PDF:
+        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
+                                 f'(você marcou {len(ids)}).'}), 413
+
+    where, params = _where_lote('cte', data)
+    where = list(where) + ["t.modelo = '57'"]
+    rows = execute_query(
+        "SELECT t.id, t.chave_acesso, t.modelo, t.xml_raw, t.xml_caminho "
+        "FROM cte_documentos t WHERE " + ' AND '.join(where),
+        tuple(params), fetch=True) or []
+
+    arquivos = []
+    for r, xml in _xmls_cte(rows):
+        try:
+            pdf = _gerar_pdf_documento(xml, '57')
+        except Exception:
+            logging.getLogger(__name__).exception(
+                '[export-lote] falha no DACTE do cte_id=%s', r['id'])
+            pdf = None
+        if pdf:
+            arquivos.append(((r['chave_acesso'] or str(r['id'])) + '.pdf', pdf))
+    if not arquivos:
+        return jsonify({'error': 'Nenhum dos CT-e marcados gera PDF (só o modelo 57 tem '
+                                 'DACTE).'}), 404
+    return _zip_download(arquivos, 'pdfs-cte.zip')
 
 
 # ---------------------------------------------------------------------------
