@@ -1901,6 +1901,294 @@ def lote_pdf_cte():
 
 
 # ---------------------------------------------------------------------------
+# Relatório (PDF + Excel) — Entradas / Saídas / CT-e. Monta o ctx a partir do
+# MESMO filtro da listagem (não da seleção). KPIs sempre sobre o filtro inteiro.
+# Excel leva o filtro inteiro (teto _LOTE_MAX_XML); PDF lista até _REL_MAX_PDF e,
+# acima disso, sai só com cabeçalho+KPIs+totais + aviso (PDF de 12k páginas não
+# serve). Colunas 'R': número no Excel (soma por fórmula), string BRL no PDF.
+# ---------------------------------------------------------------------------
+_REL_MAX_PDF = 5000
+_REL_LOGO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         'static', 'images', 'logo.png')
+
+
+def _rel_brl(v):
+    return 'R$ ' + f'{float(v or 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _rel_int(v):
+    return f'{int(v or 0):,}'.replace(',', '.')
+
+
+def _rel_data(d):
+    return d.strftime('%d/%m/%Y') if hasattr(d, 'strftime') else str(d or '')
+
+
+def _rel_filtro(escopo):
+    """WHERE do relatório = o MESMO filtro da listagem (request.args). Replica as
+    cláusulas de api_notas (entrada) / api_notas_saidas (saida) / api_ctes (cte) —
+    é o filtro, não a seleção. Isolado de propósito: não toca nos endpoints da
+    listagem que estão em produção."""
+    a = request.args
+    ci, gi = a.get('cliente_id', '').strip(), a.get('grupo_id', '').strip()
+
+    def dt(w, p, al):
+        if a.get('data_ini', '').strip(): w.append(f'{al}.data_emissao >= %s'); p.append(a.get('data_ini').strip())
+        if a.get('data_fim', '').strip(): w.append(f'{al}.data_emissao <= %s'); p.append(a.get('data_fim').strip())
+
+    def org(w, p, al):
+        o = a.get('origem', '').strip()
+        if o == 'SEFAZ': w.append(f"{al}.origem = 'SEFAZ'")
+        elif o == 'MANUAL': w.append(f"{al}.origem IN ('UPLOAD','DROPBOX')")
+        elif o: w.append(f'{al}.origem = %s'); p.append(o)
+
+    def vlr(w, p, col):
+        if a.get('vmin', '').strip(): w.append(f'{col} >= %s'); p.append(float(a.get('vmin')))
+        if a.get('vmax', '').strip(): w.append(f'{col} <= %s'); p.append(float(a.get('vmax')))
+
+    def vinc(w, p):
+        vs = a.get('vinc_status', '').strip()
+        base = "SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id"
+        if vs == 'completo':
+            w.append(f"NOT EXISTS ({base} AND i.produto_catalogo_id IS NULL) AND EXISTS ({base})")
+        elif vs == 'parcial':
+            w.append(f"EXISTS ({base} AND i.produto_catalogo_id IS NOT NULL) AND EXISTS ({base} AND i.produto_catalogo_id IS NULL)")
+        elif vs == 'sem':
+            w.append(f"NOT EXISTS ({base} AND i.produto_catalogo_id IS NOT NULL)")
+        elif vs == 'incompleto':
+            w.append(f"EXISTS ({base} AND i.produto_catalogo_id IS NULL)")
+
+    if escopo == 'cte':
+        w, p = _empresa_where_cte(ci, gi, alias='t', params=[])
+        emit = _filtro_lista(a.get('emit_cnpj', ''))
+        if emit: w.append(_clausula_in('t.emit_cnpj', emit, p))
+        if a.get('tomador_cnpj', '').strip():
+            w.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
+            p.append('%' + re.sub(r'\D', '', a.get('tomador_cnpj')) + '%')
+        dt(w, p, 't')
+        if a.get('chave', '').strip(): w.append('t.chave_acesso LIKE %s'); p.append('%' + a.get('chave').strip() + '%')
+        if a.get('num_cte', '').strip(): w.append('t.num_cte = %s'); p.append(a.get('num_cte').strip())
+        if a.get('modelo', '').strip(): w.append('t.modelo = %s'); p.append(a.get('modelo').strip())
+        ui, uf = _filtro_lista(a.get('uf_ini', '')), _filtro_lista(a.get('uf_fim', ''))
+        if ui: w.append(_clausula_in('t.uf_ini', ui, p))
+        if uf: w.append(_clausula_in('t.uf_fim', uf, p))
+        vlr(w, p, 't.valor_frete'); org(w, p, 't')
+        if a.get('cancelado', '').strip() == '1': w.append('t.cancelado = 1')
+        elif a.get('cancelado', '').strip() == '0': w.append('t.cancelado = 0')
+        if a.get('papel', '').strip(): w.append('t.papel_cliente = %s'); p.append(a.get('papel').strip())
+        return 'WHERE ' + ' AND '.join(w), p
+
+    if escopo == 'saida':
+        w, p = _empresa_where_saidas(ci, gi, alias='n', params=[])
+        w = ["n.tipo = 'saida'"] + w
+        dest = _filtro_lista(a.get('dest_cnpj', ''))
+        if dest: w.append(_clausula_in('n.dest_cnpj', dest, p))
+        dt(w, p, 'n')
+        if a.get('chave', '').strip(): w.append('n.chave_acesso LIKE %s'); p.append('%' + a.get('chave').strip() + '%')
+        if a.get('num_nota', '').strip(): w.append('n.num_nota = %s'); p.append(a.get('num_nota').strip())
+        if a.get('cfop', '').strip(): w.append('n.cfop LIKE %s'); p.append(a.get('cfop').strip() + '%')
+        du = _filtro_lista(a.get('dest_uf', ''))
+        if du: w.append(_clausula_in('n.dest_uf', du, p))
+        if a.get('emit_cnpj', '').strip(): w.append('n.emit_cnpj LIKE %s'); p.append('%' + a.get('emit_cnpj').strip() + '%')
+        vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
+        return 'WHERE ' + ' AND '.join(w), p
+
+    # entrada
+    w, p = _empresa_where(ci, gi, alias='n', params=[])
+    w = ["n.tipo = 'entrada'"] + w
+    emit = _filtro_lista(a.get('emit_cnpj', ''))
+    if emit: w.append(_clausula_in('n.emit_cnpj', emit, p))
+    dt(w, p, 'n')
+    if a.get('chave', '').strip(): w.append('n.chave_acesso LIKE %s'); p.append('%' + a.get('chave').strip() + '%')
+    if a.get('num_nota', '').strip(): w.append('n.num_nota = %s'); p.append(a.get('num_nota').strip())
+    if a.get('cfop', '').strip(): w.append('n.cfop LIKE %s'); p.append(a.get('cfop').strip() + '%')
+    eu = _filtro_lista(a.get('emit_uf', ''))
+    if eu: w.append(_clausula_in('n.emit_uf', eu, p))
+    if a.get('dest_cnpj', '').strip(): w.append('n.dest_cnpj LIKE %s'); p.append('%' + a.get('dest_cnpj').strip() + '%')
+    vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
+    return 'WHERE ' + ' AND '.join(w), p
+
+
+def _rel_empresa():
+    a = request.args
+    ci, gi = a.get('cliente_id', '').strip(), a.get('grupo_id', '').strip()
+    if ci.isdigit():
+        r = execute_query("SELECT numero_cliente, nome_razao_social FROM clientes WHERE id = %s",
+                          (int(ci),), fetch=True, fetch_one=True) or {}
+        num, raz = str(r.get('numero_cliente') or '').strip(), str(r.get('nome_razao_social') or '').strip()
+        return f'{num} - {raz}' if num and raz else (raz or num or '—')
+    if gi.isdigit():
+        r = execute_query("SELECT nome FROM grupos_clientes WHERE id = %s",
+                          (int(gi),), fetch=True, fetch_one=True) or {}
+        return f"Grupo: {r.get('nome') or '—'}"
+    return '—'
+
+
+def _rel_periodo():
+    a = request.args
+    def br(s):
+        try:
+            return datetime.strptime(str(s)[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+        except (ValueError, TypeError):
+            return None
+    di, df = br(a.get('data_ini', '')), br(a.get('data_fim', ''))
+    if di and df:
+        return di if di == df else f'{di} a {df}'
+    return di or df or 'Todo o período'
+
+
+def _rel_nome(escopo, ext):
+    data = {'cliente_id': request.args.get('cliente_id', ''), 'grupo_id': request.args.get('grupo_id', '')}
+    datas = [d for d in (request.args.get('data_ini', '').strip(),
+                         request.args.get('data_fim', '').strip()) if d]
+    base = _nome_zip_lote(data, datas, _prefixo_lote(escopo, 'RELATORIO'))  # termina em .zip
+    return base[:-4] + '.' + ext
+
+
+def _rel_linhas(escopo, formato, where_sql, params, limite):
+    """Linhas do relatório (até ``limite``). Colunas 'R' = string BRL no PDF, número
+    no Excel (pra somar). Contagens (Itens/NF-e) sempre string (não é moeda)."""
+    pdf = (formato == 'pdf')
+    if escopo == 'cte':
+        rows = execute_query(
+            "SELECT t.data_emissao, t.num_cte, t.serie, t.emit_nome, t.emit_cnpj, "
+            "t.uf_ini, t.uf_fim, t.cfop, t.valor_frete, t.valor_icms, "
+            "(SELECT COUNT(*) FROM cte_nfe cn WHERE cn.cte_id = t.id) AS qtd_nfes "
+            f"FROM cte_documentos t {where_sql} ORDER BY t.data_emissao DESC, t.id DESC LIMIT %s",
+            tuple(params) + (limite,), fetch=True) or []
+        out = []
+        for r in rows:
+            fre, icm = r['valor_frete'] or 0, r['valor_icms'] or 0
+            out.append([
+                _rel_data(r['data_emissao']),
+                f"{r['num_cte'] or '—'}/{r['serie'] or '—'}",
+                r['emit_nome'] or r['emit_cnpj'] or '—',
+                f"{r['uf_ini'] or '—'} → {r['uf_fim'] or '—'}",
+                r['cfop'] or '—', str(int(r['qtd_nfes'] or 0)),
+                _rel_brl(fre) if pdf else float(fre),
+                _rel_brl(icm) if pdf else float(icm),
+            ])
+        return out
+
+    hora = (", CASE WHEN LOCATE('<dhEmi>', n.xml_raw) > 0 THEN "
+            "SUBSTRING(SUBSTRING_INDEX(SUBSTRING_INDEX(n.xml_raw,'<dhEmi>',-1),'</dhEmi>',1),12,8) "
+            "END AS hora") if escopo == 'saida' else ""
+    partes = ("n.dest_nome AS nome, n.dest_cnpj AS doc, n.dest_uf AS uf"
+              if escopo == 'saida' else "n.emit_nome AS nome, n.emit_cnpj AS doc, n.emit_uf AS uf")
+    rows = execute_query(
+        f"SELECT n.id, n.data_emissao, n.num_nota, n.serie, {partes}, n.cfop, "
+        f"n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, "
+        f"COALESCE(ic.qtd, 0) AS qtd_itens{hora} FROM nfe_importacoes n "
+        f"LEFT JOIN (SELECT nfe_id, COUNT(*) AS qtd FROM nfe_itens GROUP BY nfe_id) ic ON ic.nfe_id = n.id "
+        f"{where_sql} ORDER BY n.data_emissao DESC, n.id DESC LIMIT %s",
+        tuple(params) + (limite,), fetch=True) or []
+    out = []
+    for r in rows:
+        data = _rel_data(r['data_emissao'])
+        if escopo == 'saida' and r.get('hora'):
+            data += ' ' + str(r['hora'])[:5]
+        v, ic, pi, co = (r['valor_total'] or 0, r['valor_icms'] or 0,
+                         r['valor_pis'] or 0, r['valor_cofins'] or 0)
+        out.append([
+            data, f"{r['num_nota'] or '—'}/{r['serie'] or '—'}",
+            r['nome'] or r['doc'] or '—', r['uf'] or '—', r['cfop'] or '—',
+            str(int(r['qtd_itens'] or 0)),
+            _rel_brl(v) if pdf else float(v), _rel_brl(ic) if pdf else float(ic),
+            _rel_brl(pi) if pdf else float(pi), _rel_brl(co) if pdf else float(co),
+        ])
+    return out
+
+
+def _exportar_relatorio(escopo, permissao, titulo):
+    from utils.relatorio import gerar_relatorio_pdf, gerar_relatorio_xlsx
+    if not current_user.has_permission(permissao):
+        return jsonify({'error': 'Você não tem permissão para exportar este relatório.'}), 403
+    formato = (request.args.get('formato', 'pdf') or 'pdf').lower()
+    if formato not in ('pdf', 'xlsx'):
+        return jsonify({'error': 'Formato inválido (use pdf ou xlsx).'}), 400
+
+    where_sql, params = _rel_filtro(escopo)
+
+    # KPIs + total sobre o FILTRO INTEIRO (independe do teto do PDF).
+    if escopo == 'cte':
+        agg = execute_query(
+            "SELECT COUNT(*) AS tot, COALESCE(SUM(t.valor_frete),0) AS frete, "
+            "COALESCE(SUM(t.valor_icms),0) AS icms, COALESCE(SUM(t.cancelado),0) AS canc, "
+            "COALESCE(SUM((SELECT COUNT(*) FROM cte_nfe cn WHERE cn.cte_id = t.id)),0) AS nfes "
+            f"FROM cte_documentos t {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+        total = int(agg.get('tot') or 0)
+        kpis = [('Total de CT-e', _rel_int(total)), ('Valor (Frete)', _rel_brl(agg.get('frete'))),
+                ('ICMS', _rel_brl(agg.get('icms'))), ('Cancelados', _rel_int(agg.get('canc'))),
+                ('NF-e transportadas', _rel_int(agg.get('nfes')))]
+        colunas = [('Data', 'L'), ('Nº/Série', 'L'), ('Transportadora', 'L'), ('Trajeto', 'L'),
+                   ('CFOP', 'L'), ('NF-e', 'L'), ('Frete R$', 'R'), ('ICMS', 'R')]
+        totais = ['', '', 'TOTAL', '', '', '', _rel_brl(agg.get('frete')), _rel_brl(agg.get('icms'))]
+    else:
+        agg = execute_query(
+            "SELECT COUNT(*) AS tot, COALESCE(SUM(n.valor_total),0) AS v, "
+            "COALESCE(SUM(n.valor_icms),0) AS icms, COALESCE(SUM(n.valor_pis),0) AS pis, "
+            "COALESCE(SUM(n.valor_cofins),0) AS cofins "
+            f"FROM nfe_importacoes n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+        total = int(agg.get('tot') or 0)
+        kpis = [('Total de Notas', _rel_int(total)), ('Valor Total', _rel_brl(agg.get('v'))),
+                ('ICMS', _rel_brl(agg.get('icms'))), ('PIS', _rel_brl(agg.get('pis'))),
+                ('COFINS', _rel_brl(agg.get('cofins')))]
+        parte = 'Destinatário' if escopo == 'saida' else 'Emitente (Fornecedor)'
+        cabD = ('Data / Hora', 'L') if escopo == 'saida' else ('Data', 'L')
+        colunas = [cabD, ('Nº/Série', 'L'), (parte, 'L'), ('UF', 'L'), ('CFOP', 'L'),
+                   ('Itens', 'L'), ('Valor R$', 'R'), ('ICMS', 'R'), ('PIS', 'R'), ('COFINS', 'R')]
+        totais = ['', 'TOTAL', '', '', '', '', _rel_brl(agg.get('v')), _rel_brl(agg.get('icms')),
+                  _rel_brl(agg.get('pis')), _rel_brl(agg.get('cofins'))]
+
+    if total == 0:
+        return jsonify({'error': 'Nada no filtro atual para o relatório.'}), 404
+    if formato == 'xlsx' and total > _LOTE_MAX_XML:
+        return jsonify({'error': f'{total} registros — o limite do Excel é {_LOTE_MAX_XML}. '
+                                 f'Refine o filtro.'}), 413
+
+    aviso, linhas = None, []
+    if formato == 'pdf' and total > _REL_MAX_PDF:
+        aviso = (f'Listagem completa no Excel — são {_rel_int(total)} registros '
+                 f'(o PDF lista até {_rel_int(_REL_MAX_PDF)}).')
+    else:
+        limite = _REL_MAX_PDF if formato == 'pdf' else _LOTE_MAX_XML
+        linhas = _rel_linhas(escopo, formato, where_sql, params, limite)
+
+    ctx = {
+        'titulo': titulo, 'empresa': _rel_empresa(), 'periodo': _rel_periodo(),
+        'gerado_em': datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%d/%m/%Y %H:%M'),
+        'kpis': kpis, 'colunas': colunas, 'linhas': linhas, 'totais': totais,
+        'logo_path': _REL_LOGO if os.path.exists(_REL_LOGO) else None, 'aviso': aviso,
+    }
+    if formato == 'xlsx':
+        dados = gerar_relatorio_xlsx(ctx)
+        mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        dados = gerar_relatorio_pdf(ctx)
+        mime = 'application/pdf'
+    return send_file(BytesIO(dados), as_attachment=True,
+                     download_name=_rel_nome(escopo, formato), mimetype=mime)
+
+
+@escrita_fiscal.route('/conf-compras/export/relatorio')
+@login_required
+def relatorio_entradas():
+    return _exportar_relatorio('entrada', 'escrita_fiscal.conf_compras', 'Relatório de Entradas')
+
+
+@escrita_fiscal.route('/conf-saidas/export/relatorio')
+@login_required
+def relatorio_saidas():
+    return _exportar_relatorio('saida', 'escrita_fiscal.conf_saidas', 'Relatório de Saídas')
+
+
+@escrita_fiscal.route('/conf-cte/export/relatorio')
+@login_required
+def relatorio_cte():
+    return _exportar_relatorio('cte', 'escrita_fiscal.conf_cte', 'Relatório de CT-e')
+
+
+# ---------------------------------------------------------------------------
 # API — itens de uma NF-e específica
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/api/itens/<int:nfe_id>')

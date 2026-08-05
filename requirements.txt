@@ -22,3 +22,5 @@ qrcode==8.2
 Pillow==12.2.0
 # Export de XML em lote via streaming (memória constante em 12k-50k arquivos)
 zipstream-ng==1.9.2
+# Relatório em Excel (utils/relatorio.py) — reportlab/Pillow já pinados acima
+openpyxl==3.1.5
