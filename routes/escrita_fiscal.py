@@ -1147,6 +1147,115 @@ def nota_pdf(nfe_id):
 
 
 # ---------------------------------------------------------------------------
+# Export de CT-e — XML e PDF (DACTE). Espelha o export de NF-e acima, com UMA
+# diferença de fundo: em ``cte_documentos`` a coluna ``xml_raw`` está VAZIA em
+# 100% das linhas — a captura de CT-e grava o XML no Dropbox e guarda só o
+# ``xml_caminho``. Então a fonte aqui é o arquivo, com ``xml_raw`` como
+# preferência caso um dia passe a ser preenchido (upload/importação futura).
+# Guard de acesso = a MESMA permissão da tela que lista (conf_cte).
+# ---------------------------------------------------------------------------
+def _carregar_cte_export(cte_id):
+    """Retorna (cte, xml, None) pronto para exportar, ou (None, None, (msg, status)).
+
+    Cobre: CT-e inexistente (404), sem permissão (403), sem XML disponível nem
+    no banco nem no Dropbox (404) e falha de download (502)."""
+    cte = execute_query(
+        "SELECT xml_raw, xml_caminho, chave_acesso, modelo FROM cte_documentos "
+        "WHERE id = %s",
+        (cte_id,), fetch=True, fetch_one=True,
+    )
+    if not cte:
+        return None, None, ('CT-e não encontrado.', 404)
+    if not current_user.has_permission('escrita_fiscal.conf_cte'):
+        return None, None, ('Você não tem permissão para baixar este CT-e.', 403)
+
+    xml = (cte.get('xml_raw') or '').strip()
+    if xml:
+        return cte, xml, None
+
+    caminho = (cte.get('xml_caminho') or '').strip()
+    if not caminho:
+        return None, None, ('Este CT-e não tem o XML guardado — nada a exportar.', 404)
+    try:
+        xml = dropbox_sync.download_xml(caminho)
+    except (DropboxAuthError, DropboxError) as exc:
+        logging.getLogger(__name__).warning(
+            '[export] falha ao baixar XML do CT-e id=%s (%s): %s', cte_id, caminho, exc)
+        return None, None, ('Não foi possível ler o XML no Dropbox agora. '
+                            'Tente de novo em instantes.', 502)
+    if not xml:
+        return None, None, ('O XML deste CT-e não está mais no Dropbox '
+                            '(o arquivo pode ter sido movido ou removido).', 404)
+    return cte, xml, None
+
+
+@escrita_fiscal.route('/cte/<int:cte_id>/xml')
+@login_required
+def cte_xml(cte_id):
+    """Baixa o XML do CT-e (do banco quando houver, senão do Dropbox)."""
+    cte, xml, erro = _carregar_cte_export(cte_id)
+    if erro:
+        return erro
+    chave = cte.get('chave_acesso') or str(cte_id)
+    return send_file(BytesIO(xml.encode('utf-8')), as_attachment=True,
+                     download_name=f'{chave}.xml', mimetype='application/xml')
+
+
+@escrita_fiscal.route('/cte/<int:cte_id>/pdf')
+@login_required
+def cte_pdf(cte_id):
+    """Gera o DACTE em PDF do CT-e (modelo 57).
+
+    ?inline=1 → Content-Disposition inline, para o <iframe> do modal renderizar
+    em vez de baixar — igual ao PDF da NF-e. Modelos 67 (CT-e OS) e 64 (GTV-e)
+    não têm layout na lib: devolvem 400 amigável e a tela só oferece o XML.
+    A geração é BLINDADA: qualquer falha vira 422, nunca 500."""
+    cte, xml, erro = _carregar_cte_export(cte_id)
+    if erro:
+        return erro
+    chave = cte.get('chave_acesso') or ''
+    modelo = (cte.get('modelo') or '').strip() or (chave[20:22] if len(chave) >= 22 else '')
+
+    if modelo and modelo != '57':
+        return (f'PDF do modelo {modelo} ainda não é gerado (a biblioteca só monta '
+                f'o DACTE do CT-e modelo 57). Use o XML por enquanto.', 400)
+    try:
+        from brazilfiscalreport.dacte import Dacte
+        doc = Dacte(xml=xml)
+        # fpdf2 (base da lib): output() sem destino devolve o PDF como bytearray.
+        pdf_bytes = bytes(doc.output())
+    except Exception:
+        logging.getLogger(__name__).exception(
+            '[export] falha ao gerar DACTE do cte_id=%s (chave=%s)', cte_id, chave)
+        return ('Não foi possível gerar o PDF deste CT-e (o XML pode estar fora do '
+                'padrão esperado). Baixe o XML por enquanto.', 422)
+    inline = request.args.get('inline') in ('1', 'true', 'sim')
+    return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
+                     download_name=f'{chave or cte_id}.pdf', mimetype='application/pdf')
+
+
+@escrita_fiscal.route('/conf-cte/excluir/<int:cte_id>', methods=['POST'])
+@login_required
+def excluir_cte(cte_id):
+    """Exclui um CT-e. SÓ ADMIN — mesmo gate do excluir_nfe: esconder o botão no
+    front não impede um não-admin de chamar a URL na mão."""
+    if not current_user.is_admin():
+        logger.warning('[excluir_cte] usuário %s (não-admin) tentou excluir o cte_id=%s',
+                       getattr(current_user, 'id', '?'), cte_id)
+        msg = 'Apenas administradores podem excluir CT-e.'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'error': msg}), 403
+        flash(msg, 'error')
+        return redirect(url_for('escrita_fiscal.conf_cte'))
+
+    execute_query("DELETE FROM cte_documentos WHERE id = %s", (cte_id,))
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True})
+    flash('CT-e excluído.', 'success')
+    return redirect(url_for('escrita_fiscal.conf_cte'))
+
+
+# ---------------------------------------------------------------------------
 # API — itens de uma NF-e específica
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/api/itens/<int:nfe_id>')
@@ -5237,6 +5346,8 @@ def conf_cte():
         stats=stats,
         empresas=empresas,
         grupos=grupos,
+        # Só admin enxerga o botão de excluir (o gate real está na rota).
+        is_admin=current_user.is_admin(),
     )
 
 
@@ -5327,6 +5438,11 @@ def api_ctes():
                    cl.nome_razao_social AS empresa_nome,
                    g.nome AS grupo_nome,
                    COALESCE(nf.qtd, 0) AS qtd_nfes,
+                   -- Tem XML para exportar? O CT-e da captura guarda o arquivo no
+                   -- Dropbox (xml_caminho) e deixa xml_raw vazio; qualquer um dos
+                   -- dois serve. Sem isso a tela não sabe quando mostrar os botões.
+                   (COALESCE(t.xml_raw, '') <> '' OR COALESCE(t.xml_caminho, '') <> '')
+                       AS tem_xml,
                    COUNT(*) OVER() AS _total,
                    COALESCE(SUM(t.valor_frete) OVER(), 0) AS _kpi_frete,
                    COALESCE(SUM(t.valor_icms)  OVER(), 0) AS _kpi_icms,

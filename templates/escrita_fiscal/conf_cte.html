@@ -89,6 +89,22 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .ct-nfe-count { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; background:#e0f2fe; color:#075985; }
 .ct-nfe-count.zero { background:#f1f5f9; color:#94a3b8; }
 
+/* ---- Botões de export / excluir na linha (mesmo padrão das outras telas) ---- */
+.btn-exp { background:transparent; border:none; color:#6b7280; padding:4px 6px; border-radius:5px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-flex; }
+.btn-exp:hover { background:#f0fdfa; color:#0f766e; }
+.btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
+.btn-del:hover { background:#fee2e2; }
+
+/* ---- Preview do CT-e (DACTE dentro de um iframe) ---- */
+.nf-prev-overlay { position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:9200; display:none; align-items:center; justify-content:center; }
+.nf-prev-overlay.open { display:flex; }
+.nf-prev-box { background:#fff; border-radius:14px; width:92vw; height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+.nf-prev-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; background:linear-gradient(135deg,#134e4a,#0d9488); flex-shrink:0; }
+.nf-prev-header h3 { margin:0; font-size:13.5px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nf-prev-close { background:rgba(255,255,255,.15); border:none; font-size:18px; color:#fff; cursor:pointer; width:32px; height:32px; border-radius:8px; line-height:32px; flex-shrink:0; }
+.nf-prev-close:hover { background:rgba(255,255,255,.28); }
+.nf-prev-frame { flex:1; width:100%; border:none; background:#525659; }
+
 /* ---- Tom Select (filtros com busca + multi-seleção) ---- */
 /* Alinha o componente ao visual dos outros campos do filtro. */
 .cc-filter-grid .ts-wrapper { width:100%; }
@@ -354,10 +370,11 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
                     <th style="text-align:right;">Frete R$</th>
                     <th style="text-align:right;">ICMS</th>
                     <th>Origem</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody id="tbodyCtes">
-                <tr><td colspan="12" class="cc-empty"><i class="fas fa-truck"></i>Selecione uma empresa e clique em Buscar</td></tr>
+                <tr><td colspan="13" class="cc-empty"><i class="fas fa-truck"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -404,6 +421,17 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
     <div class="cc-panel-footer">
         <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Fechar</button>
     </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Visualizar o CT-e (DACTE) ===================== -->
+<div class="nf-prev-overlay" id="prevOverlay" onclick="fecharPreview()">
+<div class="nf-prev-box" onclick="event.stopPropagation()">
+    <div class="nf-prev-header">
+        <h3 id="prevTitle"><i class="fas fa-eye" style="margin-right:8px;"></i>Visualizar CT-e</h3>
+        <button class="nf-prev-close" onclick="fecharPreview()" title="Fechar (Esc)">&times;</button>
+    </div>
+    <iframe id="prevFrame" class="nf-prev-frame" title="Visualização do CT-e"></iframe>
 </div>
 </div>
 {% endblock %}
@@ -534,6 +562,72 @@ function updateScopeBadge(type, label) {
     b.className = 'cc-scope-badge ' + type;
     const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
     b.innerHTML = `<i class="${icons[type]}"></i> ${label}`;
+}
+
+// ---- Export/visualização por CT-e ----
+// Espelha o das telas de NF-e. Só aparece quando há XML para exportar
+// (tem_xml: xml_raw no banco OU xml_caminho no Dropbox). Olhinho e PDF só no
+// modelo 57 — a lib monta o DACTE; 67/64 ficam só com o XML.
+// O stopPropagation evita abrir o painel de NF-e transportadas ao clicar.
+function exportBtns(r) {
+    if (!r.tem_xml) return '';
+    const temPdf = String(r.modelo || '') === '57';
+    const rot = `CT-e ${r.num_cte||'—'}/${r.serie||'—'} · ${r.chave_acesso||''}`.replace(/['"\\]/g, '');
+    let html = '';
+    if (temPdf) {
+        html += `<button class="btn-exp" title="Visualizar o CT-e (DACTE)"
+                    onclick="event.stopPropagation(); abrirPreview(${r.id}, '${rot}')"><i class="fas fa-eye"></i></button>`;
+    }
+    html += `<a class="btn-exp" href="/escrita-fiscal/cte/${r.id}/xml" title="Baixar XML"
+                onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`;
+    if (temPdf) {
+        html += `<a class="btn-exp" href="/escrita-fiscal/cte/${r.id}/pdf" title="Baixar PDF (DACTE)"
+                    onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
+    }
+    return html;
+}
+
+// ---- Preview do CT-e em modal ----
+// Reaproveita o MESMO endpoint do PDF com ?inline=1 (Content-Disposition inline);
+// o <iframe> então renderiza no visualizador nativo do browser em vez de baixar.
+function abrirPreview(id, rotulo) {
+    document.getElementById('prevTitle').innerHTML =
+        '<i class="fas fa-eye" style="margin-right:8px;"></i>' + (rotulo || ('CT-e ' + id));
+    document.getElementById('prevFrame').src = `/escrita-fiscal/cte/${id}/pdf?inline=1`;
+    document.getElementById('prevOverlay').classList.add('open');
+}
+function fecharPreview() {
+    const ov = document.getElementById('prevOverlay');
+    if (!ov || !ov.classList.contains('open')) return;
+    ov.classList.remove('open');
+    document.getElementById('prevFrame').src = '';  // para o carregamento do PDF
+}
+// Esc fecha o preview (só age quando ele está aberto).
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') fecharPreview();
+});
+
+// Só ADMIN vê o botão de excluir. O gate de verdade está na rota
+// /conf-cte/excluir/<id>, que devolve 403 para não-admin.
+const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+function delBtn(r) {
+    if (!IS_ADMIN) return '';
+    return `<button class="btn-del" onclick="excluirCte(${r.id}, this)" title="Excluir">
+                <i class="fas fa-trash-alt"></i>
+            </button>`;
+}
+function excluirCte(id, btn) {
+    if (!confirm('Excluir este CT-e?')) return;
+    fetch(`/escrita-fiscal/conf-cte/excluir/${id}`,
+        {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}})
+        .then(r => r.json())
+        // 403 de não-admin volta como {error: ...} — não remove a linha.
+        .then(data => {
+            if (data && data.error) { alert(data.error); return; }
+            btn.closest('tr').remove();
+            applyFilters();
+        })
+        .catch(() => alert('Erro ao excluir.'));
 }
 
 // ---- Opções dos filtros por empresa ----
@@ -758,7 +852,7 @@ function loadCtes() {
             }
             const tbody = document.getElementById('tbodyCtes');
             if (!lastRows.length) {
-                tbody.innerHTML = '<tr><td colspan="12" class="cc-empty"><i class="fas fa-truck"></i><br>Nenhum CT-e encontrado</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-truck"></i><br>Nenhum CT-e encontrado</td></tr>';
                 document.getElementById('paginationCtes').innerHTML = '';
                 return;
             }
@@ -789,6 +883,10 @@ function loadCtes() {
                     <td>
                         <span class="badge-${(r.origem||'sefaz').toLowerCase()}">${esc(r.origem)}</span>
                         ${r.cancelado ? '<span class="badge-cancel" title="CT-e cancelado por evento">CANCELADO</span>' : ''}
+                    </td>
+                    <td onclick="event.stopPropagation()">
+                        ${exportBtns(r)}
+                        ${delBtn(r)}
                     </td>
                 </tr>`;
             }).join('');
