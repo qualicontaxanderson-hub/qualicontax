@@ -654,7 +654,7 @@ function closeImportManualModal() {
 function submitImportManual() {
     const form = document.getElementById('importManualForm');
     const files = document.getElementById('importManualFiles').files;
-    if (!files.length) { alert('Selecione pelo menos um arquivo XML.'); return; }
+    if (!files.length) { alert('Selecione pelo menos um arquivo XML ou .zip.'); return; }
     const btn = document.getElementById('btnImportManualSubmit');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
@@ -721,13 +721,14 @@ function submitImportManual() {
     </div>
     <div style="padding:20px 24px;">
         <p style="font-size:12px;color:#64748b;margin:0 0 16px;line-height:1.5;">
-            Upload direto de XMLs para teste de velocidade de importação (sem Dropbox).<br>
-            As notas são importadas imediatamente sem movimentação de arquivos.
+            Upload direto de XMLs (sem Dropbox): <strong>NF-e/NFC-e e CT-e no mesmo lote</strong> —
+            cada arquivo é roteado pelo modelo do documento. Também aceita .zip de XMLs.<br>
+            Os documentos são importados imediatamente sem movimentação de arquivos.
         </p>
         <form id="importManualForm" enctype="multipart/form-data">
             <div style="margin-bottom:14px;">
-                <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;display:block;margin-bottom:5px;">Arquivos XML</label>
-                <input type="file" id="importManualFiles" name="xml_files" multiple accept=".xml"
+                <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;display:block;margin-bottom:5px;">Arquivos XML ou .zip</label>
+                <input type="file" id="importManualFiles" name="xml_files" multiple accept=".xml,.zip"
                        style="width:100%;padding:8px;border:1.5px dashed #d1d5db;border-radius:8px;font-size:13px;cursor:pointer;background:#f8fafc;">
             </div>
         </form>

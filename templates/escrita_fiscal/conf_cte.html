@@ -370,12 +370,9 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
         <i class="fas fa-key"></i> Chaves XML
         <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
     </div>
+    {# A importação manual (NF-e e CT-e no mesmo lote) agora é só na tela inicial. #}
+    {# Excluir em lote: só ADMIN. O gate real é a rota /conf-cte/excluir-lote. #}
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-        <button class="btn-lote" style="background:#0052cc;" onclick="document.getElementById('cteUploadInput').click()"
-                title="Importar CT-e de arquivos XML ou de um .zip (empresa e papel são lidos do próprio XML)">
-            <i class="fas fa-file-import"></i> Importar XML
-        </button>
-        <input type="file" id="cteUploadInput" multiple accept=".xml,.zip" style="display:none;" onchange="importarCteXml(this)">
         <button class="btn-lote xml" onclick="baixarXmlLote(this)"
                 title="Os marcados; se nada estiver marcado, todos do filtro atual">
             <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
@@ -393,6 +390,12 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
                 <a onclick="exportarRel('pdf')"><i class="fas fa-file-pdf" style="color:#b91c1c;"></i> PDF</a>
             </div>
         </div>
+        {% if is_admin %}
+        <button onclick="excluirLote()"
+                style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-trash-alt"></i> Excluir em Lote
+        </button>
+        {% endif %}
     </div>
 </div>
 
@@ -720,33 +723,6 @@ function baixarXmlLote(btn) {
     _baixarZip('/escrita-fiscal/conf-cte/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 
-// ---- Upload manual de CT-e (XMLs soltos ou um .zip) ----
-// Empresa e papel saem do próprio XML (o emitente cliente vira SAÍDA). Grava com
-// origem='UPLOAD'; dedup por chave. Recarrega a lista ao terminar.
-function importarCteXml(input) {
-    const arquivos = input.files;
-    if (!arquivos || !arquivos.length) return;
-    const btn = document.querySelector('button[onclick*="cteUploadInput"]');
-    const rotulo = btn ? btn.innerHTML : null;
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...'; }
-    const fd = new FormData();
-    for (const f of arquivos) fd.append('xml_files', f);
-    input.value = '';   // permite reimportar os mesmos arquivos depois
-    fetch('/escrita-fiscal/conf-cte/importar',
-          {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd})
-        .then(r => r.json())
-        .then(d => {
-            if (d.error) { alert(d.error); return; }
-            let msg = `Importados: ${d.importados}\n`
-                    + `Já existiam (pulados): ${d.pulados}\n`
-                    + `Rejeitados: ${d.rejeitados}`;
-            if (d.detalhes && d.detalhes.length) msg += '\n\n' + d.detalhes.join('\n');
-            alert(msg);
-            if (d.importados || d.pulados) loadCtes();   // atualiza a lista
-        })
-        .catch(() => alert('Erro de conexão ao importar CT-e.'))
-        .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } });
-}
 function gerarPdfLote(btn) {
     const ids = idsMarcados();
     if (!ids.length) { alert('Marque o que você quer em PDF (no máximo 10).'); return; }
@@ -818,6 +794,39 @@ function excluirCte(id, btn) {
             applyFilters();
         })
         .catch(() => alert('Erro ao excluir.'));
+}
+
+// ---- Exclusão em lote (igual às telas de Entradas/Saídas) ----
+// Opera sobre os MARCADOS; no modo "todos os N do filtro" (ou sem nada marcado)
+// manda ids vazios e o backend apaga por WHERE — aí a confirmação é reforçada,
+// mostrando o N. O gate real é a rota, que devolve 403 para não-admin.
+function excluirLote() {
+    const marcados = idsMarcados();
+    const tudoFiltro = selTudoFiltro || !marcados.length;
+    const n = tudoFiltro ? ctesTotal : marcados.length;
+    if (!n) { alert('Nenhum CT-e encontrado com os filtros atuais.'); return; }
+    if (tudoFiltro) {
+        if (!confirm(`Excluir TODOS os ${n} CT-e encontrados com os filtros atuais?\n\nEsta ação não pode ser desfeita.`)) return;
+        if (!confirm(`Confirme mais uma vez: ${n} CT-e serão excluídos permanentemente.`)) return;
+    } else if (!confirm(`Excluir ${n} CT-e marcado(s)?\n\nEsta ação não pode ser desfeita.`)) {
+        return;
+    }
+    fetch('/escrita-fiscal/conf-cte/excluir-lote', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(Object.assign({}, getFilters(), {ids: tudoFiltro ? [] : marcados})),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            alert(`${data.deleted} CT-e excluído(s).`);
+            desmarcarTodos();
+            applyFilters();
+        } else {
+            // 403 de não-admin volta como {error: ...} — mostra a msg do servidor.
+            alert(data.error || 'Erro ao excluir em lote.');
+        }
+    })
+    .catch(() => alert('Erro ao excluir em lote.'));
 }
 
 // ---- Opções dos filtros por empresa ----

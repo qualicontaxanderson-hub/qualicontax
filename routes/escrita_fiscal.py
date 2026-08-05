@@ -1324,6 +1324,37 @@ def excluir_cte(cte_id):
     return redirect(url_for('escrita_fiscal.conf_cte'))
 
 
+@escrita_fiscal.route('/conf-cte/excluir-lote', methods=['POST'])
+@login_required
+def excluir_lote_cte():
+    """Exclui os CT-e MARCADOS ou, sem nada marcado (ids vazios), todos os do
+    filtro atual — o mesmo _where_lote que o export usa, então o escopo de
+    empresa entra sempre e uma lista de ids forjada não alcança outra empresa.
+    SÓ ADMIN, mesmo gate do excluir_cte, aplicado antes de montar o WHERE.
+    As NF-e transportadas (cte_nfe) saem por ON DELETE CASCADE."""
+    if not current_user.is_admin():
+        logger.warning('[excluir_lote_cte] usuário %s (não-admin) tentou excluir CT-e em lote',
+                       getattr(current_user, 'id', '?'))
+        return jsonify({'error': 'Apenas administradores podem excluir CT-e.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    # Trava: sem ids marcados E sem empresa/grupo o WHERE ficaria vazio e o DELETE
+    # varreria a base inteira. A tela já exige escopo para listar; aqui é o gate.
+    if not _ids_do_lote(data) and not (str(data.get('cliente_id', '')).strip()
+                                       or str(data.get('grupo_id', '')).strip()):
+        return jsonify({'error': 'Selecione uma empresa ou grupo antes de excluir em lote.'}), 400
+
+    where, params = _where_lote('cte', data)
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    total = int((execute_query(
+        f"SELECT COUNT(*) AS t FROM cte_documentos t {where_sql}",
+        tuple(params), fetch=True, fetch_one=True) or {}).get('t', 0))
+    if total:
+        execute_query(f"DELETE t FROM cte_documentos t {where_sql}", tuple(params))
+    return jsonify({'ok': True, 'deleted': total})
+
+
 # ---------------------------------------------------------------------------
 # Export em LOTE — .zip de XMLs e de PDFs
 #
@@ -2637,7 +2668,110 @@ def api_resumo_produtos():
 
 
 # ---------------------------------------------------------------------------
-# Importar XML — upload manual
+# Upload manual — roteamento por MODELO
+#
+# A Importação Manual da tela inicial é o ÚNICO ponto de upload do sistema:
+# NF-e/NFC-e (55/65) e CT-e (57) entram no MESMO lote. O modelo é decidido
+# ANTES de qualquer parse (dígitos 21-22 da chave do Id=, ou a raiz do XML
+# quando não há Id) — era daí que vinha o "Nó não encontrado no XML": um CT-e
+# caindo no parser de NF-e.
+#
+# CT-e: resolve empresa e papel pelo próprio XML (papel_do_cliente contra a
+# base — emitente cliente → SAÍDA), grava com origem='UPLOAD' e dedup por
+# (chave, cliente_id). É o mesmo core que a rota /conf-cte/importar usa.
+# ---------------------------------------------------------------------------
+_CTE_PARTES = ('emit_cnpj', 'rem_cnpj', 'dest_cnpj', 'exped_cnpj', 'receb_cnpj',
+               'tomador_cnpj')
+_MODELOS_CTE = ('57', '67', '64')
+# Id="CTe3521..." / Id="NFe3521..." — os 44 dígitos da chave. Eventos (Id="ID11...")
+# têm mais de 44 dígitos antes das aspas e de propósito NÃO casam aqui.
+_RE_CHAVE_ID = re.compile(r'\bId\s*=\s*["\'][A-Za-z]*(\d{44})["\']')
+_RE_RAIZ_XML = re.compile(r'<\s*(?![?!])([A-Za-z_][\w.\-]*)')
+_RAIZES_CTE = {'cteproc', 'cteosproc', 'cte', 'cteos', 'gtve',
+               'infcte', 'infcteos', 'infgtve'}
+
+
+def _modelo_do_xml(content: str) -> str:
+    """Modelo fiscal (dígitos 21-22 da chave) lido do Id=, sem parsear o XML.
+    Devolve '' quando o documento não traz chave no Id."""
+    m = _RE_CHAVE_ID.search(content)
+    return m.group(1)[20:22] if m else ''
+
+
+def _e_cte(content: str) -> bool:
+    """True quando o XML é de CT-e (57) / CT-e OS (67) / GTV-e (64). Decidido
+    pelo modelo da chave e, na falta dela, pela raiz do XML."""
+    modelo = _modelo_do_xml(content)
+    if modelo:
+        return modelo in _MODELOS_CTE
+    m = _RE_RAIZ_XML.search(content)
+    raiz = m.group(1).split(':')[-1].lower() if m else ''
+    return raiz in _RAIZES_CTE
+
+
+def _importar_um_cte(nome: str, content: str, cache):
+    """Importa UM XML de CT-e. Devolve ('ok'|'dup', None) quando entrou, ou
+    (None, 'motivo') quando o arquivo foi rejeitado."""
+    try:
+        parsed = parse_cte_xml(content)
+    except Exception as exc:
+        return None, f'{nome}: XML não é um CT-e válido ({exc}).'
+    header = parsed['header']
+    chave = header.get('chave_acesso') or ''
+    modelo = header.get('modelo') or (chave[20:22] if len(chave) >= 22 else '')
+    if modelo != '57':
+        return None, f'{nome}: não é CT-e modelo 57 (modelo {modelo or "?"}).'
+    # Quais partes são clientes cadastrados → uma linha por cliente, com o papel
+    # real (emitente → SAÍDA; tomador/dest/rem → entrada; os dois → dual).
+    achados = {}   # cliente_id -> cnpj_dígitos
+    for campo in _CTE_PARTES:
+        dig = re.sub(r'\D', '', header.get(campo) or '')
+        if len(dig) < 11:
+            continue
+        hit = _find_cliente_by_doc_digits(dig, cache)
+        if hit and hit['id'] not in achados:
+            achados[hit['id']] = dig
+    if not achados:
+        return None, f'{nome}: nenhuma empresa cadastrada nesse CT-e.'
+    novo = False
+    for cid, dig in achados.items():
+        papel = papel_do_cliente(header, dig)
+        if _save_cte(parsed, nome, 'UPLOAD', cliente_id=cid,
+                     xml_raw=content, papel_cliente=papel, cnpj_cliente=dig) == 'ok':
+            novo = True
+    return ('ok' if novo else 'dup'), None
+
+
+def _expandir_uploads(files, errors):
+    """Desempacota os arquivos enviados em [(nome, bytes)]: XMLs soltos e os de
+    dentro de cada .zip (o upload de CT-e sempre veio em zip). O que não for XML
+    nem ZIP vira erro. Devolve a lista e quantos arquivos foram recusados."""
+    entradas, recusados = [], 0
+    for f in files:
+        nome = f.filename or ''
+        low = nome.lower()
+        if low.endswith('.zip'):
+            try:
+                with zipfile.ZipFile(BytesIO(f.read())) as z:
+                    membros = [n for n in z.namelist() if n.lower().endswith('.xml')]
+                    for n in membros:
+                        entradas.append((n.rsplit('/', 1)[-1], z.read(n)))
+                if not membros:
+                    recusados += 1
+                    errors.append(f'{nome}: zip sem XML dentro.')
+            except zipfile.BadZipFile:
+                recusados += 1
+                errors.append(f'{nome}: zip inválido/corrompido.')
+        elif low.endswith('.xml'):
+            entradas.append((nome, f.read()))
+        else:
+            recusados += 1
+            errors.append(f'{nome}: não é XML nem ZIP.')
+    return entradas, recusados
+
+
+# ---------------------------------------------------------------------------
+# Importar XML — upload manual (NF-e/NFC-e + CT-e no mesmo lote)
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/conf-compras/importar', methods=['POST'])
 @login_required
@@ -2650,18 +2784,30 @@ def importar_xml():
         flash('Nenhum arquivo selecionado.', 'warning')
         return redirect(url_for('escrita_fiscal.conf_compras'))
 
-    ok, dup, err = 0, 0, 0
+    ok, dup = 0, 0
     errors = []
 
     _upload_cache = _build_cliente_doc_cache()
+    # err já começa contando o que nem chegou a ser XML (zip ruim, extensão errada)
+    entradas, err = _expandir_uploads(files, errors)
 
-    for f in files:
-        if not f.filename.lower().endswith('.xml'):
-            err += 1
-            errors.append(f'{f.filename}: não é um arquivo XML')
-            continue
+    for nome, raw in entradas:
         try:
-            content = f.read().decode('utf-8', errors='replace')
+            content = raw.decode('utf-8', errors='replace')
+
+            # Roteia POR MODELO antes do parse: CT-e vai para o core do conf-cte
+            # (empresa e papel saem do próprio XML); 55/65 segue intocado abaixo.
+            if _e_cte(content):
+                res, motivo = _importar_um_cte(nome, content, _upload_cache)
+                if motivo:
+                    err += 1
+                    errors.append(motivo)
+                elif res == 'ok':
+                    ok += 1
+                else:
+                    dup += 1
+                continue
+
             parsed = parse_nfe_xml(content)
 
             dest_cli = int(cliente_id) if cliente_id else None
@@ -2677,10 +2823,10 @@ def importar_xml():
 
             if dest_cli is None and emit_cli is None:
                 # Sem empresa selecionada e nenhum CNPJ reconhecido — salva sem vínculo
-                result = _save_nfe(parsed, f.filename, 'UPLOAD', content,
+                result = _save_nfe(parsed, nome, 'UPLOAD', content,
                                    grupo_id=grp_id, tipo='entrada')
             else:
-                result = _save_nfe_dual(parsed, f.filename, 'UPLOAD', content,
+                result = _save_nfe_dual(parsed, nome, 'UPLOAD', content,
                                         dest_cli=dest_cli, emit_cli=emit_cli,
                                         grupo_id=grp_id)
             if result == 'dup':
@@ -2689,10 +2835,10 @@ def importar_xml():
                 ok += 1
         except ValueError as exc:
             err += 1
-            errors.append(f'{f.filename}: {exc}')
+            errors.append(f'{nome}: {exc}')
         except Exception as exc:
             err += 1
-            errors.append(f'{f.filename}: erro inesperado — {exc}')
+            errors.append(f'{nome}: erro inesperado — {exc}')
 
     # Resposta JSON para chamadas AJAX (modal de Importação Manual)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -2700,12 +2846,12 @@ def importar_xml():
 
     msgs = []
     if ok:
-        msgs.append(f'{ok} nota(s) importada(s) com sucesso.')
+        msgs.append(f'{ok} documento(s) importado(s) com sucesso.')
     if dup:
-        msgs.append(f'{dup} nota(s) já existiam (duplicadas, ignoradas).')
+        msgs.append(f'{dup} documento(s) já existiam (duplicados, ignorados).')
     if err:
         msgs.append(f'{err} arquivo(s) com erro.')
-    flash(' '.join(msgs) or 'Nenhuma nota processada.', 'success' if ok else 'warning')
+    flash(' '.join(msgs) or 'Nenhum documento processado.', 'success' if ok else 'warning')
     for e in errors[:5]:
         flash(e, 'danger')
 
@@ -2713,15 +2859,11 @@ def importar_xml():
 
 
 # ---------------------------------------------------------------------------
-# Upload manual de CT-e — fecha as SAÍDAS de CT-e (cliente = transportadora/
-# emitente), que a CTeDistribuicaoDFe não devolve. Espelha o importar_xml da NF-e,
-# com 3 diferenças: aceita .zip de XMLs; só modelo 57; resolve empresa/papel pelo
-# próprio XML (papel_do_cliente contra a base — emitente cliente → SAÍDA).
+# Upload manual SÓ de CT-e — fecha as SAÍDAS de CT-e (cliente = transportadora/
+# emitente), que a CTeDistribuicaoDFe não devolve. A tela do conf-cte não tem
+# mais botão de importar (a Importação Manual da home faz os dois tipos); a rota
+# fica de pé como API do mesmo core (_importar_um_cte).
 # ---------------------------------------------------------------------------
-_CTE_PARTES = ('emit_cnpj', 'rem_cnpj', 'dest_cnpj', 'exped_cnpj', 'receb_cnpj',
-               'tomador_cnpj')
-
-
 @escrita_fiscal.route('/conf-cte/importar', methods=['POST'])
 @login_required
 def importar_cte_xml():
@@ -2736,66 +2878,17 @@ def importar_cte_xml():
         return jsonify({'error': 'Nenhum arquivo selecionado.'}), 400
 
     # Coleta os XMLs: soltos e os de dentro de cada .zip (o Anderson manda um zip).
-    xmls, rejeitados, detalhes = [], 0, []
-    for f in files:
-        nome = f.filename or ''
-        low = nome.lower()
-        if low.endswith('.zip'):
-            try:
-                with zipfile.ZipFile(BytesIO(f.read())) as z:
-                    membros = [n for n in z.namelist() if n.lower().endswith('.xml')]
-                    for n in membros:
-                        xmls.append((n.rsplit('/', 1)[-1], z.read(n)))
-                if not membros:
-                    rejeitados += 1
-                    detalhes.append(f'{nome}: zip sem XML dentro.')
-            except zipfile.BadZipFile:
-                rejeitados += 1
-                detalhes.append(f'{nome}: zip inválido/corrompido.')
-        elif low.endswith('.xml'):
-            xmls.append((nome, f.read()))
-        else:
-            rejeitados += 1
-            detalhes.append(f'{nome}: não é XML nem ZIP.')
+    detalhes = []
+    xmls, rejeitados = _expandir_uploads(files, detalhes)
 
     cache = _build_cliente_doc_cache()
     importados = pulados = 0
     for nome, raw in xmls:
-        try:
-            content = raw.decode('utf-8', 'replace')
-            parsed = parse_cte_xml(content)
-        except Exception as exc:
+        res, motivo = _importar_um_cte(nome, raw.decode('utf-8', 'replace'), cache)
+        if motivo:
             rejeitados += 1
-            detalhes.append(f'{nome}: XML não é um CT-e válido ({exc}).')
-            continue
-        header = parsed['header']
-        chave = header.get('chave_acesso') or ''
-        modelo = header.get('modelo') or (chave[20:22] if len(chave) >= 22 else '')
-        if modelo != '57':
-            rejeitados += 1
-            detalhes.append(f'{nome}: não é CT-e modelo 57 (modelo {modelo or "?"}).')
-            continue
-        # Quais partes são clientes cadastrados → uma linha por cliente, com o papel
-        # real (emitente → SAÍDA; tomador/dest/rem → entrada; os dois → dual).
-        achados = {}   # cliente_id -> cnpj_dígitos
-        for campo in _CTE_PARTES:
-            dig = re.sub(r'\D', '', header.get(campo) or '')
-            if len(dig) < 11:
-                continue
-            hit = _find_cliente_by_doc_digits(dig, cache)
-            if hit and hit['id'] not in achados:
-                achados[hit['id']] = dig
-        if not achados:
-            rejeitados += 1
-            detalhes.append(f'{nome}: nenhuma empresa cadastrada nesse CT-e.')
-            continue
-        novo = False
-        for cid, dig in achados.items():
-            papel = papel_do_cliente(header, dig)
-            if _save_cte(parsed, nome, 'UPLOAD', cliente_id=cid,
-                         xml_raw=content, papel_cliente=papel, cnpj_cliente=dig) == 'ok':
-                novo = True
-        if novo:
+            detalhes.append(motivo)
+        elif res == 'ok':
             importados += 1
         else:
             pulados += 1
