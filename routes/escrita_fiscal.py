@@ -1107,9 +1107,10 @@ def nota_xml(nfe_id):
 def nota_pdf(nfe_id):
     """Gera o DANFE/DACTE em PDF a partir do xml_raw (nfeProc autorizado).
 
-    Modelo pelos dígitos 21-22 da chave: 55=DANFE, 57=DACTE, 65=NFC-e (a lib ainda
-    não gera DANFCE → 400 amigável). A geração é BLINDADA: se o XML não for o
-    proc autorizado esperado e a lib falhar, devolve erro amigável, nunca 500.
+    Modelo pelos dígitos 21-22 da chave: 55=DANFE, 57=DACTE (brazilfiscalreport),
+    65=NFC-e (DANFCE próprio em ReportLab, utils/danfce). A geração é BLINDADA: se o
+    XML não for o proc autorizado esperado e a lib falhar, devolve erro amigável,
+    nunca 500.
 
     ?inline=1 → Content-Disposition: inline, para o <iframe> do modal de
     visualização renderizar o PDF em vez de baixar. Sem o parâmetro continua
@@ -1122,8 +1123,19 @@ def nota_pdf(nfe_id):
     modelo = chave[20:22] if len(chave) >= 22 else ''
 
     if modelo == '65':
-        return ('PDF de NFC-e (modelo 65) em breve — a biblioteca ainda não gera o '
-                'DANFCE. Use o XML por enquanto.', 400)
+        # NFC-e: DANFCE próprio em ReportLab (a brazilfiscalreport não gera 65).
+        # Blindagem igual à dos 55/57: XML fora do padrão → 422 amigável, nunca 500.
+        try:
+            from utils.danfce import gerar_danfce_pdf
+            pdf_bytes = gerar_danfce_pdf(xml_raw)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                '[export] falha ao gerar DANFCE da nfe_id=%s (chave=%s)', nfe_id, chave)
+            return ('Não foi possível gerar o PDF desta NFC-e (o XML pode estar fora '
+                    'do padrão esperado). Baixe o XML por enquanto.', 422)
+        inline = request.args.get('inline') in ('1', 'true', 'sim')
+        return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
+                         download_name=f'{chave or nfe_id}.pdf', mimetype='application/pdf')
     try:
         if modelo == '57':
             # NOTA: CT-e não é gravado em nfe_importacoes (fica em cte_documentos),
@@ -1593,13 +1605,17 @@ def _where_lote(escopo, data):
 
 
 def _gerar_pdf_documento(xml, modelo):
-    """DANFE (55) / DACTE (57) em bytes, ou None se a lib não montar o layout."""
+    """DANFE (55) / DACTE (57) / DANFCE (65) em bytes, ou None se não montar o layout."""
     if modelo == '57':
         from brazilfiscalreport.dacte import Dacte
         return bytes(Dacte(xml=xml).output())
     if modelo == '55':
         from brazilfiscalreport.danfe import Danfe
         return bytes(Danfe(xml=xml).output())
+    if modelo == '65':
+        # NFC-e: DANFCE próprio em ReportLab (a brazilfiscalreport não gera 65).
+        from utils.danfce import gerar_danfce_pdf
+        return gerar_danfce_pdf(xml)
     return None
 
 
@@ -1664,8 +1680,8 @@ def _lote_pdf_nfe(escopo, permissao):
         else:
             ignorados += 1
     if not arquivos:
-        return jsonify({'error': 'Nenhuma das notas marcadas gera PDF — NFC-e (modelo 65) '
-                                 'só tem XML.'}), 404
+        return jsonify({'error': 'Nenhuma das notas marcadas gerou PDF (o XML pode estar '
+                                 'fora do padrão esperado). Baixe o XML por enquanto.'}), 404
     return _zip_download(arquivos, _nome_zip_lote(data))
 
 

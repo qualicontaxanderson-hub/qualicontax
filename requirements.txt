@@ -16,3 +16,7 @@ APScheduler==3.10.4
 Flask-Compress==1.17
 defusedxml==0.7.1
 brazilfiscalreport[dacte]==1.0.1
+# DANFCE (NFC-e modelo 65) — gerador próprio em ReportLab (utils/danfce.py)
+reportlab==4.4.10
+qrcode==8.2
+Pillow==12.2.0

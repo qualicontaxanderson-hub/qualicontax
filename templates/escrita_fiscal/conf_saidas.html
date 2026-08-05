@@ -1019,7 +1019,7 @@ function applyFilters() {
 function exportBtns(r) {
     if (r.incompleta) return '';
     const modelo = (r.chave_acesso || '').substr(20, 2);
-    const temPdf = (modelo === '55' || modelo === '57');
+    const temPdf = (modelo === '55' || modelo === '57' || modelo === '65');
     // Rótulo do cabeçalho do modal. Vai dentro de um atributo onclick entre
     // aspas simples — as aspas são removidas por segurança.
     const rot = `Nota ${r.num_nota||'—'}/${r.serie||'—'} · ${r.chave_acesso||''}`.replace(/['"\\]/g, '');
@@ -1031,7 +1031,7 @@ function exportBtns(r) {
     html += `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/xml" title="Baixar XML"
                 onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`;
     if (temPdf) {
-        html += `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/pdf" title="Baixar PDF (DANFE/DACTE)"
+        html += `<a class="btn-exp" href="/escrita-fiscal/nota/${r.id}/pdf" title="Baixar PDF (DANFE/DACTE/DANFCE)"
                     onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
     }
     return html;
