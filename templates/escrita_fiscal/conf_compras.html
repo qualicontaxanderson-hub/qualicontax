@@ -719,6 +719,10 @@ let catalogoProdutos = [];
 let catalogoCache = {};   // key: "cli:grp" → array of products
 let currentNfeId = null;
 let panelModified = false;
+// Promessas dos saves otimistas de vínculo (fire-and-forget). closePanel espera
+// elas baterem no banco antes de reler a lista, senão o loadNotas leria o
+// CADASTRO antes da gravação.
+let vincSaves = [];
 let hasSearched = false;
 let requestControllers = {notas: null, emissor: null, produto: null, chaves: null};
 
@@ -1667,27 +1671,20 @@ function buildProdOpts(selectedId) {
 }
 
 function closePanel() {
-    if (panelModified && currentNfeId) {
-        // Update only the vinculation dot for this NF-e row in-place.
-        // This avoids a full applyFilters() → api_notas round-trip (which was
-        // slow because the retroactive UPDATE may still hold DB locks, and the
-        // api_notas window-function query over the full table is expensive).
-        const totalWraps = document.querySelectorAll('[id^="vinculo_"]').length;
-        const vincWraps  = document.querySelectorAll('[id^="vinculo_"] .vinculado-badge').length;
-        const row = document.querySelector(`tr[data-nfeid="${currentNfeId}"]`);
-        if (row) {
-            let dotCls, dotTip;
-            if (totalWraps === 0)             { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
-            else if (vincWraps === 0)          { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
-            else if (vincWraps === totalWraps) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
-            else                              { dotCls = 'amarelo';   dotTip = `Parcial (${vincWraps}/${totalWraps})`; }
-            const dotCell = row.querySelector('.vinc-cell');
-            if (dotCell) dotCell.innerHTML = `<span class="vinc-dot ${dotCls}" title="${dotTip}"></span>`;
-        }
-        panelModified = false;
-    }
     document.getElementById('panelOverlay').classList.remove('open');
+    const recarregar = panelModified;
+    panelModified = false;
     currentNfeId = null;
+    if (!recarregar) return;
+    // Vínculo é memorizado por EMPRESA+PRODUTO, então reflete em TODAS as notas
+    // com aquele produto — reler a lista com os filtros atuais (loadNotas usa
+    // getFilters por dentro) reavalia a coluna CADASTRO de todas as linhas, não
+    // só a que estava aberta (o update in-place mexia numa linha só). Espera os
+    // saves otimistas baterem no banco antes, senão a releitura pegaria o vínculo
+    // antes da gravação e o CADASTRO voltaria vermelho. allSettled: um save com
+    // erro não impede a releitura dos demais.
+    const saves = vincSaves.splice(0);
+    Promise.allSettled(saves).then(loadNotas);
 }
 
 function vincularProduto(itemId, clienteId, grupoId) {
@@ -1704,7 +1701,7 @@ function vincularProduto(itemId, clienteId, grupoId) {
         wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
             <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
         panelModified = true;
-        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+        vincSaves.push(fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
@@ -1715,12 +1712,13 @@ function vincularProduto(itemId, clienteId, grupoId) {
             // Sem isto o badge otimista mentiria: nada foi salvo.
             if (d && d.error) reverterVinculo(itemId, clienteId, grupoId, d.error);
         })
-        .catch(() => {/* falha de rede: UI já atualizada */});
+        .catch(() => {/* falha de rede: UI já atualizada */}));
     } else if (produtoId && !prodNome) {
         // Catalog not ready (shouldn't happen after Promise.all, but handle defensively)
         const btn = wrap.querySelector('button');
         if (btn) { btn.disabled = true; btn.textContent = '⌛'; }
-        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+        panelModified = true;
+        vincSaves.push(fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({item_id: itemId, produto_id: produtoId, salvar_regra: true}),
@@ -1728,13 +1726,12 @@ function vincularProduto(itemId, clienteId, grupoId) {
             if (data.ok && data.produto_nome) {
                 wrap.innerHTML = `<span class="vinculado-badge">${data.produto_nome}</span>
                     <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
-                panelModified = true;
             } else if (data.error) {
                 reverterVinculo(itemId, clienteId, grupoId, data.error);
             }
         }).catch(() => {
             if (btn) { btn.disabled = false; btn.textContent = 'Vincular'; }
-        });
+        }));
     } else if (!produtoId) {
         const opts = buildProdOpts(null);
         wrap.innerHTML = `<select id="sel_prod_${itemId}">${opts}</select>
@@ -1784,7 +1781,8 @@ function vincularTodos() {
         panelModified = true;
     }
 
-    fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
+    panelModified = true;
+    vincSaves.push(fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({nfe_id: currentNfeId, produto_id: produtoId}),
@@ -1792,7 +1790,6 @@ function vincularTodos() {
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
-            panelModified = true;
             // If we didn't have the name locally, fall back to server response and re-render
             if (!prodNome && data.produto_nome) {
                 document.querySelectorAll('[id^="vinculo_"]').forEach(wrap => {
@@ -1807,7 +1804,7 @@ function vincularTodos() {
             openPanel(currentNfeId);
         }
     })
-    .catch(() => alert('Erro ao vincular todos.'));
+    .catch(() => alert('Erro ao vincular todos.')));
 }
 
 // ---- Init ----

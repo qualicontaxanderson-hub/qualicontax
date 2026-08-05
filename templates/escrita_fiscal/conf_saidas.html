@@ -574,6 +574,10 @@ let catalogoProdutos = [];
 let catalogoCache = {};
 let currentNfeId = null;
 let panelModified = false;
+// Promessas dos saves otimistas de vínculo (fire-and-forget). closePanel espera
+// elas baterem no banco antes de reler a lista, senão o loadNotas leria o
+// CADASTRO antes da gravação.
+let vincSaves = [];
 let hasSearched = false;
 let requestControllers = {notas: null, destinatario: null, produto: null, chaves: null};
 
@@ -1356,23 +1360,19 @@ function buildProdOpts(selectedId) {
 }
 
 function closePanel() {
-    if (panelModified && currentNfeId) {
-        const totalWraps = document.querySelectorAll('[id^="vinculo_"]').length;
-        const vincWraps  = document.querySelectorAll('[id^="vinculo_"] .vinculado-badge').length;
-        const row = document.querySelector(`tr[data-nfeid="${currentNfeId}"]`);
-        if (row) {
-            let dotCls, dotTip;
-            if (totalWraps === 0)             { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
-            else if (vincWraps === 0)          { dotCls = 'vermelho'; dotTip = 'Sem cadastro'; }
-            else if (vincWraps === totalWraps) { dotCls = 'verde';    dotTip = 'Tudo cadastrado'; }
-            else                              { dotCls = 'amarelo';   dotTip = `Parcial (${vincWraps}/${totalWraps})`; }
-            const dotCell = row.querySelector('.vinc-cell');
-            if (dotCell) dotCell.innerHTML = `<span class="vinc-dot ${dotCls}" title="${dotTip}"></span>`;
-        }
-        panelModified = false;
-    }
     document.getElementById('panelOverlay').classList.remove('open');
+    const recarregar = panelModified;
+    panelModified = false;
     currentNfeId = null;
+    if (!recarregar) return;
+    // Vínculo é memorizado por EMPRESA+PRODUTO, então reflete em TODAS as notas
+    // com aquele produto — reler a lista com os filtros atuais (loadNotas usa
+    // getFilters por dentro) reavalia a coluna CADASTRO de todas as linhas, não
+    // só a que estava aberta. Espera os saves otimistas baterem no banco antes,
+    // senão a releitura pegaria o vínculo antes da gravação e o CADASTRO voltaria
+    // vermelho. allSettled: um save com erro não impede a releitura dos demais.
+    const saves = vincSaves.splice(0);
+    Promise.allSettled(saves).then(loadNotas);
 }
 
 function vincularProduto(itemId, clienteId, grupoId) {
@@ -1385,10 +1385,10 @@ function vincularProduto(itemId, clienteId, grupoId) {
         wrap.innerHTML = `<span class="vinculado-badge">${prodNome}</span>
             <button onclick="desvincular(${itemId})" style="padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:11px;cursor:pointer;">✎ Alterar</button>`;
         panelModified = true;
-        fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
+        vincSaves.push(fetch('{{ url_for("escrita_fiscal.api_vincular_produto") }}', {
             method:'POST', headers:{'Content-Type':'application/json'},
             body:JSON.stringify({item_id:itemId, produto_id:produtoId, salvar_regra:true}),
-        }).catch(()=>{});
+        }).catch(()=>{}));
     } else if (!produtoId) {
         wrap.innerHTML = `<select id="sel_prod_${itemId}">${buildProdOpts(null)}</select>
             <button onclick="vincularProduto(${itemId}, ${clienteId||'null'}, ${grupoId||'null'})">Vincular</button>`;
@@ -1416,10 +1416,10 @@ function vincularTodos() {
         });
         panelModified = true;
     }
-    fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
+    vincSaves.push(fetch('{{ url_for("escrita_fiscal.api_vincular_todos") }}', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({nfe_id:currentNfeId, produto_id:produtoId}),
-    }).then(r=>r.json()).catch(()=>alert('Erro ao vincular todos.'));
+    }).then(r=>r.json()).catch(()=>alert('Erro ao vincular todos.')));
 }
 
 // ---- Chaves XML ----
