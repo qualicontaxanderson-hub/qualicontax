@@ -186,9 +186,15 @@ def _importar_cte(empresa, xml_bytes, nsu=None):
     caminho = f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml"
 
     try:
+        # xml_raw + xml_caminho: cinto E suspensório. O XML vai para o BANCO (o
+        # olhinho/DACTE/zip preferem xml_raw e param de depender do arquivo — foi
+        # o que quebrou 4.542 CT-e quando as pastas mudaram) e o caminho continua
+        # gravado como ponteiro do arquivo arquivado. _save_cte trunca em 16 MB e
+        # o UPDATE usa COALESCE, então reprocessar nunca apaga o que já existe.
         res = _save_cte(
             parsed, f'{chave}.xml', 'SEFAZ',
-            cliente_id=empresa['cliente_id'], xml_caminho=caminho, nsu=nsu,
+            cliente_id=empresa['cliente_id'], xml_raw=xml_str,
+            xml_caminho=caminho, nsu=nsu,
             cnpj_cliente=empresa['cnpj'],
         )
     except Exception:

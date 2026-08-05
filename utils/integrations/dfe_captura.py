@@ -59,6 +59,11 @@ _PRAZO_SUAVE_SEG = int(os.getenv('DFE_SCHED_PRAZO_SEG', '960'))  # ~16 min
 # o MESMO do fluxo Dropbox). DFe é documento fiscal → 'Fiscal'.
 _DEPARTAMENTO_DFE = os.getenv('DFE_DEPARTAMENTO', 'Fiscal')
 
+# Teto do xml_raw do evento — dfe_eventos.xml_raw é MEDIUMTEXT (16 MB). Mesmo
+# valor do _MAX_XML_SIZE de utils/nfe_import.py e utils/cte_import.py. Na prática
+# um procEventoNFe tem ~5 KB; o corte é rede de proteção, não caso esperado.
+_MAX_XML_EVENTO = 16_000_000
+
 # Teto de buscas por chave (consChNFe) por empresa por rodada. Cada busca é uma
 # requisição à SEFAZ e conta na MESMA cota do 656 — o teto evita estourar. O que
 # passar do teto fica como resumo pendente (incompleta=1) e é retomado no próximo
@@ -181,13 +186,16 @@ SQL_CANCELA_NOTA = (
 SQL_EVENTO_UPSERT = (
     "INSERT INTO dfe_eventos "
     "(cliente_id, chave_evento, ch_nfe, tp_evento, n_seq, descricao, dh_evento, "
-    " nsu, schema_dfe, org_cnpj, xml_caminho) "
-    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+    " nsu, schema_dfe, org_cnpj, xml_caminho, xml_raw) "
+    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
     "ON DUPLICATE KEY UPDATE "
     "  tp_evento=VALUES(tp_evento), n_seq=VALUES(n_seq), "
     "  descricao=VALUES(descricao), dh_evento=VALUES(dh_evento), "
     "  nsu=VALUES(nsu), schema_dfe=VALUES(schema_dfe), "
-    "  org_cnpj=VALUES(org_cnpj), xml_caminho=VALUES(xml_caminho)"
+    "  org_cnpj=VALUES(org_cnpj), xml_caminho=VALUES(xml_caminho), "
+    # COALESCE (mesmo padrão do _sql_update do CT-e): um reprocessamento que
+    # venha sem XML NÃO apaga o xml_raw já gravado.
+    "  xml_raw=COALESCE(VALUES(xml_raw), xml_raw)"
 )
 
 # NSU: max_nsu=0 significa "a SEFAZ não informou" (o 656 não traz maxNSU), NUNCA
@@ -601,6 +609,11 @@ def gravar_evento(conn, cur, empresa, ev, xml_bytes):
     caminho = _caminho_fiscal(empresa, ano, mes, ev["chave_evento"])
     _subir_xml(caminho, xml_bytes)
 
+    # O XML também vai para o BANCO (xml_raw), não só para o Dropbox: o evento
+    # era o último documento do sistema que dependia 100% do arquivo, e a janela
+    # de 90 dias da SEFAZ (xml_expira_em) o apagaria de qualquer jeito.
+    xml_evento = xml_bytes.decode("utf-8", "replace")[:_MAX_XML_EVENTO]
+
     # ch_nfe é NOT NULL na tabela; evento sem chNFe (não deveria existir em NF-e)
     # fica só no Dropbox, com aviso — melhor do que derrubar a fila de NSU.
     if ev["ch_nfe"]:
@@ -608,6 +621,7 @@ def gravar_evento(conn, cur, empresa, ev, xml_bytes):
             empresa["cliente_id"], ev["chave_evento"], ev["ch_nfe"], ev["tp_evento"],
             ev["n_seq"], ev["descricao"], ev["dh_txt"], ev.get("nsu"),
             (ev.get("schema_dfe") or None), ev["org_cnpj"], caminho[:300],
+            xml_evento,
         ))
     else:
         logger.warning("[dfe] evento sem chNFe — só arquivado no Dropbox: %s",
