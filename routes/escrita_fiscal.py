@@ -1394,13 +1394,22 @@ def _periodo_zip(datas):
     return fmt(lo) if lo == hi else f'{fmt(lo)}_a_{fmt(hi)}'
 
 
-def _nome_zip_lote(data, datas):
-    """'<numero> - <razão> - <período>.zip' da empresa selecionada.
+_PREFIXO_LOTE = {'entrada': 'ENTRADAS', 'saida': 'SAIDAS', 'cte': 'CTE'}
+
+
+def _prefixo_lote(escopo, formato):
+    """Prefixo do nome do zip: '<TELA> <FORMATO>' — ENTRADAS/SAIDAS/CTE + XML/PDF."""
+    return f'{_PREFIXO_LOTE.get(escopo, "")} {formato}'.strip()
+
+
+def _nome_zip_lote(data, datas, prefixo=''):
+    """'<PREFIXO> <numero> - <razão> - <período>.zip' da empresa selecionada.
 
     ``data`` traz o escopo (empresa/grupo); ``datas`` são as data_emissao das notas
-    que compõem o zip — o período sai do MIN/MAX delas, não do filtro. Em visão por
-    GRUPO usa o nome do grupo (não há número/razão de uma empresa só). Sem escopo ou
-    sem data, a parte que faltar simplesmente não entra."""
+    que compõem o zip — o período sai do MIN/MAX delas, não do filtro. ``prefixo`` é
+    o TIPO da tela (ENTRADAS/SAIDAS/CTE), vindo do escopo do lote. Em visão por GRUPO
+    usa o nome do grupo (não há número/razão de uma empresa só). Sem escopo ou sem
+    data, a parte que faltar simplesmente não entra."""
     cid = str(data.get('cliente_id', '')).strip()
     gid = str(data.get('grupo_id', '')).strip()
     quem = ''
@@ -1416,7 +1425,8 @@ def _nome_zip_lote(data, datas):
                           (int(gid),), fetch=True, fetch_one=True) or {}
         quem = str(r.get('nome') or '').strip()
     partes = [p for p in (_sanitiza_nome(quem), _periodo_zip(datas)) if p]
-    return (' - '.join(partes) or 'documentos') + '.zip'
+    base = ' - '.join(partes) or 'documentos'
+    return (f'{prefixo} {base}' if prefixo else base) + '.zip'
 
 
 def _zip_download(arquivos, nome_zip):
@@ -1713,14 +1723,15 @@ def _lote_xml_nfe(escopo, permissao):
             tuple(params), fetch=True) or []
         arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
                      (r['xml_raw'] or '').encode('utf-8')) for r in rows]
-        return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
+        return _zip_download(arquivos, _nome_zip_lote(
+            data, [r['data_emissao'] for r in rows], _prefixo_lote(escopo, 'XML')))
 
     # Nome sai do MIN/MAX do filtro (no streaming não temos as linhas de antemão, e
     # o cabeçalho com o nome vai ANTES do corpo).
     per = execute_query(
         f"SELECT MIN(n.data_emissao) AS mn, MAX(n.data_emissao) AS mx "
         f"FROM nfe_importacoes n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
-    nome = _nome_zip_lote(data, [per.get('mn'), per.get('mx')])
+    nome = _nome_zip_lote(data, [per.get('mn'), per.get('mx')], _prefixo_lote(escopo, 'XML'))
     return _stream_xml_lote_nfe(where_sql, params, nome)
 
 
@@ -1759,7 +1770,8 @@ def _lote_pdf_nfe(escopo, permissao):
     if not arquivos:
         return jsonify({'error': 'Nenhuma das notas marcadas gerou PDF (o XML pode estar '
                                  'fora do padrão esperado). Baixe o XML por enquanto.'}), 404
-    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
+    return _zip_download(arquivos, _nome_zip_lote(
+        data, [r['data_emissao'] for r in rows], _prefixo_lote(escopo, 'PDF')))
 
 
 @escrita_fiscal.route('/conf-compras/export/xml-lote', methods=['POST'])
@@ -1842,7 +1854,8 @@ def lote_xml_cte():
     if not arquivos:
         return jsonify({'error': 'Não foi possível ler os XMLs no Dropbox agora. '
                                  'Tente de novo em instantes.'}), 502
-    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
+    return _zip_download(arquivos, _nome_zip_lote(
+        data, [r['data_emissao'] for r in rows], _prefixo_lote('cte', 'XML')))
 
 
 @escrita_fiscal.route('/conf-cte/export/pdf-lote', methods=['POST'])
@@ -1879,7 +1892,8 @@ def lote_pdf_cte():
     if not arquivos:
         return jsonify({'error': 'Nenhum dos CT-e marcados gera PDF (só o modelo 57 tem '
                                  'DACTE).'}), 404
-    return _zip_download(arquivos, _nome_zip_lote(data, [r['data_emissao'] for r in rows]))
+    return _zip_download(arquivos, _nome_zip_lote(
+        data, [r['data_emissao'] for r in rows], _prefixo_lote('cte', 'PDF')))
 
 
 # ---------------------------------------------------------------------------
