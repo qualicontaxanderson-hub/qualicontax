@@ -334,22 +334,28 @@ def _tokens_certificado(cliente):
     return tokens
 
 
-# Separadores aceitos entre o token (número/CNPJ) e o resto do nome do arquivo.
-_CERT_SEPARADORES = ('-', '_', ' ')
+# Separadores aceitos entre o NÚMERO da empresa e o resto do nome do arquivo.
+_CERT_SEPARADORES = ('-', '_', ' ', '.')
 
 
-def _nome_casa_token(nome, token):
-    """True se o nome do .pfx (sem a extensão) é o token EXATO, ou começa com o
-    token seguido de um separador (-, _ ou espaço). Case-insensitive.
+def _nome_base_pfx(nome):
+    """Nome do arquivo sem a extensão .pfx final (case-insensitive)."""
+    return nome[:-4] if nome.lower().endswith('.pfx') else nome
+
+
+def _nome_casa_numero(nome, numero):
+    """REGRA 1 — o nome COMEÇA com o número da empresa: o número EXATO, ou o
+    número seguido de um separador (``-``, ``_``, espaço ou ``.``).
 
     O separador obrigatório evita casamento de prefixo ambíguo: a empresa 51 NÃO
-    casa com "515-....pfx" (depois de "51" vem "5", não um separador).
+    casa com "515-....pfx" (depois de "51" vem "5", não um separador). É prefixo
+    de propósito — número no meio do nome não vale, senão "Venc 04.09.26" casaria
+    com a empresa 4, a 9 e a 26.
     """
-    if not token:
+    if not numero:
         return False
-    base = nome[:-4] if nome.lower().endswith('.pfx') else nome  # tira a extensão
-    base_l = base.lower()
-    tok_l = str(token).lower()
+    base_l = _nome_base_pfx(nome).lower()
+    tok_l = str(numero).lower()
     if base_l == tok_l:
         return True
     return (base_l.startswith(tok_l)
@@ -357,24 +363,49 @@ def _nome_casa_token(nome, token):
             and base_l[len(tok_l)] in _CERT_SEPARADORES)
 
 
+def _nome_casa_documento(nome, doc):
+    """REGRA 2 — o nome CONTÉM o documento da empresa em QUALQUER posição.
+
+    Só dígitos crus (CNPJ com 14, CPF com 11), com FRONTEIRA DE DÍGITOS: o
+    documento não pode ser pedaço de uma sequência numérica maior. Sem essa
+    fronteira, um nome com a chave de 44 dígitos de uma NF-e casaria com
+    qualquer empresa cujo CNPJ aparecesse por acaso lá dentro.
+
+    Diferente da regra do número, aqui é "contém" e não "prefixo": o CNPJ é
+    identificador único, então não há o risco de ambiguidade que o prefixo do
+    número tem. Isso faz "BRR BLINDAGENS 28472667000106.pfx" ser encontrado.
+    """
+    if not doc or len(doc) not in (11, 14):
+        return False
+    return re.search(rf'(?<!\d){re.escape(doc)}(?!\d)',
+                     _nome_base_pfx(nome)) is not None
+
+
+def _nome_casa_empresa(nome, cliente):
+    """Regra de nome do .pfx: REGRA 1 (número como prefixo) OU REGRA 2 (documento
+    contido). Fora disso, o arquivo NÃO é lido."""
+    numero = (cliente.get('numero_cliente') or '').strip()
+    doc = re.sub(r'\D', '', cliente.get('cpf_cnpj') or '')
+    return _nome_casa_numero(nome, numero) or _nome_casa_documento(nome, doc)
+
+
 def _localizar_certificados_novo(svc, cliente):
-    """Lista os .pfx da _ENTRADA que casam com a empresa (número
-    OU CNPJ, como nome exato ou prefixo + separador). Extensão .pfx/.PFX aceita
-    (case-insensitive).
+    """Lista os .pfx da _ENTRADA que casam com a empresa: NÚMERO como prefixo
+    (+ separador) OU DOCUMENTO contido em qualquer posição — ver
+    ``_nome_casa_empresa``. Extensão .pfx/.PFX aceita (case-insensitive).
 
     Retorna a LISTA de itens casados (0, 1 ou vários). A busca é sempre refeita
     no servidor (não confia em caminho vindo do cliente). O chamador decide: 0 =
     não encontrado; 1 = usa; vários = recusa (não escolhe o certificado sozinho).
     """
-    tokens = _tokens_certificado(cliente)
-    if not tokens:
+    if not _tokens_certificado(cliente):
         return []
     achados = []
     for item in svc.list_folder(svc.pasta_cert_novo()):
         nome = item.get('name') or ''
         if not item.get('is_file') or not nome.lower().endswith('.pfx'):
             continue
-        if any(_nome_casa_token(nome, t) for t in tokens):
+        if _nome_casa_empresa(nome, cliente):
             achados.append(item)
     return achados
 

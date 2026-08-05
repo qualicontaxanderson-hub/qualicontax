@@ -1086,6 +1086,21 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # Incremental (Fase 1 da reorganização do Dropbox): o XML do evento passa a
+    # morar NO BANCO, como já acontece em nfe_importacoes/nfe_eventos/cte_documentos.
+    # Antes disso o evento dependia 100% do arquivo em xml_caminho — mover a pasta
+    # (ou a janela de 90 dias da SEFAZ em xml_expira_em) apagava o documento na
+    # prática. MEDIUMTEXT NULL: mesmo tipo dos outros xml_raw; NULL = ainda não
+    # preenchido (backfill), nunca "não existe".
+    _col_exists = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dfe_eventos' "
+        "AND COLUMN_NAME = 'xml_raw'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _col_exists.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE dfe_eventos ADD COLUMN xml_raw MEDIUMTEXT NULL")
+
     # ---- Log de consultas de DFe (schema idêntico ao dfe_log do NH) -----------
     # Uma linha por RODADA (inclusive as puladas por cota/lock): sem FK e best-
     # effort, pra logar NUNCA derrubar a captura. Sem FK em cliente_id de propósito.
