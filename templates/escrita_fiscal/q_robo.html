@@ -110,14 +110,14 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 
 <div class="qr-fase">
     <i class="fas fa-circle-info"></i>
-    <b>Monitor + chaves.</b> Aqui você acompanha os robôs, gera a chave de um posto
+    <b>Monitor + chaves.</b> Aqui você acompanha os robôs, gera a chave de um cliente
     e vê a auditoria completa do Portal do Instalador. Ligar/desligar, reprocessar
-    histórico e cadastro de posto entram nas próximas fases.
+    histórico e cadastro de cliente entram nas próximas fases.
 </div>
 
 <div class="qr-kpis">
     <div class="qr-kpi accent-azul">
-        <div class="qr-kpi-label">Postos com robô</div>
+        <div class="qr-kpi-label">Clientes com robô</div>
         <div class="qr-kpi-value">{{ resumo.total }}</div>
         <div class="qr-kpi-sub">{{ resumo.desligados }} desligado(s) no painel</div>
     </div>
@@ -145,7 +145,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
         <b>🟠 atenção</b> = entre {{ limiar_verde }} min e {{ (limiar_laranja / 60) | int }}h ·
         <b>🔴 parado</b> = mais de {{ (limiar_laranja / 60) | int }}h sem contato.<br>
         O robô avisa a nuvem a <b>cada</b> contato, mesmo desligado ou sem nota nova —
-        então silêncio significa que o <b>processo não está rodando</b> no posto
+        então silêncio significa que o <b>processo não está rodando</b> no cliente
         (máquina desligada, robô fechado), e não simplesmente que não houve venda.
     </span>
 </div>
@@ -154,7 +154,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
     <table class="qr-table">
         <thead>
             <tr>
-                <th>Posto</th>
+                <th>Cliente</th>
                 <th>Status</th>
                 <th>Última captura</th>
                 <th>Data de captura</th>
@@ -205,7 +205,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
             </tr>
         {% else %}
             <tr><td colspan="6" class="qr-empty">
-                <i class="fas fa-robot"></i><br>Nenhum posto com robô cadastrado.
+                <i class="fas fa-robot"></i><br>Nenhum cliente com robô cadastrado.
             </td></tr>
         {% endfor %}
         </tbody>
@@ -217,7 +217,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 {# ------------------------------------------------------------------ #}
 <div class="qr-sec">
     <div class="qr-sec-h">
-        <div class="qr-sec-t"><i class="fas fa-key" style="color:#7c3aed;"></i> Chave do posto</div>
+        <div class="qr-sec-t"><i class="fas fa-key" style="color:#7c3aed;"></i> Chave do cliente</div>
     </div>
 
     {% if chave %}
@@ -236,7 +236,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
             <b>Copie agora.</b> A chave aparece uma única vez — não fica visível em
             nenhuma tela depois.
             {% if chave.acao == 'CHAVE_REGERADA' %}
-            A chave anterior <b>já não vale mais</b>: este posto não envia nada até o
+            A chave anterior <b>já não vale mais</b>: este cliente não envia nada até o
             robô ser reconfigurado.
             {% endif %}
         </div>
@@ -256,7 +256,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 
         {% if confirmacao.robo %}
         <div class="qr-perigo">
-            Este posto <b>já tem chave</b> (versão {{ confirmacao.robo.token_versao }}{% if confirmacao.robo.token_gerado_em %},
+            Este cliente <b>já tem chave</b> (versão {{ confirmacao.robo.token_versao }}{% if confirmacao.robo.token_gerado_em %},
             gerada em {{ confirmacao.robo.token_gerado_em.strftime('%d/%m/%Y %H:%M') }}{% if confirmacao.robo.token_gerado_por_nome %}
             por {{ confirmacao.robo.token_gerado_por_nome }}{% endif %}{% endif %}).
             Gerar outra <b>invalida a atual</b> e o robô instalado <b>para de enviar</b>
@@ -280,7 +280,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
             {% if confirmacao.robo %}
             <div class="qr-check">
                 <input type="checkbox" id="conf_reg" name="confirmar_regeracao" value="1" required>
-                <label for="conf_reg">Entendi que a chave atual deste posto vai
+                <label for="conf_reg">Entendi que a chave atual deste cliente vai
                     <b>parar de funcionar</b> e que o robô só volta a enviar depois de
                     reconfigurado com a chave nova.</label>
             </div>

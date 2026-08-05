@@ -159,7 +159,7 @@
         </div>
 
         <div class="card">
-            <h2>2. Gerar a chave do posto</h2>
+            <h2>2. Gerar a chave do cliente</h2>
             <p>Informe o <b>número do cliente</b>. A razão social aparece para você
                conferir — a chave só é gerada depois disso.</p>
             <form method="POST" action="{{ url_for('qrobo.resolver') }}" autocomplete="off"
@@ -184,14 +184,14 @@
     {% if meus_postos %}
     <div class="hist">
         <div class="card">
-            <h2>Meus postos</h2>
-            <p>Postos em que <b>você</b> gerou chave, com o sinal de vida do robô agora.
+            <h2>Meus clientes</h2>
+            <p>Clientes em que <b>você</b> gerou chave, com o sinal de vida do robô agora.
                O robô avisa a nuvem a cada ciclo, mesmo sem nota nova — então
                <b>verde é processo rodando</b> na máquina.</p>
             <div class="tab-wrap">
             <table class="tab" id="tabPostos">
                 <thead>
-                    <tr><th>Posto</th><th>Sinal do robô</th><th>Último contato</th><th></th></tr>
+                    <tr><th>Cliente</th><th>Sinal do robô</th><th>Último contato</th><th></th></tr>
                 </thead>
                 <tbody>
                 {% for p in meus_postos %}

@@ -96,7 +96,7 @@
 
         {% if robo %}
         <div class="robo-atual">
-            Este posto <b>já tem uma chave</b> (versão {{ robo.token_versao }}).<br>
+            Este cliente <b>já tem uma chave</b> (versão {{ robo.token_versao }}).<br>
             {% if robo.token_gerado_em %}
               Gerada em <b>{{ robo.token_gerado_em.strftime('%d/%m/%Y às %H:%M') }}</b>
               {% if robo.token_gerado_por_nome %}por <b>{{ robo.token_gerado_por_nome }}</b>{% endif %}.<br>
@@ -110,7 +110,7 @@
 
         <div class="aviso perigo">
             <b>Gerar outra chave INVALIDA a atual.</b> O robô que estiver instalado
-            neste posto <b>para de enviar</b> assim que a chave for trocada, e só volta
+            neste cliente <b>para de enviar</b> assim que a chave for trocada, e só volta
             depois de configurado com a chave nova. Só siga se você está reinstalando
             esta máquina agora.
         </div>
@@ -136,7 +136,7 @@
                 <input type="checkbox" id="confirmar_regeracao" name="confirmar_regeracao"
                        value="1" required {% if faltou_confirmar %}autofocus{% endif %}>
                 <label for="confirmar_regeracao">
-                    Entendi que a chave atual deste posto vai <b>parar de funcionar</b>
+                    Entendi que a chave atual deste cliente vai <b>parar de funcionar</b>
                     e que o robô só volta a enviar depois de reconfigurado.
                 </label>
             </div>

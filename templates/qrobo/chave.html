@@ -99,7 +99,7 @@
         <div class="aviso alerta">
             <b>Copie agora.</b> Esta chave aparece <b>uma única vez</b> — por segurança, ela
             não fica visível em nenhuma tela depois que você sair daqui. Se perder, é só
-            gerar outra (o posto volta a precisar de reconfiguração).
+            gerar outra (o cliente volta a precisar de reconfiguração).
         </div>
 
         <div class="resumo">
@@ -112,7 +112,7 @@
         {% if regerada %}
         <div class="aviso info">
             A chave anterior <b>já não vale mais</b>. Configure o robô desta máquina com a
-            chave nova agora — enquanto isso, este posto não envia nada.
+            chave nova agora — enquanto isso, este cliente não envia nada.
         </div>
         {% endif %}
 
@@ -122,7 +122,7 @@
                 <li>Instale o <b>qrobo.exe</b> (botão de download no portal).</li>
                 <li>Cole esta chave na configuração do robô.</li>
                 <li>Confirme que a empresa que aparece no robô é <b>{{ cliente.razao_social }}</b>.</li>
-                <li>Volte aqui e clique em <b>Verificar agora</b> — o posto tem que dar sinal de vida.</li>
+                <li>Volte aqui e clique em <b>Verificar agora</b> — o cliente tem que dar sinal de vida.</li>
             </ol>
         </div>
 
@@ -133,7 +133,7 @@
                     <div class="conf-tit">Conferir a instalação</div>
                     <div class="conf-sub" id="confSub">
                         {% if st and st.confirmado %}
-                            Este posto já se comunicou com a nuvem depois da chave nova.
+                            Este cliente já se comunicou com a nuvem depois da chave nova.
                         {% else %}
                             Assim que o robô rodar com esta chave, ele avisa a nuvem e o
                             sinal aparece aqui.
@@ -149,7 +149,7 @@
                 {% if st and st.ja_deu_sinal %}
                     Último contato do robô: <b>{{ st.ultimo_contato }}</b> ({{ st.ha }})
                 {% else %}
-                    Ainda <b>nenhum contato</b> registrado para este posto.
+                    Ainda <b>nenhum contato</b> registrado para este cliente.
                 {% endif %}
             </div>
             <button class="btn-verificar" id="btnVerificar" onclick="verificar()">
@@ -197,9 +197,9 @@ function verificar() {
             document.getElementById('confRotulo').textContent = s.rotulo;
             document.getElementById('confLinha').innerHTML = s.ja_deu_sinal
                 ? 'Último contato do robô: <b>' + s.ultimo_contato + '</b> (' + s.ha + ')'
-                : 'Ainda <b>nenhum contato</b> registrado para este posto.';
+                : 'Ainda <b>nenhum contato</b> registrado para este cliente.';
             document.getElementById('confSub').textContent = s.confirmado
-                ? 'Este posto já se comunicou com a nuvem depois da chave nova.'
+                ? 'Este cliente já se comunicou com a nuvem depois da chave nova.'
                 : 'Assim que o robô rodar com esta chave, ele avisa a nuvem e o sinal aparece aqui.';
         })
         .catch(function () {
