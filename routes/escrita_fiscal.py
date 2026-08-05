@@ -5694,6 +5694,22 @@ def api_notas_saidas():
         total = 0
         kpi = {'total_valor': 0, 'total_icms': 0, 'total_pis': 0, 'total_cofins': 0}
 
+    # Hora de emissão (HH:MM:SS) das linhas da página. data_emissao é DATE (sem
+    # hora), então a hora sai do dhEmi do xml_raw (formato 'AAAA-MM-DDThh:mm:ss…',
+    # a hora nos chars 12-19). Extraída só dos ids da página, por PK, para NÃO
+    # varrer o xml_raw de todo o conjunto filtrado — a listagem tem COUNT(*) OVER(),
+    # que bufferiza o filtro inteiro. Resumo sem xml → sem hora (NULL).
+    horas = {}
+    ids_pagina = [r['id'] for r in all_rows]
+    if ids_pagina:
+        ph = ','.join(['%s'] * len(ids_pagina))
+        hrows = execute_query(
+            f"SELECT id, CASE WHEN LOCATE('<dhEmi>', xml_raw) > 0 THEN "
+            f"SUBSTRING(SUBSTRING_INDEX(SUBSTRING_INDEX(xml_raw,'<dhEmi>',-1),'</dhEmi>',1),12,8) "
+            f"END AS hora_emissao FROM nfe_importacoes WHERE id IN ({ph})",
+            tuple(ids_pagina), fetch=True) or []
+        horas = {h['id']: h['hora_emissao'] for h in hrows}
+
     _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
     rows = []
     for r in all_rows:
@@ -5703,6 +5719,7 @@ def api_notas_saidas():
                 row[k] = row[k].isoformat()
         for k in ('valor_total', 'valor_icms', 'valor_pis', 'valor_cofins', 'valor_ipi'):
             row[k] = float(row.get(k) or 0)
+        row['hora_emissao'] = horas.get(r['id'])
         rows.append(row)
 
     return jsonify({'total': total, 'page': page, 'per_page': per_page, 'rows': rows, 'kpi': kpi})

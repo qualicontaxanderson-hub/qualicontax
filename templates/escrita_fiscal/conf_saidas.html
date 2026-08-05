@@ -423,7 +423,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                     <th style="width:34px;text-align:center;"><input type="checkbox" id="chkTodos" onclick="marcarTodos(this)" title="Marcar todos desta página"></th>
                     <th>Data</th>
                     <th>Nº / Série</th>
-                    <th>Empresa (Emit.)</th>
+                    <th id="thEmpEmit">Empresa (Emit.)</th>
                     <th>Destinatário</th>
                     <th>UF Dest.</th>
                     <th>CFOP</th>
@@ -1104,10 +1104,19 @@ function loadNotas() {
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }
+            // Empresa única filtrada → o emitente é sempre ela (coluna redundante):
+            // troca por HORA de emissão. Em visão por GRUPO o emitente varia entre as
+            // empresas do grupo, então a coluna EMPRESA fica.
+            const porEmpresa = !!currentClienteId;
+            const thEmp = document.getElementById('thEmpEmit');
+            if (thEmp) thEmp.textContent = porEmpresa ? 'Hora Emissão' : 'Empresa (Emit.)';
             tbody.innerHTML = data.rows.map(r => {
                 const empPill = r.empresa_nome
                     ? `<span class="cc-empresa-pill">${r.empresa_nome}</span>`
                     : (r.grupo_nome ? `<span class="cc-grupo-pill">${r.grupo_nome}</span>` : '<span style="color:#d1d5db">—</span>');
+                const col3 = porEmpresa
+                    ? (r.hora_emissao || '<span style="color:#d1d5db">—</span>')
+                    : empPill;
                 const total = r.qtd_itens || 0, vinc = r.itens_vinculados || 0;
                 let dotCls, dotTip;
                 if (total === 0)         { dotCls = 'vermelho'; dotTip = 'Sem itens'; }
@@ -1124,7 +1133,7 @@ function loadNotas() {
                     <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}"></td>
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
-                    <td>${empPill}</td>
+                    <td>${col3}</td>
                     <td title="${r.dest_cnpj}" style="text-transform:uppercase;">${r.dest_nome||r.dest_cnpj||'—'}</td>
                     <td>${r.dest_uf||'—'}</td>
                     <td>${r.cfop||'—'}</td>
