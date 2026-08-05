@@ -16,6 +16,7 @@ Contrato de status (o robô reage pelo HTTP + status):
   401 nao_autorizado / 403 desligado / 5xx / timeout → robô NÃO marca, tenta depois.
 """
 import logging
+import re
 from datetime import date
 
 from flask import Blueprint, request, jsonify
@@ -26,6 +27,8 @@ from utils import dropbox_sync
 from utils.db_helper import execute_query
 from utils.nfe_parser import parse_nfe_xml
 from utils.nfe_import import _save_nfe_dual
+from utils.cte_parser import parse_cte_xml
+from utils.cte_import import _save_cte
 from utils.integrations.dfe_captura import _mesmo_titular, _digitos
 from utils.xml_seguro import fromstring_seguro, XmlInseguroError
 
@@ -95,6 +98,63 @@ def _arquivar_dropbox(cliente, chave, data_emissao, xml_bytes):
 # ---------------------------------------------------------------------------
 # POST /api/saidas
 # ---------------------------------------------------------------------------
+# Chave (44 díg.) só para ROTEAR o modelo (55/65 NF-e vs 57 CT-e) ANTES do parse
+# específico — o parse_nfe_xml quebra num cteProc. Pega do Id do infNFe/infCte
+# ("...NFe<44>"/"...CTe<44>") ou da 1ª sequência isolada de 44 dígitos.
+_RE_CHAVE_ID = re.compile(r'Id\s*=\s*["\'][^"\']*?(\d{44})["\']')
+_RE_CHAVE_44 = re.compile(r'(?<!\d)(\d{44})(?!\d)')
+
+
+def _modelo_do_xml(xml_str):
+    """Modelo (2 díg., posição 21-22 da chave) só para roteamento. '' se não achar
+    (cai no fluxo NF-e, que rejeita como sempre)."""
+    m = _RE_CHAVE_ID.search(xml_str) or _RE_CHAVE_44.search(xml_str)
+    ch = m.group(1) if m else ''
+    return ch[20:22] if len(ch) >= 22 else ''
+
+
+def _receber_cte_qrobo(xml_str, robo, cliente_id):
+    """CT-e (modelo 57) do Q-Robô → grava a SAÍDA do emitente (papel='emitente',
+    origem='Q-ROBO'), reaproveitando o MESMO core do upload manual (_save_cte). O
+    dedup por (chave, cliente_id) é do próprio _save_cte. Titularidade: o emitente
+    do CT-e tem que ser o cliente do token (mesmo raiz-check da NF-e)."""
+    try:
+        parsed = parse_cte_xml(xml_str)
+    except Exception as exc:
+        return jsonify({'status': 'xml_invalido', 'erro': str(exc)}), 422
+    header = parsed['header']
+    chave = header.get('chave_acesso') or ''
+    modelo = header.get('modelo') or (chave[20:22] if len(chave) >= 22 else '')
+    if len(chave) != 44 or modelo != '57':
+        return jsonify({'status': 'xml_invalido',
+                        'erro': 'não é CT-e (57) com chave de 44'}), 422
+
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        return jsonify({'status': 'nao_autorizado'}), 401
+
+    # Titularidade: o EMITENTE do CT-e = o cliente do token (raiz — matriz cobre filial).
+    if not _mesmo_titular(header.get('emit_cnpj'), cliente.get('cpf_cnpj')):
+        return jsonify({'status': 'emitente_nao_confere'}), 422
+
+    # Filtro de data_inicio_captura (igual à NF-e; data_emissao é date).
+    di = robo.get('data_inicio_captura')
+    if di and header.get('data_emissao') and header['data_emissao'] < di:
+        return jsonify({'status': 'ignorado_data'}), 200
+
+    try:
+        res = _save_cte(parsed, f"{chave}.xml", 'Q-ROBO', cliente_id=cliente_id,
+                        xml_raw=xml_str, papel_cliente='emitente',
+                        cnpj_cliente=_digitos(header.get('emit_cnpj')))
+    except Exception as exc:
+        logger.exception('[q-robo] falha ao gravar CT-e chave=%s', chave)
+        return jsonify({'status': 'erro', 'erro': str(exc)}), 500
+
+    # _save_cte: 'ok' = linha nova; 'upd'/'dup' = já existia → deduplicado.
+    return jsonify({'status': 'salvo' if res == 'ok' else 'duplicado',
+                    'chave': chave, 'modelo': '57'}), 200
+
+
 @robo_saidas.route('/api/saidas', methods=['POST'])
 def receber_saida():
     # (1) token → cliente
@@ -115,12 +175,23 @@ def receber_saida():
     if not xml_bytes:
         return jsonify({'status': 'arquivo_ausente'}), 422
 
-    # (3) leitura SEGURA (XXE off) + parse
+    # (3) leitura SEGURA (XXE off) — comum aos dois modelos.
     try:
         fromstring_seguro(xml_bytes)             # gate anti-XXE (recusa DTD/entidade)
-        xml_str = xml_bytes.decode('utf-8', 'replace')
+    except XmlInseguroError as exc:
+        return jsonify({'status': 'xml_invalido', 'erro': str(exc)}), 422
+    xml_str = xml_bytes.decode('utf-8', 'replace')
+
+    # (3b) CT-e (modelo 57) tem parser/gravação próprios (reaproveita a Parte 1 do
+    #      upload). Roteia pelos dígitos 21-22 da chave; 55/65 seguem o fluxo abaixo,
+    #      INTOCADO.
+    if _modelo_do_xml(xml_str) == '57':
+        return _receber_cte_qrobo(xml_str, robo, cliente_id)
+
+    # (3c) NF-e/NFC-e: parse pleno.
+    try:
         parsed = parse_nfe_xml(xml_str)          # parse pleno (já sem DTD/entidade)
-    except (XmlInseguroError, ValueError) as exc:
+    except ValueError as exc:
         return jsonify({'status': 'xml_invalido', 'erro': str(exc)}), 422
 
     dados = _cabecalho(parsed)

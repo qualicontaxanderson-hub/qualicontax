@@ -1172,7 +1172,7 @@ def _apply_migrations():
             cancelado         TINYINT(1)    NOT NULL DEFAULT 0,
             protocolo         VARCHAR(20)   DEFAULT '',
             nsu               BIGINT        NULL,
-            origem            ENUM('UPLOAD','DROPBOX','SEFAZ') NOT NULL DEFAULT 'SEFAZ',
+            origem            ENUM('UPLOAD','DROPBOX','SEFAZ','Q-ROBO') NOT NULL DEFAULT 'SEFAZ',
             nome_arquivo      VARCHAR(500)  NOT NULL DEFAULT '',
             xml_raw           MEDIUMTEXT    NULL,
             xml_caminho       VARCHAR(300)  NULL,
@@ -1188,6 +1188,25 @@ def _apply_migrations():
             KEY ix_cte_origem (origem)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
+
+    # Acrescenta 'Q-ROBO' ao enum origem do cte_documentos (upload de CT-e via
+    # Q-Robô — saída do emitente). ADITIVO: só adiciona um valor ao enum, não toca
+    # em nenhuma linha existente. Guardado p/ ser idempotente (só altera se faltar).
+    try:
+        _enum_cte = execute_query(
+            "SELECT COLUMN_TYPE t FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cte_documentos' "
+            "AND COLUMN_NAME = 'origem'",
+            fetch=True, fetch_one=True,
+        ) or {}
+        if 'Q-ROBO' not in (_enum_cte.get('t') or ''):
+            execute_query(
+                "ALTER TABLE cte_documentos MODIFY origem "
+                "ENUM('UPLOAD','DROPBOX','SEFAZ','Q-ROBO') NOT NULL DEFAULT 'SEFAZ'",
+                fetch=False,
+            )
+    except Exception:
+        pass
 
     # NF-e transportadas pelo CT-e (infCTeNorm/infDoc/infNFe e o infNF antigo).
     _migrate("""
