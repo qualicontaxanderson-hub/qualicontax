@@ -71,7 +71,12 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .badge-upload  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .badge-dropbox { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .badge-sefaz   { background:#ede9fe; color:#6d28d9; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
-.badge-cancel  { background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:99px; font-size:9px; font-weight:700; margin-left:4px; }
+/* CT-e CANCELADO (mesmo padrão das entradas/saídas): selo vermelho + linha tingida.
+   As regras de :hover vêm DEPOIS da do cc-row-clickable (mesma especificidade, a
+   última vence) — senão o hover apagaria o aviso. */
+.badge-cancelada { background:#dc2626; color:#fff; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; letter-spacing:.3px; margin-left:6px; white-space:nowrap; }
+table.cc-table tr.cc-row-cancelada td { background:#fef2f2; }
+table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 .cc-data-pill            { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 .cc-data-pill.importado  { background:#dbeafe; color:#1d4ed8; }
 .cc-data-pill.atualizado { background:#e9d5ff; color:#7c3aed; }
@@ -1041,7 +1046,7 @@ function loadCtes() {
                 const nfeCls = r.qtd_nfes > 0 ? '' : ' zero';
                 const trajeto = (r.uf_ini || r.uf_fim)
                     ? `${esc(r.mun_ini||'')}/${esc(r.uf_ini||'—')} → ${esc(r.mun_fim||'')}/${esc(r.uf_fim||'—')}` : '—';
-                return `<tr class="cc-row-clickable" onclick="openPanel(${r.id})">
+                return `<tr class="cc-row-clickable${r.cancelado ? ' cc-row-cancelada' : ''}" onclick="openPanel(${r.id})">
                     <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" onchange="chkLinhaChange()"></td>
                     <td>${fmtDate(r.data_emissao)}</td>
                     <td>${esc(r.num_cte)||'—'} / ${esc(r.serie)||'—'}</td>
@@ -1063,7 +1068,7 @@ function loadCtes() {
                     <td class="money">${fmtBRL(r.valor_icms)}</td>
                     <td>
                         <span class="badge-${(r.origem||'sefaz').toLowerCase()}">${esc(r.origem)}</span>
-                        ${r.cancelado ? '<span class="badge-cancel" title="CT-e cancelado por evento">CANCELADO</span>' : ''}
+                        ${r.cancelado ? '<span class="badge-cancelada" title="CT-e cancelado na SEFAZ — não escriturar">CANCELADO</span>' : ''}
                     </td>
                     <td onclick="event.stopPropagation()">
                         ${exportBtns(r)}
