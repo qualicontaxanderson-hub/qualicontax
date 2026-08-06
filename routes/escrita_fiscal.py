@@ -2241,6 +2241,7 @@ def api_itens(nfe_id):
         """SELECT i.id, i.num_item, i.codigo_produto, i.descricao, i.ncm, i.cfop,
                   i.unidade, i.quantidade, i.valor_unitario, i.valor_total,
                   i.valor_icms, i.valor_pis, i.valor_cofins,
+                  i.valor_unit_comercial,
                   i.produto_catalogo_id,
                   p.nome AS produto_catalogo_nome, p.categoria AS produto_categoria
              FROM nfe_itens i
@@ -2295,6 +2296,10 @@ def api_itens(nfe_id):
         for k in ('quantidade', 'valor_unitario', 'valor_total',
                   'valor_icms', 'valor_pis', 'valor_cofins'):
             it[k] = float(it.get(k) or 0)
+        # valor_unit_comercial: NULL = "ainda não calculado" (item anterior ao
+        # backfill), NUNCA custo zero — preserva None para a tela mostrar "—".
+        vc = it.get('valor_unit_comercial')
+        it['valor_unit_comercial'] = float(vc) if vc is not None else None
 
     return jsonify({'nota': nota, 'itens': itens})
 
