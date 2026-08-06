@@ -30,19 +30,29 @@ logger = logging.getLogger(__name__)
 
 # A coluna `origem` de nfe_importacoes E de cte_documentos é um ENUM fechado:
 #
-#     ENUM('UPLOAD','DROPBOX','SEFAZ','Q-ROBO')  NOT NULL DEFAULT 'UPLOAD'
+#     ENUM('UPLOAD','DROPBOX','SEFAZ','Q-ROBO','Q-COLABORE')
 #
 # Este módulo já nasceu com um bug por causa disso: passava origem='ROTEADOR',
 # o MySQL recusava o INSERT em strict mode, execute_query devolvia None e o
 # _save_nfe levantava "Falha ao salvar NF-e no banco" — 10 notas do primeiro
 # teste real caíram assim. Não perdemos nada (o roteador não arquiva o que não
-# lançou), mas o erro só apareceu em produção.
+# lançou), mas o erro só apareceu em produção. Daí o ORIGENS_VALIDAS: um valor
+# inválido morre AQUI, com mensagem clara, em vez de três camadas adiante.
 #
-# O roteador grava DROPBOX, e não um valor novo, porque é exatamente o que ele
-# é: o consumidor da caixa do Dropbox, no lugar do job que lia /Fiscal/NOVO.
-# Manter o mesmo valor preserva a continuidade do histórico.
-ORIGENS_VALIDAS = frozenset({'UPLOAD', 'DROPBOX', 'SEFAZ', 'Q-ROBO'})
-ORIGEM_ROTEADOR = 'DROPBOX'
+# ATENÇÃO: esta lista tem de espelhar o ENUM do banco. Quem acrescentar valor
+# aqui precisa da migration correspondente ANTES do deploy (a de 'Q-COLABORE' é
+# migrations/qcolabore_06_origem_enum.py) — código novo contra ENUM velho é
+# INSERT recusado em produção.
+ORIGENS_VALIDAS = frozenset({'UPLOAD', 'DROPBOX', 'SEFAZ', 'Q-ROBO', 'Q-COLABORE'})
+
+# O que o roteador grava. Foi 'DROPBOX' entre 06/08/2026 20:43 e a migration 06:
+# na época o ENUM não tinha valor melhor, e a caixa era descrita pelo meio
+# (Dropbox) em vez de pelo produto. A procedência real é o Q-Colabore — o canal
+# por onde o cliente entrega documento.
+#
+# As 759 linhas 'DROPBOX' NÃO foram repontadas: é verdade histórica, foi isso
+# que o sistema gravou. Só o que nasce daqui em diante é Q-COLABORE.
+ORIGEM_ROTEADOR = 'Q-COLABORE'
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +144,7 @@ def _importar_um_cte(nome: str, content: str, cache, origem: str = 'UPLOAD'):
     (None, 'motivo') quando o arquivo foi rejeitado.
 
     ``origem`` tem default 'UPLOAD' para os chamadores antigos (o upload manual
-    do blueprint) continuarem idênticos; o roteador passa 'DROPBOX'."""
+    do blueprint) continuarem idênticos; o roteador passa ORIGEM_ROTEADOR."""
     try:
         parsed = parse_cte_xml(content)
     except Exception as exc:
