@@ -91,6 +91,52 @@
     .ef-card { padding:11px; border-radius:14px; }
     .ef-card-desc { display:none; }   /* 3 colunas compactas em 390px */
 }
+
+/* ===== Carrossel de destaques (Parte 3) — dados reais via fetch ===== */
+.ef-carousel { margin-top:20px; }
+.ef-car-track {
+    display:flex; gap:14px; overflow-x:auto;
+    scroll-snap-type:x mandatory;
+    scrollbar-width:none; -ms-overflow-style:none;
+    padding-bottom:2px;
+}
+.ef-car-track::-webkit-scrollbar { display:none; }
+.ef-car-card {
+    flex:0 0 272px; scroll-snap-align:center; box-sizing:border-box;
+    background:#fff; border-radius:16px; padding:15px 16px;
+    box-shadow:0 16px 34px rgba(4,30,20,.30);
+    display:flex; flex-direction:column; gap:7px;
+}
+.ef-cc-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.ef-cc-titulo { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700;
+    color:#0f3d2e; text-transform:uppercase; letter-spacing:.4px; }
+.ef-cc-titulo i { color:#16a34a; }
+.ef-cc-pill { font-size:10px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.ef-pill-neutro, .ef-pill-igual { background:#eef2f0; color:#64748b; }
+.ef-pill-alta { background:#dcfce7; color:#15803d; }
+.ef-pill-baixa { background:#fee2e2; color:#b91c1c; }
+.ef-cc-valor { font-size:30px; font-weight:800; color:#0f3d2e; line-height:1; }
+.ef-cc-valor small { font-size:15px; font-weight:700; color:#7d968a; }
+.ef-cc-apoio { font-size:11px; color:#7d968a; }
+.ef-cc-spark { margin-top:2px; height:34px; }
+.ef-cc-spark svg { display:block; width:100%; height:34px; overflow:visible; }
+.ef-car-dots { display:flex; gap:6px; justify-content:center; margin-top:12px; }
+.ef-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.35);
+    cursor:pointer; transition:background .2s ease, width .2s ease; }
+.ef-dot.on { background:#fff; width:18px; border-radius:99px; }
+/* skeleton shimmer enquanto carrega */
+.ef-car-skel { display:flex; gap:14px; margin-top:20px; overflow:hidden; }
+.ef-skel-card { flex:0 0 272px; height:150px; border-radius:16px;
+    background:linear-gradient(100deg, rgba(255,255,255,.08) 30%, rgba(255,255,255,.20) 50%, rgba(255,255,255,.08) 70%);
+    background-size:200% 100%; animation:efShimmer 1.3s ease-in-out infinite; }
+@keyframes efShimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
+/* contador no card DIA A DIA (preenchido por fetch; vazio = sem número, nunca 0 falso) */
+.ef-card-num { font-size:17px; font-weight:800; color:#0f3d2e; line-height:1; min-height:1px; }
+
+@media (max-width:600px) {
+    .ef-car-card, .ef-skel-card { flex-basis:300px; }
+    .ef-card-num { font-size:15px; }
+}
 </style>
 
 <!-- ===== HERO verde ===== -->
@@ -126,7 +172,12 @@
                 {% endif %}
             </div>
         </div>
-        <!-- carrossel: Parte 3 -->
+        <!-- carrossel de destaques (Parte 3): preenchido por fetch; some se falhar
+             ou se o dado tiver mais de 5 min (melhor omitir que mentir) -->
+        <div class="ef-car-skel" id="efCarSkel" aria-hidden="true">
+            <div class="ef-skel-card"></div><div class="ef-skel-card"></div><div class="ef-skel-card"></div>
+        </div>
+        <div class="ef-carousel" id="efCarousel" hidden></div>
     </div>
 </div>
 
@@ -138,31 +189,37 @@
         <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-file-invoice-dollar"></i></div>
             <h3 class="ef-card-title">Entradas</h3>
+            <div class="ef-card-num" data-counter="entradas"></div>
             <p class="ef-card-desc">NF-e de entrada por produto e emissor</p>
         </a>
         <a href="{{ url_for('escrita_fiscal.conf_saidas') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ecfccb;color:#4d7c0f;"><i class="fas fa-file-export"></i></div>
             <h3 class="ef-card-title">Saídas</h3>
+            <div class="ef-card-num" data-counter="saidas"></div>
             <p class="ef-card-desc">NF-e de saída por destinatário e produto</p>
         </a>
         <a href="{{ url_for('escrita_fiscal.conf_cte') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-truck"></i></div>
             <h3 class="ef-card-title">CT-e</h3>
+            <div class="ef-card-num" data-counter="cte"></div>
             <p class="ef-card-desc">Fretes capturados na SEFAZ</p>
         </a>
         <a href="{{ url_for('escrita_fiscal.status_sefaz') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#d1fae5;color:#059669;"><i class="fas fa-satellite-dish"></i></div>
             <h3 class="ef-card-title">Status SEFAZ</h3>
+            <div class="ef-card-num" data-counter="sefaz"></div>
             <p class="ef-card-desc">Captura automática: backlog e cota</p>
         </a>
         <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#e7f6ec;color:#166534;"><i class="fas fa-tag"></i></div>
             <h3 class="ef-card-title">Produtos</h3>
+            <div class="ef-card-num" data-counter="produtos"></div>
             <p class="ef-card-desc">Catálogo e vínculos por empresa</p>
         </a>
         <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#f0fdf4;color:#22c55e;"><i class="fas fa-memory"></i></div>
             <h3 class="ef-card-title">Memorizações</h3>
+            <div class="ef-card-num" data-counter="memorizacoes"></div>
             <p class="ef-card-desc">Vínculos automáticos por fornecedor</p>
         </a>
     </div>
@@ -404,6 +461,119 @@ function carregarHistorico() {
                 '<p style="color:#dc2626;text-align:center;">Erro ao carregar histórico.</p>';
         });
 }
+</script>
+
+<script>
+// ===== Home — carrossel de destaques + contadores (Parte 3) =====
+// A home já está pintada; isto só busca os números e enfeita. Se falhar ou vier
+// velho (>5min), o carrossel some e a home fica exatamente como estava.
+(function () {
+    var carEl = document.getElementById('efCarousel');
+    var skelEl = document.getElementById('efCarSkel');
+    if (!carEl) return;
+    var STALE_MS = 5 * 60 * 1000;
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+        });
+    }
+    function nfmt(n) { return Number(n || 0).toLocaleString('pt-BR'); }
+
+    // Sparkline SVG desenhado no cliente a partir do array (sem lib externa).
+    function sparkSVG(arr, tipo) {
+        arr = (arr && arr.length) ? arr : [0];
+        var W = 240, H = 34, n = arr.length;
+        var max = Math.max.apply(null, arr), min = Math.min.apply(null, arr);
+        var rng = (max - min) || 1;
+        if (tipo === 'barra') {
+            var gap = W / n, bw = gap * 0.6;
+            var bars = arr.map(function (v, i) {
+                var h = max > 0 ? (v / max) * (H - 2) : 0;
+                var x = i * gap + (gap - bw) / 2;
+                return '<rect x="' + x.toFixed(1) + '" y="' + (H - Math.max(h, 1)).toFixed(1) +
+                       '" width="' + bw.toFixed(1) + '" height="' + Math.max(h, 1).toFixed(1) +
+                       '" rx="1.5" fill="#22c55e"></rect>';
+            }).join('');
+            return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + bars + '</svg>';
+        }
+        var pts = arr.map(function (v, i) {
+            var x = n > 1 ? (i / (n - 1)) * W : 0;
+            var y = H - ((v - min) / rng) * (H - 4) - 2;
+            return x.toFixed(1) + ',' + y.toFixed(1);
+        });
+        var area = 'M0,' + H + ' L' + pts.join(' L') + ' L' + W + ',' + H + ' Z';
+        return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+               '<path d="' + area + '" fill="rgba(34,197,94,.14)"></path>' +
+               '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#16a34a" ' +
+               'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline></svg>';
+    }
+
+    function pill(t) {
+        t = t || { tipo: 'neutro' };
+        var txt;
+        if (t.tipo === 'alta') txt = '▲ ' + Math.abs(t.pct) + '%';
+        else if (t.tipo === 'baixa') txt = '▼ ' + Math.abs(t.pct) + '%';
+        else if (t.tipo === 'igual') txt = '0%';
+        else txt = t.rotulo || 'mês';
+        return '<span class="ef-cc-pill ef-pill-' + (t.tipo || 'neutro') + '">' + esc(txt) + '</span>';
+    }
+
+    function cardHTML(c) {
+        var suf = c.valor_sufixo ? '<small>' + esc(c.valor_sufixo) + '</small>' : '';
+        return '<div class="ef-car-card">' +
+            '<div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas ' + esc(c.icone) + '"></i>' +
+                esc(c.titulo) + '</span>' + pill(c.trend) + '</div>' +
+            '<div class="ef-cc-valor">' + nfmt(c.valor) + suf + '</div>' +
+            '<div class="ef-cc-apoio">' + esc(c.apoio) + '</div>' +
+            '<div class="ef-cc-spark">' + sparkSVG(c.spark, c.spark_tipo) + '</div>' +
+            '</div>';
+    }
+
+    function fillCounters(counters) {
+        if (!counters) return;
+        document.querySelectorAll('[data-counter]').forEach(function (el) {
+            var k = el.getAttribute('data-counter');
+            if (counters[k] != null) {
+                el.textContent = (typeof counters[k] === 'number') ? nfmt(counters[k]) : counters[k];
+            }
+        });
+    }
+
+    var track, dots, timer = null, idx = 0, paused = false, resumeT = null;
+    function cardW() { var c = track && track.querySelector('.ef-car-card'); return c ? c.offsetWidth + 14 : 286; }
+    function setDot(i) { if (dots) dots.forEach(function (d, ix) { d.classList.toggle('on', ix === i); }); }
+    function go(i) { idx = i; track.scrollTo({ left: i * cardW(), behavior: 'smooth' }); setDot(i); }
+    function syncDot() { if (!track) return; var i = Math.round(track.scrollLeft / cardW()); if (i !== idx) { idx = i; setDot(i); } }
+    function pauseAWhile() { paused = true; if (resumeT) clearTimeout(resumeT); resumeT = setTimeout(function () { paused = false; }, 8000); }
+    function startAuto(n) { if (timer) clearInterval(timer); if (n <= 1) return; timer = setInterval(function () { if (!paused) go((idx + 1) % n); }, 4000); }
+
+    function render(cards) {
+        carEl.innerHTML = '<div class="ef-car-track" id="efCarTrack">' + cards.map(cardHTML).join('') +
+            '</div><div class="ef-car-dots" id="efCarDots"></div>';
+        track = document.getElementById('efCarTrack');
+        var dotsEl = document.getElementById('efCarDots');
+        dotsEl.innerHTML = cards.map(function (_, ix) { return '<span class="ef-dot' + (ix === 0 ? ' on' : '') + '" data-ix="' + ix + '"></span>'; }).join('');
+        dots = Array.prototype.slice.call(dotsEl.children);
+        dots.forEach(function (d) { d.addEventListener('click', function () { go(parseInt(d.getAttribute('data-ix'), 10)); pauseAWhile(); }); });
+        track.addEventListener('scroll', syncDot, { passive: true });
+        // auto-avanço PAUSA quando o usuário toca/arrasta/rola a faixa
+        ['pointerdown', 'touchstart', 'wheel'].forEach(function (ev) { track.addEventListener(ev, pauseAWhile, { passive: true }); });
+        carEl.hidden = false;
+        startAuto(cards.length);
+    }
+
+    fetch('{{ url_for("escrita_fiscal.api_home_destaques") }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (data) {
+            if (skelEl) skelEl.remove();
+            fillCounters(data.counters);
+            var fresco = data.gerado_em_ms && (Date.now() - data.gerado_em_ms) <= STALE_MS;
+            if (fresco && data.cards && data.cards.length) render(data.cards);
+            // stale (>5min) ou sem cards → não mostra o carrossel; a home segue como está
+        })
+        .catch(function () { if (skelEl) skelEl.remove(); });
+})();
 </script>
 
 {% if is_admin %}

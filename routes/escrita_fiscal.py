@@ -573,6 +573,252 @@ def index():
 
 
 # ---------------------------------------------------------------------------
+# Home do Fiscal — DESTAQUES (carrossel + contadores). Painel do ESCRITÓRIO:
+# agrega GLOBAL, gated pela mesma permissão das telas de consulta. SÓ SELECTs.
+# A home abre instantânea (não espera query) e busca isto por fetch; cache em
+# memória de 60s por usuário evita que F5 em sequência martele o banco. Cada
+# consulta é isolada: se a query de um card falhar, o card é OMITIDO (os outros
+# vivem) e o erro vai pro log, nunca pro usuário — melhor faltar que mentir.
+# ---------------------------------------------------------------------------
+_HOME_CACHE: dict = {}
+_HOME_CACHE_LOCK = threading.Lock()
+_HOME_TTL_S = 60
+
+# 1º dia do mês corrente e a mesma janela (mês-a-dia) do mês anterior — em SQL,
+# sem DATE_FORMAT (evita o '%' no paramstyle do driver).
+_MES_INI = "(CURDATE() - INTERVAL (DAY(CURDATE())-1) DAY)"
+_PMES_INI = f"({_MES_INI} - INTERVAL 1 MONTH)"
+_PMES_FIM = "(CURDATE() - INTERVAL 1 MONTH)"
+
+
+def _hi(v):
+    return int(v) if v is not None else 0
+
+
+def _hbrl(v):
+    s = f'{float(v or 0):,.2f}'
+    return 'R$ ' + s.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _hdias_iso(n):
+    """n datas ISO terminando hoje (Brasília), em ordem crescente."""
+    from datetime import timedelta
+    hoje = datetime.now(ZoneInfo('America/Sao_Paulo')).date()
+    return [(hoje - timedelta(days=i)).isoformat() for i in range(n - 1, -1, -1)]
+
+
+def _hspark(rows, keys, kf, vf):
+    """Densifica linhas agrupadas num array alinhado a `keys` (0 onde faltar)."""
+    m = {}
+    for r in rows or []:
+        k = r.get(kf)
+        if hasattr(k, 'isoformat'):
+            k = k.isoformat()
+        m[str(k)] = _hi(r.get(vf))
+    return [m.get(str(k), 0) for k in keys]
+
+
+def _htrend(atual, anterior):
+    """Selo de tendência vs mesmo período do mês anterior. Sem base → neutro."""
+    if not anterior or anterior <= 0:
+        return {'tipo': 'neutro'}
+    pct = round((atual - anterior) / anterior * 100)
+    return {'tipo': 'alta' if pct > 0 else ('baixa' if pct < 0 else 'igual'), 'pct': pct}
+
+
+def _hq1(sql):
+    """SELECT de 1 linha. Exceção → None (card omitido); tabela vazia → dict."""
+    try:
+        return execute_query(sql, fetch=True, fetch_one=True) or {}
+    except Exception:
+        logger.exception('[home-destaques] query1 falhou')
+        return None
+
+
+def _hqn(sql):
+    try:
+        return execute_query(sql, fetch=True) or []
+    except Exception:
+        logger.exception('[home-destaques] queryN falhou')
+        return []
+
+
+def _home_destaques_payload():
+    cards = []
+    counters = {}
+
+    def _card(fn):
+        try:
+            c = fn()
+            if c:
+                cards.append(c)
+        except Exception:
+            logger.exception('[home-destaques] card omitido')
+
+    hoje_dom = datetime.now(ZoneInfo('America/Sao_Paulo')).day
+    keys_dom = list(range(1, hoje_dom + 1))
+    keys9 = _hdias_iso(9)
+    keys7 = _hdias_iso(7)
+
+    # ---- scalares (cada um isolado) ----
+    nfe = _hq1(
+        "SELECT "
+        " SUM(DATE(importado_em)=CURDATE()) imp_hoje, "
+        f" SUM(tipo='entrada' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI}) ent_mes, "
+        f" SUM(tipo='saida'   AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI}) sai_mes, "
+        f" COALESCE(SUM(CASE WHEN tipo='entrada' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI} THEN valor_total END),0) ent_valor, "
+        f" SUM(tipo='saida' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI} AND SUBSTRING(chave_acesso,21,2)='65') sai_nfce, "
+        f" SUM(tipo='saida' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI} AND SUBSTRING(chave_acesso,21,2)='55') sai_nfe, "
+        f" SUM(tipo='entrada' AND COALESCE(cancelada,0)=0 AND data_emissao>={_PMES_INI} AND data_emissao<={_PMES_FIM}) ent_prev, "
+        f" SUM(tipo='saida'   AND COALESCE(cancelada,0)=0 AND data_emissao>={_PMES_INI} AND data_emissao<={_PMES_FIM}) sai_prev "
+        "FROM nfe_importacoes")
+    cte = _hq1(
+        "SELECT SUM(DATE(importado_em)=CURDATE()) imp_hoje, "
+        f" SUM(COALESCE(cancelado,0)=0 AND data_emissao>={_MES_INI}) cte_mes "
+        "FROM cte_documentos")
+    # "Em dia" = cursor alcançado (backlog 0) e já consultou. A "cota" (throttle
+    # transitório entre janelas da SEFAZ) NÃO conta como atraso — senão o painel
+    # mostraria 0/26 num sistema saudável, só no cooldown. COALESCE espelha o
+    # backlog da tela de Status (max_nsu/ult_nsu podem ser NULL).
+    nsu = _hq1(
+        "SELECT COUNT(*) total, "
+        " SUM(GREATEST(COALESCE(max_nsu,0)-COALESCE(ult_nsu,0),0)=0 "
+        "     AND ult_consulta IS NOT NULL) em_dia "
+        "FROM dfe_nsu")
+    cert = _hq1(
+        "SELECT COUNT(*) venc FROM dfe_certificados "
+        "WHERE ativo=1 AND validade IS NOT NULL "
+        "AND validade BETWEEN CURDATE() AND CURDATE()+INTERVAL 30 DAY")
+    prod = _hq1("SELECT COUNT(*) total FROM nfe_produtos_catalogo WHERE ativo=1")
+    semv = _hq1("SELECT COUNT(DISTINCT descricao, unidade) sem_vinc "
+                "FROM nfe_itens WHERE produto_catalogo_id IS NULL")
+    memo = _hq1(
+        "SELECT COUNT(*) ativas, "
+        " SUM(YEAR(criado_em)=YEAR(CURDATE()) AND MONTH(criado_em)=MONTH(CURDATE())) aplicadas_mes "
+        "FROM nfe_produto_vinculo")
+    cli9 = _hq1("SELECT COUNT(DISTINCT cliente_id) cli FROM nfe_importacoes "
+                "WHERE importado_em>=CURDATE()-INTERVAL 8 DAY")
+
+    # ---- séries (sparklines) ----
+    dom = _hqn("SELECT DAY(data_emissao) d, SUM(tipo='entrada') ent, SUM(tipo='saida') sai "
+               f"FROM nfe_importacoes WHERE COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI} GROUP BY d")
+    nfe9 = _hqn("SELECT DATE(importado_em) d, COUNT(*) c FROM nfe_importacoes "
+                "WHERE importado_em>=CURDATE()-INTERVAL 8 DAY GROUP BY d")
+    cte9 = _hqn("SELECT DATE(importado_em) d, COUNT(*) c FROM cte_documentos "
+                "WHERE importado_em>=CURDATE()-INTERVAL 8 DAY GROUP BY d")
+    cons7 = _hqn("SELECT DATE(momento) d, COUNT(*) c FROM dfe_consulta_log "
+                 "WHERE momento>=CURDATE()-INTERVAL 6 DAY GROUP BY d")
+    vinc9 = _hqn("SELECT DATE(criado_em) d, COUNT(*) c FROM nfe_produto_vinculo "
+                 "WHERE criado_em>=CURDATE()-INTERVAL 8 DAY GROUP BY d")
+
+    # ---- 1) CAPTURADAS HOJE ----
+    def _c1():
+        if nfe is None or cte is None:
+            return None
+        s = [a + b for a, b in zip(_hspark(nfe9, keys9, 'd', 'c'),
+                                   _hspark(cte9, keys9, 'd', 'c'))]
+        return {'id': 'capturadas', 'icone': 'fa-bolt', 'titulo': 'Capturadas hoje',
+                'valor': _hi(nfe.get('imp_hoje')) + _hi(cte.get('imp_hoje')),
+                'apoio': f"últimos 9 dias · {_hi((cli9 or {}).get('cli'))} clientes ativos",
+                'spark': s, 'spark_tipo': 'linha', 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}}
+    _card(_c1)
+
+    # ---- 2) SAÍDAS DO MÊS ----
+    def _c2():
+        if nfe is None:
+            return None
+        return {'id': 'saidas', 'icone': 'fa-file-export', 'titulo': 'Saídas do mês',
+                'valor': _hi(nfe.get('sai_mes')),
+                'apoio': f"{_hi(nfe.get('sai_nfce'))} NFC-e · {_hi(nfe.get('sai_nfe'))} NF-e",
+                'spark': _hspark(dom, keys_dom, 'd', 'sai'), 'spark_tipo': 'linha',
+                'trend': _htrend(_hi(nfe.get('sai_mes')), _hi(nfe.get('sai_prev')))}
+    _card(_c2)
+
+    # ---- 3) STATUS SEFAZ ----
+    def _c3():
+        if nsu is None:
+            return None
+        v = _hi((cert or {}).get('venc'))
+        apoio = (f"{v} certificado(s) vencendo em 30d" if v > 0
+                 else "nenhum certificado vencendo")
+        return {'id': 'status', 'icone': 'fa-satellite-dish', 'titulo': 'Status SEFAZ',
+                'valor': _hi(nsu.get('em_dia')), 'valor_sufixo': f" / {_hi(nsu.get('total'))}",
+                'apoio': apoio, 'spark': _hspark(cons7, keys7, 'd', 'c'),
+                'spark_tipo': 'barra', 'trend': {'tipo': 'neutro', 'rotulo': 'em dia'}}
+    _card(_c3)
+
+    # ---- 4) ENTRADAS DO MÊS ----
+    def _c4():
+        if nfe is None:
+            return None
+        return {'id': 'entradas', 'icone': 'fa-file-invoice-dollar', 'titulo': 'Entradas do mês',
+                'valor': _hi(nfe.get('ent_mes')),
+                'apoio': _hbrl(nfe.get('ent_valor')),
+                'spark': _hspark(dom, keys_dom, 'd', 'ent'), 'spark_tipo': 'linha',
+                'trend': _htrend(_hi(nfe.get('ent_mes')), _hi(nfe.get('ent_prev')))}
+    _card(_c4)
+
+    # ---- 5) PRODUTOS ----
+    def _c5():
+        if prod is None:
+            return None
+        return {'id': 'produtos', 'icone': 'fa-tag', 'titulo': 'Produtos',
+                'valor': _hi(prod.get('total')),
+                'apoio': f"{_hi((semv or {}).get('sem_vinc'))} sem vínculo",
+                'spark': _hspark(vinc9, keys9, 'd', 'c'), 'spark_tipo': 'linha',
+                'trend': {'tipo': 'neutro', 'rotulo': 'catálogo'}}
+    _card(_c5)
+
+    # ---- 6) MEMORIZAÇÕES ----
+    def _c6():
+        if memo is None:
+            return None
+        return {'id': 'memorizacoes', 'icone': 'fa-memory', 'titulo': 'Memorizações',
+                'valor': _hi(memo.get('ativas')),
+                'apoio': f"{_hi(memo.get('aplicadas_mes'))} aplicadas no mês",
+                'spark': _hspark(vinc9, keys9, 'd', 'c'), 'spark_tipo': 'linha',
+                'trend': {'tipo': 'neutro', 'rotulo': 'ativas'}}
+    _card(_c6)
+
+    # ---- contadores DIA A DIA (mesmo payload; ausente onde a query falhou) ----
+    if nfe is not None:
+        counters['entradas'] = _hi(nfe.get('ent_mes'))
+        counters['saidas'] = _hi(nfe.get('sai_mes'))
+    if cte is not None:
+        counters['cte'] = _hi(cte.get('cte_mes'))
+    if nsu is not None:
+        counters['sefaz'] = f"{_hi(nsu.get('em_dia'))}/{_hi(nsu.get('total'))}"
+    if prod is not None:
+        counters['produtos'] = _hi(prod.get('total'))
+    if memo is not None:
+        counters['memorizacoes'] = _hi(memo.get('ativas'))
+
+    agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    return {
+        'gerado_em': agora.isoformat(timespec='seconds'),
+        'gerado_em_ms': int(agora.timestamp() * 1000),
+        'cards': cards,
+        'counters': counters,
+    }
+
+
+@escrita_fiscal.route('/api/home-destaques')
+@permission_required('escrita_fiscal.conf_compras')
+def api_home_destaques():
+    """Números da home (carrossel + contadores). Cache 60s por usuário."""
+    uid = getattr(current_user, 'id', None)
+    agora = datetime.now(timezone.utc).timestamp()
+    with _HOME_CACHE_LOCK:
+        hit = _HOME_CACHE.get(uid)
+        if hit and (agora - hit[0]) < _HOME_TTL_S:
+            return jsonify(hit[1])
+    payload = _home_destaques_payload()
+    with _HOME_CACHE_LOCK:
+        _HOME_CACHE[uid] = (agora, payload)
+    return jsonify(payload)
+
+
+# ---------------------------------------------------------------------------
 # Painel de Status da Captura SEFAZ — SÓ LEITURA (dfe_nsu / dfe_consulta_log /
 # nfe_importacoes). NÃO captura, NÃO consome cota — só mostra o que o cron gravou.
 # ---------------------------------------------------------------------------
