@@ -391,9 +391,9 @@ def extrair_resumo_nota(root):
 # ==========================================================================
 # Dropbox: caminho Fiscal (ano/mês da nota) + upload
 # ==========================================================================
-def _caminho_fiscal(empresa, ano, mes, nome):
+def _caminho_fiscal(empresa, ano, mes, nome, sentido):
     svc = dropbox_sync._service
-    pasta = svc.pasta_fiscal(empresa["razao"], ano, mes, empresa.get("numero"))
+    pasta = svc.pasta_fiscal(empresa["razao"], ano, mes, sentido, empresa.get("numero"))
     return f"{pasta}/{nome}.xml"
 
 
@@ -610,8 +610,9 @@ def gravar_evento(conn, cur, empresa, ev, xml_bytes):
     registrado com a nota marcada, ou nada entra."""
     ano = ev["ano"] or _hoje_brt().year
     mes = ev["mes"] or _hoje_brt().month
-    # Arquiva pelo Id do evento (não pela chNFe, para não colidir com a nota).
-    caminho = _caminho_fiscal(empresa, ano, mes, ev["chave_evento"])
+    # Arquiva pelo Id do evento (não pela chNFe, para não colidir com a nota),
+    # na convenção única com SENTIDO=EVENTOS (mesma pasta do roteador).
+    caminho = _caminho_fiscal(empresa, ano, mes, ev["chave_evento"], 'EVENTOS')
     _subir_xml(caminho, xml_bytes)
 
     # O XML também vai para o BANCO (xml_raw), não só para o Dropbox: o evento

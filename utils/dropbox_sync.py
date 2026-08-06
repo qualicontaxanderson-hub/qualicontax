@@ -630,19 +630,27 @@ class DropboxService:
     # ------------------------------------------------------------------
     # Helpers de caminho para Documentos Fiscais (DFe / XML)
     # ------------------------------------------------------------------
-    def pasta_fiscal(self, empresa_nome: str, ano, mes,
+    def pasta_fiscal(self, empresa_nome: str, ano, mes, sentido: str,
                      empresa_numero: str = None) -> str:
-        """Pasta de documentos fiscais (XML de DFe) da empresa, por ano/mês:
-        ``{ROOT}/EMPRESAS/{numero} - {razão}/Fiscal/{ano}/{mes}``.
+        """Pasta de documentos fiscais (XML de DFe) da empresa, na convenção ÚNICA
+        do ``cron_roteador``:
+        ``{ROOT}/EMPRESAS/{numero} - {razão}/FISCAL/{SENTIDO}/{ano}/{mes}``,
+        com ``sentido`` ∈ ``ENTRADAS | SAIDAS | CTE | EVENTOS``.
 
-        Segue o padrão único por empresa (uma pasta reúne Fiscal, Legalização,
-        Contábil, Pessoal, Certificado). O ano/mês dentro de Fiscal é obrigatório
-        por causa do volume de XML. Reusa ``_build_empresa_folder`` (mesmo
-        ``001 - RAZÃO`` dos certificados) e ``_build_path`` (prefixo raiz).
+        Antes gravava o path PLANO ``.../Fiscal/{ano}/{mes}`` (sem SENTIDO): todo
+        doc que também passava pelo roteador virava um par duplicado (flat +
+        SENTIDO). Unificar aqui mata a FONTE das duplicatas — o ``sentido`` é
+        obrigatório e o path sai idêntico ao que o roteador grava (mesmo
+        ``EMPRESAS``, ``FISCAL`` maiúsculo, ano e mês de 2 dígitos). No Dropbox o
+        ``FISCAL`` cai na pasta ``Fiscal`` existente (case-insensitive), como já
+        acontece com os arquivos do roteador.
+
+        Reusa ``_build_empresa_folder`` (mesmo ``001 - RAZÃO`` dos certificados) e
+        ``_build_path`` (prefixo raiz).
         """
         pasta_empresa = _build_empresa_folder(empresa_numero, empresa_nome)
         return self._build_path(
-            'EMPRESAS', pasta_empresa, 'Fiscal', str(ano), f'{int(mes):02d}')
+            'EMPRESAS', pasta_empresa, 'FISCAL', sentido, str(ano), f'{int(mes):02d}')
 
 
 def normalize_departamento(departamento: str) -> str:
