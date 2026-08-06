@@ -54,3 +54,16 @@ Thumbs.db
 # Uploads
 uploads/
 static/uploads/
+
+# Credenciais e artefatos de BACKUP — NUNCA versionar.
+# O bakup_qualicontax.bat mora dentro do repo mas carrega parametros de conexao;
+# a senha saiu dele (vai em %USERPROFILE%\.qualicontax\mysql_backup.cnf, fora do
+# repo e do OneDrive), e o arquivo fica ignorado como segunda camada de defesa.
+bakup_qualicontax.bat
+bakup_qualicontax.bat.orig
+*.cnf
+*.sql
+*.sql.gz
+
+# Trilhas de auditoria dos backfills (saida de execucao, nao codigo)
+scripts/backfill_*.csv
