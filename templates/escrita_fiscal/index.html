@@ -2,124 +2,198 @@
 {% block title %}Escrita Fiscal - Qualicontax{% endblock %}
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Escrita Fiscal</h1>
-        <p class="page-subtitle">Apuração de impostos e obrigações acessórias</p>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button onclick="openHistoricoModal()"
-                title="Ver histórico de importações e empresas não cadastradas"
-                style="background:#f1f5f9;color:#6366f1;border:1.5px solid #c7d2fe;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
-            <i class="fas fa-history"></i> Histórico
-        </button>
-        {% if is_admin %}
-        <button onclick="openImportManualModal()" id="btnImportManual"
-                title="Upload direto de XMLs para teste (sem Dropbox)"
-                style="background:#f1f5f9;color:#374151;border:1.5px solid #d1d5db;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
-            <i class="fas fa-upload"></i> Importação Manual
-        </button>
-        <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
-                title="Executa agora a importação de XMLs {% if departamento %}do departamento {{ departamento }}{% else %}de todos os departamentos{% endif %}"
-                style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);">
-            <i class="fas fa-play-circle"></i> Executar Agora
-        </button>
-        <button onclick="openHorarioModal()" id="btnHorario"
-                title="Configurar o horário da importação automática"
-                style="background:#f1f5f9;color:#6366f1;border:1.5px solid #c7d2fe;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
-            <i class="fas fa-clock"></i> <span id="btnHorarioText">{{ schedule_texto or 'Carregando...' }}</span>
-        </button>
-        {% endif %}
+<style>
+/* ===== HOME VERDE+BRANCO (Parte 2 — visual; dados dinâmicos na Parte 3) ===== */
+/* Hero e corpo sangram sobre o padding do .content (28px 32px / 16px no mobile). */
+.ef-hero, .ef-body { margin-left:-32px; margin-right:-32px; box-sizing:border-box; }
+
+.ef-hero {
+    position:relative; overflow:hidden;
+    padding:28px 32px 64px;
+    background:linear-gradient(150deg,#0b3b2b 0%,#116a43 55%,#178a52 100%);
+}
+/* Dois brilhos radiais suaves nas pontas (atrás do conteúdo). */
+.ef-hero::before, .ef-hero::after {
+    content:''; position:absolute; border-radius:50%; pointer-events:none;
+    filter:blur(24px); z-index:0;
+}
+.ef-hero::before { top:-45%; left:-8%; width:340px; height:340px;
+    background:radial-gradient(circle, rgba(52,211,153,.28), transparent 70%); }
+.ef-hero::after  { bottom:-55%; right:-4%; width:380px; height:380px;
+    background:radial-gradient(circle, rgba(74,222,128,.22), transparent 70%); }
+.ef-hero-inner { position:relative; z-index:1; }
+
+.ef-hero-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.ef-hero-title { margin:0; font-size:24px; font-weight:800; color:#fff; letter-spacing:-.02em; }
+.ef-hero-sub { margin:4px 0 0; font-size:11.5px; font-weight:500; color:#a7d9c0; }
+
+.ef-hero-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.ef-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 16px; border-radius:10px;
+    font-size:13px; font-weight:600; cursor:pointer;
+    background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.24); color:#eafff3;
+    transition:background .15s ease, border-color .15s ease;
+}
+.ef-btn:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.4); }
+.ef-btn-primary { background:#fff; border-color:#fff; color:#0f3d2e; font-weight:800; }
+.ef-btn-primary:hover { background:#eafff3; border-color:#eafff3; }
+
+/* Corpo branco sobe sobre o hero numa curva. */
+.ef-body {
+    position:relative; z-index:1;
+    margin-top:-40px; margin-bottom:-28px;
+    padding:26px 32px 40px;
+    background:#f7faf8;
+    border-radius:24px 24px 0 0;
+    min-height:46vh;
+}
+.ef-section-label {
+    font-size:9.5px; letter-spacing:1.8px; font-weight:800;
+    text-transform:uppercase; color:#7d968a; margin:0 0 12px;
+}
+.ef-body .ef-section-label + .ef-grid + .ef-section-label,
+.ef-body .ef-grid + .ef-section-label { margin-top:28px; }
+
+.ef-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
+
+.ef-card {
+    display:flex; flex-direction:column; gap:9px; box-sizing:border-box;
+    background:#fff; border:1px solid #e3ece7; border-radius:17px; padding:14px;
+    text-decoration:none;
+    transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.ef-card:hover { border-color:#86efac; box-shadow:0 8px 20px rgba(16,120,70,.10); transform:translateY(-2px); }
+.ef-card-ico {
+    width:38px; height:38px; border-radius:12px; box-sizing:border-box;
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+}
+.ef-card-title { margin:0; font-size:13px; font-weight:700; color:#0f3d2e; }
+.ef-card-desc { margin:0; font-size:10.5px; line-height:1.35; color:#7d968a; }
+
+/* "Em breve": desabilitados, cinza, sem link. */
+.ef-card-soon { cursor:default; background:#f7faf8; opacity:.8; }
+.ef-card-soon:hover { border-color:#e3ece7; box-shadow:none; transform:none; }
+.ef-soon-badge {
+    align-self:flex-start; margin-top:-2px;
+    font-size:8.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+    color:#94a3b8; background:#eef2f0; border-radius:99px; padding:2px 8px;
+}
+
+@media (max-width:900px) {
+    .ef-grid { grid-template-columns:repeat(3,1fr); }
+}
+@media (max-width:600px) {
+    .ef-hero { padding:22px 16px 56px; }
+    .ef-hero, .ef-body { margin-left:-16px; margin-right:-16px; margin-bottom:-16px; }
+    .ef-body { padding:22px 16px 32px; }
+    .ef-grid { grid-template-columns:repeat(3,1fr); gap:8px; }
+    .ef-card { padding:11px; border-radius:14px; }
+    .ef-card-desc { display:none; }   /* 3 colunas compactas em 390px */
+}
+</style>
+
+<!-- ===== HERO verde ===== -->
+<div class="ef-hero">
+    <div class="ef-hero-inner">
+        <div class="ef-hero-head">
+            <div>
+                <h1 class="ef-hero-title">Escrita Fiscal</h1>
+                <p class="ef-hero-sub">Apuração de impostos e obrigações acessórias</p>
+            </div>
+            <div class="ef-hero-actions">
+                <button onclick="openHistoricoModal()"
+                        title="Ver histórico de importações e empresas não cadastradas"
+                        class="ef-btn">
+                    <i class="fas fa-history"></i> Histórico
+                </button>
+                {% if is_admin %}
+                <button onclick="openImportManualModal()" id="btnImportManual"
+                        title="Upload direto de XMLs para teste (sem Dropbox)"
+                        class="ef-btn">
+                    <i class="fas fa-upload"></i> Importação Manual
+                </button>
+                <button onclick="openHorarioModal()" id="btnHorario"
+                        title="Configurar o horário da importação automática"
+                        class="ef-btn">
+                    <i class="fas fa-clock"></i> <span id="btnHorarioText">{{ schedule_texto or 'Carregando...' }}</span>
+                </button>
+                <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
+                        title="Executa agora a importação de XMLs {% if departamento %}do departamento {{ departamento }}{% else %}de todos os departamentos{% endif %}"
+                        class="ef-btn ef-btn-primary">
+                    <i class="fas fa-play-circle"></i> Executar Agora
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        <!-- carrossel: Parte 3 -->
     </div>
 </div>
 
-<div class="module-tiles">
+<!-- ===== CORPO branco ===== -->
+<div class="ef-body">
 
-    <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-            <i class="fas fa-tag"></i>
-        </div>
-        <h3 class="module-tile-title">Cadastro de Produtos</h3>
-        <p class="module-tile-desc">Cadastre e vincule produtos ao catálogo por empresa ou grupo para classificação automática</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
+    <div class="ef-section-label">Dia a dia</div>
+    <div class="ef-grid">
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-file-invoice-dollar"></i></div>
+            <h3 class="ef-card-title">Entradas</h3>
+            <p class="ef-card-desc">NF-e de entrada por produto e emissor</p>
+        </a>
+        <a href="{{ url_for('escrita_fiscal.conf_saidas') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ecfccb;color:#4d7c0f;"><i class="fas fa-file-export"></i></div>
+            <h3 class="ef-card-title">Saídas</h3>
+            <p class="ef-card-desc">NF-e de saída por destinatário e produto</p>
+        </a>
+        <a href="{{ url_for('escrita_fiscal.conf_cte') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-truck"></i></div>
+            <h3 class="ef-card-title">CT-e</h3>
+            <p class="ef-card-desc">Fretes capturados na SEFAZ</p>
+        </a>
+        <a href="{{ url_for('escrita_fiscal.status_sefaz') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#d1fae5;color:#059669;"><i class="fas fa-satellite-dish"></i></div>
+            <h3 class="ef-card-title">Status SEFAZ</h3>
+            <p class="ef-card-desc">Captura automática: backlog e cota</p>
+        </a>
+        <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#e7f6ec;color:#166534;"><i class="fas fa-tag"></i></div>
+            <h3 class="ef-card-title">Produtos</h3>
+            <p class="ef-card-desc">Catálogo e vínculos por empresa</p>
+        </a>
+        <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#f0fdf4;color:#22c55e;"><i class="fas fa-memory"></i></div>
+            <h3 class="ef-card-title">Memorizações</h3>
+            <p class="ef-card-desc">Vínculos automáticos por fornecedor</p>
+        </a>
+    </div>
 
-    <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
-            <i class="fas fa-file-invoice-dollar"></i>
+    <div class="ef-section-label">Em breve</div>
+    <div class="ef-grid">
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-file-invoice"></i></div>
+            <h3 class="ef-card-title">Notas Fiscais</h3>
+            <p class="ef-card-desc">Escrituração de entrada e saída</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Conferência de Entradas</h3>
-        <p class="module-tile-desc">Importe XMLs de NF-e de entrada, analise por produto, emissor e muito mais</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="{{ url_for('escrita_fiscal.conf_cte') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #14b8a6, #0d9488);">
-            <i class="fas fa-truck"></i>
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-percentage"></i></div>
+            <h3 class="ef-card-title">Apuração de Impostos</h3>
+            <p class="ef-card-desc">ICMS, PIS, COFINS e outros tributos</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Conferência de CT-e</h3>
-        <p class="module-tile-desc">Confira os fretes capturados na SEFAZ: transportadora, tomador, valor do frete e as NF-e transportadas</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="{{ url_for('escrita_fiscal.conf_saidas') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">
-            <i class="fas fa-file-export"></i>
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-calendar-check"></i></div>
+            <h3 class="ef-card-title">Obrigações Acessórias</h3>
+            <p class="ef-card-desc">SPED, DCTF, ECF e demais obrigações</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Conferência de Saídas</h3>
-        <p class="module-tile-desc">Analise NF-e de saída por destinatário, produto e chave XML</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <i class="fas fa-memory"></i>
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-file-export"></i></div>
+            <h3 class="ef-card-title">Exportação SPED</h3>
+            <p class="ef-card-desc">SPED Fiscal e Contribuições</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Memorizações</h3>
-        <p class="module-tile-desc">Gerencie os vínculos automáticos de produtos por fornecedor — edite ou exclua memorizações fiscais</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="{{ url_for('escrita_fiscal.status_sefaz') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
-            <i class="fas fa-satellite-dish"></i>
-        </div>
-        <h3 class="module-tile-title">Status da Captura SEFAZ</h3>
-        <p class="module-tile-desc">Acompanhe a captura automática de NF-e: backlog, cota, últimas rodadas e notas por empresa — só leitura</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <i class="fas fa-file-invoice"></i>
-        </div>
-        <h3 class="module-tile-title">Notas Fiscais</h3>
-        <p class="module-tile-desc">Escrituração de notas fiscais de entrada e saída</p>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
-            <i class="fas fa-percentage"></i>
-        </div>
-        <h3 class="module-tile-title">Apuração de Impostos</h3>
-        <p class="module-tile-desc">Apuração de ICMS, PIS, COFINS e outros tributos</p>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-            <i class="fas fa-calendar-check"></i>
-        </div>
-        <h3 class="module-tile-title">Obrigações Acessórias</h3>
-        <p class="module-tile-desc">Controle de SPED, DCTF, ECF e demais obrigações</p>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-            <i class="fas fa-file-export"></i>
-        </div>
-        <h3 class="module-tile-title">Exportação SPED</h3>
-        <p class="module-tile-desc">Geração dos arquivos SPED Fiscal e SPED Contribuições</p>
-    </a>
+    </div>
 
 </div>
 
