@@ -28,6 +28,22 @@ from utils.nfe_parser import parse_nfe_xml
 
 logger = logging.getLogger(__name__)
 
+# A coluna `origem` de nfe_importacoes E de cte_documentos é um ENUM fechado:
+#
+#     ENUM('UPLOAD','DROPBOX','SEFAZ','Q-ROBO')  NOT NULL DEFAULT 'UPLOAD'
+#
+# Este módulo já nasceu com um bug por causa disso: passava origem='ROTEADOR',
+# o MySQL recusava o INSERT em strict mode, execute_query devolvia None e o
+# _save_nfe levantava "Falha ao salvar NF-e no banco" — 10 notas do primeiro
+# teste real caíram assim. Não perdemos nada (o roteador não arquiva o que não
+# lançou), mas o erro só apareceu em produção.
+#
+# O roteador grava DROPBOX, e não um valor novo, porque é exatamente o que ele
+# é: o consumidor da caixa do Dropbox, no lugar do job que lia /Fiscal/NOVO.
+# Manter o mesmo valor preserva a continuidade do histórico.
+ORIGENS_VALIDAS = frozenset({'UPLOAD', 'DROPBOX', 'SEFAZ', 'Q-ROBO'})
+ORIGEM_ROTEADOR = 'DROPBOX'
+
 
 # ---------------------------------------------------------------------------
 # Cache de clientes por documento  (movido de routes/escrita_fiscal.py)
@@ -113,9 +129,12 @@ def _e_cte(content: str) -> bool:
 # ---------------------------------------------------------------------------
 # Import de UM documento  (movido de routes/escrita_fiscal.py)
 # ---------------------------------------------------------------------------
-def _importar_um_cte(nome: str, content: str, cache):
+def _importar_um_cte(nome: str, content: str, cache, origem: str = 'UPLOAD'):
     """Importa UM XML de CT-e. Devolve ('ok'|'dup', None) quando entrou, ou
-    (None, 'motivo') quando o arquivo foi rejeitado."""
+    (None, 'motivo') quando o arquivo foi rejeitado.
+
+    ``origem`` tem default 'UPLOAD' para os chamadores antigos (o upload manual
+    do blueprint) continuarem idênticos; o roteador passa 'DROPBOX'."""
     try:
         parsed = parse_cte_xml(content)
     except Exception as exc:
@@ -140,7 +159,7 @@ def _importar_um_cte(nome: str, content: str, cache):
     novo = False
     for cid, dig in achados.items():
         papel = papel_do_cliente(header, dig)
-        if _save_cte(parsed, nome, 'UPLOAD', cliente_id=cid,
+        if _save_cte(parsed, nome, origem, cliente_id=cid,
                      xml_raw=content, papel_cliente=papel, cnpj_cliente=dig) == 'ok':
             novo = True
     return ('ok' if novo else 'dup'), None
@@ -150,19 +169,23 @@ def _importar_um_cte(nome: str, content: str, cache):
 # A porta de entrada do roteador
 # ---------------------------------------------------------------------------
 def importar_xml(nome: str, dados: bytes, cache: dict,
-                 origem: str = 'ROTEADOR') -> tuple:
+                 origem: str = ORIGEM_ROTEADOR) -> tuple:
     """Lança UM .xml no banco. Devolve ``(status, motivo)``.
 
     status ∈ ``ok`` (entrou) | ``dup`` (já estava) | ``skip`` (tipo sem trilha
     de import — evento/inutilização) | ``erro`` (recusado, com motivo).
 
-    NÃO levanta exceção por XML ruim: devolve ('erro', motivo). Quem chama
-    decide se arquiva ou deixa na origem — e a decisão do roteador é NÃO
+    NÃO levanta exceção: devolve ('erro', motivo) para QUALQUER falha. Quem
+    chama decide se arquiva ou deixa na origem — e a decisão do roteador é NÃO
     arquivar o que não foi lançado.
 
-    O ``origem`` grava a procedência na linha (o mesmo campo que recebe
-    'SEFAZ'/'Q-ROBO'/'UPLOAD' nos outros fluxos).
+    O ``origem`` grava a procedência na linha e é validado contra o ENUM da
+    coluna — ver ORIGENS_VALIDAS.
     """
+    if origem not in ORIGENS_VALIDAS:
+        raise ValueError(
+            f'origem {origem!r} não existe no ENUM de nfe_importacoes.origem '
+            f'({", ".join(sorted(ORIGENS_VALIDAS))}). Erro de programação.')
     if isinstance(dados, bytes):
         content = dados.decode('utf-8', errors='replace')
     else:
@@ -176,7 +199,10 @@ def importar_xml(nome: str, dados: bytes, cache: dict,
         return 'skip', f'{raiz}: sem trilha de import (só arquivamento)'
 
     if _e_cte(content):
-        res, motivo = _importar_um_cte(nome, content, cache)
+        try:
+            res, motivo = _importar_um_cte(nome, content, cache, origem)
+        except Exception as exc:
+            return 'erro', f'{nome}: falha ao gravar CT-e — {exc}'
         if motivo:
             return 'erro', motivo
         return res, ''
@@ -202,10 +228,15 @@ def importar_xml(nome: str, dados: bytes, cache: dict,
         # aqui é divergência entre os dois — não inventa vínculo, recusa.
         return 'erro', f'{nome}: emitente e destinatário não são clientes'
 
+    # except Exception, não só ValueError: o _save_nfe levanta Exception CRUA
+    # quando o INSERT falha ("Falha ao salvar NF-e no banco"). Capturando só
+    # ValueError, essa falha escapava para o handler genérico do roteador e a
+    # linha do roteador_log saía SEM o marcador [import=...] — o log deixava de
+    # dizer que quem falhou foi o lançamento. Aconteceu no primeiro teste real.
     try:
         return _save_nfe_dual(parsed, nome, origem, content,
                               dest_cli=dest_cli, emit_cli=emit_cli), ''
-    except ValueError as exc:
+    except Exception as exc:
         return 'erro', f'{nome}: {exc}'
 
 
