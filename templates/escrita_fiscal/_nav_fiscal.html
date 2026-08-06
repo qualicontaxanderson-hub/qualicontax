@@ -1,0 +1,100 @@
+{# ---------------------------------------------------------------------------
+   Barra de navegação do Fiscal (HOME VERDE+BRANCO, Parte 1).
+
+   Sticky no topo (logo abaixo da .top-bar do base), abas-pílula para pular
+   entre as telas do módulo sem voltar à home. Incluída no topo do
+   {% block content %} de cada tela do fiscal.
+
+   NOVA TELA NO FUTURO: basta acrescentar UMA linha em ABAS abaixo
+   (endpoint, prefixo_para_aba_ativa, rótulo). A lista mora só aqui.
+
+   - href SEMPRE via url_for(endpoint) — se o endpoint mudar, a barra acompanha.
+   - Aba ativa por request.path, PREFIXO MAIS LONGO vence: INÍCIO ('/escrita-fiscal/')
+     é prefixo de todas, então só vence quando nada mais longo casa; q-robo (sem
+     barra final) vence sobre SAÍDAS; produtos-catalogo vence sobre ENTRADAS.
+--------------------------------------------------------------------------- #}
+<style>
+.nav-fiscal {
+    position: sticky;
+    top: var(--top-bar-height);          /* cola sob a .top-bar (60px) */
+    z-index: 99;                         /* abaixo da .top-bar (100) e dos modais/toasts */
+    margin: -28px -32px 24px;            /* sangra sobre o padding do .content (28px 32px) */
+    padding: 10px 32px;
+    background: linear-gradient(120deg,#0b3b2b,#116a43);
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+}
+.nav-fiscal-track {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;                    /* rola de lado quando não cabe */
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;               /* Firefox */
+    -ms-overflow-style: none;            /* IE/Edge legado */
+}
+.nav-fiscal-track::-webkit-scrollbar { display: none; }   /* Chrome/Safari */
+.nff-tab {
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    color: #a7d9c0;                      /* inativa: texto */
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.22);
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.nff-tab:hover { color: #fff; border-color: rgba(255,255,255,.5); }
+.nff-tab.active {                        /* ativa: fundo branco, texto verde-escuro, negrito */
+    color: #0f3d2e;
+    background: #fff;
+    border-color: #fff;
+    font-weight: 800;
+}
+@media (max-width: 600px) {
+    /* rail some (display:none) e main-area margin-left:0; .content vira padding:16px */
+    .nav-fiscal { margin: -16px -16px 16px; padding: 10px 16px; }
+}
+</style>
+
+{# Lista única de abas — (endpoint, prefixo p/ aba ativa, rótulo). Ordem = exibição. #}
+{% set _abas = [
+    ('escrita_fiscal.index',             '/escrita-fiscal/',                                'INÍCIO'),
+    ('escrita_fiscal.conf_compras',      '/escrita-fiscal/conf-compras/',                   'ENTRADAS'),
+    ('escrita_fiscal.conf_saidas',       '/escrita-fiscal/conf-saidas/',                    'SAÍDAS'),
+    ('escrita_fiscal.q_robo_painel',     '/escrita-fiscal/conf-saidas/q-robo',              'Q-ROBÔ'),
+    ('escrita_fiscal.conf_cte',          '/escrita-fiscal/conf-cte/',                       'CT-E'),
+    ('escrita_fiscal.produtos_catalogo', '/escrita-fiscal/conf-compras/produtos-catalogo/', 'PRODUTOS'),
+    ('escrita_fiscal.memorizacoes',      '/escrita-fiscal/memorizacoes/',                   'MEMORIZAÇÕES'),
+    ('escrita_fiscal.status_sefaz',      '/escrita-fiscal/status-sefaz/',                   'STATUS SEFAZ'),
+] %}
+{# Aba ativa = prefixo mais longo que casa com request.path. #}
+{% set _ativa = namespace(pref='') %}
+{% for _ep, _pref, _label in _abas %}
+    {% if request.path.startswith(_pref) and _pref|length > _ativa.pref|length %}
+        {% set _ativa.pref = _pref %}
+    {% endif %}
+{% endfor %}
+
+<nav class="nav-fiscal" aria-label="Navegação do Fiscal">
+    <div class="nav-fiscal-track">
+        {% for _ep, _pref, _label in _abas %}
+        <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
+           href="{{ url_for(_ep) }}"
+           {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>
+        {% endfor %}
+    </div>
+</nav>
+
+<script>
+// No load, centraliza a aba ativa (útil quando ela está fora de vista no mobile).
+// block:'nearest' evita empurrar a página verticalmente.
+(function () {
+    var t = document.querySelector('.nav-fiscal .nff-tab.active');
+    if (t && t.scrollIntoView) t.scrollIntoView({ inline: 'center', block: 'nearest' });
+})();
+</script>

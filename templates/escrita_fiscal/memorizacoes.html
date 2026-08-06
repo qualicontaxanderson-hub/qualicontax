@@ -57,6 +57,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
 {% endblock %}
 
 {% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
 <div class="mem-header">
     <div>
         <a href="{{ url_for('escrita_fiscal.index') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
