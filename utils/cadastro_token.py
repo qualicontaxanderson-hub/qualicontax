@@ -311,6 +311,24 @@ def revogar_pendentes(tipo: str, *, destinatario: str = None,
         tuple(params))
 
 
+def status_do_link(row: dict) -> str:
+    """Estado derivado de uma linha de listar(): pendente/usado/expirado/revogado.
+
+    Mora aqui e não no template porque a ordem de precedência é regra de
+    negócio, não apresentação: um link REVOGADO depois de expirado ainda conta
+    como revogado, e um USADO nunca vira 'expirado' quando a data passa.
+    """
+    if not row:
+        return INEXISTENTE
+    if row.get('revogado_em'):
+        return REVOGADO
+    if row.get('usado_em'):
+        return USADO
+    if row.get('vencido'):
+        return EXPIRADO
+    return 'pendente'
+
+
 def listar(tipo: str = None, apenas_pendentes: bool = False, limite: int = 100):
     """Links para a tela do admin. NUNCA devolve token_hash — só o prefixo."""
     sql = [f"""SELECT l.id, l.tipo, l.token_prefixo, l.destinatario, l.usuario_id,
@@ -330,4 +348,7 @@ def listar(tipo: str = None, apenas_pendentes: bool = False, limite: int = 100):
         sql.append('WHERE ' + ' AND '.join(where))
     sql.append('ORDER BY l.criado_em DESC LIMIT %s')
     params.append(int(limite))
-    return execute_query(' '.join(sql), tuple(params), fetch=True) or []
+    linhas = execute_query(' '.join(sql), tuple(params), fetch=True) or []
+    for r in linhas:
+        r['status'] = status_do_link(r)
+    return linhas

@@ -8,6 +8,9 @@
         <p class="page-subtitle">Gerencie os usuários e seus acessos ao sistema</p>
     </div>
     <div>
+        <button type="button" class="btn btn-secondary" onclick="abrirGerarLink()">
+            <i class="fas fa-link"></i> Gerar link de cadastro
+        </button>
         <a href="{{ url_for('configuracoes.usuario_novo') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Novo Usuário
         </a>
@@ -73,7 +76,266 @@
     </div>
 </div>
 
+{# ==================================================================== #}
+{# Q-COLABORE Parte 2 — links gerados e fila de pendentes              #}
+{# ==================================================================== #}
+<div class="card qc-secao">
+    <div class="qc-secao-topo">
+        <div>
+            <h2 class="qc-secao-tit">Links de cadastro gerados</h2>
+            <p class="qc-secao-sub">Cada link vale <strong>uma única vez</strong> e expira em 72h.
+               Depois de fechado o modal, só o prefixo continua visível.</p>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Prefixo</th>
+                <th>Tipo</th>
+                <th>Destinatário</th>
+                <th>Status</th>
+                <th>Validade</th>
+                <th>Gerado por</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in links %}
+            <tr>
+                <td><code>{{ l.token_prefixo }}…</code></td>
+                <td><span class="badge badge-secondary">{{ l.tipo }}</span></td>
+                <td>{{ l.destinatario or '—' }}</td>
+                <td>
+                    {% set cor = {'pendente':'info', 'usado':'success',
+                                  'expirado':'warning', 'revogado':'danger'} %}
+                    <span class="badge badge-{{ cor.get(l.status, 'secondary') }}">{{ l.status }}</span>
+                </td>
+                <td>{{ l.expira_em.strftime('%d/%m/%Y %H:%M') if l.expira_em else '—' }}</td>
+                <td>{{ l.criado_por_nome or '—' }}<br>
+                    <small class="text-muted">{{ l.criado_em.strftime('%d/%m/%Y %H:%M') if l.criado_em else '' }}</small></td>
+                <td>
+                    {% if l.status == 'pendente' %}
+                    <button class="btn btn-sm btn-danger" title="Revogar"
+                            onclick="revogarLink({{ l.id }}, '{{ l.token_prefixo }}', this)">
+                        <i class="fas fa-ban"></i> Revogar
+                    </button>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center text-muted py-4">
+                Nenhum link gerado ainda.
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card qc-secao">
+    <div class="qc-secao-topo">
+        <div>
+            <h2 class="qc-secao-tit">Cadastros pendentes</h2>
+            <p class="qc-secao-sub">Candidaturas preenchidas por quem recebeu um link,
+               aguardando sua aprovação.</p>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Login pedido</th>
+                <th>Nick</th>
+                <th>E-mail</th>
+                <th>Departamentos</th>
+                <th>Já funcionário?</th>
+                <th>Recebido em</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in pendentes %}
+            <tr>
+                <td><strong>{{ p.nome_completo }}</strong></td>
+                <td><code>{{ p.login_escolhido }}</code></td>
+                <td>{{ p.nick_escolhido or '—' }}</td>
+                <td>{{ p.email_corporativo or p.email_pessoal or '—' }}</td>
+                <td>{{ p.departamentos or '—' }}</td>
+                <td>{{ 'Sim' if p.ja_funcionario else 'Não' }}</td>
+                <td>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="qc-vazio">
+                <i class="fas fa-inbox"></i>
+                <div>Nenhum cadastro aguardando aprovação.</div>
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# ---- Modal: gerar link (o token aparece AQUI e em lugar nenhum mais) ---- #}
+<div class="qc-modal-fundo" id="qcModal" onclick="if(event.target===this) fecharModal()">
+  <div class="qc-modal">
+    {# Passo 1: pedir o destinatário (opcional) #}
+    <div id="qcPasso1">
+        <h3 class="qc-modal-tit">Gerar link de cadastro</h3>
+        <p class="qc-modal-sub">O link abre o formulário de candidatura. Quem preencher
+           entra na fila de <strong>Cadastros pendentes</strong> para sua aprovação.</p>
+        <label class="qc-label" for="qcDest">Destinatário <span class="text-muted">(opcional)</span></label>
+        <input type="text" id="qcDest" class="qc-input" maxlength="255"
+               placeholder="e-mail ou nome de quem vai receber">
+        <p class="qc-hint">Serve só para você reconhecer o link nesta lista depois.</p>
+        <div class="qc-modal-acoes">
+            <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="qcBtnGerar" onclick="gerarLink()">
+                <i class="fas fa-link"></i> Gerar link
+            </button>
+        </div>
+    </div>
+
+    {# Passo 2: a URL, uma única vez #}
+    <div id="qcPasso2" style="display:none">
+        <h3 class="qc-modal-tit">Link gerado</h3>
+        <div class="qc-url-area">
+            <div class="qc-url-rot">URL de cadastro</div>
+            <div class="qc-url" id="qcUrl"></div>
+        </div>
+        <button type="button" class="qc-btn-copiar" id="qcBtnCopiar" onclick="copiarUrl()">
+            COPIAR LINK
+        </button>
+        <div class="qc-aviso">
+            <strong>Copie agora.</strong> Este link só funciona <strong>1 vez</strong> e
+            expira em <strong>72h</strong>. Ao fechar esta janela, <strong>não é possível
+            vê-lo de novo</strong> — só o prefixo <code id="qcPrefixo"></code> fica visível
+            na lista.
+        </div>
+        <div class="qc-modal-acoes">
+            <button type="button" class="btn btn-primary" onclick="fecharModal(true)">
+                Já copiei, fechar
+            </button>
+        </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.qc-secao { margin-top: 24px; padding: 0; overflow: hidden; }
+.qc-secao:hover { transform: none; }
+.qc-secao-topo { padding: 18px 20px 12px; border-bottom: 1px solid var(--gray-light); }
+.qc-secao-tit { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0; }
+.qc-secao-sub { font-size: 12.5px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.6; }
+.qc-vazio { text-align: center; color: var(--text-secondary); padding: 34px 12px !important; }
+.qc-vazio i { font-size: 26px; opacity: .35; display: block; margin-bottom: 10px; }
+
+.qc-modal-fundo { display: none; position: fixed; inset: 0; z-index: 1000;
+                  background: rgba(15,23,42,.55); align-items: center; justify-content: center;
+                  padding: 20px; }
+.qc-modal-fundo.aberto { display: flex; }
+.qc-modal { background: #fff; border-radius: 14px; padding: 26px 24px; width: 100%;
+            max-width: 540px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.qc-modal-tit { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
+.qc-modal-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 18px; }
+.qc-label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px;
+            color: var(--text-primary); }
+.qc-input { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-light);
+            border-radius: 8px; font-size: 13.5px; font-family: inherit; }
+.qc-hint { font-size: 11.5px; color: var(--text-secondary); margin: 6px 0 0; }
+.qc-modal-acoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+.qc-url-area { background: #0f172a; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.qc-url-rot { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; color: #64748b;
+              text-transform: uppercase; margin-bottom: 8px; }
+.qc-url { font-family: ui-monospace, Consolas, 'Courier New', monospace; font-size: 13px;
+          color: #4ade80; word-break: break-all; line-height: 1.7; user-select: all; }
+.qc-btn-copiar { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer;
+                 background: var(--primary-green); color: #fff; font-size: 14px;
+                 font-weight: 700; margin-bottom: 14px; font-family: inherit; }
+.qc-btn-copiar.ok { filter: brightness(.9); }
+.qc-aviso { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px;
+            padding: 13px 15px; font-size: 12.5px; line-height: 1.7; }
+.qc-aviso code { background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px; }
+</style>
+
 <script>
+// CSRF de sessão — o mesmo helper do portal do Q-Robô, já reusado pelo painel
+// do escrita_fiscal. Gerar/revogar link é ação sensível.
+var QC_CSRF = "{{ csrf_token }}";
+
+function abrirGerarLink() {
+    document.getElementById('qcPasso1').style.display = '';
+    document.getElementById('qcPasso2').style.display = 'none';
+    document.getElementById('qcDest').value = '';
+    document.getElementById('qcUrl').textContent = '';
+    document.getElementById('qcModal').classList.add('aberto');
+    document.getElementById('qcDest').focus();
+}
+
+// precisouRecarregar: só depois de gerar, para a lista mostrar o link novo.
+function fecharModal(recarregar) {
+    document.getElementById('qcModal').classList.remove('aberto');
+    // Limpa a URL do DOM ao fechar — o token não fica pendurado na página.
+    document.getElementById('qcUrl').textContent = '';
+    if (recarregar) location.reload();
+}
+
+function gerarLink() {
+    var btn = document.getElementById('qcBtnGerar');
+    btn.disabled = true;
+    var dados = new FormData();
+    dados.append('destinatario', document.getElementById('qcDest').value.trim());
+    dados.append('csrf_token', QC_CSRF);
+    fetch("{{ url_for('configuracoes.usuario_link_gerar') }}",
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (!res.ok || !res.d.ok) {
+            alert(res.d.msg || 'Não foi possível gerar o link.');
+            return;
+        }
+        document.getElementById('qcUrl').textContent = res.d.url;
+        document.getElementById('qcPrefixo').textContent = res.d.prefixo + '…';
+        document.getElementById('qcPasso1').style.display = 'none';
+        document.getElementById('qcPasso2').style.display = '';
+    })
+    .catch(function () { alert('Sem resposta do servidor. Tente de novo.'); })
+    .then(function () { btn.disabled = false; });
+}
+
+function copiarUrl() {
+    var el = document.getElementById('qcUrl');
+    var btn = document.getElementById('qcBtnCopiar');
+    function ok() {
+        btn.textContent = 'LINK COPIADO';
+        btn.classList.add('ok');
+        setTimeout(function () { btn.textContent = 'COPIAR LINK'; btn.classList.remove('ok'); }, 2500);
+    }
+    function selecionar() {
+        // Fallback para navegador sem clipboard API (ou fora de HTTPS).
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { document.execCommand('copy'); } catch (e) {}
+        btn.textContent = 'SELECIONADO — use Ctrl+C';
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(el.textContent.trim()).then(ok, selecionar);
+    } else { selecionar(); }
+}
+
+function revogarLink(id, prefixo, btn) {
+    if (!confirm('Revogar o link ' + prefixo + '…?\n\nEle deixa de funcionar imediatamente '
+                 + 'e quem receber terá de pedir outro.')) return;
+    btn.disabled = true;
+    fetch('/configuracoes/usuarios/link/' + id + '/revogar',
+          { method: 'POST', headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.d.ok) { location.reload(); }
+        else { alert(res.d.msg || 'Não foi possível revogar.'); btn.disabled = false; }
+    })
+    .catch(function () { alert('Sem resposta do servidor.'); btn.disabled = false; });
+}
+
 function toggleUsuario(id, btn) {
     if (!confirm('Confirmar alteração de status do usuário?')) return;
     fetch(`/configuracoes/usuarios/${id}/toggle`, {method:'POST',

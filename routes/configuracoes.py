@@ -1,9 +1,14 @@
 """Rotas do módulo Configurações — Usuários e Perfis de Acesso"""
+import logging
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from utils.auth_helper import login_required, admin_required, permission_required, hash_password
 from utils.db_helper import execute_query
 from utils.permissions import PERMISSION_CATALOG
+from utils import cadastro_token
+
+logger = logging.getLogger(__name__)
 
 configuracoes = Blueprint('configuracoes', __name__, url_prefix='/configuracoes')
 
@@ -49,11 +54,108 @@ def usuarios():
              FROM usuarios u
              LEFT JOIN usuario_perfis up ON up.usuario_id = u.id
              LEFT JOIN perfis_acesso pa  ON pa.id = up.perfil_id
+            WHERE u.classe_conta = 'FUNCIONARIO'
             GROUP BY u.id
             ORDER BY u.nome""",
         fetch=True,
     ) or []
-    return render_template('configuracoes/usuarios_lista.html', usuarios=rows)
+    return render_template('configuracoes/usuarios_lista.html', usuarios=rows,
+                           links=cadastro_token.listar(limite=50),
+                           pendentes=_cadastros_pendentes(),
+                           csrf_token=_qrobo_csrf_token())
+
+
+# ===========================================================================
+# Q-COLABORE Parte 2 — link de cadastro + fila de pendentes
+#
+# Extensão desta MESMA tela: quem administra usuários é quem convida gente
+# nova e quem aprova. Módulo Configurações intocado no resto.
+#
+# CSRF: reusa o helper de sessão do portal do Q-Robô, como o painel do
+# escrita_fiscal já faz — gerar/revogar link é ação sensível e o helper custa
+# uma linha. (SESSION_COOKIE_SAMESITE='Lax' é só a primeira barreira.)
+# ===========================================================================
+
+# Rota pública do formulário (Parte 3) — ainda NÃO existe, então o url_for
+# morreria. O path é definitivo e está acordado; quando a Parte 3 criar o
+# blueprint, isto vira url_for('cadastro.formulario', token=t, _external=True).
+CADASTRO_PATH = '/cadastro/'
+VALIDADE_LINK_HORAS = 72
+
+
+def _qrobo_csrf_token():
+    from routes.qrobo import csrf_token
+    return csrf_token()
+
+
+def _qrobo_csrf_ok():
+    from routes.qrobo import csrf_valido
+    return csrf_valido()
+
+
+def _cadastros_pendentes():
+    """Candidaturas aguardando decisão. Nasce vazia — o formulário é a Parte 3."""
+    return execute_query(
+        """SELECT p.id, p.nome_completo, p.login_escolhido, p.nick_escolhido,
+                  p.email_pessoal, p.email_corporativo, p.ja_funcionario,
+                  p.criado_em, p.status,
+                  GROUP_CONCAT(d.nome ORDER BY d.nome SEPARATOR ', ') AS departamentos
+             FROM cadastro_pendente p
+             LEFT JOIN cadastro_pendente_departamentos pd ON pd.pendente_id = p.id
+             LEFT JOIN departamentos d ON d.id = pd.departamento_id
+            WHERE p.status = 'PENDENTE'
+            GROUP BY p.id
+            ORDER BY p.criado_em""",
+        fetch=True,
+    ) or []
+
+
+@configuracoes.route('/usuarios/link/gerar', methods=['POST'])
+@admin_required
+def usuario_link_gerar():
+    """Gera um link de cadastro de uso único e devolve a URL UMA vez.
+
+    Responde JSON de propósito: a URL com o token não passa por flash/session
+    nem pela barra de endereços — some quando o modal fecha. Depois disso só o
+    prefixo existe, aqui e no banco.
+    """
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    destinatario = (request.form.get('destinatario') or '').strip() or None
+    try:
+        token, link_id = cadastro_token.gerar(
+            'CADASTRO', current_user.id,
+            destinatario=destinatario, validade_horas=VALIDADE_LINK_HORAS)
+    except ValueError as exc:
+        return jsonify(ok=False, msg=str(exc)), 400
+    except Exception:
+        # NUNCA ecoar a exceção crua: ela pode carregar o SQL e o parâmetro.
+        logger.exception('[qcolabore] falha ao gerar link de cadastro')
+        return jsonify(ok=False, msg='Não foi possível gerar o link agora.'), 500
+
+    # request.url_root já vem com o esquema e host públicos (equivale ao
+    # _external=True do url_for).
+    url = request.url_root.rstrip('/') + CADASTRO_PATH + token
+    # Log com o ID e o prefixo. O token inteiro não entra em log nenhum.
+    logger.info('[qcolabore] link de cadastro id=%s prefixo=%s gerado por %s.',
+                link_id, token[:8], current_user.id)
+    return jsonify(ok=True, url=url, prefixo=token[:8],
+                   validade_horas=VALIDADE_LINK_HORAS)
+
+
+@configuracoes.route('/usuarios/link/<int:link_id>/revogar', methods=['POST'])
+@admin_required
+def usuario_link_revogar(link_id):
+    """Mata um link ainda não usado."""
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+    if cadastro_token.revogar(link_id, current_user.id):
+        logger.info('[qcolabore] link id=%s revogado por %s.', link_id, current_user.id)
+        return jsonify(ok=True)
+    # rowcount 0: já usado, já revogado, ou inexistente — nenhum deles é erro
+    # de servidor, e a tela precisa recarregar para mostrar o estado real.
+    return jsonify(ok=False, msg='Este link já foi usado ou revogado.'), 409
 
 
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])
