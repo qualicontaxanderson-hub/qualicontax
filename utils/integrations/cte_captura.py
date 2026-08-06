@@ -183,7 +183,7 @@ def _importar_cte(empresa, xml_bytes, nsu=None):
     parsed = parse_cte_xml(xml_str)                  # pode levantar ValueError
     chave = parsed['chave']
     data_emissao = parsed['header'].get('data_emissao')
-    caminho = f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml"
+    caminho = f"{_pasta_dfe(empresa, data_emissao, 'CTE')}/{chave}.xml"
 
     try:
         # xml_raw + xml_caminho: cinto E suspensório. O XML vai para o BANCO (o
@@ -200,7 +200,7 @@ def _importar_cte(empresa, xml_bytes, nsu=None):
     except Exception:
         # Gravação falhou → arquiva em ERROS (best-effort) e propaga (para o lote).
         try:
-            _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=False)}/{chave}.xml",
+            _subir_xml(f"{_pasta_dfe(empresa, data_emissao, 'ERROS')}/{chave}.xml",
                        xml_bytes)
         except Exception:
             pass
@@ -238,8 +238,10 @@ def _gravar_evento(empresa, ev, xml_bytes):
     Dropbox: são histórico, não mudam a linha da conferência."""
     ano = ev['ano'] or _hoje_brt().year
     mes = ev['mes'] or _hoje_brt().month
-    # Arquiva pelo Id do evento (não pela chCTe, para não colidir com o CT-e).
-    _subir_xml(_caminho_fiscal(empresa, ano, mes, ev['chave_evento']), xml_bytes)
+    # Arquiva pelo Id do evento (não pela chCTe, para não colidir com o CT-e), na
+    # convenção única com SENTIDO=EVENTOS (mesma pasta do roteador e da NF-e).
+    _subir_xml(_caminho_fiscal(empresa, ano, mes, ev['chave_evento'], 'EVENTOS'),
+               xml_bytes)
     if ev['tp_evento'] == TP_CANCELAMENTO_CTE and ev['ch_cte']:
         marcar_cte_cancelado(ev['ch_cte'])
 

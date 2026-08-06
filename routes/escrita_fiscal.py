@@ -3387,13 +3387,13 @@ def api_importar_dropbox():
                 analyzed_in_batch += 1
                 logger.info('%s: evento sem empresa identificada — deixado em NOVO', info['name'])
                 continue
-            logger.info('%s: %s → movendo para ERROS',
+            logger.info('%s: %s → movendo para EVENTOS',
                         info['name'], _clf['descr_evento'])
             ok += 1
             try:
                 pasta_err_ev = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, _proc['empresa_nome'],
-                                    _proc['dt'], empresa_numero=_proc['empresa_num']))
+                    svc.pasta_fiscal(_proc['empresa_nome'], _proc['dt'].year,
+                                     _proc['dt'].month, 'EVENTOS', _proc['empresa_num']))
                 if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
                     moved_err += 1
                 else:
@@ -3433,21 +3433,23 @@ def api_importar_dropbox():
                 dup += 1
             else:
                 ok += 1
-            # Copia para pasta do emitente quando ambos (dest e emit) são clientes
+            # Copia para pasta do emitente (SAIDAS) quando ambos (dest e emit) são clientes
             if _r['cli'] is not None and _r['emit_cli'] is not None:
                 try:
                     pasta_emit_sync = _get_or_create_pasta(
-                        svc.pasta_importados(departamento, _r['emit_nome'], _dt,
-                                             empresa_numero=_r['emit_num']))
+                        svc.pasta_fiscal(_r['emit_nome'], _dt.year, _dt.month,
+                                         'SAIDAS', _r['emit_num']))
                     if not svc.copy_file(info['path'], f"{pasta_emit_sync}/{info['name']}"):
                         logger.warning('%s: falha ao copiar para pasta do emitente', info['name'])
                 except Exception as _exc_copy:
                     logger.warning('%s: erro ao copiar para pasta do emitente: %s',
                                    info['name'], _exc_copy)
-            # Sucesso (incluindo duplicata) → move para IMPORTADOS
+            # Sucesso (incl. duplicata) → move DIRETO para EMPRESAS/.../FISCAL/{SENTIDO}:
+            # ENTRADAS quando o dest é cliente; SAIDAS quando só o emit é (nota emitida).
+            _sent_main = 'ENTRADAS' if _r['cli'] is not None else 'SAIDAS'
             try:
                 pasta_imp = _get_or_create_pasta(
-                    svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                    svc.pasta_fiscal(_nome, _dt.year, _dt.month, _sent_main, _num))
                 if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
                     moved_ok += 1
                 else:
@@ -3471,7 +3473,7 @@ def api_importar_dropbox():
             _err_num = _num if _nome else None
             try:
                 pasta_err = _get_or_create_pasta(
-                    svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
+                    svc.pasta_fiscal(_err_empresa, _dt.year, _dt.month, 'ERROS', _err_num))
                 if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                     moved_err += 1
                 else:
@@ -3797,8 +3799,8 @@ def _run_import_job(job: dict, departamento: str,
                     ok += 1
                     try:
                         pasta_err_ev = _get_or_create_pasta(
-                            svc.pasta_erros(departamento, _proc['empresa_nome'],
-                                            _proc['dt'], empresa_numero=_proc['empresa_num']))
+                            svc.pasta_fiscal(_proc['empresa_nome'], _proc['dt'].year,
+                                             _proc['dt'].month, 'EVENTOS', _proc['empresa_num']))
                         pending_moves.append((
                             info['path'], f"{pasta_err_ev}/{info['name']}", 'err', info['name']))
                     except DropboxAuthError:
@@ -3836,21 +3838,23 @@ def _run_import_job(job: dict, departamento: str,
                         dup += 1
                     else:
                         ok += 1
-                    # Copia para pasta do emitente quando ambos (dest e emit) são clientes
+                    # Copia para pasta do emitente (SAIDAS) quando ambos (dest e emit) são clientes
                     if _r['cli'] is not None and _r['emit_cli'] is not None:
                         try:
                             pasta_emit_job = _get_or_create_pasta(
-                                svc.pasta_importados(departamento, _r['emit_nome'], _dt,
-                                                     empresa_numero=_r['emit_num']))
+                                svc.pasta_fiscal(_r['emit_nome'], _dt.year, _dt.month,
+                                                 'SAIDAS', _r['emit_num']))
                             if not svc.copy_file(info['path'], f"{pasta_emit_job}/{info['name']}"):
                                 logger.warning('[import_job] %s: falha ao copiar para pasta do emitente',
                                                info['name'])
                         except Exception as _exc_copy:
                             logger.warning('[import_job] %s: erro ao copiar para pasta do emitente: %s',
                                            info['name'], _exc_copy)
+                    # Move DIRETO para EMPRESAS/.../FISCAL/{SENTIDO} (ENTRADAS/SAIDAS).
+                    _sent_main = 'ENTRADAS' if _r['cli'] is not None else 'SAIDAS'
                     try:
                         pasta_imp = _get_or_create_pasta(
-                            svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                            svc.pasta_fiscal(_nome, _dt.year, _dt.month, _sent_main, _num))
                         pending_moves.append((
                             info['path'], f"{pasta_imp}/{info['name']}", 'ok', info['name']))
                     except DropboxAuthError:
@@ -3886,8 +3890,8 @@ def _run_import_job(job: dict, departamento: str,
                     _err_num = _num if _nome else None
                     try:
                         pasta_err = _get_or_create_pasta(
-                            svc.pasta_erros(departamento, _err_empresa, _dt,
-                                            empresa_numero=_err_num))
+                            svc.pasta_fiscal(_err_empresa, _dt.year, _dt.month,
+                                             'ERROS', _err_num))
                         pending_moves.append((
                             info['path'], f"{pasta_err}/{info['name']}", 'err', info['name']))
                     except DropboxAuthError:
@@ -4168,7 +4172,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                     logger.info('[agendado] %s: evento sem empresa identificada — deixado em NOVO', info['name'])
                     batch_processed += 1
                     continue
-                logger.info('[agendado] %s: %s → movendo para ERROS',
+                logger.info('[agendado] %s: %s → movendo para EVENTOS',
                             info['name'], _clf['descr_evento'])
                 totals['ok'] += 1
                 file_logs.append({'arquivo': info['name'], 'resultado': 'importado',
@@ -4176,8 +4180,8 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                                   'detalhe': _proc['detalhe']})
                 try:
                     pasta_err_ev = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _proc['empresa_nome'],
-                                        _proc['dt'], empresa_numero=_proc['empresa_num']))
+                        svc.pasta_fiscal(_proc['empresa_nome'], _proc['dt'].year,
+                                         _proc['dt'].month, 'EVENTOS', _proc['empresa_num']))
                     if svc.move_file(info['path'], f"{pasta_err_ev}/{info['name']}"):
                         totals['moved_err'] += 1
                         batch_moved += 1
@@ -4241,21 +4245,23 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                                       'numero': _emp_num_log,
                                       'detalhe': _det_log + _comp_log})
 
-                # Copia para pasta do emitente quando ambos (dest e emit) são clientes
+                # Copia para pasta do emitente (SAIDAS) quando ambos (dest e emit) são clientes
                 if _r['cli'] is not None and _r['emit_cli'] is not None:
                     try:
                         pasta_emit_ag = _get_or_create_pasta(
-                            svc.pasta_importados(departamento, _r['emit_nome'], _dt,
-                                                 empresa_numero=_r['emit_num']))
+                            svc.pasta_fiscal(_r['emit_nome'], _dt.year, _dt.month,
+                                             'SAIDAS', _r['emit_num']))
                         if not svc.copy_file(info['path'], f"{pasta_emit_ag}/{info['name']}"):
                             logger.warning('[agendado] %s: falha ao copiar para pasta do emitente',
                                            info['name'])
                     except Exception as _exc_copy:
                         logger.warning('[agendado] %s: erro ao copiar para pasta do emitente: %s',
                                        info['name'], _exc_copy)
+                # Move DIRETO para EMPRESAS/.../FISCAL/{SENTIDO} (ENTRADAS/SAIDAS).
+                _sent_main = 'ENTRADAS' if _r['cli'] is not None else 'SAIDAS'
                 try:
                     pasta_imp = _get_or_create_pasta(
-                        svc.pasta_importados(departamento, _nome, _dt, empresa_numero=_num))
+                        svc.pasta_fiscal(_nome, _dt.year, _dt.month, _sent_main, _num))
                     if svc.move_file(info['path'], f"{pasta_imp}/{info['name']}"):
                         totals['moved_ok'] += 1
                         batch_moved += 1
@@ -4279,7 +4285,7 @@ def importar_departamento_background(departamento: str, origem: str = 'agendado'
                                   'empresa': _err_empresa, 'detalhe': _detalhe_err})
                 try:
                     pasta_err = _get_or_create_pasta(
-                        svc.pasta_erros(departamento, _err_empresa, _dt, empresa_numero=_err_num))
+                        svc.pasta_fiscal(_err_empresa, _dt.year, _dt.month, 'ERROS', _err_num))
                     if svc.move_file(info['path'], f"{pasta_err}/{info['name']}"):
                         totals['moved_err'] += 1
                         batch_moved += 1

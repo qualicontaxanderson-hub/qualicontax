@@ -36,9 +36,6 @@ logger = logging.getLogger(__name__)
 
 robo_saidas = Blueprint('robo_saidas', __name__)
 
-# Departamento do Dropbox onde as saídas são arquivadas (mesmo do fluxo Fiscal).
-_DEPARTAMENTO = 'Fiscal'
-
 
 # ---------------------------------------------------------------------------
 # Auth Bearer (robo_token)
@@ -81,14 +78,16 @@ def _cabecalho(parsed):
 
 
 def _arquivar_dropbox(cliente, chave, data_emissao, xml_bytes):
-    """Sobe o XML da saída no Dropbox sob o EMITENTE (pasta_saidas). Best-effort: a
-    linha no banco já entrou; falha aqui não derruba o request (só loga)."""
+    """Sobe o XML da saída no Dropbox sob o EMITENTE, DIRETO na convenção definitiva
+    ``EMPRESAS/{nº - razão}/FISCAL/SAIDAS/{ano}/{mês}`` (a mesma do roteador — sem
+    passar mais pela ponte /Fiscal/IMPORTADOS). Best-effort: a linha no banco já
+    entrou; falha aqui não derruba o request (só loga)."""
     try:
         svc = dropbox_sync._service
         numero = (cliente.get('numero_cliente') or '').strip() or None
         razao = cliente.get('nome_razao_social') or 'SEM_NOME'
         dt = data_emissao or date.today()
-        pasta = svc.pasta_saidas(_DEPARTAMENTO, razao, dt, numero)
+        pasta = svc.pasta_fiscal(razao, dt.year, dt.month, 'SAIDAS', numero)
         svc.upload_bytes(f"{pasta}/{chave}.xml", xml_bytes)
     except Exception:
         logger.warning('[q-robo] saída gravada, mas falha ao arquivar XML no Dropbox '

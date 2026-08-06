@@ -55,10 +55,6 @@ TP_CANCELAMENTO = "110111"  # tpEvento de cancelamento de NF-e
 _LOCK_CAPTURA = 'dfe_captura'
 _PRAZO_SUAVE_SEG = int(os.getenv('DFE_SCHED_PRAZO_SEG', '960'))  # ~16 min
 
-# Departamento do Dropbox onde a captura arquiva os XML (padrão IMPORTADOS/ERROS,
-# o MESMO do fluxo Dropbox). DFe é documento fiscal → 'Fiscal'.
-_DEPARTAMENTO_DFE = os.getenv('DFE_DEPARTAMENTO', 'Fiscal')
-
 # Teto do xml_raw do evento — dfe_eventos.xml_raw é MEDIUMTEXT (16 MB). Mesmo
 # valor do _MAX_XML_SIZE de utils/nfe_import.py e utils/cte_import.py. Na prática
 # um procEventoNFe tem ~5 KB; o corte é rede de proteção, não caso esperado.
@@ -432,23 +428,19 @@ def _data_de(dh_txt):
 # de XML: parse_nfe_xml + _save_nfe_dual gravam nfe_importacoes/nfe_itens com TODOS
 # os campos (impostos, cfop, natureza) e o vínculo produto_catalogo_id por item.
 # ==========================================================================
-def _pasta_dfe(empresa, data_emissao, ok=True):
-    """Pasta destino no padrão do Dropbox: {Fiscal}/IMPORTADOS/{ano}/{empresa}/{mês}
-    (ou .../ERROS/...). ano/mês saem da emissão da nota (fallback: hoje BRT)."""
+def _pasta_dfe(empresa, data_emissao, sentido):
+    """Pasta destino DEFINITIVA por-empresa, na convenção ÚNICA do roteador:
+    ``EMPRESAS/{nº - razão}/FISCAL/{SENTIDO}/{ano}/{mês}``.
+
+    A captura conhece a EMPRESA e o SENTIDO no ato do write, então grava DIRETO no
+    destino final em vez de passar pela ponte ``/Fiscal/IMPORTADOS`` (que o
+    ``cron_roteador`` tinha de reclassificar e mover de novo). ``sentido`` ∈
+    ``ENTRADAS | SAIDAS | CTE | EVENTOS | ERROS``. ano/mês saem da emissão da nota
+    (fallback: hoje BRT)."""
     dt = data_emissao or _hoje_brt().date()
     svc = dropbox_sync._service
-    fn = svc.pasta_importados if ok else svc.pasta_erros
-    return fn(_DEPARTAMENTO_DFE, empresa["razao"], dt, empresa.get("numero"))
-
-
-def _pasta_saidas(empresa_emit, data_emissao):
-    """Pasta da SAÍDA (nota emitida por um cliente), aninhada sob o EMITENTE:
-    {Fiscal}/IMPORTADOS/{ano}/{nº - razão emitente}/SAIDAS/{mês.ano}. ``empresa_emit``
-    é o dict {razao, numero} do cliente emitente (o vendedor)."""
-    dt = data_emissao or _hoje_brt().date()
-    svc = dropbox_sync._service
-    return svc.pasta_saidas(_DEPARTAMENTO_DFE, empresa_emit["razao"], dt,
-                            empresa_emit.get("numero"))
+    return svc.pasta_fiscal(empresa["razao"], dt.year, dt.month, sentido,
+                            empresa.get("numero"))
 
 
 def _remover_sefaz_incompleto(chave):
@@ -547,7 +539,7 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
     except Exception:
         # Importação falhou → arquiva em ERROS (best-effort) e propaga (para o lote).
         try:
-            _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=False)}/{chave or 'sem_chave'}.xml",
+            _subir_xml(f"{_pasta_dfe(empresa, data_emissao, 'ERROS')}/{chave or 'sem_chave'}.xml",
                        xml_bytes)
         except Exception:
             pass
@@ -557,7 +549,7 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
     # só quando a entrada dele foi criada. Falha aqui aborta o doc; o retry re-sobe
     # (o _save_nfe vira 'dup', idempotente).
     if dest_cli is not None:
-        _subir_xml(f"{_pasta_dfe(empresa, data_emissao, ok=True)}/{chave}.xml", xml_bytes)
+        _subir_xml(f"{_pasta_dfe(empresa, data_emissao, 'ENTRADAS')}/{chave}.xml", xml_bytes)
 
     # Saída (emit é cliente) → arquiva TAMBÉM sob o emitente em .../SAIDAS/{mês}.
     # Best-effort: a linha no banco já entrou; falha aqui não aborta o doc (diferente
@@ -570,7 +562,7 @@ def _importar_nfe_completa(empresa, xml_bytes, cli_index=None):
                 "numero": (emit_cliente.get("numero_cliente") or "").strip() or None,
             }
             try:
-                _subir_xml(f"{_pasta_saidas(empresa_emit, data_emissao)}/{chave}.xml", xml_bytes)
+                _subir_xml(f"{_pasta_dfe(empresa_emit, data_emissao, 'SAIDAS')}/{chave}.xml", xml_bytes)
             except Exception:
                 logger.warning("[dfe] saída gravada, mas falha ao arquivar XML sob o "
                                "emitente (cliente_id=%s, chave=%s)", emit_cli, chave)
