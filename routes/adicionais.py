@@ -109,7 +109,13 @@ def sync_dropbox_anp():
 
     svc = dropbox_sync._service
 
-    pasta_novo = '/Legalizacao/NOVO'
+    # Antes lia de '/Legalizacao/NOVO' — path hard-coded, sem _build_path (não
+    # respeitava DROPBOX_ROOT_FOLDER) e numa pasta que será arquivada na limpeza
+    # do Dropbox. Passa a ler da caixa de entrada ÚNICA e PLANA _ENTRADA, onde
+    # todo arquivo chega hoje. O filtro .pdf + validação de CNPJ da ANP abaixo
+    # garante que só PDFs da ANP são processados; XML/.pfx que dividem a _ENTRADA
+    # são ignorados (e o cron_roteador só move .xml, então nada colide).
+    pasta_novo = svc.pasta_cert_novo()   # -> {ROOT}/_ENTRADA, via _build_path
     try:
         entries = svc.list_folder(pasta_novo)
     except dropbox_sync.DropboxAuthError:

@@ -34,12 +34,15 @@ _NFE_KEY_RE = re.compile(r'^\d{44}')
 
 DEPARTAMENTO_ALIASES = {
     # Nome canônico → aliases aceitos na raiz da App Folder do Dropbox.
+    # SÓ Fiscal permanece: é o único departamento com fluxo — a captura SEFAZ, o
+    # Q-Robô e o import escrevem apenas nele (robo_saidas._DEPARTAMENTO='Fiscal',
+    # dfe_captura._DEPARTAMENTO_DFE default 'Fiscal'). Contabil/DP/Financeiro/
+    # Legalizacao/Comercial nunca receberam fluxo e suas pastas de raiz serão
+    # arquivadas na limpeza do Dropbox. Removê-los daqui faz o job noturno e o
+    # "Executar todos" pararem de iterá-los (não recriam mais /Contabil etc.) e
+    # invalida um departamento não-Fiscal na API de import. CANONICOS,
+    # DEPARTAMENTOS e normalize_departamento derivam deste dict e seguem juntos.
     'Fiscal': ['Fiscal', 'qualicontax-fiscal'],
-    'Contabil': ['Contabil', 'qualicontax-contabil'],
-    'DP': ['DP', 'qualicontax-dp'],
-    'Financeiro': ['Financeiro', 'qualicontax-financeiro'],
-    'Legalizacao': ['Legalizacao', 'qualicontax-legalizacao'],
-    'Comercial': ['Comercial', 'qualicontax-comercial'],
 }
 
 DEPARTAMENTOS_CANONICOS = list(DEPARTAMENTO_ALIASES.keys())
