@@ -581,33 +581,73 @@ def certificado_vincular(id):
     except CertificadoError as exc:
         return jsonify({'ok': False, 'erro': str(exc)}), 500
 
-    # 6) Move + renomeia para IMPORTADOS/{numero} - {razão}/{CNPJ}.pfx
+    # 6) Move + renomeia para CERTIFICADO/{numero} - {razão}/{CNPJ}.pfx
     origem = item['path']
     numero = (cliente.get('numero_cliente') or '').strip() or None
     razao = cliente.get('nome_razao_social') or 'SEM_NOME'
     pasta_dest = svc.pasta_cert_importados(razao, numero)
     destino = f'{pasta_dest}/{doc_cert}.pfx'
     svc.ensure_folder(pasta_dest)
+
+    # 6a) RENOVAÇÃO: preserva o .pfx anterior desta empresa ANTES de mover o novo —
+    #     NUNCA apaga, NUNCA sobrescreve (move_file sobrescreve por padrão, então
+    #     uma renovação de mesmo CNPJ perderia o antigo). O arquivo antigo é
+    #     renomeado para ``substituido{CNPJ}.venc.{dd.mm.aaaa}.pfx``, com o
+    #     VENCIMENTO do cert antigo. A validade vem do banco (foi lida do próprio
+    #     .pfx quando ele foi vinculado; reabri-lo aqui exigiria a senha dele, que
+    #     não temos). Numa 2ª renovação, sufixa .2, .3… para não colidir.
+    #     Lê ``anterior`` ANTES do move (o upsert do passo 7 substitui o registro).
+    anterior = DfeCertificado.get_by_cliente(id)
+
+    def _pasta_de(p):
+        return p.rsplit('/', 1)[0] if '/' in p else ''
+
+    a_preservar = []
+    if anterior:
+        _ap = (anterior.get('dropbox_path') or '').strip()
+        if _ap and _pasta_de(_ap).lower() == pasta_dest.lower():
+            a_preservar.append((_ap, anterior.get('cnpj') or doc_cert, anterior.get('validade')))
+    # arquivo já no destino (mesmo nome do novo) que o move sobrescreveria
+    if svc._path_exists(destino) and all(destino.lower() != p.lower() for p, _, _ in a_preservar):
+        a_preservar.append((destino, doc_cert, anterior.get('validade') if anterior else None))
+
+    renamed = []
+    for _old, _cnpj_old, _val in a_preservar:
+        if not svc._path_exists(_old):
+            continue
+        _data = _val.strftime('%d.%m.%Y') if _val else 'sem_venc'
+        _base = f'{pasta_dest}/substituido{_cnpj_old}.venc.{_data}'
+        _novo = f'{_base}.pfx'
+        _k = 2
+        while svc._path_exists(_novo):
+            _novo = f'{_base}.{_k}.pfx'
+            _k += 1
+        try:
+            if not svc.move_file(_old, _novo):
+                return jsonify({'ok': False, 'erro': 'Falha ao arquivar o certificado anterior no Dropbox.'}), 502
+        except dropbox_sync.DropboxAuthError:
+            return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+        renamed.append((_old, _novo))
+
+    # 6b) Move o novo .pfx com o nome padrão {CNPJ}.pfx (NUNCA a senha no nome).
+    #     O destino agora está livre (o anterior, se havia, virou substituido...).
     try:
         if not svc.move_file(origem, destino):
             return jsonify({'ok': False, 'erro': 'Falha ao mover o certificado no Dropbox.'}), 502
     except dropbox_sync.DropboxAuthError:
         return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
 
-    # 6b) O UNIQUE (cliente_id) faz o upsert SUBSTITUIR o vínculo anterior em
-    #     SILÊNCIO. Lê o que está saindo de cena ANTES de gravar, para dizer na
-    #     tela qual certificado foi trocado. MVP: segue 1 certificado por empresa
-    #     (o modelo multi-cert entrada+saída fica para depois).
-    anterior = DfeCertificado.get_by_cliente(id)
+    # 6c) Mensagem p/ a tela: qual cert saiu de cena e como foi preservado.
     substituicao = None
-    if anterior and (anterior.get('dropbox_path') or '') != destino:
+    if anterior and renamed:
         _val = anterior.get('validade')
+        _nome_arq = renamed[0][1].rsplit('/', 1)[-1]
         substituicao = (
             f'Substituiu o certificado anterior desta empresa '
             f'({anterior.get("tipo_doc")} {anterior.get("cnpj")}'
             + (f', válido até {_val.strftime("%d/%m/%Y")}' if _val else '')
-            + f'). O arquivo antigo continua no Dropbox em '
-              f'{anterior.get("dropbox_path")} e deixou de ser usado.')
+            + f'). O arquivo antigo foi PRESERVADO no Dropbox como {_nome_arq} '
+              f'(nunca apagado, nunca sobrescrito).')
 
     # 7) Grava o vínculo. Se falhar, tenta devolver o .pfx para NOVO (sem órfão);
     #    se nem a reversão der certo, loga o caminho para recuperação manual.
@@ -623,6 +663,15 @@ def certificado_vincular(id):
         except Exception as exc:
             logger.error('Falha ao reverter move do certificado %s -> %s: %s',
                          destino, origem, exc)
+        # Desfaz a preservação do cert anterior (substituido... -> nome original):
+        # o dropbox_path do banco (que não mudou, pois o upsert falhou) aponta para
+        # o nome antigo, então ele precisa voltar a existir.
+        for _orig, _novo in reversed(renamed):
+            try:
+                svc.move_file(_novo, _orig)
+            except Exception:
+                logger.error('Falha ao desfazer preservação do cert anterior %s -> %s',
+                             _novo, _orig)
         if revertido:
             logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s). '
                          'Arquivo devolvido para NOVO: %s', id, origem)
