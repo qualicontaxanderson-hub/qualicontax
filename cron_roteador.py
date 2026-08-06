@@ -3,12 +3,17 @@
 
 Por que existe
 --------------
-As FONTES continuam burras: a captura SEFAZ e o Q-Robô escrevem onde sempre
-escreveram (Fiscal/IMPORTADOS, .../SAIDAS). Este roteador é o ÚNICO cérebro que
-arquiva: recolhe o que estiver em _ENTRADA e Fiscal/IMPORTADOS, classifica com a
-MESMA lógica do classificar_fiscal.py já validada no backlog local, e move para
+Desde a aposentadoria da ponte /Fiscal, as FONTES gravam DIRETO no destino final:
+a captura SEFAZ, o Q-Robô e o import escrevem em EMPRESAS/.../FISCAL/{SENTIDO}. O
+roteador deixou de ser a ponte de reclassificação e ficou como ÚNICO cérebro da
+_ENTRADA — a caixa plana onde caem drops manuais de .xml. Recolhe o que estiver
+nela, classifica com a MESMA lógica do classificar_fiscal.py já validada no
+backlog local, e move para
 
     EMPRESAS/<nº - razão>/FISCAL/<ENTRADAS|SAIDAS|CTE|EVENTOS>/<ano>/<mês>
+
+(O 'Fiscal/IMPORTADOS' saiu do PASTAS_ORIGEM quando a /Fiscal foi drenada e
+arquivada: mantê-lo faria o ensure_folder RECRIAR a /Fiscal a cada tick.)
 
 Molde igual ao cron_captura_dfe.py: serviço de Cron próprio no Railway, Start
 Command ``python cron_roteador.py``, schedule ``*/15 * * * *``. O processo sobe,
@@ -73,7 +78,7 @@ CHAVE_RE = re.compile(r'\d{44}')
 NAO_DIGITO = re.compile(r'\D+')
 MESES = {f'{i:02d}' for i in range(1, 13)}
 
-PASTAS_ORIGEM = ['_ENTRADA', 'Fiscal/IMPORTADOS']
+PASTAS_ORIGEM = ['_ENTRADA']
 
 # REGRA DE FERRO: este cron só toca em arquivo .xml. NADA MAIS.
 #
