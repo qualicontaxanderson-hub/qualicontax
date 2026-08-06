@@ -60,20 +60,13 @@ table.mem-table tr:hover td { background:#f8fafc; }
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
 <div class="mem-header">
     <div>
-        <a href="{{ url_for('escrita_fiscal.index') }}" style="font-size:12px;color:#6b7280;text-decoration:none;">
-            <i class="fas fa-arrow-left"></i> Escrita Fiscal
-        </a>
-        <h1 style="margin-top:4px;"><i class="fas fa-memory" style="color:#8b5cf6;margin-right:8px;"></i>Memorizações Fiscais</h1>
+        <h1><i class="fas fa-memory" style="color:#8b5cf6;margin-right:8px;"></i>Memorizações Fiscais</h1>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
         <button onclick="abrirClone()"
            style="background:#8b5cf6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
             <i class="fas fa-clone"></i> Clonar
         </button>
-        <a href="{{ url_for('escrita_fiscal.conf_compras') }}"
-           style="background:#22c55e;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;">
-            <i class="fas fa-file-search"></i> Conferência de Entradas
-        </a>
     </div>
 </div>
 
