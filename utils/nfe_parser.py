@@ -1,6 +1,7 @@
 """Utilitário para parsear arquivos XML de NF-e (Nota Fiscal Eletrônica)."""
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
 # Namespace da NF-e
@@ -42,6 +43,64 @@ def _float(node, tag, default=0.0, recursive=False):
         return float(v)
     except (ValueError, TypeError):
         return default
+
+
+def _dec(node, tag, recursive=False):
+    """Valor monetário como Decimal, a partir do TEXTO do XML.
+
+    Não passa por float de propósito: o vUnCom da NF-e vem com até 10 casas
+    (ex.: 2.6279794128) e somar/dividir isso em ponto flutuante produz centavos
+    fantasmas. Ausente/ilegível = 0, que é o neutro das somas do custo.
+    """
+    if node is None:
+        return Decimal('0')
+    fn = _text_recursive if recursive else _text
+    try:
+        return Decimal(fn(node, tag, '') or '0')
+    except InvalidOperation:
+        return Decimal('0')
+
+
+def _valor_comercial(prod, imposto):
+    """CUSTO COMERCIAL do item: ``(custo_total_item, valor_unit_comercial)``.
+
+    Para combustível (e qualquer mercadoria com ICMS-ST), o custo real por
+    unidade NÃO é o ``vUnCom``: o ICMS-ST, o IPI, o frete, o seguro e as despesas
+    acessórias entram no custo mas ficam FORA do ``vProd``; o desconto sai.
+
+        custo_total_item     = vProd + vICMSST + vIPI + vFrete + vSeg + vOutro - vDesc
+        valor_unit_comercial = custo_total_item / qCom
+
+    Ex. real (NF 1002, INTEGRACAO COMBUSTIVEIS): vProd 7.883,94 + vICMSST 576,06
+    = 8.460,00; dividido por 3.000 = **2,8200** o litro, contra o vUnCom de
+    2,6280 que a nota exibe.
+
+    Os campos moram em DOIS grupos diferentes do XML: vFrete/vSeg/vOutro/vDesc
+    ficam em ``<prod>``, enquanto vICMSST/vIPI ficam em ``<imposto>`` (dentro de
+    ICMS.../IPI..., por isso a busca recursiva).
+
+    Parte de ``vProd``, e não de ``vUnCom × qCom``: o vUnCom já vem arredondado
+    na origem e multiplicá-lo devolveria um total que não fecha com a nota.
+
+    Devolve ``(None, None)`` quando ``qCom`` é 0, ausente ou ilegível: sem
+    quantidade não há custo unitário, e um custo total solto sem o unitário
+    correspondente só serviria para confundir a conferência. NULL no banco
+    significa "não sei", que é diferente de zero. Nunca levanta
+    ZeroDivisionError — importação não pode cair por causa de um item torto.
+    """
+    q_com = _dec(prod, 'qCom')
+    if q_com <= 0:
+        return None, None
+    custo = (_dec(prod, 'vProd')
+             + _dec(imposto, 'vICMSST', recursive=True)
+             + _dec(imposto, 'vIPI', recursive=True)
+             + _dec(prod, 'vFrete')
+             + _dec(prod, 'vSeg')
+             + _dec(prod, 'vOutro')
+             - _dec(prod, 'vDesc'))
+    custo = custo.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    unit = (custo / q_com).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+    return custo, unit
 
 
 def parse_nfe_xml(xml_content: str) -> dict:
@@ -147,6 +206,8 @@ def parse_nfe_xml(xml_content: str) -> dict:
             v_pis_item = _float(imposto, 'vPIS', recursive=True)
             v_cofins_item = _float(imposto, 'vCOFINS', recursive=True)
 
+        custo_total, valor_unit_comercial = _valor_comercial(prod, imposto)
+
         itens.append({
             'num_item': int(n_item) if n_item.isdigit() else 0,
             'codigo_produto': _text(prod, 'cProd'),
@@ -160,6 +221,8 @@ def parse_nfe_xml(xml_content: str) -> dict:
             'valor_icms': v_icms_item,
             'valor_pis': v_pis_item,
             'valor_cofins': v_cofins_item,
+            'custo_total_item': custo_total,
+            'valor_unit_comercial': valor_unit_comercial,
         })
 
     header = {

@@ -138,6 +138,12 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
             item['unidade'], item['quantidade'], item['valor_unitario'],
             item['valor_total'], item['valor_icms'],
             item['valor_pis'], item['valor_cofins'], prod_id,
+            # VALOR COMERCIAL (custo real por unidade: vProd + ICMS-ST + IPI +
+            # frete + seguro + outras - desconto, dividido por qCom). Calculado
+            # no parser, então TODO caminho de import — SEFAZ, upload manual,
+            # Q-Robô e Dropbox — grava por aqui, sem exceção. .get() com default
+            # None para um parsed antigo (sem as chaves) não quebrar o INSERT.
+            item.get('custo_total_item'), item.get('valor_unit_comercial'),
         ))
 
     if items_data:
@@ -145,8 +151,9 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
             """INSERT INTO nfe_itens
                    (nfe_id, num_item, codigo_produto, descricao, ncm, cfop,
                     unidade, quantidade, valor_unitario, valor_total,
-                    valor_icms, valor_pis, valor_cofins, produto_catalogo_id)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    valor_icms, valor_pis, valor_cofins, produto_catalogo_id,
+                    custo_total_item, valor_unit_comercial)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             items_data,
         )
 

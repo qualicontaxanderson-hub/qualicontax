@@ -490,6 +490,26 @@ def _apply_migrations():
     if _pcat_exists.get('cnt', 0) == 0:
         execute_query("ALTER TABLE nfe_itens ADD COLUMN produto_catalogo_id INT NULL", fetch=False)
 
+    # Incremental: VALOR COMERCIAL por item. Para combustível, o custo real por
+    # litro NÃO é o vUnCom da nota: o ICMS-ST (e IPI/frete/seguro/outras, menos o
+    # desconto) entram no custo mas ficam fora do vProd. Ex. real (NF 1002
+    # INTEGRACAO): vUnCom 2,6280, mas 8.460,00 / 3.000 = 2,8200 o litro.
+    #   custo_total_item     = vProd + vICMSST + vIPI + vFrete + vSeg + vOutro - vDesc
+    #   valor_unit_comercial = custo_total_item / qCom
+    # NULL = ainda não calculado (item anterior ao backfill), nunca "custo zero".
+    for _col_name, _col_def in [
+        ('custo_total_item',     'DECIMAL(15,2) NULL'),
+        ('valor_unit_comercial', 'DECIMAL(15,4) NULL'),
+    ]:
+        _col_exists = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_itens' "
+            "AND COLUMN_NAME = %s",
+            (_col_name,), fetch=True, fetch_one=True,
+        ) or {}
+        if _col_exists.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE nfe_itens ADD COLUMN {_col_name} {_col_def}")
+
     # Incremental: índice composto em nfe_itens
     _idx_vinc_exists = execute_query(
         "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "

@@ -148,6 +148,11 @@ SQL_NOTA_ID = (
 # por nota). produto_catalogo_id fica NULL: o vínculo é feito depois, pela UI que
 # já existe. cfop/impostos por item ficam vazios/0 nesta fase (MVP).
 SQL_ITENS_DEL = "DELETE FROM nfe_itens WHERE nfe_id = %s"
+# ATENÇÃO: caminho morto — se reativar, incluir custo_total_item e
+# valor_unit_comercial. Hoje a captura grava item por _save_nfe_dual (utils/
+# nfe_import), que já preenche os dois campos a partir do parser; este INSERT
+# sobrou da fase MVP e só é importado pela migration histórica
+# backfill_dfe_para_conf_compras.py.
 SQL_ITEM_INS = (
     "INSERT INTO nfe_itens "
     "(nfe_id, num_item, codigo_produto, descricao, ncm, cfop, unidade, "
