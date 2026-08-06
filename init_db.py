@@ -522,6 +522,21 @@ def _apply_migrations():
             fetch=False,
         )
 
+    # Incremental: índice em importado_em. A home (painel do escritório) agrega
+    # "capturadas hoje" e o sparkline de 9 dias por importado_em; sem índice era
+    # full scan. Aditivo e idempotente. (O par em cte_documentos fica junto da
+    # tabela dele, mais abaixo.)
+    _idx_imp_exists = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nfe_importacoes' AND INDEX_NAME = 'idx_importado'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _idx_imp_exists.get('cnt', 0) == 0:
+        execute_query(
+            "ALTER TABLE nfe_importacoes ADD INDEX idx_importado (importado_em)",
+            fetch=False,
+        )
+
     # ---- Catálogo de Produtos ----
     _migrate("""
         CREATE TABLE IF NOT EXISTS nfe_produtos_catalogo (
@@ -1242,6 +1257,20 @@ def _apply_migrations():
             )
     except Exception:
         pass
+
+    # Incremental: índice em importado_em (par do idx_importado de nfe_importacoes).
+    # A home conta "capturadas hoje" e o sparkline de 9 dias somando CT-e por
+    # importado_em. Aditivo e idempotente.
+    _idx_cte_imp_exists = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cte_documentos' AND INDEX_NAME = 'ix_cte_importado'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _idx_cte_imp_exists.get('cnt', 0) == 0:
+        execute_query(
+            "ALTER TABLE cte_documentos ADD INDEX ix_cte_importado (importado_em)",
+            fetch=False,
+        )
 
     # NF-e transportadas pelo CT-e (infCTeNorm/infDoc/infNFe e o infNF antigo).
     _migrate("""
