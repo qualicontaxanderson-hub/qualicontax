@@ -8,12 +8,27 @@ a captura SEFAZ, o Q-Robô e o import escrevem em EMPRESAS/.../FISCAL/{SENTIDO}.
 roteador deixou de ser a ponte de reclassificação e ficou como ÚNICO cérebro da
 _ENTRADA — a caixa plana onde caem drops manuais de .xml. Recolhe o que estiver
 nela, classifica com a MESMA lógica do classificar_fiscal.py já validada no
-backlog local, e move para
+backlog local, LANÇA no banco e move para
 
     EMPRESAS/<nº - razão>/FISCAL/<ENTRADAS|SAIDAS|CTE|EVENTOS>/<ano>/<mês>
 
 (O 'Fiscal/IMPORTADOS' saiu do PASTAS_ORIGEM quando a /Fiscal foi drenada e
 arquivada: mantê-lo faria o ensure_folder RECRIAR a /Fiscal a cada tick.)
+
+LANÇA no banco — a metade que faltava
+-------------------------------------
+Até aqui o roteador SÓ MOVIA: quem lançava em nfe_importacoes/cte_documentos
+era o job do blueprint, que lê a pasta /Fiscal/NOVO. Um .xml jogado na _ENTRADA
+era arquivado em EMPRESAS e NUNCA entrava no banco — buraco aberto desde o
+go-live (04/08), que só não gerou dano porque ninguém havia usado a _ENTRADA.
+
+Agora cada .xml passa por utils.fiscal_ingest.importar_xml ANTES do move, com o
+MESMO core do upload manual. A ordem é o ponto: import falhou → o arquivo fica
+na origem e volta no próximo tick; import passou e o move falhou → o tick
+seguinte reimporta e o dedup por (chave, cliente, tipo) devolve 'dup'. Os dois
+lados são idempotentes; o caminho impossível é arquivar sem lançar.
+
+Kill switch: ROTEADOR_IMPORTA=0 volta ao comportamento antigo (só move).
 
 Molde igual ao cron_captura_dfe.py: serviço de Cron próprio no Railway, Start
 Command ``python cron_roteador.py``, schedule ``*/15 * * * *``. O processo sobe,
@@ -96,6 +111,9 @@ EXTENSAO_PROCESSADA = '.xml'
 
 ATIVO = os.getenv('ROTEADOR_ATIVO', '0').strip() == '1'
 DRYRUN = os.getenv('ROTEADOR_DRYRUN', '1').strip() == '1'
+# Kill switch do LANÇAMENTO. Com IMPORTA=0 o roteador volta a ser o que era —
+# só move — e o buraco reabre. Existe para desarmar em produção sem redeploy.
+IMPORTA = os.getenv('ROTEADOR_IMPORTA', '1').strip() == '1'
 MAX_ARQ = max(1, int(os.getenv('ROTEADOR_MAX_ARQ', '500')))
 PRAZO_SEG = max(30, int(os.getenv('ROTEADOR_PRAZO_SEG', '600')))
 
@@ -337,12 +355,27 @@ def rodar():
          'REVISAR': 0, 'SEM_MATCH': 0, 'ERRO': 0,
          # não-XML deixados em paz (o .pfx à espera de vínculo cai aqui)
          'IGNORADO': 0}
+    n_imp = {}              # ok/dup/skip/off — placar do LANÇAMENTO
     vistos = set()          # dedupe intra-rodada por destino
     total = 0
 
     try:
         empresas = _mapa_empresas()
         logger.info('[roteador] mapa: %d CNPJs de clientes.', len(empresas))
+
+        # Cache de clientes por documento, UMA vez por rodada (o mesmo que o
+        # upload manual monta). Só é necessário quando vamos lançar.
+        doc_cache = {}
+        importar_xml = None
+        if IMPORTA and not DRYRUN:
+            from utils.fiscal_ingest import _build_cliente_doc_cache, importar_xml
+            doc_cache = _build_cliente_doc_cache()
+            logger.info('[roteador] import LIGADO — cache de %d documentos.',
+                        len(doc_cache))
+        else:
+            logger.warning('[roteador] import DESLIGADO (importa=%s, dry_run=%s) '
+                           '— arquivos serao apenas ARQUIVADOS, sem lancamento.',
+                           IMPORTA, DRYRUN)
 
         for rel in PASTAS_ORIGEM:
             base = svc._build_path(*rel.split('/'))
@@ -389,6 +422,28 @@ def rodar():
                              tipo_doc=info['tipo_doc'], motivo=info['motivo'])
                         continue
 
+                    # LANÇAMENTO ANTES DO ARQUIVAMENTO.
+                    #
+                    # A ordem é o coração da correção. Se o import falha, o
+                    # arquivo FICA na origem e volta no próximo tick — nunca
+                    # some do radar. Se o import passa e o move falha, o tick
+                    # seguinte reimporta e o dedup devolve 'dup', sem dano.
+                    # O caminho impossível é o antigo: arquivar sem lançar.
+                    #
+                    # Vem ANTES até do teste de CONFLITO de propósito: um
+                    # homônimo no destino significa que o ARQUIVO é duplicado,
+                    # não que a NOTA já esteja no banco.
+                    imp = 'off'
+                    if importar_xml is not None:
+                        imp, imp_motivo = importar_xml(nome, dados, doc_cache)
+                        if imp == 'erro':
+                            n['ERRO'] += 1
+                            _log(rodada, origem, None, 'ERRO',
+                                 tipo_doc=info['tipo_doc'],
+                                 empresa_numero=info['empresa_numero'],
+                                 motivo=f'import: {imp_motivo}')
+                            continue        # NÃO arquiva o que não foi lançado
+
                     destino_dir = svc._build_path(
                         'EMPRESAS',
                         pasta_empresa(info['empresa_numero'], info['empresa_razao']),
@@ -402,7 +457,7 @@ def rodar():
                         _log(rodada, origem, destino, 'CONFLITO',
                              tipo_doc=info['tipo_doc'],
                              empresa_numero=info['empresa_numero'],
-                             motivo='destino ja existe — ficou na origem')
+                             motivo=f'destino ja existe — ficou na origem [import={imp}]')
                         continue
 
                     if DRYRUN:
@@ -417,11 +472,12 @@ def rodar():
                     svc.ensure_folder(destino_dir)
                     if svc.move_file(origem, destino):
                         n['MOVIDO'] += 1
+                        n_imp[imp] = n_imp.get(imp, 0) + 1
                         vistos.add(destino.lower())
                         _log(rodada, origem, destino, 'MOVIDO',
                              tipo_doc=info['tipo_doc'],
                              empresa_numero=info['empresa_numero'],
-                             motivo=info['motivo'])
+                             motivo=f"{info['motivo']} [import={imp}]")
                     else:
                         n['ERRO'] += 1
                         _log(rodada, origem, destino, 'ERRO',
@@ -436,9 +492,10 @@ def rodar():
 
         logger.warning('[roteador] rodada %s: %d avaliados | movidos=%d simulados=%d '
                        'conflitos=%d revisar=%d sem_match=%d erros=%d | '
-                       'ignorados_nao_xml=%d',
+                       'ignorados_nao_xml=%d | lancamento=%s',
                        rodada, total, n['MOVIDO'], n['SIMULADO'], n['CONFLITO'],
-                       n['REVISAR'], n['SEM_MATCH'], n['ERRO'], n['IGNORADO'])
+                       n['REVISAR'], n['SEM_MATCH'], n['ERRO'], n['IGNORADO'],
+                       dict(sorted(n_imp.items())) or '{}')
     finally:
         try:
             cur.execute("SELECT RELEASE_LOCK('roteador')")

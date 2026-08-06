@@ -31,6 +31,14 @@ from utils.nfe_import import (
 # empresa/papel pelo próprio XML (papel_do_cliente) e grava via _save_cte.
 from utils.cte_parser import parse_cte_xml, papel_do_cliente
 from utils.cte_import import _save_cte
+# Núcleo de LANÇAMENTO de um .xml (extraído para utils/fiscal_ingest.py para o
+# cron_roteador.py poder importar sem arrastar Flask). Reexportado aqui — os
+# chamadores antigos deste blueprint continuam usando os mesmos nomes.
+from utils.fiscal_ingest import (
+    _build_cliente_doc_cache, _find_cliente_by_doc_digits,
+    _CTE_PARTES, _MODELOS_CTE, _RE_CHAVE_ID, _RE_RAIZ_XML, _RAIZES_CTE,
+    _modelo_do_xml, _e_cte, _importar_um_cte,
+)
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
 from models.robo_config import RoboConfig
@@ -182,40 +190,8 @@ def _get_categorias():
     return [(c['nome'], subs_map.get(c['id'], [])) for c in cats]
 
 
-def _build_cliente_doc_cache() -> dict:
-    """Indexa clientes por documento numérico para matching robusto de CNPJ/CPF."""
-    rows = execute_query(
-        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes",
-        fetch=True,
-    ) or []
-    cache: dict = {}
-    for row in rows:
-        digits = re.sub(r'\D', '', row.get('cpf_cnpj') or '')
-        if len(digits) < 11:
-            continue
-        doc_keys = {digits}
-        nozero = digits.lstrip('0')
-        if nozero:
-            doc_keys.add(nozero)
-        item = {
-            'id': row['id'],
-            'numero_cliente': row.get('numero_cliente'),
-            'nome_razao_social': row['nome_razao_social'],
-        }
-        for k in doc_keys:
-            cache.setdefault(k, item)
-    return cache
-
-
-def _find_cliente_by_doc_digits(doc_digits: str, cache: dict) -> dict | None:
-    """Busca cliente por documento usando variações normalizadas."""
-    digits = re.sub(r'\D', '', doc_digits or '')
-    if len(digits) < 11:
-        return None
-    nozero = digits.lstrip('0')
-    return cache.get(digits) or (cache.get(nozero) if nozero else None)
-
-
+# _build_cliente_doc_cache e _find_cliente_by_doc_digits foram movidos para
+# utils/fiscal_ingest.py (reexportados no topo deste arquivo).
 
 
 
@@ -2931,66 +2907,10 @@ def api_resumo_produtos():
 # base — emitente cliente → SAÍDA), grava com origem='UPLOAD' e dedup por
 # (chave, cliente_id). É o mesmo core que a rota /conf-cte/importar usa.
 # ---------------------------------------------------------------------------
-_CTE_PARTES = ('emit_cnpj', 'rem_cnpj', 'dest_cnpj', 'exped_cnpj', 'receb_cnpj',
-               'tomador_cnpj')
-_MODELOS_CTE = ('57', '67', '64')
-# Id="CTe3521..." / Id="NFe3521..." — os 44 dígitos da chave. Eventos (Id="ID11...")
-# têm mais de 44 dígitos antes das aspas e de propósito NÃO casam aqui.
-_RE_CHAVE_ID = re.compile(r'\bId\s*=\s*["\'][A-Za-z]*(\d{44})["\']')
-_RE_RAIZ_XML = re.compile(r'<\s*(?![?!])([A-Za-z_][\w.\-]*)')
-_RAIZES_CTE = {'cteproc', 'cteosproc', 'cte', 'cteos', 'gtve',
-               'infcte', 'infcteos', 'infgtve'}
-
-
-def _modelo_do_xml(content: str) -> str:
-    """Modelo fiscal (dígitos 21-22 da chave) lido do Id=, sem parsear o XML.
-    Devolve '' quando o documento não traz chave no Id."""
-    m = _RE_CHAVE_ID.search(content)
-    return m.group(1)[20:22] if m else ''
-
-
-def _e_cte(content: str) -> bool:
-    """True quando o XML é de CT-e (57) / CT-e OS (67) / GTV-e (64). Decidido
-    pelo modelo da chave e, na falta dela, pela raiz do XML."""
-    modelo = _modelo_do_xml(content)
-    if modelo:
-        return modelo in _MODELOS_CTE
-    m = _RE_RAIZ_XML.search(content)
-    raiz = m.group(1).split(':')[-1].lower() if m else ''
-    return raiz in _RAIZES_CTE
-
-
-def _importar_um_cte(nome: str, content: str, cache):
-    """Importa UM XML de CT-e. Devolve ('ok'|'dup', None) quando entrou, ou
-    (None, 'motivo') quando o arquivo foi rejeitado."""
-    try:
-        parsed = parse_cte_xml(content)
-    except Exception as exc:
-        return None, f'{nome}: XML não é um CT-e válido ({exc}).'
-    header = parsed['header']
-    chave = header.get('chave_acesso') or ''
-    modelo = header.get('modelo') or (chave[20:22] if len(chave) >= 22 else '')
-    if modelo != '57':
-        return None, f'{nome}: não é CT-e modelo 57 (modelo {modelo or "?"}).'
-    # Quais partes são clientes cadastrados → uma linha por cliente, com o papel
-    # real (emitente → SAÍDA; tomador/dest/rem → entrada; os dois → dual).
-    achados = {}   # cliente_id -> cnpj_dígitos
-    for campo in _CTE_PARTES:
-        dig = re.sub(r'\D', '', header.get(campo) or '')
-        if len(dig) < 11:
-            continue
-        hit = _find_cliente_by_doc_digits(dig, cache)
-        if hit and hit['id'] not in achados:
-            achados[hit['id']] = dig
-    if not achados:
-        return None, f'{nome}: nenhuma empresa cadastrada nesse CT-e.'
-    novo = False
-    for cid, dig in achados.items():
-        papel = papel_do_cliente(header, dig)
-        if _save_cte(parsed, nome, 'UPLOAD', cliente_id=cid,
-                     xml_raw=content, papel_cliente=papel, cnpj_cliente=dig) == 'ok':
-            novo = True
-    return ('ok' if novo else 'dup'), None
+# _CTE_PARTES, _MODELOS_CTE, _RE_CHAVE_ID, _RE_RAIZ_XML, _RAIZES_CTE,
+# _modelo_do_xml, _e_cte e _importar_um_cte foram movidos para
+# utils/fiscal_ingest.py (reexportados no topo deste arquivo), para que o
+# cron_roteador.py possa LANÇAR o XML antes de arquivar sem importar Flask.
 
 
 def _expandir_uploads(files, errors):
