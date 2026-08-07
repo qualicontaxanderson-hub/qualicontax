@@ -93,7 +93,8 @@ def _cadastros_pendentes():
     """Candidaturas aguardando decisão. Nasce vazia — o formulário é a Parte 3."""
     return execute_query(
         """SELECT p.id, p.nome_completo, p.login_escolhido, p.nick_escolhido,
-                  p.email_pessoal, p.email_corporativo, p.ja_funcionario,
+                  p.email_pessoal, p.email_corporativo, p.celular_corporativo,
+                  p.modalidade_trabalho, p.ja_funcionario,
                   p.criado_em, p.status,
                   GROUP_CONCAT(d.nome ORDER BY d.nome SEPARATOR ', ') AS departamentos
              FROM cadastro_pendente p
@@ -120,9 +121,14 @@ def usuario_link_gerar():
 
     destinatario = (request.form.get('destinatario') or '').strip() or None
     try:
+        # url_builder: o util não conhece url_for. Passamos o construtor para que
+        # url_claro (a cópia reenviável) nasça no mesmo INSERT do hash. Vive só
+        # enquanto o link é pendente — some no uso/revogação/expiração.
         token, link_id = cadastro_token.gerar(
             'CADASTRO', current_user.id,
-            destinatario=destinatario, validade_horas=VALIDADE_LINK_HORAS)
+            destinatario=destinatario, validade_horas=VALIDADE_LINK_HORAS,
+            url_builder=lambda tok: url_for('cadastro.formulario', token=tok,
+                                            _external=True))
     except ValueError as exc:
         return jsonify(ok=False, msg=str(exc)), 400
     except Exception:

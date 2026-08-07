@@ -68,6 +68,14 @@ def _departamentos():
 _CONTA_TIPOS = ('CORRENTE', 'POUPANCA', 'SALARIO', 'PAGAMENTO')
 _PIX_TIPOS = ('CPF', 'CNPJ', 'EMAIL', 'TELEFONE', 'ALEATORIA')
 
+# Modalidade de trabalho: os três valores do ENUM da migration 07. Qualquer
+# outra coisa é lixo de POST forjado — vira 400 amigável, nunca 500.
+_MODALIDADES = ('HOME_OFFICE', 'ESCRITORIO', 'HIBRIDO')
+
+# E-mail "bom o suficiente": tem um @, um ponto no domínio e nada de espaço.
+# Não é RFC 5322 — é o mesmo rigor prático que o resto do cadastro pede.
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
 
 def _txt(form, campo, limite):
     """Campo de texto normalizado. Vazio vira None (a coluna é nullable)."""
@@ -203,6 +211,7 @@ def enviar(token):
     login = (request.form.get('login_escolhido') or '').strip().lower()
     nick = (request.form.get('nick_escolhido') or '').strip() or None
     ja_func = 1 if (request.form.get('ja_funcionario') or '') == '1' else 0
+    modalidade = (request.form.get('modalidade_trabalho') or '').strip().upper()
     deps = [int(d) for d in request.form.getlist('departamentos') if d.isdigit()]
 
     def erro(msg):
@@ -216,6 +225,25 @@ def enviar(token):
         return erro('Escolha um dos logins sugeridos.')
     if not cadastro_sugestoes.login_disponivel(login):
         return erro('Esse login acabou de ser tomado. Escolha outro da lista.')
+
+    # Modalidade é obrigatória para TODOS e checada contra o ENUM no servidor:
+    # o front manda um dos três; lixo forjado cai aqui como 400, não 500.
+    if modalidade not in _MODALIDADES:
+        return erro('Escolha como você vai trabalhar: home office, escritório ou híbrido.')
+
+    # Quem JÁ é funcionário: e-mail e celular corporativos são obrigatórios e
+    # validados no servidor (o front esconde/mostra, mas não é a fonte da verdade).
+    email_corp = (request.form.get('email_corporativo') or '').strip()
+    cel_corp_dig = re.sub(r'\D', '', request.form.get('celular_corporativo') or '')
+    if ja_func:
+        if not email_corp:
+            return erro('Informe seu e-mail corporativo — você marcou que já '
+                        'trabalha na Qualicontax.')
+        if not _EMAIL_RE.match(email_corp):
+            return erro('O e-mail corporativo não parece válido. Confira e tente de novo.')
+        if len(cel_corp_dig) < 10:
+            return erro('Informe seu celular corporativo com DDD — você marcou que '
+                        'já trabalha na Qualicontax.')
 
     # O consumo é ATÔMICO: quem obtiver rowcount==1 segue. Dois envios
     # simultâneos do mesmo link resultam num cadastro e num "já utilizado".
@@ -254,6 +282,13 @@ def enviar(token):
     # que faltar na aprovação.
     p = _campos_parte4(request.form)
 
+    # Contatos corporativos SÓ para quem já é funcionário. Quem não é nem viu os
+    # campos — se um POST forjado os trouxer, viram NULL aqui (regra: "= NÃO →
+    # gravam NULL"). Para quem é, já passaram pela validação acima.
+    if not ja_func:
+        p['email_c'] = None
+        p['cel_c'] = None
+
     try:
         with transacao() as cur:
             if pendente_id:
@@ -264,11 +299,13 @@ def enviar(token):
                               cpf=%s, data_nascimento=%s,
                               email_pessoal=%s, email_corporativo=%s,
                               celular_pessoal=%s, celular_corporativo=%s,
+                              modalidade_trabalho=%s,
                               cep=%s, logradouro=%s, numero=%s, complemento=%s,
                               bairro=%s, cidade=%s, estado=%s
                         WHERE id=%s""",
                     (ja_func, nome, login, nick, p['cpf'], p['nasc'],
                      p['email_p'], p['email_c'], p['cel_p'], p['cel_c'],
+                     modalidade,
                      p['cep'], p['logradouro'], p['numero'], p['complemento'],
                      p['bairro'], p['cidade'], p['estado'], pendente_id))
             else:
@@ -278,11 +315,13 @@ def enviar(token):
                           login_escolhido, nick_escolhido, cpf, data_nascimento,
                           email_pessoal, email_corporativo,
                           celular_pessoal, celular_corporativo,
+                          modalidade_trabalho,
                           cep, logradouro, numero, complemento,
                           bairro, cidade, estado)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (link_id, ja_func, nome, login, nick, p['cpf'], p['nasc'],
                      p['email_p'], p['email_c'], p['cel_p'], p['cel_c'],
+                     modalidade,
                      p['cep'], p['logradouro'], p['numero'], p['complemento'],
                      p['bairro'], p['cidade'], p['estado']))
                 pendente_id = cur.lastrowid

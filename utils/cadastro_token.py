@@ -153,7 +153,8 @@ def _motivo_da_falha(token_hash: str, tipo: str) -> dict:
 # ---------------------------------------------------------------------------
 def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
           usuario_id: int = None,
-          validade_horas: int = VALIDADE_HORAS_PADRAO) -> tuple:
+          validade_horas: int = VALIDADE_HORAS_PADRAO,
+          url_builder=None) -> tuple:
     """Cria um link de uso único. Devolve ``(token_claro, link_id)``.
 
     O token claro é devolvido UMA vez e não é recuperável depois — quem chamou
@@ -161,6 +162,14 @@ def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
 
     ``tipo='SENHA'`` exige ``usuario_id`` (o dono da senha). ``tipo='CADASTRO'``
     aceita usuario_id=None: a conta ainda não existe.
+
+    ``url_builder`` (opcional): callable ``token -> url_completa``. Existe para
+    este módulo continuar SEM Flask — quem tem ``url_for`` (a rota) passa o
+    construtor, e a URL é gravada em ``url_claro`` no MESMO INSERT do hash. É uma
+    cópia operacional de vida curta (o admin reenvia o convite perdido sem gerar
+    outro link); morre no consumo/revogação/expiração. Sem url_builder,
+    ``url_claro`` nasce NULL e o link vale só pelo hash. Se o builder estourar, a
+    geração NÃO falha: perde-se só a cópia, nunca o link.
     """
     tipo = _valida_tipo(tipo)
     if not criado_por:
@@ -180,13 +189,26 @@ def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
 
     token, token_hash = _token_unico()
     expira_em = datetime.now() + timedelta(hours=validade_horas)
+
+    # Cópia operacional da URL (ver docstring). Nunca deixa a geração falhar.
+    url_claro = None
+    if url_builder is not None:
+        try:
+            url_claro = (url_builder(token) or None)
+            if url_claro:
+                url_claro = url_claro[:255]
+        except Exception as exc:
+            logger.warning('[cadastro_token] url_builder falhou; link segue só '
+                           'pelo hash: %s', exc)
+            url_claro = None
+
     link_id = _inserir(
         f"""INSERT INTO {TABELA}
               (tipo, token_hash, token_prefixo, destinatario, usuario_id,
-               criado_por, expira_em)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+               criado_por, expira_em, url_claro)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
         (tipo, token_hash, token[:PREFIXO_LEN], destinatario or None,
-         usuario_id or None, criado_por, expira_em))
+         usuario_id or None, criado_por, expira_em, url_claro))
 
     logger.info('[cadastro_token] link %s id=%s criado por %s, expira %s.',
                 tipo, link_id, criado_por, expira_em)
@@ -239,9 +261,11 @@ def consumir(token_claro: str, tipo: str, *, ip: str = None) -> dict:
     tipo = _valida_tipo(tipo)
     token_hash = _hash(token_claro)
 
+    # url_claro morre no MESMO UPDATE que marca o uso: a cópia operacional não
+    # sobrevive ao link. Quem obtiver rowcount==1 já a apagou atomicamente.
     afetadas = _escrever(
         f"""UPDATE {TABELA}
-               SET usado_em = NOW(), usado_ip = %s
+               SET usado_em = NOW(), usado_ip = %s, url_claro = NULL
              WHERE token_hash = %s
                AND tipo = %s
                AND usado_em IS NULL
@@ -281,7 +305,7 @@ def revogar(link_id: int, revogado_por: int) -> bool:
         raise ValueError('link_id é obrigatório.')
     return _escrever(
         f"""UPDATE {TABELA}
-               SET revogado_em = NOW(), revogado_por = %s
+               SET revogado_em = NOW(), revogado_por = %s, url_claro = NULL
              WHERE id = %s AND usado_em IS NULL AND revogado_em IS NULL""",
         (revogado_por, link_id)) == 1
 
@@ -305,7 +329,7 @@ def revogar_pendentes(tipo: str, *, destinatario: str = None,
         params.append(destinatario)
     return _escrever(
         f"""UPDATE {TABELA}
-               SET revogado_em = NOW(), revogado_por = %s
+               SET revogado_em = NOW(), revogado_por = %s, url_claro = NULL
              WHERE tipo = %s AND ({' OR '.join(cond)})
                AND usado_em IS NULL AND revogado_em IS NULL""",
         tuple(params))
@@ -329,11 +353,35 @@ def status_do_link(row: dict) -> str:
     return 'pendente'
 
 
+def limpar_url_claro_vencidos() -> int:
+    """Apaga url_claro dos links já vencidos que ainda a carregam.
+
+    Limpeza PREGUIÇOSA: chamada por listar() sempre que o admin abre a tela, sem
+    cron novo. A cópia operacional só faz sentido enquanto o link é reenviável —
+    vencido, ela some junto com a utilidade. Ainda-pendentes não são tocados.
+    O rowcount costuma ser 0; o UPDATE só pega o que sobrou.
+    """
+    return _escrever(
+        f"""UPDATE {TABELA}
+               SET url_claro = NULL
+             WHERE url_claro IS NOT NULL
+               AND usado_em IS NULL
+               AND revogado_em IS NULL
+               AND expira_em <= NOW()""")
+
+
 def listar(tipo: str = None, apenas_pendentes: bool = False, limite: int = 100):
-    """Links para a tela do admin. NUNCA devolve token_hash — só o prefixo."""
+    """Links para a tela do admin. NUNCA devolve token_hash — só o prefixo.
+
+    Devolve ``url_claro`` (a URL completa) SÓ dos links ainda pendentes — os
+    demais estados já a têm NULL no banco. É a única saída autorizada do token em
+    claro, e existe para o botão "Copiar link" da tela do admin.
+    """
+    limpar_url_claro_vencidos()   # varredura preguiçosa antes de ler
     sql = [f"""SELECT l.id, l.tipo, l.token_prefixo, l.destinatario, l.usuario_id,
                       l.criado_por, l.criado_em, l.expira_em, l.usado_em,
-                      l.revogado_em, (l.expira_em <= NOW()) AS vencido,
+                      l.revogado_em, l.url_claro,
+                      (l.expira_em <= NOW()) AS vencido,
                       u.nome AS criado_por_nome
                  FROM {TABELA} l
                  LEFT JOIN usuarios u ON u.id = l.criado_por"""]

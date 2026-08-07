@@ -95,6 +95,39 @@
         <input type="text" id="celp" name="celular_pessoal" inputmode="tel"
                maxlength="20" placeholder="(00) 00000-0000"></div>
     </div>
+
+    {# Corporativos — só aparecem para quem marcou "já trabalho". Obrigatórios
+       nesse caso; a validação de verdade é no servidor (routes/cadastro.py). #}
+    <div id="corpFields" style="display:none; margin-top:18px">
+      <div class="secao-tit" style="font-size:14px">Contato corporativo</div>
+      <div class="secao-sub">Como você já trabalha na Qualicontax, precisamos do
+         seu e-mail e celular corporativos.</div>
+      <div class="grade">
+        <div><label class="rot" for="emailc">E-mail corporativo</label>
+          <input type="text" id="emailc" name="email_corporativo" inputmode="email"
+                 maxlength="120" placeholder="voce@qualicontax.com.br"
+                 value="{{ form.email_corporativo if form else '' }}"></div>
+        <div><label class="rot" for="celc">Celular corporativo</label>
+          <input type="text" id="celc" name="celular_corporativo" inputmode="tel"
+                 maxlength="20" placeholder="(00) 00000-0000"
+                 value="{{ form.celular_corporativo if form else '' }}"></div>
+      </div>
+    </div>
+
+    {# Modalidade — obrigatória para TODOS. Os três valores batem com o ENUM. #}
+    <div style="margin-top:18px">
+      <label class="rot">Como você vai trabalhar?</label>
+      <div class="chips" id="modalidade">
+        {% for v, r in [('HOME_OFFICE','Home office'),('ESCRITORIO','Escritório'),
+                        ('HIBRIDO','Híbrido')] %}
+        <label class="chip-check">
+          <input type="radio" name="modalidade_trabalho" value="{{ v }}"
+                 {% if form and form.modalidade_trabalho == v %}checked{% endif %}>
+          <span>{{ r }}</span></label>
+        {% endfor %}
+      </div>
+      <div class="dica">Obrigatório — escolha uma das três.</div>
+    </div>
   </div>
 
   <div class="card">
@@ -212,18 +245,32 @@ var TOKEN_URL = "{{ url_for('cadastro.sugestoes', token=token) }}";
 var nomeEl = document.getElementById('nome');
 var timer = null, ultimoNome = '';
 
+function jaTrabalha() {
+    var ja = document.querySelector('input[name=ja_funcionario]:checked');
+    return !!(ja && ja.value === '1');
+}
+
 // Texto muda conforme "já trabalha conosco?" — a mesma pergunta serve às duas
 // situações, mas a explicação não pode ser a mesma.
 function ajustaTexto() {
-    var ja = document.querySelector('input[name=ja_funcionario]:checked');
-    document.getElementById('dicaNome').textContent = (ja && ja.value === '1')
+    document.getElementById('dicaNome').textContent = jaTrabalha()
         ? 'Use o mesmo nome que já consta no seu registro na empresa.'
         : 'Nome e sobrenome, como no RG ou CPF.';
 }
+
+// Mostra/esconde os campos corporativos. Não usamos o atributo HTML `required`
+// de propósito: campo required escondido trava o submit com erro não-focável em
+// alguns navegadores. O portão é o revisaEnvio() abaixo + a validação servidor.
+function ajustaFuncionario() {
+    var box = document.getElementById('corpFields');
+    if (box) { box.style.display = jaTrabalha() ? '' : 'none'; }
+    ajustaTexto();
+    revisaEnvio();
+}
 Array.prototype.forEach.call(
     document.querySelectorAll('input[name=ja_funcionario]'),
-    function (r) { r.addEventListener('change', ajustaTexto); });
-ajustaTexto();
+    function (r) { r.addEventListener('change', ajustaFuncionario); });
+ajustaFuncionario();
 
 function montaChips(alvo, valores, hidden, obrigatorio) {
     var box = document.getElementById(alvo);
@@ -252,11 +299,29 @@ function montaChips(alvo, valores, hidden, obrigatorio) {
 }
 
 function revisaEnvio() {
-    var ok = !!document.getElementById('loginEscolhido').value
-             && nomeEl.value.trim().length >= 5;
+    var loginOk = !!document.getElementById('loginEscolhido').value;
+    var nomeOk = nomeEl.value.trim().length >= 5;
+    var modalOk = !!document.querySelector('input[name=modalidade_trabalho]:checked');
+    var corpOk = true;
+    if (jaTrabalha()) {
+        var ec = (document.getElementById('emailc').value || '').trim();
+        var cc = (document.getElementById('celc').value || '').replace(/\D/g, '');
+        // Mesmo rigor prático do servidor: @ com ponto no domínio e celular com DDD.
+        corpOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ec) && cc.length >= 10;
+    }
+    var ok = loginOk && nomeOk && modalOk && corpOk;
     document.getElementById('btnEnviar').disabled = !ok;
     document.getElementById('cardEnvio').style.display = ok ? '' : 'none';
 }
+
+// Modalidade e contatos corporativos também abrem/fecham o botão de envio.
+Array.prototype.forEach.call(
+    document.querySelectorAll('input[name=modalidade_trabalho]'),
+    function (r) { r.addEventListener('change', revisaEnvio); });
+['emailc', 'celc'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) { el.addEventListener('input', revisaEnvio); }
+});
 
 function pedeSugestoes() {
     var nome = nomeEl.value.trim();

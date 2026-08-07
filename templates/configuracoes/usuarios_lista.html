@@ -114,11 +114,20 @@
                 <td>{{ l.criado_por_nome or '—' }}<br>
                     <small class="text-muted">{{ l.criado_em.strftime('%d/%m/%Y %H:%M') if l.criado_em else '' }}</small></td>
                 <td>
+                    {# status 'pendente' já exclui vencido/usado/revogado
+                       (status_do_link). Só aqui o link ainda existe no banco e
+                       tem url_claro para copiar. #}
                     {% if l.status == 'pendente' %}
-                    <button class="btn btn-sm btn-danger" title="Revogar"
-                            onclick="revogarLink({{ l.id }}, '{{ l.token_prefixo }}', this)">
-                        <i class="fas fa-ban"></i> Revogar
-                    </button>
+                        {% if l.url_claro %}
+                        <button class="btn btn-sm btn-secondary" title="Copiar link"
+                                data-url="{{ l.url_claro }}" onclick="copiarLista(this)">
+                            <i class="fas fa-copy"></i> Copiar link
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-sm btn-danger" title="Revogar"
+                                onclick="revogarLink({{ l.id }}, '{{ l.token_prefixo }}', this)">
+                            <i class="fas fa-ban"></i> Revogar
+                        </button>
                     {% else %}
                     <span class="text-muted">—</span>
                     {% endif %}
@@ -141,13 +150,16 @@
                aguardando sua aprovação.</p>
         </div>
     </div>
+    {% set modal_lbl = {'HOME_OFFICE':'Home office','ESCRITORIO':'Escritório','HIBRIDO':'Híbrido'} %}
+    {% set modal_cor = {'HOME_OFFICE':'info','ESCRITORIO':'secondary','HIBRIDO':'success'} %}
     <table class="data-table">
         <thead>
             <tr>
                 <th>Nome</th>
                 <th>Login pedido</th>
                 <th>Nick</th>
-                <th>E-mail</th>
+                <th>Contato</th>
+                <th>Modalidade</th>
                 <th>Departamentos</th>
                 <th>Já funcionário?</th>
                 <th>Recebido em</th>
@@ -159,13 +171,31 @@
                 <td><strong>{{ p.nome_completo }}</strong></td>
                 <td><code>{{ p.login_escolhido }}</code></td>
                 <td>{{ p.nick_escolhido or '—' }}</td>
-                <td>{{ p.email_corporativo or p.email_pessoal or '—' }}</td>
+                <td>
+                    {% if p.email_corporativo or p.celular_corporativo %}
+                        {% if p.email_corporativo %}
+                        <div><span class="badge badge-secondary">corp</span> {{ p.email_corporativo }}</div>
+                        {% endif %}
+                        {% if p.celular_corporativo %}
+                        <div><small class="text-muted">{{ p.celular_corporativo }}</small></div>
+                        {% endif %}
+                    {% elif p.email_pessoal %}
+                        {{ p.email_pessoal }}
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if p.modalidade_trabalho %}
+                    <span class="badge badge-{{ modal_cor.get(p.modalidade_trabalho, 'secondary') }}">
+                        {{ modal_lbl.get(p.modalidade_trabalho, p.modalidade_trabalho) }}
+                    </span>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
                 <td>{{ p.departamentos or '—' }}</td>
                 <td>{{ 'Sim' if p.ja_funcionario else 'Não' }}</td>
                 <td>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '—' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="7" class="qc-vazio">
+            <tr><td colspan="8" class="qc-vazio">
                 <i class="fas fa-inbox"></i>
                 <div>Nenhum cadastro aguardando aprovação.</div>
             </td></tr>
@@ -177,6 +207,9 @@
 {# ---- Modal: gerar link (o token aparece AQUI e em lugar nenhum mais) ---- #}
 <div class="qc-modal-fundo" id="qcModal" onclick="if(event.target===this) fecharModal()">
   <div class="qc-modal">
+    {# X — única forma explícita de fechar depois de gerar (o botão "Já copiei"
+       saiu: dá para recopiar na lista enquanto o link estiver pendente). #}
+    <button type="button" class="qc-x" title="Fechar" onclick="fecharModal()">&times;</button>
     {# Passo 1: pedir o destinatário (opcional) #}
     <div id="qcPasso1">
         <h3 class="qc-modal-tit">Gerar link de cadastro</h3>
@@ -205,15 +238,10 @@
             COPIAR LINK
         </button>
         <div class="qc-aviso">
-            <strong>Copie agora.</strong> Este link só funciona <strong>1 vez</strong> e
-            expira em <strong>72h</strong>. Ao fechar esta janela, <strong>não é possível
-            vê-lo de novo</strong> — só o prefixo <code id="qcPrefixo"></code> fica visível
-            na lista.
-        </div>
-        <div class="qc-modal-acoes">
-            <button type="button" class="btn btn-primary" onclick="fecharModal(true)">
-                Já copiei, fechar
-            </button>
+            <strong>Copiar link</strong> copia e fecha esta janela. Você pode copiá-lo
+            de novo na lista abaixo <strong>enquanto o link estiver pendente</strong>
+            (prefixo <code id="qcPrefixo"></code>). Ele vale <strong>1 vez</strong> e
+            expira em <strong>72h</strong>.
         </div>
     </div>
   </div>
@@ -232,8 +260,11 @@
                   background: rgba(15,23,42,.55); align-items: center; justify-content: center;
                   padding: 20px; }
 .qc-modal-fundo.aberto { display: flex; }
-.qc-modal { background: #fff; border-radius: 14px; padding: 26px 24px; width: 100%;
-            max-width: 540px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.qc-modal { position: relative; background: #fff; border-radius: 14px; padding: 26px 24px;
+            width: 100%; max-width: 540px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.qc-x { position: absolute; top: 12px; right: 14px; border: none; background: none;
+        font-size: 26px; line-height: 1; color: #94a3b8; cursor: pointer; padding: 2px 6px; }
+.qc-x:hover { color: #334155; }
 .qc-modal-tit { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
 .qc-modal-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 18px; }
 .qc-label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px;
@@ -262,7 +293,12 @@
 // do escrita_fiscal. Gerar/revogar link é ação sensível.
 var QC_CSRF = "{{ csrf_token }}";
 
+// Vira true quando um link é gerado nesta abertura do modal. Qualquer fechamento
+// depois disso recarrega a lista, para o link novo (e seu "Copiar link") aparecer.
+var qcGerou = false;
+
 function abrirGerarLink() {
+    qcGerou = false;
     document.getElementById('qcPasso1').style.display = '';
     document.getElementById('qcPasso2').style.display = 'none';
     document.getElementById('qcDest').value = '';
@@ -271,12 +307,11 @@ function abrirGerarLink() {
     document.getElementById('qcDest').focus();
 }
 
-// precisouRecarregar: só depois de gerar, para a lista mostrar o link novo.
-function fecharModal(recarregar) {
+function fecharModal(forcarReload) {
     document.getElementById('qcModal').classList.remove('aberto');
     // Limpa a URL do DOM ao fechar — o token não fica pendurado na página.
     document.getElementById('qcUrl').textContent = '';
-    if (recarregar) location.reload();
+    if (forcarReload || qcGerou) { location.reload(); }
 }
 
 function gerarLink() {
@@ -293,6 +328,7 @@ function gerarLink() {
             alert(res.d.msg || 'Não foi possível gerar o link.');
             return;
         }
+        qcGerou = true;
         document.getElementById('qcUrl').textContent = res.d.url;
         document.getElementById('qcPrefixo').textContent = res.d.prefixo + '…';
         document.getElementById('qcPasso1').style.display = 'none';
@@ -305,21 +341,35 @@ function gerarLink() {
 function copiarUrl() {
     var el = document.getElementById('qcUrl');
     var btn = document.getElementById('qcBtnCopiar');
-    function ok() {
-        btn.textContent = 'LINK COPIADO';
-        btn.classList.add('ok');
-        setTimeout(function () { btn.textContent = 'COPIAR LINK'; btn.classList.remove('ok'); }, 2500);
-    }
-    function selecionar() {
-        // Fallback para navegador sem clipboard API (ou fora de HTTPS).
+    // Sucesso: copiou e FECHA (recarrega a lista, onde o link segue recopiável).
+    function copiouEfecha() { fecharModal(true); }
+    // Falha (http/permissão): NÃO fecha — deixa a URL selecionada e pede cópia
+    // manual, para o admin não perder o link.
+    function copieManual() {
         var r = document.createRange(); r.selectNodeContents(el);
         var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
         try { document.execCommand('copy'); } catch (e) {}
-        btn.textContent = 'SELECIONADO — use Ctrl+C';
+        btn.textContent = 'COPIE MANUALMENTE — Ctrl+C';
+        btn.classList.add('ok');
     }
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(el.textContent.trim()).then(ok, selecionar);
-    } else { selecionar(); }
+        navigator.clipboard.writeText(el.textContent.trim()).then(copiouEfecha, copieManual);
+    } else { copieManual(); }
+}
+
+// Copiar link da LISTA (link ainda pendente). Feedback 'copiado!' no próprio botão.
+function copiarLista(btn) {
+    var url = btn.getAttribute('data-url');
+    if (!url) { return; }
+    function ok() {
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+        btn.disabled = true;
+        setTimeout(function () { btn.innerHTML = orig; btn.disabled = false; }, 2000);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(ok, function () { window.prompt('Copie o link:', url); });
+    } else { window.prompt('Copie o link:', url); }
 }
 
 function revogarLink(id, prefixo, btn) {
