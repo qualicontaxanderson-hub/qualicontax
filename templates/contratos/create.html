@@ -19,7 +19,7 @@
     </div>
 
     <!-- Form -->
-    <form method="POST" action="{{ url_for('contratos.create_contrato') }}" class="form-container">
+    <form method="POST" action="{{ url_for('contratos.create') }}" class="form-container">
         {{ form.hidden_tag() if form }}
         
         <!-- Informações do Contrato -->
@@ -36,7 +36,7 @@
                             {% if clientes %}
                                 {% for cliente in clientes %}
                                 <option value="{{ cliente.id }}" {% if request.args.get('cliente_id') == cliente.id|string %}selected{% endif %}>
-                                    {{ cliente.nome }}
+                                    {{ cliente.nome_razao_social }}
                                 </option>
                                 {% endfor %}
                             {% endif %}

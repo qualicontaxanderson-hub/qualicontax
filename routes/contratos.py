@@ -78,7 +78,7 @@ def create():
         if not data['cliente_id'] or not data['numero_contrato'] or not data['tipo_servico']:
             flash('Preencha todos os campos obrigatórios.', 'danger')
             clientes_list = Cliente.get_all(per_page=1000)['clientes']
-            return render_template('contratos/form.html', contrato=data, clientes=clientes_list)
+            return render_template('contratos/create.html', contrato=data, clientes=clientes_list)
         
         query = """
             INSERT INTO contratos (
@@ -102,11 +102,11 @@ def create():
         
         if contrato_id:
             flash('Contrato cadastrado com sucesso!', 'success')
-            return redirect(url_for('contratos.list'))
+            return redirect(url_for('contratos.list_contratos'))
         else:
             flash('Erro ao cadastrar contrato.', 'danger')
     
     # GET - Busca lista de clientes para o dropdown
     clientes_list = Cliente.get_all(per_page=1000)['clientes']
-    
-    return render_template('contratos/form.html', contrato=None, clientes=clientes_list)
+
+    return render_template('contratos/create.html', contrato=None, clientes=clientes_list)
