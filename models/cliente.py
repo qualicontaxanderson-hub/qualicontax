@@ -141,6 +141,11 @@ class Cliente:
 
         # Single query that returns filtered count + global stats in one DB round-trip,
         # avoiding a separate get_stats() call from the route.
+        # global_com_cert / global_cert_vencendo: estatísticas CADASTRAIS de
+        # certificado para a fita de KPIs da lista. Contam CLIENTES distintos com
+        # certificado ativo; "vencendo" usa a mesma janela do classificar_validade
+        # (0..30 dias, CURDATE() já em horário de Brasília pelo pool). Aditivo:
+        # não altera nenhuma contagem que já existia.
         count_query = f"""
             SELECT
                 COUNT(DISTINCT c.id)                                                AS total,
@@ -148,17 +153,26 @@ class Cliente:
                 (SELECT COUNT(*) FROM clientes WHERE situacao = 'ATIVO')            AS global_ativos,
                 (SELECT COUNT(*) FROM clientes WHERE situacao = 'INATIVO')          AS global_inativos,
                 (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PF')            AS global_pf,
-                (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PJ')            AS global_pj
+                (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PJ')            AS global_pj,
+                (SELECT COUNT(DISTINCT cliente_id) FROM dfe_certificados
+                   WHERE ativo = 1)                                                 AS global_com_cert,
+                (SELECT COUNT(DISTINCT cliente_id) FROM dfe_certificados
+                   WHERE ativo = 1 AND validade IS NOT NULL
+                     AND validade >= CURDATE()
+                     AND validade <= CURDATE() + INTERVAL 30 DAY)                   AS global_cert_vencendo
             FROM clientes c{count_ramo_join}{where_clause}"""
         count_result = execute_query(count_query, tuple(params), fetch=True, fetch_one=True)
         total = int(count_result['total']) if count_result else 0
         stats = {
-            'total':    int(count_result.get('global_total',   0) or 0),
-            'ativos':   int(count_result.get('global_ativos',  0) or 0),
-            'inativos': int(count_result.get('global_inativos',0) or 0),
-            'pf':       int(count_result.get('global_pf',      0) or 0),
-            'pj':       int(count_result.get('global_pj',      0) or 0),
-        } if count_result else {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}
+            'total':          int(count_result.get('global_total',    0) or 0),
+            'ativos':         int(count_result.get('global_ativos',   0) or 0),
+            'inativos':       int(count_result.get('global_inativos', 0) or 0),
+            'pf':             int(count_result.get('global_pf',       0) or 0),
+            'pj':             int(count_result.get('global_pj',       0) or 0),
+            'com_certificado':int(count_result.get('global_com_cert', 0) or 0),
+            'cert_vencendo':  int(count_result.get('global_cert_vencendo', 0) or 0),
+        } if count_result else {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0,
+                                'pj': 0, 'com_certificado': 0, 'cert_vencendo': 0}
 
         # Ordenação configurável: sort_by in ('nome', 'numero'), sort_dir in ('asc', 'desc')
         sort_by  = filters.get('sort_by',  'numero')
@@ -186,6 +200,8 @@ class Cliente:
             SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                    c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                    c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
+                   cert.cert_validade,
+                   MAX(ender.cidade) AS end_cidade, MAX(ender.estado) AS end_uf,
                    GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome SEPARATOR ', ') as ramo_atividade_nome,
                    GROUP_CONCAT(DISTINCT g.nome ORDER BY g.nome SEPARATOR ', ') as grupo_nome
             FROM clientes c
@@ -193,10 +209,17 @@ class Cliente:
             LEFT JOIN grupos_clientes g ON cgr.grupo_id = g.id
             LEFT JOIN cliente_ramo_atividade_relacao crar ON c.id = crar.cliente_id
             LEFT JOIN ramos_atividade ra ON crar.ramo_atividade_id = ra.id
+            LEFT JOIN (SELECT cliente_id, MAX(validade) AS cert_validade
+                         FROM dfe_certificados WHERE ativo = 1
+                        GROUP BY cliente_id) cert ON cert.cliente_id = c.id
+            -- endereço principal (cidade/UF) para o subtítulo da célula Cliente;
+            -- MAX agrega quando há mais de um principal. Aditivo, read-only.
+            LEFT JOIN enderecos_clientes ender ON ender.cliente_id = c.id AND ender.principal = 1
             {where_clause}
             GROUP BY c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                      c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
-                     c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes
+                     c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
+                     cert.cert_validade
             {order_clause}
             LIMIT %s OFFSET %s
         """

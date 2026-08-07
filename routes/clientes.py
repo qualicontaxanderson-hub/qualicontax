@@ -88,10 +88,20 @@ def index():
         if result is None:
             flash('Erro ao buscar clientes. Verifique a conexão com o banco de dados.', 'danger')
             result = {'clientes': [], 'page': 1, 'total_pages': 0, 'total': 0,
-                      'stats': {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0}}
+                      'stats': {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0,
+                                'com_certificado': 0, 'cert_vencendo': 0}}
 
         # stats is now bundled inside result (no separate DB call needed)
-        stats = result.get('stats', {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0})
+        stats = result.get('stats', {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0,
+                                     'pj': 0, 'com_certificado': 0, 'cert_vencendo': 0})
+
+        # Nível do certificado por cliente para a coluna Certificado — MESMA regra
+        # única do classificar_validade (verde 'ok' / âmbar 'laranja' / vermelho
+        # 'vencido'); 'sem_data' quando não há certificado. A tela nunca mostra
+        # vazio: sem cert vira "sem certificado" em cinza.
+        for c in result['clientes']:
+            c['cert_nivel'] = DfeCertificado.classificar_validade(
+                c.get('cert_validade')).get('nivel', 'sem_data')
 
         return render_template('clientes/index.html',
                              clientes=result['clientes'],
@@ -115,7 +125,8 @@ def index():
                              page=1,
                              total_pages=0,
                               total=0,
-                              stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0},
+                              stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0, 'pj': 0,
+                                     'com_certificado': 0, 'cert_vencendo': 0},
                               grupos=[],
                               ramos_atividade=[],
                               sort_by='numero',
