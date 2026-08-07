@@ -4,66 +4,13 @@
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
 <style>
 /* ===== HOME VERDE+BRANCO (Parte 2 — visual; dados dinâmicos na Parte 3) ===== */
-/* Hero e corpo sangram sobre o padding do .content (28px 32px / 16px no mobile). */
-.ef-hero, .ef-body { margin-left:-32px; margin-right:-32px; box-sizing:border-box; }
-
-.ef-hero {
-    position:relative; overflow:hidden;
-    padding:28px 32px 64px;
-    background:linear-gradient(150deg,#0b3b2b 0%,#116a43 55%,#178a52 100%);
-}
-/* Dois brilhos radiais suaves nas pontas (atrás do conteúdo). */
-.ef-hero::before, .ef-hero::after {
-    content:''; position:absolute; border-radius:50%; pointer-events:none;
-    filter:blur(24px); z-index:0;
-}
-.ef-hero::before { top:-45%; left:-8%; width:340px; height:340px;
-    background:radial-gradient(circle, rgba(52,211,153,.28), transparent 70%); }
-.ef-hero::after  { bottom:-55%; right:-4%; width:380px; height:380px;
-    background:radial-gradient(circle, rgba(74,222,128,.22), transparent 70%); }
-.ef-hero-inner { position:relative; z-index:1; }
-
-.ef-hero-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
-.ef-hero-title { margin:0; font-size:24px; font-weight:800; color:#fff; letter-spacing:-.02em; }
-.ef-hero-sub { margin:4px 0 0; font-size:11.5px; font-weight:500; color:#a7d9c0; }
-
-.ef-hero-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.ef-btn {
-    display:inline-flex; align-items:center; gap:6px;
-    padding:9px 16px; border-radius:10px;
-    font-size:13px; font-weight:600; cursor:pointer;
-    background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.24); color:#eafff3;
-    transition:background .15s ease, border-color .15s ease;
-}
-.ef-btn:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.4); }
-.ef-btn-primary { background:#fff; border-color:#fff; color:#0f3d2e; font-weight:800; }
-.ef-btn-primary:hover { background:#eafff3; border-color:#eafff3; }
-
-/* Corpo branco sobe sobre o hero numa curva. */
-.ef-body {
-    position:relative; z-index:1;
-    margin-top:-40px; margin-bottom:-28px;
-    padding:26px 32px 40px;
-    background:#f7faf8;
-    border-radius:24px 24px 0 0;
-    min-height:46vh;
-}
-.ef-section-label {
-    font-size:9.5px; letter-spacing:1.8px; font-weight:800;
-    text-transform:uppercase; color:#7d968a; margin:0 0 12px;
-}
+/* hero / .ef-btn / corpo / .ef-section-label agora vêm de identidade.css (Parte 0). */
 .ef-body .ef-section-label + .ef-grid + .ef-section-label,
 .ef-body .ef-grid + .ef-section-label { margin-top:28px; }
 
 .ef-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
 
-.ef-card {
-    display:flex; flex-direction:column; gap:9px; box-sizing:border-box;
-    background:#fff; border:1px solid #e3ece7; border-radius:17px; padding:14px;
-    text-decoration:none;
-    transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
-}
-.ef-card:hover { border-color:#86efac; box-shadow:0 8px 20px rgba(16,120,70,.10); transform:translateY(-2px); }
+/* .ef-card (tile base) agora vem de identidade.css (Parte 0). */
 .ef-card-ico {
     width:38px; height:38px; border-radius:12px; box-sizing:border-box;
     display:flex; align-items:center; justify-content:center; font-size:16px;
@@ -84,9 +31,7 @@
     .ef-grid { grid-template-columns:repeat(3,1fr); }
 }
 @media (max-width:600px) {
-    .ef-hero { padding:22px 16px 56px; }
-    .ef-hero, .ef-body { margin-left:-16px; margin-right:-16px; margin-bottom:-16px; }
-    .ef-body { padding:22px 16px 32px; }
+    /* .ef-hero/.ef-body mobile já vêm de identidade.css; aqui só o grid/tiles da home. */
     .ef-grid { grid-template-columns:repeat(3,1fr); gap:8px; }
     .ef-card { padding:11px; border-radius:14px; }
     .ef-card-desc { display:none; }   /* 3 colunas compactas em 390px */

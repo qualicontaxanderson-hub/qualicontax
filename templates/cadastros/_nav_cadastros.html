@@ -1,0 +1,39 @@
+{# ---------------------------------------------------------------------------
+   Testeira do departamento CADASTROS — MESMO componente do fiscal (_nav_fiscal).
+   Estilos vêm de static/css/identidade.css (.nav-fiscal / .nff-tab). Incluir no
+   topo do {% block content %} de cada tela do departamento.
+
+   NOVA TELA: acrescente UMA linha em _abas (endpoint, prefixo p/ aba ativa, rótulo).
+   Aba ativa = prefixo mais longo que casa com request.path.
+--------------------------------------------------------------------------- #}
+{% set _abas = [
+    ('clientes.index',              '/clientes',              'CLIENTES'),
+    ('grupos.index',                '/grupos',                'GRUPOS'),
+    ('ramos_atividade.index',       '/ramodeatividade',       'RAMO DE ATIVIDADE'),
+    ('contratos.list_contratos',    '/contratos',             'CONTRATOS'),
+    ('municipios.index',            '/municipios',            'MUNICÍPIO'),
+    ('adicionais.index',            '/cadastros/adicionais',  'ADICIONAIS'),
+] %}
+{% set _ativa = namespace(pref='') %}
+{% for _ep, _pref, _label in _abas %}
+    {% if request.path.startswith(_pref) and _pref|length > _ativa.pref|length %}
+        {% set _ativa.pref = _pref %}
+    {% endif %}
+{% endfor %}
+
+<nav class="nav-fiscal" aria-label="Navegação de Cadastros">
+    <div class="nav-fiscal-track">
+        {% for _ep, _pref, _label in _abas %}
+        <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
+           href="{{ url_for(_ep) }}"
+           {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>
+        {% endfor %}
+    </div>
+</nav>
+
+<script>
+(function () {
+    var t = document.querySelector('.nav-fiscal .nff-tab.active');
+    if (t && t.scrollIntoView) t.scrollIntoView({ inline: 'center', block: 'nearest' });
+})();
+</script>

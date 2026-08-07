@@ -6,26 +6,28 @@
 {# filtros ativos → abre o painel automaticamente (comportamento preservado) #}
 {% set filters_active = filtros.busca or filtros.tipo_pessoa or filtros.situacao or filtros.regime or filtros.grupo_id or filtros.ramo_id %}
 
-<!-- ── HERO ───────────────────────────────────────────────────────────── -->
-<div class="cli-hero">
-    <div class="cli-hero-inner cli-hero-head">
+{% include 'cadastros/_nav_cadastros.html' %}
+
+<!-- ── HERO (identidade compartilhada) ─────────────────────────────────── -->
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
         <div>
-            <h1 class="cli-hero-title">Clientes</h1>
-            <p class="cli-hero-sub">{{ stats.total or 0 }} empresa{{ '' if (stats.total or 0) == 1 else 's' }} cadastrada{{ '' if (stats.total or 0) == 1 else 's' }}</p>
+            <h1 class="ef-hero-title">Clientes</h1>
+            <p class="ef-hero-sub">{{ stats.total or 0 }} empresa{{ '' if (stats.total or 0) == 1 else 's' }} cadastrada{{ '' if (stats.total or 0) == 1 else 's' }}</p>
         </div>
-        <div class="cli-hero-actions">
+        <div class="ef-hero-actions">
             {# Exportar: botão morto hoje (ação virá em frente própria) — mantido como está #}
-            <button type="button" class="cli-hbtn" title="Exportar">
+            <button type="button" class="ef-btn" title="Exportar">
                 <i class="fas fa-download"></i> Exportar
             </button>
-            <a href="{{ url_for('clientes.novo') }}" class="cli-hbtn cli-hbtn-primary">
+            <a href="{{ url_for('clientes.novo') }}" class="ef-btn ef-btn-primary">
                 <i class="fas fa-plus"></i> Novo Cliente
             </a>
         </div>
     </div>
 </div>
 
-<div class="cli-body">
+<div class="ef-body">
     <!-- ── Fita de KPIs (flutua metade sobre o verde) ──────────────────── -->
     <div class="cli-kpis">
         <div class="cli-kpi">
@@ -285,36 +287,10 @@
 </div>
 
 <style>
-/* Sangra sobre o padding do .content (28px 32px / 16px no mobile), como o Guia. */
-.cli-hero, .cli-body { margin-left:-32px; margin-right:-32px; box-sizing:border-box; }
+/* hero/corpo agora vêm de identidade.css (.ef-hero / .ef-body — fonte única). */
 
-.cli-hero { position:relative; overflow:hidden; padding:26px 32px 60px;
-            background:linear-gradient(150deg,#0b3b2b 0%,#116a43 55%,#178a52 100%); }
-.cli-hero::before, .cli-hero::after { content:''; position:absolute; border-radius:50%;
-            pointer-events:none; filter:blur(24px); z-index:0; }
-.cli-hero::before { top:-45%; left:-8%; width:320px; height:320px;
-            background:radial-gradient(circle, rgba(52,211,153,.28), transparent 70%); }
-.cli-hero::after  { bottom:-60%; right:-4%; width:360px; height:360px;
-            background:radial-gradient(circle, rgba(74,222,128,.22), transparent 70%); }
-.cli-hero-inner { position:relative; z-index:1; }
-.cli-hero-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
-.cli-hero-title { margin:0; font-size:24px; font-weight:800; color:#fff; letter-spacing:-.02em; }
-.cli-hero-sub { margin:4px 0 0; font-size:12px; font-weight:500; color:#a7d9c0;
-                font-variant-numeric:tabular-nums; }
-.cli-hero-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.cli-hbtn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:10px;
-            font-size:13px; font-weight:600; cursor:pointer; text-decoration:none;
-            background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.24); color:#eafff3;
-            transition:background .15s ease, border-color .15s ease; }
-.cli-hbtn:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.4); }
-.cli-hbtn-primary { background:#fff; border-color:#fff; color:#0f3d2e; font-weight:800; }
-.cli-hbtn-primary:hover { background:#eafff3; border-color:#eafff3; }
-
-.cli-body { position:relative; z-index:1; margin-top:-38px; margin-bottom:-28px;
-            padding:0 32px 40px; background:#f7faf8; border-radius:24px 24px 0 0; min-height:60vh; }
-
-/* Fita de KPIs — flutua metade sobre o verde */
-.cli-kpis { display:flex; gap:12px; flex-wrap:wrap; padding-top:22px; }
+/* Fita de KPIs — flutua metade sobre o verde (sobre a curva do .ef-body) */
+.cli-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:-14px; position:relative; z-index:2; }
 .cli-kpi { flex:1; min-width:170px; display:flex; align-items:center; gap:12px;
            background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px;
            box-shadow:0 8px 22px rgba(16,120,70,.10); }
@@ -426,9 +402,7 @@
 
 /* ── MOBILE: cartão empilhado, sem arrasto lateral ───────────────────── */
 @media (max-width:820px) {
-    .cli-hero { padding:22px 16px 54px; }
-    .cli-hero, .cli-body { margin-left:-16px; margin-right:-16px; margin-bottom:-16px; }
-    .cli-body { padding:0 16px 28px; }
+    /* .ef-hero/.ef-body mobile vêm de identidade.css */
     .cli-row { grid-template-columns:auto 1fr auto; grid-template-areas:
                "num main act" "cert cert sit" "contact contact contact";
                gap:8px 10px; }
@@ -442,10 +416,8 @@
     .cli-contact-main { white-space:normal; }
 }
 @media (max-width:600px) {
-    /* Hero empilha (título em cima, ações embaixo) para nunca estourar 390px. */
-    .cli-hero-head { flex-direction:column; align-items:flex-start; }
-    .cli-hero-title { font-size:21px; }
-    .cli-hbtn { padding:8px 12px; font-size:12px; }
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
     /* KPIs: 3 compactos em linha (ícone/número/label empilhados) — sem cortar label. */
     .cli-kpis { gap:8px; }
     .cli-kpi { min-width:0; flex:1 1 0; padding:11px 10px; flex-direction:column;

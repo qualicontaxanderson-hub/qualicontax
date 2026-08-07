@@ -42,46 +42,20 @@
 @media (max-width: 900px) { .anp-list-grid { grid-template-columns:1fr; } }
 
 /* ══════ Bloco B — redesign da ficha (hero + pílulas + cards) ══════ */
-.fv-hero { position:relative; overflow:hidden; margin:-28px -32px 0; padding:24px 32px 52px;
-    background:linear-gradient(150deg,#0b3b2b 0%,#116a43 55%,#178a52 100%); }
-.fv-hero::after { content:''; position:absolute; bottom:-55%; right:-4%; width:360px; height:360px;
-    border-radius:50%; filter:blur(24px); pointer-events:none;
-    background:radial-gradient(circle, rgba(74,222,128,.20), transparent 70%); }
-.fv-hero-head { position:relative; z-index:1; display:flex; align-items:flex-start;
-    justify-content:space-between; gap:16px; flex-wrap:wrap; }
-.fv-num { display:inline-block; background:rgba(255,255,255,.16); color:#eafff3; font-weight:700;
-    font-size:12px; border-radius:99px; padding:3px 11px; font-variant-numeric:tabular-nums; margin-bottom:9px; }
-.fv-razao { margin:0; font-size:23px; font-weight:800; color:#fff; letter-spacing:-.02em; line-height:1.2; }
-.fv-subline { margin:7px 0 0; font-size:12px; color:#a7d9c0; font-variant-numeric:tabular-nums; }
-.fv-badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:11px; }
-.fv-badge { font-size:10px; font-weight:700; letter-spacing:.3px; border-radius:99px; padding:3px 10px;
-    background:rgba(255,255,255,.14); color:#eafff3; text-transform:uppercase; }
-.fv-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.fv-actions form { display:inline; margin:0; }
-.fv-hbtn { display:inline-flex; align-items:center; gap:6px; padding:8px 15px; border-radius:10px;
-    font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; font-family:inherit;
-    border:1px solid rgba(255,255,255,.24); background:rgba(255,255,255,.11); color:#eafff3; }
-.fv-hbtn:hover { background:rgba(255,255,255,.18); }
-.fv-hbtn-primary { background:#fff; border-color:#fff; color:#0f3d2e; font-weight:800; }
-.fv-hbtn-primary:hover { background:#eafff3; }
-.fv-hbtn-danger { background:rgba(239,68,68,.15); border-color:rgba(248,113,113,.45); color:#fecaca; }
-.fv-hbtn-danger:hover { background:rgba(239,68,68,.28); }
+/* hero/corpo agora vêm de identidade.css (.ef-hero/.ef-body/.ef-hero-*). */
 
-/* Pílulas (reaproveita .tabs-nav/.tabs-item/.tabs-link; JS de troca intacto) */
-.fv-hero .tabs-nav { position:relative; z-index:1; display:flex; gap:5px; list-style:none;
-    margin:20px 0 0; padding:2px 0; overflow-x:auto; scroll-snap-type:x proximity;
-    scrollbar-width:none; -webkit-overflow-scrolling:touch; }
-.fv-hero .tabs-nav::-webkit-scrollbar { display:none; }
-.fv-hero .tabs-item { flex:0 0 auto; scroll-snap-align:center; margin:0; border:0; }
-.fv-hero .tabs-link { display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
-    text-decoration:none; padding:8px 14px; border-radius:99px; font-size:12.5px; font-weight:600;
-    color:#c7e8d5; background:rgba(255,255,255,.10); border:0; }
-.fv-hero .tabs-link:hover { background:rgba(255,255,255,.18); color:#eafff3; }
-.fv-hero .tabs-item.active .tabs-link { background:#fff; color:#0f3d2e; font-weight:700; }
+/* Faixa de abas INTERNA da ficha — MESMO tratamento da testeira do fiscal
+   (.nff-tab de identidade.css: pílula com borda, texto #a7d9c0) sobre uma banda
+   mais escura → aba inativa se lê sem esforço. JS de troca de aba intacto. */
+.ef-hero .tabs-nav { list-style:none; display:flex; gap:6px; margin:18px 0 0; padding:8px 10px;
+    border-radius:14px; background:rgba(4,30,20,.32); position:relative; z-index:1;
+    overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.ef-hero .tabs-nav::-webkit-scrollbar { display:none; }
+.ef-hero .tabs-item { flex:0 0 auto; scroll-snap-align:center; margin:0; border:0; }
+.ef-hero .tabs-item.active .nff-tab { color:#0f3d2e; background:#fff; border-color:#fff; font-weight:800; }
 
-/* Corpo branco + fita de KPIs flutuando sobre o verde */
-.fv-body { margin:0 -32px; padding:0 32px 40px; background:#f7faf8; min-height:44vh; }
-.fv-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:-26px; position:relative; z-index:2; }
+/* Fita de KPIs flutuando sobre o verde (sobre a curva do .ef-body) */
+.fv-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:-14px; position:relative; z-index:2; }
 .fv-kpi { flex:1; min-width:210px; display:flex; align-items:center; gap:12px; background:#fff;
     border:1px solid #e3ece7; border-radius:15px; padding:13px 16px; box-shadow:0 10px 24px rgba(16,120,70,.12); }
 .fv-kpi-ico { width:38px; height:38px; border-radius:11px; flex-shrink:0; display:flex;
@@ -145,8 +119,7 @@
 .fv-nsu-adv[open] > summary::before { content:'\f0d8'; }
 
 @media (max-width:820px) {
-    .fv-hero { margin:-16px -16px 0; padding:20px 16px 48px; }
-    .fv-body { margin:0 -16px; padding:0 16px 28px; }
+    /* .ef-hero/.ef-body mobile vêm de identidade.css */
     .fv-grid { grid-template-columns:1fr; }
     .fv-kpi { min-width:100%; }
 }
@@ -158,28 +131,30 @@
     {% set end_princ = (enderecos | selectattr('principal') | first) if enderecos else None %}
     {% if not end_princ and enderecos %}{% set end_princ = enderecos[0] %}{% endif %}
 
-    <!-- HERO -->
-    <div class="fv-hero">
-        <div class="fv-hero-head">
+    {% include 'cadastros/_nav_cadastros.html' %}
+
+    <!-- HERO (identidade compartilhada) -->
+    <div class="ef-hero">
+        <div class="ef-hero-inner ef-hero-head">
             <div>
-                {% if cliente.numero_cliente %}<span class="fv-num">#{{ cliente.numero_cliente }}</span>{% endif %}
-                <h1 class="fv-razao">{{ cliente.nome_razao_social }}</h1>
-                <p class="fv-subline">
+                {% if cliente.numero_cliente %}<span class="ef-hero-num">#{{ cliente.numero_cliente }}</span>{% endif %}
+                <h1 class="ef-hero-title">{{ cliente.nome_razao_social }}</h1>
+                <p class="ef-hero-sub">
                     {{ cliente.cpf_cnpj }}{% if end_princ and end_princ.cidade %} · {{ end_princ.cidade|title }}{% if end_princ.estado %}/{{ end_princ.estado }}{% endif %}{% endif %}{% if cliente.data_inicio_contrato %} · cliente desde {{ cliente.data_inicio_contrato.strftime('%m/%Y') }}{% endif %}
                 </p>
-                <div class="fv-badges">
-                    <span class="fv-badge">{{ cliente.situacao }}</span>
-                    <span class="fv-badge">{{ 'PF' if cliente.tipo_pessoa == 'PF' else 'PJ' }}</span>
-                    {% if cliente.regime_tributario %}<span class="fv-badge">{{ cliente.regime_tributario }}</span>{% endif %}
-                    {% if cliente.porte_empresa %}<span class="fv-badge">{{ cliente.porte_empresa }}</span>{% endif %}
+                <div class="ef-hero-badges">
+                    <span class="ef-hero-badge">{{ cliente.situacao }}</span>
+                    <span class="ef-hero-badge">{{ 'PF' if cliente.tipo_pessoa == 'PF' else 'PJ' }}</span>
+                    {% if cliente.regime_tributario %}<span class="ef-hero-badge">{{ cliente.regime_tributario }}</span>{% endif %}
+                    {% if cliente.porte_empresa %}<span class="ef-hero-badge">{{ cliente.porte_empresa }}</span>{% endif %}
                 </div>
             </div>
-            <div class="fv-actions">
-                <a href="{{ url_for('clientes.index') }}" class="fv-hbtn"><i class="fas fa-arrow-left"></i> Voltar</a>
-                <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="fv-hbtn fv-hbtn-primary"><i class="fas fa-edit"></i> Editar</a>
+            <div class="ef-hero-actions">
+                <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Voltar</a>
+                <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="ef-btn ef-btn-primary"><i class="fas fa-edit"></i> Editar</a>
                 {% if cliente.situacao == 'ATIVO' %}
                 <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST">
-                    <button type="submit" class="fv-hbtn fv-hbtn-danger" onclick="return confirm('Deseja realmente inativar este cliente?')">
+                    <button type="submit" class="ef-btn ef-btn-danger" onclick="return confirm('Deseja realmente inativar este cliente?')">
                         <i class="fas fa-ban"></i> Inativar
                     </button>
                 </form>
@@ -187,63 +162,63 @@
             </div>
         </div>
 
-        <ul class="tabs-nav">
+        <ul class="tabs-nav ef-tabstrip">
             <li class="tabs-item active">
-                <a href="#dados-gerais" class="tabs-link">
+                <a href="#dados-gerais" class="tabs-link nff-tab">
                     <i class="fas fa-info-circle"></i>
                     Dados Gerais
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#enderecos" class="tabs-link">
+                <a href="#enderecos" class="tabs-link nff-tab">
                     <i class="fas fa-map-marker-alt"></i>
                     Endereços ({{ enderecos|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#contatos" class="tabs-link">
+                <a href="#contatos" class="tabs-link nff-tab">
                     <i class="fas fa-users"></i>
                     Contatos ({{ contatos|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#cadastros-adicionais" class="tabs-link">
+                <a href="#cadastros-adicionais" class="tabs-link nff-tab">
                     <i class="fas fa-layer-group"></i>
                     Cadastros Adicionais ({{ cadastros_adicionais|length + cadastros_anp|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#socios" class="tabs-link">
+                <a href="#socios" class="tabs-link nff-tab">
                     <i class="fas fa-user-tie"></i>
                     Sócios ({{ socios|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#grupos" class="tabs-link">
+                <a href="#grupos" class="tabs-link nff-tab">
                     <i class="fas fa-tags"></i>
                     Grupos ({{ grupos|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#processos" class="tabs-link">
+                <a href="#processos" class="tabs-link nff-tab">
                     <i class="fas fa-briefcase"></i>
                     Processos ({{ processos|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#tarefas" class="tabs-link">
+                <a href="#tarefas" class="tabs-link nff-tab">
                     <i class="fas fa-tasks"></i>
                     Tarefas ({{ tarefas|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#obrigacoes" class="tabs-link">
+                <a href="#obrigacoes" class="tabs-link nff-tab">
                     <i class="fas fa-calendar-check"></i>
                     Obrigações ({{ obrigacoes|length }})
                 </a>
             </li>
             <li class="tabs-item">
-                <a href="#certificado" class="tabs-link">
+                <a href="#certificado" class="tabs-link nff-tab">
                     <i class="fas fa-certificate"></i>
                     Certificado Digital
                 </a>
@@ -251,7 +226,7 @@
         </ul>
     </div><!-- /fv-hero -->
 
-    <div class="fv-body">
+    <div class="ef-body">
         <!-- Fita de KPIs cadastrais -->
         <div class="fv-kpis">
             <div class="fv-kpi">
@@ -1559,11 +1534,11 @@ function irParaAba(hash) {
 // faixa, nunca a página). Roda ao abrir e a cada troca de aba.
 (function () {
     function centralizarAtiva() {
-        var nav = document.querySelector('.fv-hero .tabs-nav');
-        var a = document.querySelector('.fv-hero .tabs-item.active');
+        var nav = document.querySelector('.ef-hero .tabs-nav');
+        var a = document.querySelector('.ef-hero .tabs-item.active');
         if (nav && a) { nav.scrollLeft = a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2; }
     }
-    document.querySelectorAll('.fv-hero .tabs-link').forEach(function (l) {
+    document.querySelectorAll('.ef-hero .tabs-link').forEach(function (l) {
         l.addEventListener('click', function () { setTimeout(centralizarAtiva, 0); });
     });
     centralizarAtiva();

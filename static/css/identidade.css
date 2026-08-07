@@ -1,0 +1,109 @@
+/* ===========================================================================
+   IDENTIDADE VISUAL — Parte 0 do Guia (verde+branco do Escrita Fiscal).
+   FONTE ÚNICA. Antes, estes tokens estavam copiados inline em _nav_fiscal,
+   escrita_fiscal/index e nas telas de cliente (index/form/detalhes). Agora
+   moram AQUI e as duas famílias de tela consomem o MESMO arquivo.
+
+   Carregado globalmente pelo base.html (depois do style.css). Só visual.
+   =========================================================================== */
+
+/* ── Testeira de departamento (abas-pílula sticky) ─────────────────────────
+   Barra sólida escura sob a .top-bar. Pílula inativa com BORDA e texto #a7d9c0
+   (contraste que se lê à distância); ativa branca com texto verde-escuro. */
+.nav-fiscal {
+    position: sticky;
+    top: var(--top-bar-height);          /* cola sob a .top-bar (60px) */
+    z-index: 99;                         /* abaixo da .top-bar (100) e modais/toasts */
+    margin: -28px -32px 24px;            /* sangra sobre o padding do .content (28px 32px) */
+    padding: 10px 32px;
+    background: linear-gradient(120deg,#0b3b2b,#116a43);
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+}
+.nav-fiscal-track {
+    display: flex; align-items: center; gap: 8px;
+    overflow-x: auto;                    /* rola de lado quando não cabe */
+    scroll-snap-type: x proximity;
+    scrollbar-width: none; -ms-overflow-style: none;
+}
+.nav-fiscal-track::-webkit-scrollbar { display: none; }
+.nff-tab {
+    flex: 0 0 auto; scroll-snap-align: center;
+    padding: 7px 16px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; line-height: 1;
+    white-space: nowrap; text-decoration: none;
+    color: #a7d9c0;                      /* inativa: texto legível sobre o verde escuro */
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.22);
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.nff-tab:hover { color: #fff; border-color: rgba(255,255,255,.5); }
+.nff-tab.active { color: #0f3d2e; background: #fff; border-color: #fff; font-weight: 800; }
+
+/* ── Hero verde + corpo claro ──────────────────────────────────────────────
+   Hero e corpo sangram sobre o padding do .content (28px 32px / 16px no mobile). */
+.ef-hero, .ef-body { margin-left:-32px; margin-right:-32px; box-sizing:border-box; }
+.ef-hero {
+    position:relative; overflow:hidden; padding:28px 32px 64px;
+    background:linear-gradient(150deg,#0b3b2b 0%,#116a43 55%,#178a52 100%);
+}
+.ef-hero::before, .ef-hero::after {
+    content:''; position:absolute; border-radius:50%; pointer-events:none;
+    filter:blur(24px); z-index:0;
+}
+.ef-hero::before { top:-45%; left:-8%; width:340px; height:340px;
+    background:radial-gradient(circle, rgba(52,211,153,.28), transparent 70%); }
+.ef-hero::after  { bottom:-55%; right:-4%; width:380px; height:380px;
+    background:radial-gradient(circle, rgba(74,222,128,.22), transparent 70%); }
+.ef-hero-inner { position:relative; z-index:1; }
+.ef-hero-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.ef-hero-title { margin:0; font-size:24px; font-weight:800; color:#fff; letter-spacing:-.02em; line-height:1.2; }
+.ef-hero-sub { margin:4px 0 0; font-size:11.5px; font-weight:500; color:#a7d9c0; font-variant-numeric:tabular-nums; }
+
+/* Pílula #Nº e badges do hero (usadas na ficha do cliente) */
+.ef-hero-num { display:inline-block; background:rgba(255,255,255,.16); color:#eafff3; font-weight:700;
+    font-size:12px; border-radius:99px; padding:3px 11px; font-variant-numeric:tabular-nums; margin-bottom:9px; }
+.ef-hero-badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:11px; }
+.ef-hero-badge { font-size:10px; font-weight:700; letter-spacing:.3px; border-radius:99px; padding:3px 10px;
+    background:rgba(255,255,255,.14); color:#eafff3; text-transform:uppercase; }
+
+/* Botões do hero */
+.ef-hero-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.ef-hero-actions form { display:inline; margin:0; }
+.ef-btn {
+    display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:10px;
+    font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; font-family:inherit;
+    background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.24); color:#eafff3;
+    transition:background .15s ease, border-color .15s ease;
+}
+.ef-btn:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.4); }
+.ef-btn-primary { background:#fff; border-color:#fff; color:#0f3d2e; font-weight:800; }
+.ef-btn-primary:hover { background:#eafff3; border-color:#eafff3; }
+.ef-btn-danger { background:rgba(239,68,68,.15); border-color:rgba(248,113,113,.45); color:#fecaca; }
+.ef-btn-danger:hover { background:rgba(239,68,68,.28); }
+
+/* Corpo branco sobe sobre o hero numa curva. */
+.ef-body {
+    position:relative; z-index:1; margin-top:-40px; margin-bottom:-28px;
+    padding:26px 32px 40px; background:#f7faf8; border-radius:24px 24px 0 0; min-height:46vh;
+}
+
+/* Etiqueta de seção (linha fina opcional via ::after) */
+.ef-section-label { font-size:9.5px; letter-spacing:1.8px; font-weight:800;
+    text-transform:uppercase; color:#7d968a; margin:0 0 12px; }
+.ef-section-label.ef-line { display:flex; align-items:center; gap:12px; color:#15803d; letter-spacing:1.3px; }
+.ef-section-label.ef-line::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+
+/* Card padrão da identidade (o tile da home do fiscal — valor de referência). */
+.ef-card {
+    display:flex; flex-direction:column; gap:9px; box-sizing:border-box;
+    background:#fff; border:1px solid #e3ece7; border-radius:17px; padding:14px; text-decoration:none;
+    transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.ef-card:hover { border-color:#86efac; box-shadow:0 8px 20px rgba(16,120,70,.10); transform:translateY(-2px); }
+
+@media (max-width: 600px) {
+    .nav-fiscal { margin: -16px -16px 16px; padding: 10px 16px; }
+    .ef-hero { padding:22px 16px 56px; }
+    .ef-hero, .ef-body { margin-left:-16px; margin-right:-16px; margin-bottom:-16px; }
+    .ef-body { padding:22px 16px 32px; }
+}
