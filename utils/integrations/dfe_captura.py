@@ -80,6 +80,13 @@ _MAX_CHNFE_CICLO = int(os.getenv('DFE_MAX_CHNFE_CICLO', '30'))
 #   _INTERVALO_LOTE    pausa de cortesia entre lotes (igual ao NH, ~0.4s).
 # Bateu o teto → para e o resto drena no próximo ciclo (o cursor já ficou salvo).
 _MAX_LOTES_CICLO = int(os.getenv('DFE_MAX_LOTES_CICLO', '60'))
+#   _MAX_JANELAS_VAZIAS  teto de janelas VAZIAS (137 com fila à frente) encadeadas
+#                        num mesmo ciclo. Contador PRÓPRIO, separado do de lotes:
+#                        varrer vazio não é o mesmo trabalho que baixar documento,
+#                        e misturar os dois orçamentos esconderia qual deles
+#                        estourou. É o terceiro freio, junto do teto de lotes e do
+#                        teto de tempo — nenhum laço contra a SEFAZ fica sem freio.
+_MAX_JANELAS_VAZIAS = int(os.getenv('DFE_MAX_JANELAS_VAZIAS', '50'))
 _MAX_SEG_EMPRESA = int(os.getenv('DFE_MAX_SEG_EMPRESA', '90'))
 _INTERVALO_LOTE = float(os.getenv('DFE_INTERVALO_LOTE_SEG', '0.4'))
 
@@ -1076,6 +1083,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     nsu_ok = ult_nsu
     parada = None
     n_lotes = 0
+    n_vazias = 0          # janelas 137 encadeadas neste ciclo (teto próprio)
     limite = None
     inicio = time.monotonic()
 
@@ -1118,21 +1126,47 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
             else:
                 execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
 
-            # Fim da drenagem? doc falhou / 656 (consChNFe) / 137 (chegou no maxNSU).
+            # Fim da drenagem? doc falhou / 656 (consChNFe) / fim REAL da fila.
             if parada or ctx['cooldown_656']:
                 break
-            if cStat != '138' or ret_ult >= ret_max:
-                break                                    # 137 = em dia → para
-            # Travas de segurança (constraint 3): teto de lotes/tempo por empresa.
+
+            # ENCADEIA JANELA VAZIA NO MESMO CICLO.
+            #
+            # Antes, qualquer 137 encerrava o ciclo — mesmo com fila à frente. Com
+            # o cursor já avançando (correção anterior), isso significava UMA
+            # janela de 50 NSU por tick do cron: a 152 levaria ~36h para varrer
+            # 1771 NSU vazios. Encadear aqui resolve em minutos.
+            #
+            # 137 com ret_ult < ret_max NÃO é fim de fila: é "esta faixa está
+            # vazia, continue". Fim de fila é ret_ult >= ret_max, e continua
+            # saindo do laço como sempre saiu.
+            #
+            # Qualquer outra coisa cai fora e volta ao comportamento de hoje: 138
+            # segue pelo caminho normal (documentos), 656 já saiu acima, erro vira
+            # 'parada'. As três travas abaixo valem para os dois casos.
+            vazia = (cStat == '137' and ret_ult < ret_max)
+            if vazia:
+                n_vazias += 1
+            if cStat not in ('137', '138') or ret_ult >= ret_max:
+                break                                    # fim de fila / status inesperado
+            # Travas de segurança (constraint 3): teto de lotes/tempo por empresa,
+            # mais o teto próprio de janelas vazias.
             if n_lotes >= max_lotes:
                 limite = f'teto de {max_lotes} lote(s) na rodada'
                 break
             if max_seg and (time.monotonic() - inicio) >= max_seg:
                 limite = f'teto de {max_seg}s na rodada'
                 break
+            if n_vazias >= _MAX_JANELAS_VAZIAS:
+                limite = f'teto de {_MAX_JANELAS_VAZIAS} janela(s) vazia(s) na rodada'
+                break
 
             # Próximo lote: pausa de cortesia (NH ~0.4s) e nova consulta a partir do
             # nsu_ok. Enquanto vem 138 a SEFAZ autoriza consecutivo — não é 656.
+            # Na janela vazia o cursor ANDOU (ret_ult), então o pedido seguinte é
+            # por uma faixa NOVA — não é reenvio do mesmo ultNSU, que é o que a
+            # SEFAZ trata como consumo indevido. Se ainda assim vier 656, ele é
+            # tratado logo abaixo, com cooldown, como sempre foi.
             time.sleep(_INTERVALO_LOTE)
             try:
                 ret, _fmt = consultar(sess, cnpj, cuf, nsu_ok)

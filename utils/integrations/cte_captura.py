@@ -64,6 +64,10 @@ _PRAZO_SUAVE_SEG = int(os.getenv('CTE_SCHED_PRAZO_SEG', '480'))   # ~8 min
 # Drenagem multi-lote (mesmo padrão do NF-e). Tetos conservadores: prefere-se
 # drenar um backlog grande em alguns ciclos a segurar o worker numa rodada gigante.
 _MAX_LOTES_CICLO = int(os.getenv('CTE_MAX_LOTES_CICLO', '60'))
+#   _MAX_JANELAS_VAZIAS  teto de janelas VAZIAS (137 com fila à frente) encadeadas
+#                        num mesmo ciclo — contador próprio, separado do de lotes.
+#                        Ver o comentário longo no dfe_captura.py.
+_MAX_JANELAS_VAZIAS = int(os.getenv('CTE_MAX_JANELAS_VAZIAS', '50'))
 _MAX_SEG_EMPRESA = int(os.getenv('CTE_MAX_SEG_EMPRESA', '90'))
 _INTERVALO_LOTE = float(os.getenv('CTE_INTERVALO_LOTE_SEG', '0.4'))
 
@@ -469,6 +473,7 @@ def capturar_cte_cliente(cliente_id, dry_run=False, origem='manual',
     parada = None
     limite = None
     n_lotes = 0
+    n_vazias = 0          # janelas 137 encadeadas neste ciclo (teto próprio)
     inicio = time.monotonic()
 
     while True:
@@ -498,13 +503,24 @@ def capturar_cte_cliente(cliente_id, dry_run=False, origem='manual',
 
         if parada:
             break
-        if cStat != '138' or ret_ult >= ret_max:
-            break                                    # 137 = em dia → para
+
+        # ENCADEIA JANELA VAZIA NO MESMO CICLO. Mesma lógica do dfe_captura.py —
+        # ver o comentário longo lá. 137 com ret_ult < ret_max não é fim de fila:
+        # é "esta faixa está vazia, continue". Fim de fila (ret_ult >= ret_max),
+        # 138, 656 e erro seguem exatamente como hoje.
+        vazia = (cStat == '137' and ret_ult < ret_max)
+        if vazia:
+            n_vazias += 1
+        if cStat not in ('137', '138') or ret_ult >= ret_max:
+            break                                    # fim de fila / status inesperado
         if n_lotes >= max_lotes:
             limite = f'teto de {max_lotes} lote(s) na rodada'
             break
         if max_seg and (time.monotonic() - inicio) >= max_seg:
             limite = f'teto de {max_seg}s na rodada'
+            break
+        if n_vazias >= _MAX_JANELAS_VAZIAS:
+            limite = f'teto de {_MAX_JANELAS_VAZIAS} janela(s) vazia(s) na rodada'
             break
 
         time.sleep(_INTERVALO_LOTE)                  # cortesia entre lotes
