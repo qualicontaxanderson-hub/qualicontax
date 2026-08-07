@@ -107,3 +107,105 @@
     .ef-hero, .ef-body { margin-left:-16px; margin-right:-16px; margin-bottom:-16px; }
     .ef-body { padding:22px 16px 32px; }
 }
+
+/* ===========================================================================
+   PADRÃO DE TELA DE LISTA DO CADASTROS (Bloco C2)
+   Extraído da lista de clientes, que é a referência aprovada. Os valores abaixo
+   são os MESMOS de lá — o que muda é só o nome (genérico, sem semântica de
+   cliente), para as telas de grupos/ramos/contratos/municípios consumirem daqui.
+
+   Nomes novos de propósito: .filters-card e .fi-* NÃO foram promovidos porque
+   contabil/ e relatorios/ também usam .filters-card. Como essa classe hoje é
+   inerte (nenhum CSS a define), promovê-la mudaria a cara daquelas telas sem
+   ninguém ter pedido. .qf-* e .lst-* não colidem com nada.
+
+   OBS: clientes/index.html ainda carrega a cópia inline deste padrão. Unificar
+   é passo seguinte — não foi feito aqui para não mexer em tela já aprovada.
+   =========================================================================== */
+
+/* ── Painel de filtros colapsável ────────────────────────────────────────── */
+.qf-card { margin-top:22px; border:1px solid #e3ece7; border-radius:15px; overflow:hidden; background:#fff; }
+.qf-head { display:flex; align-items:center; justify-content:space-between;
+           padding:11px 16px; cursor:pointer; user-select:none; transition:background .15s; }
+.qf-head:hover { background:#f0faf4; }
+.qf-title { font-size:13px; font-weight:700; color:#0f3d2e; display:flex; align-items:center; gap:8px; }
+.qf-title i.fa-filter { color:#16a34a; font-size:12px; }
+.qf-chev { font-size:11px; color:#7d968a; transition:transform .25s; }
+.qf-chev.open { transform:rotate(180deg); }
+.qf-badge { font-size:10px; font-weight:600; background:#dcfce7; color:#15803d;
+            border-radius:20px; padding:2px 8px; }
+.qf-body { border-top:1px solid #e8f1ec; }
+.qf-wrap { padding:12px 16px 14px; }
+.qf-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 12px; }
+.qf-group { display:flex; flex-direction:column; gap:3px; flex:1; min-width:110px; }
+.qf-search-group, .qf-actions { flex:0 0 auto; }
+.qf-lbl { font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#7d968a; }
+.qf-ctrl { height:34px; width:100%; border:1px solid #d7e3dc; border-radius:8px; padding:0 8px;
+           font-size:12.5px; color:#0f3d2e; background:#fff; box-sizing:border-box; }
+.qf-ctrl:focus { border-color:#22c55e; outline:none; box-shadow:0 0 0 2px rgba(34,197,94,.15); }
+.qf-btns { display:flex; gap:6px; }
+.qf-btn { padding:5px 14px; font-size:12.5px; height:34px; display:inline-flex; align-items:center; gap:5px; }
+
+/* ── Barra de contagem acima da lista ────────────────────────────────────── */
+.lst-infobar { display:flex; align-items:center; justify-content:space-between; gap:12px;
+               flex-wrap:wrap; margin:20px 2px 10px; }
+.lst-count { font-size:12.5px; color:#5b7468; font-variant-numeric:tabular-nums; }
+.lst-count strong { color:#0f3d2e; }
+
+/* ── Lista em linhas-cartão ──────────────────────────────────────────────
+   .lst-row NÃO define grid-template-columns: cada tela declara as suas colunas
+   (e as áreas do mobile), porque o conjunto de colunas muda de tela pra tela. */
+.lst-list { display:flex; flex-direction:column; gap:8px; }
+.lst-row { display:grid; align-items:center; gap:12px; background:#fff; border:1px solid #e3ece7;
+           border-radius:14px; padding:11px 14px;
+           transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.lst-row:hover { border-color:#86efac; box-shadow:0 6px 16px rgba(16,120,70,.09); transform:translateY(-1px); }
+.lst-row-off { background:#fbfcfb; }
+
+.lst-name { font-size:13px; font-weight:700; color:#0f3d2e; white-space:nowrap; overflow:hidden;
+            text-overflow:ellipsis; }
+.lst-meta { font-size:11.5px; color:#7d968a; margin-top:2px; overflow:hidden; text-overflow:ellipsis; }
+.lst-mono { font-family:ui-monospace, Consolas, monospace; letter-spacing:.2px;
+            font-variant-numeric:tabular-nums; }
+
+/* Pílula de contagem (ex.: "12 clientes" no grupo/ramo) */
+.lst-pill { display:inline-flex; align-items:center; gap:5px; background:#dcfce7; color:#15803d;
+            font-weight:700; font-size:12px; border-radius:99px; padding:3px 10px;
+            font-variant-numeric:tabular-nums; white-space:nowrap; }
+.lst-pill-zero { background:#eef2f0; color:#64748b; }
+
+/* Etiqueta de situação */
+.lst-sit { font-size:10px; font-weight:700; letter-spacing:.3px; border-radius:99px; padding:3px 9px;
+           white-space:nowrap; }
+.lst-sit-on { background:#dcfce7; color:#15803d; }
+.lst-sit-off { background:#eef2f0; color:#64748b; }
+.lst-sit-warn { background:#fef3c7; color:#b45309; }
+
+/* Ícones de ação — quadrados 30px, verde/vermelho suave (nada berrante) */
+.lst-c-act { display:flex; gap:6px; justify-content:flex-end; }
+.lst-act { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+           border-radius:8px; text-decoration:none; cursor:pointer; font-size:13px;
+           border:1px solid transparent; }
+.lst-act-view { background:#f0f7f3; color:#15803d; border-color:#dcfce7; }
+.lst-act-view:hover { background:#dcfce7; }
+.lst-act-edit { background:#ecfdf5; color:#15803d; border-color:#d1fae5; }
+.lst-act-edit:hover { background:#d1fae5; }
+.lst-act-del { background:#fef2f2; color:#b91c1c; border-color:#fee2e2; }
+.lst-act-del:hover { background:#fee2e2; }
+
+/* Link externo dentro da linha (portal da prefeitura) */
+.lst-link { color:#15803d; text-decoration:none; font-size:12px; display:inline-flex; align-items:center;
+            gap:6px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lst-link:hover { text-decoration:underline; }
+
+/* Estado vazio */
+.lst-empty { text-align:center; padding:48px 16px; color:#94a3b8; }
+.lst-empty i { font-size:34px; opacity:.4; display:block; margin-bottom:12px; }
+.lst-empty p { margin:0 0 14px; font-size:13px; }
+
+@media (max-width:600px) {
+    .qf-group { min-width:100%; }
+    .qf-actions, .qf-search-group { flex:1 1 100%; }
+    .qf-btns { width:100%; }
+    .qf-btn { flex:1; justify-content:center; }
+}
