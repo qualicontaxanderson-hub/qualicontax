@@ -85,6 +85,9 @@ from routes.adicionais import adicionais
 from routes.dfe import dfe_bp
 from routes.robo_saidas import robo_saidas
 from routes.qrobo import qrobo, gate_escopo_instalador
+# Q-Colabore: formulário PÚBLICO de cadastro (/cadastro/<token>). Sem
+# login_required — quem chega não tem conta; a credencial é o token da URL.
+from routes.cadastro import cadastro_bp
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -106,6 +109,7 @@ app.register_blueprint(configuracoes_bp)
 app.register_blueprint(adicionais)
 app.register_blueprint(dfe_bp)
 app.register_blueprint(robo_saidas)
+app.register_blueprint(cadastro_bp)
 app.register_blueprint(qrobo)
 
 # Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo

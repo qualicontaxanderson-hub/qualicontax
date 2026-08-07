@@ -1,0 +1,195 @@
+{% extends "cadastro/_base.html" %}
+{% block titulo %}Seu cadastro — Qualicontax{% endblock %}
+
+{% block hero %}
+    <h1>Bem-vindo à equipe</h1>
+    <p>Preencha seus dados para criar seu acesso. Leva menos de um minuto —
+       depois é só aguardar a aprovação.</p>
+{% endblock %}
+
+{% block conteudo %}
+<form method="post" action="{{ url_for('cadastro.enviar', token=token) }}" id="frm">
+  <div class="card">
+    {% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
+
+    <div class="secao-tit">Quem é você</div>
+    <div class="secao-sub">
+      {% if destinatario %}Convite enviado para <strong>{{ destinatario }}</strong>.{% endif %}
+      Use seu nome como está no documento.
+    </div>
+
+    {# --- já trabalha conosco? troca o texto do que vem depois --- #}
+    <label class="rot">Você já trabalha na Qualicontax?</label>
+    <div class="opcoes" id="jaFunc">
+      <label class="opcao">
+        <input type="radio" name="ja_funcionario" value="0"
+               {% if not form or form.ja_funcionario != '1' %}checked{% endif %}>
+        <span><strong>Ainda não</strong><small>Estou entrando agora</small></span>
+      </label>
+      <label class="opcao">
+        <input type="radio" name="ja_funcionario" value="1"
+               {% if form and form.ja_funcionario == '1' %}checked{% endif %}>
+        <span><strong>Sim, já trabalho</strong><small>Só preciso do meu acesso</small></span>
+      </label>
+    </div>
+
+    <div style="margin-top:18px">
+      <label class="rot" for="nome">Nome completo</label>
+      <input type="text" id="nome" name="nome_completo" autocomplete="name"
+             maxlength="255" required placeholder="Ex.: Maria Clara Antunes"
+             value="{{ form.nome_completo if form else '' }}">
+      <div class="dica" id="dicaNome">Nome e sobrenome, como no RG ou CPF.</div>
+    </div>
+  </div>
+
+  {# --- login e nick: o servidor OFERECE, o candidato escolhe --- #}
+  <div class="card" id="cardEscolha" style="display:none">
+    <div class="secao-tit">Escolha seu acesso</div>
+    <div class="secao-sub">
+      Preparamos as opções a partir do seu nome. Toque na que preferir —
+      não precisa digitar nada.
+    </div>
+
+    <label class="rot">Seu login <span style="font-weight:500;color:#64748b">(para entrar no sistema)</span></label>
+    <div class="chips" id="chipsLogin"></div>
+    <input type="hidden" name="login_escolhido" id="loginEscolhido"
+           value="{{ form.login_escolhido if form else '' }}">
+    <div class="dica">Sempre em minúsculas, sem acento e sem espaço.</div>
+
+    <div style="margin-top:20px">
+      <label class="rot">Como quer ser chamado <span style="font-weight:500;color:#64748b">(aparece na tela)</span></label>
+      <div class="chips" id="chipsNick"></div>
+      <input type="hidden" name="nick_escolhido" id="nickEscolhido"
+             value="{{ form.nick_escolhido if form else '' }}">
+    </div>
+
+    {% if departamentos %}
+    <div style="margin-top:22px">
+      <label class="rot">Em quais áreas você vai atuar? <span style="font-weight:500;color:#64748b">(opcional)</span></label>
+      <div class="chips">
+        {% for d in departamentos %}
+        <label class="chip chip-check">
+          <input type="checkbox" name="departamentos" value="{{ d.id }}">
+          <span>{{ d.nome }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card" id="cardEnvio" style="display:none">
+    <div class="aviso info" style="margin-bottom:16px">
+      Depois de enviar, um administrador confere seus dados e libera o acesso.
+      Você será avisado quando estiver pronto.
+    </div>
+    <button type="submit" class="btn" id="btnEnviar" disabled>ENVIAR CADASTRO</button>
+  </div>
+</form>
+
+<style>
+.opcoes { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (max-width:420px) { .opcoes { grid-template-columns:1fr; } }
+.opcao { position:relative; display:block; cursor:pointer; }
+.opcao input { position:absolute; opacity:0; pointer-events:none; }
+.opcao span { display:block; padding:13px 14px; border:1.5px solid #e2e8f0;
+              border-radius:11px; background:#f9fafb; }
+.opcao strong { display:block; font-size:14px; color:#0f172a; }
+.opcao small  { display:block; font-size:12px; color:#64748b; margin-top:2px; }
+.opcao input:checked + span { border-color:#16a34a; background:#f0fdf4; }
+.chips { display:flex; flex-wrap:wrap; gap:8px; }
+.chip, .chips label { cursor:pointer; }
+.chip-op, .chip-check span {
+    display:inline-block; padding:9px 14px; border:1.5px solid #e2e8f0;
+    border-radius:99px; background:#f9fafb; font-size:14px; color:#334155;
+    font-family:ui-monospace, Consolas, monospace;
+}
+.chip-check span { font-family:inherit; }
+.chip-op.on { border-color:#16a34a; background:#16a34a; color:#fff; font-weight:700; }
+.chip-check input { position:absolute; opacity:0; pointer-events:none; }
+.chip-check input:checked + span { border-color:#16a34a; background:#f0fdf4;
+                                   color:#15803d; font-weight:700; }
+.vazio { font-size:13px; color:#94a3b8; }
+</style>
+
+<script>
+var TOKEN_URL = "{{ url_for('cadastro.sugestoes', token=token) }}";
+var nomeEl = document.getElementById('nome');
+var timer = null, ultimoNome = '';
+
+// Texto muda conforme "já trabalha conosco?" — a mesma pergunta serve às duas
+// situações, mas a explicação não pode ser a mesma.
+function ajustaTexto() {
+    var ja = document.querySelector('input[name=ja_funcionario]:checked');
+    document.getElementById('dicaNome').textContent = (ja && ja.value === '1')
+        ? 'Use o mesmo nome que já consta no seu registro na empresa.'
+        : 'Nome e sobrenome, como no RG ou CPF.';
+}
+Array.prototype.forEach.call(
+    document.querySelectorAll('input[name=ja_funcionario]'),
+    function (r) { r.addEventListener('change', ajustaTexto); });
+ajustaTexto();
+
+function montaChips(alvo, valores, hidden, obrigatorio) {
+    var box = document.getElementById(alvo);
+    box.innerHTML = '';
+    if (!valores.length) {
+        box.innerHTML = '<span class="vazio">—</span>';
+        return;
+    }
+    valores.forEach(function (v, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip-op';
+        b.textContent = v;
+        b.addEventListener('click', function () {
+            Array.prototype.forEach.call(box.children, function (c) {
+                c.classList.remove('on');
+            });
+            b.classList.add('on');
+            document.getElementById(hidden).value = v;
+            revisaEnvio();
+        });
+        box.appendChild(b);
+        // Pré-seleciona a primeira só do login: o nick é opcional.
+        if (i === 0 && obrigatorio) { b.click(); }
+    });
+}
+
+function revisaEnvio() {
+    var ok = !!document.getElementById('loginEscolhido').value
+             && nomeEl.value.trim().length >= 5;
+    document.getElementById('btnEnviar').disabled = !ok;
+    document.getElementById('cardEnvio').style.display = ok ? '' : 'none';
+}
+
+function pedeSugestoes() {
+    var nome = nomeEl.value.trim();
+    if (nome === ultimoNome) { return; }
+    ultimoNome = nome;
+    if (nome.length < 5 || nome.indexOf(' ') < 0) {
+        document.getElementById('cardEscolha').style.display = 'none';
+        document.getElementById('cardEnvio').style.display = 'none';
+        return;
+    }
+    var d = new FormData();
+    d.append('nome_completo', nome);
+    fetch(TOKEN_URL, { method: 'POST', body: d })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (!j.ok) { return; }
+            montaChips('chipsLogin', j.logins, 'loginEscolhido', true);
+            montaChips('chipsNick', j.nicks, 'nickEscolhido', false);
+            document.getElementById('cardEscolha').style.display = '';
+            revisaEnvio();
+        })
+        .catch(function () { /* silencioso: o candidato pode reenviar */ });
+}
+
+nomeEl.addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(pedeSugestoes, 450);
+});
+if (nomeEl.value.trim()) { pedeSugestoes(); }
+</script>
+{% endblock %}

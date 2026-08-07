@@ -1,0 +1,21 @@
+{% extends "cadastro/_base.html" %}
+{% block titulo %}Cadastro enviado — Qualicontax{% endblock %}
+{% block hero %}
+    <h1>Cadastro enviado</h1>
+    <p>Recebemos seus dados, {{ nome.split()[0] }}.</p>
+{% endblock %}
+{% block conteudo %}
+<div class="card" style="text-align:center">
+    <div style="font-size:44px; line-height:1; margin-bottom:14px">✅</div>
+    <p style="font-size:14px; color:#475569; line-height:1.7">
+        Seu login escolhido foi <strong style="font-family:ui-monospace,Consolas,monospace">{{ login }}</strong>.
+    </p>
+    <div class="aviso info" style="margin-top:18px; text-align:left">
+        Um administrador vai conferir seus dados e liberar o acesso. Você será
+        avisado quando estiver pronto — <strong>não é preciso reenviar</strong>.
+    </div>
+    <p style="font-size:12px; color:#94a3b8; margin-top:16px; line-height:1.6">
+        Este link já cumpriu sua função e não funciona mais.
+    </p>
+</div>
+{% endblock %}

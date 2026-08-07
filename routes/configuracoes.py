@@ -76,10 +76,6 @@ def usuarios():
 # uma linha. (SESSION_COOKIE_SAMESITE='Lax' é só a primeira barreira.)
 # ===========================================================================
 
-# Rota pública do formulário (Parte 3) — ainda NÃO existe, então o url_for
-# morreria. O path é definitivo e está acordado; quando a Parte 3 criar o
-# blueprint, isto vira url_for('cadastro.formulario', token=t, _external=True).
-CADASTRO_PATH = '/cadastro/'
 VALIDADE_LINK_HORAS = 72
 
 
@@ -134,9 +130,9 @@ def usuario_link_gerar():
         logger.exception('[qcolabore] falha ao gerar link de cadastro')
         return jsonify(ok=False, msg='Não foi possível gerar o link agora.'), 500
 
-    # request.url_root já vem com o esquema e host públicos (equivale ao
-    # _external=True do url_for).
-    url = request.url_root.rstrip('/') + CADASTRO_PATH + token
+    # A rota pública agora EXISTE (Parte 3) — url_for no lugar do path montado
+    # à mão, como estava combinado desde a Parte 2.
+    url = url_for('cadastro.formulario', token=token, _external=True)
     # Log com o ID e o prefixo. O token inteiro não entra em log nenhum.
     logger.info('[qcolabore] link de cadastro id=%s prefixo=%s gerado por %s.',
                 link_id, token[:8], current_user.id)

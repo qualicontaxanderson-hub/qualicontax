@@ -1,0 +1,15 @@
+{% extends "cadastro/_base.html" %}
+{% block titulo %}{{ titulo }} — Qualicontax{% endblock %}
+{% block hero %}
+    <h1>{{ titulo }}</h1>
+{% endblock %}
+{% block conteudo %}
+<div class="card" style="text-align:center">
+    <div style="font-size:40px; line-height:1; margin-bottom:14px">🔒</div>
+    <p style="font-size:14px; color:#475569; line-height:1.7">{{ texto }}</p>
+    <div class="aviso info" style="margin-top:18px; text-align:left">
+        Precisa de ajuda? Fale com quem lhe enviou o link — só um administrador
+        da Qualicontax pode gerar um novo.
+    </div>
+</div>
+{% endblock %}
