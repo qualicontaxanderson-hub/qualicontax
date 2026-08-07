@@ -25,7 +25,7 @@ try:
 except Exception:
     pass
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, url_for as flask_url_for
 from flask_login import LoginManager
 from flask_compress import Compress
 from config import Config
@@ -143,9 +143,53 @@ app.jinja_env.filters['format_currency'] = format_currency
 app.jinja_env.filters['format_date'] = format_date
 
 
-# Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens
+# Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens.
+# Só é seguro por causa do cache-busting logo abaixo: a URL carrega a versão do
+# arquivo, então "1 ano" vale para o conteúdo daquela versão, não para o caminho.
 if not Config.DEBUG:
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 365 * 24 * 60 * 60  # 1 ano em segundos
+
+
+# ---------------------------------------------------------------------------
+# CACHE-BUSTING DOS ESTÁTICOS
+#
+# Por que existe: os estáticos são servidos com max-age de 1 ano e o navegador
+# NÃO revalida nesse período. Sem versão na URL, um deploy que muda CSS/JS não
+# chega em quem já visitou o site — foi assim que a home do fiscal quebrou
+# depois que o CSS dela saiu do template para o identidade.css (revert 7d919b5).
+#
+# Como funciona: sobrescreve o url_for QUE OS TEMPLATES ENXERGAM. Toda chamada
+# url_for('static', filename=...) ganha ?v=<mtime do arquivo>, no sistema
+# inteiro de uma vez — não há nada para lembrar de atualizar arquivo por
+# arquivo. Arquivo mudou → mtime muda → URL muda → o navegador é obrigado a
+# baixar. Arquivo igual → URL igual → cache de 1 ano aproveitado por inteiro.
+#
+# O valor NÃO é escrito à mão de propósito: número manual é exatamente o que se
+# esquece de atualizar, e aí o problema volta calado.
+# ---------------------------------------------------------------------------
+def _versao_estatico(filename):
+    """mtime do arquivo em static/, como string. None se o arquivo não existir."""
+    try:
+        caminho = os.path.join(app.static_folder, filename)
+        return str(int(os.stat(caminho).st_mtime))
+    except (OSError, TypeError, ValueError):
+        # Arquivo ausente ou nome estranho: devolve a URL sem ?v= em vez de
+        # quebrar a página. Perde-se o cache-busting daquele arquivo, só isso.
+        return None
+
+
+def url_for_versionado(endpoint, **values):
+    if endpoint == 'static' and 'v' not in values:
+        versao = _versao_estatico(values.get('filename'))
+        if versao:
+            values['v'] = versao
+    return flask_url_for(endpoint, **values)
+
+
+@app.context_processor
+def _injeta_url_for_versionado():
+    """Faz os templates usarem a versão com ?v= no lugar do url_for do Flask."""
+    return {'url_for': url_for_versionado}
 
 
 # ---------------------------------------------------------------------------
