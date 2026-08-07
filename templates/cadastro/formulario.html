@@ -78,6 +78,93 @@
     {% endif %}
   </div>
 
+  {# ================= Parte 4 — contato, endereço e bancários ================= #}
+  <div class="card" id="cardExtras" style="display:none">
+    <div class="secao-tit">Seus contatos</div>
+    <div class="secao-sub">Usamos para falar com você sobre o acesso. Todos opcionais.</div>
+    <div class="grade">
+      <div><label class="rot" for="cpf">CPF</label>
+        <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="14"
+               placeholder="000.000.000-00"></div>
+      <div><label class="rot" for="nasc">Nascimento</label>
+        <input type="date" id="nasc" name="data_nascimento"></div>
+      <div><label class="rot" for="emailp">E-mail pessoal</label>
+        <input type="text" id="emailp" name="email_pessoal" inputmode="email"
+               maxlength="255" placeholder="voce@email.com"></div>
+      <div><label class="rot" for="celp">Celular</label>
+        <input type="text" id="celp" name="celular_pessoal" inputmode="tel"
+               maxlength="20" placeholder="(00) 00000-0000"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="secao-tit">Seu endereço</div>
+    <div class="secao-sub">Digite o CEP que o resto é preenchido sozinho.</div>
+    <div class="grade">
+      <div><label class="rot" for="cep">CEP</label>
+        <input type="text" id="cep" name="cep" inputmode="numeric" maxlength="9"
+               placeholder="00000-000">
+        <div class="dica" id="dicaCep">&nbsp;</div></div>
+      <div><label class="rot" for="numero">Número</label>
+        <input type="text" id="numero" name="numero" maxlength="20" placeholder="123"></div>
+    </div>
+    <div style="margin-top:12px"><label class="rot" for="logradouro">Rua</label>
+      <input type="text" id="logradouro" name="logradouro" maxlength="255"></div>
+    <div class="grade" style="margin-top:12px">
+      <div><label class="rot" for="complemento">Complemento</label>
+        <input type="text" id="complemento" name="complemento" maxlength="100"
+               placeholder="Apto, bloco…"></div>
+      <div><label class="rot" for="bairro">Bairro</label>
+        <input type="text" id="bairro" name="bairro" maxlength="100"></div>
+      <div><label class="rot" for="cidade">Cidade</label>
+        <input type="text" id="cidade" name="cidade" maxlength="100"></div>
+      <div><label class="rot" for="estado">UF</label>
+        <input type="text" id="estado" name="estado" maxlength="2"
+               style="text-transform:uppercase"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="secao-tit">Dados bancários</div>
+    <div class="secao-sub">
+      Para pagamentos. Só o Financeiro enxerga estes campos — não aparecem em
+      nenhuma listagem. Preencha o banco, o PIX, ou os dois.
+    </div>
+    <div class="grade">
+      <div><label class="rot" for="bcod">Banco (código)</label>
+        <input type="text" id="bcod" name="banco_codigo" inputmode="numeric"
+               maxlength="5" placeholder="001"></div>
+      <div><label class="rot" for="bnome">Banco (nome)</label>
+        <input type="text" id="bnome" name="banco_nome" maxlength="120"></div>
+      <div><label class="rot" for="ag">Agência</label>
+        <input type="text" id="ag" name="agencia" maxlength="15"></div>
+      <div><label class="rot" for="cc">Conta</label>
+        <input type="text" id="cc" name="conta" maxlength="25"></div>
+    </div>
+    <div style="margin-top:12px">
+      <label class="rot">Tipo de conta</label>
+      <div class="chips">
+        {% for t, r in [('CORRENTE','Corrente'),('POUPANCA','Poupança'),
+                        ('SALARIO','Salário'),('PAGAMENTO','Pagamento')] %}
+        <label class="chip-check"><input type="radio" name="conta_tipo" value="{{ t }}">
+          <span>{{ r }}</span></label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="grade" style="margin-top:14px">
+      <div><label class="rot">Tipo da chave PIX</label>
+        <div class="chips">
+          {% for t, r in [('CPF','CPF'),('EMAIL','E-mail'),('TELEFONE','Telefone'),
+                          ('ALEATORIA','Aleatória')] %}
+          <label class="chip-check"><input type="radio" name="pix_tipo" value="{{ t }}">
+            <span>{{ r }}</span></label>
+          {% endfor %}
+        </div></div>
+      <div><label class="rot" for="pix">Chave PIX</label>
+        <input type="text" id="pix" name="pix_chave" maxlength="140"></div>
+    </div>
+  </div>
+
   <div class="card" id="cardEnvio" style="display:none">
     <div class="aviso info" style="margin-bottom:16px">
       Depois de enviar, um administrador confere seus dados e libera o acesso.
@@ -110,6 +197,14 @@
 .chip-check input:checked + span { border-color:#16a34a; background:#f0fdf4;
                                    color:#15803d; font-weight:700; }
 .vazio { font-size:13px; color:#94a3b8; }
+.grade { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:480px) { .grade { grid-template-columns:1fr; } }
+input[type=date] {
+    width:100%; padding:12px 14px; border:1.5px solid #e2e8f0; border-radius:10px;
+    font-size:15px; font-family:inherit; background:#f9fafb; color:#1e293b;
+}
+input[type=date]:focus { outline:none; border-color:#22c55e; background:#fff;
+                         box-shadow:0 0 0 3px rgba(34,197,94,.14); }
 </style>
 
 <script>
@@ -181,9 +276,35 @@ function pedeSugestoes() {
             montaChips('chipsLogin', j.logins, 'loginEscolhido', true);
             montaChips('chipsNick', j.nicks, 'nickEscolhido', false);
             document.getElementById('cardEscolha').style.display = '';
+            document.getElementById('cardExtras').style.display = '';
             revisaEnvio();
         })
         .catch(function () { /* silencioso: o candidato pode reenviar */ });
+}
+
+// CEP -> preenche rua/bairro/cidade/UF pelo endpoint com token (a /api/cep do
+// app e' @login_required e nao serve aqui).
+var CEP_URL = "{{ url_for('cadastro.buscar_cep', token=token, cep='000') }}".slice(0, -3);
+var cepEl = document.getElementById('cep');
+if (cepEl) {
+    cepEl.addEventListener('blur', function () {
+        var d = cepEl.value.replace(/\D/g, '');
+        var dica = document.getElementById('dicaCep');
+        if (d.length !== 8) { dica.textContent = d ? 'CEP deve ter 8 digitos.' : ' '; return; }
+        dica.textContent = 'Buscando...';
+        fetch(CEP_URL + d)
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (!j.ok) { dica.textContent = j.msg || 'CEP nao encontrado.'; return; }
+                dica.textContent = ' ';
+                if (j.logradouro) { document.getElementById('logradouro').value = j.logradouro; }
+                if (j.bairro)     { document.getElementById('bairro').value = j.bairro; }
+                if (j.cidade)     { document.getElementById('cidade').value = j.cidade; }
+                if (j.estado)     { document.getElementById('estado').value = j.estado; }
+                document.getElementById('numero').focus();
+            })
+            .catch(function () { dica.textContent = 'Nao consegui consultar agora — preencha a mao.'; });
+    });
 }
 
 nomeEl.addEventListener('input', function () {

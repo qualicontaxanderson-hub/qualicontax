@@ -15,6 +15,7 @@ motivo em português. O token só é CONSUMIDO no envio final — abrir o formul
 (e reabrir, e recarregar) não gasta o link.
 """
 import logging
+import re
 
 from flask import (Blueprint, jsonify, render_template, request)
 
@@ -64,6 +65,60 @@ def _departamentos():
         fetch=True) or []
 
 
+_CONTA_TIPOS = ('CORRENTE', 'POUPANCA', 'SALARIO', 'PAGAMENTO')
+_PIX_TIPOS = ('CPF', 'CNPJ', 'EMAIL', 'TELEFONE', 'ALEATORIA')
+
+
+def _txt(form, campo, limite):
+    """Campo de texto normalizado. Vazio vira None (a coluna é nullable)."""
+    v = (form.get(campo) or '').strip()
+    return v[:limite] or None
+
+
+def _campos_parte4(form) -> dict:
+    """Contato, endereço e bancários — todos opcionais, todos normalizados.
+
+    ATENÇÃO: os valores bancários que saem daqui NÃO podem ir para log nenhum
+    (regra registrada na migration 04). Este dicionário existe para ser gravado
+    e descartado — nada de imprimi-lo em except, nem em debug.
+    """
+    so_dig = lambda c, n: (re.sub(r'\D', '', form.get(c) or '') or None) and \
+        re.sub(r'\D', '', form.get(c) or '')[:n]
+    nasc = (form.get('data_nascimento') or '').strip() or None
+    if nasc and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', nasc):
+        nasc = None                      # <input type=date> já entrega ISO
+    conta_tipo = (form.get('conta_tipo') or '').strip().upper() or None
+    pix_tipo = (form.get('pix_tipo') or '').strip().upper() or None
+    d = {
+        'cpf': so_dig('cpf', 14), 'nasc': nasc,
+        'email_p': _txt(form, 'email_pessoal', 255),
+        'email_c': _txt(form, 'email_corporativo', 255),
+        'cel_p': so_dig('celular_pessoal', 20),
+        'cel_c': so_dig('celular_corporativo', 20),
+        'cep': so_dig('cep', 9),
+        'logradouro': _txt(form, 'logradouro', 255),
+        'numero': _txt(form, 'numero', 20),
+        'complemento': _txt(form, 'complemento', 100),
+        'bairro': _txt(form, 'bairro', 100),
+        'cidade': _txt(form, 'cidade', 100),
+        'estado': (_txt(form, 'estado', 2) or '').upper() or None,
+        'banco_cod': so_dig('banco_codigo', 5),
+        'banco_nome': _txt(form, 'banco_nome', 120),
+        'agencia': _txt(form, 'agencia', 15),
+        'conta': _txt(form, 'conta', 25),
+        'conta_tipo': conta_tipo if conta_tipo in _CONTA_TIPOS else None,
+        'titular': _txt(form, 'titular_nome', 255),
+        'titular_cpf': so_dig('titular_cpf', 14),
+        'pix_tipo': pix_tipo if pix_tipo in _PIX_TIPOS else None,
+        'pix_chave': _txt(form, 'pix_chave', 140),
+    }
+    # Só grava a linha bancária se houver ALGUMA informação de verdade — senão
+    # a tabela sensível se enche de linhas vazias por cadastro.
+    d['tem_banco'] = any(d[k] for k in
+                         ('banco_cod', 'banco_nome', 'agencia', 'conta', 'pix_chave'))
+    return d
+
+
 def _pendencia_do_link(link_id):
     return execute_query(
         'SELECT id, status FROM cadastro_pendente WHERE link_id = %s',
@@ -108,7 +163,39 @@ def sugestoes(token):
 
 
 # ---------------------------------------------------------------------------
-# 3) Enviar — AQUI o token é consumido
+# 3) CEP — Parte 4
+#
+# A /api/cep do blueprint de clientes é @login_required e não serve aqui. Em vez
+# de abrir aquela, o endereço ganha o SEU endpoint, com o mesmo portão de todo o
+# resto: sem token válido, não responde. Assim o app não vira um proxy de CEP
+# aberto na internet só porque existe um formulário público.
+# ---------------------------------------------------------------------------
+@cadastro_bp.route('/<token>/cep/<cep>', methods=['GET'])
+def buscar_cep(token, cep):
+    est = cadastro_token.inspecionar(token, TIPO)
+    if not est['ok']:
+        return jsonify(ok=False, motivo=est['motivo']), 410
+    digitos = re.sub(r'\D', '', cep or '')
+    if len(digitos) != 8:
+        return jsonify(ok=False, msg='CEP deve ter 8 dígitos.'), 400
+    try:
+        import requests
+        r = requests.get(f'https://viacep.com.br/ws/{digitos}/json/', timeout=5)
+        dados = r.json() if r.status_code == 200 else {}
+    except Exception:
+        logger.warning('[cadastro] ViaCEP indisponível para %s', digitos)
+        return jsonify(ok=False, msg='Não consegui consultar o CEP agora. '
+                                     'Você pode preencher à mão.'), 503
+    if dados.get('erro'):
+        return jsonify(ok=False, msg='CEP não encontrado.'), 404
+    return jsonify(ok=True, logradouro=dados.get('logradouro') or '',
+                   bairro=dados.get('bairro') or '',
+                   cidade=dados.get('localidade') or '',
+                   estado=(dados.get('uf') or '').upper())
+
+
+# ---------------------------------------------------------------------------
+# 4) Enviar — AQUI o token é consumido
 # ---------------------------------------------------------------------------
 @cadastro_bp.route('/<token>', methods=['POST'])
 def enviar(token):
@@ -162,22 +249,42 @@ def enviar(token):
     else:
         link_id = res['link']['id']
 
+    # --- Parte 4: contato, endereço e bancários. Todos OPCIONAIS: o cadastro
+    # não pode travar porque alguém não sabe a agência de cor. O admin cobra o
+    # que faltar na aprovação.
+    p = _campos_parte4(request.form)
+
     try:
         with transacao() as cur:
             if pendente_id:
                 cur.execute(
                     """UPDATE cadastro_pendente
                           SET ja_funcionario=%s, nome_completo=%s,
-                              login_escolhido=%s, nick_escolhido=%s
+                              login_escolhido=%s, nick_escolhido=%s,
+                              cpf=%s, data_nascimento=%s,
+                              email_pessoal=%s, email_corporativo=%s,
+                              celular_pessoal=%s, celular_corporativo=%s,
+                              cep=%s, logradouro=%s, numero=%s, complemento=%s,
+                              bairro=%s, cidade=%s, estado=%s
                         WHERE id=%s""",
-                    (ja_func, nome, login, nick, pendente_id))
+                    (ja_func, nome, login, nick, p['cpf'], p['nasc'],
+                     p['email_p'], p['email_c'], p['cel_p'], p['cel_c'],
+                     p['cep'], p['logradouro'], p['numero'], p['complemento'],
+                     p['bairro'], p['cidade'], p['estado'], pendente_id))
             else:
                 cur.execute(
                     """INSERT INTO cadastro_pendente
                          (link_id, ja_funcionario, nome_completo,
-                          login_escolhido, nick_escolhido)
-                       VALUES (%s,%s,%s,%s,%s)""",
-                    (link_id, ja_func, nome, login, nick))
+                          login_escolhido, nick_escolhido, cpf, data_nascimento,
+                          email_pessoal, email_corporativo,
+                          celular_pessoal, celular_corporativo,
+                          cep, logradouro, numero, complemento,
+                          bairro, cidade, estado)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (link_id, ja_func, nome, login, nick, p['cpf'], p['nasc'],
+                     p['email_p'], p['email_c'], p['cel_p'], p['cel_c'],
+                     p['cep'], p['logradouro'], p['numero'], p['complemento'],
+                     p['bairro'], p['cidade'], p['estado']))
                 pendente_id = cur.lastrowid
             cur.execute('DELETE FROM cadastro_pendente_departamentos WHERE pendente_id=%s',
                         (pendente_id,))
@@ -186,6 +293,21 @@ def enviar(token):
                     """INSERT INTO cadastro_pendente_departamentos
                          (pendente_id, departamento_id) VALUES (%s,%s)""",
                     (pendente_id, d))
+
+            # BANCÁRIOS em tabela à parte (gate admin/Financeiro na leitura).
+            # DELETE+INSERT em vez de upsert: reenvio do formulário substitui,
+            # e não há chave natural além do pendente_id.
+            cur.execute('DELETE FROM usuario_dados_bancarios WHERE pendente_id=%s',
+                        (pendente_id,))
+            if p['tem_banco']:
+                cur.execute(
+                    """INSERT INTO usuario_dados_bancarios
+                         (pendente_id, banco_codigo, banco_nome, agencia, conta,
+                          conta_tipo, titular_nome, titular_cpf, pix_tipo, pix_chave)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (pendente_id, p['banco_cod'], p['banco_nome'], p['agencia'],
+                     p['conta'], p['conta_tipo'], p['titular'] or nome,
+                     p['titular_cpf'] or p['cpf'], p['pix_tipo'], p['pix_chave']))
     except Exception:
         # Nunca devolve a exceção crua a quem está do lado de fora do sistema.
         logger.exception('[cadastro] falha ao gravar pendência do link %s', link_id)
