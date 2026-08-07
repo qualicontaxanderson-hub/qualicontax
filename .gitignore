@@ -64,6 +64,8 @@ bakup_qualicontax.bat.orig
 *.cnf
 *.sql
 *.sql.gz
+# Pasta de dumps locais (contém hash de senha e dados bancários) — nunca sobe.
+backups/
 
 # Trilhas de auditoria dos backfills (saida de execucao, nao codigo)
 scripts/backfill_*.csv
