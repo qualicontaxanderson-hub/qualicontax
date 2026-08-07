@@ -1,64 +1,91 @@
 {% extends "base.html" %}
 {% block title %}Cadastros - Qualicontax{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Cadastros</h1>
-        <p class="page-subtitle">Gestão de clientes, grupos, contratos e tabelas auxiliares</p>
+{% include 'cadastros/_nav_cadastros.html' %}
+{# Sem <style> próprio: hero, corpo, tiles e carrossel vêm de identidade.css —
+   os MESMOS componentes da home do Escrita Fiscal. As duas têm de parecer irmãs
+   porque são literalmente o mesmo CSS. #}
+
+<!-- ===== HERO verde ===== -->
+<div class="ef-hero">
+    <div class="ef-hero-inner">
+        <div class="ef-hero-head">
+            <div>
+                <h1 class="ef-hero-title">Cadastros</h1>
+                <p class="ef-hero-sub">Gestão de clientes, grupos, contratos e tabelas auxiliares</p>
+            </div>
+            <div class="ef-hero-actions">
+                {# Os dois atalhos que a tela já tinha, preservados #}
+                <a href="{{ url_for('contratos.create') }}" class="ef-btn">
+                    <i class="fas fa-plus"></i> Novo Contrato
+                </a>
+                <a href="{{ url_for('clientes.novo') }}" class="ef-btn ef-btn-primary">
+                    <i class="fas fa-plus"></i> Novo Cliente
+                </a>
+            </div>
+        </div>
+        <!-- carrossel de destaques: preenchido por fetch; some se falhar ou se o
+             dado tiver mais de 5 min (melhor omitir que mentir) -->
+        <div class="ef-car-skel" id="efCarSkel" aria-hidden="true">
+            <div class="ef-skel-card"></div><div class="ef-skel-card"></div><div class="ef-skel-card"></div>
+        </div>
+        <div class="ef-carousel" id="efCarousel" hidden
+             data-endpoint="{{ url_for('modulos.api_cadastros_destaques') }}"></div>
     </div>
 </div>
 
-<div class="module-tiles">
+<!-- ===== CORPO branco ===== -->
+<div class="ef-body">
 
-    <a href="{{ url_for('clientes.index') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
-            <i class="fas fa-user-tie"></i>
-        </div>
-        <h3 class="module-tile-title">Clientes</h3>
-        <p class="module-tile-desc">Cadastro completo de clientes pessoa física e jurídica</p>
-        <span class="module-tile-action"><i class="fas fa-plus-circle"></i> Novo Cliente</span>
-    </a>
+    <div class="ef-section-label">Dia a dia</div>
+    <div class="ef-grid">
+        <a href="{{ url_for('clientes.index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-user-tie"></i></div>
+            <h3 class="ef-card-title">Clientes</h3>
+            <div class="ef-card-num" data-counter="clientes"></div>
+            <p class="ef-card-desc">Cadastro completo de pessoa física e jurídica</p>
+        </a>
+        <a href="{{ url_for('grupos.index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ecfccb;color:#4d7c0f;"><i class="fas fa-users-cog"></i></div>
+            <h3 class="ef-card-title">Grupos</h3>
+            <div class="ef-card-num" data-counter="grupos"></div>
+            <p class="ef-card-desc">Agrupe clientes para aplicar regras em lote</p>
+        </a>
+        <a href="{{ url_for('ramos_atividade.index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-industry"></i></div>
+            <h3 class="ef-card-title">Ramo de Atividade</h3>
+            <div class="ef-card-num" data-counter="ramos"></div>
+            <p class="ef-card-desc">Tabela de ramos para classificar clientes</p>
+        </a>
+        <a href="{{ url_for('contratos.list_contratos') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#d1fae5;color:#059669;"><i class="fas fa-file-contract"></i></div>
+            <h3 class="ef-card-title">Contratos</h3>
+            <div class="ef-card-num" data-counter="contratos"></div>
+            <p class="ef-card-desc">Prestação de serviço com controle de vigência</p>
+        </a>
+        <a href="{{ url_for('municipios.index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#e7f6ec;color:#166534;"><i class="fas fa-map-marked-alt"></i></div>
+            <h3 class="ef-card-title">Município</h3>
+            <div class="ef-card-num" data-counter="municipios"></div>
+            <p class="ef-card-desc">Municípios e portais das prefeituras</p>
+        </a>
+        <a href="{{ url_for('adicionais.index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#f0fdf4;color:#22c55e;"><i class="fas fa-layer-group"></i></div>
+            <h3 class="ef-card-title">Adicionais</h3>
+            <div class="ef-card-num" data-counter="adicionais"></div>
+            <p class="ef-card-desc">Cadastros por órgão: ANP e outros</p>
+        </a>
+    </div>
 
-    <a href="{{ url_for('grupos.index') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-            <i class="fas fa-users-cog"></i>
-        </div>
-        <h3 class="module-tile-title">Grupos</h3>
-        <p class="module-tile-desc">Agrupe clientes para aplicar regras e configurações em lote</p>
-    </a>
-
-    <a href="{{ url_for('ramos_atividade.index') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <i class="fas fa-industry"></i>
-        </div>
-        <h3 class="module-tile-title">Ramo de Atividade</h3>
-        <p class="module-tile-desc">Tabela de ramos de atividade para classificação de clientes</p>
-    </a>
-
-    <a href="{{ url_for('contratos.list_contratos') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-            <i class="fas fa-file-contract"></i>
-        </div>
-        <h3 class="module-tile-title">Contratos</h3>
-        <p class="module-tile-desc">Contratos de prestação de serviço com controle de vigência</p>
-        <span class="module-tile-action"><i class="fas fa-plus-circle"></i> Novo Contrato</span>
-    </a>
-
-    <a href="{{ url_for('municipios.index') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
-            <i class="fas fa-map-marked-alt"></i>
-        </div>
-        <h3 class="module-tile-title">Município</h3>
-        <p class="module-tile-desc">Tabela de municípios e alíquotas de ISS por cidade</p>
-    </a>
-
-    <a href="{{ url_for('adicionais.index') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
-            <i class="fas fa-layer-group"></i>
-        </div>
-        <h3 class="module-tile-title">Adicionais</h3>
-        <p class="module-tile-desc">Cadastros específicos por órgão: ANP, IBAMA e outros</p>
-    </a>
+    {# Sem bloco "Em breve": não há roadmap de Cadastros para listar, e card
+       vazio só para preencher a seção seria invenção. Quando houver, entra aqui
+       no mesmo formato do fiscal (.ef-card.ef-card-soon + .ef-soon-badge). #}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{# Mesmo carrossel da home do fiscal — arquivo compartilhado; o endpoint desta
+   tela vai no data-endpoint do #efCarousel, acima. #}
+<script src="{{ url_for('static', filename='js/home_destaques.js') }}" defer></script>
 {% endblock %}
