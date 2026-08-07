@@ -3,521 +3,397 @@
 {% block title %}{{ 'Editar Cliente' if cliente else 'Novo Cliente' }} - Qualicontax{% endblock %}
 
 {% block content %}
-<div class="cliente-form-page">
-    <!-- Page Header -->
-    <div class="page-header">
+<div class="cf-page">
+    <div class="cf-topbar">
+        <a href="{{ url_for('clientes.index') }}" class="cf-back"><i class="fas fa-arrow-left"></i> Clientes</a>
         <div>
-            <h1 class="page-title">{{ 'Editar Cliente' if cliente else 'Novo Cliente' }}</h1>
-            <p class="page-subtitle">{{ 'Atualize os dados do cliente' if cliente else 'Cadastre um novo cliente no sistema' }}</p>
-        </div>
-        <div class="page-actions">
-            <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
-                <i class="fas fa-arrow-left"></i>
-                Voltar
-            </a>
+            <h1 class="cf-title">{{ 'Editar Cliente' if cliente else 'Novo Cliente' }}</h1>
+            <p class="cf-sub">{{ 'Atualize os dados do cliente' if cliente else 'Cadastre um novo cliente no sistema' }}</p>
         </div>
     </div>
 
-    <!-- Form -->
-    <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container">
+    <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container cf-form">
         {% set endereco = endereco_principal if endereco_principal else None %}
-        
-        <!-- Informações Básicas -->
-        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-            <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
-                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-id-card"></i> Informações Básicas
-                </h3>
+
+        <!-- ── CARD 1: Comece pelo CNPJ (destaque) ─────────────────────── -->
+        <div class="cf-card cf-card-hi">
+            <p class="cf-seclabel">Comece pelo CNPJ</p>
+
+            <div class="cf-grid2">
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="tipo_pessoa">Tipo de pessoa *</label>
+                    <select id="tipo_pessoa" name="tipo_pessoa" class="cf-ctrl" required onchange="toggleTipoFields()">
+                        <option value="">Selecione…</option>
+                        <option value="PF" {% if cliente and cliente.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
+                        <option value="PJ" {% if cliente and cliente.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
+                    </select>
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="situacao">Situação *</label>
+                    <select id="situacao" name="situacao" class="cf-ctrl" required>
+                        <option value="ATIVO"     {% if not cliente or cliente.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                        <option value="INATIVO"   {% if cliente and cliente.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                        <option value="SUSPENSO"  {% if cliente and cliente.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
+                        <option value="CANCELADO" {% if cliente and cliente.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                    </select>
+                </div>
             </div>
-            <div class="card-body" style="padding: 25px;">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="numero_cliente">
-                            Número do Cliente
-                            <span class="text-muted" style="font-size: 12px;">(opcional - ex: 102)</span>
-                        </label>
-                        <input type="text" 
-                               id="numero_cliente" 
-                               name="numero_cliente" 
-                               class="form-control" 
-                               placeholder="Digite o número do cliente (ex: 102)" 
-                               value="{{ cliente.numero_cliente if cliente else '' }}"
-                               maxlength="20">
-                        <small class="form-text text-muted">
-                            Deixe em branco para usar apenas o ID automático ou digite um número personalizado (ex: 102 para manter consistência com seus cadastros atuais)
-                        </small>
-                    </div>
+
+            <!-- PJ: CNPJ grande + Buscar na Receita -->
+            <div class="pj-only" style="margin-top:14px;">
+                <label class="cf-lbl" for="cpf_cnpj_pj">CNPJ *</label>
+                <div class="cf-cnpj-row">
+                    <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="cf-ctrl cf-ctrl-big cnpj-mask"
+                           placeholder="00.000.000/0000-00"
+                           value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                    <button type="button" id="btnConsultarCNPJ" class="cf-btn-receita" onclick="consultarCNPJ()">
+                        <i class="fas fa-search"></i> Buscar na Receita
+                    </button>
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="tipo_pessoa">Tipo de Pessoa *</label>
-                        <select id="tipo_pessoa" name="tipo_pessoa" class="form-control" required onchange="toggleTipoFields()">
-                            <option value="">Selecione...</option>
-                            <option value="PF" {% if cliente and cliente.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
-                            <option value="PJ" {% if cliente and cliente.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
-                        </select>
+                <p class="cf-hint">Digite o CNPJ e busque na Receita Federal para preencher os dados automaticamente.</p>
+            </div>
+
+            <!-- PF: nome + CPF -->
+            <div class="pf-only cf-grid2" style="margin-top:14px;">
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="nome_razao_social_pf">Nome completo *</label>
+                    <input type="text" id="nome_razao_social_pf" name="nome_razao_social" class="cf-ctrl"
+                           placeholder="Nome completo"
+                           value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="cpf_cnpj_pf">CPF *</label>
+                    <input type="text" id="cpf_cnpj_pf" name="cpf_cnpj" class="cf-ctrl cpf-mask"
+                           placeholder="000.000.000-00"
+                           value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Card verde de resultado da Receita (aparece após buscar) ── -->
+        <div class="cf-receita" id="receitaResult" style="display:none;">
+            <span class="cf-receita-ico"><i class="fas fa-check"></i></span>
+            <div>
+                <div class="cf-receita-tit">Encontramos: <strong id="receitaRazao"></strong></div>
+                <div class="cf-receita-txt" id="receitaResumo">
+                    Preenchemos os dados abaixo com o que veio da Receita. <strong>Confira</strong> antes de salvar.
+                </div>
+            </div>
+        </div>
+
+        <!-- ── CARD 2: Identificação (PJ) ──────────────────────────────── -->
+        <div class="cf-card">
+            <p class="cf-seclabel">Identificação</p>
+
+            <div class="cf-grid2">
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="numero_cliente">Número do cliente <span class="cf-opt">(opcional)</span></label>
+                    <input type="text" id="numero_cliente" name="numero_cliente" class="cf-ctrl"
+                           placeholder="ex: 102" maxlength="20" value="{{ cliente.numero_cliente if cliente else '' }}">
+                    <p class="cf-hint">Em branco usa o ID automático; ou digite um número personalizado.</p>
+                </div>
+            </div>
+
+            <div class="pj-only">
+                <div class="cf-grid2">
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="nome_razao_social_pj">Razão social *</label>
+                        <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="cf-ctrl"
+                               placeholder="Razão social da empresa"
+                               value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
                     </div>
-                    <div class="form-group">
-                        <label for="situacao">Situação *</label>
-                        <select id="situacao" name="situacao" class="form-control" required>
-                            <option value="ATIVO" {% if not cliente or cliente.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
-                            <option value="INATIVO" {% if cliente and cliente.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
-                            <option value="SUSPENSO" {% if cliente and cliente.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
-                            <option value="CANCELADO" {% if cliente and cliente.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
-                        </select>
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="nome_fantasia">Nome fantasia</label>
+                        <input type="text" id="nome_fantasia" name="nome_fantasia" class="cf-ctrl"
+                               placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
                     </div>
                 </div>
 
-                <!-- Pessoa Física Fields -->
-                <div id="pfFields" style="display: {% if cliente and cliente.tipo_pessoa == 'PF' %}block{% else %}none{% endif %};">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="nome_razao_social_pf">Nome Completo *</label>
-                            <input type="text" id="nome_razao_social_pf" name="nome_razao_social" class="form-control" placeholder="Nome completo" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
-                        </div>
-                        <div class="form-group">
-                            <label for="cpf_cnpj_pf">CPF *</label>
-                            <input type="text" id="cpf_cnpj_pf" name="cpf_cnpj" class="form-control cpf-mask" placeholder="000.000.000-00" value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pessoa Jurídica Fields -->
-                <div id="pjFields" style="display: {% if cliente and cliente.tipo_pessoa == 'PJ' %}block{% else %}none{% endif %};">
-                    <!-- CNPJ PRIMEIRO - Para seguir lógica de preenchimento -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="cpf_cnpj_pj">CNPJ *</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="form-control cnpj-mask" placeholder="00.000.000/0000-00" value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}" style="flex: 1;">
-                                <button type="button" id="btnConsultarCNPJ" class="btn btn-info" onclick="consultarCNPJ()" style="white-space: nowrap;">
-                                    <i class="fas fa-search"></i> Consultar CNPJ
-                                </button>
-                            </div>
-                            <small class="form-text text-muted">
-                                Digite o CNPJ e clique em "Consultar CNPJ" para preencher automaticamente os dados da Receita Federal
-                            </small>
-                        </div>
-                        <div class="form-group">
-                            <label for="inscricao_estadual">
-                                Inscrição Estadual ⭐
-                                <span class="text-muted" style="font-size:12px;">(Comércio)</span>
+                <div class="cf-grid2">
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="inscricao_estadual">Inscrição estadual <span class="cf-star" title="preenchido via CNPJ">★</span></label>
+                        <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="cf-ctrl"
+                               placeholder="Preenchido automaticamente via CNPJ"
+                               value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}"
+                               aria-describedby="ie-help-text">
+                        <div class="cf-check" id="isento-ie-container">
+                            <input type="checkbox" id="inscricao_estadual_isento" name="inscricao_estadual_isento" value="1"
+                                   {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
+                                   onchange="toggleIsentoIE(this)">
+                            <label for="inscricao_estadual_isento">
+                                <i class="fas fa-ban" style="color:#e67e22;"></i>
+                                Isento de Inscrição Estadual (Prestador de Serviços)
                             </label>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="text" 
-                                       id="inscricao_estadual" 
-                                       name="inscricao_estadual" 
-                                       class="form-control" 
-                                       placeholder="Preenchido automaticamente via CNPJ" 
-                                       value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}" 
-                                       style="flex: 1;"
-                                       aria-label="Inscrição Estadual - preenchido automaticamente ao consultar CNPJ"
-                                       aria-describedby="ie-help-text">
-                                <button type="button" 
-                                        class="btn btn-info" 
-                                        onclick="consultarSintegra()" 
-                                        title="Abrir site do Sintegra com CNPJ copiado"
-                                        style="white-space: nowrap;">
-                                    <i class="fas fa-external-link-alt"></i> Sintegra
-                                </button>
-                            </div>
-                            <!-- Checkbox ISENTO para prestadores de serviço -->
-                            <div class="form-check mt-2" id="isento-ie-container">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       id="inscricao_estadual_isento"
-                                       name="inscricao_estadual_isento"
-                                       value="1"
-                                       {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
-                                       onchange="toggleIsentoIE(this)">
-                                <label class="form-check-label" for="inscricao_estadual_isento"
-                                       style="font-size:13px; color:#6c757d; cursor:pointer;">
-                                    <i class="fas fa-ban" style="color:#e67e22;"></i>
-                                    Isento de Inscrição Estadual (Prestador de Serviços)
-                                </label>
-                            </div>
-                            <small id="ie-help-text" class="form-text text-muted">
-                                ✅ Preenchido automaticamente ao consultar o CNPJ | 
-                                <a href="javascript:consultarSintegra()" style="color: #17a2b8; text-decoration: none;">
-                                    <i class="fas fa-check-circle"></i> Clique para validar no Sintegra do estado
-                                </a>
-                            </small>
                         </div>
+                        <p id="ie-help-text" class="cf-hint">✅ Preenchido ao buscar o CNPJ. Valide no Sintegra (card "Órgãos e integrações").</p>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="data_inicio_atividade">Data de Início da Atividade ⭐</label>
-                            <input type="date" 
-                                   id="data_inicio_atividade" 
-                                   name="data_inicio_atividade" 
-                                   class="form-control" 
-                                   value="{{ cliente.data_inicio_atividade if cliente else '' }}"
-                                   aria-label="Data de início das atividades da empresa - preenchido automaticamente ao consultar CNPJ"
-                                   aria-describedby="data-atividade-help-text">
-                            <small id="data-atividade-help-text" class="form-text text-muted">✅ Data de fundação da empresa (preenchido automaticamente ao consultar o CNPJ)</small>
-                        </div>
-                    </div>
-                    <!-- Razão Social DEPOIS do CNPJ -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="nome_razao_social_pj">Razão Social *</label>
-                            <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="form-control" placeholder="Razão social da empresa" value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
-                        </div>
-                        <div class="form-group">
-                            <label for="nome_fantasia">Nome Fantasia</label>
-                            <input type="text" id="nome_fantasia" name="nome_fantasia" class="form-control" placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="inscricao_municipal">Inscrição Municipal</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="text" 
-                                       id="inscricao_municipal" 
-                                       name="inscricao_municipal" 
-                                       class="form-control" 
-                                       placeholder="Inscrição Municipal" 
-                                       value="{{ cliente.inscricao_municipal if cliente else '' }}"
-                                       style="flex: 1;">
-                                <button type="button" 
-                                        class="btn btn-info" 
-                                        onclick="buscarMunicipio()" 
-                                        title="Buscar município cadastrado"
-                                        style="white-space: nowrap;">
-                                    <i class="fas fa-map-marked-alt"></i> Buscar Município
-                                </button>
-                            </div>
-                            <small class="form-text text-muted">
-                                <i class="fas fa-info-circle"></i> 
-                                Consulte municípios cadastrados e acesse o portal da prefeitura
-                            </small>
-                        </div>
-                        <div class="form-group">
-                            <label for="regime_tributario">Regime Tributário</label>
-                            <select id="regime_tributario" name="regime_tributario" class="form-control">
-                                <option value="">Selecione...</option>
-                                <option value="SIMPLES" {% if cliente and cliente.regime_tributario == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
-                                <option value="LUCRO_PRESUMIDO" {% if cliente and cliente.regime_tributario == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
-                                <option value="LUCRO_REAL" {% if cliente and cliente.regime_tributario == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
-                                <option value="MEI" {% if cliente and cliente.regime_tributario == 'MEI' %}selected{% endif %}>MEI</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="porte_empresa">Porte da Empresa</label>
-                            <select id="porte_empresa" name="porte_empresa" class="form-control">
-                                <option value="">Selecione...</option>
-                                <option value="MEI" {% if cliente and cliente.porte_empresa == 'MEI' %}selected{% endif %}>MEI</option>
-                                <option value="ME" {% if cliente and cliente.porte_empresa == 'ME' %}selected{% endif %}>Microempresa (ME)</option>
-                                <option value="EPP" {% if cliente and cliente.porte_empresa == 'EPP' %}selected{% endif %}>Empresa de Pequeno Porte (EPP)</option>
-                                <option value="MEDIO" {% if cliente and cliente.porte_empresa == 'MEDIO' %}selected{% endif %}>Médio Porte</option>
-                                <option value="GRANDE" {% if cliente and cliente.porte_empresa == 'GRANDE' %}selected{% endif %}>Grande Porte</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="cnae_fiscal">CNAE Fiscal ⭐</label>
-                            <input type="text" 
-                                   id="cnae_fiscal" 
-                                   name="cnae_fiscal" 
-                                   class="form-control" 
-                                   placeholder="Código CNAE (ex: 4711-3/02)"
-                                   value="{{ cliente.cnae_fiscal if cliente else '' }}"
-                                   readonly
-                                   aria-label="CNAE Fiscal - preenchido automaticamente ao consultar CNPJ"
-                                   aria-describedby="cnae-help-text">
-                            <small id="cnae-help-text" class="form-text text-muted">✅ Preenchido automaticamente ao consultar o CNPJ</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="cnae_fiscal_descricao">Descrição do CNAE ⭐</label>
-                            <input type="text" 
-                                   id="cnae_fiscal_descricao" 
-                                   name="cnae_fiscal_descricao" 
-                                   class="form-control" 
-                                   placeholder="Descrição da atividade principal"
-                                   value="{{ cliente.cnae_fiscal_descricao if cliente else '' }}"
-                                   readonly
-                                   aria-label="Descrição do CNAE - preenchido automaticamente ao consultar CNPJ">
-                            <small class="form-text text-muted">Atividade econômica principal da empresa</small>
-                        </div>
-                    </div>
-                    
-                    <!-- CNAEs Secundários (se existirem) -->
-                    <div id="cnaes_secundarios_container" style="display: none;">
-                        <div class="form-row">
-                            <div class="form-group" style="width: 100%;">
-                                <label>CNAEs Secundários ⭐</label>
-                                <div id="cnaes_secundarios_list" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; background: #f9fafb; max-height: 200px; overflow-y: auto;">
-                                    <!-- Será preenchido via JavaScript -->
-                                </div>
-                                <small class="form-text text-muted">Atividades econômicas secundárias da empresa</small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group" style="width: 100%;">
-                            <div class="ramos-header">
-                                <label class="ramos-title">Ramos de Atividade</label>
-                                <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="btn btn-success btn-sm ramos-btn-novo">
-                                    <i class="fas fa-plus"></i> Novo Ramo de Atividade
-                                </a>
-                            </div>
-                            <div class="ramos-wrapper">
-                                {% if ramos_atividade %}
-                                    <div class="ramos-grid">
-                                        {% for ramo in ramos_atividade %}
-                                        <div class="form-check ramo-item">
-                                            <input class="form-check-input" type="checkbox" 
-                                                    name="ramos_atividade_ids" 
-                                                    value="{{ ramo.id }}" 
-                                                    id="ramo_{{ ramo.id }}"
-                                                    {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                                            <label class="form-check-label ramo-label" for="ramo_{{ ramo.id }}">
-                                                {{ ramo.nome }}
-                                            </label>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    <p class="text-muted" style="margin: 0; text-align: center; padding: 20px;">
-                                        Nenhum ramo de atividade cadastrado. <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" style="color: #22C55E; text-decoration: none; font-weight: 600;">Clique aqui para criar o primeiro</a>.
-                                    </p>
-                                {% endif %}
-                            </div>
-                            <small class="form-text text-muted" style="margin-top: 10px; display: block;">
-                                <i class="fas fa-info-circle"></i> Selecione um ou mais ramos de atividade. Se não encontrar o ramo desejado, clique em "Novo Ramo de Atividade".
-                            </small>
-                        </div>
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="data_inicio_atividade">Início da atividade <span class="cf-star">★</span></label>
+                        <input type="date" id="data_inicio_atividade" name="data_inicio_atividade" class="cf-ctrl"
+                               value="{{ cliente.data_inicio_atividade if cliente else '' }}">
+                        <p class="cf-hint">✅ Data de fundação (preenchida ao buscar o CNPJ).</p>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Contato -->
-        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-            <div class="card-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
-                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-envelope"></i> Informações de Contato
-                </h3>
-            </div>
-            <div class="card-body" style="padding: 25px;">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="email">E-mail</label>
-                        <input type="email" id="email" name="email" class="form-control" placeholder="email@exemplo.com" value="{{ cliente.email if cliente else '' }}">
+                <div class="cf-grid2">
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="inscricao_municipal">Inscrição municipal</label>
+                        <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="cf-ctrl"
+                               placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
+                        <p class="cf-hint">Consulte o município e o portal da prefeitura no card "Órgãos e integrações".</p>
                     </div>
-                    <div class="form-group">
-                        <label for="telefone">Telefone</label>
-                        <input type="text" id="telefone" name="telefone" class="form-control phone-mask" placeholder="(00) 0000-0000" value="{{ cliente.telefone if cliente else '' }}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="celular">Celular</label>
-                        <input type="text" id="celular" name="celular" class="form-control phone-mask" placeholder="(00) 00000-0000" value="{{ cliente.celular if cliente else '' }}">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Endereço -->
-        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-            <div class="card-header" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
-                <div style="flex: 1;">
-                    <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-map-marker-alt"></i> Endereço
-                    </h3>
-                    <small style="color: rgba(255,255,255,0.9); font-size: 13px;">Opcional - será preenchido automaticamente ao consultar CNPJ</small>
-                </div>
-            </div>
-            <div class="card-body" style="padding: 25px;">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="cep">CEP</label>
-                        <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" maxlength="9" value="{{ endereco.cep if endereco else '' }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="logradouro">Logradouro</label>
-                        <input type="text" id="logradouro" name="logradouro" class="form-control" placeholder="Rua, Avenida, etc." value="{{ endereco.logradouro if endereco else '' }}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="numero">Número</label>
-                        <input type="text" id="numero" name="numero" class="form-control" placeholder="Número" value="{{ endereco.numero if endereco else '' }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="complemento">Complemento</label>
-                        <input type="text" id="complemento" name="complemento" class="form-control" placeholder="Apto, Sala, etc." value="{{ endereco.complemento if endereco else '' }}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="bairro">Bairro</label>
-                        <input type="text" id="bairro" name="bairro" class="form-control" placeholder="Bairro" value="{{ endereco.bairro if endereco else '' }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="cidade">Cidade / Município</label>
-                        <input type="text" 
-                               id="cidade" 
-                               name="cidade" 
-                               class="form-control" 
-                               placeholder="Digite o nome da cidade" 
-                               value="{{ endereco.cidade if endereco else '' }}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="estado">Estado (UF) *</label>
-                        <select id="estado" name="estado" class="form-control" data-selected-uf="{{ endereco.estado if endereco else '' }}">
-                            <option value="">Selecione...</option>
-                            <option value="AC">AC - Acre</option>
-                            <option value="AL">AL - Alagoas</option>
-                            <option value="AP">AP - Amapá</option>
-                            <option value="AM">AM - Amazonas</option>
-                            <option value="BA">BA - Bahia</option>
-                            <option value="CE">CE - Ceará</option>
-                            <option value="DF">DF - Distrito Federal</option>
-                            <option value="ES">ES - Espírito Santo</option>
-                            <option value="GO">GO - Goiás</option>
-                            <option value="MA">MA - Maranhão</option>
-                            <option value="MT">MT - Mato Grosso</option>
-                            <option value="MS">MS - Mato Grosso do Sul</option>
-                            <option value="MG">MG - Minas Gerais</option>
-                            <option value="PA">PA - Pará</option>
-                            <option value="PB">PB - Paraíba</option>
-                            <option value="PR">PR - Paraná</option>
-                            <option value="PE">PE - Pernambuco</option>
-                            <option value="PI">PI - Piauí</option>
-                            <option value="RJ">RJ - Rio de Janeiro</option>
-                            <option value="RN">RN - Rio Grande do Norte</option>
-                            <option value="RS">RS - Rio Grande do Sul</option>
-                            <option value="RO">RO - Rondônia</option>
-                            <option value="RR">RR - Roraima</option>
-                            <option value="SC">SC - Santa Catarina</option>
-                            <option value="SP">SP - São Paulo</option>
-                            <option value="SE">SE - Sergipe</option>
-                            <option value="TO">TO - Tocantins</option>
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="regime_tributario">Regime tributário</label>
+                        <select id="regime_tributario" name="regime_tributario" class="cf-ctrl">
+                            <option value="">Selecione…</option>
+                            <option value="SIMPLES"         {% if cliente and cliente.regime_tributario == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
+                            <option value="LUCRO_PRESUMIDO" {% if cliente and cliente.regime_tributario == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
+                            <option value="LUCRO_REAL"      {% if cliente and cliente.regime_tributario == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
+                            <option value="MEI"             {% if cliente and cliente.regime_tributario == 'MEI' %}selected{% endif %}>MEI</option>
                         </select>
-                        <small class="form-text text-muted">Sigla do estado em letras maiúsculas (ex: SP, RJ, MG)</small>
                     </div>
+                </div>
+
+                <div class="cf-grid2">
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="porte_empresa">Porte da empresa</label>
+                        <select id="porte_empresa" name="porte_empresa" class="cf-ctrl">
+                            <option value="">Selecione…</option>
+                            <option value="MEI"   {% if cliente and cliente.porte_empresa == 'MEI' %}selected{% endif %}>MEI</option>
+                            <option value="ME"    {% if cliente and cliente.porte_empresa == 'ME' %}selected{% endif %}>Microempresa (ME)</option>
+                            <option value="EPP"   {% if cliente and cliente.porte_empresa == 'EPP' %}selected{% endif %}>Empresa de Pequeno Porte (EPP)</option>
+                            <option value="MEDIO" {% if cliente and cliente.porte_empresa == 'MEDIO' %}selected{% endif %}>Médio Porte</option>
+                            <option value="GRANDE"{% if cliente and cliente.porte_empresa == 'GRANDE' %}selected{% endif %}>Grande Porte</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="cf-grid2">
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="cnae_fiscal">CNAE fiscal <span class="cf-star">★</span></label>
+                        <input type="text" id="cnae_fiscal" name="cnae_fiscal" class="cf-ctrl" placeholder="ex: 4711-3/02"
+                               value="{{ cliente.cnae_fiscal if cliente else '' }}" readonly aria-describedby="cnae-help-text">
+                        <p id="cnae-help-text" class="cf-hint">✅ Preenchido ao buscar o CNPJ.</p>
+                    </div>
+                    <div class="cf-fg">
+                        <label class="cf-lbl" for="cnae_fiscal_descricao">Descrição do CNAE <span class="cf-star">★</span></label>
+                        <input type="text" id="cnae_fiscal_descricao" name="cnae_fiscal_descricao" class="cf-ctrl"
+                               placeholder="Descrição da atividade principal"
+                               value="{{ cliente.cnae_fiscal_descricao if cliente else '' }}" readonly>
+                    </div>
+                </div>
+
+                <!-- CNAEs Secundários (preenchidos via JS) -->
+                <div id="cnaes_secundarios_container" style="display:none; margin-top:4px;">
+                    <label class="cf-lbl">CNAEs secundários <span class="cf-star">★</span></label>
+                    <div id="cnaes_secundarios_list" class="cf-cnaes-box"></div>
+                    <p class="cf-hint">Atividades econômicas secundárias da empresa.</p>
+                </div>
+
+                <!-- Ramos de atividade -->
+                <div style="margin-top:6px;">
+                    <div class="cf-ramos-head">
+                        <label class="cf-lbl" style="margin:0;">Ramos de atividade</label>
+                        <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="cf-ramos-novo">
+                            <i class="fas fa-plus"></i> Novo ramo
+                        </a>
+                    </div>
+                    <div class="cf-ramos-box">
+                        {% if ramos_atividade %}
+                        <div class="cf-ramos-grid">
+                            {% for ramo in ramos_atividade %}
+                            <label class="cf-ramo" for="ramo_{{ ramo.id }}">
+                                <input class="form-check-input" type="checkbox" name="ramos_atividade_ids"
+                                       value="{{ ramo.id }}" id="ramo_{{ ramo.id }}"
+                                       {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
+                                <span>{{ ramo.nome }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="cf-hint" style="text-align:center; padding:12px;">
+                            Nenhum ramo cadastrado.
+                            <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" style="color:#15803d; font-weight:600;">Criar o primeiro</a>.
+                        </p>
+                        {% endif %}
+                    </div>
+                    <p class="cf-hint">Selecione um ou mais. Não achou? Clique em "Novo ramo".</p>
                 </div>
             </div>
         </div>
 
-        <!-- Dados do Contrato -->
-        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-            <div class="card-header" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
-                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-file-contract"></i> Dados do Contrato
-                </h3>
-            </div>
-            <div class="card-body" style="padding: 25px;">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="data_inicio_contrato">Data Início do Contrato</label>
-                        <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="form-control" value="{{ cliente.data_inicio_contrato if cliente else '' }}">
-                        <small class="form-text text-muted">Data de início do contrato de prestação de serviços</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="data_fim_contrato">Data Fim do Contrato</label>
-                        <input type="date" id="data_fim_contrato" name="data_fim_contrato" class="form-control" value="{{ cliente.data_fim_contrato if cliente else '' }}">
-                    </div>
+        <!-- ── CARD 3: Contato ─────────────────────────────────────────── -->
+        <div class="cf-card">
+            <p class="cf-seclabel">Contato</p>
+            <div class="cf-grid2">
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="email">E-mail</label>
+                    <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com"
+                           value="{{ cliente.email if cliente else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="telefone">Telefone</label>
+                    <input type="text" id="telefone" name="telefone" class="cf-ctrl phone-mask" placeholder="(00) 0000-0000"
+                           value="{{ cliente.telefone if cliente else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="celular">Celular</label>
+                    <input type="text" id="celular" name="celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000"
+                           value="{{ cliente.celular if cliente else '' }}">
                 </div>
             </div>
         </div>
 
-        <!-- Observações -->
-        <div class="card" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-            <div class="card-header" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; border-radius: 12px 12px 0 0; padding: 20px; margin: -1px -1px 0 -1px;">
-                <h3 class="card-title" style="color: white; font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-sticky-note"></i> Observações
-                </h3>
-            </div>
-            <div class="card-body" style="padding: 25px;">
-                <div class="form-group">
-                    <label for="observacoes">Observações</label>
-                    <textarea id="observacoes" name="observacoes" class="form-control" rows="4" placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+        <!-- ── CARD 4: Endereço ────────────────────────────────────────── -->
+        <div class="cf-card">
+            <p class="cf-seclabel">Endereço <span class="cf-seclabel-note">— veio da Receita, confira</span></p>
+            <div class="cf-grid2">
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="cep">CEP</label>
+                    <input type="text" id="cep" name="cep" class="cf-ctrl" placeholder="00000-000" maxlength="9"
+                           value="{{ endereco.cep if endereco else '' }}">
                 </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="logradouro">Logradouro</label>
+                    <input type="text" id="logradouro" name="logradouro" class="cf-ctrl" placeholder="Rua, Avenida, etc."
+                           value="{{ endereco.logradouro if endereco else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="numero">Número</label>
+                    <input type="text" id="numero" name="numero" class="cf-ctrl" placeholder="Número"
+                           value="{{ endereco.numero if endereco else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="complemento">Complemento</label>
+                    <input type="text" id="complemento" name="complemento" class="cf-ctrl" placeholder="Apto, Sala, etc."
+                           value="{{ endereco.complemento if endereco else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="bairro">Bairro</label>
+                    <input type="text" id="bairro" name="bairro" class="cf-ctrl" placeholder="Bairro"
+                           value="{{ endereco.bairro if endereco else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="cidade">Cidade / Município</label>
+                    <input type="text" id="cidade" name="cidade" class="cf-ctrl" placeholder="Digite o nome da cidade"
+                           value="{{ endereco.cidade if endereco else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="estado">Estado (UF) *</label>
+                    <select id="estado" name="estado" class="cf-ctrl" data-selected-uf="{{ endereco.estado if endereco else '' }}">
+                        <option value="">Selecione…</option>
+                        {% for sg, nm in [('AC','Acre'),('AL','Alagoas'),('AP','Amapá'),('AM','Amazonas'),('BA','Bahia'),
+                                          ('CE','Ceará'),('DF','Distrito Federal'),('ES','Espírito Santo'),('GO','Goiás'),
+                                          ('MA','Maranhão'),('MT','Mato Grosso'),('MS','Mato Grosso do Sul'),('MG','Minas Gerais'),
+                                          ('PA','Pará'),('PB','Paraíba'),('PR','Paraná'),('PE','Pernambuco'),('PI','Piauí'),
+                                          ('RJ','Rio de Janeiro'),('RN','Rio Grande do Norte'),('RS','Rio Grande do Sul'),
+                                          ('RO','Rondônia'),('RR','Roraima'),('SC','Santa Catarina'),('SP','São Paulo'),
+                                          ('SE','Sergipe'),('TO','Tocantins')] %}
+                        <option value="{{ sg }}">{{ sg }} - {{ nm }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
 
-                <div class="form-group" style="margin-top:18px; padding-top:16px;
-                                               border-top:1px solid #e5e7eb;">
-                    <label style="display:flex; align-items:flex-start; gap:8px;
-                                  font-weight:400; cursor:pointer;">
-                        <input type="checkbox" id="is_contador" name="is_contador" value="1"
-                               style="margin-top:3px;"
-                               {% if cliente and cliente.is_contador %}checked{% endif %}>
-                        <span><strong>Este cadastro é um Contador</strong><br>
-                            <small style="color:#64748b;">Marque para que este cadastro possa
-                            ser vinculado como contador responsável de outros clientes. O
-                            certificado digital continua sendo vinculado normalmente aqui,
-                            com o titular igual a este cadastro.</small>
-                        </span>
-                    </label>
+        <!-- ── CARD 5: Contrato e observações ──────────────────────────── -->
+        <div class="cf-card">
+            <p class="cf-seclabel">Contrato e observações</p>
+            <div class="cf-grid2">
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="data_inicio_contrato">Início do contrato</label>
+                    <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="cf-ctrl"
+                           value="{{ cliente.data_inicio_contrato if cliente else '' }}">
+                </div>
+                <div class="cf-fg">
+                    <label class="cf-lbl" for="data_fim_contrato">Fim do contrato</label>
+                    <input type="date" id="data_fim_contrato" name="data_fim_contrato" class="cf-ctrl"
+                           value="{{ cliente.data_fim_contrato if cliente else '' }}">
+                </div>
+            </div>
+            <div class="cf-fg" style="margin-top:12px;">
+                <label class="cf-lbl" for="observacoes">Observações</label>
+                <textarea id="observacoes" name="observacoes" class="cf-ctrl" rows="4"
+                          placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+            </div>
+
+            <label class="cf-contador">
+                <input type="checkbox" id="is_contador" name="is_contador" value="1"
+                       {% if cliente and cliente.is_contador %}checked{% endif %}>
+                <span>
+                    <strong>Este cadastro é um Contador</strong><br>
+                    <small>Marque para que este cadastro possa ser <strong>vinculado como contador responsável</strong>
+                    de outros clientes. O certificado digital continua sendo vinculado normalmente aqui,
+                    com o titular igual a este cadastro.</small>
+                </span>
+            </label>
+        </div>
+
+        <!-- ── CARD 6: Órgãos e integrações (direcionamentos agrupados) ── -->
+        <div class="cf-card">
+            <p class="cf-seclabel">Órgãos e integrações</p>
+            <p class="cf-hint" style="margin-top:-4px; margin-bottom:12px;">
+                Atalhos para conferir dados do cliente nos órgãos. Não alteram o cadastro — abrem o portal com o CNPJ copiado.
+            </p>
+            <div class="cf-orgaos">
+                <div class="cf-orgao">
+                    <div>
+                        <div class="cf-orgao-tit"><i class="fas fa-building-columns"></i> Sintegra (SEFAZ)</div>
+                        <div class="cf-orgao-desc">Valida a Inscrição Estadual no estado. Copia o CNPJ e abre o site.</div>
+                    </div>
+                    <button type="button" class="cf-orgao-btn" onclick="consultarSintegra()">
+                        <i class="fas fa-external-link-alt"></i> Sintegra
+                    </button>
+                </div>
+                <div class="cf-orgao">
+                    <div>
+                        <div class="cf-orgao-tit"><i class="fas fa-map-marked-alt"></i> Prefeitura / Município</div>
+                        <div class="cf-orgao-desc">Consulta municípios cadastrados e abre o portal da prefeitura (CNPJ copiado).</div>
+                    </div>
+                    <button type="button" class="cf-orgao-btn" onclick="buscarMunicipio()">
+                        <i class="fas fa-map-marked-alt"></i> Buscar município
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Grupos (apenas em edição) -->
         {% if cliente and grupos %}
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Grupos</h3>
+        <div class="cf-card">
+            <p class="cf-seclabel">Grupos</p>
+            <p class="cf-hint">Para gerenciar grupos, acesse a aba "Grupos" na página de detalhes do cliente.</p>
+            {% if grupos_cliente %}
+            <div class="cf-tags">
+                {% for grupo in grupos_cliente %}<span class="cf-tag">{{ grupo.nome }}</span>{% endfor %}
             </div>
-            <div class="card-body">
-                <p class="text-muted">Para gerenciar grupos, acesse a aba "Grupos" na página de detalhes do cliente.</p>
-                {% if grupos_cliente %}
-                <div class="badges-list">
-                    {% for grupo in grupos_cliente %}
-                    <span class="badge badge-info badge-lg">{{ grupo.nome }}</span>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
+            {% endif %}
         </div>
         {% endif %}
 
-        <!-- Form Actions -->
-        <div class="form-actions">
-            <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
-                <i class="fas fa-times"></i>
-                Cancelar
-            </a>
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i>
-                {{ 'Atualizar Cliente' if cliente else 'Cadastrar Cliente' }}
+        <!-- Rodapé -->
+        <div class="cf-actions">
+            <a href="{{ url_for('clientes.index') }}" class="cf-btn-ghost"><i class="fas fa-times"></i> Cancelar</a>
+            <button type="submit" class="cf-btn-save">
+                <i class="fas fa-check"></i> {{ 'Atualizar cliente' if cliente else 'Cadastrar cliente' }}
             </button>
         </div>
     </form>
 </div>
 
-
-<!-- Modal Buscar Município -->
+<!-- Modal Buscar Município (preservado) -->
 <div id="municipioModal" class="modal" style="display: none;">
     <div class="modal-content" style="max-width: 700px;">
         <div class="modal-header">
-            <h3>
-                <i class="fas fa-map-marked-alt" style="color: var(--primary-green);"></i>
-                Buscar Município
-            </h3>
+            <h3><i class="fas fa-map-marked-alt" style="color: var(--primary-green);"></i> Buscar Município</h3>
             <button class="modal-close" onclick="fecharModalMunicipio()" aria-label="Fechar">&times;</button>
         </div>
         <div class="modal-body">
             <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-                <input type="text" id="municipioBusca" class="form-control"
-                       placeholder="Digite o nome do município..."
-                       oninput="pesquisarMunicipios()"
-                       style="flex: 1; min-width: 160px;">
-                <select id="municipioFiltroUF" class="form-control" onchange="pesquisarMunicipios()"
-                        style="max-width: 100px;">
+                <input type="text" id="municipioBusca" class="form-control" placeholder="Digite o nome do município..."
+                       oninput="pesquisarMunicipios()" style="flex: 1; min-width: 160px;">
+                <select id="municipioFiltroUF" class="form-control" onchange="pesquisarMunicipios()" style="max-width: 100px;">
                     <option value="">Todas UFs</option>
-                    {% for uf in ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA',
-                                  'MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN',
-                                  'RS','RO','RR','SC','SP','SE','TO'] %}
+                    {% for uf in ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] %}
                     <option value="{{ uf }}">{{ uf }}</option>
                     {% endfor %}
                 </select>
@@ -529,8 +405,7 @@
             </div>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
                 <small style="color: var(--text-secondary);">
-                    <i class="fas fa-info-circle"></i>
-                    Não encontrou o município?
+                    <i class="fas fa-info-circle"></i> Não encontrou o município?
                     <a href="/municipios/novo" target="_blank">Cadastrar novo município</a>
                 </small>
             </div>
@@ -544,149 +419,141 @@
 
 {% block extra_js %}
 <style>
-.cliente-form-page {
-    background: #e5e7eb;
-    border-radius: 12px;
-    padding: 16px;
-}
+.cf-page { background:#f7faf8; margin:-28px -32px 0; padding:24px 32px 40px; min-height:calc(100vh - 60px); }
+.cf-topbar { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
+.cf-back { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+           color:#15803d; text-decoration:none; background:#ecfdf5; border:1px solid #d1fae5;
+           padding:8px 12px; border-radius:9px; white-space:nowrap; }
+.cf-back:hover { background:#d1fae5; }
+.cf-title { margin:0; font-size:22px; font-weight:800; color:#0f3d2e; letter-spacing:-.02em; }
+.cf-sub { margin:2px 0 0; font-size:12.5px; color:#7d968a; }
 
-.cliente-form-page .card {
-    border: 1px solid #cbd5e1 !important;
-    background: #f8fafc;
-}
+.cf-form { max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+.cf-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:20px 22px;
+           transition:border-color .15s ease, box-shadow .15s ease; }
+.cf-card:hover { border-color:#cfe6d8; box-shadow:0 4px 14px rgba(16,120,70,.05); }
+.cf-card-hi { border-color:#86efac; box-shadow:0 6px 18px rgba(16,120,70,.10); }
 
-.cliente-form-page .card-body {
-    background: #f8fafc;
-}
+.cf-seclabel { display:flex; align-items:center; gap:12px; margin:0 0 16px;
+               font-size:10px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; color:#15803d; }
+.cf-seclabel::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+.cf-seclabel-note { color:#94a3b8; font-weight:600; letter-spacing:.3px; text-transform:none; }
 
-.cliente-form-page .form-control,
-.cliente-form-page select.form-control,
-.cliente-form-page textarea.form-control {
-    border-color: #cbd5e1;
-    background: #ffffff;
-}
+.cf-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.cf-fg { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.cf-lbl { font-size:12px; font-weight:600; color:#334155; }
+.cf-opt { color:#94a3b8; font-weight:400; }
+.cf-star { color:#eab308; font-size:11px; }
+.cf-ctrl { width:100%; height:38px; border:1px solid #d7e3dc; border-radius:9px; padding:0 11px;
+           font-size:13.5px; color:#0f172a; background:#fff; box-sizing:border-box; font-family:inherit; }
+textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
+.cf-ctrl:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.cf-ctrl[readonly] { background:#f6f8f7; color:#475569; }
+.cf-hint { font-size:11px; color:#7d968a; margin:2px 0 0; line-height:1.45; }
 
-.cliente-form-page .form-control:focus,
-.cliente-form-page select.form-control:focus,
-.cliente-form-page textarea.form-control:focus {
-    border-color: #93c5fd;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-}
+/* CNPJ grande + botão escuro Buscar na Receita */
+.cf-ctrl-big { height:46px; font-size:16px; font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+.cf-cnpj-row { display:flex; gap:10px; }
+.cf-cnpj-row .cf-ctrl-big { flex:1; }
+.cf-btn-receita { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; cursor:pointer;
+                  background:#0f3d2e; color:#eafff3; border:none; border-radius:9px; padding:0 18px;
+                  font-size:13.5px; font-weight:700; font-family:inherit; }
+.cf-btn-receita:hover { background:#12513c; }
+.cf-btn-receita:disabled { opacity:.7; cursor:default; }
 
-/* Ramos de Atividade - visual mais compacto e elegante */
-.ramos-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-}
+/* Card verde de resultado da Receita */
+.cf-receita { display:flex; align-items:flex-start; gap:12px; padding:15px 18px; border-radius:13px;
+              background:linear-gradient(135deg,#f0fdf4,#ecfdf5); border:1px solid #86efac; }
+.cf-receita-ico { flex-shrink:0; width:30px; height:30px; border-radius:50%; background:#16a34a; color:#fff;
+                  display:flex; align-items:center; justify-content:center; font-size:14px; }
+.cf-receita-tit { font-size:14px; color:#14532d; } .cf-receita-tit strong { color:#0f3d2e; }
+.cf-receita-txt { font-size:12px; color:#3f6b52; margin-top:2px; line-height:1.5; }
 
-.ramos-title {
-    margin: 0;
-    font-weight: 600;
-    font-size: 14px;
-}
+.cf-check { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:12.5px; color:#64748b; }
+.cf-check input { width:15px; height:15px; }
+.cf-check label { cursor:pointer; }
 
-.ramos-btn-novo {
-    padding: 5px 10px !important;
-    font-size: 12px !important;
-    border-radius: 6px !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08) !important;
-}
+.cf-cnaes-box { border:1px solid #e2e8f0; border-radius:9px; padding:12px; background:#f9fafb;
+                max-height:200px; overflow-y:auto; }
 
-.ramos-wrapper {
-    border: 1px solid #d1d5db;
-    border-radius: 10px;
-    padding: 12px;
-    background: linear-gradient(to bottom, #ffffff, #f8fafc);
-}
+.cf-ramos-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.cf-ramos-novo { font-size:12px; font-weight:600; color:#15803d; text-decoration:none;
+                 background:#ecfdf5; border:1px solid #d1fae5; border-radius:7px; padding:4px 10px; }
+.cf-ramos-novo:hover { background:#d1fae5; }
+.cf-ramos-box { border:1px solid #e3ece7; border-radius:11px; padding:12px; background:#fbfdfc; }
+.cf-ramos-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:8px;
+                 max-height:230px; overflow-y:auto; }
+.cf-ramo { display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid #e2e8f0;
+           border-radius:8px; background:#fff; cursor:pointer; font-size:13px; color:#334155; }
+.cf-ramo:hover { border-color:#86efac; background:#f0faf4; }
+.cf-ramo:has(input:checked) { border-color:#22c55e; background:#ecfdf5; color:#15803d; font-weight:600; }
 
-.ramos-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 8px;
-    max-height: 260px;
-    overflow-y: auto;
-}
+/* is_contador */
+.cf-contador { display:flex; align-items:flex-start; gap:10px; margin-top:16px; padding-top:16px;
+               border-top:1px solid #eef2f0; cursor:pointer; }
+.cf-contador input { margin-top:3px; width:16px; height:16px; flex-shrink:0; }
+.cf-contador strong { font-size:13.5px; color:#0f3d2e; }
+.cf-contador small { color:#64748b; font-size:12px; line-height:1.5; }
 
-.ramos-grid .ramo-item {
-    margin-bottom: 0;
-    padding: 6px 8px;
-    border-radius: 8px;
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-}
+/* Órgãos */
+.cf-orgaos { display:flex; flex-direction:column; gap:10px; }
+.cf-orgao { display:flex; align-items:center; justify-content:space-between; gap:12px;
+            border:1px solid #e3ece7; border-radius:11px; padding:12px 14px; background:#fbfdfc; }
+.cf-orgao-tit { font-size:13px; font-weight:700; color:#0f3d2e; display:flex; align-items:center; gap:8px; }
+.cf-orgao-tit i { color:#16a34a; }
+.cf-orgao-desc { font-size:11.5px; color:#7d968a; margin-top:3px; }
+.cf-orgao-btn { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; cursor:pointer;
+                background:#fff; color:#15803d; border:1px solid #86efac; border-radius:9px;
+                padding:8px 14px; font-size:12.5px; font-weight:600; font-family:inherit; }
+.cf-orgao-btn:hover { background:#ecfdf5; }
 
-.ramos-grid .ramo-item .form-check-input {
-    margin-top: 0;
-}
+.cf-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.cf-tag { font-size:12px; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; border-radius:7px; padding:3px 9px; }
 
-.ramos-grid .ramo-label {
-    margin-left: 8px;
-    font-size: 13px;
-    line-height: 1.25;
-    cursor: pointer;
-    user-select: none;
-    color: #334155;
-}
+/* Rodapé */
+.cf-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+.cf-btn-ghost { display:inline-flex; align-items:center; gap:7px; text-decoration:none; cursor:pointer;
+                background:#fff; color:#64748b; border:1px solid #e3ece7; border-radius:10px;
+                padding:11px 20px; font-size:13.5px; font-weight:600; }
+.cf-btn-ghost:hover { background:#f7faf8; color:#334155; }
+.cf-btn-save { display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:none;
+               background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; border-radius:10px;
+               padding:11px 22px; font-size:13.5px; font-weight:800; font-family:inherit; }
+.cf-btn-save:hover { filter:brightness(1.05); }
 
-.ramos-grid .form-check:has(input[type="checkbox"]):hover {
-    background-color: #f0f9ff !important;
-    border-color: #22C55E !important;
-    transform: translateY(-0.5px);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-}
+/* Nomes em maiúsculas (aplicado via JS ao textTransform) */
 
-.ramos-grid .form-check:has(input[type="checkbox"]:checked) {
-    background-color: #ecfdf5 !important;
-    border-color: #22C55E !important;
-}
-
-/* Style Estado select for better visibility */
-#estado {
-    font-weight: 600;
+@media (max-width:720px) {
+    .cf-page { margin:-16px -16px 0; padding:18px 16px 30px; }
+    .cf-grid2 { grid-template-columns:1fr; }
+    .cf-cnpj-row { flex-direction:column; }
+    .cf-btn-receita { justify-content:center; padding:11px; }
+    .cf-orgao { flex-direction:column; align-items:stretch; gap:10px; }
+    .cf-orgao-btn { justify-content:center; }
+    .cf-actions { flex-direction:column-reverse; }
+    .cf-btn-ghost, .cf-btn-save { justify-content:center; }
+    .cf-topbar { flex-wrap:wrap; }
 }
 </style>
 <script>
 // Variável global para armazenar o último CNPJ consultado
 let ultimoCNPJConsultado = '';
 
-// Toggle fields based on tipo_pessoa
+// Toggle fields based on tipo_pessoa — via classes .pf-only / .pj-only (layout em
+// vários cards). Mesma REGRA de antes: mostra os campos do tipo e marca required.
 function toggleTipoFields() {
-    const tipoPessoa = document.getElementById('tipo_pessoa').value;
-    const pfFields = document.getElementById('pfFields');
-    const pjFields = document.getElementById('pjFields');
-    
-    if (tipoPessoa === 'PF') {
-        pfFields.style.display = 'block';
-        pjFields.style.display = 'none';
-        
-        // Make PF fields required
-        document.getElementById('nome_razao_social_pf').required = true;
-        document.getElementById('cpf_cnpj_pf').required = true;
-        
-        // Make PJ fields not required
-        document.getElementById('nome_razao_social_pj').required = false;
-        document.getElementById('cpf_cnpj_pj').required = false;
-    } else if (tipoPessoa === 'PJ') {
-        pfFields.style.display = 'none';
-        pjFields.style.display = 'block';
-        
-        // Make PJ fields required
-        document.getElementById('nome_razao_social_pj').required = true;
-        document.getElementById('cpf_cnpj_pj').required = true;
-        
-        // Make PF fields not required
-        document.getElementById('nome_razao_social_pf').required = false;
-        document.getElementById('cpf_cnpj_pf').required = false;
-    } else {
-        pfFields.style.display = 'none';
-        pjFields.style.display = 'none';
-    }
+    const tipo = document.getElementById('tipo_pessoa').value;
+    document.querySelectorAll('.pf-only').forEach(function (el) { el.style.display = (tipo === 'PF') ? '' : 'none'; });
+    document.querySelectorAll('.pj-only').forEach(function (el) { el.style.display = (tipo === 'PJ') ? '' : 'none'; });
+
+    const pfNome = document.getElementById('nome_razao_social_pf');
+    const pfCpf  = document.getElementById('cpf_cnpj_pf');
+    const pjNome = document.getElementById('nome_razao_social_pj');
+    const pjCnpj = document.getElementById('cpf_cnpj_pj');
+    if (pfNome) pfNome.required = (tipo === 'PF');
+    if (pfCpf)  pfCpf.required  = (tipo === 'PF');
+    if (pjNome) pjNome.required = (tipo === 'PJ');
+    if (pjCnpj) pjCnpj.required = (tipo === 'PJ');
 }
 
 // Toggle Isento de Inscrição Estadual
@@ -706,128 +573,81 @@ function toggleIsentoIE(checkbox) {
     }
 }
 
-// Call on page load if editing
 document.addEventListener('DOMContentLoaded', function() {
     const estadoSelect = document.getElementById('estado');
     if (estadoSelect && estadoSelect.dataset.selectedUf) {
         estadoSelect.value = estadoSelect.dataset.selectedUf;
     }
 
-    // Apply initial ISENTO state if editing a client with ISENTO
     var isentoCheckbox = document.getElementById('inscricao_estadual_isento');
     if (isentoCheckbox && isentoCheckbox.checked) {
         toggleIsentoIE(isentoCheckbox);
     }
 
-    // Before form submit: inject 'ISENTO' into disabled field so value is sent
+    // Antes do submit: injeta 'ISENTO' no campo desabilitado para o valor ser enviado
     var form = document.querySelector('form.form-container');
     if (form) {
         form.addEventListener('submit', function() {
             var cb = document.getElementById('inscricao_estadual_isento');
             var ie = document.getElementById('inscricao_estadual');
-            if (cb && cb.checked) {
-                ie.disabled = false;
-                ie.value = 'ISENTO';
-            }
+            if (cb && cb.checked) { ie.disabled = false; ie.value = 'ISENTO'; }
         });
     }
 
     toggleTipoFields();
-    
-    // Convert name fields to UPPERCASE automatically
-    const nameFields = [
-        document.getElementById('nome_razao_social_pf'),
-        document.getElementById('nome_razao_social_pj'),
-        document.getElementById('nome_fantasia')
-    ];
-    
-    nameFields.forEach(field => {
+
+    // Nomes em MAIÚSCULAS automaticamente
+    [document.getElementById('nome_razao_social_pf'),
+     document.getElementById('nome_razao_social_pj'),
+     document.getElementById('nome_fantasia')].forEach(function (field) {
         if (field) {
-            // Apply uppercase CSS
             field.style.textTransform = 'uppercase';
-            
-            // Convert on input
-            field.addEventListener('input', function(e) {
-                const start = e.target.selectionStart;
-                const end = e.target.selectionEnd;
+            field.addEventListener('input', function (e) {
+                const start = e.target.selectionStart, end = e.target.selectionEnd;
                 e.target.value = e.target.value.toUpperCase();
                 e.target.setSelectionRange(start, end);
             });
         }
     });
-    
-    // Simple input masks (could be improved with a library)
-    const cpfInputs = document.querySelectorAll('.cpf-mask');
-    const cnpjInputs = document.querySelectorAll('.cnpj-mask');
-    const phoneInputs = document.querySelectorAll('.phone-mask');
-    
-    // CPF mask
-    cpfInputs.forEach(input => {
-        input.addEventListener('input', function(e) {
+
+    // Máscaras
+    document.querySelectorAll('.cpf-mask').forEach(function (input) {
+        input.addEventListener('input', function (e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 11) value = value.slice(0, 11);
-            
-            if (value.length > 9) {
-                value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-            } else if (value.length > 6) {
-                value = value.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
-            } else if (value.length > 3) {
-                value = value.replace(/(\d{3})(\d{1,3})/, '$1.$2');
-            }
-            
+            if (value.length > 9)      value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            else if (value.length > 6) value = value.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            else if (value.length > 3) value = value.replace(/(\d{3})(\d{1,3})/, '$1.$2');
             e.target.value = value;
         });
     });
-    
-    // CNPJ mask
-    cnpjInputs.forEach(input => {
-        input.addEventListener('input', function(e) {
+    document.querySelectorAll('.cnpj-mask').forEach(function (input) {
+        input.addEventListener('input', function (e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 14) value = value.slice(0, 14);
-            
-            if (value.length > 12) {
-                value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-            } else if (value.length > 8) {
-                value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
-            } else if (value.length > 5) {
-                value = value.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
-            } else if (value.length > 2) {
-                value = value.replace(/(\d{2})(\d{1,3})/, '$1.$2');
-            }
-            
+            if (value.length > 12)      value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+            else if (value.length > 8)  value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+            else if (value.length > 5)  value = value.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            else if (value.length > 2)  value = value.replace(/(\d{2})(\d{1,3})/, '$1.$2');
             e.target.value = value;
         });
     });
-    
-    // Phone mask
-    phoneInputs.forEach(input => {
-        input.addEventListener('input', function(e) {
+    document.querySelectorAll('.phone-mask').forEach(function (input) {
+        input.addEventListener('input', function (e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 11) value = value.slice(0, 11);
-            
-            if (value.length > 10) {
-                value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-            } else if (value.length > 6) {
-                value = value.replace(/(\d{2})(\d{4})(\d{1,4})/, '($1) $2-$3');
-            } else if (value.length > 2) {
-                value = value.replace(/(\d{2})(\d{1,5})/, '($1) $2');
-            }
-            
+            if (value.length > 10)     value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            else if (value.length > 6) value = value.replace(/(\d{2})(\d{4})(\d{1,4})/, '($1) $2-$3');
+            else if (value.length > 2) value = value.replace(/(\d{2})(\d{1,5})/, '($1) $2');
             e.target.value = value;
         });
     });
-    
-    // CEP mask
-    const cepInput = document.getElementById('cep');
+    var cepInput = document.getElementById('cep');
     if (cepInput) {
-        cepInput.addEventListener('input', function(e) {
+        cepInput.addEventListener('input', function (e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 8) value = value.slice(0, 8);
-            
-            if (value.length > 5) {
-                value = value.replace(/(\d{5})(\d{1,3})/, '$1-$2');
-            }
-            
+            if (value.length > 5) value = value.replace(/(\d{5})(\d{1,3})/, '$1-$2');
             e.target.value = value;
         });
     }
@@ -837,7 +657,6 @@ document.addEventListener('DOMContentLoaded', function() {
 document.querySelector('form').addEventListener('submit', function(e) {
     const dataInicio = document.getElementById('data_inicio_contrato').value;
     const dataFim = document.getElementById('data_fim_contrato').value;
-    
     if (dataInicio && dataFim && dataFim < dataInicio) {
         e.preventDefault();
         alert('A data de fim do contrato não pode ser anterior à data de início.');
@@ -845,40 +664,25 @@ document.querySelector('form').addEventListener('submit', function(e) {
     }
 });
 
-// Função para consultar CNPJ na Receita Federal
+// Consultar CNPJ na Receita Federal
 function consultarCNPJ() {
     const cnpjInput = document.getElementById('cpf_cnpj_pj');
     const cnpj = cnpjInput.value.replace(/\D/g, '');
-    
     if (!cnpj || cnpj.length !== 14) {
         alert('Por favor, digite um CNPJ válido com 14 dígitos.');
         cnpjInput.focus();
         return;
     }
-    
     const btn = document.getElementById('btnConsultarCNPJ');
     const btnOriginalHTML = btn.innerHTML;
-    
-    // Mostrar loading
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
-    
-    // Fazer requisição
     fetch(`/api/consultar-cnpj/${cnpj}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                console.log('🎯 DADOS RECEBIDOS! Preenchendo automaticamente...');
-                console.log('📦 DADOS COMPLETOS:', JSON.stringify(data.data, null, 2));
-                
-                // Salvar CNPJ consultado para uso no Sintegra
                 ultimoCNPJConsultado = cnpj;
-                console.log('✅ CNPJ salvo para Sintegra:', ultimoCNPJConsultado);
-                
-                // SOLUÇÃO NUCLEAR: Preencher com delay para garantir DOM pronto
-                setTimeout(() => {
-                    preencherDadosCNPJ(data.data);
-                }, 100); // Pequeno delay para garantir DOM está pronto
+                setTimeout(() => { preencherDadosCNPJ(data.data); }, 100);
             } else {
                 alert(data.message || 'Erro ao consultar CNPJ. Verifique o número e tente novamente.');
             }
@@ -887,647 +691,261 @@ function consultarCNPJ() {
             console.error('Erro:', error);
             alert('Erro ao consultar CNPJ. Verifique sua conexão e tente novamente.');
         })
-        .finally(() => {
-            // Restaurar botão
-            btn.disabled = false;
-            btn.innerHTML = btnOriginalHTML;
-        });
+        .finally(() => { btn.disabled = false; btn.innerHTML = btnOriginalHTML; });
 }
 
-// Função para preencher os campos com dados da Receita
+// Preencher os campos com dados da Receita
 function preencherDadosCNPJ(data) {
-    console.log('=== 🚀 INÍCIO DO PREENCHIMENTO AUTOMÁTICO (VERSÃO DEFINITIVA) ===');
-    console.log('=== 📦 DADOS COMPLETOS RECEBIDOS ===');
-    console.log(JSON.stringify(data, null, 2));
-    
-    // Listas para rastreamento
     const preenchidos = [];
     const naoPreenchidos = [];
     const camposNaoExistem = [];
-    
-    // Helper function para tentar preencher um campo
+
     function tentarPreencher(fieldId, valor, label) {
         try {
             if (!valor || (typeof valor === 'string' && valor.trim() === '')) {
-                naoPreenchidos.push(`${label} (dado não disponível)`);
-                console.warn(`⚠️ ${label}: Dado não disponível`);
-                return false;
+                naoPreenchidos.push(`${label} (dado não disponível)`); return false;
             }
-            
             const campo = document.getElementById(fieldId);
-            if (!campo) {
-                camposNaoExistem.push(`${label} (campo #${fieldId} não existe no HTML)`);
-                console.error(`❌ ${label}: Campo #${fieldId} NÃO EXISTE no DOM!`);
-                return false;
-            }
-            
+            if (!campo) { camposNaoExistem.push(`${label} (#${fieldId} não existe)`); return false; }
             campo.value = valor;
             preenchidos.push(`${label}: ${valor}`);
-            console.log(`✅ ${label} preenchido: ${valor}`);
             return true;
-        } catch (e) {
-            console.error(`❌ ERRO ao preencher ${label}:`, e);
-            naoPreenchidos.push(`${label} (erro: ${e.message})`);
-            return false;
-        }
+        } catch (e) { naoPreenchidos.push(`${label} (erro: ${e.message})`); return false; }
     }
-    
-    console.log('=== 📋 PREENCHENDO TODOS OS CAMPOS ===');
-    
-    // 1. Razão Social
+
     tentarPreencher('nome_razao_social_pj', data.razao_social, 'Razão Social');
-    
-    // 2. Nome Fantasia
     tentarPreencher('nome_fantasia', data.nome_fantasia, 'Nome Fantasia');
-    
-    // 3. Porte da Empresa (com mapeamento)
+
     if (data.porte) {
-        const porteMap = {
-            'ME': 'ME',
-            'EPP': 'EPP',
-            'DEMAIS': 'MEDIO',
-            'MICRO EMPRESA': 'ME',
-            'EMPRESA DE PEQUENO PORTE': 'EPP'
-        };
+        const porteMap = { 'ME':'ME','EPP':'EPP','DEMAIS':'MEDIO','MICRO EMPRESA':'ME','EMPRESA DE PEQUENO PORTE':'EPP' };
         const porte = porteMap[data.porte.toUpperCase()] || '';
         tentarPreencher('porte_empresa', porte, 'Porte da Empresa');
-    } else {
-        naoPreenchidos.push('Porte da Empresa (não disponível)');
-    }
-    
-    // 4. Data de Início da Atividade (converter DD/MM/YYYY -> YYYY-MM-DD)
+    } else { naoPreenchidos.push('Porte da Empresa (não disponível)'); }
+
     if (data.data_inicio_atividade) {
-        console.log(`DEBUG: Data recebida da API: "${data.data_inicio_atividade}"`);
         let dataFormatada = '';
-        
-        // Tentar split por "/"
         if (data.data_inicio_atividade.includes('/')) {
-            const partes = data.data_inicio_atividade.split('/');
-            if (partes.length === 3) {
-                // DD/MM/YYYY -> YYYY-MM-DD
-                dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-            }
-        } 
-        // Tentar split por "-" (caso já venha em outro formato)
-        else if (data.data_inicio_atividade.includes('-')) {
-            const partes = data.data_inicio_atividade.split('-');
-            if (partes.length === 3 && partes[0].length === 4) {
-                // Já está em YYYY-MM-DD
-                dataFormatada = data.data_inicio_atividade;
-            } else if (partes.length === 3 && partes[0].length === 2) {
-                // DD-MM-YYYY -> YYYY-MM-DD
-                dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-            }
+            const p = data.data_inicio_atividade.split('/');
+            if (p.length === 3) dataFormatada = `${p[2]}-${p[1]}-${p[0]}`;
+        } else if (data.data_inicio_atividade.includes('-')) {
+            const p = data.data_inicio_atividade.split('-');
+            if (p.length === 3 && p[0].length === 4) dataFormatada = data.data_inicio_atividade;
+            else if (p.length === 3 && p[0].length === 2) dataFormatada = `${p[2]}-${p[1]}-${p[0]}`;
         }
-        
-        if (dataFormatada) {
-            console.log(`DEBUG: Data formatada para: "${dataFormatada}"`);
-            tentarPreencher('data_inicio_atividade', dataFormatada, 'Data de Início da Atividade');
-        } else {
-            console.warn(`⚠️ Não foi possível formatar data: "${data.data_inicio_atividade}"`);
-            naoPreenchidos.push(`Data de Início da Atividade (formato inválido: ${data.data_inicio_atividade})`);
-        }
-    } else {
-        naoPreenchidos.push('Data de Início da Atividade (não disponível)');
-    }
-    
-    // 5. Inscrição Estadual — only fill if not marked as ISENTO
+        if (dataFormatada) tentarPreencher('data_inicio_atividade', dataFormatada, 'Data de Início da Atividade');
+        else naoPreenchidos.push(`Data de Início da Atividade (formato inválido: ${data.data_inicio_atividade})`);
+    } else { naoPreenchidos.push('Data de Início da Atividade (não disponível)'); }
+
     var isentoIECb = document.getElementById('inscricao_estadual_isento');
     if (!(isentoIECb && isentoIECb.checked)) {
         if (data.inscricao_estadual && data.inscricao_estadual.trim() !== '') {
             tentarPreencher('inscricao_estadual', data.inscricao_estadual, 'Inscrição Estadual');
-        } else {
-            console.warn('⚠️ Inscrição Estadual: não disponível ou vazia');
-            console.warn('   Nota: Nem todas as empresas possuem IE cadastrada');
-            naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)');
-        }
+        } else { naoPreenchidos.push('Inscrição Estadual (não disponível - algumas empresas não têm)'); }
     }
-    
-    // 6. CNAE Fiscal
+
     tentarPreencher('cnae_fiscal', data.cnae_fiscal, 'CNAE Fiscal');
-    
-    // 7. Descrição do CNAE
     tentarPreencher('cnae_fiscal_descricao', data.cnae_fiscal_descricao, 'Descrição do CNAE');
-    
-    // 7.5. CNAEs Secundários (NOVO)
+
     if (data.cnaes_secundarios && Array.isArray(data.cnaes_secundarios) && data.cnaes_secundarios.length > 0) {
-        console.log(`✅ CNAEs Secundários encontrados: ${data.cnaes_secundarios.length}`);
         const container = document.getElementById('cnaes_secundarios_container');
         const lista = document.getElementById('cnaes_secundarios_list');
-        
         if (container && lista) {
-            // Mostrar container
             container.style.display = 'block';
-            
-            // Criar lista de CNAEs
-            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-            data.cnaes_secundarios.forEach((cnae, index) => {
+            let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+            data.cnaes_secundarios.forEach(function (cnae) {
                 if (typeof cnae === 'object') {
                     const codigo = cnae.codigo || cnae.cnae || '';
                     const descricao = cnae.descricao || '';
-                    html += `
-                        <div style="padding: 10px; background: white; border-radius: 6px; border-left: 3px solid #3b82f6;">
-                            <strong style="color: #1e40af; font-size: 14px;">${codigo}</strong>
-                            <span style="color: #64748b; font-size: 13px; margin-left: 8px;">${descricao}</span>
-                        </div>
-                    `;
+                    html += `<div style="padding:10px;background:#fff;border-radius:6px;border-left:3px solid #16a34a;">
+                        <strong style="color:#15803d;font-size:14px;">${codigo}</strong>
+                        <span style="color:#64748b;font-size:13px;margin-left:8px;">${descricao}</span></div>`;
                 } else if (typeof cnae === 'string') {
-                    html += `
-                        <div style="padding: 10px; background: white; border-radius: 6px; border-left: 3px solid #3b82f6;">
-                            <span style="color: #1e40af; font-size: 13px;">${cnae}</span>
-                        </div>
-                    `;
+                    html += `<div style="padding:10px;background:#fff;border-radius:6px;border-left:3px solid #16a34a;">
+                        <span style="color:#15803d;font-size:13px;">${cnae}</span></div>`;
                 }
             });
             html += '</div>';
             lista.innerHTML = html;
-            
             preenchidos.push(`CNAEs Secundários: ${data.cnaes_secundarios.length} encontrados`);
-            console.log(`✅ ${data.cnaes_secundarios.length} CNAEs secundários exibidos`);
         }
     } else {
-        console.log('ℹ️ Sem CNAEs secundários (normal - nem todas empresas têm)');
-        // Esconder container se existir
         const container = document.getElementById('cnaes_secundarios_container');
-        if (container) {
-            container.style.display = 'none';
-        }
+        if (container) container.style.display = 'none';
     }
-    
-    // 8. Email (tentar múltiplos nomes de campos)
-    // 8. E-mail (tentar todos os campos possíveis e preencher diretamente)
-    console.log('=== DEBUG EMAIL INÍCIO ===');
-    console.log('data.email:', data.email);
-    console.log('data.correio_eletronico:', data.correio_eletronico);
-    console.log('data.endereco_eletronico:', data.endereco_eletronico);
-    
+
     const emailValue = data.email || data.correio_eletronico || data.endereco_eletronico || '';
-    console.log('emailValue final:', emailValue, 'tipo:', typeof emailValue);
-    
-    // DEBUG: Mostrar alert se email foi encontrado nos dados
-    // IMPORTANTE: Verificar se tem CONTEÚDO (não apenas se existe)
-    // String vazia "" é falsy, mas queremos detectar isso também
-    if (emailValue && emailValue.trim() !== '') {
-        console.log('⚠️ EMAIL ENCONTRADO NOS DADOS! Valor:', emailValue);
-    } else {
-        console.warn('⚠️ NENHUM CAMPO DE EMAIL NOS DADOS DA API (ou está vazio)');
-    }
-    
-    // NOVO: Verificar se campo existe e seu estado ANTES de tentar preencher
     const emailField = document.getElementById('email');
-    console.log('Campo email encontrado?', emailField ? 'SIM' : 'NÃO');
-    if (emailField) {
-        console.log('Campo email disabled?', emailField.disabled);
-        console.log('Campo email readonly?', emailField.readOnly);
-        console.log('Campo email valor atual:', emailField.value);
-    }
-    
-    if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '') {
+    if (emailValue && typeof emailValue === 'string' && emailValue.trim() !== '' && emailField) {
         const emailFinal = emailValue.toLowerCase().trim();
-        console.log('Tentando preencher email com:', emailFinal);
-        
-        // Preencher DIRETAMENTE (método mais garantido)
-        if (emailField) {
-            // Remove readonly temporariamente se existir
-            const wasReadonly = emailField.readOnly;
-            const wasDisabled = emailField.disabled;
-            
-            emailField.readOnly = false;
-            emailField.disabled = false;
-            
-            emailField.value = emailFinal;
-            
-            // Dispara eventos para garantir que frameworks detectem a mudança
-            emailField.dispatchEvent(new Event('input', { bubbles: true }));
-            emailField.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            console.log('✅ Email preenchido DIRETAMENTE:', emailFinal);
-            console.log('✅ Valor do campo após preencher:', emailField.value);
-            
-            // Restaura estados se estavam
-            if (wasReadonly) {
-                emailField.readOnly = true;
-            }
-            if (wasDisabled) {
-                emailField.disabled = true;
-            }
-            
-            preenchidos.push('E-mail: ' + emailFinal);
-        } else {
-            console.error('❌ Campo email não encontrado no DOM!');
-            camposNaoExistem.push('E-mail (campo não existe no HTML)');
-        }
-    } else {
-        console.warn('⚠️ E-mail: não disponível ou vazio');
-        console.warn('   Nota: Muitas empresas não possuem e-mail cadastrado na Receita Federal');
-        naoPreenchidos.push('E-mail (não disponível - normal, muitas empresas não têm cadastrado)');
-    }
-    
-    // 9. Telefone (formatar)
+        const wasReadonly = emailField.readOnly, wasDisabled = emailField.disabled;
+        emailField.readOnly = false; emailField.disabled = false;
+        emailField.value = emailFinal;
+        emailField.dispatchEvent(new Event('input', { bubbles: true }));
+        emailField.dispatchEvent(new Event('change', { bubbles: true }));
+        if (wasReadonly) emailField.readOnly = true;
+        if (wasDisabled) emailField.disabled = true;
+        preenchidos.push('E-mail: ' + emailFinal);
+    } else { naoPreenchidos.push('E-mail (não disponível)'); }
+
     if (data.ddd_telefone_1) {
         const tel1 = String(data.ddd_telefone_1).replace(/\D/g, '');
         if (tel1.length >= 10) {
-            let telFormatado;
-            if (tel1.length === 10) {
-                telFormatado = tel1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-            } else if (tel1.length === 11) {
-                telFormatado = tel1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-            } else {
-                telFormatado = tel1;
-            }
-            tentarPreencher('telefone', telFormatado, 'Telefone');
-        } else {
-            naoPreenchidos.push('Telefone (número inválido)');
-        }
-    } else {
-        naoPreenchidos.push('Telefone (não disponível)');
-    }
-    
-    // 10. Celular (formatar)
+            let t = tel1.length === 10 ? tel1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
+                  : tel1.length === 11 ? tel1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : tel1;
+            tentarPreencher('telefone', t, 'Telefone');
+        } else { naoPreenchidos.push('Telefone (número inválido)'); }
+    } else { naoPreenchidos.push('Telefone (não disponível)'); }
+
     if (data.ddd_telefone_2) {
         const tel2 = String(data.ddd_telefone_2).replace(/\D/g, '');
         if (tel2.length >= 10) {
-            let telFormatado;
-            if (tel2.length === 10) {
-                telFormatado = tel2.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-            } else if (tel2.length === 11) {
-                telFormatado = tel2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-            } else {
-                telFormatado = tel2;
-            }
-            tentarPreencher('celular', telFormatado, 'Celular');
-        } else {
-            naoPreenchidos.push('Celular (número inválido)');
-        }
-    } else {
-        naoPreenchidos.push('Celular (não disponível)');
-    }
-    
-    // 11. CEP (formatar)
+            let t = tel2.length === 10 ? tel2.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
+                  : tel2.length === 11 ? tel2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : tel2;
+            tentarPreencher('celular', t, 'Celular');
+        } else { naoPreenchidos.push('Celular (número inválido)'); }
+    } else { naoPreenchidos.push('Celular (não disponível)'); }
+
     if (data.cep) {
-        const cepFormatado = String(data.cep).replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
-        tentarPreencher('cep', cepFormatado, 'CEP');
-    } else {
-        naoPreenchidos.push('CEP (não disponível)');
-    }
-    
-    // 12. Logradouro
+        const cepF = String(data.cep).replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2');
+        tentarPreencher('cep', cepF, 'CEP');
+    } else { naoPreenchidos.push('CEP (não disponível)'); }
+
     tentarPreencher('logradouro', data.logradouro, 'Logradouro');
-    
-    // 13. Número
     tentarPreencher('numero', data.numero, 'Número');
-    
-    // 14. Complemento
     tentarPreencher('complemento', data.complemento, 'Complemento');
-    
-    // 15. Bairro
     tentarPreencher('bairro', data.bairro, 'Bairro');
-    
-    // 16. Cidade
     tentarPreencher('cidade', data.municipio, 'Cidade');
-    
-    // 17. Estado/UF
-    if (data.uf) {
-        tentarPreencher('estado', data.uf.toUpperCase(), 'Estado (UF)');
-    } else {
-        naoPreenchidos.push('Estado (não disponível)');
+    if (data.uf) tentarPreencher('estado', data.uf.toUpperCase(), 'Estado (UF)');
+    else naoPreenchidos.push('Estado (não disponível)');
+
+    // Mostra o CARD VERDE com o resultado (a automação fica visível pro usuário).
+    var card = document.getElementById('receitaResult');
+    if (card) {
+        document.getElementById('receitaRazao').textContent = data.razao_social || 'empresa localizada';
+        document.getElementById('receitaResumo').innerHTML =
+            '<strong>' + preenchidos.length + '</strong> campo(s) preenchido(s) com dados da Receita. '
+            + 'Confira e complete o que faltar antes de salvar.';
+        card.style.display = 'flex';
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    
-    // === RESUMO FINAL ===
-    console.log('=== ✅ CAMPOS PREENCHIDOS COM SUCESSO (' + preenchidos.length + ') ===');
-    preenchidos.forEach((item, i) => console.log(`  ${i+1}. ✅ ${item}`));
-    
-    console.log('=== ⚠️ CAMPOS NÃO PREENCHIDOS (' + naoPreenchidos.length + ') ===');
-    naoPreenchidos.forEach((item, i) => console.log(`  ${i+1}. ⚠️ ${item}`));
-    
-    if (camposNaoExistem.length > 0) {
-        console.log('=== ❌ CAMPOS QUE NÃO EXISTEM NO HTML (' + camposNaoExistem.length + ') ===');
-        camposNaoExistem.forEach((item, i) => console.log(`  ${i+1}. ❌ ${item}`));
-    }
-    
-    // ALERT com resumo para usuário
-    let mensagem = `✅ Consulta CNPJ realizada com sucesso!\n\n`;
-    mensagem += `📊 RESUMO DO PREENCHIMENTO:\n\n`;
-    mensagem += `✅ Campos preenchidos: ${preenchidos.length}\n`;
-    mensagem += `⚠️ Campos não disponíveis: ${naoPreenchidos.length}\n`;
-    
-    if (camposNaoExistem.length > 0) {
-        mensagem += `❌ Campos com erro: ${camposNaoExistem.length}\n\n`;
-        mensagem += `⚠️ ATENÇÃO: Alguns campos não existem no formulário!\n`;
-        mensagem += `Isso pode indicar problema no código.\n`;
-        mensagem += `Abra o Console (F12) para ver detalhes.`;
-    } else if (preenchidos.length < 5) {
-        mensagem += `\n⚠️ ATENÇÃO: Poucos campos foram preenchidos!\n`;
-        mensagem += `Isso NÃO É NORMAL.\n\n`;
-        mensagem += `Possíveis causas:\n`;
-        mensagem += `1. Cache do navegador (MAIS PROVÁVEL)\n`;
-        mensagem += `2. Código não deployado\n\n`;
-        mensagem += `SOLUÇÃO: Feche o navegador completamente,\n`;
-        mensagem += `reabra e pressione Ctrl+Shift+Delete\n`;
-        mensagem += `para limpar o cache.`;
-    } else {
-        mensagem += `\nPor favor, revise os dados preenchidos\n`;
-        mensagem += `e complete os campos restantes manualmente.`;
-    }
-    
-    alert(mensagem);
-    console.log('=== 🏁 FIM DO PREENCHIMENTO AUTOMÁTICO ===');
 }
 
-// Função para buscar município no banco de dados interno
+// Município (modal) — preservado
 function buscarMunicipio() {
-    const modal = document.getElementById('municipioModal');
-    modal.style.display = 'block';
-
-    // Auto-fill cidade from address fields populated by CNPJ lookup
+    document.getElementById('municipioModal').style.display = 'block';
     const cidadeEl = document.getElementById('cidade');
     const estadoEl = document.getElementById('estado');
     const cidadeVal = cidadeEl ? cidadeEl.value.trim() : '';
-
-    if (cidadeVal) {
-        document.getElementById('municipioBusca').value = cidadeVal;
-    }
-    if (estadoEl && estadoEl.value) {
-        document.getElementById('municipioFiltroUF').value = estadoEl.value;
-    }
-
-    // Fire search immediately with pre-filled values
+    if (cidadeVal) document.getElementById('municipioBusca').value = cidadeVal;
+    if (estadoEl && estadoEl.value) document.getElementById('municipioFiltroUF').value = estadoEl.value;
     pesquisarMunicipios();
 }
+function fecharModalMunicipio() { document.getElementById('municipioModal').style.display = 'none'; }
 
-function fecharModalMunicipio() {
-    document.getElementById('municipioModal').style.display = 'none';
-}
-
-// Fallback copy helper using deprecated execCommand (for older browsers)
 function _copiarViaExecCommand(text) {
     try {
         const tmp = document.createElement('input');
-        tmp.value = text;
-        tmp.style.position = 'absolute';
-        tmp.style.left = '-9999px';
+        tmp.value = text; tmp.style.position = 'absolute'; tmp.style.left = '-9999px';
         tmp.setAttribute('readonly', '');
-        document.body.appendChild(tmp);
-        tmp.select();
-        tmp.setSelectionRange(0, 99999);
-        document.execCommand('copy');
-        document.body.removeChild(tmp);
-    } catch (e) { /* silent */ }
+        document.body.appendChild(tmp); tmp.select(); tmp.setSelectionRange(0, 99999);
+        document.execCommand('copy'); document.body.removeChild(tmp);
+    } catch (e) {}
 }
 
-// Copy CNPJ (digits only) to clipboard and open the portal URL
 function abrirPortalMunicipio(url) {
-    // Get CNPJ from form
-    let cnpj = '';
-    if (ultimoCNPJConsultado) {
-        cnpj = ultimoCNPJConsultado;
-    } else {
-        const cnpjField = document.getElementById('cpf_cnpj_pj');
-        cnpj = cnpjField ? cnpjField.value.trim() : '';
-    }
+    let cnpj = ultimoCNPJConsultado || '';
+    if (!cnpj) { const f = document.getElementById('cpf_cnpj_pj'); cnpj = f ? f.value.trim() : ''; }
     const cnpjLimpo = cnpj.replace(/\D/g, '');
-
-    // Copy CNPJ to clipboard so user can paste it in the portal
-    // Prefer modern Clipboard API; fall back to execCommand for older browsers
-    let copiou = false;
     if (cnpjLimpo) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(cnpjLimpo).then(function() {
-                copiou = true;
-            }).catch(function() {
-                // Fallback via execCommand
-                _copiarViaExecCommand(cnpjLimpo);
-            });
-        } else {
-            _copiarViaExecCommand(cnpjLimpo);
-        }
-
-        // Show a brief toast so user knows CNPJ is in the clipboard
+            navigator.clipboard.writeText(cnpjLimpo).catch(function () { _copiarViaExecCommand(cnpjLimpo); });
+        } else { _copiarViaExecCommand(cnpjLimpo); }
         const toast = document.createElement('div');
         toast.textContent = '📋 CNPJ ' + cnpjLimpo + ' copiado! Cole no portal da prefeitura.';
         toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);' +
-            'background:#22C55E;color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;' +
+            'background:#16a34a;color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;' +
             'font-weight:600;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
         document.body.appendChild(toast);
-        setTimeout(function() { document.body.removeChild(toast); }, 4000);
+        setTimeout(function () { document.body.removeChild(toast); }, 4000);
     }
-
-    // Open portal in a new tab — use anchor click to avoid popup-blocker interference
     var a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 function pesquisarMunicipios() {
     const q = document.getElementById('municipioBusca').value.trim();
     const uf = document.getElementById('municipioFiltroUF').value;
     const resultados = document.getElementById('municipioResultados');
-
     resultados.innerHTML = '<p style="color:var(--text-secondary);text-align:center;">Buscando...</p>';
-
     const params = new URLSearchParams();
     if (q) params.append('q', q);
     if (uf) params.append('uf', uf);
-
-    // Build "cadastrar" link with pre-filled nome/uf query params
-    const nomeEnc = encodeURIComponent(q);
-    const ufEnc = encodeURIComponent(uf);
-    const cadastrarUrl = '/municipios/novo' + (q || uf ? '?nome=' + nomeEnc + '&uf=' + ufEnc : '');
-
+    const cadastrarUrl = '/municipios/novo' + (q || uf ? '?nome=' + encodeURIComponent(q) + '&uf=' + encodeURIComponent(uf) : '');
     fetch('/api/municipios/search?' + params.toString())
         .then(r => r.json())
         .then(data => {
             if (!data.municipios || data.municipios.length === 0) {
                 resultados.innerHTML =
-                    '<div style="text-align:center;padding:24px;">' +
-                    '<div style="font-size:2rem;margin-bottom:8px;">🏙️</div>' +
-                    '<p style="color:var(--text-secondary);margin-bottom:12px;">' +
-                    '<strong>Município sem Cadastro</strong><br>' +
-                    (q ? '<small>Nenhum resultado para <em>"' + q + '"</em>' + (uf ? ' (' + uf + ')' : '') + '</small>' : '') +
-                    '</p>' +
-                    '<a href="' + cadastrarUrl + '" target="_blank" ' +
-                    'style="display:inline-block;padding:8px 18px;background:var(--primary-green);color:#fff;' +
-                    'border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">' +
-                    '<i class="fas fa-plus-circle"></i> Deseja cadastrar? Clique aqui</a>' +
-                    '</div>';
+                    '<div style="text-align:center;padding:24px;"><div style="font-size:2rem;margin-bottom:8px;">🏙️</div>' +
+                    '<p style="color:var(--text-secondary);margin-bottom:12px;"><strong>Município sem Cadastro</strong><br>' +
+                    (q ? '<small>Nenhum resultado para <em>"' + q + '"</em>' + (uf ? ' (' + uf + ')' : '') + '</small>' : '') + '</p>' +
+                    '<a href="' + cadastrarUrl + '" target="_blank" style="display:inline-block;padding:8px 18px;background:var(--primary-green);color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">' +
+                    '<i class="fas fa-plus-circle"></i> Deseja cadastrar? Clique aqui</a></div>';
                 return;
             }
-            let html = '<table class="table" style="margin:0;">';
-            html += '<thead><tr><th>Município</th><th>UF</th><th>Portal</th></tr></thead><tbody>';
+            let html = '<table class="table" style="margin:0;"><thead><tr><th>Município</th><th>UF</th><th>Portal</th></tr></thead><tbody>';
             data.municipios.forEach(m => {
                 let site;
                 if (m.site_prefeitura) {
-                    // Use data-url attribute to safely store URL without any inline JS injection risk
-                    const urlHtmlEsc = m.site_prefeitura
-                        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    site = `<button type="button" class="btn btn-outline btn-abrir-portal" ` +
-                        `data-url="${urlHtmlEsc}" style="padding:4px 10px;font-size:12px;" ` +
-                        `title="Copia o CNPJ e abre o portal da prefeitura">` +
-                        `<i class="fas fa-external-link-alt"></i> Abrir</button>`;
-                } else {
-                    site = '<span style="color:var(--text-secondary);">\u2014</span>';
-                }
-                html += `<tr>
-                    <td><strong>${m.nome}</strong></td>
-                    <td><span class="badge badge-info">${m.uf}</span></td>
-                    <td>${site}</td>
-                </tr>`;
+                    const urlHtmlEsc = m.site_prefeitura.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    site = `<button type="button" class="btn btn-outline btn-abrir-portal" data-url="${urlHtmlEsc}" style="padding:4px 10px;font-size:12px;" title="Copia o CNPJ e abre o portal da prefeitura"><i class="fas fa-external-link-alt"></i> Abrir</button>`;
+                } else { site = '<span style="color:var(--text-secondary);">—</span>'; }
+                html += `<tr><td><strong>${m.nome}</strong></td><td><span class="badge badge-info">${m.uf}</span></td><td>${site}</td></tr>`;
             });
             html += '</tbody></table>';
             resultados.innerHTML = html;
         })
-        .catch(() => {
-            resultados.innerHTML = '<p style="color:var(--danger);text-align:center;">Erro ao buscar municípios.</p>';
-        });
+        .catch(() => { resultados.innerHTML = '<p style="color:var(--danger);text-align:center;">Erro ao buscar municípios.</p>'; });
 }
 
-// Fechar modal ao clicar fora
 window.addEventListener('click', function(e) {
     var modal = document.getElementById('municipioModal');
     if (e.target === modal) fecharModalMunicipio();
 });
-
-// Event delegation for "Abrir" portal buttons rendered inside the results table
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.btn-abrir-portal');
-    if (btn) {
-        var url = btn.getAttribute('data-url');
-        if (url) abrirPortalMunicipio(url);
-    }
+    if (btn) { var url = btn.getAttribute('data-url'); if (url) abrirPortalMunicipio(url); }
 });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') fecharModalMunicipio(); });
 
-// Fechar modal com Esc
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') fecharModalMunicipio();
-});
-
-// Função para abrir Sintegra (1º copia CNPJ, 2º abre site)
+// Sintegra (1º copia CNPJ, 2º abre site) — preservado
 function consultarSintegra() {
-    console.log('=== FUNÇÃO CONSULTAR SINTEGRA CHAMADA ===');
-    
-    // DEBUG: Confirmar que função foi chamada
-    console.log('Função consultarSintegra() executando...');
-    
-    // PRIORIDADE 1: Usar CNPJ que foi consultado pela API
-    // PRIORIDADE 2: Pegar do campo do formulário
-    let cnpj = '';
-    
-    if (ultimoCNPJConsultado) {
-        cnpj = ultimoCNPJConsultado;
-        console.log('✅ Usando CNPJ da última consulta:', cnpj);
-    } else {
-        // Fallback: pegar do campo
-        const cnpjField = document.getElementById('cpf_cnpj_pj');
-        cnpj = cnpjField ? cnpjField.value.trim() : '';
-        console.log('⚠️ CNPJ da última consulta não encontrado, pegando do campo:', cnpj);
-    }
-    
-    console.log('CNPJ encontrado:', cnpj);
-    
-    if (!cnpj) {
-        alert('⚠️ CNPJ NÃO PREENCHIDO!\n\n' +
-              'Por favor, preencha o CNPJ antes de clicar em Sintegra.');
-        return;
-    }
-    
-    // Remove formatação do CNPJ (deixa só números)
+    let cnpj = ultimoCNPJConsultado || '';
+    if (!cnpj) { const f = document.getElementById('cpf_cnpj_pj'); cnpj = f ? f.value.trim() : ''; }
+    if (!cnpj) { alert('⚠️ CNPJ NÃO PREENCHIDO!\n\nPor favor, preencha o CNPJ antes de clicar em Sintegra.'); return; }
     const cnpjLimpo = cnpj.replace(/\D/g, '');
-    console.log('CNPJ limpo (só números):', cnpjLimpo);
-    
     if (!cnpjLimpo || cnpjLimpo.length !== 14) {
-        alert('⚠️ CNPJ INVÁLIDO!\n\n' +
-              'O CNPJ deve ter 14 dígitos.\n' +
-              'CNPJ encontrado: ' + cnpj);
-        return;
+        alert('⚠️ CNPJ INVÁLIDO!\n\nO CNPJ deve ter 14 dígitos.\nCNPJ encontrado: ' + cnpj); return;
     }
-    
-    // PASSO 1: COPIAR CNPJ IMEDIATAMENTE
-    console.log('Tentando copiar CNPJ:', cnpjLimpo);
-    
-    let copiouComSucesso = false;
-    let metodoUsado = 'nenhum';
-    
-    // Método 1: Input temporário (SEMPRE funciona, inclusive em HTTP)
+    let copiouComSucesso = false, metodoUsado = 'nenhum';
     try {
-        console.log('Tentando método input temporário...');
-        
         const tempInput = document.createElement('input');
-        tempInput.value = cnpjLimpo;
-        tempInput.style.position = 'absolute';
-        tempInput.style.left = '-9999px';
+        tempInput.value = cnpjLimpo; tempInput.style.position = 'absolute'; tempInput.style.left = '-9999px';
         tempInput.setAttribute('readonly', '');
-        document.body.appendChild(tempInput);
-        
-        tempInput.select();
-        tempInput.setSelectionRange(0, 99999);
-        
-        const copied = document.execCommand('copy');
-        document.body.removeChild(tempInput);
-        
-        if (copied) {
-            copiouComSucesso = true;
-            metodoUsado = 'input temporário';
-            console.log('✅ CNPJ copiado via input temporário!');
-        }
-    } catch (err) {
-        console.error('❌ Erro no método input:', err);
-    }
-    
-    // Método 2: Clipboard API (só se primeiro falhou)
+        document.body.appendChild(tempInput); tempInput.select(); tempInput.setSelectionRange(0, 99999);
+        const copied = document.execCommand('copy'); document.body.removeChild(tempInput);
+        if (copied) { copiouComSucesso = true; metodoUsado = 'input temporário'; }
+    } catch (err) {}
     if (!copiouComSucesso && navigator.clipboard && navigator.clipboard.writeText) {
-        console.log('Tentando Clipboard API...');
-        try {
-            // Nota: Clipboard API retorna Promise, mas vamos usar de forma síncrona via flag
-            navigator.clipboard.writeText(cnpjLimpo).then(() => {
-                console.log('✅ Clipboard API funcionou!');
-            }).catch(err => {
-                console.warn('Clipboard API error:', err);
-            });
-            // Consideramos sucesso imediato pois é assíncrono
-            copiouComSucesso = true;
-            metodoUsado = 'Clipboard API';
-        } catch (err) {
-            console.error('❌ Erro Clipboard API:', err);
-        }
+        try { navigator.clipboard.writeText(cnpjLimpo); copiouComSucesso = true; metodoUsado = 'Clipboard API'; } catch (err) {}
     }
-    
-    // PASSO 2: Mostrar mensagem IMEDIATAMENTE
-    let mensagem;
-    
-    if (copiouComSucesso) {
-        mensagem = '✅ CNPJ COPIADO!\n\n' + 
-                  cnpjLimpo + '\n\n' +
-                  '(Método: ' + metodoUsado + ')\n\n' +
-                  'O site do Sintegra será aberto.\n' +
-                  'Cole o CNPJ com Ctrl+V';
-    } else {
-        mensagem = '📋 COPIE ESTE CNPJ:\n\n' + 
-                  cnpjLimpo + '\n\n' +
-                  '⚠️ Cópia automática falhou.\n' +
-                  'Copie o número acima (selecione + Ctrl+C)';
-    }
-    
+    let mensagem = copiouComSucesso
+        ? '✅ CNPJ COPIADO!\n\n' + cnpjLimpo + '\n\n(Método: ' + metodoUsado + ')\n\nO site do Sintegra será aberto.\nCole o CNPJ com Ctrl+V'
+        : '📋 COPIE ESTE CNPJ:\n\n' + cnpjLimpo + '\n\n⚠️ Cópia automática falhou.\nCopie o número acima (selecione + Ctrl+C)';
     alert(mensagem);
-    console.log('Alert mostrado:', mensagem.substring(0, 50) + '...');
-    
-    // PASSO 3: Abrir site
-    console.log('Abrindo site do Sintegra...');
     const sintegraWindow = window.open('https://www.sintegra.gov.br/', '_blank');
-    
-    if (sintegraWindow) {
-        console.log('✅ Site aberto com sucesso');
-    } else {
-        console.error('❌ Falha ao abrir site (pop-up bloqueado?)');
-        alert('⚠️ O site foi bloqueado pelo navegador.\n\n' +
-              'Por favor, permita pop-ups para este site.');
-    }
-    
-    console.log('=== FIM CONSULTAR SINTEGRA ===');
+    if (!sintegraWindow) { alert('⚠️ O site foi bloqueado pelo navegador.\n\nPor favor, permita pop-ups para este site.'); }
 }
 </script>
 {% endblock %}
