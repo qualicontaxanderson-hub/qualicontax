@@ -1,5 +1,6 @@
 """Rotas do módulo Configurações — Usuários e Perfis de Acesso"""
 import logging
+import re
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
@@ -105,6 +106,36 @@ def _departamentos_ativos():
     return execute_query(
         'SELECT id, nome FROM departamentos WHERE ativo = 1 ORDER BY nome',
         fetch=True) or []
+
+
+# --- Formatação SÓ para exibição no painel de análise. O banco continua com o
+# valor cru (dígitos / datas ISO); estes helpers vestem os dados para o admin ler.
+def _fmt_data(v):
+    try:
+        return v.strftime('%d/%m/%Y') if v is not None else None
+    except Exception:
+        return str(v) if v else None
+
+
+def _fmt_datahora(v):
+    try:
+        return v.strftime('%d/%m/%Y %H:%M') if v is not None else None
+    except Exception:
+        return str(v) if v else None
+
+
+def _fmt_cpf(v):
+    d = re.sub(r'\D', '', v or '')
+    return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}' if len(d) == 11 else (v or None)
+
+
+def _fmt_cel(v):
+    d = re.sub(r'\D', '', v or '')
+    if len(d) == 11:                       # (XX) X XXXX-XXXX
+        return f'({d[:2]}) {d[2]} {d[3:7]}-{d[7:]}'
+    if len(d) == 10:                       # (XX) XXXX-XXXX
+        return f'({d[:2]}) {d[2:6]}-{d[6:]}'
+    return v or None
 
 
 def _qrobo_csrf_token():
@@ -222,9 +253,12 @@ def usuario_pendente_detalhe(pid):
               'numero', 'complemento', 'bairro', 'cidade', 'estado', 'pais',
               'modalidade_trabalho', 'ja_funcionario', 'criado_em')
     c = {k: cand.get(k) for k in campos}
-    for dk in ('data_nascimento', 'criado_em'):   # datas → texto p/ JSON
-        if c.get(dk) is not None:
-            c[dk] = str(c[dk])
+    # Apresentação em padrão brasileiro (feita AQUI, no servidor, não no JS):
+    c['data_nascimento'] = _fmt_data(cand.get('data_nascimento'))
+    c['criado_em'] = _fmt_datahora(cand.get('criado_em'))
+    c['cpf'] = _fmt_cpf(cand.get('cpf'))
+    c['celular_pessoal'] = _fmt_cel(cand.get('celular_pessoal'))
+    c['celular_corporativo'] = _fmt_cel(cand.get('celular_corporativo'))
     return jsonify(ok=True, cand=c, banco=banco, departamentos_pedidos=deps)
 
 

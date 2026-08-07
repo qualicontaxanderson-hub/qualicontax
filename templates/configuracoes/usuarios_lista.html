@@ -258,6 +258,7 @@
 <div class="qc-modal-fundo" id="qcAnalise" onclick="if(event.target===this) fecharAnalise()">
   <div class="qc-modal qc-modal-lg">
     <button type="button" class="qc-x" title="Fechar" onclick="fecharAnalise()">&times;</button>
+    <div class="qa-scroll">
     <h3 class="qc-modal-tit">Analisar candidatura</h3>
     <p class="qc-modal-sub">Confira os dados e defina tipo, perfis e departamentos.
        Aprovar cria o acesso <strong>sem senha</strong> — a pessoa define a senha
@@ -299,6 +300,7 @@
         </div>
       </div>
     </div>
+    </div>{# /qa-scroll — só o conteúdo rola; os botões abaixo ficam fixos #}
 
     <div class="qc-modal-acoes" style="justify-content:space-between">
       <button type="button" class="btn btn-danger" id="qaBtnRecusar" onclick="recusarPendente()">
@@ -329,7 +331,12 @@
 .qc-x { position: absolute; top: 12px; right: 14px; border: none; background: none;
         font-size: 26px; line-height: 1; color: #94a3b8; cursor: pointer; padding: 2px 6px; }
 .qc-x:hover { color: #334155; }
-.qc-modal-lg { max-width: 860px; }
+.qc-modal-lg { max-width: 860px; display: flex; flex-direction: column; max-height: 88vh; }
+/* Só o conteúdo rola (min-height:0 deixa o flex encolher); o rodapé de botões
+   fica fixo e sempre alcançável, mesmo em janela baixa / mobile. */
+.qa-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 4px -4px 0; padding: 0 4px; }
+.qc-modal-lg .qc-modal-acoes { flex: 0 0 auto; border-top: 1px solid var(--gray-light);
+                               padding-top: 14px; margin-top: 6px; }
 .qa-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; margin-top: 8px; }
 @media (max-width: 720px) { .qa-cols { grid-template-columns: 1fr; } }
 .qa-sec { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
@@ -543,12 +550,16 @@ function analisarPendente(pid) {
         document.getElementById('qaBtnAprovar').disabled = false;
         document.getElementById('qaBtnRecusar').disabled = false;
         document.getElementById('qcAnalise').classList.add('aberto');
+        var sc = document.querySelector('#qcAnalise .qa-scroll');
+        if (sc) { sc.scrollTop = 0; }               // cada abertura começa no topo
+        document.body.style.overflow = 'hidden';    // trava o scroll da página atrás
     })
     .catch(function () { alert('Sem resposta do servidor.'); });
 }
 
 function fecharAnalise() {
     document.getElementById('qcAnalise').classList.remove('aberto');
+    document.body.style.overflow = '';              // devolve o scroll da página
     qaPid = null;
 }
 
