@@ -20,11 +20,30 @@ torna seguro importar ANTES de arquivar e repetir no tick seguinte.
 import logging
 import re
 
+import xml.etree.ElementTree as ET
+
 from utils.cte_import import _save_cte
 from utils.cte_parser import parse_cte_xml, papel_do_cliente
-from utils.db_helper import execute_query
+from utils.db_helper import execute_query, transacao
 from utils.nfe_import import _save_nfe_dual
 from utils.nfe_parser import parse_nfe_xml
+
+# Mesmo teto do xml_raw de evento da captura (a coluna é MEDIUMTEXT).
+_MAX_XML_EVENTO = 4_000_000
+
+
+def _parse(content: str):
+    """ElementTree do XML, ou None. Tolera lixo antes do '<' (BOM, espaços)."""
+    try:
+        return ET.fromstring(content)
+    except Exception:
+        i = content.find('<')
+        if i > 0:
+            try:
+                return ET.fromstring(content[i:])
+            except Exception:
+                return None
+        return None
 
 logger = logging.getLogger(__name__)
 
@@ -108,11 +127,17 @@ _RE_CHAVE_ID = re.compile(r'\bId\s*=\s*["\'][A-Za-z]*(\d{44})["\']')
 _RE_RAIZ_XML = re.compile(r'<\s*(?![?!])([A-Za-z_][\w.\-]*)')
 _RAIZES_CTE = {'cteproc', 'cteosproc', 'cte', 'cteos', 'gtve',
                'infcte', 'infcteos', 'infgtve'}
-# Eventos e inutilização não têm trilha de import por XML avulso (a captura
-# SEFAZ é quem grava dfe_eventos). Reconhecidos aqui só para virarem 'skip'
-# explícito em vez de morrerem no parser de NF-e.
-_RAIZES_SEM_IMPORT = {'proceventonfe', 'proceventocte', 'procevento', 'evento',
-                      'reteventonfe', 'inutnfe', 'procinutnfe', 'retinutnfe'}
+# Evento de NF-e: TEM trilha de import (ver importar_evento). Antes caía no
+# 'skip' junto com a inutilização — o arquivo era arquivado e o cancelamento
+# nunca chegava ao banco, então uma nota cancelada na SEFAZ aparecia ATIVA na
+# tela. Agora entra em dfe_eventos e, no 110111, marca a nota.
+_RAIZES_EVENTO_NFE = {'proceventonfe', 'procevento', 'evento', 'reteventonfe'}
+
+# Inutilização e evento de CT-e continuam sem trilha por XML avulso: viram
+# 'skip' declarado (arquiva, não lança) em vez de morrer no parser de NF-e.
+# O cancelamento de CT-e tem caminho próprio (utils.cte_import.marcar_cte_cancelado,
+# hoje só alimentado pela captura SEFAZ) — fica para uma fatia futura.
+_RAIZES_SEM_IMPORT = {'proceventocte', 'inutnfe', 'procinutnfe', 'retinutnfe'}
 
 
 def _modelo_do_xml(content: str) -> str:
@@ -176,6 +201,100 @@ def _importar_um_cte(nome: str, content: str, cache, origem: str = 'UPLOAD'):
 
 
 # ---------------------------------------------------------------------------
+# Dono do EVENTO — resolvido pela CHAVE DA NOTA, não pelo CNPJ emitente
+# ---------------------------------------------------------------------------
+def dono_da_nota(chave: str) -> dict | None:
+    """Cliente dono do documento de ``chave``. ``None`` se a nota não está aqui.
+
+    Por que não pelo CNPJ emitente
+    ------------------------------
+    O ``classificar()`` do roteador decidia o dono do evento pelos dígitos 6-20
+    da chave — que são o CNPJ do EMITENTE da nota. Num evento de cancelamento de
+    compra, o emitente é o FORNECEDOR (a Raizen, no caso que motivou isto), que
+    não é cliente do escritório: o evento virava REVISAR e ficava parado na
+    _ENTRADA para sempre, enquanto a nota seguia ativa na tela.
+
+    O dono certo é o dono da NOTA. Como a nota já está no banco (o roteador a
+    lançou antes), basta perguntar por ela. Devolve o número e a razão porque o
+    roteador precisa deles para montar EMPRESAS/<nº - razão>/FISCAL/EVENTOS.
+    """
+    if not chave or len(chave) != 44:
+        return None
+    for tabela in ('nfe_importacoes', 'cte_documentos'):
+        r = execute_query(
+            f"""SELECT c.id, c.numero_cliente, c.nome_razao_social
+                  FROM {tabela} d JOIN clientes c ON c.id = d.cliente_id
+                 WHERE d.chave_acesso = %s LIMIT 1""",
+            (chave,), fetch=True, fetch_one=True)
+        if r:
+            return {'cliente_id': r['id'],
+                    'numero': (r['numero_cliente'] or '').strip(),
+                    'razao': r['nome_razao_social'] or ''}
+    return None
+
+
+def importar_evento(nome: str, content: str, chave_nota: str = None) -> tuple:
+    """Lança UM procEventoNFe. Devolve ``(status, motivo)``.
+
+    Grava o histórico em ``dfe_eventos`` e, quando ``tpEvento=110111``, marca
+    ``nfe_importacoes.cancelada=1`` para a chave da nota — exatamente o que a
+    captura SEFAZ faz em ``dfe_captura.gravar_evento``. Reusa o parser e os SQL
+    de lá em vez de reescrevê-los: é o mesmo documento e a mesma regra, e uma
+    segunda implementação divergiria no primeiro ajuste.
+
+    Diferença ÚNICA em relação ao caminho da captura: aqui NÃO se sobe o XML
+    para o Dropbox. O arquivo já está no Dropbox — veio da _ENTRADA — e quem o
+    move para FISCAL/EVENTOS é o roteador, depois deste lançamento.
+
+    Os dois passos vão na MESMA transação: ou o evento fica registrado com a
+    nota marcada, ou nada entra.
+    """
+    from utils.integrations.dfe_captura import (
+        SQL_CANCELA_NOTA, SQL_EVENTO_UPSERT, TP_CANCELAMENTO, extrair_evento)
+
+    root = _parse(content)
+    if root is None:
+        return 'erro', f'{nome}: evento ilegível'
+    try:
+        ev = extrair_evento(root)
+    except Exception as exc:
+        return 'erro', f'{nome}: evento sem identificação ({exc})'
+
+    ch = ev.get('ch_nfe') or chave_nota
+    if not ch:
+        # ch_nfe é NOT NULL em dfe_eventos. Sem ela não há o que registrar nem o
+        # que cancelar — arquiva e segue, como a captura também faz.
+        return 'skip', f'{nome}: evento sem chNFe (só arquivamento)'
+
+    dono = dono_da_nota(ch)
+    if not dono:
+        # Evento de nota que o sistema não tem. Não inventa dono: sem cliente_id
+        # a linha de dfe_eventos ficaria órfã e o cancelamento não teria alvo.
+        return 'erro', (f'{nome}: a nota {ch[:12]}… do evento não está no sistema '
+                        '— importe a nota antes')
+
+    cancelou = 0
+    try:
+        with transacao() as cur:
+            cur.execute(SQL_EVENTO_UPSERT, (
+                dono['cliente_id'], ev['chave_evento'], ch, ev['tp_evento'],
+                ev['n_seq'], ev['descricao'], ev['dh_txt'], None, None,
+                ev['org_cnpj'], None, content[:_MAX_XML_EVENTO],
+            ))
+            if ev['tp_evento'] == TP_CANCELAMENTO:
+                cur.execute(SQL_CANCELA_NOTA, (ch,))
+                cancelou = int(cur.rowcount or 0)
+    except Exception as exc:
+        return 'erro', f'{nome}: falha ao gravar evento — {exc}'
+
+    if ev['tp_evento'] == TP_CANCELAMENTO:
+        logger.info('[fiscal_ingest] evento 110111 %s: %d linha(s) da nota %s '
+                    'marcadas como canceladas.', ev['chave_evento'], cancelou, ch)
+        return 'ok', f"cancelamento aplicado ({cancelou} linha(s))"
+    return 'ok', f"evento {ev['tp_evento']} registrado"
+
+
+# ---------------------------------------------------------------------------
 # A porta de entrada do roteador
 # ---------------------------------------------------------------------------
 def importar_xml(nome: str, dados: bytes, cache: dict,
@@ -204,8 +323,11 @@ def importar_xml(nome: str, dados: bytes, cache: dict,
         return 'erro', 'arquivo vazio'
 
     raiz = _raiz_do_xml(content)
+    if raiz in _RAIZES_EVENTO_NFE:
+        return importar_evento(nome, content)
     if raiz in _RAIZES_SEM_IMPORT:
-        # Arquivar sim, lançar não: evento avulso não tem import por XML.
+        # Arquivar sim, lançar não: inutilização e evento de CT-e não têm import
+        # por XML avulso. 'skip' declarado, não silêncio.
         return 'skip', f'{raiz}: sem trilha de import (só arquivamento)'
 
     if _e_cte(content):

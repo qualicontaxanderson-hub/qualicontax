@@ -208,9 +208,13 @@ def pasta_empresa(numero, razao):
     return f'{numero} - {razao_limpa}'
 
 
-def classificar(dados, nome_arquivo, empresas):
+def classificar(dados, nome_arquivo, empresas, dono_por_chave=None):
     """Devolve {tipo_doc, sentido, empresa_numero, empresa_razao, ano, mes,
-    status, motivo}. status ∈ OK | REVISAR | SEM_MATCH."""
+    status, motivo}. status ∈ OK | REVISAR | SEM_MATCH.
+
+    ``dono_por_chave`` (opcional): callable chave44 -> {'numero','razao'} | None,
+    usado SÓ para evento. Sem ele o comportamento é exatamente o de antes.
+    """
     info = {'tipo_doc': '', 'sentido': '', 'empresa_numero': '', 'empresa_razao': '',
             'ano': '', 'mes': '', 'status': '', 'motivo': ''}
     root = parse_xml_bytes(dados)
@@ -229,6 +233,20 @@ def classificar(dados, nome_arquivo, empresas):
 
     if raiz.lower().startswith('procevento') or raiz.lower() == 'evento':
         info['tipo_doc'] = 'EVENTO'
+        # 1º) O DONO DA NOTA. A chave do evento É a chave da nota; se a nota está
+        # no sistema, o evento é do cliente dela — mesmo que o emitente seja um
+        # fornecedor de fora da base. Era exatamente isto que faltava: um
+        # cancelamento de COMPRA é sempre emitido pelo fornecedor, então a regra
+        # antiga (autor da chave) mandava todo cancelamento de entrada para
+        # REVISAR, e a nota continuava aparecendo ativa na tela.
+        dono = dono_por_chave(chave) if (dono_por_chave and chave) else None
+        if dono:
+            info.update(sentido='EVENTOS', empresa_numero=dono['numero'],
+                        empresa_razao=dono['razao'], status='OK',
+                        motivo='Evento da nota do cliente (dono pela chave)')
+            return info
+        # 2º) Fallback: o autor do evento é cliente (cancelamento da própria
+        # SAÍDA, em que emitente e dono coincidem). Comportamento de sempre.
         autor = (chave[6:20] if chave and len(chave) >= 20 else emit)
         if autor and autor in empresas:
             num, razao = empresas[autor]
@@ -236,7 +254,7 @@ def classificar(dados, nome_arquivo, empresas):
                         status='OK', motivo='Evento do proprio cliente (emitente)')
         else:
             info.update(status='REVISAR',
-                        motivo='Evento de nota de terceiro (definir pela chave da nota)')
+                        motivo='Evento de nota que nao esta no sistema')
         return info
 
     if 'inut' in raiz.lower():
@@ -365,6 +383,21 @@ def rodar():
 
         # Cache de clientes por documento, UMA vez por rodada (o mesmo que o
         # upload manual monta). Só é necessário quando vamos lançar.
+        # Dono do EVENTO pela chave da nota. Consulta o banco, então é montado
+        # aqui e passado ao classificar() — que segue puro para quem não o usa.
+        # Memoiza por rodada: um lote pode trazer vários eventos da mesma nota.
+        from utils.fiscal_ingest import dono_da_nota
+        _cache_dono = {}
+
+        def dono_por_chave(chave):
+            if chave not in _cache_dono:
+                try:
+                    _cache_dono[chave] = dono_da_nota(chave)
+                except Exception:
+                    logger.exception('[roteador] falha ao resolver dono da chave %s', chave)
+                    _cache_dono[chave] = None
+            return _cache_dono[chave]
+
         doc_cache = {}
         importar_xml = None
         if IMPORTA and not DRYRUN:
@@ -415,7 +448,7 @@ def rodar():
                         _log(rodada, origem, None, 'ERRO', motivo='download vazio/falhou')
                         continue
 
-                    info = classificar(dados, nome, empresas)
+                    info = classificar(dados, nome, empresas, dono_por_chave)
                     if info['status'] != 'OK':
                         n[info['status']] += 1
                         _log(rodada, origem, None, info['status'],
