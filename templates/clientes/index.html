@@ -178,8 +178,8 @@
             {% for cliente in clientes %}
             {% set inativo = cliente.situacao != 'ATIVO' %}
             <div class="cli-row {% if inativo %}cli-row-off{% endif %}"
-                 data-edit-url="{{ url_for('clientes.editar', id=cliente.id) }}"
-                 role="button" tabindex="0" title="Abrir cadastro para edição">
+                 data-open-url="{{ url_for('clientes.detalhes', id=cliente.id) }}"
+                 role="button" tabindex="0" title="Abrir a ficha do cliente">
 
                 <div class="cli-c-num">
                     <span class="cli-numpill {% if inativo %}cli-numpill-off{% endif %}">
@@ -232,9 +232,7 @@
                 </div>
 
                 <div class="cli-c-act">
-                    <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="cli-act cli-act-view" title="Visualizar detalhes">
-                        <i class="fas fa-eye"></i>
-                    </a>
+                    {# A linha inteira abre a FICHA; aqui ficam só editar e excluir. #}
                     <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="cli-act cli-act-edit" title="Editar cadastro">
                         <i class="fas fa-pen"></i>
                     </a>
@@ -488,17 +486,19 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('filters-chevron').classList.add('open');
     {% endif %}
 
-    // Linha inteira clicável (mouse + teclado) — não intercepta cliques em ações.
-    document.querySelectorAll('.cli-row[data-edit-url]').forEach(function (row) {
+    // Linha inteira abre a FICHA (detalhes) — mouse + teclado. Cliques em ações
+    // (lápis/lixeira) são ignorados aqui pelo closest('a,button,form,...'), então
+    // editar/excluir NÃO disparam a abertura da ficha.
+    document.querySelectorAll('.cli-row[data-open-url]').forEach(function (row) {
         row.addEventListener('click', function (event) {
             if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
-            window.location.href = row.dataset.editUrl;
+            window.location.href = row.dataset.openUrl;
         });
         row.addEventListener('keydown', function (event) {
             if (event.key !== 'Enter' && event.key !== ' ') { return; }
             if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
             event.preventDefault();
-            window.location.href = row.dataset.editUrl;
+            window.location.href = row.dataset.openUrl;
         });
     });
 });
