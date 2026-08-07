@@ -93,7 +93,7 @@
                maxlength="255" placeholder="voce@email.com"></div>
       <div><label class="rot" for="celp">Celular</label>
         <input type="text" id="celp" name="celular_pessoal" inputmode="tel"
-               maxlength="20" placeholder="(00) 00000-0000"></div>
+               maxlength="16" placeholder="(00) 00000-0000"></div>
     </div>
 
     {# Corporativos — só aparecem para quem marcou "já trabalho". Obrigatórios
@@ -109,7 +109,7 @@
                  value="{{ form.email_corporativo if form else '' }}"></div>
         <div><label class="rot" for="celc">Celular corporativo</label>
           <input type="text" id="celc" name="celular_corporativo" inputmode="tel"
-                 maxlength="20" placeholder="(00) 00000-0000"
+                 maxlength="16" placeholder="(00) 00000-0000"
                  value="{{ form.celular_corporativo if form else '' }}"></div>
       </div>
     </div>
@@ -164,16 +164,44 @@
       nenhuma listagem. Preencha o banco, o PIX, ou os dois.
     </div>
     <div class="grade">
-      <div><label class="rot" for="bcod">Banco (código)</label>
-        <input type="text" id="bcod" name="banco_codigo" inputmode="numeric"
-               maxlength="5" placeholder="001"></div>
-      <div><label class="rot" for="bnome">Banco (nome)</label>
-        <input type="text" id="bnome" name="banco_nome" maxlength="120"></div>
+      <div><label class="rot" for="bnome">Banco</label>
+        {# input + datalist: escolha rápida dos mais usados, mas digitação livre
+           continua valendo (banco fora da lista não trava). O valor "NNN — Nome"
+           é gravado inteiro no campo banco_nome — o servidor não muda; o código
+           na frente fica guardado junto. #}
+        <input type="text" id="bnome" name="banco_nome" maxlength="120"
+               list="bancosLista" autocomplete="off"
+               placeholder="Toque para escolher ou digite o nome"></div>
       <div><label class="rot" for="ag">Agência</label>
         <input type="text" id="ag" name="agencia" maxlength="15"></div>
       <div><label class="rot" for="cc">Conta</label>
         <input type="text" id="cc" name="conta" maxlength="25"></div>
     </div>
+    {# Ordenado por popularidade. FEBRABAN na frente ("NNN — Nome"). #}
+    <datalist id="bancosLista">
+      <option value="001 — Banco do Brasil"></option>
+      <option value="104 — Caixa Econômica Federal"></option>
+      <option value="237 — Bradesco"></option>
+      <option value="341 — Itaú Unibanco"></option>
+      <option value="033 — Santander"></option>
+      <option value="260 — Nubank"></option>
+      <option value="077 — Banco Inter"></option>
+      <option value="336 — C6 Bank"></option>
+      <option value="290 — PagBank"></option>
+      <option value="323 — Mercado Pago"></option>
+      <option value="756 — Sicoob"></option>
+      <option value="748 — Sicredi"></option>
+      <option value="208 — BTG Pactual"></option>
+      <option value="212 — Banco Original"></option>
+      <option value="655 — Banco BV"></option>
+      <option value="422 — Banco Safra"></option>
+      <option value="389 — Banco Mercantil"></option>
+      <option value="070 — BRB"></option>
+      <option value="136 — Unicred"></option>
+      <option value="097 — Cresol"></option>
+      <option value="380 — PicPay"></option>
+      <option value="099 — Uniprime"></option>
+    </datalist>
     <div style="margin-top:12px">
       <label class="rot">Tipo de conta</label>
       <div class="chips">
@@ -377,5 +405,37 @@ nomeEl.addEventListener('input', function () {
     timer = setTimeout(pedeSugestoes, 450);
 });
 if (nomeEl.value.trim()) { pedeSugestoes(); }
+
+// ---- Máscaras (SÓ cosméticas: o servidor limpa com re.sub(\D,'')) ----------
+// Cada máscara reformata a partir dos DÍGITOS puros, então apagar/colar não
+// quebra a formatação. Reescrever value joga o cursor para o fim — aceitável
+// nestes campos curtos.
+function mascaraCPF(v) {
+    var d = (v || '').replace(/\D/g, '').slice(0, 11);
+    if (d.length > 9) { return d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9); }
+    if (d.length > 6) { return d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6); }
+    if (d.length > 3) { return d.slice(0,3)+'.'+d.slice(3); }
+    return d;
+}
+function mascaraCelular(v) {
+    var d = (v || '').replace(/\D/g, '').slice(0, 11);
+    var n = d.length;
+    if (n === 0) { return ''; }
+    if (n < 3)   { return '(' + d; }
+    var ddd = '(' + d.slice(0, 2) + ') ';
+    var r = d.slice(2);
+    if (n <= 6)  { return ddd + r; }                                       // parcial
+    if (n <= 10) { return ddd + r.slice(0, r.length - 4) + '-' + r.slice(r.length - 4); } // fixo (XX) XXXX-XXXX
+    return ddd + r.slice(0, 1) + ' ' + r.slice(1, 5) + '-' + r.slice(5);   // cel (XX) X XXXX-XXXX
+}
+function ligaMascara(id, fn) {
+    var el = document.getElementById(id);
+    if (!el) { return; }
+    el.addEventListener('input', function () { el.value = fn(el.value); });
+    if (el.value) { el.value = fn(el.value); }   // reformata valor pré-preenchido
+}
+ligaMascara('cpf', mascaraCPF);
+ligaMascara('celp', mascaraCelular);
+ligaMascara('celc', mascaraCelular);
 </script>
 {% endblock %}
