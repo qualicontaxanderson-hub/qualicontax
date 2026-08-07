@@ -163,6 +163,7 @@
                 <th>Departamentos</th>
                 <th>Já funcionário?</th>
                 <th>Recebido em</th>
+                <th>Ações</th>
             </tr>
         </thead>
         <tbody>
@@ -193,9 +194,15 @@
                 <td>{{ p.departamentos or '—' }}</td>
                 <td>{{ 'Sim' if p.ja_funcionario else 'Não' }}</td>
                 <td>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '—' }}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" title="Analisar candidatura"
+                            onclick="analisarPendente({{ p.id }})">
+                        <i class="fas fa-clipboard-check"></i> Analisar
+                    </button>
+                </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="qc-vazio">
+            <tr><td colspan="9" class="qc-vazio">
                 <i class="fas fa-inbox"></i>
                 <div>Nenhum cadastro aguardando aprovação.</div>
             </td></tr>
@@ -247,6 +254,63 @@
   </div>
 </div>
 
+{# ---- Modal: analisar candidatura (dados + decisão) ---- #}
+<div class="qc-modal-fundo" id="qcAnalise" onclick="if(event.target===this) fecharAnalise()">
+  <div class="qc-modal qc-modal-lg">
+    <button type="button" class="qc-x" title="Fechar" onclick="fecharAnalise()">&times;</button>
+    <h3 class="qc-modal-tit">Analisar candidatura</h3>
+    <p class="qc-modal-sub">Confira os dados e defina tipo, perfis e departamentos.
+       Aprovar cria o acesso <strong>sem senha</strong> — a pessoa define a senha
+       depois, por link (Parte 6).</p>
+    <div id="qaErro" class="qa-erro" style="display:none"></div>
+
+    <div class="qa-cols">
+      <div class="qa-dados">
+        <div class="qa-sec">Identificação</div>
+        <dl class="qa-dl" id="qaIdent"></dl>
+        <div class="qa-sec">Contatos</div>
+        <dl class="qa-dl" id="qaContatos"></dl>
+        <div class="qa-sec">Endereço</div>
+        <dl class="qa-dl" id="qaEndereco"></dl>
+        <div class="qa-sec">Dados bancários / PIX</div>
+        <dl class="qa-dl" id="qaBanco"></dl>
+      </div>
+
+      <div class="qa-decisao">
+        <div class="qa-sec">Decisão</div>
+        <label class="qc-label" for="qaTipo">Tipo de conta</label>
+        <select id="qaTipo" class="qc-input">
+          {% for t in tipos_usuario %}<option value="{{ t }}">{{ t|capitalize }}</option>{% endfor %}
+        </select>
+
+        <label class="qc-label" style="margin-top:14px">Perfis de acesso</label>
+        <div id="qaPerfis" class="qa-checks">
+          {% for pf in perfis_disponiveis %}
+          <label class="qa-check"><input type="checkbox" value="{{ pf.id }}"><span>{{ pf.nome }}</span></label>
+          {% else %}<span class="text-muted">Nenhum perfil ativo cadastrado.</span>{% endfor %}
+        </div>
+
+        <label class="qc-label" style="margin-top:14px">Departamentos
+          <span class="text-muted" style="font-weight:400">(pré-marcados com o pedido)</span></label>
+        <div id="qaDeps" class="qa-checks">
+          {% for d in departamentos_disponiveis %}
+          <label class="qa-check"><input type="checkbox" value="{{ d.id }}"><span>{{ d.nome }}</span></label>
+          {% else %}<span class="text-muted">Nenhum departamento ativo.</span>{% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="qc-modal-acoes" style="justify-content:space-between">
+      <button type="button" class="btn btn-danger" id="qaBtnRecusar" onclick="recusarPendente()">
+        <i class="fas fa-times"></i> Recusar
+      </button>
+      <button type="button" class="btn btn-success" id="qaBtnAprovar" onclick="aprovarPendente()">
+        <i class="fas fa-check"></i> Aprovar e criar acesso
+      </button>
+    </div>
+  </div>
+</div>
+
 <style>
 .qc-secao { margin-top: 24px; padding: 0; overflow: hidden; }
 .qc-secao:hover { transform: none; }
@@ -265,6 +329,24 @@
 .qc-x { position: absolute; top: 12px; right: 14px; border: none; background: none;
         font-size: 26px; line-height: 1; color: #94a3b8; cursor: pointer; padding: 2px 6px; }
 .qc-x:hover { color: #334155; }
+.qc-modal-lg { max-width: 860px; }
+.qa-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; margin-top: 8px; }
+@media (max-width: 720px) { .qa-cols { grid-template-columns: 1fr; } }
+.qa-sec { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+          color: #64748b; margin: 14px 0 6px; }
+.qa-sec:first-child { margin-top: 0; }
+.qa-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.qa-dl dt { color: #64748b; white-space: nowrap; }
+.qa-dl dd { margin: 0; color: var(--text-primary); word-break: break-word; }
+.qa-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.qa-check { cursor: pointer; }
+.qa-check input { position: absolute; opacity: 0; pointer-events: none; }
+.qa-check span { display: inline-block; padding: 7px 12px; border: 1.5px solid var(--gray-light);
+                 border-radius: 8px; background: #f9fafb; font-size: 13px; }
+.qa-check input:checked + span { border-color: #16a34a; background: #f0fdf4; color: #15803d;
+                                 font-weight: 600; }
+.qa-erro { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 10px;
+           padding: 11px 14px; font-size: 13px; margin-bottom: 14px; }
 .qc-modal-tit { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
 .qc-modal-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 18px; }
 .qc-label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px;
@@ -394,6 +476,130 @@ function toggleUsuario(id, btn) {
         if (d.ok) location.reload();
         else alert(d.msg || 'Erro ao alterar status.');
     });
+}
+
+// ================= Q-Colabore Parte 5: analisar / aprovar / recusar =========
+var qaPid = null;
+
+// Preenche via textContent (NÃO innerHTML): os dados vêm do candidato e não
+// podem virar HTML executável no painel do admin.
+function qaTexto(dl, rot, val) {
+    var dt = document.createElement('dt'); dt.textContent = rot;
+    var dd = document.createElement('dd');
+    dd.textContent = (val === null || val === undefined || val === '') ? '—' : val;
+    dl.appendChild(dt); dl.appendChild(dd);
+}
+
+function analisarPendente(pid) {
+    fetch('/configuracoes/usuarios/pendente/' + pid, { headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (!res.ok || !res.d.ok) { alert(res.d.msg || 'Não foi possível abrir a candidatura.'); return; }
+        qaPid = pid;
+        var c = res.d.cand, b = res.d.banco, pedidos = res.d.departamentos_pedidos || [];
+
+        var ident = document.getElementById('qaIdent'); ident.innerHTML = '';
+        qaTexto(ident, 'Nome', c.nome_completo);
+        qaTexto(ident, 'Login pedido', c.login_escolhido);
+        qaTexto(ident, 'Nick', c.nick_escolhido);
+        qaTexto(ident, 'CPF', c.cpf);
+        qaTexto(ident, 'Nascimento', c.data_nascimento);
+        qaTexto(ident, 'Modalidade', c.modalidade_trabalho);
+        qaTexto(ident, 'Já funcionário?', c.ja_funcionario ? 'Sim' : 'Não');
+
+        var cont = document.getElementById('qaContatos'); cont.innerHTML = '';
+        qaTexto(cont, 'E-mail pessoal', c.email_pessoal);
+        qaTexto(cont, 'E-mail corporativo', c.email_corporativo);
+        qaTexto(cont, 'Celular pessoal', c.celular_pessoal);
+        qaTexto(cont, 'Celular corporativo', c.celular_corporativo);
+
+        var end = document.getElementById('qaEndereco'); end.innerHTML = '';
+        qaTexto(end, 'CEP', c.cep);
+        qaTexto(end, 'Logradouro', c.logradouro);
+        qaTexto(end, 'Número', c.numero);
+        qaTexto(end, 'Complemento', c.complemento);
+        qaTexto(end, 'Bairro', c.bairro);
+        qaTexto(end, 'Cidade/UF', (c.cidade || '') + (c.estado ? '/' + c.estado : ''));
+
+        var banco = document.getElementById('qaBanco'); banco.innerHTML = '';
+        if (b) {
+            qaTexto(banco, 'Banco', b.banco_nome || b.banco_codigo);
+            qaTexto(banco, 'Agência', b.agencia);
+            qaTexto(banco, 'Conta', b.conta);
+            qaTexto(banco, 'Tipo', b.conta_tipo);
+            qaTexto(banco, 'Titular', b.titular_nome);
+            qaTexto(banco, 'PIX', (b.pix_tipo ? b.pix_tipo + ': ' : '') + (b.pix_chave || ''));
+        } else {
+            qaTexto(banco, 'Bancários', 'não informados');
+        }
+
+        document.getElementById('qaTipo').value = 'ASSISTENTE';
+        Array.prototype.forEach.call(document.querySelectorAll('#qaPerfis input'),
+            function (i) { i.checked = false; });
+        Array.prototype.forEach.call(document.querySelectorAll('#qaDeps input'),
+            function (i) { i.checked = pedidos.indexOf(parseInt(i.value, 10)) >= 0; });
+
+        var err = document.getElementById('qaErro'); err.style.display = 'none'; err.textContent = '';
+        document.getElementById('qaBtnAprovar').disabled = false;
+        document.getElementById('qaBtnRecusar').disabled = false;
+        document.getElementById('qcAnalise').classList.add('aberto');
+    })
+    .catch(function () { alert('Sem resposta do servidor.'); });
+}
+
+function fecharAnalise() {
+    document.getElementById('qcAnalise').classList.remove('aberto');
+    qaPid = null;
+}
+
+function qaMarcados(sel) {
+    return Array.prototype.filter.call(
+        document.querySelectorAll(sel + ' input'), function (i) { return i.checked; }
+    ).map(function (i) { return i.value; });
+}
+
+function qaErroMostra(msg) {
+    var e = document.getElementById('qaErro'); e.textContent = msg; e.style.display = '';
+}
+
+function aprovarPendente() {
+    if (!qaPid) { return; }
+    var dados = new FormData();
+    dados.append('csrf_token', QC_CSRF);
+    dados.append('tipo_usuario', document.getElementById('qaTipo').value);
+    qaMarcados('#qaPerfis').forEach(function (v) { dados.append('perfis', v); });
+    qaMarcados('#qaDeps').forEach(function (v) { dados.append('departamentos', v); });
+    var btn = document.getElementById('qaBtnAprovar'); btn.disabled = true;
+    fetch('/configuracoes/usuarios/pendente/' + qaPid + '/aprovar',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.d.ok) { location.reload(); return; }
+        qaErroMostra(res.d.msg || 'Não foi possível aprovar.');   // pendência segue na fila
+        btn.disabled = false;
+    })
+    .catch(function () { qaErroMostra('Sem resposta do servidor.'); btn.disabled = false; });
+}
+
+function recusarPendente() {
+    if (!qaPid) { return; }
+    var motivo = window.prompt('Motivo da recusa (curto):', '');
+    if (motivo === null) { return; }          // cancelou
+    motivo = motivo.trim();
+    if (!motivo) { qaErroMostra('Diga um motivo curto para a recusa.'); return; }
+    var dados = new FormData();
+    dados.append('csrf_token', QC_CSRF);
+    dados.append('motivo', motivo);
+    var btn = document.getElementById('qaBtnRecusar'); btn.disabled = true;
+    fetch('/configuracoes/usuarios/pendente/' + qaPid + '/recusar',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.d.ok) { location.reload(); return; }
+        qaErroMostra(res.d.msg || 'Não foi possível recusar.');
+        btn.disabled = false;
+    })
+    .catch(function () { qaErroMostra('Sem resposta do servidor.'); btn.disabled = false; });
 }
 </script>
 {% endblock %}

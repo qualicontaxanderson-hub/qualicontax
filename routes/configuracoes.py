@@ -4,7 +4,7 @@ import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from utils.auth_helper import login_required, admin_required, permission_required, hash_password
-from utils.db_helper import execute_query
+from utils.db_helper import execute_query, transacao
 from utils.permissions import PERMISSION_CATALOG
 from utils import cadastro_token
 
@@ -62,6 +62,9 @@ def usuarios():
     return render_template('configuracoes/usuarios_lista.html', usuarios=rows,
                            links=cadastro_token.listar(limite=50),
                            pendentes=_cadastros_pendentes(),
+                           perfis_disponiveis=_perfis_ativos(),
+                           departamentos_disponiveis=_departamentos_ativos(),
+                           tipos_usuario=TIPOS_USUARIO,
                            csrf_token=_qrobo_csrf_token())
 
 
@@ -77,6 +80,31 @@ def usuarios():
 # ===========================================================================
 
 VALIDADE_LINK_HORAS = 72
+
+# Os mesmos tipos do ENUM de usuarios.tipo_usuario — o painel de aprovação
+# oferece exatamente estes, e o servidor recusa qualquer outro valor.
+TIPOS_USUARIO = ('ADMIN', 'GERENTE', 'CONTADOR', 'ASSISTENTE', 'ESTAGIARIO')
+
+
+class AprovacaoErro(RuntimeError):
+    """Recusa amigável de uma aprovação (login tomado, e-mail duplicado, etc.).
+
+    Não é erro de servidor: sobe até a rota, vira mensagem no painel e a pendência
+    continua na fila para o admin corrigir. Distinta de Exception genérica, que
+    seria um 500.
+    """
+
+
+def _perfis_ativos():
+    return execute_query(
+        "SELECT id, nome FROM perfis_acesso WHERE situacao='ATIVO' ORDER BY nome",
+        fetch=True) or []
+
+
+def _departamentos_ativos():
+    return execute_query(
+        'SELECT id, nome FROM departamentos WHERE ativo = 1 ORDER BY nome',
+        fetch=True) or []
 
 
 def _qrobo_csrf_token():
@@ -158,6 +186,180 @@ def usuario_link_revogar(link_id):
     # rowcount 0: já usado, já revogado, ou inexistente — nenhum deles é erro
     # de servidor, e a tela precisa recarregar para mostrar o estado real.
     return jsonify(ok=False, msg='Este link já foi usado ou revogado.'), 409
+
+
+# ---------------------------------------------------------------------------
+# Q-COLABORE Parte 5 — analisar / aprovar / recusar candidatura
+# ---------------------------------------------------------------------------
+@configuracoes.route('/usuarios/pendente/<int:pid>')
+@admin_required
+def usuario_pendente_detalhe(pid):
+    """Todos os dados da candidatura para o painel de análise (JSON).
+
+    Inclui os dados BANCÁRIOS: eles aparecem SÓ aqui, sob @admin_required, e nunca
+    entram em log — por isso a resposta não é logada e o except de mais abaixo (nas
+    rotas de decisão) não ecoa payload.
+    """
+    cand = execute_query(
+        "SELECT * FROM cadastro_pendente WHERE id = %s AND status = 'PENDENTE'",
+        (pid,), fetch=True, fetch_one=True)
+    if not cand:
+        return jsonify(ok=False, msg='Candidatura não encontrada ou já decidida.'), 404
+
+    banco = execute_query(
+        """SELECT banco_codigo, banco_nome, agencia, conta, conta_tipo,
+                  titular_nome, titular_cpf, pix_tipo, pix_chave
+             FROM usuario_dados_bancarios WHERE pendente_id = %s""",
+        (pid,), fetch=True, fetch_one=True)
+
+    deps = [r['departamento_id'] for r in (execute_query(
+        "SELECT departamento_id FROM cadastro_pendente_departamentos WHERE pendente_id = %s",
+        (pid,), fetch=True) or [])]
+
+    campos = ('id', 'nome_completo', 'cpf', 'data_nascimento', 'login_escolhido',
+              'nick_escolhido', 'email_pessoal', 'email_corporativo',
+              'celular_pessoal', 'celular_corporativo', 'cep', 'logradouro',
+              'numero', 'complemento', 'bairro', 'cidade', 'estado', 'pais',
+              'modalidade_trabalho', 'ja_funcionario', 'criado_em')
+    c = {k: cand.get(k) for k in campos}
+    for dk in ('data_nascimento', 'criado_em'):   # datas → texto p/ JSON
+        if c.get(dk) is not None:
+            c[dk] = str(c[dk])
+    return jsonify(ok=True, cand=c, banco=banco, departamentos_pedidos=deps)
+
+
+def _aprovar_pendente(pid, tipo, perfis, deps, admin_id):
+    """Cria o usuário a partir da candidatura, em UMA transação (tudo ou nada).
+
+    Devolve o id do usuário criado. Qualquer AprovacaoErro faz a transação inteira
+    reverter (transacao() dá rollback em exceção) — nem usuário, nem perfis, nem
+    mudança de status sobrevivem a uma falha no meio.
+    """
+    cand = execute_query('SELECT * FROM cadastro_pendente WHERE id = %s',
+                         (pid,), fetch=True, fetch_one=True)
+    if not cand or cand['status'] != 'PENDENTE':
+        raise AprovacaoErro('Esta candidatura já foi decidida.')
+
+    login = (cand['login_escolhido'] or '').strip().lower()
+    email = ((cand.get('email_corporativo') or cand.get('email_pessoal') or '')
+             .strip().lower()) or None
+    if not email:
+        raise AprovacaoErro('O candidato não informou e-mail — não dá para criar o '
+                            'acesso sem um. Peça que complete o cadastro.')
+    nick = cand.get('nick_escolhido')
+    cpf = cand.get('cpf') or None
+    telefone = cand.get('celular_corporativo') or cand.get('celular_pessoal')
+    dep_primario = deps[0] if deps else None
+
+    with transacao() as cur:
+        # a) o login ainda está livre? (pode ter sido tomado desde a candidatura)
+        cur.execute('SELECT id FROM usuarios WHERE login = %s', (login,))
+        if cur.fetchone():
+            raise AprovacaoErro(f'O login "{login}" já foi tomado. Ajuste o login da '
+                                'candidatura e aprove de novo.')
+        # e-mail e CPF são UNIQUE em usuarios: barra aqui com mensagem decente em
+        # vez de deixar estourar erro de driver no meio do INSERT.
+        cur.execute('SELECT id FROM usuarios WHERE email = %s', (email,))
+        if cur.fetchone():
+            raise AprovacaoErro(f'Já existe um usuário com o e-mail {email}.')
+        if cpf:
+            cur.execute('SELECT id FROM usuarios WHERE cpf = %s', (cpf,))
+            if cur.fetchone():
+                raise AprovacaoErro('Já existe um usuário com este CPF.')
+
+        # b) cria a conta SEM senha e com login bloqueado (senha_pendente=1). A
+        # Parte 6 manda o link de senha e zera a flag.
+        cur.execute(
+            """INSERT INTO usuarios
+                 (nome, nick, email, login, senha_hash, senha_pendente,
+                  tipo_usuario, classe_conta, situacao, cpf, telefone, departamento_id)
+               VALUES (%s, %s, %s, %s, NULL, 1, %s, 'FUNCIONARIO', 'ATIVO', %s, %s, %s)""",
+            (cand['nome_completo'], nick, email, login, tipo, cpf, telefone, dep_primario))
+        uid = cur.lastrowid
+
+        # perfis escolhidos pelo admin
+        for pf in perfis:
+            cur.execute('INSERT IGNORE INTO usuario_perfis (usuario_id, perfil_id) '
+                        'VALUES (%s, %s)', (uid, pf))
+
+        # e) departamentos DEFINITIVOS: reescreve o conjunto na tabela da pendência,
+        # que segue ligada ao usuário (usuario_id) — é onde o conjunto completo mora
+        # (usuarios só tem um departamento_id, gravado como primário acima).
+        cur.execute('DELETE FROM cadastro_pendente_departamentos WHERE pendente_id = %s',
+                    (pid,))
+        for d in deps:
+            cur.execute('INSERT INTO cadastro_pendente_departamentos '
+                        '(pendente_id, departamento_id) VALUES (%s, %s)', (pid, d))
+
+        # c) move os bancários da pendência para o usuário recém-criado
+        cur.execute('UPDATE usuario_dados_bancarios SET usuario_id = %s '
+                    'WHERE pendente_id = %s', (uid, pid))
+
+        # d) marca a pendência aprovada. O WHERE status='PENDENTE' + rowcount==1
+        # fecha a corrida: dois admins aprovando ao mesmo tempo → um só vence.
+        cur.execute(
+            """UPDATE cadastro_pendente
+                  SET status = 'APROVADO', decidido_por = %s, decidido_em = NOW(),
+                      usuario_id = %s
+                WHERE id = %s AND status = 'PENDENTE'""",
+            (admin_id, uid, pid))
+        if cur.rowcount != 1:
+            raise AprovacaoErro('Esta candidatura já foi decidida por outra pessoa.')
+
+    return uid
+
+
+@configuracoes.route('/usuarios/pendente/<int:pid>/aprovar', methods=['POST'])
+@admin_required
+def usuario_pendente_aprovar(pid):
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    tipo = (request.form.get('tipo_usuario') or '').strip().upper()
+    if tipo not in TIPOS_USUARIO:
+        return jsonify(ok=False, msg='Selecione um tipo de conta válido.'), 400
+    perfis = [int(p) for p in request.form.getlist('perfis') if p.isdigit()]
+    deps = [int(d) for d in request.form.getlist('departamentos') if d.isdigit()]
+
+    try:
+        uid = _aprovar_pendente(pid, tipo, perfis, deps, current_user.id)
+    except AprovacaoErro as exc:
+        # Falha esperada: pendência segue na fila para o admin ajustar.
+        return jsonify(ok=False, msg=str(exc)), 409
+    except Exception:
+        # NUNCA ecoar a exceção crua — a transação pode carregar dados bancários.
+        logger.exception('[qcolabore] falha ao aprovar pendência %s', pid)
+        return jsonify(ok=False, msg='Não foi possível aprovar agora. Tente novamente.'), 500
+
+    logger.info('[qcolabore] pendência %s aprovada por %s → usuário %s.',
+                pid, current_user.id, uid)
+    return jsonify(ok=True, usuario_id=uid)
+
+
+@configuracoes.route('/usuarios/pendente/<int:pid>/recusar', methods=['POST'])
+@admin_required
+def usuario_pendente_recusar(pid):
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    motivo = (request.form.get('motivo') or '').strip()[:255]
+    if not motivo:
+        return jsonify(ok=False, msg='Diga um motivo curto para a recusa.'), 400
+
+    # Não cria nada. A linha fica no banco como histórico (status RECUSADO) — some
+    # só da FILA, que filtra por PENDENTE. rowcount==1 confirma que era pendente.
+    with transacao() as cur:
+        cur.execute(
+            """UPDATE cadastro_pendente
+                  SET status = 'RECUSADO', decisao_motivo = %s,
+                      decidido_por = %s, decidido_em = NOW()
+                WHERE id = %s AND status = 'PENDENTE'""",
+            (motivo, current_user.id, pid))
+        if cur.rowcount != 1:
+            return jsonify(ok=False, msg='Candidatura já decidida ou inexistente.'), 409
+
+    logger.info('[qcolabore] pendência %s recusada por %s.', pid, current_user.id)
+    return jsonify(ok=True)
 
 
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])

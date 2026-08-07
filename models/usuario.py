@@ -11,9 +11,9 @@ from utils.db_helper import execute_query
 # dá erro: o parâmetro cai no default do __init__ e a conta entra com o valor
 # errado, calada. Com classe_conta no jogo isso deixaria de ser desconforto e
 # viraria falha de segurança (uma conta CLIENTE lida como FUNCIONARIO).
-_CAMPOS = """id, nome, nick, email, login, senha_hash, tipo_usuario, classe_conta,
-             situacao, cpf, telefone, departamento_id, cargo, capacidade_tarefas,
-             data_admissao, foto_perfil"""
+_CAMPOS = """id, nome, nick, email, login, senha_hash, senha_pendente, tipo_usuario,
+             classe_conta, situacao, cpf, telefone, departamento_id, cargo,
+             capacidade_tarefas, data_admissao, foto_perfil"""
 
 
 class Usuario(UserMixin):
@@ -22,13 +22,16 @@ class Usuario(UserMixin):
     def __init__(self, id, nome, email, senha_hash, tipo_usuario='ASSISTENTE', situacao='ATIVO',
                  cpf=None, telefone=None, departamento_id=None, cargo=None,
                  capacidade_tarefas=10, data_admissao=None, foto_perfil=None, login=None,
-                 classe_conta='FUNCIONARIO', nick=None):
+                 classe_conta='FUNCIONARIO', nick=None, senha_pendente=0):
         self.id = id
         self.nome = nome
         self.nick = nick
         self.email = email
         self.login = login
         self.senha_hash = senha_hash
+        # 1 = conta aprovada mas ainda sem senha (Parte 5). O login usa isto para
+        # recusar com "falta definir senha" em vez de "senha incorreta".
+        self.senha_pendente = int(senha_pendente or 0)
         self.tipo_usuario = tipo_usuario
         self.classe_conta = classe_conta
         self.situacao = situacao
@@ -57,6 +60,7 @@ class Usuario(UserMixin):
             email=row['email'],
             login=row.get('login'),
             senha_hash=row['senha_hash'],
+            senha_pendente=row.get('senha_pendente', 0),
             tipo_usuario=row.get('tipo_usuario', 'ASSISTENTE'),
             classe_conta=row.get('classe_conta', 'FUNCIONARIO'),
             situacao=row.get('situacao', 'ATIVO'),

@@ -26,7 +26,15 @@ def login():
         
         # Busca usuário pelo login
         user = Usuario.get_by_login(login_name)
-        
+
+        # Conta aprovada mas ainda sem senha (Q-Colabore Parte 5): o acesso existe,
+        # só falta a pessoa criar a senha (Parte 6). Mensagem própria — dizer
+        # "senha incorreta" aqui seria mentira e deixaria a pessoa tentando à toa.
+        # Checado ANTES de verify_password: com senha_hash NULL, verificar quebraria.
+        if user and (user.senha_pendente or not user.senha_hash):
+            flash('Seu acesso foi aprovado — falta definir sua senha. Aguarde o link.', 'info')
+            return render_template('login.html')
+
         if user and verify_password(user.senha_hash, password):
             if not user.is_active():
                 flash('Sua conta está desativada. Entre em contato com o administrador.', 'warning')
