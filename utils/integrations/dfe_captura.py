@@ -219,29 +219,47 @@ SQL_NSU_OK = (
     "  ult_consulta=NOW(), proximo_permitido=NULL, ult_status=VALUES(ult_status)"
 )
 
+# COOLDOWNS — agora configuráveis, e medidos.
+#
+# Eram fixos no SQL: 65 min no 137, 60 min no 656. Com o cron */20, quem é selado
+# em T fica elegível em T+65 e só é consultado no tique de T+80. Medição de
+# 06→07/08: 36% das consultas de NF-e voltavam 656 (69 de 191), com os tiques
+# pesados repetindo o ciclo de 80 min — 02:40, 04:00, 05:20, todos com ~50% de
+# rejeição. O CT-e, mesmo código com cron de 60 min, teve ZERO 656 em 248
+# consultas. Ou seja: 80 minutos não bastam para essa carteira.
+#
+# 130 min empurra a próxima tentativa para ~2h20 (o tique seguinte a T+130).
+# Custo: nota que chegue logo após um 137 espera mais. Ganho: para de queimar
+# 1/3 das consultas em rejeição — e consulta rejeitada não traz documento
+# nenhum, então a espera EFETIVA de hoje já é de duas tentativas.
+#
+# Em env var para calibrar sem redeploy: se 130 não derrubar a taxa, o plano B
+# é backoff progressivo por empresa (dobrar a cada 656 consecutivo, zerar no
+# primeiro sucesso), que exige coluna de contador.
+_COOLDOWN_137_MIN = int(os.getenv('DFE_COOLDOWN_137_MIN', '130'))
+_COOLDOWN_656_MIN = int(os.getenv('DFE_COOLDOWN_656_MIN', '130'))
+
 SQL_NSU_656 = (
     "INSERT INTO dfe_nsu "
     "(cliente_id, cnpj, ult_nsu, max_nsu, ult_consulta, proximo_permitido, ult_status) "
-    "VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL 1 HOUR,%s) "
+    f"VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL {_COOLDOWN_656_MIN} MINUTE,%s) "
     "ON DUPLICATE KEY UPDATE "
     "  ult_nsu=VALUES(ult_nsu), " + _MAX_NSU + ", "
-    "  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL 1 HOUR, "
+    f"  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL {_COOLDOWN_656_MIN} MINUTE, "
     "  ult_status=VALUES(ult_status)"
 )
 
-# 137 (fim de fila: nada novo / em dia). Grava o cursor IGUAL ao OK, mas com um
-# cooldown CURTO (65 min) em vez de liberar (NULL). Motivo: o distDFeInt cobra
-# ~1h de espera depois que se alcança o maxNSU; como o cron roda */20, sem esta
-# folga ele re-consulta em ~20 min e leva 656 (consumo indevido). 65 = 60 + 5 de
-# margem para não raspar no limite. NÃO afeta o 138 (tem mais doc → continua
-# drenando sem cooldown) nem o valor de 1h do 656.
+# 137 (fim de fila: nada novo / em dia). Grava o cursor IGUAL ao OK, mas com
+# cooldown em vez de liberar (NULL). NÃO afeta o 138 (tem mais doc → continua
+# drenando sem cooldown) nem a janela vazia (137 com fila à frente, que encadeia
+# no mesmo ciclo e não passa por aqui).
 SQL_NSU_137 = (
     "INSERT INTO dfe_nsu "
     "(cliente_id, cnpj, ult_nsu, max_nsu, ult_consulta, proximo_permitido, ult_status) "
-    "VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL 65 MINUTE,%s) "
+    f"VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL {_COOLDOWN_137_MIN} MINUTE,%s) "
     "ON DUPLICATE KEY UPDATE "
     "  ult_nsu=VALUES(ult_nsu), " + _MAX_NSU + ", "
-    "  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL 65 MINUTE, "
+    f"  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL {_COOLDOWN_137_MIN} MINUTE, "
     "  ult_status=VALUES(ult_status)"
 )
 

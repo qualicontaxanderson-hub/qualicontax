@@ -68,6 +68,12 @@ _MAX_LOTES_CICLO = int(os.getenv('CTE_MAX_LOTES_CICLO', '60'))
 #                        num mesmo ciclo — contador próprio, separado do de lotes.
 #                        Ver o comentário longo no dfe_captura.py.
 _MAX_JANELAS_VAZIAS = int(os.getenv('CTE_MAX_JANELAS_VAZIAS', '50'))
+# Cooldown do 656. Configurável como o do NF-e, mas o DEFAULT segue 60 (o valor
+# de hoje) de propósito: na medição de 06→07/08 o CT-e teve ZERO 656 em 248
+# consultas — o cron dele já roda a ~60 min e não se atropela. Subir para 130
+# só o deixaria mais lento sem resolver problema nenhum. Se um dia ele começar a
+# tomar 656, é a env var que se mexe, não o código.
+_COOLDOWN_656_MIN = int(os.getenv('CTE_COOLDOWN_656_MIN', '60'))
 _MAX_SEG_EMPRESA = int(os.getenv('CTE_MAX_SEG_EMPRESA', '90'))
 _INTERVALO_LOTE = float(os.getenv('CTE_INTERVALO_LOTE_SEG', '0.4'))
 
@@ -96,10 +102,10 @@ SQL_NSU_OK = (
 SQL_NSU_656 = (
     "INSERT INTO dfe_nsu_cte "
     "(cliente_id, cnpj, ult_nsu, max_nsu, ult_consulta, proximo_permitido, ult_status) "
-    "VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL 1 HOUR,%s) "
+    f"VALUES (%s,%s,%s,%s,NOW(),NOW() + INTERVAL {_COOLDOWN_656_MIN} MINUTE,%s) "
     "ON DUPLICATE KEY UPDATE "
     "  ult_nsu=VALUES(ult_nsu), " + _MAX_NSU + ", "
-    "  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL 1 HOUR, "
+    f"  ult_consulta=NOW(), proximo_permitido=NOW() + INTERVAL {_COOLDOWN_656_MIN} MINUTE, "
     "  ult_status=VALUES(ult_status)"
 )
 
