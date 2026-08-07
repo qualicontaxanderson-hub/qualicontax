@@ -140,17 +140,21 @@ def _fmt_cel(v):
     return v or None
 
 
-def _gerar_link_senha(uid, admin_id):
+def _gerar_link_senha(uid, admin_id, cur=None):
     """Gera um link tipo='SENHA' para o usuário e devolve (url, prefixo).
 
     cadastro_token.gerar já revoga os links de senha pendentes do mesmo usuário
     antes de criar o novo — é o que faz o "Gerar novo link" invalidar o anterior.
     A URL completa nasce em url_claro (via url_builder), então a lista pode
     reoferecer 'Copiar' enquanto o link estiver pendente.
+
+    ``cur``: gera dentro de uma transação já aberta (usado quando o bloqueio de
+    acesso e o link precisam ser um único commit atômico).
     """
     token, _link_id = cadastro_token.gerar(
         'SENHA', admin_id, usuario_id=uid, validade_horas=VALIDADE_LINK_HORAS,
-        url_builder=lambda t: url_for('senha.formulario', token=t, _external=True))
+        url_builder=lambda t: url_for('senha.formulario', token=t, _external=True),
+        cur=cur)
     url = url_for('senha.formulario', token=token, _external=True)
     return url, token[:8]
 
@@ -437,10 +441,17 @@ def usuario_pendente_recusar(pid):
 @configuracoes.route('/usuarios/<int:uid>/senha-link', methods=['POST'])
 @admin_required
 def usuario_senha_link(uid):
-    """Gera (ou regenera) o link de senha de um usuário ainda sem senha.
+    """Gera link de definição/redefinição de senha. Cobre três casos:
 
-    Serve para o link que expirou ou que a pessoa perdeu. gerar() revoga o
-    anterior. Recusa se a conta JÁ tem senha — não faz sentido reabri-la.
+    - senha_pendente=1 (conta recém-aprovada, sem senha): só (re)emite o link.
+    - senha_pendente=0 + bloquear=0: REDEFINIÇÃO "esqueci a senha" — emite o link;
+      a senha atual CONTINUA valendo até a pessoa definir a nova.
+    - senha_pendente=0 + bloquear=1: REDEFINIÇÃO com corte — marca senha_pendente=1
+      E emite o link no MESMO commit; a pessoa é deslogada na próxima requisição
+      (load_user recusa senha_pendente=1) e só volta pelo link. "Senha vazou /
+      desligamento".
+
+    gerar() revoga o link de senha pendente anterior. NUNCA loga token/senha.
     """
     if not _qrobo_csrf_ok():
         return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
@@ -448,16 +459,33 @@ def usuario_senha_link(uid):
                       (uid,), fetch=True, fetch_one=True)
     if not u:
         return jsonify(ok=False, msg='Usuário não encontrado.'), 404
-    if not u['senha_pendente']:
-        return jsonify(ok=False, msg='Este usuário já definiu a senha.'), 409
+
+    bloquear = request.form.get('bloquear') == '1'
+
+    # Guard anti-tiro-no-pé: bloquear o PRÓPRIO acesso derrubaria a sua sessão
+    # agora — e se o link não for copiado, ninguém reentra. Redefinir a própria
+    # senha SEM bloqueio segue permitido.
+    if bloquear and uid == current_user.id:
+        return jsonify(ok=False, msg='Você não pode bloquear o seu próprio acesso. '
+                       'Redefina sem bloquear, ou peça a outro administrador.'), 409
+
     try:
-        url, prefixo = _gerar_link_senha(uid, current_user.id)
+        if bloquear and u['senha_pendente'] == 0:
+            # Bloqueio + link num ÚNICO commit: ou a pessoa perde o acesso E ganha
+            # o caminho de volta, ou nada muda.
+            with transacao() as cur:
+                cur.execute('UPDATE usuarios SET senha_pendente = 1 WHERE id = %s',
+                            (uid,))
+                url, prefixo = _gerar_link_senha(uid, current_user.id, cur=cur)
+        else:
+            url, prefixo = _gerar_link_senha(uid, current_user.id)
     except Exception:
         logger.exception('[qcolabore] falha ao gerar link de senha do usuário %s', uid)
         return jsonify(ok=False, msg='Não foi possível gerar o link agora.'), 500
-    logger.info('[qcolabore] link de senha (re)gerado para usuário %s por %s.',
-                uid, current_user.id)
-    return jsonify(ok=True, url=url, prefixo=prefixo)
+
+    logger.info('[qcolabore] link de senha para usuário %s por %s (bloquear=%s).',
+                uid, current_user.id, int(bloquear))
+    return jsonify(ok=True, url=url, prefixo=prefixo, bloqueado=bool(bloquear))
 
 
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])

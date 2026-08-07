@@ -69,17 +69,22 @@
                                 onclick="toggleUsuario({{ u.id }}, this)">
                             <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
                         </button>
+                        {% set slink = senha_links.get(u.id) %}
+                        {% if slink %}
+                        <button class="btn btn-sm btn-info" title="Copiar link de senha"
+                                data-url="{{ slink }}" onclick="copiarLista(this)">
+                            <i class="fas fa-key"></i> Copiar link de senha
+                        </button>
+                        {% endif %}
                         {% if u.senha_pendente %}
-                            {% set slink = senha_links.get(u.id) %}
-                            {% if slink %}
-                            <button class="btn btn-sm btn-info" title="Copiar link de senha"
-                                    data-url="{{ slink }}" onclick="copiarLista(this)">
-                                <i class="fas fa-key"></i> Copiar link de senha
-                            </button>
-                            {% endif %}
                             <button class="btn btn-sm btn-primary" title="Gerar novo link de senha (revoga o anterior)"
                                     onclick="gerarLinkSenha({{ u.id }}, this)">
                                 <i class="fas fa-rotate"></i> Novo link de senha
+                            </button>
+                        {% else %}
+                            <button class="btn btn-sm btn-warning" title="Redefinir a senha deste usuário"
+                                    onclick="abrirRedefinir({{ u.id }}, '{{ u.login|e }}', {{ 'true' if u.id == current_user.id else 'false' }})">
+                                <i class="fas fa-key"></i> Redefinir senha
                             </button>
                         {% endif %}
                     </td>
@@ -331,6 +336,33 @@
   </div>
 </div>
 
+{# ---- Modal: confirmar redefinição de senha (2 opções) ---- #}
+<div class="qc-modal-fundo" id="qcRedefinir" onclick="if(event.target===this) fecharRedefinir()">
+  <div class="qc-modal">
+    <button type="button" class="qc-x" title="Fechar" onclick="fecharRedefinir()">&times;</button>
+    <h3 class="qc-modal-tit">Redefinir senha</h3>
+    <p class="qc-modal-sub">Usuário <strong id="qrLogin"></strong>. Um link de redefinição
+       será gerado (vale 1 vez, 72h). Escolha o modo — a diferença é séria:</p>
+
+    <label class="qr-op" id="qrOp">
+      <input type="checkbox" id="qrBloquear">
+      <span>Bloquear o acesso <strong>agora</strong> (senha vazou / desligamento)</span>
+    </label>
+    <p class="qc-hint" id="qrSelfNote" style="display:none; color:#b45309">
+      Você não pode bloquear o seu próprio acesso — só redefinir sem bloquear.
+    </p>
+
+    <div class="qc-aviso" id="qrResumo"></div>
+
+    <div class="qc-modal-acoes">
+      <button type="button" class="btn btn-secondary" onclick="fecharRedefinir()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="qrConfirmar" onclick="confirmarRedefinir()">
+        Gerar link
+      </button>
+    </div>
+  </div>
+</div>
+
 {# ---- Modal: link de senha gerado (aprovação e "novo link") ---- #}
 <div class="qc-modal-fundo" id="qcSenhaLink" onclick="if(event.target===this) fecharSenhaLink()">
   <div class="qc-modal">
@@ -371,6 +403,11 @@
 .qc-x { position: absolute; top: 12px; right: 14px; border: none; background: none;
         font-size: 26px; line-height: 1; color: #94a3b8; cursor: pointer; padding: 2px 6px; }
 .qc-x:hover { color: #334155; }
+.qr-op { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155;
+         padding: 12px 14px; border: 1.5px solid var(--gray-light); border-radius: 10px;
+         cursor: pointer; }
+.qr-op input { width: 18px; height: 18px; flex: 0 0 auto; }
+.qr-perigo { background: #fef2f2 !important; border-color: #fecaca !important; color: #991b1b !important; }
 .qc-modal-lg { max-width: 860px; display: flex; flex-direction: column; max-height: 88vh; }
 /* Só o conteúdo rola (min-height:0 deixa o flex encolher); o rodapé de botões
    fica fixo e sempre alcançável, mesmo em janela baixa / mobile. */
@@ -702,6 +739,68 @@ function gerarLinkSenha(uid, btn) {
         if (btn) { btn.disabled = false; }
     })
     .catch(function () { alert('Sem resposta do servidor.'); if (btn) { btn.disabled = false; } });
+}
+
+// ---- Redefinição de senha (usuário que JÁ tem senha) ----
+var qrUid = null;
+
+function qrAtualizaResumo() {
+    var bloq = document.getElementById('qrBloquear').checked;
+    var r = document.getElementById('qrResumo');
+    var op = document.getElementById('qrOp');
+    if (bloq) {
+        r.className = 'qc-aviso qr-perigo';
+        r.innerHTML = '<strong>Bloquear agora:</strong> a pessoa é <strong>deslogada</strong> '
+            + 'imediatamente e a senha atual deixa de valer — só volta definindo a nova pelo '
+            + 'link. Use para senha vazada ou desligamento.';
+        op.classList.add('qr-perigo');
+    } else {
+        r.className = 'qc-aviso';
+        r.innerHTML = '<strong>Só gerar o link:</strong> a senha atual <strong>continua '
+            + 'valendo</strong> até a pessoa definir a nova. É o caso "esqueci a senha".';
+        op.classList.remove('qr-perigo');
+    }
+}
+
+function abrirRedefinir(uid, login, isSelf) {
+    qrUid = uid;
+    document.getElementById('qrLogin').textContent = login;
+    var cb = document.getElementById('qrBloquear');
+    cb.checked = false;
+    cb.disabled = !!isSelf;                          // não deixa bloquear o próprio acesso
+    document.getElementById('qrSelfNote').style.display = isSelf ? '' : 'none';
+    document.getElementById('qrConfirmar').disabled = false;
+    qrAtualizaResumo();
+    document.getElementById('qcRedefinir').classList.add('aberto');
+}
+
+function fecharRedefinir() {
+    document.getElementById('qcRedefinir').classList.remove('aberto');
+    qrUid = null;
+}
+
+document.getElementById('qrBloquear').addEventListener('change', qrAtualizaResumo);
+
+function confirmarRedefinir() {
+    if (!qrUid) { return; }
+    var bloquear = document.getElementById('qrBloquear').checked ? '1' : '0';
+    var dados = new FormData();
+    dados.append('csrf_token', QC_CSRF);
+    dados.append('bloquear', bloquear);
+    var btn = document.getElementById('qrConfirmar'); btn.disabled = true;
+    fetch('/configuracoes/usuarios/' + qrUid + '/senha-link',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.d.ok) {
+            fecharRedefinir();
+            mostrarSenhaLink(res.d.url, res.d.prefixo);   // mesmo modal COPIAR LINK
+            return;
+        }
+        alert(res.d.msg || 'Não foi possível gerar o link.');
+        btn.disabled = false;
+    })
+    .catch(function () { alert('Sem resposta do servidor.'); btn.disabled = false; });
 }
 </script>
 {% endblock %}

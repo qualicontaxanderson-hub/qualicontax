@@ -44,18 +44,11 @@ MOTIVOS = {
     'tipo_errado': ('Link inválido',
                     'Este link não é de definição de senha. Confira o endereço com '
                     'quem o enviou.'),
-    'definida': ('Senha já definida',
-                 'Esta conta já tem uma senha. Vá para a tela de login e entre '
-                 'normalmente.'),
 }
 
 
 class _Conflito(RuntimeError):
     """O token deixou de estar consumível entre o inspecionar e o UPDATE."""
-
-
-class _JaDefinida(RuntimeError):
-    """A conta já saiu do estado senha_pendente — nada a gravar."""
 
 
 def _recusa(motivo, codigo=410):
@@ -102,8 +95,10 @@ def formulario(token):
     if not u:
         # Link válido mas sem dono legível: trata como inválido, sem vazar nada.
         return _recusa('inexistente')
-    if not u['senha_pendente']:
-        return _recusa('definida')
+    # NÃO se checa senha_pendente aqui: a autorização é o TOKEN (válido, não usado,
+    # não revogado). Serve tanto para a 1ª senha (senha_pendente=1) quanto para a
+    # redefinição de quem já tem senha (senha_pendente=0). Como gerar() revoga o
+    # link anterior, há no máximo um vivo — um link usado/revogado já cai acima.
     return render_template('senha/formulario.html',
                            token=token, nome=u['nome'], login=u['login'])
 
@@ -122,8 +117,6 @@ def definir(token):
     u = _usuario(est['link'].get('usuario_id'))
     if not u:
         return _recusa('inexistente')
-    if not u['senha_pendente']:
-        return _recusa('definida')
 
     def erro(msg):
         return render_template('senha/formulario.html', token=token,
@@ -154,16 +147,14 @@ def definir(token):
                 (ip, token_hash))
             if cur.rowcount != 1:
                 raise _Conflito()
-            # Grava a senha SÓ se a conta ainda estava pendente. Mesmo transacao():
-            # falhou aqui, o consumo do token acima também é revertido.
+            # Consumido o token, grava a senha e zera senha_pendente (destrava o
+            # login). Vale para 1ª senha E redefinição — a autorização foi o token,
+            # consumido atomicamente acima. Mesmo transacao(): falhou aqui, o
+            # consumo do token também é revertido e o link continua valendo.
             cur.execute(
                 """UPDATE usuarios SET senha_hash = %s, senha_pendente = 0
-                    WHERE id = %s AND senha_pendente = 1""",
+                    WHERE id = %s""",
                 (senha_hash, u['id']))
-            if cur.rowcount != 1:
-                raise _JaDefinida()
-    except _JaDefinida:
-        return _recusa('definida')
     except _Conflito:
         # Alguém consumiu/expirou entre o inspecionar e o UPDATE — relê o motivo.
         est2 = cadastro_token.inspecionar(token, TIPO)

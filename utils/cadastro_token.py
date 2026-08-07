@@ -90,26 +90,38 @@ def _valida_tipo(tipo: str) -> str:
     return t
 
 
-def _escrever(sql, params=None) -> int:
+def _escrever(sql, params=None, cur=None) -> int:
     """Executa uma escrita e devolve o rowcount REAL.
 
     Via transacao() de propósito — ver a nota no topo do módulo. Erro de banco
     sobe como CadastroTokenError em vez de virar None silencioso.
+
+    Com ``cur`` (cursor de uma transação já aberta pelo chamador), escreve DENTRO
+    dela e deixa a exceção subir crua — quem abriu a transação é quem faz o
+    rollback. É o que permite gerar o link no MESMO commit de outra operação
+    (ex.: bloquear o acesso e emitir o link de redefinição atomicamente).
     """
+    if cur is not None:
+        cur.execute(sql, params or ())
+        return int(cur.rowcount or 0)
     try:
-        with transacao() as cur:
-            cur.execute(sql, params or ())
-            return int(cur.rowcount or 0)
+        with transacao() as c:
+            c.execute(sql, params or ())
+            return int(c.rowcount or 0)
     except Exception as exc:
         raise CadastroTokenError(f'falha ao gravar em {TABELA}: {exc}') from exc
 
 
-def _inserir(sql, params=None) -> int:
-    """Executa um INSERT e devolve o lastrowid."""
+def _inserir(sql, params=None, cur=None) -> int:
+    """Executa um INSERT e devolve o lastrowid. Com ``cur``, insere na transação
+    do chamador (ver _escrever)."""
+    if cur is not None:
+        cur.execute(sql, params or ())
+        return int(cur.lastrowid or 0)
     try:
-        with transacao() as cur:
-            cur.execute(sql, params or ())
-            return int(cur.lastrowid or 0)
+        with transacao() as c:
+            c.execute(sql, params or ())
+            return int(c.lastrowid or 0)
     except Exception as exc:
         raise CadastroTokenError(f'falha ao inserir em {TABELA}: {exc}') from exc
 
@@ -162,7 +174,7 @@ def _motivo_da_falha(token_hash: str, tipo: str) -> dict:
 def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
           usuario_id: int = None,
           validade_horas: int = VALIDADE_HORAS_PADRAO,
-          url_builder=None) -> tuple:
+          url_builder=None, cur=None) -> tuple:
     """Cria um link de uso único. Devolve ``(token_claro, link_id)``.
 
     O token claro é devolvido UMA vez e não é recuperável depois — quem chamou
@@ -178,6 +190,12 @@ def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
     outro link); morre no consumo/revogação/expiração. Sem url_builder,
     ``url_claro`` nasce NULL e o link vale só pelo hash. Se o builder estourar, a
     geração NÃO falha: perde-se só a cópia, nunca o link.
+
+    ``cur`` (opcional): cursor de uma transação já aberta. Com ele, a revogação
+    dos pendentes e o INSERT do novo link ocorrem DENTRO dessa transação — então
+    bloquear o acesso (senha_pendente=1) e emitir o link de redefinição são um
+    único commit atômico. Sem ``cur``, cada escrita abre sua própria transação
+    como antes.
     """
     tipo = _valida_tipo(tipo)
     if not criado_por:
@@ -190,7 +208,8 @@ def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
     # Revoga os pendentes anteriores do mesmo alvo: dois links vivos para a
     # mesma pessoa é convite a confusão (e a segundo cadastro).
     revogados = revogar_pendentes(tipo, destinatario=destinatario,
-                                  usuario_id=usuario_id, revogado_por=criado_por)
+                                  usuario_id=usuario_id, revogado_por=criado_por,
+                                  cur=cur)
     if revogados:
         logger.info('[cadastro_token] %d link(s) %s pendente(s) revogado(s) '
                     'antes de gerar o novo.', revogados, tipo)
@@ -216,7 +235,7 @@ def gerar(tipo: str, criado_por: int, *, destinatario: str = None,
                criado_por, expira_em, url_claro)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
         (tipo, token_hash, token[:PREFIXO_LEN], destinatario or None,
-         usuario_id or None, criado_por, expira_em, url_claro))
+         usuario_id or None, criado_por, expira_em, url_claro), cur=cur)
 
     logger.info('[cadastro_token] link %s id=%s criado por %s, expira %s.',
                 tipo, link_id, criado_por, expira_em)
@@ -319,11 +338,12 @@ def revogar(link_id: int, revogado_por: int) -> bool:
 
 
 def revogar_pendentes(tipo: str, *, destinatario: str = None,
-                      usuario_id: int = None, revogado_por: int = None) -> int:
+                      usuario_id: int = None, revogado_por: int = None,
+                      cur=None) -> int:
     """Revoga os links vivos do mesmo alvo. Devolve quantos caíram.
 
     Sem destinatario NEM usuario_id não faz nada: um WHERE sem alvo revogaria os
-    links pendentes de TODO MUNDO.
+    links pendentes de TODO MUNDO. ``cur`` escreve na transação do chamador.
     """
     tipo = _valida_tipo(tipo)
     if not destinatario and not usuario_id:
@@ -340,7 +360,7 @@ def revogar_pendentes(tipo: str, *, destinatario: str = None,
                SET revogado_em = NOW(), revogado_por = %s, url_claro = NULL
              WHERE tipo = %s AND ({' OR '.join(cond)})
                AND usado_em IS NULL AND revogado_em IS NULL""",
-        tuple(params))
+        tuple(params), cur=cur)
 
 
 def status_do_link(row: dict) -> str:

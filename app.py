@@ -59,8 +59,18 @@ login_manager.login_message_category = 'warning'
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Carrega usuário para Flask-Login"""
-    return Usuario.get_by_id(int(user_id))
+    """Carrega usuário para Flask-Login.
+
+    Conta com senha PENDENTE (nunca definida, ou redefinição com bloqueio) não
+    sustenta sessão: devolver None faz o current_user cair já na PRÓXIMA
+    requisição — quem estava logado é derrubado na hora que o admin bloqueia, e
+    cai no /login (onde a rota mostra 'falta definir a senha'). É o que impede a
+    pessoa de continuar navegando após um bloqueio.
+    """
+    u = Usuario.get_by_id(int(user_id))
+    if u and u.senha_pendente:
+        return None
+    return u
 
 
 # Registra Blueprints
