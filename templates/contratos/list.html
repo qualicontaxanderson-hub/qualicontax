@@ -3,132 +3,151 @@
 {% block title %}Contratos - Qualicontax{% endblock %}
 
 {% block content %}
-<div class="contratos-page">
-    <!-- Page Header -->
-    <div class="page-header">
+{# Os três filtros abaixo são os MESMOS de antes (search/tipo/status). Registro
+   honesto: a rota list_contratos() lê 'cliente_id' e 'situacao', não estes
+   campos — ou seja, eles já não filtravam nada antes desta tela mudar. Ficam
+   preservados como estão; ligá-los é outra frente (o módulo está incompleto). #}
+{% set filters_active = request.args.get('search') or request.args.get('tipo') or request.args.get('status') %}
+
+{% include 'cadastros/_nav_cadastros.html' %}
+
+<!-- ── HERO (identidade compartilhada) ─────────────────────────────────── -->
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
         <div>
-            <h1 class="page-title">Contratos</h1>
-            <p class="page-subtitle">Gerencie os contratos dos clientes</p>
+            <h1 class="ef-hero-title">Contratos</h1>
+            <p class="ef-hero-sub">
+                {{ total or 0 }} contrato{{ '' if (total or 0) == 1 else 's' }}
+                {{ 'cadastrado' if (total or 0) == 1 else 'cadastrados' }}
+            </p>
         </div>
-        <div class="page-actions">
-            <button class="btn btn-outline">
-                <i class="fas fa-download"></i>
-                Exportar
+        <div class="ef-hero-actions">
+            {# Exportar: botão morto hoje, igual à lista de clientes — mantido como está #}
+            <button type="button" class="ef-btn" title="Exportar">
+                <i class="fas fa-download"></i> Exportar
             </button>
-            <a href="{{ url_for('contratos.create') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i>
-                Novo Contrato
+            <a href="{{ url_for('contratos.create') }}" class="ef-btn ef-btn-primary">
+                <i class="fas fa-plus"></i> Novo Contrato
             </a>
         </div>
     </div>
+</div>
 
-    <!-- Filters -->
-    <div class="card filters-card">
-        <div class="card-body">
-            <form method="GET" class="filters-form">
-                <div class="filters-row">
-                    <div class="form-group">
-                        <label for="search">Buscar</label>
-                        <input type="text" id="search" name="search" class="form-control" placeholder="Número, Cliente..." value="{{ request.args.get('search', '') }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="tipo">Tipo</label>
-                        <select id="tipo" name="tipo" class="form-control">
-                            <option value="">Todos</option>
-                            <option value="mensal" {% if request.args.get('tipo') == 'mensal' %}selected{% endif %}>Mensal</option>
-                            <option value="anual" {% if request.args.get('tipo') == 'anual' %}selected{% endif %}>Anual</option>
-                            <option value="unico" {% if request.args.get('tipo') == 'unico' %}selected{% endif %}>Único</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="status">Status</label>
-                        <select id="status" name="status" class="form-control">
-                            <option value="">Todos</option>
-                            <option value="ativo" {% if request.args.get('status') == 'ativo' %}selected{% endif %}>Ativo</option>
-                            <option value="pendente" {% if request.args.get('status') == 'pendente' %}selected{% endif %}>Pendente</option>
-                            <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelado</option>
-                            <option value="encerrado" {% if request.args.get('status') == 'encerrado' %}selected{% endif %}>Encerrado</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-search"></i>
-                            Filtrar
-                        </button>
-                    </div>
-                </div>
-            </form>
+<div class="ef-body">
+    <!-- ── Filtros (os 3 de hoje, mesmos names e mesmas opções) ────────── -->
+    <div class="qf-card">
+        <div class="qf-head" onclick="toggleFilters()">
+            <span class="qf-title">
+                <i class="fas fa-filter"></i> Filtros de pesquisa
+                {% if filters_active %}<span class="qf-badge">filtros ativos</span>{% endif %}
+            </span>
+            <i class="fas fa-chevron-down qf-chev" id="filters-chevron"></i>
         </div>
-    </div>
-
-    <!-- Contratos Table -->
-    <div class="card table-card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Número</th>
-                            <th>Cliente</th>
-                            <th>Tipo</th>
-                            <th>Data Início</th>
-                            <th>Data Fim</th>
-                            <th>Valor</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {# A rota manda uma LISTA de dicts (c.* + cliente_nome), não um
-                           objeto de paginação do SQLAlchemy. Os nomes abaixo são os das
-                           colunas reais da tabela contratos. #}
-                        {% if contratos %}
-                            {% for contrato in contratos %}
-                            <tr>
-                                <td>#{{ contrato.numero_contrato }}</td>
-                                <td>
-                                    <div class="table-user">
-                                        <div class="table-user-avatar">
-                                            {{ (contrato.cliente_nome or '?')[0]|upper }}
-                                        </div>
-                                        <span>{{ contrato.cliente_nome or '—' }}</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="badge badge-info">{{ contrato.tipo_servico or '—' }}</span>
-                                </td>
-                                <td>{{ contrato.data_inicio.strftime('%d/%m/%Y') if contrato.data_inicio else '—' }}</td>
-                                <td>{{ contrato.data_fim.strftime('%d/%m/%Y') if contrato.data_fim else '—' }}</td>
-                                <td>
-                                    {%- if contrato.valor_mensal is not none -%}
-                                        R$ {{ ('%.2f'|format(contrato.valor_mensal))|replace('.', ',') }}
-                                    {%- else -%}—{%- endif -%}
-                                </td>
-                                <td>
-                                    {% set sit = (contrato.situacao or '')|lower %}
-                                    <span class="badge badge-{{ 'success' if sit == 'ativo' else 'warning' if sit == 'pendente' else 'danger' if sit == 'cancelado' else 'secondary' }}">
-                                        {{ contrato.situacao|capitalize if contrato.situacao else '—' }}
-                                    </span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="7" class="text-center">
-                                    <div class="empty-state">
-                                        <i class="fas fa-file-contract"></i>
-                                        <p>Nenhum contrato encontrado</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
+        <div class="qf-body" id="filters-body" style="display:none;">
+            <div class="qf-wrap">
+                <form method="GET">
+                    <div class="qf-row">
+                        <div class="qf-group">
+                            <span class="qf-lbl">Buscar</span>
+                            <input type="text" id="search" name="search" class="qf-ctrl"
+                                   placeholder="Número, Cliente..." value="{{ request.args.get('search', '') }}">
+                        </div>
+                        <div class="qf-group">
+                            <span class="qf-lbl">Tipo</span>
+                            <select id="tipo" name="tipo" class="qf-ctrl">
+                                <option value="">Todos</option>
+                                <option value="mensal" {% if request.args.get('tipo') == 'mensal' %}selected{% endif %}>Mensal</option>
+                                <option value="anual"  {% if request.args.get('tipo') == 'anual'  %}selected{% endif %}>Anual</option>
+                                <option value="unico"  {% if request.args.get('tipo') == 'unico'  %}selected{% endif %}>Único</option>
+                            </select>
+                        </div>
+                        <div class="qf-group">
+                            <span class="qf-lbl">Status</span>
+                            <select id="status" name="status" class="qf-ctrl">
+                                <option value="">Todos</option>
+                                <option value="ativo"     {% if request.args.get('status') == 'ativo'     %}selected{% endif %}>Ativo</option>
+                                <option value="pendente"  {% if request.args.get('status') == 'pendente'  %}selected{% endif %}>Pendente</option>
+                                <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                                <option value="encerrado" {% if request.args.get('status') == 'encerrado' %}selected{% endif %}>Encerrado</option>
+                            </select>
+                        </div>
+                        <div class="qf-group qf-actions">
+                            <span class="qf-lbl">&nbsp;</span>
+                            <div class="qf-btns">
+                                <button type="submit" class="btn btn-primary qf-btn">
+                                    <i class="fas fa-search"></i> Filtrar
+                                </button>
+                                {% if filters_active %}
+                                <a href="{{ url_for('contratos.list_contratos') }}" class="btn btn-outline qf-btn" title="Limpar filtros">
+                                    <i class="fas fa-times"></i> Limpar
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Pagination -->
+    <div class="lst-infobar">
+        <span class="lst-count">
+            {% if contratos %}
+                Mostrando <strong>{{ contratos|length }}</strong> de <strong>{{ total }}</strong>
+                contrato{{ '' if total == 1 else 's' }}
+            {% else %}
+                Nenhum contrato encontrado
+            {% endif %}
+        </span>
+    </div>
+
+    <!-- ── Lista em linhas-cartão (mesmas colunas da tabela de antes) ─────
+         Ver/Editar/Excluir continuam AUSENTES de propósito: as rotas
+         view_contrato, edit_contrato e /contratos/<id>/delete não existem.
+         Nesta frente é só visual — nenhuma rota nova. -->
+    <div class="lst-list">
+        {% if contratos %}
+            {% for contrato in contratos %}
+            {% set sit = (contrato.situacao or '')|lower %}
+            <div class="lst-row ct-row">
+                <div class="ct-c-num">
+                    <span class="lst-pill">#{{ contrato.numero_contrato }}</span>
+                </div>
+
+                <div class="ct-c-main">
+                    <div class="lst-name" title="{{ contrato.cliente_nome or '' }}">{{ contrato.cliente_nome or '—' }}</div>
+                    <div class="lst-meta">{{ contrato.tipo_servico or 'Tipo não informado' }}</div>
+                </div>
+
+                <div class="ct-c-datas">
+                    <div class="ct-dt"><span class="ct-dt-lbl">Início</span>
+                        <span class="lst-mono">{{ contrato.data_inicio.strftime('%d/%m/%Y') if contrato.data_inicio else '—' }}</span></div>
+                    <div class="ct-dt"><span class="ct-dt-lbl">Fim</span>
+                        <span class="lst-mono">{{ contrato.data_fim.strftime('%d/%m/%Y') if contrato.data_fim else '—' }}</span></div>
+                </div>
+
+                <div class="ct-c-valor">
+                    {%- if contrato.valor_mensal is not none -%}
+                        <span class="ct-valor">R$ {{ ('%.2f'|format(contrato.valor_mensal))|replace('.', ',') }}</span>
+                    {%- else -%}<span class="ct-valor ct-valor-none">—</span>{%- endif -%}
+                </div>
+
+                <div class="ct-c-sit">
+                    <span class="lst-sit {{ 'lst-sit-on' if sit == 'ativo' else 'lst-sit-warn' if sit == 'pendente' else 'lst-sit-off' }}">
+                        {{ contrato.situacao|capitalize if contrato.situacao else '—' }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="lst-empty">
+                <i class="fas fa-file-contract"></i>
+                <p>Nenhum contrato encontrado</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- ── Paginação (preservada da correção do Bloco C1) ──────────────── -->
     {# 'page' sai da query string antes do **qs: passá-lo junto com page=N dava
        "multiple values for keyword argument 'page'" (TypeError → 500). #}
     {% set qs = request.args.to_dict() %}
@@ -138,32 +157,68 @@
         <nav class="pagination">
             {% if page > 1 %}
             <a href="{{ url_for('contratos.list_contratos', page=page-1, **qs) }}" class="pagination-btn">
-                <i class="fas fa-chevron-left"></i>
-                Anterior
+                <i class="fas fa-chevron-left"></i> Anterior
             </a>
             {% endif %}
-
             <div class="pagination-pages">
                 {% for page_num in range(1, total_pages + 1) %}
                     <a href="{{ url_for('contratos.list_contratos', page=page_num, **qs) }}"
-                       class="pagination-page {% if page_num == page %}active{% endif %}">
-                        {{ page_num }}
-                    </a>
+                       class="pagination-page {% if page_num == page %}active{% endif %}">{{ page_num }}</a>
                 {% endfor %}
             </div>
-
             {% if page < total_pages %}
             <a href="{{ url_for('contratos.list_contratos', page=page+1, **qs) }}" class="pagination-btn">
-                Próximo
-                <i class="fas fa-chevron-right"></i>
+                Próximo <i class="fas fa-chevron-right"></i>
             </a>
             {% endif %}
         </nav>
+        <p class="pagination-info">Página {{ page }} de {{ total_pages }}</p>
     </div>
     {% endif %}
 </div>
-{% endblock %}
 
-{# deleteContrato() removida junto com o botão Excluir: postava em
-   /contratos/<id>/delete, rota que não existe no blueprint. Ver/Editar/Excluir
-   continuam PENDENTES — falta a rota, não foram descartados. #}
+<style>
+/* Colunas desta tela. Cartão, ícones e filtros vêm do identidade.css. */
+.ct-row { grid-template-columns:128px minmax(0,1fr) 190px 118px 104px; }
+.ct-c-main { min-width:0; }
+.ct-c-datas { display:flex; flex-direction:column; gap:2px; }
+.ct-dt { display:flex; align-items:baseline; gap:7px; font-size:11.5px; color:#475569; }
+.ct-dt-lbl { font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+             color:#7d968a; flex:0 0 34px; }
+.ct-valor { font-size:13px; font-weight:700; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.ct-valor-none { color:#94a3b8; font-weight:500; }
+
+@media (max-width:820px) {
+    /* Regra da casa: nada de arrastar a PÁGINA de lado — o cartão empilha. */
+    .ct-row { grid-template-columns:auto 1fr; grid-template-areas:
+              "num main" "datas datas" "valor sit"; gap:8px 10px; }
+    .ct-c-num   { grid-area:num; }
+    .ct-c-main  { grid-area:main; }
+    .ct-c-datas { grid-area:datas; padding-top:7px; border-top:1px dashed #eef2f0; }
+    .ct-c-valor { grid-area:valor; padding-top:7px; border-top:1px dashed #eef2f0; }
+    .ct-c-sit   { grid-area:sit; justify-self:end; padding-top:7px; border-top:1px dashed #eef2f0; }
+    .lst-meta   { white-space:normal; }
+}
+@media (max-width:600px) {
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
+}
+</style>
+
+<script>
+function toggleFilters() {
+    var body    = document.getElementById('filters-body');
+    var chevron = document.getElementById('filters-chevron');
+    var isOpen  = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    chevron.classList.toggle('open', !isOpen);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    {% if filters_active %}
+    document.getElementById('filters-body').style.display = 'block';
+    document.getElementById('filters-chevron').classList.add('open');
+    {% endif %}
+});
+</script>
+{% endblock %}

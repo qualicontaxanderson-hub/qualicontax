@@ -1,58 +1,80 @@
 {% extends "base.html" %}
 {% block title %}Cadastros Adicionais - Qualicontax{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Cadastros Adicionais</h1>
-        <p class="page-subtitle">Tipos de cadastros específicos disponíveis para vincular aos clientes</p>
-    </div>
-    <div>
-        <a href="{{ url_for('modulos.cadastros') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
+{% include 'cadastros/_nav_cadastros.html' %}
+
+<!-- ── HERO (identidade compartilhada) ─────────────────────────────────── -->
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <h1 class="ef-hero-title">Cadastros Adicionais</h1>
+            <p class="ef-hero-sub">
+                {{ tipos|length }} tipo{{ '' if tipos|length == 1 else 's' }}
+                {{ 'disponível' if tipos|length == 1 else 'disponíveis' }} para vincular aos clientes
+            </p>
+        </div>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('modulos.cadastros') }}" class="ef-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
     </div>
 </div>
 
-<div class="module-tiles">
-    {% for tipo in tipos %}
-    <div class="module-tile" style="cursor:default;">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, {{ tipo.cor }}, {{ tipo.cor }}cc);">
-            <i class="{{ tipo.icone }}"></i>
+<div class="ef-body">
+    {# Tela de CARDS, não de tabela: os tiles abaixo e o cartão do Dropbox
+       continuam exatamente como estavam — nesta frente só o topo mudou. #}
+    <div class="module-tiles">
+        {% for tipo in tipos %}
+        <div class="module-tile" style="cursor:default;">
+            <div class="module-tile-icon" style="background: linear-gradient(135deg, {{ tipo.cor }}, {{ tipo.cor }}cc);">
+                <i class="{{ tipo.icone }}"></i>
+            </div>
+            <h3 class="module-tile-title">{{ tipo.nome }}</h3>
+            <p class="module-tile-desc">{{ tipo.descricao }}</p>
+            <div style="margin-top: 8px;">
+                <small class="text-muted">
+                    <strong>Campos:</strong> {{ tipo.campos | join(', ') }}
+                </small>
+            </div>
         </div>
-        <h3 class="module-tile-title">{{ tipo.nome }}</h3>
-        <p class="module-tile-desc">{{ tipo.descricao }}</p>
-        <div style="margin-top: 8px;">
-            <small class="text-muted">
-                <strong>Campos:</strong> {{ tipo.campos | join(', ') }}
-            </small>
+        {% else %}
+        <div class="empty-state" style="width:100%;">
+            <i class="fas fa-layer-group"></i>
+            <p>Nenhum tipo de cadastro adicional disponível.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Sincronização Dropbox -->
+    {% if tipos %}
+    <div class="card" style="margin-top: 32px;">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-cloud-download-alt"></i> Auto-importação via Dropbox</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                PDFs da ANP colocados na pasta <code>Legalizacao/NOVO</code> do Dropbox serão lidos automaticamente,
+                o CNPJ será verificado e os dados serão importados para o cliente correspondente.
+            </p>
+            <button id="btnSyncDropbox" class="btn btn-primary" onclick="syncDropboxAnp()">
+                <i class="fas fa-sync-alt"></i> Importar PDFs ANP do Dropbox agora
+            </button>
+            <div id="syncResult" style="margin-top: 16px; display: none;"></div>
         </div>
     </div>
-    {% else %}
-    <div class="empty-state" style="width:100%;">
-        <i class="fas fa-layer-group"></i>
-        <p>Nenhum tipo de cadastro adicional disponível.</p>
-    </div>
-    {% endfor %}
+    {% endif %}
 </div>
 
-<!-- Sincronização Dropbox -->
-{% if tipos %}
-<div class="card" style="margin-top: 32px;">
-    <div class="card-header">
-        <h3 class="card-title"><i class="fas fa-cloud-download-alt"></i> Auto-importação via Dropbox</h3>
-    </div>
-    <div class="card-body">
-        <p class="text-muted">
-            PDFs da ANP colocados na pasta <code>Legalizacao/NOVO</code> do Dropbox serão lidos automaticamente,
-            o CNPJ será verificado e os dados serão importados para o cliente correspondente.
-        </p>
-        <button id="btnSyncDropbox" class="btn btn-primary" onclick="syncDropboxAnp()">
-            <i class="fas fa-sync-alt"></i> Importar PDFs ANP do Dropbox agora
-        </button>
-        <div id="syncResult" style="margin-top: 16px; display: none;"></div>
-    </div>
-</div>
-{% endif %}
+<style>
+@media (max-width:600px) {
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
+}
+/* A tabela do resultado da importação rola dentro do próprio contêiner —
+   regra da casa: nenhuma tabela faz a PÁGINA rolar de lado. */
+#syncResult { overflow-x:auto; }
+</style>
 
 <script>
 function syncDropboxAnp() {
