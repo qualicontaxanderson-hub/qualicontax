@@ -119,8 +119,8 @@
    inerte (nenhum CSS a define), promovê-la mudaria a cara daquelas telas sem
    ninguém ter pedido. .qf-* e .lst-* não colidem com nada.
 
-   clientes/index.html consome daqui desde o commit da parte 3 do C2 — não há
-   mais cópia inline deste padrão em lugar nenhum.
+   OBS: clientes/index.html ainda carrega a cópia inline deste padrão. Unificar
+   é passo seguinte — não foi feito aqui para não mexer em tela já aprovada.
    =========================================================================== */
 
 /* ── Painel de filtros colapsável ────────────────────────────────────────── */
@@ -216,85 +216,4 @@
 @media (max-width:480px) {
     .qf-type-sel { width:92px; }
     .qf-text { width:130px; }
-}
-
-/* ===========================================================================
-   HOME DE DEPARTAMENTO (Bloco C3)
-   Extraído da home do Escrita Fiscal, que é a referência. Valores idênticos aos
-   que estavam inline lá — muda só o endereço, para /cadastros/ consumir o MESMO
-   componente em vez de copiar. Grid de tiles, tile, "em breve" e carrossel.
-   O JS do carrossel virou static/js/home_destaques.js (também compartilhado).
-   =========================================================================== */
-
-/* ── Grade de tiles ──────────────────────────────────────────────────────── */
-.ef-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
-.ef-body .ef-section-label + .ef-grid + .ef-section-label,
-.ef-body .ef-grid + .ef-section-label { margin-top:28px; }
-
-.ef-card-ico {
-    width:38px; height:38px; border-radius:12px; box-sizing:border-box;
-    display:flex; align-items:center; justify-content:center; font-size:16px;
-}
-.ef-card-title { margin:0; font-size:13px; font-weight:700; color:#0f3d2e; }
-.ef-card-desc { margin:0; font-size:10.5px; line-height:1.35; color:#7d968a; }
-/* contador do tile (preenchido por fetch; vazio = sem número, nunca 0 falso) */
-.ef-card-num { font-size:17px; font-weight:800; color:#0f3d2e; line-height:1; min-height:1px; }
-
-/* "Em breve": desabilitados, cinza, sem link. */
-.ef-card-soon { cursor:default; background:#f7faf8; opacity:.8; }
-.ef-card-soon:hover { border-color:#e3ece7; box-shadow:none; transform:none; }
-.ef-soon-badge {
-    align-self:flex-start; margin-top:-2px;
-    font-size:8.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
-    color:#94a3b8; background:#eef2f0; border-radius:99px; padding:2px 8px;
-}
-
-/* ── Carrossel de destaques (dentro do hero) ─────────────────────────────── */
-.ef-carousel { margin-top:20px; }
-.ef-car-track {
-    display:flex; gap:14px; overflow-x:auto;
-    scroll-snap-type:x mandatory;
-    scrollbar-width:none; -ms-overflow-style:none;
-    padding-bottom:2px;
-}
-.ef-car-track::-webkit-scrollbar { display:none; }
-.ef-car-card {
-    flex:0 0 272px; scroll-snap-align:center; box-sizing:border-box;
-    background:#fff; border-radius:16px; padding:15px 16px;
-    box-shadow:0 16px 34px rgba(4,30,20,.30);
-    display:flex; flex-direction:column; gap:7px;
-}
-.ef-cc-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.ef-cc-titulo { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700;
-    color:#0f3d2e; text-transform:uppercase; letter-spacing:.4px; }
-.ef-cc-titulo i { color:#16a34a; }
-.ef-cc-pill { font-size:10px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
-.ef-pill-neutro, .ef-pill-igual { background:#eef2f0; color:#64748b; }
-.ef-pill-alta { background:#dcfce7; color:#15803d; }
-.ef-pill-baixa { background:#fee2e2; color:#b91c1c; }
-.ef-cc-valor { font-size:30px; font-weight:800; color:#0f3d2e; line-height:1; }
-.ef-cc-valor small { font-size:15px; font-weight:700; color:#7d968a; }
-.ef-cc-apoio { font-size:11px; color:#7d968a; }
-.ef-cc-spark { margin-top:2px; height:34px; }
-.ef-cc-spark svg { display:block; width:100%; height:34px; overflow:visible; }
-.ef-car-dots { display:flex; gap:6px; justify-content:center; margin-top:12px; }
-.ef-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.35);
-    cursor:pointer; transition:background .2s ease, width .2s ease; }
-.ef-dot.on { background:#fff; width:18px; border-radius:99px; }
-/* skeleton shimmer enquanto carrega */
-.ef-car-skel { display:flex; gap:14px; margin-top:20px; overflow:hidden; }
-.ef-skel-card { flex:0 0 272px; height:150px; border-radius:16px;
-    background:linear-gradient(100deg, rgba(255,255,255,.08) 30%, rgba(255,255,255,.20) 50%, rgba(255,255,255,.08) 70%);
-    background-size:200% 100%; animation:efShimmer 1.3s ease-in-out infinite; }
-@keyframes efShimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
-
-@media (max-width:900px) {
-    .ef-grid { grid-template-columns:repeat(3,1fr); }
-}
-@media (max-width:600px) {
-    .ef-grid { grid-template-columns:repeat(3,1fr); gap:8px; }
-    .ef-card { padding:11px; border-radius:14px; }
-    .ef-card-desc { display:none; }   /* 3 colunas compactas em 390px */
-    .ef-car-card, .ef-skel-card { flex-basis:300px; }
-    .ef-card-num { font-size:15px; }
 }
