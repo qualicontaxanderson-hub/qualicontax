@@ -1157,6 +1157,7 @@ def api_notas():
     f_vmax = request.args.get('vmax', '').strip()
     f_origem = request.args.get('origem', '').strip()
     f_vinc_status = request.args.get('vinc_status', '').strip()
+    f_cancelado = request.args.get('cancelado', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
 
@@ -1198,6 +1199,7 @@ def api_notas():
     elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
+    _aplica_cancelada(where, f_cancelado, 'n')
     if f_vinc_status == 'completo':
         where.append(
             "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
@@ -1712,6 +1714,7 @@ def _where_lote_entradas(data):
     f_vmin       = str(data.get('vmin', '')).strip()
     f_vmax       = str(data.get('vmax', '')).strip()
     f_origem     = str(data.get('origem', '')).strip()
+    f_cancelado  = str(data.get('cancelado', '')).strip()
 
     where = ["n.tipo = 'entrada'"]
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
@@ -1747,6 +1750,7 @@ def _where_lote_entradas(data):
     if f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
+    _aplica_cancelada(where, f_cancelado, 'n')
     return where, params
 
 
@@ -1765,6 +1769,7 @@ def _where_lote_saidas(data):
     f_vmin       = str(data.get('vmin', '')).strip()
     f_vmax       = str(data.get('vmax', '')).strip()
     f_origem     = str(data.get('origem', '')).strip()
+    f_cancelado  = str(data.get('cancelado', '')).strip()
 
     where = ["n.tipo = 'saida'"]
     extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
@@ -1800,6 +1805,7 @@ def _where_lote_saidas(data):
     if f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
+    _aplica_cancelada(where, f_cancelado, 'n')
     return where, params
 
 
@@ -1852,10 +1858,7 @@ def _where_lote_cte(data):
     elif f_origem:
         where.append('t.origem = %s')
         params.append(f_origem)
-    if f_cancelado == '1':
-        where.append('t.cancelado = 1')
-    elif f_cancelado == '0':
-        where.append('t.cancelado = 0')
+    _aplica_cancelada(where, f_cancelado, 't', 'cancelado')
     if f_papel:
         where.append('t.papel_cliente = %s')
         params.append(f_papel)
@@ -2177,6 +2180,35 @@ def _rel_data(d):
     return d.strftime('%d/%m/%Y') if hasattr(d, 'strftime') else str(d or '')
 
 
+# ---------------------------------------------------------------------------
+# Filtro SITUAÇÃO — contrato ÚNICO das três telas
+#
+# Parâmetro 'cancelado' na querystring (ou no corpo do lote), com os MESMOS três
+# valores que a conf-cte já usava: '' = Todas (default), '0' = Autorizadas,
+# '1' = Canceladas. O nome segue 'cancelado' mesmo nas notas, onde a coluna
+# chama-se 'cancelada': o contrato é do FRONT — um só select em três telas — e
+# inventar 'cancelada' na querystring criaria justamente o segundo padrão que se
+# quer evitar.
+#
+# A conf-cte foi migrada para cá também. A mesma regra estava escrita em três
+# lugares; agora é uma função — o único jeito de garantir que as três telas
+# continuem concordando quando alguém mexer.
+def _clausula_cancelada(valor, alias='n', coluna='cancelada'):
+    """Cláusula do filtro Situação, ou None quando é 'Todas'."""
+    v = str(valor or '').strip()
+    if v == '1':
+        return f'{alias}.{coluna} = 1'
+    if v == '0':
+        return f'{alias}.{coluna} = 0'
+    return None
+
+
+def _aplica_cancelada(where, valor, alias='n', coluna='cancelada'):
+    c = _clausula_cancelada(valor, alias, coluna)
+    if c:
+        where.append(c)
+
+
 def _rel_filtro(escopo):
     """WHERE do relatório = o MESMO filtro da listagem (request.args). Replica as
     cláusulas de api_notas (entrada) / api_notas_saidas (saida) / api_ctes (cte) —
@@ -2226,8 +2258,7 @@ def _rel_filtro(escopo):
         if ui: w.append(_clausula_in('t.uf_ini', ui, p))
         if uf: w.append(_clausula_in('t.uf_fim', uf, p))
         vlr(w, p, 't.valor_frete'); org(w, p, 't')
-        if a.get('cancelado', '').strip() == '1': w.append('t.cancelado = 1')
-        elif a.get('cancelado', '').strip() == '0': w.append('t.cancelado = 0')
+        _aplica_cancelada(w, a.get('cancelado'), 't', 'cancelado')
         if a.get('papel', '').strip(): w.append('t.papel_cliente = %s'); p.append(a.get('papel').strip())
         return 'WHERE ' + ' AND '.join(w), p
 
@@ -2244,6 +2275,7 @@ def _rel_filtro(escopo):
         if du: w.append(_clausula_in('n.dest_uf', du, p))
         if a.get('emit_cnpj', '').strip(): w.append('n.emit_cnpj LIKE %s'); p.append('%' + a.get('emit_cnpj').strip() + '%')
         vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
+        _aplica_cancelada(w, a.get('cancelado'), 'n')
         return 'WHERE ' + ' AND '.join(w), p
 
     # entrada
@@ -2259,6 +2291,7 @@ def _rel_filtro(escopo):
     if eu: w.append(_clausula_in('n.emit_uf', eu, p))
     if a.get('dest_cnpj', '').strip(): w.append('n.dest_cnpj LIKE %s'); p.append('%' + a.get('dest_cnpj').strip() + '%')
     vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
+    _aplica_cancelada(w, a.get('cancelado'), 'n')
     return 'WHERE ' + ' AND '.join(w), p
 
 
@@ -2661,6 +2694,7 @@ def api_por_emissor():
     f_grupo_id = request.args.get('grupo_id', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
+    f_cancelado  = request.args.get('cancelado', '').strip()
 
     where, params = ["n.tipo = 'entrada'"], []
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
@@ -2671,6 +2705,7 @@ def api_por_emissor():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _aplica_cancelada(where, f_cancelado, 'n')
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
@@ -2704,6 +2739,7 @@ def api_por_produto():
     f_grupo_id = request.args.get('grupo_id', '').strip()
     f_data_ini = request.args.get('data_ini', '').strip()
     f_data_fim = request.args.get('data_fim', '').strip()
+    f_cancelado  = request.args.get('cancelado', '').strip()
     f_emit_cnpj = _filtro_lista(request.args.get('emit_cnpj', ''))
     f_ncm = request.args.get('ncm', '').strip()
     f_descricao = request.args.get('descricao', '').strip()
@@ -2717,6 +2753,7 @@ def api_por_produto():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _aplica_cancelada(where, f_cancelado, 'n')
     if f_emit_cnpj:
         where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
     if f_ncm:
@@ -6318,6 +6355,7 @@ def api_notas_saidas():
     f_vmin        = request.args.get('vmin', '').strip()
     f_vmax        = request.args.get('vmax', '').strip()
     f_origem      = request.args.get('origem', '').strip()
+    f_cancelado   = request.args.get('cancelado', '').strip()
     f_vinc_status = request.args.get('vinc_status', '').strip()
     page          = max(1, int(request.args.get('page', 1)))
     per_page      = 50
@@ -6361,6 +6399,7 @@ def api_notas_saidas():
     elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
+    _aplica_cancelada(where, f_cancelado, 'n')
     if f_vinc_status == 'completo':
         where.append(
             "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
@@ -6467,6 +6506,7 @@ def api_por_destinatario():
     f_grupo_id   = request.args.get('grupo_id', '').strip()
     f_data_ini   = request.args.get('data_ini', '').strip()
     f_data_fim   = request.args.get('data_fim', '').strip()
+    f_cancelado  = request.args.get('cancelado', '').strip()
 
     where = ["n.tipo = 'saida'"]
     extra, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
@@ -6477,6 +6517,7 @@ def api_por_destinatario():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _aplica_cancelada(where, f_cancelado, 'n')
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
@@ -6507,6 +6548,7 @@ def api_por_produto_saidas():
     f_grupo_id   = request.args.get('grupo_id', '').strip()
     f_data_ini   = request.args.get('data_ini', '').strip()
     f_data_fim   = request.args.get('data_fim', '').strip()
+    f_cancelado  = request.args.get('cancelado', '').strip()
     f_dest_cnpj  = _filtro_lista(request.args.get('dest_cnpj', ''))
     f_ncm        = request.args.get('ncm', '').strip()
     f_descricao  = request.args.get('descricao', '').strip()
@@ -6520,6 +6562,7 @@ def api_por_produto_saidas():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _aplica_cancelada(where, f_cancelado, 'n')
     if f_dest_cnpj:
         where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
     if f_ncm:
@@ -6726,10 +6769,7 @@ def api_ctes():
     elif f_origem:
         where.append('t.origem = %s')
         params.append(f_origem)
-    if f_cancelado == '1':
-        where.append('t.cancelado = 1')
-    elif f_cancelado == '0':
-        where.append('t.cancelado = 0')
+    _aplica_cancelada(where, f_cancelado, 't', 'cancelado')
     if f_papel:
         where.append('t.papel_cliente = %s')
         params.append(f_papel)

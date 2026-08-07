@@ -371,6 +371,14 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                     <option value="sem">🔴 Sem cadastro</option>
                 </select>
             </div>
+            <div>
+                <label>Situação</label>
+                <select id="f_cancelado">
+                    <option value="">— Todas —</option>
+                    <option value="0">Autorizadas</option>
+                    <option value="1">Canceladas</option>
+                </select>
+            </div>
             <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
             <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
         </div>
@@ -1034,6 +1042,7 @@ function clearFilters() {
     if (tsUf) tsUf.clear(true);
     document.getElementById('f_origem').value = '';
     document.getElementById('f_vinc_status').value = '';
+    document.getElementById('f_cancelado').value = '';
     currentPage = 1;
     chavesCurrentPage = 1;
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
@@ -1059,6 +1068,7 @@ function getFilters() {
         vmax:        document.getElementById('f_vmax').value,
         origem:      document.getElementById('f_origem').value,
         vinc_status: document.getElementById('f_vinc_status').value,
+        cancelado: document.getElementById('f_cancelado').value,
         descricao:   document.getElementById('f_descricao').value,
         ncm:         document.getElementById('f_ncm').value,
     };
@@ -1236,7 +1246,7 @@ function loadNotas() {
 // ---- Load Por Destinatário ----
 function loadDestinatario() {
     const f = getFilters();
-    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim});
+    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim, cancelado:f.cancelado});
     showLoad();
     _fetchWithAbort('destinatario', '{{ url_for("escrita_fiscal.api_por_destinatario") }}?' + params)
         .then(r => r.json())
@@ -1270,6 +1280,7 @@ function loadProduto() {
         cliente_id:f.cliente_id, grupo_id:f.grupo_id,
         data_ini:f.data_ini, data_fim:f.data_fim,
         dest_cnpj:f.dest_cnpj, ncm:f.ncm, descricao:f.descricao,
+        cancelado:f.cancelado,
     });
     showLoad();
     _fetchWithAbort('produto', '{{ url_for("escrita_fiscal.api_por_produto_saidas") }}?' + params)
