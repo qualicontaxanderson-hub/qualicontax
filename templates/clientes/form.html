@@ -3,15 +3,21 @@
 {% block title %}{{ 'Editar Cliente' if cliente else 'Novo Cliente' }} - Qualicontax{% endblock %}
 
 {% block content %}
-<div class="cf-page">
-    <div class="cf-topbar">
-        <a href="{{ url_for('clientes.index') }}" class="cf-back"><i class="fas fa-arrow-left"></i> Clientes</a>
+{% include 'cadastros/_nav_cadastros.html' %}
+
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
         <div>
-            <h1 class="cf-title">{{ 'Editar Cliente' if cliente else 'Novo Cliente' }}</h1>
-            <p class="cf-sub">{{ 'Atualize os dados do cliente' if cliente else 'Cadastre um novo cliente no sistema' }}</p>
+            <h1 class="ef-hero-title">{{ 'Editar Cliente' if cliente else 'Novo Cliente' }}</h1>
+            <p class="ef-hero-sub">{{ 'Atualize os dados do cliente' if cliente else 'Cadastre um novo cliente no sistema' }}</p>
+        </div>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Clientes</a>
         </div>
     </div>
+</div>
 
+<div class="ef-body">
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container cf-form">
         {% set endereco = endereco_principal if endereco_principal else None %}
 
@@ -112,10 +118,16 @@
                 <div class="cf-grid2">
                     <div class="cf-fg">
                         <label class="cf-lbl" for="inscricao_estadual">Inscrição estadual <span class="cf-star" title="preenchido via CNPJ">★</span></label>
-                        <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="cf-ctrl"
-                               placeholder="Preenchido automaticamente via CNPJ"
-                               value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}"
-                               aria-describedby="ie-help-text">
+                        <div class="cf-field-btn">
+                            <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="cf-ctrl"
+                                   placeholder="Preenchido automaticamente via CNPJ"
+                                   value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}"
+                                   aria-describedby="ie-help-text">
+                            <button type="button" class="cf-inline-btn" onclick="consultarSintegra()"
+                                    title="Copia o CNPJ e abre o Sintegra para validar a IE">
+                                <i class="fas fa-external-link-alt"></i> Sintegra
+                            </button>
+                        </div>
                         <div class="cf-check" id="isento-ie-container">
                             <input type="checkbox" id="inscricao_estadual_isento" name="inscricao_estadual_isento" value="1"
                                    {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
@@ -125,7 +137,7 @@
                                 Isento de Inscrição Estadual (Prestador de Serviços)
                             </label>
                         </div>
-                        <p id="ie-help-text" class="cf-hint">✅ Preenchido ao buscar o CNPJ. Valide no Sintegra (card "Órgãos e integrações").</p>
+                        <p id="ie-help-text" class="cf-hint">✅ Preenchido ao buscar o CNPJ. Use <strong>Sintegra</strong> para validar a IE no estado.</p>
                     </div>
                     <div class="cf-fg">
                         <label class="cf-lbl" for="data_inicio_atividade">Início da atividade <span class="cf-star">★</span></label>
@@ -138,9 +150,15 @@
                 <div class="cf-grid2">
                     <div class="cf-fg">
                         <label class="cf-lbl" for="inscricao_municipal">Inscrição municipal</label>
-                        <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="cf-ctrl"
-                               placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
-                        <p class="cf-hint">Consulte o município e o portal da prefeitura no card "Órgãos e integrações".</p>
+                        <div class="cf-field-btn">
+                            <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="cf-ctrl"
+                                   placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
+                            <button type="button" class="cf-inline-btn" onclick="buscarMunicipio()"
+                                    title="Consulta municípios e abre o portal da prefeitura (CNPJ copiado)">
+                                <i class="fas fa-map-marked-alt"></i> Município
+                            </button>
+                        </div>
+                        <p class="cf-hint">Consulte o município cadastrado e o portal da prefeitura.</p>
                     </div>
                     <div class="cf-fg">
                         <label class="cf-lbl" for="regime_tributario">Regime tributário</label>
@@ -252,6 +270,7 @@
                     <label class="cf-lbl" for="cep">CEP</label>
                     <input type="text" id="cep" name="cep" class="cf-ctrl" placeholder="00000-000" maxlength="9"
                            value="{{ endereco.cep if endereco else '' }}">
+                    <p class="cf-hint" id="cepAviso">&nbsp;</p>
                 </div>
                 <div class="cf-fg">
                     <label class="cf-lbl" for="logradouro">Logradouro</label>
@@ -311,6 +330,17 @@
                            value="{{ cliente.data_fim_contrato if cliente else '' }}">
                 </div>
             </div>
+
+            {# "Aberta pela casa": só PJ (data de PF é sempre manual). Marcar copia a
+               data de início da atividade — vinda do CNPJ — para o início do contrato. #}
+            <label class="cf-check pj-only" id="abertaCasaWrap" style="margin-top:12px;">
+                <input type="checkbox" id="aberta_pela_casa" name="aberta_pela_casa" value="1"
+                       onchange="toggleAbertaCasa(this)"
+                       {% if cliente and cliente.aberta_pela_casa %}checked{% endif %}>
+                <span>Empresa aberta pela Qualicontax
+                    <small style="color:#7d968a;">— copia a data de início da atividade para o início do contrato</small></span>
+            </label>
+
             <div class="cf-fg" style="margin-top:12px;">
                 <label class="cf-lbl" for="observacoes">Observações</label>
                 <textarea id="observacoes" name="observacoes" class="cf-ctrl" rows="4"
@@ -327,34 +357,6 @@
                     com o titular igual a este cadastro.</small>
                 </span>
             </label>
-        </div>
-
-        <!-- ── CARD 6: Órgãos e integrações (direcionamentos agrupados) ── -->
-        <div class="cf-card">
-            <p class="cf-seclabel">Órgãos e integrações</p>
-            <p class="cf-hint" style="margin-top:-4px; margin-bottom:12px;">
-                Atalhos para conferir dados do cliente nos órgãos. Não alteram o cadastro — abrem o portal com o CNPJ copiado.
-            </p>
-            <div class="cf-orgaos">
-                <div class="cf-orgao">
-                    <div>
-                        <div class="cf-orgao-tit"><i class="fas fa-building-columns"></i> Sintegra (SEFAZ)</div>
-                        <div class="cf-orgao-desc">Valida a Inscrição Estadual no estado. Copia o CNPJ e abre o site.</div>
-                    </div>
-                    <button type="button" class="cf-orgao-btn" onclick="consultarSintegra()">
-                        <i class="fas fa-external-link-alt"></i> Sintegra
-                    </button>
-                </div>
-                <div class="cf-orgao">
-                    <div>
-                        <div class="cf-orgao-tit"><i class="fas fa-map-marked-alt"></i> Prefeitura / Município</div>
-                        <div class="cf-orgao-desc">Consulta municípios cadastrados e abre o portal da prefeitura (CNPJ copiado).</div>
-                    </div>
-                    <button type="button" class="cf-orgao-btn" onclick="buscarMunicipio()">
-                        <i class="fas fa-map-marked-alt"></i> Buscar município
-                    </button>
-                </div>
-            </div>
         </div>
 
         <!-- Grupos (apenas em edição) -->
@@ -419,15 +421,7 @@
 
 {% block extra_js %}
 <style>
-.cf-page { background:#f7faf8; margin:-28px -32px 0; padding:24px 32px 40px; min-height:calc(100vh - 60px); }
-.cf-topbar { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
-.cf-back { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
-           color:#15803d; text-decoration:none; background:#ecfdf5; border:1px solid #d1fae5;
-           padding:8px 12px; border-radius:9px; white-space:nowrap; }
-.cf-back:hover { background:#d1fae5; }
-.cf-title { margin:0; font-size:22px; font-weight:800; color:#0f3d2e; letter-spacing:-.02em; }
-.cf-sub { margin:2px 0 0; font-size:12.5px; color:#7d968a; }
-
+/* topo (testeira + hero verde + corpo) agora vem de identidade.css. */
 .cf-form { max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
 .cf-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:20px 22px;
            transition:border-color .15s ease, box-shadow .15s ease; }
@@ -460,6 +454,14 @@ textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
                   font-size:13.5px; font-weight:700; font-family:inherit; }
 .cf-btn-receita:hover { background:#12513c; }
 .cf-btn-receita:disabled { opacity:.7; cursor:default; }
+
+/* Botão colado ao campo (Sintegra na IE, Município na IM) — branco, borda verde */
+.cf-field-btn { display:flex; gap:8px; align-items:stretch; }
+.cf-field-btn .cf-ctrl { flex:1; min-width:0; }
+.cf-inline-btn { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; cursor:pointer;
+                 background:#fff; color:#15803d; border:1px solid #86efac; border-radius:9px;
+                 padding:0 13px; font-size:12.5px; font-weight:600; font-family:inherit; }
+.cf-inline-btn:hover { background:#ecfdf5; }
 
 /* Card verde de resultado da Receita */
 .cf-receita { display:flex; align-items:flex-start; gap:12px; padding:15px 18px; border-radius:13px;
@@ -495,18 +497,6 @@ textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
 .cf-contador strong { font-size:13.5px; color:#0f3d2e; }
 .cf-contador small { color:#64748b; font-size:12px; line-height:1.5; }
 
-/* Órgãos */
-.cf-orgaos { display:flex; flex-direction:column; gap:10px; }
-.cf-orgao { display:flex; align-items:center; justify-content:space-between; gap:12px;
-            border:1px solid #e3ece7; border-radius:11px; padding:12px 14px; background:#fbfdfc; }
-.cf-orgao-tit { font-size:13px; font-weight:700; color:#0f3d2e; display:flex; align-items:center; gap:8px; }
-.cf-orgao-tit i { color:#16a34a; }
-.cf-orgao-desc { font-size:11.5px; color:#7d968a; margin-top:3px; }
-.cf-orgao-btn { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; cursor:pointer;
-                background:#fff; color:#15803d; border:1px solid #86efac; border-radius:9px;
-                padding:8px 14px; font-size:12.5px; font-weight:600; font-family:inherit; }
-.cf-orgao-btn:hover { background:#ecfdf5; }
-
 .cf-tags { display:flex; flex-wrap:wrap; gap:6px; }
 .cf-tag { font-size:12px; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; border-radius:7px; padding:3px 9px; }
 
@@ -524,15 +514,11 @@ textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
 /* Nomes em maiúsculas (aplicado via JS ao textTransform) */
 
 @media (max-width:720px) {
-    .cf-page { margin:-16px -16px 0; padding:18px 16px 30px; }
     .cf-grid2 { grid-template-columns:1fr; }
     .cf-cnpj-row { flex-direction:column; }
     .cf-btn-receita { justify-content:center; padding:11px; }
-    .cf-orgao { flex-direction:column; align-items:stretch; gap:10px; }
-    .cf-orgao-btn { justify-content:center; }
     .cf-actions { flex-direction:column-reverse; }
     .cf-btn-ghost, .cf-btn-save { justify-content:center; }
-    .cf-topbar { flex-wrap:wrap; }
 }
 </style>
 <script>
@@ -647,11 +633,51 @@ document.addEventListener('DOMContentLoaded', function() {
         cepInput.addEventListener('input', function (e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 8) value = value.slice(0, 8);
+            var digits = value;
             if (value.length > 5) value = value.replace(/(\d{5})(\d{1,3})/, '$1-$2');
             e.target.value = value;
+            if (digits.length === 8) { buscarCepCliente(digits); }   // completou o CEP → busca sozinho
         });
     }
 });
+
+// Preenche logradouro/bairro/cidade/UF pelo CEP (ViaCEP via /api/cep). NUNCA toca em
+// número/complemento; em erro NÃO limpa nada e NÃO trava — só avisa discreto.
+function buscarCepCliente(cep) {
+    var aviso = document.getElementById('cepAviso');
+    if (aviso) { aviso.innerHTML = 'Buscando endereço…'; aviso.style.color = '#7d968a'; }
+    fetch('/api/cep/' + cep)
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (j && !j.erro && (j.logradouro || j.localidade)) {
+                if (j.logradouro) document.getElementById('logradouro').value = j.logradouro;
+                if (j.bairro)     document.getElementById('bairro').value = j.bairro;
+                if (j.localidade) document.getElementById('cidade').value = j.localidade;
+                if (j.uf)         document.getElementById('estado').value = j.uf.toUpperCase();
+                if (aviso) { aviso.innerHTML = '&nbsp;'; }
+            } else if (aviso) {
+                aviso.innerHTML = 'CEP não encontrado — preencha o endereço à mão.'; aviso.style.color = '#b45309';
+            }
+        })
+        .catch(function () {
+            if (aviso) { aviso.innerHTML = 'Não consegui consultar o CEP agora — preencha à mão.'; aviso.style.color = '#b45309'; }
+        });
+}
+
+// "Empresa aberta pela Qualicontax": marcar copia a data de início da atividade
+// (vinda do CNPJ) para o início do contrato. Sem data → avisa e NÃO marca.
+// Desmarcar NÃO apaga a data já preenchida.
+function toggleAbertaCasa(cb) {
+    if (!cb.checked) { return; }
+    var atividade = document.getElementById('data_inicio_atividade');
+    var contrato = document.getElementById('data_inicio_contrato');
+    if (!atividade || !atividade.value) {
+        alert('Preencha o CNPJ primeiro (para vir a data de início da atividade) ou digite a data manualmente.');
+        cb.checked = false;
+        return;
+    }
+    contrato.value = atividade.value;
+}
 
 // Validate dates
 document.querySelector('form').addEventListener('submit', function(e) {

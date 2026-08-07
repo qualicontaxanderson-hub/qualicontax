@@ -184,6 +184,7 @@ def novo():
             'data_inicio_atividade': request.form.get('data_inicio_atividade'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
+            'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
             'criado_por': current_user.id
         }
         
@@ -762,9 +763,10 @@ def editar(id):
                 'situacao': request.form.get('situacao'),
                 'data_inicio_atividade': request.form.get('data_inicio_atividade'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
-                'observacoes': request.form.get('observacoes')
+                'observacoes': request.form.get('observacoes'),
+                'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0
             }
-            
+
             sucesso = Cliente.update(id, data)
             
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
