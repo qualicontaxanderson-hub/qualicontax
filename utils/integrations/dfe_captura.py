@@ -1090,6 +1090,26 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
             nsu_ok = rl['nsu_ok']
             parada = rl['parada']
 
+            # 137 com ultNSU À FRENTE: JANELA VAZIA, e o avanço tem de ser anotado.
+            #
+            # O _processar_lote só move nsu_ok depois de cada documento salvo. Num
+            # 137 o lote vem vazio, então nsu_ok fica onde estava — e era isso que
+            # travava o cursor: a empresa reenviava o MESMO ultNSU para sempre.
+            #
+            # Mas 137 com ultNSU > o enviado não é "não há nada": é a SEFAZ
+            # dizendo "varri até ultNSU e não há nada TEU nessa janela; peça a
+            # partir daqui". Ignorar isso é revarrer a mesma faixa eternamente e
+            # nunca alcançar os documentos que estão adiante — foi o que aconteceu
+            # com a 152 (0 -> 50/1771 por 12h), a 547 (cte, 0 -> 50/490, 145
+            # consultas), a 5002 e a 5000 (esta destravada por seed manual).
+            #
+            # Só avança quando o lote fechou LIMPO: com parada (documento falhou)
+            # ou 656 no meio, o cursor fica onde está — pular NSU não processado
+            # perderia documento em silêncio, que é o oposto do que se quer aqui.
+            if (cStat == '137' and parada is None and not ctx['cooldown_656']
+                    and ret_ult > nsu_ok):
+                nsu_ok = ret_ult
+
             # Constraint 6: grava e AVANÇA o cursor ANTES do próximo lote (cai no
             # meio → retoma daqui, não reprocessa). 656 numa busca por chave grava
             # cooldown; senão libera (proximo_permitido = NULL).

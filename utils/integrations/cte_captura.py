@@ -479,6 +479,18 @@ def capturar_cte_cliente(cliente_id, dry_run=False, origem='manual',
         nsu_ok = rl['nsu_ok']
         parada = rl['parada']
 
+        # 137 com ultNSU À FRENTE: JANELA VAZIA, e o avanço tem de ser anotado.
+        # Mesma correção do dfe_captura.py — ver o comentário longo lá. Em
+        # resumo: 137 com ultNSU > o enviado é a SEFAZ mandando pedir a partir
+        # dali; sem anotar, o cursor revarre a mesma faixa para sempre. O caso
+        # de prova deste arquivo é a 547 (CT-e preso em 0 -> 50/490, 145
+        # consultas) e o lado CT-e da 152 (0 -> 50/304).
+        #
+        # Só avança com o lote LIMPO (sem parada): pular NSU não processado
+        # perderia documento em silêncio.
+        if cStat == '137' and parada is None and ret_ult > nsu_ok:
+            nsu_ok = ret_ult
+
         # Grava e AVANÇA o cursor ANTES do próximo lote (cai no meio → retoma
         # daqui, não reprocessa).
         execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt),
