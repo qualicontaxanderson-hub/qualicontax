@@ -122,12 +122,45 @@
     /* .ef-hero/.ef-body mobile vêm de identidade.css */
     .fv-grid { grid-template-columns:1fr; }
     .fv-kpi { min-width:100%; }
+
+    /* ── Contadores responsáveis: tabela → cartões ─────────────────────────
+       Regra da casa: nenhuma tabela pode fazer a PÁGINA rolar de lado. As 5
+       colunas não cabem em 390px, então cada <tr> vira um cartão e cada <td>
+       vira uma linha "RÓTULO  valor" (o rótulo sai do data-label). Mesma
+       marcação do desktop — nada é duplicado e o Remover continua o mesmo. */
+    .cert-tbl, .cert-tbl tbody, .cert-tbl tr, .cert-tbl td { display:block; width:100%; }
+    .cert-tbl thead { display:none; }
+    .cert-tbl { font-size:13px; }
+    .cert-tbl tr {
+        background:#fff; border:1px solid #e3ece7; border-radius:14px;
+        padding:12px 14px; margin-bottom:10px;
+    }
+    .cert-tbl td {
+        border:0 !important; padding:5px 0 !important;
+        display:flex; gap:10px; align-items:baseline;
+    }
+    .cert-tbl td::before {
+        content:attr(data-label);
+        flex:0 0 84px; font-size:10px; font-weight:800; letter-spacing:.6px;
+        text-transform:uppercase; color:#7d968a; line-height:1.5;
+    }
+    /* célula do botão: sem rótulo e ocupando a largura do cartão */
+    .cert-tbl td.cert-td-act { padding-top:10px !important; margin-top:6px;
+        border-top:1px dashed #eef2f0 !important; }
+    .cert-tbl td.cert-td-act::before { content:none; }
+    .cert-tbl td.cert-td-act form { width:100%; }
+    .cert-tbl td.cert-td-act .btn { width:100%; justify-content:center; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="cliente-view-page">
+{# Sem .cliente-view-page: aquele wrapper tem max-width:1400px + padding:20px, e o
+   padding encaixotava o hero — o -32px do .ef-hero cancela o padding do .content
+   (32px), não o do wrapper, então sobravam 20px de faixa clara nas duas bordas.
+   A lista e o form não usam wrapper nenhum; a ficha passa a seguir o mesmo modelo.
+   Todo o conteúdo visível mora no .ef-body, que já tem padding próprio. #}
+<div class="cliente-ficha">
     {% set end_princ = (enderecos | selectattr('principal') | first) if enderecos else None %}
     {% if not end_princ and enderecos %}{% set end_princ = enderecos[0] %}{% endif %}
 
@@ -1026,7 +1059,10 @@
                         </p>
 
                         {% if contadores %}
-                        <table class="table" style="width:100%; font-size:14px;">
+                        {# Mesma marcação serve desktop e mobile: no mobile o CSS .cert-tbl
+                           converte cada <tr> em cartão e o data-label vira o rótulo da
+                           linha. Nada duplicado, o botão Remover é o mesmo. #}
+                        <table class="table cert-tbl" style="width:100%; font-size:14px;">
                             <thead>
                                 <tr>
                                     <th>Contador</th><th>Documento</th><th>Finalidade</th>
@@ -1036,20 +1072,20 @@
                             <tbody>
                             {% for ct in contadores %}
                                 <tr>
-                                    <td>
+                                    <td data-label="Contador">
                                         {% if ct.numero_cliente %}{{ ct.numero_cliente }} - {% endif %}
                                         {{ ct.nome_razao_social }}
                                     </td>
-                                    <td>{{ ct.cpf_cnpj }}</td>
-                                    <td>{{ ct.finalidade or '—' }}</td>
-                                    <td>
+                                    <td data-label="Documento">{{ ct.cpf_cnpj }}</td>
+                                    <td data-label="Finalidade">{{ ct.finalidade or '—' }}</td>
+                                    <td data-label="Certificado">
                                         {% if ct.tem_certificado %}
                                         <span class="badge badge-success">{{ ct.cert_tipo_doc }} {{ ct.cert_doc }}</span>
                                         {% else %}
                                         <span class="badge badge-warning">SEM CERTIFICADO</span>
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td class="cert-td-act">
                                         <form method="POST"
                                               action="{{ url_for('clientes.desvincular_contador', cliente_id=cliente.id, contador_id=ct.id) }}"
                                               onsubmit="return confirm('Remover {{ ct.nome_razao_social }} dos contadores desta empresa?');">
