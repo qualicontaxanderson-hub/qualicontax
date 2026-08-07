@@ -53,6 +53,11 @@
                         <span class="status-badge status-{{ 'ativo' if u.situacao == 'ATIVO' else 'inativo' }}">
                             {{ u.situacao }}
                         </span>
+                        {% if u.senha_pendente %}
+                        <span class="badge badge-warning" title="Aprovado — aguardando a pessoa definir a senha">
+                            SEM SENHA
+                        </span>
+                        {% endif %}
                     </td>
                     <td>
                         <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
@@ -64,6 +69,19 @@
                                 onclick="toggleUsuario({{ u.id }}, this)">
                             <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
                         </button>
+                        {% if u.senha_pendente %}
+                            {% set slink = senha_links.get(u.id) %}
+                            {% if slink %}
+                            <button class="btn btn-sm btn-info" title="Copiar link de senha"
+                                    data-url="{{ slink }}" onclick="copiarLista(this)">
+                                <i class="fas fa-key"></i> Copiar link de senha
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-primary" title="Gerar novo link de senha (revoga o anterior)"
+                                    onclick="gerarLinkSenha({{ u.id }}, this)">
+                                <i class="fas fa-rotate"></i> Novo link de senha
+                            </button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% else %}
@@ -309,6 +327,28 @@
       <button type="button" class="btn btn-success" id="qaBtnAprovar" onclick="aprovarPendente()">
         <i class="fas fa-check"></i> Aprovar e criar acesso
       </button>
+    </div>
+  </div>
+</div>
+
+{# ---- Modal: link de senha gerado (aprovação e "novo link") ---- #}
+<div class="qc-modal-fundo" id="qcSenhaLink" onclick="if(event.target===this) fecharSenhaLink()">
+  <div class="qc-modal">
+    <button type="button" class="qc-x" title="Fechar" onclick="fecharSenhaLink()">&times;</button>
+    <h3 class="qc-modal-tit">Acesso criado — falta a senha</h3>
+    <p class="qc-modal-sub">Envie este link para a pessoa <strong>definir a senha</strong>.
+       Vale <strong>1 vez</strong> e expira em <strong>72h</strong>. Você pode gerar
+       outro pela lista enquanto a senha não for definida.</p>
+    <div class="qc-url-area">
+      <div class="qc-url-rot">Link de definição de senha</div>
+      <div class="qc-url" id="qsUrl"></div>
+    </div>
+    <button type="button" class="qc-btn-copiar" id="qsBtnCopiar" onclick="copiarSenhaUrl()">
+      COPIAR LINK
+    </button>
+    <div class="qc-aviso">
+      Prefixo <code id="qsPrefixo"></code>. Ao fechar, o link continua recopiável na
+      lista (botão <strong>Copiar link de senha</strong>) enquanto estiver pendente.
     </div>
   </div>
 </div>
@@ -585,7 +625,14 @@ function aprovarPendente() {
           { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
     .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
     .then(function (res) {
-        if (res.ok && res.d.ok) { location.reload(); return; }
+        if (res.ok && res.d.ok) {
+            fecharAnalise();
+            // Mostra o link de senha (se veio); senão só recarrega — o admin gera
+            // pela lista com "Novo link de senha".
+            if (res.d.senha_url) { mostrarSenhaLink(res.d.senha_url, res.d.senha_prefixo); }
+            else { location.reload(); }
+            return;
+        }
         qaErroMostra(res.d.msg || 'Não foi possível aprovar.');   // pendência segue na fila
         btn.disabled = false;
     })
@@ -611,6 +658,50 @@ function recusarPendente() {
         btn.disabled = false;
     })
     .catch(function () { qaErroMostra('Sem resposta do servidor.'); btn.disabled = false; });
+}
+
+// ================= Q-Colabore Parte 6: link de definição de senha ===========
+function mostrarSenhaLink(url, prefixo) {
+    document.getElementById('qsUrl').textContent = url;
+    document.getElementById('qsPrefixo').textContent = (prefixo || '') + '…';
+    var btn = document.getElementById('qsBtnCopiar');
+    btn.textContent = 'COPIAR LINK'; btn.classList.remove('ok');
+    document.getElementById('qcSenhaLink').classList.add('aberto');
+}
+
+function fecharSenhaLink() {
+    document.getElementById('qcSenhaLink').classList.remove('aberto');
+    document.getElementById('qsUrl').textContent = '';   // não deixa o token no DOM
+    location.reload();                                    // atualiza badge/botões da lista
+}
+
+function copiarSenhaUrl() {
+    var el = document.getElementById('qsUrl');
+    var btn = document.getElementById('qsBtnCopiar');
+    function copiouEfecha() { fecharSenhaLink(); }        // copia e FECHA (recarrega)
+    function copieManual() {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { document.execCommand('copy'); } catch (e) {}
+        btn.textContent = 'COPIE MANUALMENTE — Ctrl+C'; btn.classList.add('ok');
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(el.textContent.trim()).then(copiouEfecha, copieManual);
+    } else { copieManual(); }
+}
+
+function gerarLinkSenha(uid, btn) {
+    if (btn) { btn.disabled = true; }
+    var dados = new FormData(); dados.append('csrf_token', QC_CSRF);
+    fetch('/configuracoes/usuarios/' + uid + '/senha-link',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.d.ok) { mostrarSenhaLink(res.d.url, res.d.prefixo); return; }
+        alert(res.d.msg || 'Não foi possível gerar o link.');
+        if (btn) { btn.disabled = false; }
+    })
+    .catch(function () { alert('Sem resposta do servidor.'); if (btn) { btn.disabled = false; } });
 }
 </script>
 {% endblock %}

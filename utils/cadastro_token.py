@@ -75,6 +75,14 @@ def _hash(token: str) -> str:
     return hashlib.sha256((token or '').encode('utf-8')).hexdigest()
 
 
+def hash_token(token: str) -> str:
+    """Hash canônico do token, exposto para quem precisa consumir o link dentro da
+    PRÓPRIA transação (ex.: /senha grava a senha e queima o token no mesmo UPDATE
+    atômico, então não pode usar consumir(), que abre transação à parte). Usa o
+    mesmo _hash — não há duas formas de derivar o que o banco guarda."""
+    return _hash(token)
+
+
 def _valida_tipo(tipo: str) -> str:
     t = (tipo or '').strip().upper()
     if t not in TIPOS:

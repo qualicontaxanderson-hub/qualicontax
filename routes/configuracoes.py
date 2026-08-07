@@ -51,6 +51,7 @@ def dropbox_espaco_atualizar():
 def usuarios():
     rows = execute_query(
         """SELECT u.id, u.nome, u.login, u.email, u.tipo_usuario, u.situacao, u.cargo,
+                  u.senha_pendente,
                   GROUP_CONCAT(pa.nome ORDER BY pa.nome SEPARATOR ', ') AS perfis
              FROM usuarios u
              LEFT JOIN usuario_perfis up ON up.usuario_id = u.id
@@ -66,6 +67,7 @@ def usuarios():
                            perfis_disponiveis=_perfis_ativos(),
                            departamentos_disponiveis=_departamentos_ativos(),
                            tipos_usuario=TIPOS_USUARIO,
+                           senha_links=_links_senha_por_usuario(),
                            csrf_token=_qrobo_csrf_token())
 
 
@@ -136,6 +138,32 @@ def _fmt_cel(v):
     if len(d) == 10:                       # (XX) XXXX-XXXX
         return f'({d[:2]}) {d[2:6]}-{d[6:]}'
     return v or None
+
+
+def _gerar_link_senha(uid, admin_id):
+    """Gera um link tipo='SENHA' para o usuário e devolve (url, prefixo).
+
+    cadastro_token.gerar já revoga os links de senha pendentes do mesmo usuário
+    antes de criar o novo — é o que faz o "Gerar novo link" invalidar o anterior.
+    A URL completa nasce em url_claro (via url_builder), então a lista pode
+    reoferecer 'Copiar' enquanto o link estiver pendente.
+    """
+    token, _link_id = cadastro_token.gerar(
+        'SENHA', admin_id, usuario_id=uid, validade_horas=VALIDADE_LINK_HORAS,
+        url_builder=lambda t: url_for('senha.formulario', token=t, _external=True))
+    url = url_for('senha.formulario', token=token, _external=True)
+    return url, token[:8]
+
+
+def _links_senha_por_usuario():
+    """{usuario_id: url_claro} dos links de SENHA pendentes (não usados/revogados/
+    vencidos). Alimenta o botão 'Copiar link de senha' da lista de usuários."""
+    rows = execute_query(
+        """SELECT usuario_id, url_claro FROM cadastro_link
+            WHERE tipo = 'SENHA' AND usuario_id IS NOT NULL
+              AND usado_em IS NULL AND revogado_em IS NULL AND expira_em > NOW()""",
+        fetch=True) or []
+    return {r['usuario_id']: r['url_claro'] for r in rows if r.get('url_claro')}
 
 
 def _qrobo_csrf_token():
@@ -365,9 +393,19 @@ def usuario_pendente_aprovar(pid):
         logger.exception('[qcolabore] falha ao aprovar pendência %s', pid)
         return jsonify(ok=False, msg='Não foi possível aprovar agora. Tente novamente.'), 500
 
+    # Link de senha (Parte 6): a conta nasce sem senha; este link é como a pessoa
+    # a define. Geração é NÃO-fatal — se falhar, o usuário já existe e o admin
+    # gera outro pela lista ("Novo link de senha"). NÃO desfaz a aprovação.
+    senha_url, senha_prefixo = None, None
+    try:
+        senha_url, senha_prefixo = _gerar_link_senha(uid, current_user.id)
+    except Exception:
+        logger.exception('[qcolabore] usuário %s criado, mas falhou o link de senha', uid)
+
     logger.info('[qcolabore] pendência %s aprovada por %s → usuário %s.',
                 pid, current_user.id, uid)
-    return jsonify(ok=True, usuario_id=uid)
+    return jsonify(ok=True, usuario_id=uid,
+                   senha_url=senha_url, senha_prefixo=senha_prefixo)
 
 
 @configuracoes.route('/usuarios/pendente/<int:pid>/recusar', methods=['POST'])
@@ -394,6 +432,32 @@ def usuario_pendente_recusar(pid):
 
     logger.info('[qcolabore] pendência %s recusada por %s.', pid, current_user.id)
     return jsonify(ok=True)
+
+
+@configuracoes.route('/usuarios/<int:uid>/senha-link', methods=['POST'])
+@admin_required
+def usuario_senha_link(uid):
+    """Gera (ou regenera) o link de senha de um usuário ainda sem senha.
+
+    Serve para o link que expirou ou que a pessoa perdeu. gerar() revoga o
+    anterior. Recusa se a conta JÁ tem senha — não faz sentido reabri-la.
+    """
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+    u = execute_query('SELECT id, senha_pendente FROM usuarios WHERE id = %s',
+                      (uid,), fetch=True, fetch_one=True)
+    if not u:
+        return jsonify(ok=False, msg='Usuário não encontrado.'), 404
+    if not u['senha_pendente']:
+        return jsonify(ok=False, msg='Este usuário já definiu a senha.'), 409
+    try:
+        url, prefixo = _gerar_link_senha(uid, current_user.id)
+    except Exception:
+        logger.exception('[qcolabore] falha ao gerar link de senha do usuário %s', uid)
+        return jsonify(ok=False, msg='Não foi possível gerar o link agora.'), 500
+    logger.info('[qcolabore] link de senha (re)gerado para usuário %s por %s.',
+                uid, current_user.id)
+    return jsonify(ok=True, url=url, prefixo=prefixo)
 
 
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])

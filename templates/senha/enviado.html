@@ -1,0 +1,22 @@
+{% extends "cadastro/_base.html" %}
+{% block titulo %}Senha criada — Qualicontax{% endblock %}
+{% block hero %}
+    <h1>Senha criada</h1>
+    <p>Pronto, {{ nome.split()[0] }}. Seu acesso está liberado.</p>
+{% endblock %}
+{% block conteudo %}
+<div class="card" style="text-align:center">
+    <div style="font-size:44px; line-height:1; margin-bottom:14px">🔓</div>
+    <p style="font-size:14px; color:#475569; line-height:1.7">
+        Entre com o login
+        <strong style="font-family:ui-monospace,Consolas,monospace">{{ login }}</strong>
+        e a senha que você acabou de definir.
+    </p>
+    <a href="{{ url_for('auth.login') }}" class="btn" style="margin-top:18px; text-decoration:none">
+        IR PARA O LOGIN
+    </a>
+    <p style="font-size:12px; color:#94a3b8; margin-top:16px; line-height:1.6">
+        Este link já cumpriu sua função e não funciona mais.
+    </p>
+</div>
+{% endblock %}

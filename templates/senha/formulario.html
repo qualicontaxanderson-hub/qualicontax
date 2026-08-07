@@ -1,0 +1,109 @@
+{% extends "cadastro/_base.html" %}
+{% block titulo %}Defina sua senha — Qualicontax{% endblock %}
+
+{% block hero %}
+    <h1>Defina sua senha</h1>
+    <p>Falta só isto para você acessar o sistema. Escolha uma senha e confirme.</p>
+{% endblock %}
+
+{% block conteudo %}
+<form method="post" action="{{ url_for('senha.definir', token=token) }}" id="frm">
+  <div class="card">
+    {% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
+
+    <div class="secao-tit">Sua conta</div>
+    <div class="secao-sub">
+      {{ nome }} — login <strong style="font-family:ui-monospace,Consolas,monospace">{{ login }}</strong>.
+      Guarde a senha: você vai usá-la para entrar.
+    </div>
+
+    <div>
+      <label class="rot" for="senha">Nova senha</label>
+      <input type="password" id="senha" name="senha" autocomplete="new-password"
+             maxlength="72" placeholder="ao menos 8 caracteres, com letra e número">
+      <div class="forca"><div class="forca-barra" id="forcaBarra"></div></div>
+      <div class="dica" id="forcaTxt">Mínimo 8 caracteres, misturando letras e números.</div>
+    </div>
+
+    <div style="margin-top:16px">
+      <label class="rot" for="conf">Repita a senha</label>
+      <input type="password" id="conf" name="confirmacao" autocomplete="new-password"
+             maxlength="72" placeholder="digite a mesma senha">
+      <div class="dica" id="confTxt">&nbsp;</div>
+    </div>
+
+    <label class="mostrar">
+      <input type="checkbox" id="mostrar"> Mostrar senha
+    </label>
+
+    <button type="submit" class="btn" id="btnEnviar" style="margin-top:18px" disabled>
+      DEFINIR SENHA
+    </button>
+  </div>
+</form>
+
+<style>
+input[type=password] {
+    width:100%; padding:12px 14px; border:1.5px solid #e2e8f0; border-radius:10px;
+    font-size:15px; font-family:inherit; background:#f9fafb; color:#1e293b;
+}
+input[type=password]:focus { outline:none; border-color:#22c55e; background:#fff;
+                             box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.forca { height:7px; border-radius:6px; background:#e5e7eb; overflow:hidden; margin-top:9px; }
+.forca-barra { height:100%; width:0; border-radius:6px; transition:width .2s, background .2s; }
+.mostrar { display:flex; align-items:center; gap:8px; font-size:13px; color:#475569;
+           margin-top:14px; cursor:pointer; }
+.mostrar input { width:16px; height:16px; }
+</style>
+
+<script>
+var senhaEl = document.getElementById('senha');
+var confEl = document.getElementById('conf');
+var btn = document.getElementById('btnEnviar');
+
+// Medidor de força — SÓ cortesia; a regra de verdade é validada no servidor.
+function pontua(s) {
+    var p = 0;
+    if (s.length >= 8) { p++; }
+    if (/[A-Za-z]/.test(s)) { p++; }
+    if (/\d/.test(s)) { p++; }
+    if (/[^A-Za-z0-9]/.test(s)) { p++; }
+    if (s.length >= 12) { p++; }
+    return p;
+}
+// Regra mínima que o servidor exige (8+, letra, número).
+function regraOk(s) {
+    return s.length >= 8 && /[A-Za-z]/.test(s) && /\d/.test(s);
+}
+
+function revisa() {
+    var s = senhaEl.value;
+    var p = pontua(s);
+    var barra = document.getElementById('forcaBarra');
+    var largura = [0, 20, 45, 70, 88, 100][Math.min(p, 5)];
+    var cor = p <= 1 ? '#ef4444' : (p <= 3 ? '#f59e0b' : '#16a34a');
+    barra.style.width = largura + '%';
+    barra.style.background = cor;
+    document.getElementById('forcaTxt').textContent = !s ? 'Mínimo 8 caracteres, misturando letras e números.'
+        : (regraOk(s) ? (p >= 4 ? 'Senha forte.' : 'Senha aceitável.') : 'Ainda fraca: precisa de 8+, com letra e número.');
+
+    var conf = confEl.value;
+    var ct = document.getElementById('confTxt');
+    var confereOk = conf.length > 0 && conf === s;
+    ct.textContent = !conf ? ' ' : (confereOk ? 'As senhas conferem.' : 'As senhas ainda não conferem.');
+    ct.style.color = !conf ? '' : (confereOk ? '#15803d' : '#b91c1c');
+
+    btn.disabled = !(regraOk(s) && confereOk);
+}
+
+senhaEl.addEventListener('input', revisa);
+confEl.addEventListener('input', revisa);
+
+document.getElementById('mostrar').addEventListener('change', function () {
+    var t = this.checked ? 'text' : 'password';
+    senhaEl.type = t; confEl.type = t;
+});
+
+revisa();
+</script>
+{% endblock %}
