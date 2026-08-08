@@ -10,7 +10,7 @@
 .cc-actions { display:flex; gap:8px; flex-wrap:wrap; }
 
 /* ---- Empresa selector bar ---- */
-.cc-empresa-bar { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(37,99,235,.25); }
+.cc-empresa-bar { background:linear-gradient(120deg,#0b3b2b,#116a43); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 2px 10px rgba(0,0,0,.15); }
 .cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
 .cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#1e3a5f; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
 .cc-empresa-ac { position:relative; min-width:320px; }
@@ -26,20 +26,15 @@
 .cc-ac-item.all { color:#64748b; font-style:italic; }
 .cc-ac-empty { padding:10px 12px; font-size:12px; color:#94a3b8; text-align:center; }
 .cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
-.cc-scope-badge.empresa { background:#bfdbfe; color:#1d4ed8; }
-.cc-scope-badge.grupo   { background:#e9d5ff; color:#7c3aed; }
+.cc-scope-badge.empresa { background:#dcfce7; color:#15803d; }
+.cc-scope-badge.grupo   { background:#eef2f0; color:#5b7468; }
 .cc-scope-badge.global  { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
 
 /* ---- KPI cards ---- */
 .cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
-.cc-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
-.cc-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
-.cc-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
-.cc-kpi:nth-child(3) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
-.cc-kpi:nth-child(4) { background:linear-gradient(135deg,#92400e,#f59e0b); }
-.cc-kpi:nth-child(5) { background:linear-gradient(135deg,#991b1b,#ef4444); }
-.cc-kpi-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
-.cc-kpi-value { font-size:20px; font-weight:800; color:#fff; margin-top:4px; }
+.cc-kpi { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 16px; }
+.cc-kpi-label { font-size:11.5px; font-weight:600; color:#7d968a; }
+.cc-kpi-value { font-size:24px; font-weight:800; color:#0f3d2e; margin-top:3px; font-variant-numeric:tabular-nums; }
 
 /* ---- Filters ---- */
 .cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
@@ -58,7 +53,7 @@
 .cc-tab.active { color:#16a34a; border-bottom-color:#22c55e; background:#f0fdf4; }
 
 /* ---- Table ---- */
-.cc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); }
+.cc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow-x:auto; box-shadow:0 1px 6px rgba(0,0,0,.05); }
 table.cc-table { width:100%; border-collapse:collapse; font-size:12.5px; }
 table.cc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
 table.cc-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
@@ -105,16 +100,13 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 
 /* ---- Export em lote (seleção + botões do topo) ---- */
 .chk-linha, #chkTodos { width:15px; height:15px; cursor:pointer; accent-color:#22c55e; }
-.btn-lote { display:inline-flex; align-items:center; gap:6px; border:none; color:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.btn-lote { display:inline-flex; align-items:center; gap:6px; border:1px solid #d7e3dc; background:#fff; color:#0f3d2e; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
 .btn-lote:disabled { opacity:.6; cursor:progress; }
-.btn-lote.xml { background:#0f766e; }
-.btn-lote.xml:hover:not(:disabled) { background:#115e59; }
-.btn-lote.pdf { background:#b91c1c; }
-.btn-lote.pdf:hover:not(:disabled) { background:#991b1b; }
+.btn-lote.xml:hover:not(:disabled) { border-color:#86efac; background:#f0faf4; }
+.btn-lote.pdf:hover:not(:disabled) { border-color:#86efac; background:#f0faf4; }
 /* Exportar ▾ (relatório PDF/Excel do filtro) */
 .exp-drop { position:relative; display:inline-block; }
-.btn-lote.exp { background:#4f46e5; }
-.btn-lote.exp:hover:not(:disabled) { background:#4338ca; }
+.btn-lote.exp:hover:not(:disabled) { border-color:#86efac; background:#f0faf4; }
 .exp-menu { position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:160px; z-index:50; display:none; overflow:hidden; }
 .exp-menu.open { display:block; }
 .exp-menu a { display:flex; align-items:center; gap:8px; padding:9px 14px; font-size:13px; color:#334155; cursor:pointer; white-space:nowrap; }
@@ -143,10 +135,10 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 .btn-periodo i { font-size:10.5px; opacity:.9; }
 .btn-periodo.verde { background:#16a34a; }
 .btn-periodo.verde:hover { background:#15803d; }
-.btn-periodo.azul  { background:#2563eb; }
-.btn-periodo.azul:hover  { background:#1d4ed8; }
-.btn-periodo.roxo  { background:#7c3aed; }
-.btn-periodo.roxo:hover  { background:#6d28d9; }
+.btn-periodo.azul  { background:#fff; color:#0f3d2e; border:1px solid #d7e3dc; box-shadow:none; }
+.btn-periodo.azul:hover  { border-color:#86efac; background:#f0faf4; }
+.btn-periodo.roxo  { background:#fff; color:#0f3d2e; border:1px solid #d7e3dc; box-shadow:none; }
+.btn-periodo.roxo:hover  { border-color:#86efac; background:#f0faf4; }
 
 /* ---- Preview da nota (DANFE dentro de um iframe) ---- */
 .nf-prev-overlay { position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:9200; display:none; align-items:center; justify-content:center; }
@@ -236,6 +228,33 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 #dbxResult.info .dbx-res-text { color:#1d4ed8; }
 #dbxResult.warn .dbx-res-icon { background:#fef3c7; color:#d97706; }
 #dbxResult.warn .dbx-res-text { color:#92400e; }
+
+/* ---- MOBILE (Bloco D1) --------------------------------------------------
+   Regra da casa: a PAGINA nao rola de lado em 390px. A tabela continua
+   tabela e rola DENTRO do .cc-table-wrap; o resto empilha.               */
+@media (max-width:820px) {
+    .cc-header { gap:8px; }
+    .cc-header h1 { font-size:18px; }
+    .cc-empresa-bar { flex-direction:column; align-items:stretch; gap:10px; padding:12px 14px; }
+    .cc-empresa-bar > div { width:100%; }
+    .cc-empresa-ac { min-width:0; width:100%; }
+    .cc-empresa-bar select { min-width:0; width:100%; }
+    .cc-scope-badge { margin-left:0; align-self:flex-start; }
+    .cc-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
+    .cc-filter-grid { grid-template-columns:1fr; }
+    /* A faixa de abas leva, no fim, um <div style="margin-left:auto"> com os
+       botoes de acao. Ele nao quebrava e sozinho jogava o documento para 874px
+       numa tela de 390 — medido. No mobile ele vira uma linha inteira. */
+    .cc-tabs { flex-wrap:wrap; row-gap:8px; }
+    .cc-tabs > div:last-child { margin-left:0 !important; width:100%; flex-wrap:wrap; }
+    .cc-tabs > div:last-child > * { flex:1 1 auto; }
+    .cc-tabs .btn-lote, .cc-tabs .exp-drop > .btn-lote { width:100%; justify-content:center; }
+    .cc-actions { width:100%; }
+    .cc-actions .btn-lote, .cc-actions .exp-drop { flex:1; justify-content:center; }
+}
+@media (max-width:480px) {
+    .cc-kpis { grid-template-columns:1fr; }
+}
 </style>
 {% endblock %}
 
@@ -270,7 +289,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     {% if current_user.is_admin() %}
     <button onclick="executarImportacaoAgendada()" id="btnExecAgendada"
             title="Executa agora a importação Dropbox do departamento Fiscal"
-            style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(5,150,105,.3);white-space:nowrap;">
+            class="ef-btn ef-btn-primary" style="white-space:nowrap;">
         <i class="fas fa-play-circle"></i> Executar Agora
     </button>
     {% endif %}
@@ -321,7 +340,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <h3><i class="fas fa-filter" style="color:#22c55e;margin-right:4px;"></i>Filtros</h3>
         <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
     </div>
-    <div id="filterBody">
+    <div id="filterBody" style="display:none;">
         <div class="cc-filter-grid">
             <div><label>Data Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
             <div><label>Data Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
@@ -432,7 +451,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         </div>
         {% if is_admin %}
         <button onclick="excluirLote()"
-                style="background:#ef4444;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                style="background:#b91c1c;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
             <i class="fas fa-trash-alt"></i> Excluir em Lote
         </button>
         {% endif %}
@@ -1034,6 +1053,28 @@ function toggleFilters() {
     b.style.display = hidden ? '' : 'none';
     c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
 }
+// Campos de filtro desta tela — a MESMA lista que o clearFilters() usa.
+const CAMPOS_FILTRO = ["f_data_ini", "f_data_fim", "f_num_nota", "f_cfop", "f_chave", "f_emit_cnpj", "f_vmin", "f_vmax", "f_descricao", "f_ncm"];
+
+// Bloco D1 — o painel de Filtros nasce FECHADO (display:none na marcação).
+// Se a URL trouxer algum parâmetro de filtro, nasce ABERTO, igual à lista de
+// clientes. Registro honesto: hoje esta tela NÃO lê filtro da URL (os campos
+// são preenchidos no painel e vão por AJAX), então este ramo só dispara se
+// alguém montar a URL na mão. Está aqui para o comportamento ser o mesmo do
+// resto da casa quando a leitura por URL existir.
+(function abrirFiltrosSeUrlTemFiltro() {
+    var qs = new URLSearchParams(window.location.search);
+    var achou = false;
+    qs.forEach(function (valor, chave) {
+        if (!valor) { return; }
+        if (chave.indexOf('f_') === 0 || CAMPOS_FILTRO.indexOf(chave) >= 0) { achou = true; }
+    });
+    if (!achou) { return; }
+    var b = document.getElementById('filterBody');
+    var c = document.getElementById('filterChevron');
+    if (b) { b.style.display = ''; }
+    if (c) { c.className = 'fas fa-chevron-up'; }
+})();
 function clearFilters() {
     ['f_data_ini','f_data_fim','f_num_nota','f_cfop','f_chave','f_emit_cnpj','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
         document.getElementById(id).value = '';
