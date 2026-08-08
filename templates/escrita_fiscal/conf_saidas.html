@@ -32,9 +32,14 @@
 
 /* ---- KPI cards ---- */
 .cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
-.cc-kpi { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 16px; }
-.cc-kpi-label { font-size:11.5px; font-weight:600; color:#7d968a; }
-.cc-kpi-value { font-size:24px; font-weight:800; color:#0f3d2e; margin-top:3px; font-variant-numeric:tabular-nums; }
+.cc-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.cc-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
+.cc-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.cc-kpi:nth-child(3) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.cc-kpi:nth-child(4) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.cc-kpi:nth-child(5) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.cc-kpi-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
+.cc-kpi-value { font-size:20px; font-weight:800; color:#fff; margin-top:4px; }
 
 /* ---- Filters ---- */
 .cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
