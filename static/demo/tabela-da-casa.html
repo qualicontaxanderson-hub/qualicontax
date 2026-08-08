@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="pt-br"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tabela da casa — demonstração (Bloco D0)</title>
+<link rel="stylesheet" href="/static/css/style.css?v=1780580055">
+<link rel="stylesheet" href="/static/css/identidade.css?v=1786183982">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  /* Só o cenário da demonstração — nada aqui faz parte do componente. */
+  body { background:#f7faf8; margin:0; }
+  .demo-wrap { max-width:1180px; margin:0 auto; padding:26px 22px 60px; }
+  .demo-faixa { background:#0b3b2b; color:#a7d9c0; font-size:11.5px; font-weight:700;
+                padding:7px 22px; letter-spacing:.3px; }
+  .demo-faixa b { color:#fff; }
+</style>
+</head><body>
+<div class="demo-faixa">DEMONSTRAÇÃO — <b>Bloco D0: a tabela da casa</b>. Nenhuma tela do sistema usa este componente ainda.</div>
+<div class="demo-wrap">
+
+  <!-- CABEÇALHO DE TELA -->
+  <div class="tela-head">
+    <div>
+      <h1 class="tela-title">Conferência de Entradas</h1>
+      <p class="tela-sub">NF-e de entrada por produto e emissor — competência 08/2026</p>
+    </div>
+    <div class="tela-actions">
+      <button class="btn btn-outline"><i class="fas fa-download"></i> Exportar</button>
+      <button class="btn btn-primary"><i class="fas fa-rotate"></i> Atualizar</button>
+    </div>
+  </div>
+
+  <!-- NOTAS: as quatro variações, no lugar das faixas azul e roxa de hoje -->
+  <div class="nota">
+    <i class="fas fa-circle-info"></i>
+    <div><strong>764</strong> memorizações registradas. Vínculos automáticos por fornecedor são aplicados na importação.</div>
+  </div>
+  <div class="nota nota-neutra">
+    <i class="fas fa-lock"></i>
+    <div>Tela <strong>somente leitura</strong>. Alterações são feitas na ficha do cliente.</div>
+  </div>
+  <div class="nota nota-atencao">
+    <i class="fas fa-triangle-exclamation"></i>
+    <div><strong>3</strong> notas pendentes de escrituração nesta competência.</div>
+  </div>
+  <div class="nota nota-erro">
+    <i class="fas fa-circle-exclamation"></i>
+    <div><strong>2</strong> XMLs com erro de leitura. Os arquivos continuam na pasta NOVO.</div>
+  </div>
+
+  <!-- A TABELA DA CASA -->
+  <div class="tbl-card">
+    <div class="tbl-scroll">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th class="num">Nº</th>
+            <th>Emitente</th>
+            <th>Chave de acesso</th>
+            <th class="num">Emissão</th>
+            <th class="val">Valor</th>
+            <th>Situação</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+      <tr>
+        <td data-label="Nº" class="num forte">12.480</td>
+        <td data-label="Emitente">PETROBRAS DISTRIBUIDORA S.A. — BASE DE SAO JOSE DOS CAMPOS<span class="apoio">33.000.167/0001-01</span></td>
+        <td data-label="Chave"><span class="mono">35260812480000167550010000124801234567890</span></td>
+        <td data-label="Emissão" class="num">01/08/2026</td>
+        <td data-label="Valor" class="val">1.284.905,37</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.481</td>
+        <td data-label="Emitente">RAIZEN COMBUSTIVEIS S.A.<span class="apoio">33.453.598/0001-23</span></td>
+        <td data-label="Chave"><span class="mono">35260812481000167550010000124811234567891</span></td>
+        <td data-label="Emissão" class="num">01/08/2026</td>
+        <td data-label="Valor" class="val">842.117,00</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.482</td>
+        <td data-label="Emitente">DISTRIBUIDORA DE ALIMENTOS VALE DO PARAIBA LTDA ME<span class="apoio">11.222.333/0001-44</span></td>
+        <td data-label="Chave"><span class="mono">35260812482000167550010000124821234567892</span></td>
+        <td data-label="Emissão" class="num">02/08/2026</td>
+        <td data-label="Valor" class="val">17.430,89</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-warn">Pendente</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.483</td>
+        <td data-label="Emitente">TRANSPORTES RODOVIARIOS SAO JUDAS TADEU EIRELI<span class="apoio">55.666.777/0001-88</span></td>
+        <td data-label="Chave"><span class="mono">35260812483000167550010000124831234567893</span></td>
+        <td data-label="Emissão" class="num">02/08/2026</td>
+        <td data-label="Valor" class="val">3.902,15</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.484</td>
+        <td data-label="Emitente">COMERCIAL DE PECAS E ACESSORIOS AUTOMOTIVOS DUTRA LTDA<span class="apoio">99.888.777/0001-66</span></td>
+        <td data-label="Chave"><span class="mono">35260812484000167550010000124841234567894</span></td>
+        <td data-label="Emissão" class="num">03/08/2026</td>
+        <td data-label="Valor" class="val"><span class="vazio">—</span></td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-err">Erro no XML</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.485</td>
+        <td data-label="Emitente">POSTO DE COMBUSTIVEIS ESTRADA VELHA LTDA<span class="apoio">12.345.678/0001-90</span></td>
+        <td data-label="Chave"><span class="mono">35260812485000167550010000124851234567895</span></td>
+        <td data-label="Emissão" class="num">03/08/2026</td>
+        <td data-label="Valor" class="val">96.204,52</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.486</td>
+        <td data-label="Emitente">SUPERMERCADO CENTRAL DE JACAREI S/A<span class="apoio">23.456.789/0001-01</span></td>
+        <td data-label="Chave"><span class="mono">35260812486000167550010000124861234567896</span></td>
+        <td data-label="Emissão" class="num">04/08/2026</td>
+        <td data-label="Valor" class="val">58.771,03</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-off">Cancelada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.487</td>
+        <td data-label="Emitente">INDUSTRIA QUIMICA DO VALE LTDA<span class="apoio">34.567.890/0001-12</span></td>
+        <td data-label="Chave"><span class="mono">35260812487000167550010000124871234567897</span></td>
+        <td data-label="Emissão" class="num">04/08/2026</td>
+        <td data-label="Valor" class="val">221.640,80</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.488</td>
+        <td data-label="Emitente">MATERIAIS DE CONSTRUCAO IRMAOS PEREIRA LTDA EPP<span class="apoio">45.678.901/0001-23</span></td>
+        <td data-label="Chave"><span class="vazio">—</span></td>
+        <td data-label="Emissão" class="num">05/08/2026</td>
+        <td data-label="Valor" class="val">7.318,44</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-warn">Pendente</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.489</td>
+        <td data-label="Emitente">AUTO PECAS E SERVICOS SANTANA ME<span class="apoio">56.789.012/0001-34</span></td>
+        <td data-label="Chave"><span class="mono">35260812489000167550010000124891234567899</span></td>
+        <td data-label="Emissão" class="num">05/08/2026</td>
+        <td data-label="Valor" class="val">1.205,00</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.490</td>
+        <td data-label="Emitente">DISTRIBUIDORA DE BEBIDAS TAUBATE LTDA<span class="apoio">67.890.123/0001-45</span></td>
+        <td data-label="Chave"><span class="mono">35260812490000167550010000124901234567800</span></td>
+        <td data-label="Emissão" class="num">06/08/2026</td>
+        <td data-label="Valor" class="val">43.980,17</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.491</td>
+        <td data-label="Emitente">GRAFICA E EDITORA IMPRIME BEM LTDA ME<span class="apoio">78.901.234/0001-56</span></td>
+        <td data-label="Chave"><span class="mono">35260812491000167550010000124911234567801</span></td>
+        <td data-label="Emissão" class="num">06/08/2026</td>
+        <td data-label="Valor" class="val">2.640,90</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-off">Cancelada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.492</td>
+        <td data-label="Emitente">SERVICOS DE LIMPEZA E CONSERVACAO ALFA LTDA<span class="apoio">89.012.345/0001-67</span></td>
+        <td data-label="Chave"><span class="mono">35260812492000167550010000124921234567802</span></td>
+        <td data-label="Emissão" class="num">07/08/2026</td>
+        <td data-label="Valor" class="val">11.500,00</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.493</td>
+        <td data-label="Emitente">TECNOLOGIA DA INFORMACAO E SISTEMAS BETA S.A.<span class="apoio">90.123.456/0001-78</span></td>
+        <td data-label="Chave"><span class="mono">35260812493000167550010000124931234567803</span></td>
+        <td data-label="Emissão" class="num">07/08/2026</td>
+        <td data-label="Valor" class="val">38.412,66</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-warn">Pendente</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.494</td>
+        <td data-label="Emitente">ATACADISTA DE EMBALAGENS GAMA LTDA<span class="apoio">01.234.567/0001-89</span></td>
+        <td data-label="Chave"><span class="mono">35260812494000167550010000124941234567804</span></td>
+        <td data-label="Emissão" class="num">07/08/2026</td>
+        <td data-label="Valor" class="val">9.087,31</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.495</td>
+        <td data-label="Emitente">FRIGORIFICO BOI FORTE DO VALE S.A.<span class="apoio">12.345.098/0001-90</span></td>
+        <td data-label="Chave"><span class="mono">35260812495000167550010000124951234567805</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">677.213,45</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.496</td>
+        <td data-label="Emitente">CONFECCOES E UNIFORMES PROFISSIONAIS DELTA ME<span class="apoio">23.456.109/0001-01</span></td>
+        <td data-label="Chave"><span class="mono">35260812496000167550010000124961234567806</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">4.760,00</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-err">Erro no XML</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.497</td>
+        <td data-label="Emitente">LOCADORA DE EQUIPAMENTOS PESADOS EPSILON LTDA<span class="apoio">34.567.210/0001-12</span></td>
+        <td data-label="Chave"><span class="mono">35260812497000167550010000124971234567807</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">155.900,00</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.498</td>
+        <td data-label="Emitente">FARMACIA E DROGARIA SAUDE PLENA LTDA<span class="apoio">45.678.321/0001-23</span></td>
+        <td data-label="Chave"><span class="mono">35260812498000167550010000124981234567808</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">812,77</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.499</td>
+        <td data-label="Emitente">PAPELARIA E SUPRIMENTOS DE ESCRITORIO ZETA ME<span class="apoio">56.789.432/0001-34</span></td>
+        <td data-label="Chave"><span class="mono">35260812499000167550010000124991234567809</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val"><span class="vazio">—</span></td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-warn">Pendente</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.500</td>
+        <td data-label="Emitente">METALURGICA E CALDEIRARIA OMEGA LTDA<span class="apoio">67.890.543/0001-45</span></td>
+        <td data-label="Chave"><span class="mono">35260812500000167550010000125001234567810</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">92.334,18</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.501</td>
+        <td data-label="Emitente">TRANSPORTADORA EXPRESSO LITORAL NORTE S/A<span class="apoio">78.901.654/0001-56</span></td>
+        <td data-label="Chave"><span class="mono">35260812501000167550010000125011234567811</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">26.145,90</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.502</td>
+        <td data-label="Emitente">COMERCIO DE MADEIRAS E COMPENSADOS SIGMA LTDA<span class="apoio">89.012.765/0001-67</span></td>
+        <td data-label="Chave"><span class="mono">35260812502000167550010000125021234567812</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">13.870,05</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-off">Cancelada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td data-label="Nº" class="num forte">12.503</td>
+        <td data-label="Emitente">ELETRICA E HIDRAULICA INSTALADORA KAPPA ME<span class="apoio">90.123.876/0001-78</span></td>
+        <td data-label="Chave"><span class="mono">35260812503000167550010000125031234567813</span></td>
+        <td data-label="Emissão" class="num">08/08/2026</td>
+        <td data-label="Valor" class="val">5.499,99</td>
+        <td data-label="Situação"><span class="lst-sit lst-sit-on">Escriturada</span></td>
+        <td class="acoes">
+          <div class="lst-c-act">
+            <a href="#" class="lst-act lst-act-view" title="Ver"><i class="fas fa-eye"></i></a>
+            <a href="#" class="lst-act lst-act-edit" title="Editar"><i class="fas fa-pen"></i></a>
+            <button class="lst-act lst-act-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </td>
+      </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p style="font-size:11.5px;color:#7d968a;margin:14px 2px 0;">
+    24 linhas · role a tabela para ver o cabeçalho fixo · reduza a janela para 390px para ver os cartões
+  </p>
+
+  <!-- ESTADO VAZIO -->
+  <h2 class="tela-title" style="font-size:15px;margin:34px 0 10px;">Estado vazio</h2>
+  <div class="tbl-card">
+    <div class="tbl-scroll tbl-solta">
+      <div class="tbl-empty">
+        <i class="fas fa-file-invoice"></i>
+        <p>Nenhuma nota encontrada nesta competência</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body></html>

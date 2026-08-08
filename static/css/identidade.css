@@ -183,9 +183,12 @@
 /* Etiqueta de situação */
 .lst-sit { font-size:10px; font-weight:700; letter-spacing:.3px; border-radius:99px; padding:3px 9px;
            white-space:nowrap; }
-.lst-sit-on { background:#dcfce7; color:#15803d; }
-.lst-sit-off { background:#eef2f0; color:#64748b; }
-.lst-sit-warn { background:#fef3c7; color:#b45309; }
+.lst-sit-on { background:#dcfce7; color:#15803d; }   /* ok        */
+.lst-sit-off { background:#eef2f0; color:#64748b; }  /* neutro    */
+.lst-sit-warn { background:#fef3c7; color:#b45309; } /* atenção   */
+.lst-sit-err { background:#fee2e2; color:#b91c1c; }  /* erro — fecha o conjunto
+   de 4 estados usado pela tabela da casa (D0). É o mesmo conjunto do resto do
+   sistema; não existe um segundo jeito de pintar estado. */
 
 /* Ícones de ação — quadrados 30px, verde/vermelho suave (nada berrante) */
 .lst-c-act { display:flex; gap:6px; justify-content:flex-end; }
@@ -297,4 +300,124 @@
     .ef-card-desc { display:none; }   /* 3 colunas compactas em 390px */
     .ef-car-card, .ef-skel-card { flex-basis:300px; }
     .ef-card-num { font-size:15px; }
+}
+
+/* ===========================================================================
+   A TABELA DA CASA + NOTA + CABEÇALHO DE TELA (Bloco D0)
+   Componente compartilhado. NENHUMA tela usa ainda — entra tela a tela depois.
+
+   Badges e ações NÃO ganham classe nova: reaproveitam .lst-sit / .lst-pill /
+   .lst-act, que já existem acima. Um jeito só de mostrar estado no sistema.
+   =========================================================================== */
+
+/* ── Cabeçalho de tela (internas do departamento) ────────────────────────── */
+.tela-head { display:flex; align-items:flex-start; justify-content:space-between;
+             gap:16px; flex-wrap:wrap; margin:0 0 18px; }
+.tela-title { margin:0; font-size:19px; font-weight:800; color:#0f3d2e; letter-spacing:-.01em; }
+.tela-sub { margin:3px 0 0; font-size:12px; color:#7d968a; }
+.tela-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+/* ── Nota / aviso ────────────────────────────────────────────────────────
+   Substitui as faixas azul-escuro e roxa ("764 memorizações registradas",
+   "tela somente leitura"). Discreta: fundo claro e barra à esquerda. */
+.nota { display:flex; gap:10px; align-items:flex-start;
+        background:#f0f7f3; border-left:3px solid #15803d; border-radius:0 10px 10px 0;
+        padding:10px 14px; margin:0 0 16px; font-size:12.5px; line-height:1.45; color:#33574a; }
+.nota i { color:#15803d; margin-top:2px; flex-shrink:0; }
+.nota strong { color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.nota-atencao { background:#fffbeb; border-left-color:#f59e0b; color:#7c5310; }
+.nota-atencao i { color:#b45309; }
+.nota-atencao strong { color:#78350f; }
+.nota-erro { background:#fef2f2; border-left-color:#ef4444; color:#8a2b2b; }
+.nota-erro i, .nota-erro strong { color:#b91c1c; }
+.nota-neutra { background:#f7faf8; border-left-color:#cbd5e1; color:#5b7468; }
+.nota-neutra i { color:#94a3b8; }
+.nota-neutra strong { color:#0f3d2e; }
+
+/* ── Tabela da casa ──────────────────────────────────────────────────────
+   Sem faixa colorida em cima: só o cartão branco de borda #e3ece7.
+
+   Por que .tbl-scroll tem max-height: cabeçalho sticky e contêiner com
+   overflow brigam. Qualquer ancestral com overflow diferente de visible vira
+   o contexto de rolagem do sticky — e um contêiner que não rola na vertical
+   deixa o cabeçalho parado junto com a tabela, ou seja, sem efeito. Dando
+   altura máxima ao contêiner, a rolagem vertical acontece DENTRO dele e o
+   cabeçalho gruda de verdade, no mesmo lugar onde a rolagem horizontal já
+   estava presa. Tabela curta não chega na altura e nada muda.
+   Quem quiser a tabela inteira sem rolagem interna usa .tbl-scroll.tbl-solta. */
+.tbl-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; }
+.tbl-scroll { overflow:auto; max-height:68vh; border-radius:15px; }
+.tbl-scroll.tbl-solta { max-height:none; }
+
+.tbl { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+/* separate + border-spacing:0 de propósito: com border-collapse:collapse a
+   borda do <th> sticky some ao rolar (a borda pertence à célula colapsada). */
+.tbl thead th {
+    position:sticky; top:0; z-index:2;
+    background:#fbfdfc; color:#7d968a;
+    font-size:10px; font-weight:800; letter-spacing:.7px; text-transform:uppercase;
+    text-align:left; padding:10px 14px; white-space:nowrap;
+    border-bottom:1px solid #e3ece7;
+}
+.tbl tbody td {
+    padding:11px 14px; border-bottom:1px solid #eef2f0;
+    color:#0f172a; vertical-align:middle;
+}
+.tbl tbody tr:last-child td { border-bottom:0; }
+.tbl tbody tr:hover td { background:#f4faf6; }
+
+/* Números e datas: à direita e tabulares. Texto continua à esquerda. */
+.tbl .num, .tbl th.num { text-align:right; font-variant-numeric:tabular-nums; }
+.tbl .val, .tbl th.val { text-align:right; font-variant-numeric:tabular-nums;
+                         font-weight:700; color:#0f3d2e; }
+.tbl .mono { font-family:ui-monospace, Consolas, monospace; letter-spacing:.2px;
+             font-variant-numeric:tabular-nums; }
+/* Vazio é sempre "—" cinza, nunca célula em branco. */
+.tbl .vazio { color:#94a3b8; }
+.tbl .forte { font-weight:700; color:#0f3d2e; }
+.tbl .apoio { display:block; font-size:11px; color:#7d968a; margin-top:2px; }
+.tbl .acoes { white-space:nowrap; }
+.tbl .acoes .lst-c-act { justify-content:flex-end; }
+
+.tbl-empty { text-align:center; padding:44px 16px; color:#94a3b8; }
+.tbl-empty i { font-size:30px; opacity:.4; display:block; margin-bottom:10px; }
+.tbl-empty p { margin:0; font-size:13px; }
+
+/* ── MOBILE: a MESMA marcação vira cartão empilhado ──────────────────────
+   Regra da casa: nenhuma tabela faz a PÁGINA rolar de lado. Cada <tr> vira
+   cartão e cada <td> vira "RÓTULO valor", com o rótulo saindo do data-label.
+   Célula sem data-label (ações) não ganha rótulo. */
+@media (max-width:820px) {
+    .tbl-card { border:0; background:transparent; }
+    .tbl-scroll { overflow:visible; max-height:none; border-radius:0; }
+    .tbl, .tbl tbody, .tbl tr, .tbl td { display:block; width:100%; }
+    .tbl thead { display:none; }
+    .tbl tbody tr {
+        background:#fff; border:1px solid #e3ece7; border-radius:14px;
+        padding:11px 13px; margin:0 0 10px;
+    }
+    .tbl tbody tr:hover td { background:transparent; }
+    .tbl tbody td, .tbl tbody tr:last-child td {
+        border:0 !important; padding:5px 0 !important;
+        display:flex; gap:10px; align-items:baseline; text-align:left !important;
+        /* Valor longo e sem espaço (chave de 44 dígitos, URL) tem de QUEBRAR.
+           Sem isto o cartão fica mais largo que a tela e a PÁGINA rola de lado
+           — medido: documento 439px numa viewport de 390px. */
+        overflow-wrap:anywhere;
+    }
+    .tbl tbody td > * { min-width:0; }   /* deixa o filho encolher no flex */
+    .tbl .mono { word-break:break-all; }
+    .tbl tbody td[data-label]::before {
+        content:attr(data-label);
+        flex:0 0 92px; font-size:10px; font-weight:800; letter-spacing:.6px;
+        text-transform:uppercase; color:#7d968a; line-height:1.5;
+    }
+    /* Valor longo ocupa a linha inteira abaixo do rótulo, em vez de ficar
+       espremido numa coluna estreita; o texto de apoio (CNPJ, competência)
+       desce junto e alinha com ele. */
+    .tbl tbody td { flex-wrap:wrap; }
+    .tbl .apoio { flex-basis:100%; margin:2px 0 0; }
+    .tbl td.acoes { padding-top:10px !important; margin-top:6px;
+                    border-top:1px dashed #eef2f0 !important; }
+    .tbl .acoes .lst-c-act { justify-content:flex-start; }
 }
