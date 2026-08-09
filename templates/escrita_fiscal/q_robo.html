@@ -4,50 +4,70 @@
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
 <style>
-.qr-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin:18px 0 20px; }
-.qr-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
-.qr-kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; }
-.qr-kpi-value { font-size:26px; font-weight:800; color:#0f172a; line-height:1.1; margin-top:6px; }
-.qr-kpi-sub { font-size:11.5px; color:#94a3b8; margin-top:4px; }
-.qr-kpi.accent-azul    { border-left:4px solid #2563eb; }
-.qr-kpi.accent-verde   { border-left:4px solid #16a34a; }
-.qr-kpi.accent-vermelho{ border-left:4px solid #dc2626; }
-.qr-kpi.accent-roxo    { border-left:4px solid #7c3aed; }
+/* Cabecalho (.tela-*), nota (.nota), pilulas (.lst-*) e a TABELA DA CASA
+   (.tbl-*) vem do identidade.css. Aqui fica so o especifico do painel. */
 
-.qr-legend { display:flex; align-items:flex-start; gap:9px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:11px 15px; font-size:12.5px; color:#1e40af; line-height:1.6; margin-bottom:16px; }
-.qr-legend i { margin-top:3px; color:#2563eb; }
-.qr-legend b { color:#1e3a8a; }
+/* ── Indicadores do topo — cartao branco da casa; cor so quando significa ── */
+.qrk { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:18px 0 16px; }
+.qrk-c { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 16px; }
+.qrk-lbl { font-size:11.5px; font-weight:600; color:#7d968a; }
+.qrk-val { font-size:26px; font-weight:800; color:#0f3d2e; line-height:1.1; margin-top:3px;
+           font-variant-numeric:tabular-nums; }
+.qrk-sub { font-size:11px; color:#94a3b8; margin-top:4px; }
+/* "Parados" so fica vermelho quando ha algum — zero e neutro, nao alarme. */
+.qrk-c.alerta { border-color:#fecaca; background:#fffafa; }
+.qrk-c.alerta .qrk-val { color:#b91c1c; }
 
-.qr-table-wrap { overflow-x:auto; background:#fff; border:1px solid #e5e7eb; border-radius:14px; }
-table.qr-table { width:100%; border-collapse:collapse; font-size:12.5px; }
-table.qr-table thead th { background:#f8fafc; text-align:left; padding:10px 12px; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; border-bottom:2px solid #e5e7eb; white-space:nowrap; }
-table.qr-table tbody td { padding:11px 12px; border-bottom:1px solid #f1f5f9; color:#374151; vertical-align:middle; }
-table.qr-table tbody tr:last-child td { border-bottom:none; }
-table.qr-table tbody tr:hover { background:#fafbfc; }
+/* ── Cartao de robo ─────────────────────────────────────────────────────── */
+.qrc-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+.qrc { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 16px;
+       display:flex; flex-direction:column; gap:10px; }
+/* Robo parado se destaca: e a informacao que faz alguem agir. */
+.qrc.parado { border-color:#fecaca; background:#fffafa; box-shadow:0 4px 14px rgba(185,28,28,.07); }
+.qrc.atencao { border-color:#fde68a; background:#fffdf5; }
+.qrc-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.qrc-nome { font-size:13px; font-weight:700; color:#0f3d2e; text-transform:uppercase;
+            line-height:1.3; min-width:0; }
+.qrc-id { font-size:10.5px; color:#94a3b8; margin-top:2px; }
+.qrc-dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0; }
+.qrc-dl dt { font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+             color:#7d968a; align-self:center; white-space:nowrap; }
+.qrc-dl dd { margin:0; font-size:12px; color:#334155; font-variant-numeric:tabular-nums; }
+.qrc-dl dd .ha { color:#7d968a; font-size:11px; }
+.qrc-dl dd .qr-muted { color:#94a3b8; }
+.qrc-pe { display:flex; align-items:center; justify-content:space-between; gap:8px;
+          padding-top:9px; border-top:1px dashed #eef2f0; }
+.qrc-saidas { font-size:12px; color:#334155; font-variant-numeric:tabular-nums; }
+.qrc-saidas b { font-size:14px; color:#0f3d2e; }
 
-.qr-posto-num { color:#6366f1; font-weight:800; }
-.qr-posto-nome { font-weight:700; color:#1e293b; text-transform:uppercase; font-size:12.5px; }
-
+/* Selo de estado — bem visivel, com a mesma regra de hoje */
 .qr-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:99px; font-size:11.5px; font-weight:800; white-space:nowrap; }
-.qr-badge.verde    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
-.qr-badge.amarelo  { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
-.qr-badge.vermelho { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
-.qr-badge.cinza    { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+.qr-badge.verde    { background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; }
+.qr-badge.amarelo  { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
+.qr-badge.vermelho { background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; }
+.qr-badge.cinza    { background:#eef2f0; color:#64748b; border:1px solid #e3ece7; }
 .qr-dot { width:8px; height:8px; border-radius:99px; flex:0 0 8px; }
 .qr-dot.verde { background:#16a34a; } .qr-dot.amarelo { background:#d97706; }
-.qr-dot.vermelho { background:#dc2626; } .qr-dot.cinza { background:#94a3b8; }
+.qr-dot.vermelho { background:#b91c1c; } .qr-dot.cinza { background:#94a3b8; }
 
 .qr-onoff { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:8px; font-size:11px; font-weight:800; }
 .qr-onoff.on  { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
-.qr-onoff.off { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+.qr-onoff.off { background:#eef2f0; color:#64748b; border:1px solid #e3ece7; }
 
 .qr-sub { font-size:11px; color:#94a3b8; margin-top:2px; }
-.qr-num { font-variant-numeric:tabular-nums; font-weight:700; color:#0f172a; }
+.qr-num { font-variant-numeric:tabular-nums; font-weight:700; color:#0f3d2e; }
 .qr-muted { color:#94a3b8; }
 .qr-empty { text-align:center; padding:30px; color:#94a3b8; font-size:13px; }
-.qr-fase { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px 14px; font-size:12px; color:#92400e; margin-bottom:16px; }
+.qr-posto-num { color:#15803d; font-weight:800; }
+.qr-posto-nome { font-weight:700; color:#0f3d2e; text-transform:uppercase; font-size:12.5px; }
 
-/* ---- Instalação / chaves / auditoria (Fase 5) ---- */
+@media (max-width:820px) {
+    /* Regra da casa: a PAGINA nao rola de lado; tudo empilha. */
+    .qrk { grid-template-columns:repeat(2,1fr); gap:8px; }
+    .qrc-grid { grid-template-columns:1fr; }
+}
+@media (max-width:480px) { .qrk { grid-template-columns:1fr; } }
+
 .qr-sec { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:20px 22px; margin-top:20px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
 .qr-sec-h { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
 .qr-sec-t { font-size:15px; font-weight:800; color:#0f172a; }
@@ -57,9 +77,9 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 .qr-form input[type=text], .qr-form input[type=date] { padding:10px 13px; border:1.5px solid #e5e7eb; border-radius:9px; font-size:14px; font-weight:600; }
 .qr-form input[type=text] { width:190px; }
 .qr-btn { padding:11px 20px; border:none; border-radius:9px; font-size:13px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-block; }
-.qr-btn.roxo    { background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; }
-.qr-btn.verde   { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
-.qr-btn.laranja { background:linear-gradient(135deg,#ea580c,#c2410c); color:#fff; }
+.qr-btn.roxo    { background:#16a34a; color:#fff; }
+.qr-btn.verde   { background:#16a34a; color:#fff; }
+.qr-btn.laranja { background:#b45309; color:#fff; }
 .qr-btn.cinza   { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
 .qr-conf { background:#f0fdf4; border:2px solid #bbf7d0; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
 .qr-conf .razao { font-size:17px; font-weight:800; color:#14532d; text-transform:uppercase; margin-bottom:8px; }
@@ -75,147 +95,137 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 .qr-check label { font-size:12.5px; color:#b91c1c; line-height:1.6; font-weight:600; }
 .qr-filtros { display:flex; gap:7px; flex-wrap:wrap; }
 .qr-filtro { font-size:11.5px; font-weight:700; padding:6px 13px; border-radius:99px; text-decoration:none; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; }
-.qr-filtro.on { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+.qr-filtro.on { background:#16a34a; border-color:#16a34a; color:#fff; }
 .qr-acao { display:inline-block; padding:3px 9px; border-radius:99px; font-size:10px; font-weight:800; white-space:nowrap; }
 .qr-acao.nova  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
 .qr-acao.troca { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
-.qr-acao.down  { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+.qr-acao.down  { background:#f0f7f3; color:#15803d; border:1px solid #dcfce7; }
 .qr-org { font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
 .qr-mono { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#94a3b8; }
 .qr-lista { position:absolute; z-index:40; left:0; width:420px; top:100%; background:#fff; border:1px solid #e2e8f0; border-radius:11px; box-shadow:0 12px 28px -8px rgba(0,0,0,.22); max-height:300px; overflow-y:auto; }
 .qr-item { padding:10px 13px; cursor:pointer; border-bottom:1px solid #f1f5f9; }
 .qr-item:last-child { border-bottom:none; }
-.qr-item:hover, .qr-item.sel { background:#faf5ff; }
+.qr-item:hover, .qr-item.sel { background:#f0faf4; }
 .qr-item .r { font-size:13px; font-weight:700; color:#0f172a; }
 .qr-item .d { font-size:11.5px; color:#64748b; margin-top:2px; }
 .qr-lista .vazio2 { padding:13px; font-size:12px; color:#94a3b8; }
 </style>
 
-<div class="cc-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+<div class="tela-head">
     <div>
-        <h1 style="font-size:22px;font-weight:700;color:#1e293b;">
-            <i class="fas fa-robot" style="color:#7c3aed;margin-right:8px;"></i>Painel do Q-Robô
-        </h1>
+        <h1 class="tela-title"><i class="fas fa-robot" style="color:#22c55e;margin-right:8px;"></i>Painel do Q-Robô</h1>
+        <p class="tela-sub">
+            {{ resumo.total }} cliente{{ '' if resumo.total == 1 else 's' }} com robô ·
+            {{ resumo.verde }} capturando ·
+            {{ resumo.vermelho + resumo.cinza }} parado{{ '' if (resumo.vermelho + resumo.cinza) == 1 else 's' }}
+        </p>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-        <span class="qr-muted" style="font-size:11.5px;"><i class="fas fa-sync-alt"></i> atualiza sozinho a cada 60s</span>
-        <button onclick="location.reload()"
-                style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;">
+    <div class="tela-actions">
+        <span class="qr-muted" style="font-size:11.5px;"><i class="fas fa-rotate"></i> atualiza sozinho a cada 60s</span>
+        <button onclick="location.reload()" class="btn btn-outline">
             <i class="fas fa-rotate-right"></i> Atualizar
         </button>
     </div>
 </div>
 
-<div class="qr-fase">
+<div class="nota">
     <i class="fas fa-circle-info"></i>
-    <b>Monitor + chaves.</b> Aqui você acompanha os robôs, gera a chave de um cliente
+    <div><strong>Monitor + chaves.</strong> Aqui você acompanha os robôs, gera a chave de um cliente
     e vê a auditoria completa do Portal do Instalador. Ligar/desligar, reprocessar
-    histórico e cadastro de cliente entram nas próximas fases.
+    histórico e cadastro de cliente entram nas próximas fases.</div>
 </div>
 
-<div class="qr-kpis">
-    <div class="qr-kpi accent-azul">
-        <div class="qr-kpi-label">Clientes com robô</div>
-        <div class="qr-kpi-value">{{ resumo.total }}</div>
-        <div class="qr-kpi-sub">{{ resumo.desligados }} desligado(s) no painel</div>
+<!-- Indicadores: cor so onde significa -->
+<div class="qrk">
+    <div class="qrk-c">
+        <div class="qrk-lbl">Clientes com robô</div>
+        <div class="qrk-val">{{ resumo.total }}</div>
+        <div class="qrk-sub">{{ resumo.desligados }} desligado(s) no painel</div>
     </div>
-    <div class="qr-kpi accent-verde">
-        <div class="qr-kpi-label">Capturando agora</div>
-        <div class="qr-kpi-value">{{ resumo.verde }}</div>
-        <div class="qr-kpi-sub">contato há menos de {{ limiar_verde }} min</div>
+    <div class="qrk-c">
+        <div class="qrk-lbl">Capturando agora</div>
+        <div class="qrk-val">{{ resumo.verde }}</div>
+        <div class="qrk-sub">contato há menos de {{ limiar_verde }} min</div>
     </div>
-    <div class="qr-kpi accent-vermelho">
-        <div class="qr-kpi-label">Parados</div>
-        <div class="qr-kpi-value">{{ resumo.vermelho + resumo.cinza }}</div>
-        <div class="qr-kpi-sub">{{ resumo.amarelo }} em atenção</div>
+    {# vermelho SO quando ha algum parado; zero e neutro, nao alarme #}
+    <div class="qrk-c {% if (resumo.vermelho + resumo.cinza) > 0 %}alerta{% endif %}">
+        <div class="qrk-lbl">Parados</div>
+        <div class="qrk-val">{{ resumo.vermelho + resumo.cinza }}</div>
+        <div class="qrk-sub">{{ resumo.amarelo }} em atenção</div>
     </div>
-    <div class="qr-kpi accent-roxo">
-        <div class="qr-kpi-label">Saídas capturadas</div>
-        <div class="qr-kpi-value">{{ '{:,}'.format(resumo.saidas).replace(',', '.') }}</div>
-        <div class="qr-kpi-sub">total acumulado, origem Q-ROBO</div>
+    <div class="qrk-c">
+        <div class="qrk-lbl">Saídas capturadas</div>
+        <div class="qrk-val">{{ '{:,}'.format(resumo.saidas).replace(',', '.') }}</div>
+        <div class="qrk-sub">total acumulado, origem Q-ROBO</div>
     </div>
 </div>
 
-<div class="qr-legend">
+<div class="nota nota-neutra">
     <i class="fas fa-traffic-light"></i>
-    <span>
-        <b>🟢 ativo</b> = contato há menos de {{ limiar_verde }} min ·
-        <b>🟠 atenção</b> = entre {{ limiar_verde }} min e {{ (limiar_laranja / 60) | int }}h ·
-        <b>🔴 parado</b> = mais de {{ (limiar_laranja / 60) | int }}h sem contato.<br>
-        O robô avisa a nuvem a <b>cada</b> contato, mesmo desligado ou sem nota nova —
-        então silêncio significa que o <b>processo não está rodando</b> no cliente
+    <div>
+        <strong>🟢 ativo</strong> = contato há menos de {{ limiar_verde }} min ·
+        <strong>🟠 atenção</strong> = entre {{ limiar_verde }} min e {{ (limiar_laranja / 60) | int }}h ·
+        <strong>🔴 parado</strong> = mais de {{ (limiar_laranja / 60) | int }}h sem contato.<br>
+        O robô avisa a nuvem a <strong>cada</strong> contato, mesmo desligado ou sem nota nova —
+        então silêncio significa que o <strong>processo não está rodando</strong> no cliente
         (máquina desligada, robô fechado), e não simplesmente que não houve venda.
-    </span>
+    </div>
 </div>
 
-<div class="qr-table-wrap">
-    <table class="qr-table">
-        <thead>
-            <tr>
-                <th>Cliente</th>
-                <th>Status</th>
-                <th>Última captura</th>
-                <th>Data de captura</th>
-                <th style="text-align:center;">Robô</th>
-                <th style="text-align:right;">Total de saídas</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for p in postos %}
-            <tr>
-                <td>
-                    <span class="qr-posto-num">{{ p.numero }}</span>
-                    <span class="qr-posto-nome">— {{ p.razao }}</span>
-                    <div class="qr-sub">cliente_id {{ p.cliente_id }}{% if p.reset_seq %} · reset_seq {{ p.reset_seq }}{% endif %}</div>
-                </td>
-                <td>
-                    <span class="qr-badge {{ p.status_cls }}">
-                        <span class="qr-dot {{ p.status_cls }}"></span>{{ p.status_txt }}
-                    </span>
-                    <div class="qr-sub">
-                        {% if p.ultimo_contato %}contato {{ p.ultimo_contato }}{% else %}sem registro de contato{% endif %}
-                    </div>
-                </td>
-                <td>
-                    {% if p.ultima_captura %}
-                        <span class="qr-num">{{ p.ultima_captura }}</span>
-                        <div class="qr-sub">{{ p.captura_ha }}</div>
-                    {% else %}
-                        <span class="qr-muted">nenhuma saída capturada</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if p.data_captura %}
-                        {{ p.data_captura }}
-                    {% else %}
-                        <span class="qr-muted">sem data — captura tudo</span>
-                    {% endif %}
-                </td>
-                <td style="text-align:center;">
-                    <span class="qr-onoff {{ 'on' if p.ativo else 'off' }}">
-                        <i class="fas fa-{{ 'circle-check' if p.ativo else 'circle-pause' }}"></i>
-                        {{ 'Ligado' if p.ativo else 'Desligado' }}
-                    </span>
-                </td>
-                <td style="text-align:right;">
-                    <span class="qr-num">{{ '{:,}'.format(p.total_saidas).replace(',', '.') }}</span>
-                </td>
-            </tr>
-        {% else %}
-            <tr><td colspan="6" class="qr-empty">
-                <i class="fas fa-robot"></i><br>Nenhum cliente com robô cadastrado.
-            </td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</div>
+<!-- Clientes em cartoes: parados primeiro (ordenado na rota) -->
+{% if postos %}
+<div class="qrc-grid">
+    {% for p in postos %}
+    <div class="qrc {% if p.status_cls in ('vermelho', 'cinza') %}parado{% elif p.status_cls == 'amarelo' %}atencao{% endif %}">
+        <div class="qrc-top">
+            <div style="min-width:0;">
+                <div class="qrc-nome"><span class="qr-posto-num">{{ p.numero }}</span> — {{ p.razao }}</div>
+                <div class="qrc-id">cliente_id {{ p.cliente_id }}{% if p.reset_seq %} · reset_seq {{ p.reset_seq }}{% endif %}</div>
+            </div>
+            <span class="qr-badge {{ p.status_cls }}">
+                <span class="qr-dot {{ p.status_cls }}"></span>{{ p.status_txt }}
+            </span>
+        </div>
 
-{# ------------------------------------------------------------------ #}
-{# CHAVE DO POSTO — gerar por número (mesmo serviço do portal)         #}
+        <dl class="qrc-dl">
+            <dt>Contato</dt>
+            <dd>
+                {% if p.ultimo_contato %}{{ p.ultimo_contato }} <span class="ha">({{ p.contato_ha }})</span>
+                {% else %}<span class="qr-muted">sem registro de contato</span>{% endif %}
+            </dd>
+            <dt>Captura</dt>
+            <dd>
+                {% if p.ultima_captura %}{{ p.ultima_captura }} <span class="ha">({{ p.captura_ha }})</span>
+                {% else %}<span class="qr-muted">nenhuma saída capturada</span>{% endif %}
+            </dd>
+            <dt>Desde</dt>
+            <dd>
+                {% if p.data_captura %}{{ p.data_captura }}
+                {% else %}<span class="qr-muted">sem data — captura tudo</span>{% endif %}
+            </dd>
+        </dl>
+
+        <div class="qrc-pe">
+            <span class="qrc-saidas"><b>{{ '{:,}'.format(p.total_saidas).replace(',', '.') }}</b> saídas</span>
+            <span class="qr-onoff {{ 'on' if p.ativo else 'off' }}">
+                <i class="fas fa-{{ 'circle-check' if p.ativo else 'circle-pause' }}"></i>
+                {{ 'Ligado' if p.ativo else 'Desligado' }}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="qr-empty">
+    <i class="fas fa-robot" style="font-size:32px;display:block;margin-bottom:10px;opacity:.4;"></i>
+    Nenhum cliente com robô cadastrado.
+</div>
+{% endif %}
+
 {# ------------------------------------------------------------------ #}
 <div class="qr-sec">
     <div class="qr-sec-h">
-        <div class="qr-sec-t"><i class="fas fa-key" style="color:#7c3aed;"></i> Chave do cliente</div>
+        <div class="qr-sec-t"><i class="fas fa-key" style="color:#16a34a;"></i> Chave do cliente</div>
     </div>
 
     {% if chave %}
@@ -321,7 +331,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
 <div class="qr-sec">
     <div class="qr-sec-h">
         <div>
-            <div class="qr-sec-t"><i class="fas fa-clipboard-list" style="color:#7c3aed;"></i> Auditoria do Q-Robô</div>
+            <div class="qr-sec-t"><i class="fas fa-clipboard-list" style="color:#16a34a;"></i> Auditoria do Q-Robô</div>
             <div class="qr-sec-p" style="margin:4px 0 0;">
                 {{ aud_resumo.chaves }} chave(s) · {{ aud_resumo.downloads }} download(s)
                 — 300 registros mais recentes.
@@ -337,8 +347,11 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
         </div>
     </div>
 
-    <div class="qr-table-wrap">
-        <table class="qr-table">
+    {# TABELA DA CASA (.tbl-*, Bloco D0): log longo, cabecalho fixo ao rolar e
+       cartao no celular pelo data-label. #}
+    <div class="tbl-card">
+      <div class="tbl-scroll">
+        <table class="tbl">
             <thead>
                 <tr>
                     <th>Quando</th>
@@ -352,14 +365,14 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
             <tbody>
             {% for t in trilha %}
                 <tr>
-                    <td class="qr-num" style="white-space:nowrap;">
+                    <td data-label="Quando" class="mono" style="white-space:nowrap;">
                         {{ t.criado_em.strftime('%d/%m/%Y %H:%M') }}
                     </td>
-                    <td>
+                    <td data-label="Quem">
                         {{ t.usuario_nome }}
                         {% if t.ip %}<div class="qr-sub qr-mono">{{ t.ip }}</div>{% endif %}
                     </td>
-                    <td>
+                    <td data-label="O quê">
                         {% if t.acao == 'CHAVE_GERADA' %}
                             <span class="qr-acao nova">CHAVE GERADA</span>
                         {% elif t.acao == 'CHAVE_REGERADA' %}
@@ -368,7 +381,7 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
                             <span class="qr-acao down">INSTALADOR BAIXADO</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-label="Empresa">
                         {% if t.razao_social %}
                             <span class="qr-posto-num">{{ t.numero_cliente }}</span>
                             <span class="qr-posto-nome">— {{ t.razao_social }}</span>
@@ -382,21 +395,24 @@ table.qr-table tbody tr:hover { background:#fafbfc; }
                             <span class="qr-muted">—</span>
                         {% endif %}
                     </td>
-                    <td class="qr-mono">
+                    <td data-label="Detalhe" class="mono">
                         {% if t.token_prefixo %}chave {{ t.token_prefixo }}…{% endif %}
                         {% if t.instalador_versao %}{{ t.instalador_versao }}{% endif %}
                     </td>
-                    <td><span class="qr-org">{{ t.origem }}</span></td>
+                    <td data-label="Origem"><span class="qr-org">{{ t.origem }}</span></td>
                 </tr>
             {% else %}
-                <tr><td colspan="6" class="qr-empty">
-                    <i class="fas fa-clipboard-list"></i><br>
-                    Nada registrado ainda — nenhuma chave gerada nem instalador baixado
-                    pelo portal.
+                <tr><td colspan="6">
+                    <div class="tbl-empty">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>Nada registrado ainda — nenhuma chave gerada nem instalador
+                        baixado pelo portal.</p>
+                    </div>
                 </td></tr>
             {% endfor %}
             </tbody>
         </table>
+      </div>
     </div>
 </div>
 

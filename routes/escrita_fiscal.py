@@ -6365,12 +6365,23 @@ def _qrobo_painel_contexto(**extra):
             'ativo':          ativo,
             'total_saidas':   total_saidas,
             'reset_seq':      int(r.get('robo_reset_seq') or 0),
+            # usados só para ordenar o painel (Bloco D4)
+            'min_sem_contato': r.get('min_sem_contato'),
+            'contato_ha':      _qrobo_ha(r.get('min_sem_contato')),
         })
         resumo['total']  += 1
         resumo[cls]      += 1
         resumo['saidas'] += total_saidas
         if not ativo:
             resumo['desligados'] += 1
+
+    # Bloco D4 — quem exige ação primeiro. Parado e sem-contato no topo, depois
+    # atenção, por último os que estão capturando. Dentro do mesmo estado, o
+    # silêncio mais longo primeiro. Só ordenação em Python: nenhuma query nova.
+    _ordem = {'vermelho': 0, 'cinza': 1, 'amarelo': 2, 'verde': 3}
+    postos.sort(key=lambda p: (_ordem.get(p['status_cls'], 9),
+                               -(p['min_sem_contato'] or 0),
+                               p['razao']))
 
     # ---- Auditoria do Portal do Instalador --------------------------------
     filtro = (request.args.get('aud') or 'todas').strip()
