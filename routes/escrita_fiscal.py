@@ -4790,31 +4790,65 @@ def excluir_lote():
 @escrita_fiscal.route('/conf-compras/produtos-catalogo/')
 @permission_required('escrita_fiscal.produtos_catalogo')
 def produtos_catalogo():
-    f_cliente_id = request.args.get('cliente_id', '').strip()
-    f_grupo_id = request.args.get('grupo_id', '').strip()
+    # Filtros (Bloco D2). A consulta ao banco continua sendo UMA só, a mesma de
+    # antes e sem WHERE: o catálogo é pequeno e limitado por natureza, então a
+    # peneira acontece em Python. Isso evita query nova e ainda deixa montar as
+    # opções de Unidade a partir do conjunto COMPLETO — se filtrasse no SQL, o
+    # select de Unidade só ofereceria o que já sobrou do filtro anterior.
+    f = {
+        'busca':        request.args.get('busca', '').strip(),
+        'categoria':    request.args.get('categoria', '').strip(),
+        'subcategoria': request.args.get('subcategoria', '').strip(),
+        'tipo_uso':     request.args.get('tipo_uso', '').strip(),
+        'unidade':      request.args.get('unidade', '').strip(),
+        'cliente_id':   request.args.get('cliente_id', '').strip(),
+        'grupo_id':     request.args.get('grupo_id', '').strip(),
+        'situacao':     request.args.get('situacao', '').strip(),   # '', 'ativos', 'inativos'
+    }
 
-    where, params = [], []
-    if f_cliente_id:
-        where.append('cliente_id = %s')
-        params.append(int(f_cliente_id))
-    if f_grupo_id:
-        where.append('grupo_id = %s')
-        params.append(int(f_grupo_id))
-
-    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
-    produtos = execute_query(
-        f"""SELECT p.id, p.codigo, p.nome, p.categoria, p.subcategoria, p.tipo_uso, p.unidade,
-                   p.ativo, p.cliente_id, p.grupo_id,
-                   c.nome_razao_social AS empresa_nome,
-                   g.nome AS grupo_nome
-              FROM nfe_produtos_catalogo p
-              LEFT JOIN clientes c ON c.id = p.cliente_id
-              LEFT JOIN grupos_clientes g ON g.id = p.grupo_id
-              {where_sql}
-             ORDER BY p.categoria, p.nome""",
-        tuple(params) if params else None,
+    todos = execute_query(
+        """SELECT p.id, p.codigo, p.nome, p.categoria, p.subcategoria, p.tipo_uso, p.unidade,
+                  p.ativo, p.cliente_id, p.grupo_id,
+                  c.nome_razao_social AS empresa_nome,
+                  g.nome AS grupo_nome
+             FROM nfe_produtos_catalogo p
+             LEFT JOIN clientes c ON c.id = p.cliente_id
+             LEFT JOIN grupos_clientes g ON g.id = p.grupo_id
+            ORDER BY p.categoria, p.nome""",
         fetch=True,
     ) or []
+
+    # Opções dos selects, tiradas do conjunto completo (nunca do filtrado).
+    unidades = sorted({(p.get('unidade') or '').strip()
+                       for p in todos if (p.get('unidade') or '').strip()})
+    tipos_uso = sorted({(p.get('tipo_uso') or '').strip()
+                        for p in todos if (p.get('tipo_uso') or '').strip()})
+
+    def _passa(p):
+        if f['busca']:
+            alvo = ((p.get('nome') or '') + ' ' + (p.get('codigo') or '')).lower()
+            if f['busca'].lower() not in alvo:
+                return False
+        if f['categoria'] and (p.get('categoria') or '') != f['categoria']:
+            return False
+        if f['subcategoria'] and (p.get('subcategoria') or '') != f['subcategoria']:
+            return False
+        if f['tipo_uso'] and (p.get('tipo_uso') or '') != f['tipo_uso']:
+            return False
+        if f['unidade'] and (p.get('unidade') or '') != f['unidade']:
+            return False
+        if f['cliente_id'] and str(p.get('cliente_id') or '') != f['cliente_id']:
+            return False
+        if f['grupo_id'] and str(p.get('grupo_id') or '') != f['grupo_id']:
+            return False
+        if f['situacao'] == 'ativos' and not p.get('ativo'):
+            return False
+        if f['situacao'] == 'inativos' and p.get('ativo'):
+            return False
+        return True
+
+    produtos = [p for p in todos if _passa(p)]
+    total_geral = len(todos)
 
     empresas = _get_empresas()
     grupos = _get_grupos()
@@ -4835,8 +4869,18 @@ def produtos_catalogo():
         produtos=produtos,
         empresas=empresas,
         grupos=grupos,
-        f_cliente_id=f_cliente_id,
-        f_grupo_id=f_grupo_id,
+        # f_cliente_id / f_grupo_id continuam para não quebrar nada que os use;
+        # o painel novo lê tudo de filtros.
+        f_cliente_id=f['cliente_id'],
+        f_grupo_id=f['grupo_id'],
+        filtros=f,
+        # Calculado aqui, e não com {% set %} no template, porque variável criada
+        # dentro de um {% block %} do Jinja NÃO enxerga em outro bloco — o painel
+        # ficava fechado mesmo com filtro ativo, porque o script mora no extra_js.
+        filters_active=any(f.values()),
+        total_geral=total_geral,
+        unidades=unidades,
+        tipos_uso=tipos_uso,
         categorias=categorias,
         cats_db=cats_db,
         subs_db=subs_db,

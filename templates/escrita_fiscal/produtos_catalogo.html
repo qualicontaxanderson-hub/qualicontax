@@ -3,173 +3,276 @@
 
 {% block extra_css %}
 <style>
-.pc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
-.pc-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+/* Cabeçalho (.tela-*), painel de filtros (.qf-*), pílulas (.lst-pill),
+   estado (.lst-sit) e ícones de ação (.lst-act) vêm do identidade.css.
+   Aqui fica só o que é específico desta tela: a grade e o miolo do cartão. */
 
-/* Filter bar */
-.pc-filterbar { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; box-shadow:0 1px 6px rgba(0,0,0,.05); }
-.pc-filterbar label { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; display:block; margin-bottom:3px; letter-spacing:.4px; }
-.pc-filterbar select { padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; min-width:180px; background:#f8fafc; }
+/* ── Grade de cartões: 4 no computador, 3 em telas médias, 1 no celular ──── */
+.pc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.pc-card { gap:8px; }
+.pc-card-off { opacity:.55; background:#fbfcfb; }   /* inativo apaga, não some */
+.pc-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.pc-nome { font-size:13.5px; font-weight:700; color:#0f3d2e; line-height:1.3; }
+.pc-cod { font-size:11px; color:#7d968a; font-family:ui-monospace, Consolas, monospace;
+          margin-top:-4px; }
+.pc-tags { display:flex; gap:5px; flex-wrap:wrap; }
+.pc-tags .lst-pill { font-size:10.5px; padding:2px 9px; }
+.pc-dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:2px 0 0; }
+.pc-dl dt { font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+            color:#7d968a; align-self:center; }
+.pc-dl dd { margin:0; font-size:12px; color:#334155; }
+.pc-dl dd .vazio { color:#94a3b8; }
+.pc-rodape { display:flex; align-items:center; justify-content:space-between; gap:8px;
+             margin-top:4px; padding-top:9px; border-top:1px dashed #eef2f0; }
+.pc-ambito { font-size:10.5px; color:#7d968a; min-width:0; overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap; }
+.pc-card form { display:inline; margin:0; }
 
-/* Table */
-.pc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); }
-table.pc-table { width:100%; border-collapse:collapse; font-size:13px; }
-table.pc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; padding:10px 14px; border-bottom:2px solid #e2e8f0; white-space:nowrap; letter-spacing:.4px; }
-table.pc-table td { padding:10px 14px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
-table.pc-table tr:hover td { background:#f8fafc; }
-.cat-badge { background:#e2e8f0; color:#475569; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
-.uso-revenda  { background:#dcfce7; color:#16a34a; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
-.uso-consumo  { background:#fef3c7; color:#b45309; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
-.uso-ativo    { background:#dbeafe; color:#1d4ed8; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
-.uso-outros   { background:#f3e8ff; color:#7c3aed; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:600; }
-.ativo-yes { color:#16a34a; font-weight:700; }
-.ativo-no  { color:#dc2626; }
+@media (max-width:1200px) { .pc-grid { grid-template-columns:repeat(3,1fr); } }
+@media (max-width:900px)  { .pc-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:600px)  { .pc-grid { grid-template-columns:1fr; } }
 
-/* Modal */
+/* ── Modais (específicos desta tela) ─────────────────────────────────────── */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:1000; align-items:center; justify-content:center; }
 .modal-overlay.open { display:flex; }
 .modal-box { background:#fff; border-radius:14px; padding:28px; width:540px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.18); }
-.modal-box h3 { font-size:16px; font-weight:700; margin:0 0 18px; color:#1e293b; }
+.modal-box h3 { font-size:16px; font-weight:700; margin:0 0 18px; color:#0f3d2e; }
 .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .form-grid .full { grid-column:1/-1; }
 .form-group label { font-size:11px; font-weight:700; color:#64748b; display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.3px; }
 .form-group input, .form-group select, .form-group textarea {
     width:100%; padding:8px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; box-sizing:border-box; background:#f8fafc;
 }
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:#8b5cf6; outline:none; background:#fff; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:#22c55e; outline:none; background:#fff; }
 .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:22px; }
+@media (max-width:600px) { .form-grid { grid-template-columns:1fr; } .modal-box { padding:20px; } }
 
-/* Empty */
+/* Estado vazio */
 .pc-empty { text-align:center; padding:48px 20px; color:#94a3b8; }
-.pc-empty i { font-size:40px; margin-bottom:10px; display:block; }
+.pc-empty i { font-size:40px; margin-bottom:10px; display:block; opacity:.4; }
 
 /* Categorias modal */
 .cat-mgmt-box { width:680px; }
 .cat-section { border:1.5px solid #e2e8f0; border-radius:10px; margin-bottom:14px; overflow:hidden; }
-.cat-section-head { background:#f8fafc; padding:10px 14px; font-weight:700; font-size:13px; color:#1e293b; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e2e8f0; }
+.cat-section-head { background:#f8fafc; padding:10px 14px; font-weight:700; font-size:13px; color:#0f3d2e; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e2e8f0; }
 .sub-list { padding:8px 14px; display:flex; flex-wrap:wrap; gap:6px; }
 .sub-tag { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:99px; padding:3px 10px; font-size:12px; color:#475569; display:flex; align-items:center; gap:5px; }
-.sub-tag button { background:none; border:none; color:#dc2626; cursor:pointer; font-size:11px; padding:0; line-height:1; }
+.sub-tag button { background:none; border:none; color:#b91c1c; cursor:pointer; font-size:11px; padding:0; line-height:1; }
 .cat-add-row { display:flex; gap:8px; padding:10px 14px; background:#fafafa; border-top:1px dashed #e2e8f0; }
 .cat-add-row input { flex:1; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; background:#fff; }
-.cat-add-row button { background:#8b5cf6; color:#fff; border:none; padding:7px 14px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.cat-add-row button { background:#16a34a; color:#fff; border:none; padding:7px 14px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
 .new-cat-row { display:flex; gap:8px; margin-top:12px; }
-.new-cat-row input { flex:1; padding:9px 12px; border:1.5px solid #8b5cf6; border-radius:8px; font-size:13px; }
-.new-cat-row button { background:#8b5cf6; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
-.del-cat-btn { background:#fee2e2; border:none; color:#dc2626; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; }
+.new-cat-row input { flex:1; padding:9px 12px; border:1.5px solid #86efac; border-radius:8px; font-size:13px; }
+.new-cat-row button { background:#16a34a; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+.del-cat-btn { background:#fef2f2; border:1px solid #fee2e2; color:#b91c1c; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; }
 </style>
 {% endblock %}
 
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
-<div class="pc-header">
+
+{# filters_active vem da ROTA: variável de {% set %} não cruza blocos do Jinja,
+   e o script que abre o painel mora no bloco extra_js. #}
+
+<div class="tela-head">
     <div>
-        <h1><i class="fas fa-tag" style="color:#8b5cf6;margin-right:8px;"></i>Cadastro de Produtos</h1>
+        <h1 class="tela-title"><i class="fas fa-tag" style="color:#22c55e;margin-right:8px;"></i>Cadastro de Produtos</h1>
+        <p class="tela-sub">
+            {{ total_geral }} produto{{ '' if total_geral == 1 else 's' }}
+            {{ 'cadastrado' if total_geral == 1 else 'cadastrados' }}{% if filters_active %} · {{ produtos|length }} no filtro atual{% endif %}
+        </p>
     </div>
-    <div style="display:flex;gap:8px;">
-        <button onclick="openCatModal()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+    <div class="tela-actions">
+        <button onclick="openCatModal()" class="btn btn-outline">
             <i class="fas fa-folder-open"></i> Gerenciar Categorias
         </button>
-        <button onclick="openModal()" style="background:#8b5cf6;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+        <button onclick="openModal()" class="btn btn-primary">
             <i class="fas fa-plus"></i> Novo Produto
         </button>
     </div>
 </div>
 
-<!-- Filter bar -->
-<form method="GET" action="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="pc-filterbar">
-    <div>
-        <label>Empresa</label>
-        <select name="cliente_id" onchange="this.form.submit()">
-            <option value="">— Todas —</option>
-            {% for e in empresas %}
-            <option value="{{ e.id }}" {% if f_cliente_id == e.id|string %}selected{% endif %}>{% if e.numero_cliente %}{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social }}</option>
-            {% endfor %}
-        </select>
+<!-- ── Filtros ─────────────────────────────────────────────────────────── -->
+<div class="qf-card">
+    <div class="qf-head" onclick="toggleFilters()">
+        <span class="qf-title">
+            <i class="fas fa-filter"></i> Filtros de pesquisa
+            {% if filters_active %}<span class="qf-badge">filtros ativos</span>{% endif %}
+        </span>
+        <i class="fas fa-chevron-down qf-chev" id="filters-chevron"></i>
     </div>
-    <div>
-        <label>Grupo</label>
-        <select name="grupo_id" onchange="this.form.submit()">
-            <option value="">— Todos —</option>
-            {% for g in grupos %}
-            <option value="{{ g.id }}" {% if f_grupo_id == g.id|string %}selected{% endif %}>{{ g.nome }}</option>
-            {% endfor %}
-        </select>
+    <div class="qf-body" id="filters-body" style="display:none;">
+        <div class="qf-wrap">
+            <form method="GET" action="{{ url_for('escrita_fiscal.produtos_catalogo') }}">
+                <div class="qf-row">
+                    <div class="qf-group">
+                        <span class="qf-lbl">Buscar</span>
+                        <input type="text" name="busca" class="qf-ctrl" placeholder="Nome ou código…"
+                               value="{{ filtros.busca }}">
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Categoria</span>
+                        <select name="categoria" id="f_categoria" class="qf-ctrl" onchange="filtrarSubcats()">
+                            <option value="">Todas</option>
+                            {% for cat in cats_db %}
+                            <option value="{{ cat.nome }}" {% if filtros.categoria == cat.nome %}selected{% endif %}>{{ cat.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Subcategoria</span>
+                        {# Cada opção carrega a categoria dona em data-cat; escolher a
+                           categoria esconde as que não pertencem a ela. #}
+                        <select name="subcategoria" id="f_subcategoria" class="qf-ctrl">
+                            <option value="">Todas</option>
+                            {% for cat in cats_db %}
+                                {% for s in subs_db if s.categoria_id == cat.id %}
+                                <option value="{{ s.nome }}" data-cat="{{ cat.nome }}"
+                                        {% if filtros.subcategoria == s.nome %}selected{% endif %}>{{ s.nome }}</option>
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Tipo de entrada</span>
+                        <select name="tipo_uso" class="qf-ctrl">
+                            <option value="">Todos</option>
+                            {% set canonicos = ['Compra para Revenda', 'Compra para Consumo', 'Ativo Imobilizado'] %}
+                            {% for t in canonicos %}
+                            <option value="{{ t }}" {% if filtros.tipo_uso == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                            {# qualquer valor gravado no banco fora dos três acima #}
+                            {% for t in tipos_uso if t not in canonicos %}
+                            <option value="{{ t }}" {% if filtros.tipo_uso == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Unidade</span>
+                        <select name="unidade" class="qf-ctrl">
+                            <option value="">Todas</option>
+                            {% for u in unidades %}
+                            <option value="{{ u }}" {% if filtros.unidade == u %}selected{% endif %}>{{ u }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Empresa</span>
+                        <select name="cliente_id" class="qf-ctrl">
+                            <option value="">Todas</option>
+                            {% for e in empresas %}
+                            <option value="{{ e.id }}" {% if filtros.cliente_id == e.id|string %}selected{% endif %}>{% if e.numero_cliente %}{{ e.numero_cliente }} - {% endif %}{{ e.nome_razao_social }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Grupo</span>
+                        <select name="grupo_id" class="qf-ctrl">
+                            <option value="">Todos</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}" {% if filtros.grupo_id == g.id|string %}selected{% endif %}>{{ g.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Situação</span>
+                        <select name="situacao" class="qf-ctrl">
+                            <option value="">Todos</option>
+                            <option value="ativos"   {% if filtros.situacao == 'ativos'   %}selected{% endif %}>Ativos</option>
+                            <option value="inativos" {% if filtros.situacao == 'inativos' %}selected{% endif %}>Inativos</option>
+                        </select>
+                    </div>
+                    <div class="qf-group qf-actions">
+                        <span class="qf-lbl">&nbsp;</span>
+                        <div class="qf-btns">
+                            <button type="submit" class="btn btn-primary qf-btn">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            {% if filters_active %}
+                            <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="btn btn-outline qf-btn" title="Limpar filtros">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
-</form>
+</div>
 
-<!-- Table -->
+<div class="lst-infobar">
+    <span class="lst-count">
+        {% if produtos %}
+            Mostrando <strong>{{ produtos|length }}</strong> de <strong>{{ total_geral }}</strong>
+            produto{{ '' if total_geral == 1 else 's' }}
+        {% else %}
+            Nenhum produto encontrado
+        {% endif %}
+    </span>
+</div>
+
+<!-- ── Cartões ─────────────────────────────────────────────────────────── -->
 {% if produtos %}
-<div class="pc-table-wrap">
-    <table class="pc-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Código</th>
-                <th>Nome</th>
-                <th>Categoria</th>
-                <th>Subcategoria</th>
-                <th>Tipo de Entrada</th>
-                <th>Unid.</th>
-                <th>Empresa / Grupo</th>
-                <th>Ativo</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in produtos %}
-            <tr>
-                <td>{{ p.id }}</td>
-                <td>{{ p.codigo or '—' }}</td>
-                <td><strong>{{ p.nome }}</strong></td>
-                <td><span class="cat-badge">{{ p.categoria or '—' }}</span></td>
-                <td>{{ p.subcategoria or '—' }}</td>
-                <td>
-                    {% if p.tipo_uso == 'Compra para Revenda' %}
-                        <span class="uso-revenda"><i class="fas fa-store"></i> Revenda</span>
-                    {% elif p.tipo_uso == 'Compra para Consumo' %}
-                        <span class="uso-consumo"><i class="fas fa-industry"></i> Consumo</span>
-                    {% elif p.tipo_uso == 'Ativo Imobilizado' %}
-                        <span class="uso-ativo"><i class="fas fa-building"></i> Ativo Imob.</span>
-                    {% elif p.tipo_uso %}
-                        <span class="uso-outros">{{ p.tipo_uso }}</span>
-                    {% else %}
-                        <span style="color:#9ca3af;font-size:11px;">—</span>
-                    {% endif %}
-                </td>
-                <td>{{ p.unidade or '—' }}</td>
-                <td>
-                    {% if p.empresa_nome %}
-                        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">{{ p.empresa_nome }}</span>
-                    {% elif p.grupo_nome %}
-                        <span style="background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">{{ p.grupo_nome }}</span>
-                    {% else %}
-                        <span style="color:#9ca3af;font-size:11px;">Global</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if p.ativo %}
-                        <span class="ativo-yes"><i class="fas fa-check"></i></span>
-                    {% else %}
-                        <span class="ativo-no"><i class="fas fa-times"></i></span>
-                    {% endif %}
-                </td>
-                <td style="display:flex;gap:6px;">
-                    <button onclick='editModal({{ p | tojson }})'
-                            style="background:#f3f4f6;border:1px solid #d1d5db;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">
-                        <i class="fas fa-edit"></i>
+<div class="pc-grid">
+    {% for p in produtos %}
+    <div class="ef-card pc-card {% if not p.ativo %}pc-card-off{% endif %}">
+        <div class="pc-top">
+            <div class="pc-nome" title="{{ p.nome }}">{{ p.nome }}</div>
+            <span class="lst-sit {{ 'lst-sit-on' if p.ativo else 'lst-sit-off' }}">
+                {{ 'ATIVO' if p.ativo else 'INATIVO' }}
+            </span>
+        </div>
+        <div class="pc-cod">{{ p.codigo or '—' }}</div>
+
+        <div class="pc-tags">
+            {% if p.categoria %}<span class="lst-pill">{{ p.categoria }}</span>{% endif %}
+            {% if p.subcategoria %}<span class="lst-pill lst-pill-zero">{{ p.subcategoria }}</span>{% endif %}
+            {% if not p.categoria and not p.subcategoria %}<span class="lst-pill lst-pill-zero">sem categoria</span>{% endif %}
+        </div>
+
+        <dl class="pc-dl">
+            <dt>Unid.</dt>
+            <dd>{% if p.unidade %}{{ p.unidade }}{% else %}<span class="vazio">—</span>{% endif %}</dd>
+            <dt>Entrada</dt>
+            <dd>
+                {% if p.tipo_uso == 'Compra para Revenda' %}Revenda
+                {% elif p.tipo_uso == 'Compra para Consumo' %}Consumo
+                {% elif p.tipo_uso == 'Ativo Imobilizado' %}Ativo imobilizado
+                {% elif p.tipo_uso %}{{ p.tipo_uso }}
+                {% else %}<span class="vazio">—</span>{% endif %}
+            </dd>
+        </dl>
+
+        <div class="pc-rodape">
+            <span class="pc-ambito" title="{{ p.empresa_nome or p.grupo_nome or 'Global (todas as empresas)' }}">
+                {% if p.empresa_nome %}<i class="fas fa-building"></i> {{ p.empresa_nome }}
+                {% elif p.grupo_nome %}<i class="fas fa-users-cog"></i> {{ p.grupo_nome }}
+                {% else %}<i class="fas fa-globe-americas"></i> Global{% endif %}
+            </span>
+            <span class="lst-c-act">
+                <button type="button" onclick='editModal({{ p | tojson }})'
+                        class="lst-act lst-act-edit" title="Editar produto">
+                    <i class="fas fa-pen"></i>
+                </button>
+                <form method="POST" action="{{ url_for('escrita_fiscal.produtos_catalogo_excluir', pid=p.id) }}"
+                      onsubmit="return confirm('Excluir este produto?')">
+                    <button type="submit" class="lst-act lst-act-del" title="Excluir produto">
+                        <i class="fas fa-trash-alt"></i>
                     </button>
-                    <form method="POST" action="{{ url_for('escrita_fiscal.produtos_catalogo_excluir', pid=p.id) }}"
-                          onsubmit="return confirm('Excluir este produto?')">
-                        <button type="submit" style="background:#fee2e2;border:none;color:#dc2626;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                </form>
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% elif filters_active %}
+<div class="pc-empty">
+    <i class="fas fa-filter"></i>
+    <p>Nenhum produto encontrado com esses filtros.</p>
+    <a href="{{ url_for('escrita_fiscal.produtos_catalogo') }}" class="btn btn-outline" style="margin-top:10px;">
+        <i class="fas fa-times"></i> Limpar filtros
+    </a>
 </div>
 {% else %}
 <div class="pc-empty">
@@ -179,7 +282,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
         Cadastre os produtos para vinculá-los às notas fiscais importadas.<br>
         Para Postos de Combustíveis, sugerimos começar pelos combustíveis abaixo:
     </p>
-    <button onclick="seedCombustiveis()" style="background:#22c55e;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">
+    <button onclick="seedCombustiveis()" style="background:#16a34a;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">
         <i class="fas fa-gas-pump"></i> Cadastrar Produtos Padrão (Combustíveis)
     </button>
 </div>
@@ -216,7 +319,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
                     </select>
                 </div>
                 <div class="form-group full">
-                    <label>Tipo de Entrada / Uso <span style="color:#dc2626;">*</span></label>
+                    <label>Tipo de Entrada / Uso <span style="color:#b91c1c;">*</span></label>
                     <select name="tipo_uso" id="m_tipo_uso">
                         <option value="">— Não definido —</option>
                         <option value="Compra para Revenda">🏪 Compra para Revenda</option>
@@ -255,14 +358,8 @@ table.pc-table tr:hover td { background:#f8fafc; }
                 </div>
             </div>
             <div class="modal-actions">
-                <button type="button" onclick="closeModal()"
-                        style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
-                    Cancelar
-                </button>
-                <button type="submit"
-                        style="background:#8b5cf6;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-                    Salvar
-                </button>
+                <button type="button" onclick="closeModal()" class="btn btn-outline">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
             </div>
         </form>
     </div>
@@ -271,13 +368,13 @@ table.pc-table tr:hover td { background:#f8fafc; }
 <!-- Modal Gerenciar Categorias -->
 <div class="modal-overlay" id="catModalOverlay">
     <div class="modal-box cat-mgmt-box">
-        <h3><i class="fas fa-folder-open" style="color:#8b5cf6;margin-right:8px;"></i>Gerenciar Categorias e Sub-Categorias</h3>
+        <h3><i class="fas fa-folder-open" style="color:#16a34a;margin-right:8px;"></i>Gerenciar Categorias e Sub-Categorias</h3>
 
         <div id="catList">
             {% for cat in cats_db %}
             <div class="cat-section" id="catSection{{ cat.id }}">
                 <div class="cat-section-head">
-                    <span><i class="fas fa-layer-group" style="color:#8b5cf6;margin-right:6px;"></i>{{ cat.nome }}</span>
+                    <span><i class="fas fa-layer-group" style="color:#16a34a;margin-right:6px;"></i>{{ cat.nome }}</span>
                     <form method="POST" action="{{ url_for('escrita_fiscal.categoria_excluir', cid=cat.id) }}"
                           onsubmit="return confirm('Excluir a categoria {{ cat.nome }}? Todas as sub-categorias também serão removidas.')">
                         <button type="submit" class="del-cat-btn"><i class="fas fa-trash-alt"></i> Excluir</button>
@@ -320,10 +417,7 @@ table.pc-table tr:hover td { background:#f8fafc; }
         </div>
 
         <div class="modal-actions" style="margin-top:18px;">
-            <button type="button" onclick="closeCatModal()"
-                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">
-                Fechar
-            </button>
+            <button type="button" onclick="closeCatModal()" class="btn btn-outline">Fechar</button>
         </div>
     </div>
 </div>
@@ -333,6 +427,31 @@ table.pc-table tr:hover td { background:#f8fafc; }
 {% block extra_js %}
 <script>
 const categorias = {{ categorias | tojson }};
+
+function toggleFilters() {
+    var body    = document.getElementById('filters-body');
+    var chevron = document.getElementById('filters-chevron');
+    var isOpen  = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    chevron.classList.toggle('open', !isOpen);
+}
+
+// Subcategoria acompanha a categoria escolhida no FILTRO: as opções de outras
+// categorias somem da lista. Sem categoria escolhida, mostra todas.
+function filtrarSubcats() {
+    var cat = document.getElementById('f_categoria').value;
+    var sel = document.getElementById('f_subcategoria');
+    var achouSelecionada = false;
+    Array.prototype.forEach.call(sel.options, function (o) {
+        if (!o.value) { return; }                       // "Todas" fica sempre
+        var mostra = !cat || o.getAttribute('data-cat') === cat;
+        o.hidden = !mostra;
+        o.disabled = !mostra;
+        if (o.selected && mostra) { achouSelecionada = true; }
+    });
+    // se a subcategoria escolhida não pertence mais à categoria, volta para "Todas"
+    if (sel.value && !achouSelecionada) { sel.value = ''; }
+}
 
 function openModal() {
     document.getElementById('modalTitle').textContent = 'Novo Produto';
@@ -420,6 +539,13 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 document.getElementById('catModalOverlay').addEventListener('click', e => {
     if (e.target === document.getElementById('catModalOverlay')) closeCatModal();
 });
+
+document.addEventListener('DOMContentLoaded', function () {
+    {% if filters_active %}
+    document.getElementById('filters-body').style.display = 'block';
+    document.getElementById('filters-chevron').classList.add('open');
+    {% endif %}
+    filtrarSubcats();
+});
 </script>
 {% endblock %}
-
