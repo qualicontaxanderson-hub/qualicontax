@@ -548,7 +548,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                 </tr>
             </thead>
             <tbody id="tbodyNotas">
-                <tr><td colspan="13" class="cc-empty"><i class="fas fa-file-search"></i>Selecione uma empresa e clique em Buscar</td></tr>
+                <tr><td colspan="13" class="cc-empty"><i class="fas fa-magnifying-glass"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -1511,7 +1511,7 @@ function loadNotas() {
             }
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-file-search"></i><br>Nenhuma nota encontrada</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-magnifying-glass"></i><br>Nenhuma nota encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }

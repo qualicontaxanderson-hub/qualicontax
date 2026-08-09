@@ -136,7 +136,7 @@
     <div class="af-toolbar">
         <a href="{{ url_for('modulos.analise_fiscal') }}" class="af-btn af-btn-muted"><i class="fas fa-arrow-left"></i> Voltar</a>
         {% if current_user.has_permission('escrita_fiscal.conf_compras') %}
-        <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="af-btn af-btn-muted"><i class="fas fa-file-search"></i> Conferência</a>
+        <a href="{{ url_for('escrita_fiscal.conf_compras') }}" class="af-btn af-btn-muted"><i class="fas fa-file-invoice-dollar"></i> Conferência</a>
         {% endif %}
     </div>
 </div>
