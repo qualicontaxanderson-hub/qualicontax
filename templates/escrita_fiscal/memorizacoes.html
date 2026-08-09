@@ -3,39 +3,73 @@
 
 {% block extra_css %}
 <style>
-.mem-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
-.mem-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
-.mem-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); overflow-x:auto; }
-table.mem-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:900px; }
-table.mem-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
-table.mem-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
-table.mem-table tr:hover td { background:#f8fafc; }
-.badge-global { background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
-.badge-empresa { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
-.badge-grupo { background:#e9d5ff; color:#7c3aed; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+/* Cabeçalho (.tela-*), nota (.nota), filtros (.qf-*), pílulas (.lst-pill),
+   estado (.lst-sit) e ícones de ação (.lst-act) vêm do identidade.css.
+   Aqui fica só o específico: o cartão de empresa e o miolo agrupado. */
+
+/* ── Cartão de EMPRESA (abre/fecha) ──────────────────────────────────────── */
+.me-emp { background:#fff; border:1px solid #e3ece7; border-radius:15px; margin-bottom:10px; }
+.me-emp-head { display:flex; align-items:center; gap:12px; padding:13px 16px; cursor:pointer;
+               user-select:none; transition:background .15s; }
+.me-emp-head:hover { background:#f4faf6; }
+.me-emp-chev { font-size:12px; color:#7d968a; transition:transform .25s; flex-shrink:0; }
+.me-emp.aberta .me-emp-chev { transform:rotate(90deg); }
+.me-emp-id { min-width:0; flex:1; }
+.me-emp-nome { font-size:13.5px; font-weight:700; color:#0f3d2e; white-space:nowrap;
+               overflow:hidden; text-overflow:ellipsis; }
+.me-emp-sub { font-size:11px; color:#7d968a; margin-top:2px; }
+.me-emp-num { flex-shrink:0; }
+.me-emp-corpo { display:none; border-top:1px solid #eef2f0; padding:6px 16px 14px; }
+.me-emp.aberta .me-emp-corpo { display:block; }
+
+/* Conjunto de sincronização — o banco NÃO guarda direção de clonagem, então a
+   tela diz "sincronizada com" e lista as empresas. Nada de "clonada de". */
+.me-sinc { margin:8px 0 4px; padding:9px 12px; background:#f0f7f3; border-left:3px solid #15803d;
+           border-radius:0 9px 9px 0; font-size:11.5px; color:#33574a; line-height:1.5; }
+.me-sinc strong { color:#0f3d2e; }
+
+/* Categoria dentro da empresa */
+.me-cat { margin-top:14px; }
+.me-cat-tit { display:flex; align-items:center; gap:9px; margin:0 0 7px;
+              font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;
+              color:#15803d; }
+.me-cat-tit::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+
+/* Linha de memorização */
+.me-linha { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr) 92px 96px;
+            align-items:center; gap:10px; padding:9px 10px; border-bottom:1px solid #f4f7f5; }
+.me-linha:last-child { border-bottom:0; }
+.me-linha:hover { background:#f8fbf9; }
+.me-forn { font-size:12px; font-weight:600; color:#0f3d2e; text-transform:uppercase;
+           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.me-cnpj { font-size:10px; color:#94a3b8; font-family:ui-monospace,monospace; }
+.me-cod { font-size:10.5px; color:#64748b; font-family:ui-monospace,monospace; text-transform:uppercase; }
+.me-desc { font-size:11.5px; color:#334155; text-transform:uppercase; white-space:nowrap;
+           overflow:hidden; text-overflow:ellipsis; }
+.me-data { font-size:10.5px; color:#94a3b8; font-variant-numeric:tabular-nums; }
+.me-acoes { display:flex; gap:5px; justify-content:flex-end; }
+.me-vazio { text-align:center; padding:44px 16px; color:#94a3b8; }
+.me-vazio i { font-size:32px; opacity:.4; display:block; margin-bottom:10px; }
+
+@media (max-width:820px) {
+    /* Regra da casa: nada de arrastar a PÁGINA. Tudo empilha. */
+    .me-linha { grid-template-columns:1fr; gap:3px; padding:11px 4px; }
+    .me-acoes { justify-content:flex-start; margin-top:6px; }
+    .me-desc, .me-forn { white-space:normal; }
+    .me-emp-corpo { padding:6px 11px 12px; }
+}
+
+/* mantidas: usadas pelo modal de clonagem e pelo de empresas */
+.badge-global { background:#eef2f0; color:#64748b; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-empresa { background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.badge-grupo { background:#eef2f0; color:#5b7468; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .badge-ramo { background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
 .badge-prod { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
-.btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
-.btn-del:hover { background:#fee2e2; }
-.btn-edit { background:transparent; border:none; color:#2563eb; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
-.btn-edit:hover { background:#dbeafe; }
-.btn-empresas { background:transparent; border:none; color:#059669; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
-.btn-empresas:hover { background:#d1fae5; }
 .mem-empty { text-align:center; padding:40px; color:#94a3b8; }
-.mem-stats { background:linear-gradient(135deg,#1e3a5f,#2563eb); border-radius:12px; padding:14px 20px; margin-bottom:18px; color:#fff; display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
-.mem-stats span { font-size:13px; font-weight:600; }
-.mem-stats strong { font-size:22px; font-weight:800; margin-right:4px; }
-/* Filtros */
-.mem-filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
-.mem-filters input[type=text] { flex:1; min-width:200px; padding:8px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; }
-.mem-filters input[type=text]:focus { outline:none; border-color:#2563eb; }
-.mem-filters select { padding:8px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; cursor:pointer; }
-.mem-filters select:focus { outline:none; border-color:#2563eb; }
-.mem-filter-count { font-size:12px; color:#64748b; margin-left:4px; white-space:nowrap; }
 .mem-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
 .mem-overlay.open { display:flex; }
 .mem-modal { background:#fff; border-radius:16px; z-index:1000; width:500px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
-.mem-modal-header { background:linear-gradient(135deg,#1e3a5f,#2563eb); padding:16px 22px; display:flex; align-items:center; justify-content:space-between; }
+.mem-modal-header { background:linear-gradient(120deg,#0b3b2b,#116a43); padding:16px 22px; display:flex; align-items:center; justify-content:space-between; }
 .mem-modal-header h3 { color:#fff; font-size:15px; font-weight:700; margin:0; }
 .mem-modal-body { padding:22px; max-height:70vh; overflow-y:auto; }
 .mem-modal-body label { font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.4px; display:block; margin-bottom:6px; }
@@ -58,111 +92,211 @@ table.mem-table tr:hover td { background:#f8fafc; }
 
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
-<div class="mem-header">
+<div class="tela-head">
     <div>
-        <h1><i class="fas fa-memory" style="color:#8b5cf6;margin-right:8px;"></i>Memorizações Fiscais</h1>
+        <h1 class="tela-title"><i class="fas fa-memory" style="color:#22c55e;margin-right:8px;"></i>Memorizações Fiscais</h1>
+        <p class="tela-sub">
+            {{ total_geral }} memorizaç{{ 'ão' if total_geral == 1 else 'ões' }} ·
+            {{ total_empresas }} empresa{{ '' if total_empresas == 1 else 's' }}{% if filters_active %} · {{ total_filtrado }} no filtro atual{% endif %}
+        </p>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;">
-        <button onclick="abrirClone()"
-           style="background:#8b5cf6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+    <div class="tela-actions">
+        <button onclick="abrirClone()" class="btn btn-primary">
             <i class="fas fa-clone"></i> Clonar
         </button>
     </div>
 </div>
 
-<div class="mem-stats">
-    <div><strong>{{ rows|length }}</strong><span>Memorização(ões) registrada(s)</span></div>
-    <div style="font-size:12px;color:rgba(255,255,255,.8);">
-        <i class="fas fa-info-circle"></i>
-        Cada memorização associa automaticamente um <strong>Fornecedor + Código do Produto</strong> a um produto do catálogo,
-        evitando a necessidade de vincular manualmente ao importar novas notas fiscais.
+<div class="nota">
+    <i class="fas fa-circle-info"></i>
+    <div>Cada memorização associa automaticamente um <strong>Fornecedor + Código do Produto</strong>
+    a um produto do catálogo, evitando a necessidade de vincular manualmente ao importar novas
+    notas fiscais.</div>
+</div>
+
+<!-- Filtros -->
+<div class="qf-card">
+    <div class="qf-head" onclick="toggleFilters()">
+        <span class="qf-title">
+            <i class="fas fa-filter"></i> Filtros de pesquisa
+            {% if filters_active %}<span class="qf-badge">filtros ativos</span>{% endif %}
+        </span>
+        <i class="fas fa-chevron-down qf-chev" id="filters-chevron"></i>
+    </div>
+    <div class="qf-body" id="filters-body" style="display:none;">
+        <div class="qf-wrap">
+            <form method="GET" action="{{ url_for('escrita_fiscal.memorizacoes') }}">
+                <div class="qf-row">
+                    <div class="qf-group">
+                        <span class="qf-lbl">Buscar</span>
+                        <input type="text" name="busca" class="qf-ctrl"
+                               placeholder="Fornecedor, produto, código…" value="{{ filtros.busca }}">
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Empresa</span>
+                        <select name="empresa" class="qf-ctrl">
+                            <option value="">Todas</option>
+                            {% for cid, nome in empresas_filtro %}
+                            <option value="{{ cid }}" {% if filtros.empresa == cid|string %}selected{% endif %}>{{ nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Categoria</span>
+                        <select name="categoria" class="qf-ctrl">
+                            <option value="">Todas</option>
+                            {% for c in categorias_filtro %}
+                            <option value="{{ c }}" {% if filtros.categoria == c %}selected{% endif %}>{{ c }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Produto vinculado</span>
+                        <select name="produto" class="qf-ctrl">
+                            <option value="">Todos</option>
+                            {% for pid, nome in produtos_filtro %}
+                            <option value="{{ pid }}" {% if filtros.produto == pid|string %}selected{% endif %}>{{ nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        <span class="qf-lbl">Tipo</span>
+                        <select name="tipo" class="qf-ctrl">
+                            <option value="">Todos os tipos</option>
+                            <option value="global"  {% if filtros.tipo == 'global'  %}selected{% endif %}>Global</option>
+                            <option value="empresa" {% if filtros.tipo == 'empresa' %}selected{% endif %}>Empresa</option>
+                            <option value="grupo"   {% if filtros.tipo == 'grupo'   %}selected{% endif %}>Grupo</option>
+                            <option value="ramo"    {% if filtros.tipo == 'ramo'    %}selected{% endif %}>Ramo</option>
+                        </select>
+                    </div>
+                    <div class="qf-group">
+                        {# O banco registra CONJUNTO de empresas sincronizadas, não direção
+                           de clonagem — por isso o filtro fala em conjunto, não em clone. #}
+                        <span class="qf-lbl">Sincronização</span>
+                        <select name="sincronia" class="qf-ctrl">
+                            <option value="">Todas</option>
+                            <option value="em_conjunto" {% if filtros.sincronia == 'em_conjunto' %}selected{% endif %}>Em conjunto</option>
+                            <option value="fora"        {% if filtros.sincronia == 'fora'        %}selected{% endif %}>Fora de conjunto</option>
+                        </select>
+                    </div>
+                    <div class="qf-group qf-actions">
+                        <span class="qf-lbl">&nbsp;</span>
+                        <div class="qf-btns">
+                            <button type="submit" class="btn btn-primary qf-btn">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            {% if filters_active %}
+                            <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="btn btn-outline qf-btn" title="Limpar filtros">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
-<div class="mem-filters">
-    <input type="text" id="filterText" placeholder="🔍 Buscar fornecedor, produto, código..." oninput="filtrarTabela()">
-    <select id="filterTipo" onchange="filtrarTabela()">
-        <option value="">Todos os tipos</option>
-        <option value="global">Global</option>
-        <option value="empresa">Empresa</option>
-        <option value="grupo">Grupo</option>
-        <option value="ramo">Ramo</option>
-    </select>
-    <span class="mem-filter-count" id="filterCount"></span>
+<div class="lst-infobar">
+    <span class="lst-count">
+        {% if grupos_empresa %}
+            Mostrando <strong>{{ total_filtrado }}</strong> de <strong>{{ total_geral }}</strong>
+            memorizações em <strong>{{ grupos_empresa|length }}</strong> empresa{{ '' if grupos_empresa|length == 1 else 's' }}
+        {% else %}
+            Nenhuma memorização encontrada
+        {% endif %}
+    </span>
 </div>
 
-<div class="mem-table-wrap">
-    <table class="mem-table">
-        <thead>
-            <tr>
-                <th>Âmbito</th>
-                <th>Fornecedor</th>
-                <th>Produto XML (Cod + Descrição)</th>
-                <th>Produto Vinculado</th>
-                <th>Categoria</th>
-                <th>Criado em</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        {% if not rows %}
-            <tr><td colspan="7" class="mem-empty">
-                <i class="fas fa-memory" style="font-size:36px;display:block;margin-bottom:10px;"></i>
-                Nenhuma memorização cadastrada ainda.<br>
-                <small>Ao vincular um produto em uma NF-e, a memorização é criada automaticamente.</small>
-            </td></tr>
-        {% else %}
-            {% for r in rows %}
-            <tr id="row_{{ r.id }}">
-                <td>
-                    {% if r.empresa_nome %}
-                        <span class="badge-empresa"><i class="fas fa-building"></i> {{ r.empresa_nome }}</span>
-                    {% elif r.grupo_nome %}
-                        <span class="badge-grupo"><i class="fas fa-layer-group"></i> {{ r.grupo_nome }}</span>
-                    {% elif r.ramo_nome %}
-                        <span class="badge-ramo"><i class="fas fa-industry"></i> {{ r.ramo_nome }}</span>
-                    {% else %}
-                        <span class="badge-global"><i class="fas fa-globe-americas"></i> Global</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div style="font-weight:600;color:#1e293b;text-transform:uppercase;">{{ r.fornecedor_nome or '—' }}</div>
-                    <div style="font-family:monospace;font-size:10px;color:#94a3b8;">{{ r.emit_cnpj }}</div>
-                </td>
-                <td>
-                    <div style="font-family:monospace;font-size:11px;color:#64748b;text-transform:uppercase;">{{ r.codigo_produto_xml }}</div>
+<!-- Cartoes por empresa (maior primeiro; nascem fechados) -->
+{% if grupos_empresa %}
+{% for g in grupos_empresa %}
+<div class="me-emp" id="emp_{{ g.cliente_id }}">
+    <div class="me-emp-head" onclick="toggleEmpresa({{ g.cliente_id }})">
+        <i class="fas fa-chevron-right me-emp-chev"></i>
+        <div class="me-emp-id">
+            <div class="me-emp-nome" title="{{ g.nome }}">{{ g.nome }}</div>
+            <div class="me-emp-sub">
+                {{ g.total }} memorizaç{{ 'ão' if g.total == 1 else 'ões' }} ·
+                {{ g.categorias|length }} categoria{{ '' if g.categorias|length == 1 else 's' }}
+                {%- if g.set_membros %} · sincronizada com {{ g.set_membros|length }} empresa{{ '' if g.set_membros|length == 1 else 's' }}{% endif %}
+            </div>
+        </div>
+        {% if g.numero %}<span class="lst-pill me-emp-num">#{{ g.numero }}</span>{% endif %}
+        {% if g.set_membros %}<span class="lst-sit lst-sit-on">CONJUNTO DE {{ g.set_membros|length + 1 }}</span>{% endif %}
+    </div>
+
+    <div class="me-emp-corpo">
+        {% if g.set_membros %}
+        <div class="me-sinc">
+            <i class="fas fa-link"></i>
+            Em conjunto de sincronização com <strong>{{ g.set_membros|length }}</strong>
+            empresa{{ '' if g.set_membros|length == 1 else 's' }}:
+            {% for e in g.set_membros %}<strong>{% if e.numero_cliente %}#{{ e.numero_cliente }} {% endif %}{{ e.nome_razao_social }}</strong>{% if not loop.last %} · {% endif %}{% endfor %}.
+            <br>As regras foram fundidas entre elas; o sistema não registra qual empresa foi a origem.
+        </div>
+        {% endif %}
+
+        {% for cat in g.categorias %}
+        <div class="me-cat">
+            <div class="me-cat-tit">{{ cat.nome }} ({{ cat.total }})</div>
+            {% for r in cat.linhas %}
+            <div class="me-linha" id="row_{{ r.id }}">
+                <div>
+                    <div class="me-forn">{{ r.fornecedor_nome or '—' }}</div>
+                    <div class="me-cnpj">{{ r.emit_cnpj }}</div>
+                </div>
+                <div>
+                    <div class="me-cod">{{ r.codigo_produto_xml }}</div>
                     {% if r.descricao_produto_xml %}
-                        <div style="font-size:12px;color:#334155;margin-top:2px;text-transform:uppercase;">{{ r.descricao_produto_xml }}</div>
+                    <div class="me-desc" title="{{ r.descricao_produto_xml }}">{{ r.descricao_produto_xml }}</div>
                     {% endif %}
-                </td>
-                <td id="prod_{{ r.id }}">
+                </div>
+                <div id="prod_{{ r.id }}">
                     {% if r.produto_nome %}
                         <span class="badge-prod">{{ r.produto_nome }}</span>
                     {% else %}
                         <span style="color:#d1d5db;font-size:11px;">Produto removido</span>
                     {% endif %}
-                </td>
-                <td id="cat_{{ r.id }}" style="font-size:11px;color:#64748b;">{{ r.produto_categoria or '—' }}</td>
-                <td style="font-size:11px;color:#64748b;">{{ r.criado_em[:10] if r.criado_em else '—' }}</td>
-                <td style="white-space:nowrap;">
-                    <button class="btn-empresas" title="Ver empresas que usam esta memorização"
+                    <span id="cat_{{ r.id }}" style="display:none;">{{ r.produto_categoria or '—' }}</span>
+                </div>
+                <div class="me-data">{{ r.criado_em[:10] if r.criado_em else '—' }}</div>
+                <div class="me-acoes">
+                    <button class="lst-act lst-act-view" title="Ver empresas que usam esta memorização"
                         onclick="verEmpresas({{ r.id }}, '{{ (r.fornecedor_nome or r.emit_cnpj)|e }}', '{{ r.codigo_produto_xml|e }}')">
                         <i class="fas fa-building"></i>
                     </button>
-                    <button class="btn-edit" title="Editar produto vinculado"
+                    <button class="lst-act lst-act-edit" title="Editar produto vinculado"
                         onclick="abrirEditar({{ r.id }}, '{{ (r.fornecedor_nome or r.emit_cnpj)|e }}', '{{ r.codigo_produto_xml|e }}', '{{ (r.descricao_produto_xml or '')|e }}', {{ r.produto_catalogo_id or 'null' }})">
-                        <i class="fas fa-pencil-alt"></i>
+                        <i class="fas fa-pen"></i>
                     </button>
-                    <button class="btn-del" onclick="excluirMem({{ r.id }})" title="Excluir memorização">
+                    <button class="lst-act lst-act-del" onclick="excluirMem({{ r.id }})" title="Excluir memorização">
                         <i class="fas fa-trash-alt"></i>
                     </button>
-                </td>
-            </tr>
+                </div>
+            </div>
             {% endfor %}
-        {% endif %}
-        </tbody>
-    </table>
+        </div>
+        {% endfor %}
+    </div>
 </div>
+{% endfor %}
+{% elif filters_active %}
+<div class="me-vazio">
+    <i class="fas fa-filter"></i>
+    <p>Nenhuma memorização encontrada com esses filtros.</p>
+    <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="btn btn-outline" style="margin-top:10px;">
+        <i class="fas fa-times"></i> Limpar filtros
+    </a>
+</div>
+{% else %}
+<div class="me-vazio">
+    <i class="fas fa-memory"></i>
+    <p>Nenhuma memorização cadastrada ainda.<br>
+    <small>Ao vincular um produto em uma NF-e, a memorização é criada automaticamente.</small></p>
+</div>
+{% endif %}
 
 <!-- Edit Modal -->
 <div class="mem-overlay" id="editOverlay" onclick="fecharEditar()">
@@ -209,7 +343,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
             Cancelar
         </button>
         <button onclick="salvarEditar()"
-                style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                style="background:#16a34a;color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
             <i class="fas fa-save"></i> Salvar
         </button>
     </div>
@@ -219,7 +353,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
 <!-- Clone: passo 1 — escolher as empresas do set -->
 <div class="mem-overlay" id="cloneOverlay" onclick="fecharClone()">
 <div class="mem-modal" style="width:640px;" onclick="event.stopPropagation()">
-    <div class="mem-modal-header" style="background:linear-gradient(135deg,#5b21b6,#8b5cf6);">
+    <div class="mem-modal-header" style="background:linear-gradient(120deg,#0b3b2b,#116a43);">
         <h3><i class="fas fa-clone" style="margin-right:8px;"></i>Clonar Memorizações</h3>
         <button onclick="fecharClone()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;">&times;</button>
     </div>
@@ -251,7 +385,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
     <div class="mem-modal-footer">
         <button onclick="fecharClone()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;">Cancelar</button>
         <button id="btnAnalisar" onclick="analisarClone()"
-                style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                style="background:#16a34a;color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
             <i class="fas fa-search"></i> Analisar
         </button>
     </div>
@@ -261,7 +395,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
 <!-- Clone: passo 2 — resumo + decisão dos conflitos -->
 <div class="mem-overlay" id="decisaoOverlay" onclick="fecharDecisao()">
 <div class="mem-modal" style="width:820px;" onclick="event.stopPropagation()">
-    <div class="mem-modal-header" style="background:linear-gradient(135deg,#5b21b6,#8b5cf6);">
+    <div class="mem-modal-header" style="background:linear-gradient(120deg,#0b3b2b,#116a43);">
         <h3><i class="fas fa-code-branch" style="margin-right:8px;"></i>Revisar clonagem</h3>
         <button onclick="fecharDecisao()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;">&times;</button>
     </div>
@@ -269,7 +403,7 @@ table.mem-table tr:hover td { background:#f8fafc; }
     <div class="mem-modal-footer">
         <button onclick="fecharDecisao()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;">Cancelar</button>
         <button id="btnAplicarClone" onclick="aplicarClone()"
-                style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                style="background:#16a34a;color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
             <i class="fas fa-check"></i> Aplicar clonagem
         </button>
     </div>
@@ -298,31 +432,21 @@ table.mem-table tr:hover td { background:#f8fafc; }
 
 {% block extra_js %}
 <script>
-function filtrarTabela() {
-    const txt = document.getElementById('filterText').value.toLowerCase().trim();
-    const tipo = document.getElementById('filterTipo').value;
-    const rows = document.querySelectorAll('table.mem-table tbody tr[id^="row_"]');
-    let vis = 0;
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const badge = row.querySelector('td:first-child span');
-        const tipoRow = badge ? (badge.className.replace('badge-', '').trim()) : 'global';
-        const matchText = !txt || text.includes(txt);
-        const matchTipo = !tipo || tipoRow === tipo;
-        if (matchText && matchTipo) {
-            row.style.display = '';
-            vis++;
-        } else {
-            row.style.display = 'none';
-        }
-    });
-    const total = rows.length;
-    const countEl = document.getElementById('filterCount');
-    if (txt || tipo) {
-        countEl.textContent = `${vis} de ${total} resultado(s)`;
-    } else {
-        countEl.textContent = '';
-    }
+// Bloco D3 — a busca por texto e o filtro de tipo saíram do JS e passaram para
+// o painel .qf-*, que filtra no servidor (assim o filtro entra na URL e pode ser
+// compartilhado). A FUNÇÃO some; a funcionalidade continua, no painel.
+function toggleFilters() {
+    var body    = document.getElementById('filters-body');
+    var chevron = document.getElementById('filters-chevron');
+    var isOpen  = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    chevron.classList.toggle('open', !isOpen);
+}
+
+// Cartão de empresa abre/fecha por clique; nasce fechado.
+function toggleEmpresa(cid) {
+    var el = document.getElementById('emp_' + cid);
+    if (el) { el.classList.toggle('aberta'); }
 }
 
 let editId = null;
@@ -574,5 +698,12 @@ function excluirMem(id) {
     })
     .catch(() => alert('Erro ao excluir.'));
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    {% if filters_active %}
+    document.getElementById('filters-body').style.display = 'block';
+    document.getElementById('filters-chevron').classList.add('open');
+    {% endif %}
+});
 </script>
 {% endblock %}

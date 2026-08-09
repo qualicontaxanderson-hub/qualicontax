@@ -5220,8 +5220,128 @@ def memorizacoes():
         fetch=True,
     ) or []
 
+    # ------------------------------------------------------------------
+    # Bloco D3 — agrupamento por empresa e depois por categoria.
+    # SEM consulta nova: tudo sai de `rows` (já carregado) e de
+    # `empresas_clone`, que já trazia o clone_set_id de cada empresa.
+    #
+    # Sobre "clonagem": o banco NÃO registra quem foi clonado de quem, e não é
+    # omissão — a operação cria um CONJUNTO e funde as regras entre as empresas,
+    # sem origem (memo_clone_set / memo_clone_membro, todas com o mesmo
+    # criado_em). Por isso a tela fala em "sincronizada com" e mostra QUAIS
+    # empresas formam o conjunto; "clonada de X" seria inventar direção.
+    # ------------------------------------------------------------------
+    conjuntos = {}
+    for e in empresas_clone:
+        if e.get('clone_set_id'):
+            conjuntos.setdefault(e['clone_set_id'], []).append(e)
+
+    fm = {
+        'busca':    request.args.get('busca', '').strip(),
+        'empresa':  request.args.get('empresa', '').strip(),
+        'categoria': request.args.get('categoria', '').strip(),
+        'produto':  request.args.get('produto', '').strip(),
+        'tipo':     request.args.get('tipo', '').strip(),      # global|empresa|grupo|ramo
+        'sincronia': request.args.get('sincronia', '').strip(),  # ''|em_conjunto|fora
+    }
+
+    def _ambito(r):
+        if r.get('cliente_id'):
+            return 'empresa'
+        if r.get('grupo_id'):
+            return 'grupo'
+        if r.get('ramo_atividade_id'):
+            return 'ramo'
+        return 'global'
+
+    def _passa(r):
+        if fm['busca']:
+            alvo = ' '.join(str(r.get(k) or '') for k in
+                            ('fornecedor_nome', 'emit_cnpj', 'codigo_produto_xml',
+                             'descricao_produto_xml', 'produto_nome')).lower()
+            if fm['busca'].lower() not in alvo:
+                return False
+        if fm['empresa'] and str(r.get('cliente_id') or '') != fm['empresa']:
+            return False
+        if fm['categoria'] and (r.get('produto_categoria') or '') != fm['categoria']:
+            return False
+        if fm['produto'] and str(r.get('produto_catalogo_id') or '') != fm['produto']:
+            return False
+        if fm['tipo'] and _ambito(r) != fm['tipo']:
+            return False
+        if fm['sincronia']:
+            em_conjunto = bool(conjuntos) and any(
+                str(r.get('cliente_id') or '') == str(e['id'])
+                for membros in conjuntos.values() for e in membros)
+            if fm['sincronia'] == 'em_conjunto' and not em_conjunto:
+                return False
+            if fm['sincronia'] == 'fora' and em_conjunto:
+                return False
+        return True
+
+    filtradas = [r for r in rows if _passa(r)]
+
+    # Empresa -> categoria -> linhas. Empresa com mais memorizações primeiro;
+    # dentro da categoria, ordenado por fornecedor e depois por produto.
+    por_empresa = {}
+    for r in filtradas:
+        chave = r.get('cliente_id') or 0          # 0 = sem empresa (global/grupo/ramo)
+        por_empresa.setdefault(chave, []).append(r)
+
+    set_de = {}
+    for sid, membros in conjuntos.items():
+        for e in membros:
+            set_de[e['id']] = sid
+
+    grupos_empresa = []
+    for chave, lista in por_empresa.items():
+        sid = set_de.get(chave)
+        outros = [e for e in conjuntos.get(sid, []) if e['id'] != chave] if sid else []
+        por_cat = {}
+        for r in lista:
+            por_cat.setdefault(r.get('produto_categoria') or '(sem categoria)', []).append(r)
+        cats = []
+        for nome_cat in sorted(por_cat):
+            linhas = sorted(por_cat[nome_cat],
+                            key=lambda x: ((x.get('fornecedor_nome') or '').upper(),
+                                           (x.get('produto_nome') or '').upper()))
+            cats.append({'nome': nome_cat, 'total': len(linhas), 'linhas': linhas})
+        primeiro = lista[0]
+        grupos_empresa.append({
+            'cliente_id': chave,
+            'nome': primeiro.get('empresa_nome') or 'Sem empresa (global, grupo ou ramo)',
+            'numero': next((e.get('numero_cliente') for e in empresas_clone
+                            if e['id'] == chave), None),
+            'total': len(lista),
+            'set_id': sid,
+            'set_membros': outros,
+            'categorias': cats,
+        })
+    grupos_empresa.sort(key=lambda g: (-g['total'], g['nome']))
+
+    categorias_filtro = sorted({(r.get('produto_categoria') or '(sem categoria)') for r in rows})
+    produtos_filtro = sorted(
+        {(r['produto_catalogo_id'], r['produto_nome']) for r in rows
+         if r.get('produto_catalogo_id') and r.get('produto_nome')},
+        key=lambda x: x[1])
+    empresas_filtro = sorted(
+        {(r['cliente_id'], r['empresa_nome']) for r in rows
+         if r.get('cliente_id') and r.get('empresa_nome')},
+        key=lambda x: x[1])
+
     return render_template('escrita_fiscal/memorizacoes.html', rows=rows,
-                           catalogo=catalogo, empresas_clone=empresas_clone)
+                           catalogo=catalogo, empresas_clone=empresas_clone,
+                           grupos_empresa=grupos_empresa,
+                           filtros=fm,
+                           filters_active=any(fm.values()),
+                           total_geral=len(rows),
+                           total_filtrado=len(filtradas),
+                           total_empresas=len({r.get('cliente_id') for r in rows
+                                               if r.get('cliente_id')}),
+                           categorias_filtro=categorias_filtro,
+                           produtos_filtro=produtos_filtro,
+                           empresas_filtro=empresas_filtro,
+                           conjuntos=conjuntos)
 
 
 # ---------------------------------------------------------------------------
