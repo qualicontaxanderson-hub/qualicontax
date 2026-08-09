@@ -801,6 +801,19 @@ def api_home_destaques():
 @escrita_fiscal.route('/status-sefaz/')
 @permission_required('escrita_fiscal.conf_compras')
 def status_sefaz():
+    # Filtros (Bloco D5). Nenhuma consulta NOVA: empresa, certificado e serviço
+    # peneiram em Python listas que a tela já carregava; c_stat e período só
+    # ajustam o WHERE/LIMIT da consulta de histórico que já existia (a coluna
+    # `momento` é indexada e a tabela tem ~13 mil linhas).
+    fs = {
+        'empresa':  request.args.get('empresa', '').strip(),
+        'servico':  request.args.get('servico', '').strip(),    # nfe|cte
+        'cert':     request.args.get('cert', '').strip(),       # vencido|d30|d60|ok
+        'cstat':    request.args.get('cstat', '').strip(),      # 137|138|656|erro
+        'periodo':  request.args.get('periodo', '').strip(),    # 1|7|30 (dias)
+    }
+    filtros_ativos = any(fs.values())
+
     def _fmt(d):
         return d.strftime('%d/%m/%Y %H:%M') if hasattr(d, 'strftime') else None
 
@@ -1033,12 +1046,34 @@ def status_sefaz():
         })
 
     # ---- HISTÓRICO: últimas ~20 rodadas do dfe_consulta_log (NF-e + CT-e) ----
+    # Sem filtro, continua exatamente como era: as últimas 20 rodadas. Com
+    # período escolhido, recorta por data e amplia o teto para 200 — bastante
+    # para ler uma janela, sem risco de despejar as 13 mil linhas na tela.
+    _hwhere, _hparams = [], []
+    if fs['servico'] in ('nfe', 'cte'):
+        _hwhere.append('l.servico = %s')
+        _hparams.append(fs['servico'])
+    if fs['cstat'] in ('137', '138', '656'):
+        _hwhere.append('l.c_stat = %s')
+        _hparams.append(fs['cstat'])
+    elif fs['cstat'] == 'erro':
+        _hwhere.append("(l.c_stat IS NULL OR l.c_stat NOT IN ('137','138','656'))")
+    if fs['periodo'] in ('1', '7', '30'):
+        _hwhere.append('l.momento >= NOW() - INTERVAL %s DAY')
+        _hparams.append(int(fs['periodo']))
+    if fs['empresa']:
+        _hwhere.append("(c.nome_razao_social LIKE %s OR c.numero_cliente LIKE %s)")
+        _hparams += ['%%%s%%' % fs['empresa'], '%%%s%%' % fs['empresa']]
+    _hsql = (' WHERE ' + ' AND '.join(_hwhere)) if _hwhere else ''
+    _hlimit = 200 if fs['periodo'] else 20
     hlog = execute_query(
         "SELECT l.momento, l.origem, l.evento, l.c_stat, l.x_motivo, "
         "  l.docs, l.notas, l.servico, c.numero_cliente, c.nome_razao_social "
         "FROM dfe_consulta_log l "
         "LEFT JOIN clientes c ON c.id = l.cliente_id "
-        "ORDER BY l.momento DESC LIMIT 20",
+        + _hsql +
+        " ORDER BY l.momento DESC LIMIT " + str(_hlimit),
+        tuple(_hparams) if _hparams else None,
         fetch=True,
     ) or []
     historico = [{
@@ -1099,11 +1134,44 @@ def status_sefaz():
         'dias': laranja, 'dias_amarelo': amarelo,
     }
 
+    # ---- Peneira em Python: só sobre listas JÁ carregadas (Bloco D5) -------
+    total_empresas, total_certs = len(empresas), len(certificados)
+
+    def _casa_empresa(txt, numero, nome):
+        alvo = ('%s %s' % (numero or '', nome or '')).lower()
+        return txt.lower() in alvo
+
+    if fs['empresa']:
+        empresas = [e for e in empresas if _casa_empresa(fs['empresa'], e.get('numero'), e.get('nome'))]
+        certificados = [c for c in certificados
+                        if _casa_empresa(fs['empresa'], c.get('numero'), c.get('nome'))]
+    if fs['servico'] == 'nfe':
+        empresas = [e for e in empresas if _i(e.get('ent_total')) or _i(e.get('sai_qtd'))]
+    elif fs['servico'] == 'cte':
+        empresas = [e for e in empresas if _i(e.get('cte_total'))]
+    if fs['cert']:
+        # 'ok' = tudo que não está vencido nem dentro das janelas de alerta
+        def _passa_cert(dias):
+            if dias is None:
+                return fs['cert'] == 'ok'
+            if fs['cert'] == 'vencido':
+                return dias < 0
+            if fs['cert'] == 'd30':
+                return 0 <= dias <= laranja
+            if fs['cert'] == 'd60':
+                return laranja < dias <= amarelo
+            return dias > amarelo
+        certificados = [c for c in certificados if _passa_cert(c.get('dias'))]
+        empresas = [e for e in empresas if _passa_cert(e.get('cert_dias'))]
+
     return render_template(
         'escrita_fiscal/status_sefaz.html',
         topo=topo, topo_cte=topo_cte, empresas=empresas, historico=historico,
         certificados=certificados, cert_alerta=cert_alerta,
         topo_saida=topo_saida,
+        filtros=fs, filters_active=filtros_ativos,
+        total_empresas=total_empresas, total_certs=total_certs,
+        cert_laranja=laranja, cert_amarelo=amarelo,
     )
 
 
