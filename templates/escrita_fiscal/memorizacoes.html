@@ -883,13 +883,23 @@ function aplicarClone() {
               + `Regras sobrescritas: ${d.regras_sobrescritas}\n`
               + `Itens reclassificados: ${d.itens_reclassificados}`;
         var nome = ((document.getElementById('cloneNome') || {}).value || '').trim();
-        // batiza o conjunto recém-criado reusando o endpoint de nomear (sem rota nova)
+        // batiza o conjunto recém-criado reusando o endpoint de nomear (sem rota
+        // nova). Se o nomear falhar, o conjunto JÁ existe — avisa que ficou sem
+        // nome e que dá para renomear pelo painel, em vez de engolir a falha.
         if (nome && d.set_id) {
+            var semNome = function (motivo) {
+                alert(msg + `\n\n⚠️ O conjunto foi criado, mas NÃO consegui salvar o nome `
+                      + `“${nome}”${motivo ? ' (' + motivo + ')' : ''}.\n`
+                      + `Ele ficou SEM NOME — renomeie pelo painel de conjuntos (aba Conjuntos).`);
+                location.reload();
+            };
             fetch('/escrita-fiscal/memorizacoes/conjunto/nomear', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({set_id: d.set_id, nome: nome}),
-            }).then(() => { alert(msg); location.reload(); })
-              .catch(() => { alert(msg); location.reload(); });
+            }).then(r => r.json())
+              .then(nd => { if (nd && nd.ok) { alert(msg); location.reload(); }
+                            else { semNome(nd && nd.error); } })
+              .catch(() => semNome(null));
         } else {
             alert(msg);
             location.reload();

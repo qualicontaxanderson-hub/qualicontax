@@ -5620,28 +5620,48 @@ def memorizacoes():
         return (2, 0, (g['nome'] or '').upper())         # sem número: por último
     grupos_empresa.sort(key=_ordem_por_numero)
 
-    # Painel de conjuntos (aba "Conjuntos" do modal). Um item por conjunto FISCAL,
-    # com nome, membros e o tamanho REAL do pool (pares distintos emit+cod+tipo
-    # entre os membros) — tudo das linhas já carregadas, sem query nova.
-    pares_cli = {}
-    for r in rows:
-        cid = r.get('cliente_id')
-        if cid:
-            pares_cli.setdefault(cid, set()).add(
-                (r.get('emit_cnpj'), r.get('codigo_produto_xml'), r.get('tipo')))
+    # Painel de conjuntos (aba "Conjuntos" do modal). Descreve o BANCO, não o
+    # recorte da tela — por isso NÃO reusa `rows` (que os filtros de pesquisa
+    # encolhem). Duas consultas próprias, independentes de qualquer filtro:
+    _dep_cond, _dep_p = _depto_and('s')
+    # (1) membros de cada conjunto FISCAL: TODOS, inclusive os com 0 regras e os
+    #     INATIVOS; ordenados por número do cliente.
+    _mrows = execute_query(
+        "SELECT m.set_id, c.id, c.numero_cliente, c.nome_razao_social "
+        "  FROM memo_clone_membro m "
+        "  JOIN clientes c ON c.id = m.cliente_id "
+        "  JOIN memo_clone_set s ON s.id = m.set_id "
+        " WHERE 1=1" + _dep_cond +
+        " ORDER BY m.set_id, CAST(c.numero_cliente AS UNSIGNED)",
+        tuple(_dep_p), fetch=True) or []
+    # (2) tamanho do pool por conjunto: pares distintos (emit_cnpj,
+    #     codigo_produto_xml, tipo) das regras escopo-empresa dos membros. UMA
+    #     consulta para todos os conjuntos (GROUP BY set_id), não uma por laço.
+    #     COALESCE no tipo porque COUNT(DISTINCT ...) ignora linha com algum NULL.
+    _rrows = execute_query(
+        "SELECT m.set_id, "
+        "       COUNT(DISTINCT v.emit_cnpj, v.codigo_produto_xml, COALESCE(v.tipo,'')) AS n "
+        "  FROM memo_clone_membro m "
+        "  JOIN memo_clone_set s ON s.id = m.set_id "
+        "  JOIN nfe_produto_vinculo v ON v.cliente_id = m.cliente_id "
+        "       AND v.grupo_id IS NULL AND v.ramo_atividade_id IS NULL "
+        " WHERE 1=1" + _dep_cond +
+        " GROUP BY m.set_id",
+        tuple(_dep_p), fetch=True) or []
+    _regras_por_set = {r['set_id']: int(r['n'] or 0) for r in _rrows}
+    _membros_por_set = {}
+    for r in _mrows:
+        _membros_por_set.setdefault(r['set_id'], []).append(
+            {'id': r['id'], 'numero': r['numero_cliente'], 'nome': r['nome_razao_social']})
     conjuntos_info = []
-    for sid in sorted(conjuntos):
-        membros = conjuntos[sid]
-        pool = set()
-        for m in membros:
-            pool |= pares_cli.get(m['id'], set())
+    for sid in sorted(_membros_por_set):
+        membros = _membros_por_set[sid]
         conjuntos_info.append({
             'set_id': sid,
-            'nome': set_nomes.get(sid),   # None = ainda sem nome
-            'membros': [{'id': m['id'], 'numero': m.get('numero_cliente'),
-                         'nome': m.get('nome_razao_social')} for m in membros],
+            'nome': set_nomes.get(sid),          # None = ainda sem nome
+            'membros': membros,
             'n_empresas': len(membros),
-            'n_regras': len(pool),
+            'n_regras': _regras_por_set.get(sid, 0),
         })
 
     categorias_filtro = sorted({(r.get('produto_categoria') or '(sem categoria)') for r in rows})
