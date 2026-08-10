@@ -103,6 +103,25 @@
 .mem-modal-body select { width:100%; padding:9px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; background:#fff; color:#1e293b; }
 .mem-modal-body select:focus { outline:none; border-color:#2563eb; }
 .mem-modal-footer { padding:14px 22px; background:#f8fafc; border-top:1.5px solid #e2e8f0; display:flex; justify-content:flex-end; gap:10px; }
+/* Abas do painel de conjuntos */
+.mem-tabs { display:flex; gap:4px; padding:10px 22px 0; background:#fff; border-bottom:1.5px solid #e2e8f0; }
+.mem-tab { border:none; background:transparent; font-size:13px; font-weight:700; color:#64748b;
+           padding:9px 14px; border-bottom:2px solid transparent; cursor:pointer; margin-bottom:-1.5px; }
+.mem-tab:hover { color:#0f3d2e; }
+.mem-tab.active { color:#116a43; border-bottom-color:#116a43; }
+/* Cartão de conjunto na aba "Conjuntos" */
+.conj-card { border:1.5px solid #e3ece7; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+.conj-card-top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.conj-nome { font-size:14px; font-weight:800; color:#0f3d2e; }
+.conj-sem-nome { color:#94a3b8; font-weight:600; font-style:italic; }
+.conj-meta { font-size:11.5px; color:#64748b; white-space:nowrap; }
+.conj-membros { display:flex; flex-wrap:wrap; gap:6px; margin:9px 0 10px; }
+.conj-membro { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:#33574a;
+               background:#f0f7f3; border:1px solid #dcebe3; border-radius:8px; padding:3px 8px; }
+.conj-rm { border:none; background:#fde8e8; color:#b91c1c; width:16px; height:16px; line-height:1;
+           border-radius:5px; font-size:13px; cursor:pointer; padding:0; }
+.conj-rm:hover { background:#fbcaca; }
+.conj-acoes { display:flex; flex-wrap:wrap; gap:8px; }
 .edit-info-row { display:flex; gap:14px; margin-bottom:16px; }
 .edit-info-box { flex:1; background:#f1f5f9; border-radius:8px; padding:10px 12px; font-size:11px; }
 .edit-info-box strong { display:block; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
@@ -257,8 +276,8 @@
         </div>
         {# C — no lugar que o número desocupou: resumo por tipo. Regra da casa:
            tipo com 0 NÃO aparece. As duas cores são as mesmas do badge da linha (A). #}
-        {% if g.n_entrada %}<span class="lst-tp-ent me-emp-num">{{ g.n_entrada }} ENTRADAS</span>{% endif %}
-        {% if g.n_saida %}<span class="lst-tp-sai me-emp-num">{{ g.n_saida }} SAÍDAS</span>{% endif %}
+        {% if g.n_entrada %}<span class="lst-tp-ent me-emp-num">{{ g.n_entrada }} ENTRADA{{ '' if g.n_entrada == 1 else 'S' }}</span>{% endif %}
+        {% if g.n_saida %}<span class="lst-tp-sai me-emp-num">{{ g.n_saida }} SAÍDA{{ '' if g.n_saida == 1 else 'S' }}</span>{% endif %}
         {% if g.set_membros %}<span class="lst-sit lst-sit-on">CONJUNTO DE {{ g.set_membros|length + 1 }}</span><span class="me-set-nome" title="Nome do conjunto de sincronização">{{ g.set_nome }}</span>{% endif %}
     </div>
 
@@ -299,14 +318,17 @@
                     <div class="me-desc" title="{{ r.descricao_produto_xml }}">{{ r.descricao_produto_xml }}</div>
                     {% endif %}
                 </div>
-                <div id="prod_{{ r.id }}">
-                    {# A — badge de TIPO (entre o produto do fornecedor e o nosso produto verde) #}
+                <div>
+                    {# A — badge de TIPO: IRMÃO do #prod_, fora do trecho que salvarEditar()
+                       regrava por innerHTML. O tipo não muda quando o produto muda. #}
                     {% if r.tipo == 'saida' %}<span class="lst-tp-sai">SAÍDA</span>{% else %}<span class="lst-tp-ent">ENTRADA</span>{% endif %}
+                    <span id="prod_{{ r.id }}">
                     {% if r.produto_nome %}
                         <span class="badge-prod">{{ r.produto_nome }}</span>
                     {% else %}
                         <span style="color:#d1d5db;font-size:11px;">Produto removido</span>
                     {% endif %}
+                    </span>
                     <span id="cat_{{ r.id }}" style="display:none;">{{ r.produto_categoria or '—' }}</span>
                 </div>
                 <div class="me-data">{{ r.criado_em[:10] if r.criado_em else '—' }}</div>
@@ -402,15 +424,56 @@
 <div class="mem-overlay" id="cloneOverlay" onclick="fecharClone()">
 <div class="mem-modal" style="width:640px;" onclick="event.stopPropagation()">
     <div class="mem-modal-header" style="background:linear-gradient(120deg,#0b3b2b,#116a43);">
-        <h3><i class="fas fa-clone" style="margin-right:8px;"></i>Clonar Memorizações</h3>
+        <h3><i class="fas fa-sitemap" style="margin-right:8px;"></i>Conjuntos de sincronização</h3>
         <button onclick="fecharClone()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;">&times;</button>
     </div>
+    <div class="mem-tabs">
+        <button type="button" class="mem-tab" id="clTabConjBtn" onclick="cloneTab('conj')">Conjuntos</button>
+        <button type="button" class="mem-tab" id="clTabNovoBtn" onclick="cloneTab('novo')">Novo conjunto</button>
+    </div>
     <div class="mem-modal-body">
-        <p style="font-size:12.5px;color:#475569;margin:0 0 14px;">
+        {# ABA CONJUNTOS — os conjuntos FISCAIS, com as ações que hoje só existem no cartão #}
+        <div id="clPaneConj">
+        {% if conjuntos_info %}
+            <input type="text" id="conjBusca" placeholder="🔍 Filtrar por nome ou empresa..." oninput="filtrarConjuntos()"
+                   style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;margin-bottom:12px;">
+            <div id="conjLista" style="max-height:360px;overflow-y:auto;">
+            {% for c in conjuntos_info %}
+                <div class="conj-card" data-busca="{{ (c.nome or '')|lower }} {% for m in c.membros %}{{ (m.nome or '')|lower }} #{{ m.numero }} {% endfor %}">
+                    <div class="conj-card-top">
+                        <div class="conj-nome">{% if c.nome %}{{ c.nome }}{% else %}<span class="conj-sem-nome">sem nome</span>{% endif %}</div>
+                        <div class="conj-meta">{{ c.n_empresas }} empresa{{ '' if c.n_empresas == 1 else 's' }} · {{ c.n_regras }} regra{{ '' if c.n_regras == 1 else 's' }}</div>
+                    </div>
+                    <div class="conj-membros">
+                        {% for m in c.membros %}
+                        <span class="conj-membro">{% if m.numero %}#{{ m.numero }} — {% endif %}{{ m.nome }}{% if is_admin %}<button type="button" class="conj-rm" title="Remover esta empresa do conjunto" onclick="fecharClone();abrirDesvincular({{ m.id }}, '{{ m.nome|e }}')">&times;</button>{% endif %}</span>
+                        {% endfor %}
+                    </div>
+                    <div class="conj-acoes">
+                        <button type="button" class="btn-set" onclick="fecharClone();abrirNome({{ c.set_id }}, '{{ (c.nome or '')|e }}')"><i class="fas fa-tag"></i> Renomear conjunto</button>
+                        <button type="button" class="btn-set" onclick="fecharClone();abrirIncluir({{ c.set_id }})"><i class="fas fa-user-plus"></i> Incluir empresa</button>
+                    </div>
+                </div>
+            {% endfor %}
+            </div>
+            <div id="conjVazio" style="display:none;font-size:12.5px;color:#94a3b8;text-align:center;padding:18px;">Nenhum conjunto bate com o filtro.</div>
+        {% else %}
+            <div style="font-size:13px;color:#64748b;text-align:center;padding:26px;">
+                <i class="fas fa-sitemap" style="font-size:26px;color:#d1d5db;display:block;margin-bottom:8px;"></i>
+                Nenhum conjunto ainda. Use a aba <strong>Novo conjunto</strong> para criar o primeiro.
+            </div>
+        {% endif %}
+        </div>
+        {# ABA NOVO CONJUNTO — a tela de hoje, com um campo NOME opcional a mais #}
+        <div id="clPaneNovo" style="display:none;">
+        <p style="font-size:12.5px;color:#475569;margin:0 0 12px;">
             Escolha as empresas que devem ter as <strong>mesmas memorizações</strong>.
             O sistema junta as regras das duas, copia o que falta e pergunta o que fazer
             quando elas discordam. Nada é gravado antes da sua confirmação.
         </p>
+        <label style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Nome do conjunto (opcional)</label>
+        <input type="text" id="cloneNome" maxlength="120" placeholder="Ex.: Postos da rede X"
+               style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;margin-bottom:12px;">
         <input type="text" id="cloneBusca" placeholder="🔍 Filtrar empresa..." oninput="filtrarEmpresasClone()"
                style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;margin-bottom:10px;">
         <div id="cloneEmpresas" style="max-height:320px;overflow-y:auto;border:1.5px solid #e2e8f0;border-radius:8px;">
@@ -429,11 +492,12 @@
         {% endfor %}
         </div>
         <div id="cloneErro" style="display:none;margin-top:12px;padding:10px 12px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:12.5px;"></div>
+        </div>{# fim #clPaneNovo #}
     </div>
     <div class="mem-modal-footer">
         <button onclick="fecharClone()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;">Cancelar</button>
         <button id="btnAnalisar" onclick="analisarClone()"
-                style="background:#16a34a;color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                style="background:#16a34a;color:#fff;border:none;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:none;">
             <i class="fas fa-search"></i> Analisar
         </button>
     </div>
@@ -650,7 +714,31 @@ let clonePreview = null;
 
 function abrirClone() {
     document.getElementById('cloneErro').style.display = 'none';
+    // aba padrão: Conjuntos quando existe ao menos um; senão, Novo conjunto
+    cloneTab(document.querySelector('.conj-card') ? 'conj' : 'novo');
     document.getElementById('cloneOverlay').classList.add('open');
+}
+
+function cloneTab(which) {
+    var conj = which === 'conj';
+    document.getElementById('clPaneConj').style.display = conj ? '' : 'none';
+    document.getElementById('clPaneNovo').style.display = conj ? 'none' : '';
+    document.getElementById('clTabConjBtn').classList.toggle('active', conj);
+    document.getElementById('clTabNovoBtn').classList.toggle('active', !conj);
+    // Analisar só faz sentido na aba de criação
+    document.getElementById('btnAnalisar').style.display = conj ? 'none' : '';
+}
+
+function filtrarConjuntos() {
+    var txt = (document.getElementById('conjBusca').value || '').toLowerCase().trim();
+    var n = 0;
+    document.querySelectorAll('#conjLista .conj-card').forEach(function (el) {
+        var ok = !txt || (el.dataset.busca || '').indexOf(txt) >= 0;
+        el.style.display = ok ? '' : 'none';
+        if (ok) n++;
+    });
+    var vazio = document.getElementById('conjVazio');
+    if (vazio) vazio.style.display = n ? 'none' : '';
 }
 
 function fecharClone() {
@@ -790,11 +878,22 @@ function aplicarClone() {
             erroEl.style.display = '';
             return;
         }
-        alert(`Clonagem aplicada (set ${d.set_id}, operação ${d.op_id}).\n\n`
+        var msg = `Clonagem aplicada (set ${d.set_id}, operação ${d.op_id}).\n\n`
               + `Regras criadas: ${d.regras_criadas}\n`
               + `Regras sobrescritas: ${d.regras_sobrescritas}\n`
-              + `Itens reclassificados: ${d.itens_reclassificados}`);
-        location.reload();
+              + `Itens reclassificados: ${d.itens_reclassificados}`;
+        var nome = ((document.getElementById('cloneNome') || {}).value || '').trim();
+        // batiza o conjunto recém-criado reusando o endpoint de nomear (sem rota nova)
+        if (nome && d.set_id) {
+            fetch('/escrita-fiscal/memorizacoes/conjunto/nomear', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({set_id: d.set_id, nome: nome}),
+            }).then(() => { alert(msg); location.reload(); })
+              .catch(() => { alert(msg); location.reload(); });
+        } else {
+            alert(msg);
+            location.reload();
+        }
     })
     .catch(() => { erroEl.textContent = 'Falha ao aplicar.'; erroEl.style.display = ''; })
     .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Aplicar clonagem'; });

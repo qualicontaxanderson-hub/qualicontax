@@ -5620,6 +5620,30 @@ def memorizacoes():
         return (2, 0, (g['nome'] or '').upper())         # sem número: por último
     grupos_empresa.sort(key=_ordem_por_numero)
 
+    # Painel de conjuntos (aba "Conjuntos" do modal). Um item por conjunto FISCAL,
+    # com nome, membros e o tamanho REAL do pool (pares distintos emit+cod+tipo
+    # entre os membros) — tudo das linhas já carregadas, sem query nova.
+    pares_cli = {}
+    for r in rows:
+        cid = r.get('cliente_id')
+        if cid:
+            pares_cli.setdefault(cid, set()).add(
+                (r.get('emit_cnpj'), r.get('codigo_produto_xml'), r.get('tipo')))
+    conjuntos_info = []
+    for sid in sorted(conjuntos):
+        membros = conjuntos[sid]
+        pool = set()
+        for m in membros:
+            pool |= pares_cli.get(m['id'], set())
+        conjuntos_info.append({
+            'set_id': sid,
+            'nome': set_nomes.get(sid),   # None = ainda sem nome
+            'membros': [{'id': m['id'], 'numero': m.get('numero_cliente'),
+                         'nome': m.get('nome_razao_social')} for m in membros],
+            'n_empresas': len(membros),
+            'n_regras': len(pool),
+        })
+
     categorias_filtro = sorted({(r.get('produto_categoria') or '(sem categoria)') for r in rows})
     produtos_filtro = sorted(
         {(r['produto_catalogo_id'], r['produto_nome']) for r in rows
@@ -5644,6 +5668,7 @@ def memorizacoes():
                            empresas_filtro=empresas_filtro,
                            conjuntos=conjuntos,
                            conjuntos_ordenados=sorted(conjuntos),
+                           conjuntos_info=conjuntos_info,
                            set_nomes=set_nomes,
                            is_admin=current_user.is_admin(),
                            empresas_livres=[
