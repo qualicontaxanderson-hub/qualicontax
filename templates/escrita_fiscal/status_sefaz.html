@@ -410,7 +410,7 @@
 <!-- ── CERTIFICADOS ────────────────────────────────────────────────────── -->
 {# nasce ABERTA quando ha certificado vencido ou vencendo — e o unico caso
    em que a secao exige atencao imediata. #}
-<div class="ss-sec {% if cert_alerta and cert_alerta.mostrar %}aberta{% endif %}" id="sec_certs">
+<div class="ss-sec" id="sec_certs">
     <div class="ss-sec-head" onclick="toggleSecao('sec_certs')">
         <i class="fas fa-chevron-right ss-sec-chev"></i>
         <span class="ss-sec-tit">Certificados</span>
@@ -527,11 +527,36 @@ function toggleFilters() {
     chevron.classList.toggle('open', !isOpen);
 }
 
-// Secoes nascem fechadas; Certificados nasce aberta quando ha vencido/vencendo
-// (a classe .aberta ja vem do servidor nesse caso).
+// As TRÊS seções nascem fechadas. Abrir/fechar é só do usuário.
 function toggleSecao(id) {
     var el = document.getElementById(id);
     if (el) { el.classList.toggle('aberta'); }
+}
+
+// Preserva o estado através do AUTO-REFRESH (que é um reload). Um flag marca que
+// o reload veio do refresh; assim, uma navegação nova para a página continua
+// fechada (regra: nascem fechadas), mas o refresh não mexe no que o usuário abriu.
+var SS_ABERTAS = 'ss_sefaz_abertas', SS_SCROLL = 'ss_sefaz_scroll', SS_FLAG = 'ss_sefaz_refresh';
+
+function ssSalvarEstado() {
+    try {
+        var abertas = Array.prototype.map.call(
+            document.querySelectorAll('.ss-sec.aberta'), function (el) { return el.id; });
+        sessionStorage.setItem(SS_ABERTAS, JSON.stringify(abertas));
+        sessionStorage.setItem(SS_SCROLL, String(window.scrollY || window.pageYOffset || 0));
+    } catch (e) {}
+}
+
+function ssRestaurarSeVeioDoRefresh() {
+    try {
+        if (!sessionStorage.getItem(SS_FLAG)) return;   // só restaura se o reload foi do refresh
+        sessionStorage.removeItem(SS_FLAG);
+        JSON.parse(sessionStorage.getItem(SS_ABERTAS) || '[]').forEach(function (id) {
+            var el = document.getElementById(id); if (el) el.classList.add('aberta');
+        });
+        var sy = sessionStorage.getItem(SS_SCROLL);
+        if (sy !== null) window.scrollTo(0, parseInt(sy, 10) || 0);
+    } catch (e) {}
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -539,9 +564,16 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('filters-body').style.display = 'block';
     document.getElementById('filters-chevron').classList.add('open');
     {% endif %}
+    ssRestaurarSeVeioDoRefresh();
 });
 
-// Auto-refresh a cada 60s — apenas re-executa as leituras (não consome cota SEFAZ).
-setTimeout(function () { location.reload(); }, 60000);
+// Auto-refresh a cada 60s — apenas re-executa as leituras (não consome cota
+// SEFAZ). Antes de recarregar, guarda as seções abertas e a rolagem e marca que
+// o reload é do refresh, para NÃO atrapalhar o que o usuário abriu/fechou.
+setTimeout(function () {
+    ssSalvarEstado();
+    try { sessionStorage.setItem(SS_FLAG, '1'); } catch (e) {}
+    location.reload();
+}, 60000);
 </script>
 {% endblock %}
