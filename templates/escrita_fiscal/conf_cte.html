@@ -175,7 +175,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 .cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
 .cc-panel-overlay.open { display:flex; }
 .cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:1000px; max-width:100%; max-height:92vh; box-shadow:0 20px 60px rgba(0,0,0,.25); }
-.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#134e4a,#0d9488); border-radius:16px 16px 0 0; }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#0b3b2b,#178a52); border-radius:16px 16px 0 0; }
 .cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
 .cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
 .cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; text-align:right; }
@@ -221,6 +221,67 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
     .cc-tabs { flex-wrap:wrap; row-gap:8px; }
     .cc-tabs > div:last-child { margin-left:0 !important; width:100%; flex-wrap:wrap; }
     .cc-tabs > div:last-child > * { flex:1 1 auto; }
+    /* ---- D6.1: a NF-e transportada vira CARTAO no celular ----------------
+       O modal do CT-e e somente leitura — lista as NF-e que o CT-e carrega,
+       nada vincula nem grava. No desktop e tabela; no celular cada NF-e vira
+       cartao e a CHAVE (44 digitos) QUEBRA em vez de empurrar a janela de
+       lado (o mesmo overflow-wrap do D0). So reorganiza o que ja existe.    */
+    .cc-panel-overlay { padding:0; align-items:flex-end; }
+    .cc-panel { width:100%; max-width:100%; max-height:94vh; border-radius:16px 16px 0 0; }
+    .cc-panel-header { border-radius:16px 16px 0 0; padding:14px 16px; }
+    .cc-panel-header h3 { font-size:14px; line-height:1.3; }
+    .cc-panel-header button { width:40px !important; height:40px !important; line-height:40px !important;
+                              flex-shrink:0; margin-left:10px; }
+    .cc-panel-body { padding:14px 12px; overflow-x:hidden; }
+    .cc-panel-footer { padding:10px 12px; }
+    .cc-panel-footer button { width:100%; min-height:44px; font-size:14px !important; }
+
+    /* dados do CT-e: uma coluna, sem campo empurrado para a direita */
+    .panel-cte-info { grid-template-columns:1fr; padding:12px 13px; }
+
+    table.cc-items-table { display:block; background:transparent; border-radius:0; overflow:visible; }
+    table.cc-items-table thead { display:none; }
+    table.cc-items-table tbody { display:block; }
+    table.cc-items-table tbody tr {
+        display:grid;
+        grid-template-columns:auto 1fr auto;
+        grid-template-areas:
+            "num   ns    valor"
+            "chave chave chave"
+            "conf  conf  conf";
+        gap:6px 10px; align-items:baseline;
+        background:#fff; border:1px solid #e3ece7; border-radius:14px;
+        padding:12px 13px; margin:0 0 10px;
+    }
+    table.cc-items-table tbody td {
+        border:0 !important; padding:0 !important; display:block;
+        min-width:0; overflow-wrap:anywhere; font-size:12px;
+    }
+
+    td.mi-num { grid-area:num; font-size:10px; font-weight:800; color:#94a3b8; align-self:start; }
+    td.mi-num::before { content:'#'; }
+    td.mi-ns { grid-area:ns; font-size:12px; color:#334155; }
+    td.mi-ns::before { content:'N\00BA / Serie'; display:block; font-size:9px; font-weight:800;
+        letter-spacing:.4px; text-transform:uppercase; color:#94a3b8; }
+    td.mi-valor { grid-area:valor; text-align:right !important; font-size:15px; font-weight:800; color:#0f766e; }
+    td.mi-valor::before { content:'Valor'; display:block; font-size:9px; font-weight:800;
+        letter-spacing:.4px; text-transform:uppercase; color:#94a3b8; }
+
+    /* CHAVE: a linha inteira, quebrando os 44 digitos — nunca empurra a janela */
+    td.mi-chave { grid-area:chave; padding-top:8px !important; margin-top:2px;
+                  border-top:1px dashed #eef2f0 !important; word-break:break-all; line-height:1.5; }
+    td.mi-chave::before { content:'Chave da NF-e'; display:block;
+        font-family:ui-sans-serif,system-ui,sans-serif; font-size:9px; font-weight:800;
+        letter-spacing:.4px; text-transform:uppercase; color:#94a3b8; margin-bottom:4px; }
+
+    /* status na Conferencia de Entradas: badge em largura cheia; verde = ja existe */
+    td.mi-conf { grid-area:conf; padding-top:10px !important; margin-top:4px;
+                 border-top:1px solid #f1f5f9 !important; }
+    td.mi-conf::before { content:'Na Confer\00EAncia de Entradas?'; display:block; font-size:9px; font-weight:800;
+        letter-spacing:.4px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px; }
+    td.mi-conf .ct-vinc { display:inline-flex; align-items:center; gap:6px; font-size:12px;
+        padding:9px 12px; border-radius:10px; }
+
     .cc-tabs .btn-lote, .cc-tabs .exp-drop > .btn-lote { width:100%; justify-content:center; }
     .cc-actions { width:100%; }
     .cc-actions .btn-lote, .cc-actions .exp-drop { flex:1; justify-content:center; }
@@ -1327,11 +1388,11 @@ function openPanel(cteId) {
                         <th class="r">Valor</th><th>Na Conferência de Entradas?</th>
                     </tr></thead>
                     <tbody>${d.nfes.map((n, i) => `<tr>
-                        <td>${i+1}</td>
-                        <td class="chave-cell">${esc(n.chave_nfe) || '<span style="color:#94a3b8">(nota em papel)</span>'}</td>
-                        <td>${esc(n.imp_num || n.num_nota) || '—'} / ${esc(n.imp_serie || n.serie) || '—'}</td>
-                        <td class="r">${n.imp_valor != null ? fmtBRL(n.imp_valor) : (n.valor != null ? fmtBRL(n.valor) : '—')}</td>
-                        <td>${n.na_conferencia
+                        <td class="mi-num">${i+1}</td>
+                        <td class="mi-chave chave-cell">${esc(n.chave_nfe) || '<span style="color:#94a3b8">(nota em papel)</span>'}</td>
+                        <td class="mi-ns">${esc(n.imp_num || n.num_nota) || '—'} / ${esc(n.imp_serie || n.serie) || '—'}</td>
+                        <td class="mi-valor r">${n.imp_valor != null ? fmtBRL(n.imp_valor) : (n.valor != null ? fmtBRL(n.valor) : '—')}</td>
+                        <td class="mi-conf">${n.na_conferencia
                             ? `<span class="ct-vinc sim" title="${esc(n.imp_emit||'')}"><i class="fas fa-check"></i> Sim</span>`
                             : '<span class="ct-vinc nao"><i class="fas fa-minus"></i> Não importada</span>'}</td>
                     </tr>`).join('')}</tbody>
