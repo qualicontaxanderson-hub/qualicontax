@@ -959,32 +959,40 @@ def _home_destaques_payload():
     def _rank_apoio(rows, rotulo):
         return ' · '.join('%s %s' % (rotulo(r), _hi(r['n'])) for r in rows[1:])
 
-    # ---- 7) MAIS ENTRADAS (top 5 empresas) ----
+    # Abrevia o nome com reticências (272px de card), preservando o caixa-alta
+    # da razão social — igual ao corte do card de fornecedores.
+    def _abbr(nm):
+        nm = (nm or '').strip()
+        return (nm[:15] + '…') if len(nm) > 16 else nm
+
+    # ---- 7) MAIS ENTRADAS (top 5 empresas: número + nome) ----
     def _c7():
-        rows = _hqn("SELECT c.numero_cliente num, COUNT(*) n FROM nfe_importacoes ni "
-                    "JOIN clientes c ON c.id=ni.cliente_id WHERE ni.tipo='entrada' "
-                    "GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
+        rows = _hqn("SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
+                    "FROM nfe_importacoes ni JOIN clientes c ON c.id=ni.cliente_id "
+                    "WHERE ni.tipo='entrada' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
         if not rows:
             return None
         return {'id': 'top_entradas', 'icone': 'fa-arrow-down-wide-short',
                 'titulo': 'Mais entradas',
-                'valor': _hi(rows[0]['n']), 'valor_sufixo': " · #%s" % rows[0]['num'],
-                'apoio': _rank_apoio(rows, lambda r: '#%s' % r['num']),
+                'valor': _hi(rows[0]['n']),
+                'valor_sufixo': " · #%s %s" % (rows[0]['num'], _abbr(rows[0]['nome'])),
+                'apoio': _rank_apoio(rows, lambda r: '#%s %s' % (r['num'], _abbr(r['nome']))),
                 'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
                 'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
     _card(_c7)
 
-    # ---- 8) MAIS SAÍDAS (top 5 empresas) ----
+    # ---- 8) MAIS SAÍDAS (top 5 empresas: número + nome) ----
     def _c8():
-        rows = _hqn("SELECT c.numero_cliente num, COUNT(*) n FROM nfe_importacoes ni "
-                    "JOIN clientes c ON c.id=ni.cliente_id WHERE ni.tipo='saida' "
-                    "GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
+        rows = _hqn("SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
+                    "FROM nfe_importacoes ni JOIN clientes c ON c.id=ni.cliente_id "
+                    "WHERE ni.tipo='saida' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
         if not rows:
             return None
         return {'id': 'top_saidas', 'icone': 'fa-arrow-up-wide-short',
                 'titulo': 'Mais saídas',
-                'valor': _hi(rows[0]['n']), 'valor_sufixo': " · #%s" % rows[0]['num'],
-                'apoio': _rank_apoio(rows, lambda r: '#%s' % r['num']),
+                'valor': _hi(rows[0]['n']),
+                'valor_sufixo': " · #%s %s" % (rows[0]['num'], _abbr(rows[0]['nome'])),
+                'apoio': _rank_apoio(rows, lambda r: '#%s %s' % (r['num'], _abbr(r['nome']))),
                 'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
                 'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
     _card(_c8)
