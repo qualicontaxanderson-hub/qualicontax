@@ -224,9 +224,87 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
     .cc-tabs .btn-lote, .cc-tabs .exp-drop > .btn-lote { width:100%; justify-content:center; }
     .cc-actions { width:100%; }
     .cc-actions .btn-lote, .cc-actions .exp-drop { flex:1; justify-content:center; }
+
+    /* ---- D6: a NOTA vira CARTAO no celular (mesma marcacao do desktop) --- */
+    .cc-table-wrap { border:0; background:transparent; box-shadow:none; overflow-x:visible; }
+    table.cc-table { min-width:0; display:block; }
+    table.cc-table thead { display:none; }
+    table.cc-table tbody { display:block; }
+
+    table.cc-table tbody tr {
+        display:grid;
+        grid-template-columns:auto 1fr 1fr 1fr auto;
+        grid-template-areas:
+            "chk  nome nome nome valor"
+            "chk  num  data mod   mod"
+            "chk  toma toma toma  toma"
+            "chk  rd   rd   rd    rd"
+            "chk  traj traj nfe   icms"
+            "chk  imp  imp  imp   imp"
+            "chk  orig orig orig  orig"
+            "acoes acoes acoes acoes acoes";
+        gap:5px 9px; align-items:baseline;
+        background:#fff; border:1px solid #e3ece7; border-radius:14px;
+        padding:12px 13px; margin:0 0 10px;
+    }
+    table.cc-table tbody tr:hover td { background:transparent; }
+    table.cc-table tbody td { border:0 !important; padding:0 !important;
+                              display:block; min-width:0; overflow-wrap:anywhere; }
+
+    td.mc-chk { grid-area:chk; align-self:start; padding-top:2px !important; }
+    td.mc-nome { grid-area:nome; font-size:13px; font-weight:700; color:#0f3d2e; line-height:1.3; }
+    td.mc-valor { grid-area:valor; text-align:right; font-size:16px; font-weight:800;
+                  color:#0f3d2e; white-space:nowrap; }
+    td.mc-num { grid-area:num; } td.mc-data { grid-area:data; } td.mc-itens { grid-area:itens; }
+    td.mc-uf { grid-area:uf; } td.mc-cfop { grid-area:cfop; } td.mc-icms { grid-area:icms; }
+    td.mc-imp { grid-area:imp; } td.mc-origem { grid-area:orig; } td.mc-cad { grid-area:cad; }
+    td.mc-acoes { grid-area:acoes; }
+    td.mc-mod { grid-area:mod; } td.mc-tomador { grid-area:toma; }
+    td.mc-rd { grid-area:rd; } td.mc-traj { grid-area:traj; } td.mc-nfe { grid-area:nfe; }
+    td.mc-tomador, td.mc-rd, td.mc-traj { font-size:11.5px; color:#334155; }
+    td.mc-tomador::before, td.mc-rd::before, td.mc-traj::before, td.mc-mod::before,
+    td.mc-nfe::before {
+        content:attr(data-l) ' '; font-size:9px; font-weight:800; letter-spacing:.4px;
+        text-transform:uppercase; color:#94a3b8; display:block;
+    }
+
+    td.mc-num, td.mc-data, td.mc-itens, td.mc-uf, td.mc-cfop, td.mc-icms {
+        font-size:11.5px; color:#334155; white-space:nowrap; overflow-wrap:normal; }
+    td.mc-num::before, td.mc-data::before, td.mc-itens::before,
+    td.mc-uf::before, td.mc-cfop::before, td.mc-icms::before {
+        content:attr(data-l) ' '; font-size:9px; font-weight:800; letter-spacing:.4px;
+        text-transform:uppercase; color:#94a3b8; display:block;
+    }
+    td.mc-itens, td.mc-icms, td.mc-cad { text-align:left !important; }
+    td.mc-cad .vinc-cell { justify-content:flex-start; }
+    td.mc-cad .vinc-dot { width:auto; height:auto; border-radius:99px; box-shadow:none;
+        padding:2px 9px; font-size:9.5px; font-weight:800; letter-spacing:.3px;
+        text-transform:uppercase; }
+    td.mc-cad .vinc-dot::after { content:attr(title); }
+    td.mc-cad .vinc-dot.verde    { background:#dcfce7; color:#15803d; }
+    td.mc-cad .vinc-dot.amarelo  { background:#fef3c7; color:#b45309; }
+    td.mc-cad .vinc-dot.vermelho { background:#fee2e2; color:#b91c1c; }
+
+    td.mc-acoes { padding-top:10px !important; margin-top:4px;
+                  border-top:1px dashed #eef2f0 !important;
+                  display:flex; gap:8px; flex-wrap:wrap; }
+    td.mc-acoes > * { flex:1 1 auto; }
+    td.mc-acoes button, td.mc-acoes a {
+        min-height:40px; min-width:40px; display:inline-flex; align-items:center;
+        justify-content:center; gap:6px; font-size:12.5px; padding:9px 12px; border-radius:10px;
+    }
+
+    .cc-row-cancelada { border-color:#fecaca !important; background:#fffafa !important; }
 }
 @media (max-width:480px) {
-    .cc-kpis { grid-template-columns:1fr; }
+    /* D6: no celular os indicadores ficam COMPACTOS — 2 por linha, altura e
+       numero menores — para caber uns quatro sem rolar. Mesmas cores; muda so
+       o tamanho. No computador continuam exatamente como estao. */
+    .cc-kpis { grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
+    .cc-kpi { padding:9px 11px; border-radius:10px; }
+    .cc-kpi-label { font-size:9px; letter-spacing:.3px; }
+    .cc-kpi-value { font-size:15px; margin-top:2px; }
+    .cc-kpi-sub { display:none; }
 }
 </style>
 {% endblock %}
@@ -1112,30 +1190,30 @@ function loadCtes() {
                 const trajeto = (r.uf_ini || r.uf_fim)
                     ? `${esc(r.mun_ini||'')}/${esc(r.uf_ini||'—')} → ${esc(r.mun_fim||'')}/${esc(r.uf_fim||'—')}` : '—';
                 return `<tr class="cc-row-clickable${r.cancelado ? ' cc-row-cancelada' : ''}" onclick="openPanel(${r.id})">
-                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" onchange="chkLinhaChange()"></td>
-                    <td>${fmtDate(r.data_emissao)}</td>
-                    <td>${esc(r.num_cte)||'—'} / ${esc(r.serie)||'—'}</td>
-                    <td>${dataPill(r)}</td>
-                    <td>${modeloBadge(r.modelo)}</td>
-                    <td title="${esc(r.emit_cnpj)}" style="text-transform:uppercase;">${esc(r.emit_nome||r.emit_cnpj)||'—'}</td>
-                    <td style="text-transform:uppercase;">
+                    <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" onchange="chkLinhaChange()"></td>
+                    <td data-l="Emissão" class="mc-data">${fmtDate(r.data_emissao)}</td>
+                    <td data-l="Nº/Série" class="mc-num">${esc(r.num_cte)||'—'} / ${esc(r.serie)||'—'}</td>
+                    <td data-l="Importação" class="mc-imp">${dataPill(r)}</td>
+                    <td data-l="Mod." class="mc-mod">${modeloBadge(r.modelo)}</td>
+                    <td data-l="Transportadora" class="mc-nome" title="${esc(r.emit_cnpj)}" style="text-transform:uppercase;">${esc(r.emit_nome||r.emit_cnpj)||'—'}</td>
+                    <td data-l="Tomador" class="mc-tomador" style="text-transform:uppercase;">
                         ${esc(r.tomador_nome)||'—'}
                         <br><span class="ct-papel ${papelCls}" title="Papel da empresa neste CT-e">${esc(r.papel_cliente||'—')}</span>
                     </td>
-                    <td style="text-transform:uppercase;font-size:11.5px;">
+                    <td data-l="Remetente → Destinatário" class="mc-rd" style="text-transform:uppercase;font-size:11.5px;">
                         ${esc(r.rem_nome)||'—'}<br>→ ${esc(r.dest_nome)||'—'}
                     </td>
-                    <td class="ct-trajeto">${trajeto}</td>
-                    <td style="text-align:center;">
+                    <td data-l="Trajeto" class="mc-traj ct-trajeto">${trajeto}</td>
+                    <td data-l="NF-e" class="mc-nfe" style="text-align:center;">
                         <span class="ct-nfe-count${nfeCls}"><i class="fas fa-file-invoice"></i> ${r.qtd_nfes}</span>
                     </td>
-                    <td class="money"><strong>${fmtBRL(r.valor_frete)}</strong></td>
-                    <td class="money">${fmtBRL(r.valor_icms)}</td>
-                    <td>
+                    <td data-l="Frete" class="mc-valor money"><strong>${fmtBRL(r.valor_frete)}</strong></td>
+                    <td data-l="ICMS" class="mc-icms money">${fmtBRL(r.valor_icms)}</td>
+                    <td data-l="Origem" class="mc-origem">
                         <span class="badge-${(r.origem||'sefaz').toLowerCase()}">${esc(r.origem)}</span>
                         ${r.cancelado ? '<span class="badge-cancelada" title="CT-e cancelado na SEFAZ — não escriturar">CANCELADO</span>' : ''}
                     </td>
-                    <td onclick="event.stopPropagation()">
+                    <td class="mc-acoes" onclick="event.stopPropagation()">
                         ${exportBtns(r)}
                         ${delBtn(r)}
                     </td>

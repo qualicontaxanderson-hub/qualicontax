@@ -315,9 +315,89 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
     .cc-tabs .btn-lote, .cc-tabs .exp-drop > .btn-lote { width:100%; justify-content:center; }
     .cc-actions { width:100%; }
     .cc-actions .btn-lote, .cc-actions .exp-drop { flex:1; justify-content:center; }
+
+    /* ---- D6: a NOTA vira CARTAO no celular ------------------------------
+       Mesma marcacao do computador: os <td> so ganharam classe e data-l, que
+       nao pintam nada no desktop. Aqui a linha vira uma grade, cada celula cai
+       no seu lugar, e ninguem precisa arrastar a tabela de lado.            */
+    .cc-table-wrap { border:0; background:transparent; box-shadow:none; overflow-x:visible; }
+    table.cc-table { min-width:0; display:block; }
+    table.cc-table thead { display:none; }
+    table.cc-table tbody { display:block; }
+
+    table.cc-table tbody tr {
+        display:grid;
+        /* 3 colunas iguais no miolo: com 'auto' o pill de importacao roubava a
+           largura e o ICMS ficava com 10px, quebrando letra por letra. */
+        grid-template-columns:auto 1fr 1fr 1fr auto;
+        grid-template-areas:
+            "chk  nome nome nome valor"
+            "chk  num  data itens itens"
+            "chk  uf   cfop icms  icms"
+            "chk  imp  imp  imp   imp"
+            "chk  orig cad  cad   cad"
+            "acoes acoes acoes acoes acoes";
+        gap:5px 9px; align-items:baseline;
+        background:#fff; border:1px solid #e3ece7; border-radius:14px;
+        padding:12px 13px; margin:0 0 10px;
+    }
+    table.cc-table tbody tr:hover td { background:transparent; }
+    table.cc-table tbody td { border:0 !important; padding:0 !important;
+                              display:block; min-width:0; overflow-wrap:anywhere; }
+
+    td.mc-chk { grid-area:chk; align-self:start; padding-top:2px !important; }
+    td.mc-nome { grid-area:nome; font-size:13px; font-weight:700; color:#0f3d2e; line-height:1.3; }
+    td.mc-valor { grid-area:valor; text-align:right; font-size:16px; font-weight:800;
+                  color:#0f3d2e; white-space:nowrap; }
+    td.mc-num { grid-area:num; } td.mc-data { grid-area:data; } td.mc-itens { grid-area:itens; }
+    td.mc-uf { grid-area:uf; } td.mc-cfop { grid-area:cfop; } td.mc-icms { grid-area:icms; }
+    td.mc-imp { grid-area:imp; } td.mc-origem { grid-area:orig; } td.mc-cad { grid-area:cad; }
+    td.mc-acoes { grid-area:acoes; }
+
+    /* rotulo curto antes das celulas secundarias: sem cabecalho, o numero
+       solto nao diz de que coluna e */
+    td.mc-num, td.mc-data, td.mc-itens, td.mc-uf, td.mc-cfop, td.mc-icms {
+        font-size:11.5px; color:#334155; white-space:nowrap; overflow-wrap:normal; }
+    td.mc-num::before, td.mc-data::before, td.mc-itens::before,
+    td.mc-uf::before, td.mc-cfop::before, td.mc-icms::before {
+        content:attr(data-l) ' '; font-size:9px; font-weight:800; letter-spacing:.4px;
+        text-transform:uppercase; color:#94a3b8; display:block;
+    }
+    td.mc-itens, td.mc-icms { text-align:left !important; }
+    td.mc-cad { text-align:left !important; }
+    td.mc-cad .vinc-cell { justify-content:flex-start; }
+
+    /* Cadastro: a bolinha vira etiqueta legivel (o title da bolinha ja diz o
+       estado; aqui ele aparece escrito). */
+    td.mc-cad .vinc-dot { width:auto; height:auto; border-radius:99px; box-shadow:none;
+        padding:2px 9px; font-size:9.5px; font-weight:800; letter-spacing:.3px;
+        text-transform:uppercase; }
+    td.mc-cad .vinc-dot::after { content:attr(title); }
+    td.mc-cad .vinc-dot.verde    { background:#dcfce7; color:#15803d; }
+    td.mc-cad .vinc-dot.amarelo  { background:#fef3c7; color:#b45309; }
+    td.mc-cad .vinc-dot.vermelho { background:#fee2e2; color:#b91c1c; }
+
+    /* Acoes com area de toque de verdade (>= 40px) */
+    td.mc-acoes { padding-top:10px !important; margin-top:4px;
+                  border-top:1px dashed #eef2f0 !important;
+                  display:flex; gap:8px; flex-wrap:wrap; }
+    td.mc-acoes > * { flex:1 1 auto; }
+    td.mc-acoes button, td.mc-acoes a {
+        min-height:40px; min-width:40px; display:inline-flex; align-items:center;
+        justify-content:center; gap:6px; font-size:12.5px; padding:9px 12px; border-radius:10px;
+    }
+
+    .cc-row-cancelada { border-color:#fecaca !important; background:#fffafa !important; }
 }
 @media (max-width:480px) {
-    .cc-kpis { grid-template-columns:1fr; }
+    /* D6: no celular os indicadores ficam COMPACTOS — 2 por linha, altura e
+       numero menores — para caber uns quatro sem rolar. Mesmas cores; muda so
+       o tamanho. No computador continuam exatamente como estao. */
+    .cc-kpis { grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
+    .cc-kpi { padding:9px 11px; border-radius:10px; }
+    .cc-kpi-label { font-size:9px; letter-spacing:.3px; }
+    .cc-kpi-value { font-size:15px; margin-top:2px; }
+    .cc-kpi-sub { display:none; }
 }
 </style>
 {% endblock %}
@@ -1539,19 +1619,19 @@ function loadNotas() {
                     ? ' <span class="badge-cancelada" title="Nota cancelada na SEFAZ — não escriturar">CANCELADA</span>'
                     : '';
                 return `<tr class="cc-row-clickable${canc ? ' cc-row-cancelada' : ''}" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
-                    <td onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}" onchange="chkLinhaChange()"></td>
-                    <td>${fmtDate(r.data_emissao)}</td>
-                    <td>${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
-                    <td>${dataPill}</td>
-                    <td title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
-                    <td>${r.emit_uf||'—'}</td>
-                    <td>${r.cfop||'—'}</td>
-                    <td style="text-align:center;">${total}</td>
-                    <td style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
-                    <td class="money"><strong>${fmtBRL(r.valor_total)}</strong></td>
-                    <td class="money">${fmtBRL(r.valor_icms)}</td>
-                    <td><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''} ${r.incompleta ? `<button class="btn-capturar" title="Tentar baixar o XML completo na SEFAZ (não manifesta)" onclick="event.stopPropagation(); capturarNota(${r.id}, this)"><i class="fas fa-cloud-download-alt"></i> Capturar</button>` : ''}</td>
-                    <td onclick="event.stopPropagation()">
+                    <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}" onchange="chkLinhaChange()"></td>
+                    <td class="mc-data" data-l="Emissão">${fmtDate(r.data_emissao)}</td>
+                    <td class="mc-num" data-l="Nº/Série">${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
+                    <td class="mc-imp" data-l="Importação">${dataPill}</td>
+                    <td class="mc-nome" data-l="Emitente" title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
+                    <td class="mc-uf" data-l="UF">${r.emit_uf||'—'}</td>
+                    <td class="mc-cfop" data-l="CFOP">${r.cfop||'—'}</td>
+                    <td class="mc-itens" data-l="Itens" style="text-align:center;">${total}</td>
+                    <td class="mc-cad" data-l="Cadastro" style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
+                    <td class="money mc-valor" data-l="Valor"><strong>${fmtBRL(r.valor_total)}</strong></td>
+                    <td class="money mc-icms" data-l="ICMS">${fmtBRL(r.valor_icms)}</td>
+                    <td class="mc-origem" data-l="Origem"><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''} ${r.incompleta ? `<button class="btn-capturar" title="Tentar baixar o XML completo na SEFAZ (não manifesta)" onclick="event.stopPropagation(); capturarNota(${r.id}, this)"><i class="fas fa-cloud-download-alt"></i> Capturar</button>` : ''}</td>
+                    <td class="mc-acoes" onclick="event.stopPropagation()">
                         ${exportBtns(r)}
                         ${delBtn(r)}
                     </td>
