@@ -312,8 +312,20 @@
     <div class="ss-sec-corpo">
 
 {% if empresas %}
+{# Frente B — três grupos + o "sem certificado". Ordem fixa; grupo vazio some.
+   Só o grupo de ATENÇÃO leva tom de alerta (badge amarelo); os demais neutros. #}
+{% set _grupos = [
+    ('atencao',       'Precisa de atenção',    'amarelo', 'fa-triangle-exclamation'),
+    ('em_dia',        'Em dia',                'cinza',   ''),
+    ('sem_movimento', 'Sem movimento',         'cinza',   ''),
+    ('sem_cert',      'Sem certificado ativo', 'cinza',   '')
+] %}
+{% for _gk, _gt, _gc, _gi in _grupos %}
+{% set _membros = empresas | selectattr('grupo', 'equalto', _gk) | list %}
+{% if _membros %}
+<div class="ss-grupo">{% if _gi %}<i class="fas {{ _gi }}"></i> {% endif %}{{ _gt }} <span class="ss-badge {{ _gc }}">{{ _membros|length }}</span></div>
 <div class="ss-emp-grid">
-    {% for e in empresas %}
+    {% for e in _membros %}
     <div class="ss-emp">
         <div class="ss-emp-head">
             <div class="ss-emp-nome">
@@ -344,6 +356,14 @@
             </div>
             {% else %}
             <div class="ss-emp-stats"><span class="ss-muted">nenhuma entrada capturada</span></div>
+            {% endif %}
+            {# Frente B — recado por grupo (só o de ATENÇÃO usa tom de alerta) #}
+            {% if e.grupo == 'atencao' and e.resumos_travados %}
+            <div class="ss-emp-stats"><span class="ss-badge amarelo"><i class="fas fa-triangle-exclamation"></i> {{ e.resumos_travados }} nota{{ '' if e.resumos_travados == 1 else 's' }} presa{{ '' if e.resumos_travados == 1 else 's' }} em resumo</span></div>
+            {% elif e.grupo == 'em_dia' and e.resumos_recentes %}
+            <div class="ss-emp-stats"><span class="ss-muted">{{ e.resumos_recentes }} em resumo recente (normal, promove sozinho)</span></div>
+            {% elif e.grupo == 'sem_movimento' and e.sem_doc_137 %}
+            <div class="ss-emp-stats"><span class="ss-muted">SEFAZ não tem documentos para este CNPJ — não é falha de captura</span></div>
             {% endif %}
             <div class="ss-emp-foot">
                 <span><span class="ss-backlog-num {{ 'zero' if e.backlog == 0 else 'pos' }}">{{ e.backlog }}</span> pendentes</span>
@@ -398,6 +418,8 @@
     </div>
     {% endfor %}
 </div>
+{% endif %}{# _membros #}
+{% endfor %}{# _grupos #}
 {% else %}
 <div class="ss-empty">Nenhuma empresa com certificado ativo.</div>
 {% endif %}

@@ -1113,7 +1113,7 @@ def status_sefaz():
     rows = execute_query(
         "SELECT c.id, c.numero_cliente, c.nome_razao_social, "
         "  dc.validade AS cert_validade, dc.tipo_doc AS cert_tipo_doc, dc.cnpj AS cert_doc, "
-        "  n.ult_consulta, n.proximo_permitido, "
+        "  n.ult_consulta, n.proximo_permitido, n.ult_status AS nsu_status, "
         "  GREATEST(COALESCE(n.max_nsu,0)-COALESCE(n.ult_nsu,0),0) AS backlog, "
         "  (n.proximo_permitido IS NOT NULL AND n.proximo_permitido > NOW()) AS em_cota, "
         "  TIMESTAMPDIFF(MINUTE, NOW(), n.proximo_permitido) AS libera_min, "
@@ -1159,6 +1159,19 @@ def status_sefaz():
         "ORDER BY em_cota DESC, backlog DESC, c.numero_cliente",
         fetch=True,
     ) or []
+
+    # Frente B — classificação em grupos. UMA consulta agregada (sem laço):
+    #  travados  = resumo (incompleta=1) com emissão há MAIS de 30 dias (defeito);
+    #  recentes  = resumo com <= 30 dias (normal, promove sozinho);
+    #  cap_30d   = capturou algo da SEFAZ nos últimos 30 dias.
+    _agg = execute_query(
+        "SELECT cliente_id, "
+        "  SUM(tipo='entrada' AND COALESCE(incompleta,0)=1 AND DATEDIFF(CURDATE(), data_emissao) > 30) AS travados, "
+        "  SUM(tipo='entrada' AND COALESCE(incompleta,0)=1 AND DATEDIFF(CURDATE(), data_emissao) <= 30) AS recentes, "
+        "  MAX(importado_em >= NOW() - INTERVAL 30 DAY) AS cap_30d "
+        "FROM nfe_importacoes WHERE origem='SEFAZ' AND cliente_id IS NOT NULL GROUP BY cliente_id",
+        fetch=True) or []
+    agg = {a['cliente_id']: a for a in _agg}
 
     empresas = []
     for r in rows:
@@ -1213,7 +1226,30 @@ def status_sefaz():
         # Validade do cert EFETIVO (próprio ou o do contador) — é ele que a SEFAZ
         # recusa se estiver vencido, então é dele que o alerta tem de falar.
         cs = DfeCertificado.classificar_validade(ef_validade)
+
+        # Frente B — grupo (prioridade: sem cert > atenção > sem movimento > em dia).
+        # Sem certificado não pode poluir o grupo de atenção (ausência de meio).
+        a = agg.get(r['id']) or {}
+        travados = _i(a.get('travados'))
+        recentes = _i(a.get('recentes'))
+        cap_30d = bool(_i(a.get('cap_30d')))
+        has_cert = fonte != 'carona'
+        if not has_cert:
+            grupo = 'sem_cert'
+        elif travados > 0:
+            grupo = 'atencao'
+        elif not cap_30d:
+            grupo = 'sem_movimento'
+        else:
+            grupo = 'em_dia'
+        # #152: cursor em dia e a SEFAZ respondeu 137 — não há documentos para o
+        # CNPJ; é ausência de nota, não falha de captura.
+        sem_doc_137 = (grupo == 'sem_movimento'
+                       and str(r.get('nsu_status') or '').strip().startswith('137'))
+
         empresas.append({
+            'grupo': grupo, 'resumos_travados': travados,
+            'resumos_recentes': recentes, 'sem_doc_137': sem_doc_137,
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
             'fonte': fonte, 'fonte_icone': fonte_icone,
             'fonte_label': fonte_label, 'fonte_det': fonte_det,
