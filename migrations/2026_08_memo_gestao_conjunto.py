@@ -36,10 +36,13 @@ def _col_existe(tabela, coluna):
 def aplicar():
     feitos = []
 
-    # 1 + 2 — colunas incrementais (checa antes do ALTER)
+    # 1 + 2 — colunas incrementais (checa antes do ALTER).
+    # departamento: escopo do conjunto. NOT NULL DEFAULT 'FISCAL' => o conjunto
+    # existente (o dos 6 postos) é marcado FISCAL automaticamente no ADD COLUMN.
     for tabela, coluna, definicao in [
-        ('memo_clone_set',    'nome',       'VARCHAR(120) NULL'),
-        ('memo_clone_membro', 'corte_data', 'DATE NULL'),
+        ('memo_clone_set',    'nome',         'VARCHAR(120) NULL'),
+        ('memo_clone_membro', 'corte_data',   'DATE NULL'),
+        ('memo_clone_set',    'departamento', "VARCHAR(20) NOT NULL DEFAULT 'FISCAL'"),
     ]:
         if _col_existe(tabela, coluna):
             feitos.append(f'= {tabela}.{coluna} já existe')

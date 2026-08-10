@@ -241,12 +241,10 @@ def _conjunto_fanout(origem_cliente_id, pares, tipo='entrada'):
     # Segurança extra: se a migration da gestão ainda não rodou, também não age.
     if not _memo_col_existe('memo_clone_membro', 'corte_data'):
         return None
-    row = execute_query(
-        "SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s LIMIT 1",
-        (origem_cliente_id,), fetch=True, fetch_one=True)
-    if not row:
+    # Só propaga dentro do conjunto FISCAL da empresa (isola departamento).
+    sid = _fiscal_set_de(origem_cliente_id)
+    if not sid:
         return None
-    sid = row['set_id']
     membros = [r['cliente_id'] for r in (execute_query(
         "SELECT cliente_id FROM memo_clone_membro WHERE set_id = %s AND cliente_id <> %s",
         (sid, origem_cliente_id), fetch=True) or [])]
@@ -345,12 +343,48 @@ def _memo_tabela_existe(tabela):
     return False
 
 
+# D3.1 E3 — ESCOPO POR DEPARTAMENTO. A tela de Memorizações é do Fiscal: toda
+# consulta de conjunto filtra departamento='FISCAL', para que um conjunto de
+# outro departamento (Contábil/DP, no futuro) nunca apareça aqui. Schema-safe:
+# antes da migration a coluna não existe e o filtro vira no-op (só há Fiscal).
+_MEMO_DEPTO = 'FISCAL'
+
+
+def _memo_depto_ok():
+    return _memo_col_existe('memo_clone_set', 'departamento')
+
+
+def _depto_and(alias='s'):
+    """(' AND <alias>.departamento = %s', [DEPTO]) se a coluna existe; ('', []) senão."""
+    if _memo_depto_ok():
+        return f" AND {alias}.departamento = %s", [_MEMO_DEPTO]
+    return "", []
+
+
+def _fiscal_set_de(cliente_id):
+    """set_id do conjunto FISCAL de que a empresa participa, ou None. Isola o
+    departamento: membership de conjunto de outro depto não é enxergada aqui."""
+    if _memo_depto_ok():
+        r = execute_query(
+            "SELECT m.set_id FROM memo_clone_membro m "
+            "JOIN memo_clone_set s ON s.id = m.set_id "
+            "WHERE m.cliente_id = %s AND s.departamento = %s LIMIT 1",
+            (cliente_id, _MEMO_DEPTO), fetch=True, fetch_one=True)
+    else:
+        r = execute_query(
+            "SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s LIMIT 1",
+            (cliente_id,), fetch=True, fetch_one=True)
+    return r['set_id'] if r else None
+
+
 def _memo_set_nomes():
-    """{set_id: nome} — vazio se a coluna `nome` ainda não existe (pré-migration)."""
+    """{set_id: nome} dos conjuntos FISCAIS — vazio se a coluna `nome` não existe."""
     if not _memo_col_existe('memo_clone_set', 'nome'):
         return {}
+    cond, p = _depto_and('memo_clone_set')
     nomes = {}
-    for r in (execute_query("SELECT id, nome FROM memo_clone_set", fetch=True) or []):
+    for r in (execute_query("SELECT id, nome FROM memo_clone_set WHERE 1=1" + cond,
+                            tuple(p), fetch=True) or []):
         n = (r.get('nome') or '').strip()
         if n:
             nomes[r['id']] = n
@@ -5436,12 +5470,16 @@ def memorizacoes():
     # Empresas para o modal de clonagem: só as que já têm memorização ou já
     # estão num set — clonar com uma empresa sem histórico nenhum é o caso de
     # "copiar tudo de A para B", que continua permitido pelo próprio seletor.
+    # clone_set_id só considera conjunto FISCAL (isola departamento). O 'FISCAL'
+    # é constante da casa (não é entrada de usuário), então inlinar é seguro.
+    _dj = (" JOIN memo_clone_set s ON s.id = m.set_id AND s.departamento = 'FISCAL'"
+           if _memo_depto_ok() else "")
     empresas_clone = execute_query(
-        """SELECT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj,
+        f"""SELECT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj,
                   (SELECT COUNT(*) FROM nfe_produto_vinculo v
                     WHERE v.cliente_id = c.id
                       AND v.grupo_id IS NULL AND v.ramo_atividade_id IS NULL) AS regras,
-                  (SELECT m.set_id FROM memo_clone_membro m
+                  (SELECT m.set_id FROM memo_clone_membro m{_dj}
                     WHERE m.cliente_id = c.id LIMIT 1) AS clone_set_id
              FROM clientes c
             WHERE c.situacao = 'ATIVO'
@@ -5738,8 +5776,11 @@ def _clone_resolver_membros(cliente_ids):
     if len(validos) != len(ids):
         raise ValueError('Alguma das empresas selecionadas não existe mais.')
 
+    # Clone só enxerga conjunto FISCAL (isola departamento). 'FISCAL' é constante.
+    _dj = (" JOIN memo_clone_set s ON s.id = m.set_id AND s.departamento = 'FISCAL'"
+           if _memo_depto_ok() else "")
     vinc = execute_query(
-        f"SELECT set_id, cliente_id FROM memo_clone_membro WHERE cliente_id IN ({ph})",
+        f"SELECT m.set_id, m.cliente_id FROM memo_clone_membro m{_dj} WHERE m.cliente_id IN ({ph})",
         tuple(ids), fetch=True,
     ) or []
     sets = {v['set_id'] for v in vinc}
@@ -5924,7 +5965,11 @@ def _clone_aplicar(cliente_ids, decisoes):
     with transacao() as cur:
         # 1. Set + membros + operação (âncora do rollback)
         if set_id is None:
-            cur.execute("INSERT INTO memo_clone_set (criado_em) VALUES (CURRENT_TIMESTAMP)")
+            if _memo_depto_ok():
+                cur.execute("INSERT INTO memo_clone_set (departamento, criado_em) "
+                            "VALUES ('FISCAL', CURRENT_TIMESTAMP)")
+            else:
+                cur.execute("INSERT INTO memo_clone_set (criado_em) VALUES (CURRENT_TIMESTAMP)")
             set_id = cur.lastrowid
         cur.execute("SELECT cliente_id FROM memo_clone_membro WHERE set_id = %s", (set_id,))
         ja_membros = {r['cliente_id'] for r in cur.fetchall()}
@@ -6187,13 +6232,22 @@ def _incluir_aplicar(set_id, cliente_id, corte_data, actor_id):
     existentes = _regras_empresa(cliente_id)
     n_regras = n_itens = 0
     with transacao() as cur:
-        cur.execute("SELECT id FROM memo_clone_membro WHERE cliente_id = %s", (cliente_id,))
-        if cur.fetchone() is None:
+        # Membership FISCAL da empresa (não enxerga/mexe em conjunto de outro depto).
+        if _memo_depto_ok():
+            cur.execute("SELECT m.id FROM memo_clone_membro m "
+                        "JOIN memo_clone_set s ON s.id = m.set_id "
+                        "WHERE m.cliente_id = %s AND s.departamento = 'FISCAL'", (cliente_id,))
+        else:
+            cur.execute("SELECT id FROM memo_clone_membro WHERE cliente_id = %s", (cliente_id,))
+        fila = cur.fetchone()
+        if fila is None:
             cur.execute("INSERT INTO memo_clone_membro (set_id, cliente_id, corte_data) "
                         "VALUES (%s, %s, %s)", (set_id, cliente_id, corte_data))
         else:
+            # UPDATE pela linha específica — nunca por cliente_id (isso reatribuiria
+            # a membership de outro departamento para este conjunto FISCAL).
             cur.execute("UPDATE memo_clone_membro SET set_id = %s, corte_data = %s "
-                        "WHERE cliente_id = %s", (set_id, corte_data, cliente_id))
+                        "WHERE id = %s", (set_id, corte_data, fila['id']))
         for (emit, cod, tipo), (desc, prod) in pool.items():
             atual = existentes.get((emit, cod, tipo))
             if atual is None:
@@ -6254,8 +6308,10 @@ def _desvincular_tudo(set_id, cliente_id, actor_id):
                     " WHERE cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
                     (cliente_id,))
         n_del = cur.rowcount
-        # 3) remove do conjunto
-        cur.execute("DELETE FROM memo_clone_membro WHERE cliente_id = %s", (cliente_id,))
+        # 3) remove do conjunto — pela membership DESTE set (FISCAL), nunca por
+        # cliente_id sozinho (isso apagaria membership de outros departamentos).
+        cur.execute("DELETE FROM memo_clone_membro WHERE cliente_id = %s AND set_id = %s",
+                    (cliente_id, set_id))
         # 4) conferência antes do commit
         if n_del != n_bkp:
             raise RuntimeError(f'Contagens não fecharam: {n_del} apagadas vs {n_bkp} '
@@ -6296,7 +6352,9 @@ def memorizacoes_conjunto_nomear():
     except (TypeError, ValueError):
         return jsonify({'error': 'set_id inválido.'}), 400
     nome = (data.get('nome') or '').strip()[:120]
-    res = execute_query("UPDATE memo_clone_set SET nome = %s WHERE id = %s", (nome or None, sid))
+    cond, p = _depto_and('memo_clone_set')   # só renomeia conjunto FISCAL
+    res = execute_query("UPDATE memo_clone_set SET nome = %s WHERE id = %s" + cond,
+                        tuple([nome or None, sid] + p))
     if res is None:
         return jsonify({'error': 'Falha ao gravar o nome.'}), 500
     return jsonify({'ok': True, 'set_id': sid, 'nome': nome, 'rotulo': nome or f'Conjunto #{sid}'})
@@ -6315,6 +6373,11 @@ def memorizacoes_conjunto_incluir_preview():
     except (TypeError, ValueError):
         return jsonify({'error': 'set_id e cliente_id são obrigatórios.'}), 400
     corte = (data.get('corte_data') or '').strip() or None
+    if _memo_depto_ok():   # não deixa "enxergar" set de outro departamento
+        s = execute_query("SELECT departamento FROM memo_clone_set WHERE id = %s",
+                          (set_id,), fetch=True, fetch_one=True)
+        if not s or s.get('departamento') != _MEMO_DEPTO:
+            return jsonify({'error': 'Conjunto inválido para o Fiscal.'}), 400
     try:
         return jsonify({'ok': True, 'corte_data': corte, **_incluir_preview(set_id, cliente_id, corte)})
     except Exception as e:
@@ -6334,10 +6397,16 @@ def memorizacoes_conjunto_incluir_aplicar():
     except (TypeError, ValueError):
         return jsonify({'error': 'set_id e cliente_id são obrigatórios.'}), 400
     corte = (data.get('corte_data') or '').strip() or None
-    # a empresa não pode já pertencer a OUTRO conjunto
-    row = execute_query("SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s",
-                        (cliente_id,), fetch=True, fetch_one=True)
-    if row and row['set_id'] != set_id:
+    # o conjunto-alvo tem de ser FISCAL (não deixa incluir num set de outro depto).
+    if _memo_depto_ok():
+        s = execute_query("SELECT departamento FROM memo_clone_set WHERE id = %s",
+                          (set_id,), fetch=True, fetch_one=True)
+        if not s or s.get('departamento') != _MEMO_DEPTO:
+            return jsonify({'error': 'Conjunto inválido para o Fiscal.'}), 400
+    # a empresa não pode já pertencer a OUTRO conjunto FISCAL (conjunto de outro
+    # departamento é ignorado — não bloqueia nem é enxergado aqui).
+    existente = _fiscal_set_de(cliente_id)
+    if existente and existente != set_id:
         return jsonify({'error': 'A empresa já pertence a outro conjunto. Desvincule antes.'}), 400
     try:
         return jsonify(_incluir_aplicar(set_id, cliente_id, corte,
@@ -6381,9 +6450,8 @@ def memorizacoes_conjunto_desvincular_aplicar():
     except (TypeError, ValueError):
         return jsonify({'error': 'cliente_id obrigatório.'}), 400
     confirmacao = (data.get('confirmacao') or '').strip()
-    membro = execute_query("SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s",
-                           (cliente_id,), fetch=True, fetch_one=True)
-    if not membro:
+    set_id_fiscal = _fiscal_set_de(cliente_id)   # só o conjunto FISCAL da empresa
+    if not set_id_fiscal:
         return jsonify({'error': 'Empresa não está em nenhum conjunto.'}), 400
     emp = execute_query("SELECT nome_razao_social FROM clientes WHERE id = %s",
                         (cliente_id,), fetch=True, fetch_one=True) or {}
@@ -6396,7 +6464,7 @@ def memorizacoes_conjunto_desvincular_aplicar():
         # (o backup espelha REGRAS, que não têm data de emissão) — não invento.
         return jsonify({'error': 'Modo de desvincular não suportado nesta versão. Use "tudo".'}), 400
     try:
-        return jsonify(_desvincular_tudo(membro['set_id'], cliente_id,
+        return jsonify(_desvincular_tudo(set_id_fiscal, cliente_id,
                                          getattr(current_user, 'id', None)))
     except Exception as e:
         logger.exception('Falha ao desvincular empresa (tudo)')
