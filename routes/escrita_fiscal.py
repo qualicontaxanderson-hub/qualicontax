@@ -221,15 +221,24 @@ def _exigir_empresa(cliente_id):
 # Schema-safe: lê só memo_clone_membro (existe desde a Fase 3a); não depende de
 # nenhuma coluna/tabela da migration nova, então funciona antes dela rodar.
 # ---------------------------------------------------------------------------
+def _pool_vivo_ligado():
+    """Interruptor mestre do pool vivo. DESLIGADO por padrão (MEMO_POOL_VIVO=0):
+    só propaga quando o Anderson ligar explicitamente (=1), depois dos testes."""
+    return os.getenv('MEMO_POOL_VIVO', '0').strip().lower() in ('1', 'true', 'on', 'sim', 'yes')
+
+
 def _conjunto_fanout(origem_cliente_id, pares, tipo='entrada'):
     """Replica (emit_cnpj, cod, descricao, produto) para os OUTROS membros do
     conjunto de `origem_cliente_id`. Devolve dict de contagens (para log) ou None
     quando não há conjunto / nada a fazer."""
+    # Interruptor mestre: com MEMO_POOL_VIVO=0 (padrão) o fan-out fica TRAVADO —
+    # um vincular numa empresa do conjunto NÃO propaga. Ligar é decisão do
+    # Anderson, depois dos testes passarem.
+    if not _pool_vivo_ligado():
+        return None
     if not origem_cliente_id or not pares:
         return None
-    # Trava de segurança: o pool vivo fica DORMENTE até a migration da gestão
-    # rodar (ordem explícita do Anderson). Assim o deploy do código NÃO muda o
-    # comportamento de produção antes de ele validar — até lá, é o de hoje.
+    # Segurança extra: se a migration da gestão ainda não rodou, também não age.
     if not _memo_col_existe('memo_clone_membro', 'corte_data'):
         return None
     row = execute_query(

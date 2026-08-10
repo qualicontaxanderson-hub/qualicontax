@@ -18,6 +18,11 @@ Uso (no serviço web, mesmo ambiente do app):
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# O pool vivo nasce DESLIGADO em produção (MEMO_POOL_VIVO=0). Este teste liga o
+# interruptor SÓ no próprio processo, para exercitar o fan-out (item b) — a
+# produção não é afetada (o env do serviço web continua sem a variável = off).
+os.environ['MEMO_POOL_VIVO'] = '1'
+
 from utils.db_helper import execute_query, transacao  # noqa: E402
 from routes.escrita_fiscal import (  # noqa: E402
     _upsert_vinculo, _incluir_aplicar, _incluir_preview,
