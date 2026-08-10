@@ -207,6 +207,147 @@ def _exigir_empresa(cliente_id):
     return int(cliente_id)
 
 
+# ---------------------------------------------------------------------------
+# D3.1 Etapa 3 — POOL VIVO. Um vínculo criado numa empresa que pertence a um
+# conjunto passa a valer para TODOS os membros, na MESMA transação.
+#
+# REGRA DE SEGURANÇA (inegociável): o fan-out só CRIA regra onde o membro ainda
+# não tem uma para o par, e o retroativo preenche apenas itens SEM vínculo
+# (produto_catalogo_id NULL). Item que já tem vínculo DIFERENTE NÃO é
+# sobrescrito — isso continua sendo decisão explícita do operador pelo "Clonar",
+# que tem preview. Reclassificar nota alheia em silêncio é o que ninguém
+# descobre até fechar errado.
+#
+# Schema-safe: lê só memo_clone_membro (existe desde a Fase 3a); não depende de
+# nenhuma coluna/tabela da migration nova, então funciona antes dela rodar.
+# ---------------------------------------------------------------------------
+def _conjunto_fanout(origem_cliente_id, pares, tipo='entrada'):
+    """Replica (emit_cnpj, cod, descricao, produto) para os OUTROS membros do
+    conjunto de `origem_cliente_id`. Devolve dict de contagens (para log) ou None
+    quando não há conjunto / nada a fazer."""
+    if not origem_cliente_id or not pares:
+        return None
+    # Trava de segurança: o pool vivo fica DORMENTE até a migration da gestão
+    # rodar (ordem explícita do Anderson). Assim o deploy do código NÃO muda o
+    # comportamento de produção antes de ele validar — até lá, é o de hoje.
+    if not _memo_col_existe('memo_clone_membro', 'corte_data'):
+        return None
+    row = execute_query(
+        "SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s LIMIT 1",
+        (origem_cliente_id,), fetch=True, fetch_one=True)
+    if not row:
+        return None
+    sid = row['set_id']
+    membros = [r['cliente_id'] for r in (execute_query(
+        "SELECT cliente_id FROM memo_clone_membro WHERE set_id = %s AND cliente_id <> %s",
+        (sid, origem_cliente_id), fetch=True) or [])]
+    if not membros:
+        return None
+
+    alvo = {}
+    for emit, cod, desc, prod in pares:
+        if emit and cod and prod:
+            alvo[(emit, cod)] = (desc or '', prod)
+    if not alvo:
+        return None
+
+    n_regras = n_itens = n_divergentes = 0
+    afetados = set()
+    with transacao() as cur:
+        for m in membros:
+            cur.execute(
+                "SELECT emit_cnpj, codigo_produto_xml, produto_catalogo_id "
+                "  FROM nfe_produto_vinculo "
+                " WHERE cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL "
+                "   AND tipo = %s", (m, tipo))
+            existentes = {(r['emit_cnpj'], r['codigo_produto_xml']): r['produto_catalogo_id']
+                          for r in cur.fetchall()}
+            aplicaveis = []  # pares que este membro pode receber (sem regra, ou regra IGUAL)
+            for (emit, cod), (desc, prod) in alvo.items():
+                atual = existentes.get((emit, cod))
+                if atual is None:
+                    # Só insere onde confirmadamente NÃO existe (checado acima, na
+                    # transação) — o UNIQUE não protege linhas com grupo_id NULL.
+                    cur.execute(
+                        "INSERT INTO nfe_produto_vinculo "
+                        "  (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, "
+                        "   codigo_produto_xml, descricao_produto_xml, produto_catalogo_id, tipo) "
+                        "VALUES (%s, NULL, NULL, %s, %s, %s, %s, %s)",
+                        (m, emit, cod, desc, prod, tipo))
+                    n_regras += 1
+                    afetados.add(m)
+                    aplicaveis.append((emit, cod, prod))
+                elif atual == prod:
+                    aplicaveis.append((emit, cod, prod))   # regra igual: só preenche NULLs
+                else:
+                    n_divergentes += 1                     # DIVERGENTE: não toca (Clonar decide)
+            for emit, cod, prod in aplicaveis:
+                cur.execute(
+                    "UPDATE nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id "
+                    "   SET i.produto_catalogo_id = %s "
+                    " WHERE i.produto_catalogo_id IS NULL "
+                    "   AND n.cliente_id = %s AND n.tipo = %s "
+                    "   AND n.emit_cnpj = %s AND i.codigo_produto = %s",
+                    (prod, m, tipo, emit, cod))
+                if cur.rowcount:
+                    n_itens += cur.rowcount
+                    afetados.add(m)
+
+    logging.getLogger(__name__).info(
+        "[pool-vivo] conjunto %s: %d de %d membro(s) receberam o vínculo "
+        "(regras +%d, itens +%d, divergentes ignorados %d) a partir da empresa %s",
+        sid, len(afetados), len(membros), n_regras, n_itens, n_divergentes, origem_cliente_id)
+    return {'set_id': sid, 'membros': len(membros), 'membros_afetados': len(afetados),
+            'regras_criadas': n_regras, 'itens_preenchidos': n_itens,
+            'divergentes': n_divergentes}
+
+
+# Detecção de schema para a gestão do conjunto (migration D3.1 E3 roda FORA do
+# boot). Cacheia só o POSITIVO: enquanto ausente, revalida a cada chamada, então
+# o app "vê" a coluna/tabela na 1ª requisição depois da migration, sem restart.
+_MEMO_SCHEMA_OK = set()
+
+
+def _memo_col_existe(tabela, coluna):
+    chave = ('col', tabela, coluna)
+    if chave in _MEMO_SCHEMA_OK:
+        return True
+    r = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+        (tabela, coluna), fetch=True, fetch_one=True) or {}
+    if int(r.get('cnt', 0)) > 0:
+        _MEMO_SCHEMA_OK.add(chave)
+        return True
+    return False
+
+
+def _memo_tabela_existe(tabela):
+    chave = ('tbl', tabela)
+    if chave in _MEMO_SCHEMA_OK:
+        return True
+    r = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+        (tabela,), fetch=True, fetch_one=True) or {}
+    if int(r.get('cnt', 0)) > 0:
+        _MEMO_SCHEMA_OK.add(chave)
+        return True
+    return False
+
+
+def _memo_set_nomes():
+    """{set_id: nome} — vazio se a coluna `nome` ainda não existe (pré-migration)."""
+    if not _memo_col_existe('memo_clone_set', 'nome'):
+        return {}
+    nomes = {}
+    for r in (execute_query("SELECT id, nome FROM memo_clone_set", fetch=True) or []):
+        n = (r.get('nome') or '').strip()
+        if n:
+            nomes[r['id']] = n
+    return nomes
+
+
 def _upsert_vinculo(cliente_id, emit_cnpj, codigo_produto_xml,
                     descricao_produto_xml, produto_catalogo_id, tipo='entrada'):
     """Insert-or-update de uma memorização no escopo EMPRESA.
@@ -248,6 +389,11 @@ def _upsert_vinculo(cliente_id, emit_cnpj, codigo_produto_xml,
             (cliente_id, emit_cnpj, codigo_produto_xml,
              descricao_produto_xml, produto_catalogo_id, tipo),
         )
+
+    # Pool vivo: propaga para os outros membros do conjunto (se houver).
+    _conjunto_fanout(cliente_id,
+                     [(emit_cnpj, codigo_produto_xml, descricao_produto_xml, produto_catalogo_id)],
+                     tipo)
 
 
 def _upsert_vinculo_batch(cliente_id, emit_cnpj, codigo_desc_map: dict,
@@ -308,6 +454,12 @@ def _upsert_vinculo_batch(cliente_id, emit_cnpj, codigo_desc_map: dict,
                VALUES {values_ph}""",
             tuple(params),
         )
+
+    # Pool vivo: propaga todos os pares para os outros membros do conjunto.
+    _conjunto_fanout(
+        cliente_id,
+        [(emit_cnpj, cod, codigo_desc_map.get(cod, ''), produto_catalogo_id) for cod in codigos],
+        tipo)
 
 
 def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
@@ -5304,6 +5456,9 @@ def memorizacoes():
         if e.get('clone_set_id'):
             conjuntos.setdefault(e['clone_set_id'], []).append(e)
 
+    # D3.1 E3 — nomes reais dos conjuntos (schema-safe: {} antes da migration).
+    set_nomes = _memo_set_nomes()
+
     fm = {
         'busca':    request.args.get('busca', '').strip(),
         'empresa':  request.args.get('empresa', '').strip(),
@@ -5393,9 +5548,9 @@ def memorizacoes():
                             if e['id'] == chave), None),
             'total': len(lista),
             'set_id': sid,
-            # D3.1 — o conjunto ainda não tem nome próprio (ver Etapa 2); até lá,
-            # rótulo estável derivado do id, nunca em branco.
-            'set_nome': ('Conjunto #%d' % sid) if sid else None,
+            # D3.1 — nome real do conjunto quando houver; senão, rótulo estável
+            # derivado do id, nunca em branco.
+            'set_nome': (set_nomes.get(sid) or ('Conjunto #%d' % sid)) if sid else None,
             'set_membros': outros,
             'categorias': cats,
         })
@@ -5434,7 +5589,13 @@ def memorizacoes():
                            produtos_filtro=produtos_filtro,
                            empresas_filtro=empresas_filtro,
                            conjuntos=conjuntos,
-                           conjuntos_ordenados=sorted(conjuntos))
+                           conjuntos_ordenados=sorted(conjuntos),
+                           set_nomes=set_nomes,
+                           is_admin=current_user.is_admin(),
+                           empresas_livres=[
+                               {'id': e['id'], 'numero': e.get('numero_cliente'),
+                                'nome': e.get('nome_razao_social')}
+                               for e in empresas_clone if not e.get('clone_set_id')])
 
 
 # ---------------------------------------------------------------------------
@@ -5922,6 +6083,315 @@ def memorizacoes_clone_aplicar():
                 resultado['regras_criadas'], resultado['regras_sobrescritas'],
                 resultado['itens_reclassificados'])
     return jsonify(resultado)
+
+
+# ===========================================================================
+# D3.1 Etapa 3 — Gestão do conjunto: NOMEAR, INCLUIR (com corte por data de
+# emissão) e DESVINCULAR (admin, com rede de proteção). Preview antes de aplicar,
+# como o Clonar. A DDL destas features roda FORA do boot (ver migrations/): os
+# endpoints avisam "migração pendente" enquanto a coluna/tabela não existir.
+# ===========================================================================
+def _regras_empresa(cliente_id):
+    """{(emit_cnpj, cod, tipo): produto} das regras escopo-empresa da empresa."""
+    rows = execute_query(
+        "SELECT emit_cnpj, codigo_produto_xml, tipo, produto_catalogo_id "
+        "  FROM nfe_produto_vinculo "
+        " WHERE cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
+        (cliente_id,), fetch=True) or []
+    return {(r['emit_cnpj'], r['codigo_produto_xml'], r['tipo']): r['produto_catalogo_id']
+            for r in rows}
+
+
+def _pool_regras(set_id, excluir_cliente=None):
+    """Regras do POOL (união dos membros do set): {(emit,cod,tipo):(desc,produto)}."""
+    membros = [r['cliente_id'] for r in (execute_query(
+        "SELECT cliente_id FROM memo_clone_membro WHERE set_id = %s", (set_id,), fetch=True) or [])]
+    if excluir_cliente:
+        membros = [m for m in membros if m != excluir_cliente]
+    if not membros:
+        return {}
+    ph = ','.join(['%s'] * len(membros))
+    rows = execute_query(
+        f"SELECT emit_cnpj, codigo_produto_xml, tipo, descricao_produto_xml, produto_catalogo_id "
+        f"  FROM nfe_produto_vinculo "
+        f" WHERE cliente_id IN ({ph}) AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
+        tuple(membros), fetch=True) or []
+    pool = {}
+    for r in rows:
+        pool.setdefault((r['emit_cnpj'], r['codigo_produto_xml'], r['tipo']),
+                        (r['descricao_produto_xml'], r['produto_catalogo_id']))
+    return pool
+
+
+def _incluir_preview(set_id, cliente_id, corte_data):
+    """Read-only. Quantos itens seriam vinculados e quantos divergentes ignorados."""
+    pool = _pool_regras(set_id, excluir_cliente=cliente_id)
+    existentes = _regras_empresa(cliente_id)
+    regras_a_criar = sum(1 for k in pool if k not in existentes)
+
+    por_tipo = defaultdict(list)   # tipo -> [(emit,cod,prod)]
+    for (emit, cod, tipo), (_desc, prod) in pool.items():
+        if existentes.get((emit, cod, tipo), prod) == prod:   # pula só os divergentes já existentes
+            por_tipo[tipo].append((emit, cod, prod))
+
+    a_vincular = 0
+    divergentes = 0
+    for tipo, trip in por_tipo.items():
+        pares = [(e, c) for e, c, _ in trip]
+        alvo_por_par = {(e, c): p for e, c, p in trip}
+        pares_ph = ','.join(['(%s,%s)'] * len(pares))
+        base = []
+        for e, c in pares:
+            base += [e, c]
+        cond_data = " AND n.data_emissao >= %s" if corte_data else ""
+        p_data = [corte_data] if corte_data else []
+        # itens SEM vínculo no escopo (respeitando o corte)
+        row = execute_query(
+            f"SELECT COUNT(*) AS c FROM nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id "
+            f" WHERE n.cliente_id = %s AND n.tipo = %s AND i.produto_catalogo_id IS NULL "
+            f"   AND (n.emit_cnpj, i.codigo_produto) IN ({pares_ph}){cond_data}",
+            tuple([cliente_id, tipo] + base + p_data), fetch=True, fetch_one=True) or {}
+        a_vincular += int(row.get('c') or 0)
+        # itens JÁ vinculados com produto DIFERENTE do pool (seriam ignorados)
+        drows = execute_query(
+            f"SELECT n.emit_cnpj, i.codigo_produto, i.produto_catalogo_id, COUNT(*) AS c "
+            f"  FROM nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id "
+            f" WHERE n.cliente_id = %s AND n.tipo = %s AND i.produto_catalogo_id IS NOT NULL "
+            f"   AND (n.emit_cnpj, i.codigo_produto) IN ({pares_ph}){cond_data} "
+            f" GROUP BY n.emit_cnpj, i.codigo_produto, i.produto_catalogo_id",
+            tuple([cliente_id, tipo] + base + p_data), fetch=True) or []
+        for r in drows:
+            if r['produto_catalogo_id'] != alvo_por_par.get((r['emit_cnpj'], r['codigo_produto'])):
+                divergentes += int(r['c'] or 0)
+
+    return {'pool': len(pool), 'regras_a_criar': regras_a_criar,
+            'itens_a_vincular': a_vincular, 'itens_divergentes': divergentes}
+
+
+def _incluir_aplicar(set_id, cliente_id, corte_data, actor_id):
+    """Grava: entra no conjunto (com o corte), cria as regras que faltam e
+    preenche apenas itens SEM vínculo. Nunca sobrescreve regra/ item divergente.
+    Não é destrutivo — sem backup."""
+    pool = _pool_regras(set_id, excluir_cliente=cliente_id)
+    if not pool:
+        raise ValueError('O conjunto não tem regras para aplicar.')
+    existentes = _regras_empresa(cliente_id)
+    n_regras = n_itens = 0
+    with transacao() as cur:
+        cur.execute("SELECT id FROM memo_clone_membro WHERE cliente_id = %s", (cliente_id,))
+        if cur.fetchone() is None:
+            cur.execute("INSERT INTO memo_clone_membro (set_id, cliente_id, corte_data) "
+                        "VALUES (%s, %s, %s)", (set_id, cliente_id, corte_data))
+        else:
+            cur.execute("UPDATE memo_clone_membro SET set_id = %s, corte_data = %s "
+                        "WHERE cliente_id = %s", (set_id, corte_data, cliente_id))
+        for (emit, cod, tipo), (desc, prod) in pool.items():
+            atual = existentes.get((emit, cod, tipo))
+            if atual is None:
+                cur.execute(
+                    "INSERT INTO nfe_produto_vinculo "
+                    "  (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml, "
+                    "   descricao_produto_xml, produto_catalogo_id, tipo) "
+                    "VALUES (%s, NULL, NULL, %s, %s, %s, %s, %s)",
+                    (cliente_id, emit, cod, desc, prod, tipo))
+                n_regras += 1
+            elif atual != prod:
+                continue   # empresa já tem regra divergente: respeita, não toca nos itens
+            sql = ("UPDATE nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id "
+                   "   SET i.produto_catalogo_id = %s "
+                   " WHERE i.produto_catalogo_id IS NULL AND n.cliente_id = %s AND n.tipo = %s "
+                   "   AND n.emit_cnpj = %s AND i.codigo_produto = %s")
+            p = [prod, cliente_id, tipo, emit, cod]
+            if corte_data:
+                sql += " AND n.data_emissao >= %s"
+                p.append(corte_data)
+            cur.execute(sql, tuple(p))
+            n_itens += cur.rowcount
+    logger.info('[incluir] empresa %s no conjunto %s (corte=%s): regras +%d, itens +%d',
+                cliente_id, set_id, corte_data or 'todos', n_regras, n_itens)
+    return {'ok': True, 'set_id': set_id, 'cliente_id': cliente_id,
+            'regras_criadas': n_regras, 'itens_vinculados': n_itens,
+            'corte_data': corte_data}
+
+
+def _desvincular_preview(cliente_id):
+    row = execute_query(
+        "SELECT COUNT(*) AS c FROM nfe_produto_vinculo "
+        " WHERE cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
+        (cliente_id,), fetch=True, fetch_one=True) or {}
+    return int(row.get('c') or 0)
+
+
+def _desvincular_tudo(set_id, cliente_id, actor_id):
+    """ADMIN. Backup ANTES do delete, tudo numa transação, com conferência.
+    Remove a empresa do conjunto e APAGA as regras dela (escopo empresa)."""
+    with transacao() as cur:
+        cur.execute("INSERT INTO memo_desvinculo_op (set_id, cliente_id, modo, corte_data, criado_por) "
+                    "VALUES (%s, %s, 'tudo', NULL, %s)", (set_id, cliente_id, actor_id))
+        op_id = cur.lastrowid
+        # 1) BACKUP das regras ANTES de qualquer delete
+        cur.execute(
+            "INSERT INTO memo_desvinculo_bkp "
+            "  (op_id, vinculo_id, cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, "
+            "   codigo_produto_xml, descricao_produto_xml, produto_catalogo_id, tipo, removido_por) "
+            "SELECT %s, id, cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, "
+            "   codigo_produto_xml, descricao_produto_xml, produto_catalogo_id, tipo, %s "
+            "  FROM nfe_produto_vinculo "
+            " WHERE cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
+            (op_id, actor_id, cliente_id))
+        n_bkp = cur.rowcount
+        # 2) DELETE das regras
+        cur.execute("DELETE FROM nfe_produto_vinculo "
+                    " WHERE cliente_id = %s AND grupo_id IS NULL AND ramo_atividade_id IS NULL",
+                    (cliente_id,))
+        n_del = cur.rowcount
+        # 3) remove do conjunto
+        cur.execute("DELETE FROM memo_clone_membro WHERE cliente_id = %s", (cliente_id,))
+        # 4) conferência antes do commit
+        if n_del != n_bkp:
+            raise RuntimeError(f'Contagens não fecharam: {n_del} apagadas vs {n_bkp} '
+                               f'no backup. Nada foi gravado.')
+    logger.info('[desvincular:tudo] empresa %s do conjunto %s: op_id=%s, %s regra(s) '
+                'para backup e apagadas', cliente_id, set_id, op_id, n_del)
+    return {'ok': True, 'op_id': op_id, 'removidas': n_del}
+
+
+def _desvincular_restore(op_id):
+    """Reinsere por op_id o que o desvincular apagou (prova de que dá para voltar)."""
+    linhas = execute_query("SELECT * FROM memo_desvinculo_bkp WHERE op_id = %s",
+                           (op_id,), fetch=True) or []
+    if not linhas:
+        raise ValueError('Nada para restaurar nesse op_id.')
+    with transacao() as cur:
+        for r in linhas:
+            cur.execute(
+                "INSERT INTO nfe_produto_vinculo "
+                "  (cliente_id, grupo_id, ramo_atividade_id, emit_cnpj, codigo_produto_xml, "
+                "   descricao_produto_xml, produto_catalogo_id, tipo) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (r['cliente_id'], r['grupo_id'], r['ramo_atividade_id'], r['emit_cnpj'],
+                 r['codigo_produto_xml'], r['descricao_produto_xml'],
+                 r['produto_catalogo_id'], r['tipo']))
+    return len(linhas)
+
+
+@escrita_fiscal.route('/memorizacoes/conjunto/nomear', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_conjunto_nomear():
+    if not _memo_col_existe('memo_clone_set', 'nome'):
+        return jsonify({'error': 'Migração pendente: a coluna de nome do conjunto ainda não '
+                                 'existe. Rode a migration da gestão do conjunto.'}), 409
+    data = request.get_json(force=True) or {}
+    try:
+        sid = int(data.get('set_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'set_id inválido.'}), 400
+    nome = (data.get('nome') or '').strip()[:120]
+    res = execute_query("UPDATE memo_clone_set SET nome = %s WHERE id = %s", (nome or None, sid))
+    if res is None:
+        return jsonify({'error': 'Falha ao gravar o nome.'}), 500
+    return jsonify({'ok': True, 'set_id': sid, 'nome': nome, 'rotulo': nome or f'Conjunto #{sid}'})
+
+
+@escrita_fiscal.route('/memorizacoes/conjunto/incluir/preview', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_conjunto_incluir_preview():
+    if not _memo_col_existe('memo_clone_membro', 'corte_data'):
+        return jsonify({'error': 'Migração pendente: a data de corte por membro ainda não '
+                                 'existe. Rode a migration da gestão do conjunto.'}), 409
+    data = request.get_json(force=True) or {}
+    try:
+        set_id = int(data.get('set_id'))
+        cliente_id = int(data.get('cliente_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'set_id e cliente_id são obrigatórios.'}), 400
+    corte = (data.get('corte_data') or '').strip() or None
+    try:
+        return jsonify({'ok': True, 'corte_data': corte, **_incluir_preview(set_id, cliente_id, corte)})
+    except Exception as e:
+        logger.exception('Falha no preview de incluir empresa no conjunto')
+        return jsonify({'error': f'Falha ao analisar: {e}'}), 500
+
+
+@escrita_fiscal.route('/memorizacoes/conjunto/incluir/aplicar', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_conjunto_incluir_aplicar():
+    if not _memo_col_existe('memo_clone_membro', 'corte_data'):
+        return jsonify({'error': 'Migração pendente. Rode a migration da gestão do conjunto.'}), 409
+    data = request.get_json(force=True) or {}
+    try:
+        set_id = int(data.get('set_id'))
+        cliente_id = int(data.get('cliente_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'set_id e cliente_id são obrigatórios.'}), 400
+    corte = (data.get('corte_data') or '').strip() or None
+    # a empresa não pode já pertencer a OUTRO conjunto
+    row = execute_query("SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s",
+                        (cliente_id,), fetch=True, fetch_one=True)
+    if row and row['set_id'] != set_id:
+        return jsonify({'error': 'A empresa já pertence a outro conjunto. Desvincule antes.'}), 400
+    try:
+        return jsonify(_incluir_aplicar(set_id, cliente_id, corte,
+                                        getattr(current_user, 'id', None)))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.exception('Falha ao incluir empresa no conjunto')
+        return jsonify({'error': f'Falha ao aplicar: {e}'}), 500
+
+
+@escrita_fiscal.route('/memorizacoes/conjunto/desvincular/preview', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_conjunto_desvincular_preview():
+    if not current_user.is_admin():
+        return jsonify({'error': 'Apenas administradores podem desvincular.'}), 403
+    data = request.get_json(force=True) or {}
+    try:
+        cliente_id = int(data.get('cliente_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'cliente_id obrigatório.'}), 400
+    emp = execute_query("SELECT nome_razao_social FROM clientes WHERE id = %s",
+                        (cliente_id,), fetch=True, fetch_one=True) or {}
+    return jsonify({'ok': True, 'cliente_id': cliente_id,
+                    'nome_empresa': emp.get('nome_razao_social') or f'#{cliente_id}',
+                    'regras_a_remover': _desvincular_preview(cliente_id)})
+
+
+@escrita_fiscal.route('/memorizacoes/conjunto/desvincular/aplicar', methods=['POST'])
+@permission_required('escrita_fiscal.memorizacoes')
+def memorizacoes_conjunto_desvincular_aplicar():
+    if not current_user.is_admin():
+        return jsonify({'error': 'Apenas administradores podem desvincular.'}), 403
+    if not (_memo_tabela_existe('memo_desvinculo_op') and _memo_tabela_existe('memo_desvinculo_bkp')):
+        return jsonify({'error': 'Migração pendente: as tabelas de backup do desvincular ainda '
+                                 'não existem. Rode a migration da gestão do conjunto.'}), 409
+    data = request.get_json(force=True) or {}
+    modo = (data.get('modo') or '').strip()
+    try:
+        cliente_id = int(data.get('cliente_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'cliente_id obrigatório.'}), 400
+    confirmacao = (data.get('confirmacao') or '').strip()
+    membro = execute_query("SELECT set_id FROM memo_clone_membro WHERE cliente_id = %s",
+                           (cliente_id,), fetch=True, fetch_one=True)
+    if not membro:
+        return jsonify({'error': 'Empresa não está em nenhum conjunto.'}), 400
+    emp = execute_query("SELECT nome_razao_social FROM clientes WHERE id = %s",
+                        (cliente_id,), fetch=True, fetch_one=True) or {}
+    nome_emp = (emp.get('nome_razao_social') or '').strip()
+    # confirmação digitando o nome da empresa (defesa contra clique fácil)
+    if not confirmacao or confirmacao.lower() != nome_emp.lower():
+        return jsonify({'error': 'Confirmação inválida: digite exatamente o nome da empresa.'}), 400
+    if modo != 'tudo':
+        # "a partir de data de emissão" ainda não definido contra o schema atual
+        # (o backup espelha REGRAS, que não têm data de emissão) — não invento.
+        return jsonify({'error': 'Modo de desvincular não suportado nesta versão. Use "tudo".'}), 400
+    try:
+        return jsonify(_desvincular_tudo(membro['set_id'], cliente_id,
+                                         getattr(current_user, 'id', None)))
+    except Exception as e:
+        logger.exception('Falha ao desvincular empresa (tudo)')
+        return jsonify({'error': f'Falha ao desvincular: {e}'}), 500
 
 
 # _lookup_vinculo, _save_nfe e _save_nfe_dual foram movidos para utils/nfe_import.py

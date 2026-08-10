@@ -734,6 +734,14 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # NOTA (D3.1 Etapa 3): a DDL da gestão do conjunto (memo_clone_set.nome,
+    # memo_clone_membro.corte_data, memo_desvinculo_op, memo_desvinculo_bkp) foi
+    # DELIBERADAMENTE mantida FORA do boot — vive em
+    # migrations/2026_08_memo_gestao_conjunto.py e roda por ordem explícita do
+    # Anderson, não no deploy. O código é schema-safe: a tela degrada para
+    # "Conjunto #id" sem a coluna e os endpoints novos avisam se as tabelas
+    # faltarem. Depois de validado em produção, um follow-up dobra a DDL aqui.
+
     # ---- Cadastros Adicionais de Clientes ----
     _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_adicionais_clientes (
