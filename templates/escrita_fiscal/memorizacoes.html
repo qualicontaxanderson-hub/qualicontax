@@ -80,7 +80,10 @@
        empresa (o "ICMS espremido" das Entradas). Passar o id de flex-basis 0%
        para auto faz o nome ocupar a 1ª linha e empurrar os selos para baixo. */
     .me-emp-head { flex-wrap:wrap; row-gap:7px; }
-    .me-emp-id { flex:1 1 auto; }
+    .me-emp-id { flex:1 1 auto; min-width:0; }
+    /* B — com o número no título, ele fica mais longo; no celular ele quebra em
+       vez de estourar a largura do cartão. */
+    .me-emp-nome { white-space:normal; overflow-wrap:anywhere; }
 }
 
 /* mantidas: usadas pelo modal de clonagem e pelo de empresas */
@@ -244,14 +247,18 @@
     <div class="me-emp-head" onclick="toggleEmpresa({{ g.cliente_id }})">
         <i class="fas fa-chevron-right me-emp-chev"></i>
         <div class="me-emp-id">
-            <div class="me-emp-nome" title="{{ g.nome }}">{{ g.nome }}</div>
+            {# B — número do cliente no começo do título, exatamente como no cadastro (sem zeros à esquerda) #}
+            <div class="me-emp-nome" title="{% if g.numero %}#{{ g.numero }} — {% endif %}{{ g.nome }}">{% if g.numero %}#{{ g.numero }} — {% endif %}{{ g.nome }}</div>
             <div class="me-emp-sub">
                 {{ g.total }} memorizaç{{ 'ão' if g.total == 1 else 'ões' }} ·
                 {{ g.categorias|length }} categoria{{ '' if g.categorias|length == 1 else 's' }}
                 {%- if g.set_membros %} · sincronizada com {{ g.set_membros|length }} empresa{{ '' if g.set_membros|length == 1 else 's' }}{% endif %}
             </div>
         </div>
-        {% if g.numero %}<span class="lst-pill me-emp-num">#{{ g.numero }}</span>{% endif %}
+        {# C — no lugar que o número desocupou: resumo por tipo. Regra da casa:
+           tipo com 0 NÃO aparece. As duas cores são as mesmas do badge da linha (A). #}
+        {% if g.n_entrada %}<span class="lst-tp-ent me-emp-num">{{ g.n_entrada }} ENTRADAS</span>{% endif %}
+        {% if g.n_saida %}<span class="lst-tp-sai me-emp-num">{{ g.n_saida }} SAÍDAS</span>{% endif %}
         {% if g.set_membros %}<span class="lst-sit lst-sit-on">CONJUNTO DE {{ g.set_membros|length + 1 }}</span><span class="me-set-nome" title="Nome do conjunto de sincronização">{{ g.set_nome }}</span>{% endif %}
     </div>
 
@@ -293,6 +300,8 @@
                     {% endif %}
                 </div>
                 <div id="prod_{{ r.id }}">
+                    {# A — badge de TIPO (entre o produto do fornecedor e o nosso produto verde) #}
+                    {% if r.tipo == 'saida' %}<span class="lst-tp-sai">SAÍDA</span>{% else %}<span class="lst-tp-ent">ENTRADA</span>{% endif %}
                     {% if r.produto_nome %}
                         <span class="badge-prod">{{ r.produto_nome }}</span>
                     {% else %}

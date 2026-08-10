@@ -5441,7 +5441,7 @@ def memorizacoes():
                           AND i.codigo_produto = v.codigo_produto_xml
                         LIMIT 1)
                   ) AS descricao_produto_xml,
-                  v.produto_catalogo_id, v.criado_em,
+                  v.produto_catalogo_id, v.tipo, v.criado_em,
                   p.nome AS produto_nome, p.categoria AS produto_categoria,
                   c.nome_razao_social AS empresa_nome,
                   g.nome AS grupo_nome,
@@ -5588,12 +5588,19 @@ def memorizacoes():
                                            (x.get('produto_nome') or '').upper()))
             cats.append({'nome': nome_cat, 'total': len(linhas), 'linhas': linhas})
         primeiro = lista[0]
+        # Contagem por TIPO a partir das linhas já carregadas (sem query nova por
+        # empresa). 'saida' é explícito; o resto (entrada / tipo em branco, cujo
+        # default é 'entrada') conta como entrada — assim entrada+saida == total.
+        n_saida = sum(1 for r in lista if (r.get('tipo') or '') == 'saida')
+        n_entrada = len(lista) - n_saida
         grupos_empresa.append({
             'cliente_id': chave,
             'nome': primeiro.get('empresa_nome') or 'Sem empresa (global, grupo ou ramo)',
             'numero': next((e.get('numero_cliente') for e in empresas_clone
                             if e['id'] == chave), None),
             'total': len(lista),
+            'n_entrada': n_entrada,
+            'n_saida': n_saida,
             'set_id': sid,
             # D3.1 — nome real do conjunto quando houver; senão, rótulo estável
             # derivado do id, nunca em branco.

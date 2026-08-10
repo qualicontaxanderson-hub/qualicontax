@@ -190,6 +190,14 @@
    de 4 estados usado pela tabela da casa (D0). É o mesmo conjunto do resto do
    sistema; não existe um segundo jeito de pintar estado. */
 
+/* Badges de TIPO da memorização (entrada/saída) — mesma família visual dos
+   badges acima (raio/padding/peso). Fonte única: nada de cor solta no template. */
+.lst-tp-ent, .lst-tp-sai { display:inline-block; font-size:10px; font-weight:700;
+    letter-spacing:.3px; border-radius:99px; padding:3px 9px;
+    font-variant-numeric:tabular-nums; white-space:nowrap; }
+.lst-tp-ent { background:#EFE4DA; color:#6B4423; }   /* ENTRADAS — marrom */
+.lst-tp-sai { background:#FDEBD8; color:#A85B00; }   /* SAÍDAS — laranja  */
+
 /* Ícones de ação — quadrados 30px, verde/vermelho suave (nada berrante) */
 .lst-c-act { display:flex; gap:6px; justify-content:flex-end; }
 .lst-act { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
