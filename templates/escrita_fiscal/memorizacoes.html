@@ -19,6 +19,10 @@
                overflow:hidden; text-overflow:ellipsis; }
 .me-emp-sub { font-size:11px; color:#7d968a; margin-top:2px; }
 .me-emp-num { flex-shrink:0; }
+/* D3.1 — nome do conjunto ao lado do selo "CONJUNTO DE N" (provisório: "Conjunto #id") */
+.me-set-nome { flex-shrink:0; font-size:11px; font-weight:700; color:#33574a;
+               background:#eaf3ee; border:1px solid #cfe6d9; padding:2px 9px; border-radius:99px;
+               white-space:nowrap; }
 .me-emp-corpo { display:none; border-top:1px solid #eef2f0; padding:6px 16px 14px; }
 .me-emp.aberta .me-emp-corpo { display:block; }
 
@@ -57,6 +61,12 @@
     .me-acoes { justify-content:flex-start; margin-top:6px; }
     .me-desc, .me-forn { white-space:normal; }
     .me-emp-corpo { padding:6px 11px 12px; }
+    /* D3.1 — com o nome do conjunto vira 3 selos (#num · CONJUNTO DE N · nome).
+       No celular eles descem para uma 2ª linha em vez de espremer o nome da
+       empresa (o "ICMS espremido" das Entradas). Passar o id de flex-basis 0%
+       para auto faz o nome ocupar a 1ª linha e empurrar os selos para baixo. */
+    .me-emp-head { flex-wrap:wrap; row-gap:7px; }
+    .me-emp-id { flex:1 1 auto; }
 }
 
 /* mantidas: usadas pelo modal de clonagem e pelo de empresas */
@@ -177,6 +187,10 @@
                             <option value="">Todas</option>
                             <option value="em_conjunto" {% if filtros.sincronia == 'em_conjunto' %}selected{% endif %}>Em conjunto</option>
                             <option value="fora"        {% if filtros.sincronia == 'fora'        %}selected{% endif %}>Fora de conjunto</option>
+                            {# D3.1 — isola um conjunto específico. Sem nome próprio ainda: rótulo pelo id. #}
+                            {% for sid in conjuntos_ordenados %}
+                            <option value="set:{{ sid }}" {% if filtros.sincronia == 'set:' ~ sid|string %}selected{% endif %}>Conjunto #{{ sid }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="qf-group qf-actions">
@@ -209,7 +223,7 @@
     </span>
 </div>
 
-<!-- Cartoes por empresa (maior primeiro; nascem fechados) -->
+<!-- Cartoes por empresa (D3.1: por número do cliente crescente; nascem fechados) -->
 {% if grupos_empresa %}
 {% for g in grupos_empresa %}
 <div class="me-emp" id="emp_{{ g.cliente_id }}">
@@ -224,7 +238,7 @@
             </div>
         </div>
         {% if g.numero %}<span class="lst-pill me-emp-num">#{{ g.numero }}</span>{% endif %}
-        {% if g.set_membros %}<span class="lst-sit lst-sit-on">CONJUNTO DE {{ g.set_membros|length + 1 }}</span>{% endif %}
+        {% if g.set_membros %}<span class="lst-sit lst-sit-on">CONJUNTO DE {{ g.set_membros|length + 1 }}</span><span class="me-set-nome" title="Nome do conjunto de sincronização">{{ g.set_nome }}</span>{% endif %}
     </div>
 
     <div class="me-emp-corpo">

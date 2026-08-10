@@ -5338,19 +5338,30 @@ def memorizacoes():
         if fm['tipo'] and _ambito(r) != fm['tipo']:
             return False
         if fm['sincronia']:
-            em_conjunto = bool(conjuntos) and any(
-                str(r.get('cliente_id') or '') == str(e['id'])
-                for membros in conjuntos.values() for e in membros)
-            if fm['sincronia'] == 'em_conjunto' and not em_conjunto:
-                return False
-            if fm['sincronia'] == 'fora' and em_conjunto:
-                return False
+            cid = str(r.get('cliente_id') or '')
+            if fm['sincronia'].startswith('set:'):
+                # isola UM conjunto específico ("set:<id>")
+                try:
+                    sid_f = int(fm['sincronia'][4:])
+                except ValueError:
+                    sid_f = None
+                membros_set = {str(e['id']) for e in conjuntos.get(sid_f, [])}
+                if cid not in membros_set:
+                    return False
+            else:
+                em_conjunto = bool(conjuntos) and any(
+                    cid == str(e['id'])
+                    for membros in conjuntos.values() for e in membros)
+                if fm['sincronia'] == 'em_conjunto' and not em_conjunto:
+                    return False
+                if fm['sincronia'] == 'fora' and em_conjunto:
+                    return False
         return True
 
     filtradas = [r for r in rows if _passa(r)]
 
-    # Empresa -> categoria -> linhas. Empresa com mais memorizações primeiro;
-    # dentro da categoria, ordenado por fornecedor e depois por produto.
+    # Empresa -> categoria -> linhas. A ordem dos cartões é definida mais abaixo
+    # (por número do cliente); dentro da categoria, por fornecedor e produto.
     por_empresa = {}
     for r in filtradas:
         chave = r.get('cliente_id') or 0          # 0 = sem empresa (global/grupo/ramo)
@@ -5382,10 +5393,23 @@ def memorizacoes():
                             if e['id'] == chave), None),
             'total': len(lista),
             'set_id': sid,
+            # D3.1 — o conjunto ainda não tem nome próprio (ver Etapa 2); até lá,
+            # rótulo estável derivado do id, nunca em branco.
+            'set_nome': ('Conjunto #%d' % sid) if sid else None,
             'set_membros': outros,
             'categorias': cats,
         })
-    grupos_empresa.sort(key=lambda g: (-g['total'], g['nome']))
+
+    # D3.1 — ordem por NÚMERO DO CLIENTE crescente (#23, #39, #162, #211…);
+    # empresa sem número (e o balde global/grupo/ramo) vai para o fim.
+    def _ordem_por_numero(g):
+        n = str(g['numero']).strip() if g.get('numero') is not None else ''
+        if n.isdigit():
+            return (0, int(n), '')
+        if n:
+            return (1, 0, n.upper())                     # número não-numérico (raro)
+        return (2, 0, (g['nome'] or '').upper())         # sem número: por último
+    grupos_empresa.sort(key=_ordem_por_numero)
 
     categorias_filtro = sorted({(r.get('produto_categoria') or '(sem categoria)') for r in rows})
     produtos_filtro = sorted(
@@ -5409,7 +5433,8 @@ def memorizacoes():
                            categorias_filtro=categorias_filtro,
                            produtos_filtro=produtos_filtro,
                            empresas_filtro=empresas_filtro,
-                           conjuntos=conjuntos)
+                           conjuntos=conjuntos,
+                           conjuntos_ordenados=sorted(conjuntos))
 
 
 # ---------------------------------------------------------------------------
