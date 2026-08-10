@@ -270,7 +270,9 @@
 }
 .ef-car-track::-webkit-scrollbar { display:none; }
 .ef-car-card {
-    flex:0 0 272px; scroll-snap-align:center; box-sizing:border-box;
+    /* snap no INÍCIO (não no centro) + stop em cada card: o carrossel encaixa
+       card a card e não para deixando meio card cortado na borda. */
+    flex:0 0 272px; scroll-snap-align:start; scroll-snap-stop:always; box-sizing:border-box;
     background:#fff; border-radius:16px; padding:15px 16px;
     box-shadow:0 16px 34px rgba(4,30,20,.30);
     display:flex; flex-direction:column; gap:7px;

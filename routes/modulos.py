@@ -237,6 +237,45 @@ def _cadastros_home_payload():
         'trend': {'tipo': 'neutro', 'rotulo': 'total'},
     })
 
+    # 8) Distribuição por RAMO DE ATIVIDADE — top 5. Ranking, não série do tempo:
+    #    o sparkline é a própria distribuição (barra), igual ao card de validade.
+    ramo_rows = execute_query(
+        "SELECT ra.nome, COUNT(DISTINCT rel.cliente_id) n "
+        "FROM cliente_ramo_atividade_relacao rel "
+        "JOIN ramos_atividade ra ON ra.id=rel.ramo_atividade_id "
+        "JOIN clientes c ON c.id=rel.cliente_id "
+        "WHERE c.situacao='ATIVO' GROUP BY ra.id ORDER BY n DESC LIMIT 5",
+        fetch=True) or []
+    if ramo_rows:
+        def _sh(nm):
+            nm = (nm or '').strip()
+            return (nm[:15] + '…') if len(nm) > 16 else nm
+        cards.append({
+            'titulo': 'Clientes por ramo', 'icone': 'fa-industry',
+            'valor': int(ramo_rows[0]['n']), 'valor_sufixo': ' · ' + _sh(ramo_rows[0]['nome']),
+            'apoio': ' · '.join('%s %d' % (_sh(r['nome']), int(r['n'])) for r in ramo_rows[1:]),
+            'spark': [int(r['n']) for r in ramo_rows], 'spark_tipo': 'barra',
+            'trend': {'tipo': 'neutro', 'rotulo': 'top 5'},
+        })
+
+    # 9) Distribuição por MUNICÍPIO — top 5 (cidade do endereço do cliente ativo).
+    mun_rows = execute_query(
+        "SELECT ec.cidade, ec.estado, COUNT(DISTINCT ec.cliente_id) n "
+        "FROM enderecos_clientes ec JOIN clientes c ON c.id=ec.cliente_id "
+        "WHERE c.situacao='ATIVO' AND COALESCE(ec.cidade,'')<>'' "
+        "GROUP BY ec.cidade, ec.estado ORDER BY n DESC LIMIT 5",
+        fetch=True) or []
+    if mun_rows:
+        def _mun(r):
+            return '%s/%s' % ((r['cidade'] or '').strip().title(), (r['estado'] or '').strip())
+        cards.append({
+            'titulo': 'Clientes por município', 'icone': 'fa-map-marked-alt',
+            'valor': int(mun_rows[0]['n']), 'valor_sufixo': ' · ' + _mun(mun_rows[0]),
+            'apoio': ' · '.join('%s %d' % (_mun(r), int(r['n'])) for r in mun_rows[1:]),
+            'spark': [int(r['n']) for r in mun_rows], 'spark_tipo': 'barra',
+            'trend': {'tipo': 'neutro', 'rotulo': 'top 5'},
+        })
+
     counters = {
         'clientes': ativos, 'grupos': grupos, 'ramos': ramos,
         'contratos': contratos, 'municipios': munis,

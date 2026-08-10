@@ -865,7 +865,9 @@ def _home_destaques_payload():
                 "FROM nfe_itens WHERE produto_catalogo_id IS NULL")
     memo = _hq1(
         "SELECT COUNT(*) ativas, "
-        " SUM(YEAR(criado_em)=YEAR(CURDATE()) AND MONTH(criado_em)=MONTH(CURDATE())) aplicadas_mes "
+        " SUM(YEAR(criado_em)=YEAR(CURDATE()) AND MONTH(criado_em)=MONTH(CURDATE())) aplicadas_mes, "
+        " SUM(YEAR(criado_em)=YEAR(CURDATE()-INTERVAL 1 MONTH) "
+        "     AND MONTH(criado_em)=MONTH(CURDATE()-INTERVAL 1 MONTH)) aplicadas_prev "
         "FROM nfe_produto_vinculo")
     cli9 = _hq1("SELECT COUNT(DISTINCT cliente_id) cli FROM nfe_importacoes "
                 "WHERE importado_em>=CURDATE()-INTERVAL 8 DAY")
@@ -950,6 +952,89 @@ def _home_destaques_payload():
                 'spark': _hspark(vinc9, keys9, 'd', 'c'), 'spark_tipo': 'linha',
                 'trend': {'tipo': 'neutro', 'rotulo': 'ativas'}}
     _card(_c6)
+
+    # Ranking: sem série temporal — o sparkline é a PRÓPRIA distribuição top-5
+    # (barra), como o card de validade do Cadastros. Líder no valor+sufixo; os
+    # 2º–5º com número no apoio. Sem inventar linha do tempo.
+    def _rank_apoio(rows, rotulo):
+        return ' · '.join('%s %s' % (rotulo(r), _hi(r['n'])) for r in rows[1:])
+
+    # ---- 7) MAIS ENTRADAS (top 5 empresas) ----
+    def _c7():
+        rows = _hqn("SELECT c.numero_cliente num, COUNT(*) n FROM nfe_importacoes ni "
+                    "JOIN clientes c ON c.id=ni.cliente_id WHERE ni.tipo='entrada' "
+                    "GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
+        if not rows:
+            return None
+        return {'id': 'top_entradas', 'icone': 'fa-arrow-down-wide-short',
+                'titulo': 'Mais entradas',
+                'valor': _hi(rows[0]['n']), 'valor_sufixo': " · #%s" % rows[0]['num'],
+                'apoio': _rank_apoio(rows, lambda r: '#%s' % r['num']),
+                'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
+                'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
+    _card(_c7)
+
+    # ---- 8) MAIS SAÍDAS (top 5 empresas) ----
+    def _c8():
+        rows = _hqn("SELECT c.numero_cliente num, COUNT(*) n FROM nfe_importacoes ni "
+                    "JOIN clientes c ON c.id=ni.cliente_id WHERE ni.tipo='saida' "
+                    "GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
+        if not rows:
+            return None
+        return {'id': 'top_saidas', 'icone': 'fa-arrow-up-wide-short',
+                'titulo': 'Mais saídas',
+                'valor': _hi(rows[0]['n']), 'valor_sufixo': " · #%s" % rows[0]['num'],
+                'apoio': _rank_apoio(rows, lambda r: '#%s' % r['num']),
+                'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
+                'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
+    _card(_c8)
+
+    # ---- 9) FORNECEDORES FREQUENTES (top 5 emitentes de entrada) ----
+    def _c9():
+        rows = _hqn("SELECT MAX(emit_nome) nome, COUNT(*) n FROM nfe_importacoes "
+                    "WHERE tipo='entrada' AND COALESCE(emit_cnpj,'')<>'' "
+                    "GROUP BY emit_cnpj ORDER BY n DESC LIMIT 5")
+        if not rows:
+            return None
+
+        def _sh(nm):
+            nm = (nm or '').strip().title()
+            return (nm[:15] + '…') if len(nm) > 16 else nm
+        return {'id': 'top_fornecedores', 'icone': 'fa-truck-ramp-box',
+                'titulo': 'Fornecedores frequentes',
+                'valor': _hi(rows[0]['n']), 'valor_sufixo': ' · ' + _sh(rows[0]['nome']),
+                'apoio': _rank_apoio(rows, lambda r: _sh(r['nome'])),
+                'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
+                'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
+    _card(_c9)
+
+    # ---- 10) MEMORIZAÇÕES NO MÊS (vs mês anterior — variação real, mesmo negativa) ----
+    def _c10():
+        if memo is None:
+            return None
+        at = _hi(memo.get('aplicadas_mes'))
+        ant = _hi(memo.get('aplicadas_prev'))
+        return {'id': 'memo_mes', 'icone': 'fa-memory', 'titulo': 'Memorizações no mês',
+                'valor': at, 'apoio': '%d no mês passado' % ant,
+                'spark': _hspark(vinc9, keys9, 'd', 'c'), 'spark_tipo': 'linha',
+                'trend': _htrend(at, ant)}
+    _card(_c10)
+
+    # ---- 11) PRESAS EM RESUMO (atenção — mesma régua da Frente B: incompleta=1 +30d) ----
+    def _c11():
+        r = _hq1("SELECT COUNT(*) n, COUNT(DISTINCT cliente_id) emp FROM nfe_importacoes "
+                 "WHERE origem='SEFAZ' AND tipo='entrada' AND incompleta=1 "
+                 "AND DATEDIFF(CURDATE(), data_emissao) > 30")
+        if r is None:
+            return None
+        n = _hi(r.get('n'))
+        emp = _hi(r.get('emp'))
+        return {'id': 'presas_resumo', 'icone': 'fa-triangle-exclamation',
+                'titulo': 'Presas em resumo', 'valor': n,
+                'apoio': ('resumo SEFAZ há +30 dias · %d empresa%s' % (emp, '' if emp == 1 else 's')
+                          if n else 'nenhuma presa há +30 dias'),
+                'trend': {'tipo': 'neutro', 'rotulo': 'atenção'}}
+    _card(_c11)
 
     # ---- contadores DIA A DIA (mesmo payload; ausente onde a query falhou) ----
     if nfe is not None:
