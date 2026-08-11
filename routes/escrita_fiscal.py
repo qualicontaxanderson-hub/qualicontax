@@ -2395,8 +2395,9 @@ def _lote_xml_nfe(escopo, permissao):
         return jsonify({'error': f'{total} notas — o limite é {_LOTE_MAX_XML} por vez. '
                                  f'Refine o período ou marque as notas que quer.'}), 413
 
-    # AUDITORIA (D2): exportação de arquivo (XML em lote) por ação do usuário.
-    registrar('escrita.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
+    # AUDITORIA (D2): exportação de arquivo (XML em lote). LEITURA — exportar não
+    # altera dado; fica fora do histórico de alterações do cliente.
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
               depois={'escopo': escopo, 'formato': 'xml', 'total': total,
                       'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
 
@@ -2435,7 +2436,7 @@ def _lote_pdf_nfe(escopo, permissao):
     where, params = _where_lote(escopo, data)
 
     # AUDITORIA (D2): exportação de arquivo (PDF em lote) por ação do usuário.
-    registrar('escrita.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
               depois={'escopo': escopo, 'formato': 'pdf', 'marcadas': len(ids),
                       'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
 
@@ -2538,7 +2539,7 @@ def lote_xml_cte():
                                  f'ou marque os que quer.'}), 413
 
     # AUDITORIA (D2): exportação de arquivo (CT-e XML em lote) por ação do usuário.
-    registrar('escrita.exportou_arquivo', 'fiscal', tabela='cte_documentos',
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='cte_documentos',
               depois={'escopo': 'cte', 'formato': 'xml', 'total': total,
                       'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
 
@@ -2569,7 +2570,7 @@ def lote_pdf_cte():
                                  f'(você marcou {len(ids)}).'}), 413
 
     # AUDITORIA (D2): exportação de arquivo (CT-e PDF em lote) por ação do usuário.
-    registrar('escrita.exportou_arquivo', 'fiscal', tabela='cte_documentos',
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='cte_documentos',
               depois={'escopo': 'cte', 'formato': 'pdf', 'marcadas': len(ids),
                       'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
 
@@ -2837,7 +2838,7 @@ def _exportar_relatorio(escopo, permissao, titulo):
     where_sql, params = _rel_filtro(escopo)
 
     # AUDITORIA (D2): exportação de RELATÓRIO (PDF/XLSX) por ação do usuário.
-    registrar('escrita.exportou_arquivo', 'fiscal',
+    registrar('leitura.exportou_arquivo', 'fiscal',
               tabela=('cte_documentos' if escopo == 'cte' else 'nfe_importacoes'),
               depois={'escopo': escopo, 'formato': formato, 'relatorio': titulo})
 
@@ -4404,6 +4405,13 @@ def api_importar_dropbox_start():
     )
     t.start()
     logger.info('import_job %s iniciado: depto=%r filter=%r', job_id, departamento, filter_cnpjs)
+    # AUDITORIA (D2): clique manual em "Executar Agora" (importação do Dropbox).
+    # A rodada AUTOMÁTICA do scheduler usa create_job() SEM usuário e não passa
+    # por esta rota — só o clique de uma pessoa logada gera linha.
+    registrar('escrita.executou_importacao', 'fiscal',
+              depois={'departamento': departamento,
+                      'escopo': 'cliente' if cliente_id else ('grupo' if grupo_id else 'todas'),
+                      'cliente_id': cliente_id, 'grupo_id': grupo_id, 'job_id': job_id})
     return jsonify({'job_id': job_id})
 
 
