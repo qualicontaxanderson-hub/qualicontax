@@ -1,6 +1,8 @@
 # Dependências do agente Q-Colabore (a máquina do funcionário).
-# Só uma dependência externa — o resto é stdlib (tkinter, logging, socket...).
+# stdlib cobre o resto (tkinter, logging, socket, winreg).
 requests==2.31.0
+pystray==0.19.5        # ícone na bandeja (ao lado do relógio)
+Pillow==10.4.0         # imagem do ícone da bandeja (pystray exige)
 
 # Só para COMPILAR (não vai no executável final):
 #   nuitka

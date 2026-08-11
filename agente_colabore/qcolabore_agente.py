@@ -10,17 +10,21 @@ Irmão do Q-Robô (que faz o mesmo por posto): burro na ponta, inteligência na
 nuvem. A data de corte (o que é "velho demais para mandar") vem SEMPRE do
 servidor (GET /api/colabore/config), nunca é decidida aqui.
 
-Tecnologia: Python + Nuitka (ver build_qcolabore.ps1). PyInstaller foi tentado no
-Q-Robô e o Defender travou — por isso Nuitka. Dependência externa única:
-``requests``; todo o resto é stdlib (tkinter para as janelas, logging para o log
-com rotação). A chave mora SÓ em C:\\qcolabore\\config.json — nunca em variável de
-ambiente, registro do Windows, ou log.
+Tecnologia: Python + Nuitka em modo PASTA (--standalone, ver build_qcolabore.ps1).
+PyInstaller e o --onefile do Nuitka foram abandonados no Q-Robô por causa do
+Defender (ambos descompactam numa pasta temporária a cada execução — o padrão que
+o antivírus marca). A saída agora é uma pasta com o .exe e as peças ao lado,
+distribuída em .zip. Dependências externas: ``requests`` (HTTP) e ``pystray`` +
+``Pillow`` (ícone na bandeja); o resto é stdlib (tkinter, logging, winreg).
+
+A CHAVE mora SÓ em C:\\qcolabore\\config.json — nunca em variável de ambiente,
+registro do Windows, ou log. O início automático guarda no registro apenas o
+CAMINHO do executável (HKCU\\...\\Run), jamais a chave.
 """
 import datetime as _dt
 import json
 import logging
 import os
-import queue
 import shutil
 import socket
 import sys
@@ -30,7 +34,12 @@ from logging.handlers import RotatingFileHandler
 
 import requests
 
-__version__ = "0.1.0"
+try:
+    import winreg                    # só existe no Windows (o agente é Windows-only)
+except ImportError:                  # noqa: em outra plataforma o autostart vira no-op
+    winreg = None
+
+__version__ = "0.2.0"
 
 # ---------------------------------------------------------------------------
 # Constantes — um só lugar para mudar.
@@ -46,15 +55,74 @@ SUBPASTA_OK = "Enviados"          # 200/409 -> arquivo entregue
 SUBPASTA_ERRO = "Nao enviados"    # 413/415 -> não adianta repetir
 SUBPASTAS = (SUBPASTA_OK, SUBPASTA_ERRO)
 
-INTERVALO_PADRAO = 60             # segundos entre varreduras
+INTERVALO_PADRAO = 60             # segundos entre varreduras (também é o heartbeat)
 MARGEM_ESTABILIDADE = 5           # segundos: ignora arquivo mexido agora (meio-cópia)
 PORTA_INSTANCIA = 52736           # trava de instância única (bind local)
+BACKOFF_MAX = 300                 # teto do recuo exponencial em falha de rede (5 min)
 
 # Timeout do POST: conexão curta, leitura longa (arquivo pode ter até 200 MB).
 TIMEOUT_CONFIG = (10, 30)
 TIMEOUT_ENVIO = (10, 300)
 
+# Início automático: chave Run do PRÓPRIO usuário (HKCU) — NÃO exige administrador.
+# Escolhida em vez do atalho em shell:startup porque é UM valor REG_SZ atômico:
+# ligar/desligar é uma chamada só e idempotente, sem criar/apagar um .lnk nem
+# depender do caminho (localizado) da pasta Inicializar. Guarda só o caminho do
+# .exe — nunca a chave.
+AUTOSTART_NOME = "QColabore"
+AUTOSTART_RUN = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
 log = logging.getLogger("qcolabore")
+
+
+# ===========================================================================
+# Início automático com o Windows (HKCU\...\Run) — sem privilégio de admin
+# ===========================================================================
+def _comando_autostart():
+    """Comando que o Windows executa no logon: o próprio executável. Compilado
+    (Nuitka) -> o .exe; em desenvolvimento -> pythonw + este script."""
+    compilado = "__compiled__" in globals() or getattr(sys, "frozen", False)
+    if compilado:
+        return '"%s"' % os.path.abspath(sys.argv[0])
+    pyw = sys.executable.replace("python.exe", "pythonw.exe")
+    return '"%s" "%s"' % (pyw, os.path.abspath(sys.argv[0]))
+
+
+def autostart_ativo():
+    """True se a entrada Run 'QColabore' existe para este usuário."""
+    if not winreg:
+        return False
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN) as k:
+            valor, _ = winreg.QueryValueEx(k, AUTOSTART_NOME)
+            return bool(valor)
+    except OSError:
+        return False
+
+
+def autostart_definir(ativar):
+    """Liga/desliga o início com o Windows (HKCU, sem admin). Devolve True se ok."""
+    if not winreg:
+        return False
+    try:
+        if ativar:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN) as k:
+                winreg.SetValueEx(k, AUTOSTART_NOME, 0, winreg.REG_SZ,
+                                  _comando_autostart())
+            log.info("Inicio automatico LIGADO.")
+        else:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN, 0,
+                                winreg.KEY_SET_VALUE) as k:
+                try:
+                    winreg.DeleteValue(k, AUTOSTART_NOME)
+                except FileNotFoundError:
+                    pass
+            log.info("Inicio automatico DESLIGADO.")
+        return True
+    except OSError as exc:
+        log.warning("Falha ao %s o inicio automatico: %s",
+                    "ligar" if ativar else "desligar", exc)
+        return False
 
 
 # ===========================================================================
@@ -235,6 +303,15 @@ class ChaveInvalida(Exception):
     pass
 
 
+def proxima_espera(atual, base, sem_conexao):
+    """Recuo exponencial da espera entre ciclos. Em falha de rede/servidor, DOBRA
+    a espera atual (nunca abaixo de ``base``) até o teto ``BACKOFF_MAX``; ao
+    reconectar, volta para ``base``. Função pura para poder ser testada sozinha."""
+    if sem_conexao:
+        return min(max(atual * 2, base), BACKOFF_MAX)
+    return base
+
+
 class Worker(threading.Thread):
     daemon = True
 
@@ -303,61 +380,84 @@ class Worker(threading.Thread):
 
     # ---- laço principal ----
     def run(self):
+        """Nunca termina por erro. Em falha de rede/servidor, recua com intervalo
+        crescente (dobra até BACKOFF_MAX) e volta ao normal quando reconecta. Só a
+        chave inválida pausa o ENVIO — o programa segue aberto mostrando o aviso."""
         log.info("Agente iniciado (versao %s).", __version__)
+        espera = INTERVALO_PADRAO
         while not self._parar.is_set():
             cfg = carregar_config()
-            if not config_completa(cfg):
-                self.estado.set_conexao("chave_invalida", "Falta configurar (chave e pastas).")
-            else:
-                self._um_ciclo(cfg)
-            # espera o intervalo, mas acorda na hora se cutucarem (config nova)
-            self._acordar.wait(timeout=max(10, cfg.get("intervalo_seg") or INTERVALO_PADRAO))
+            try:
+                if not config_completa(cfg):
+                    self.estado.set_conexao("chave_invalida",
+                                            "Falta configurar (chave e pastas).")
+                    status = "sem_config"
+                else:
+                    status = self._um_ciclo(cfg)
+            except Exception as exc:            # blindagem final: o agente não morre
+                log.exception("Erro inesperado no ciclo (o agente segue vivo): %s", exc)
+                status = "sem_conexao"
+            base = max(10, (cfg.get("intervalo_seg") or INTERVALO_PADRAO))
+            espera = proxima_espera(espera, base, status == "sem_conexao")
+            if status == "sem_conexao":
+                log.info("Sem conexao — proxima tentativa em %ss.", espera)
+            # espera, mas acorda na hora se cutucarem (config nova) ou pararem.
+            self._acordar.wait(timeout=espera)
             self._acordar.clear()
         log.info("Agente encerrado.")
 
     def _um_ciclo(self, cfg):
+        """Um passo. A consulta ao servidor (GET /config) é também o HEARTBEAT:
+        o servidor atualiza ultimo_contato a cada chamada, então mesmo sem arquivo
+        novo o escritório sabe que a máquina está viva (a cada intervalo, <= 15min).
+        Devolve 'ok' | 'sem_conexao' | 'chave_invalida'. NUNCA levanta exceção."""
         try:
-            corte, ativo = self._buscar_corte(cfg)
+            corte, ativo = self._buscar_corte(cfg)      # <- heartbeat
         except ChaveInvalida:
             self.estado.set_conexao("chave_invalida",
                                     "A chave e invalida ou foi revogada. Abra Configurar.")
-            log.warning("Chave invalida/revogada — envio pausado.")
-            return
+            log.warning("Chave invalida/revogada — envio pausado (programa segue aberto).")
+            return "chave_invalida"
         except requests.RequestException as exc:
             self.estado.set_conexao("sem_conexao", "Sem conexao com o servidor.")
             log.info("Sem conexao ao consultar config: %s", exc.__class__.__name__)
-            return
+            return "sem_conexao"
 
         self.estado.set_conexao("conectado", "" if ativo else "Chave desligada no servidor.")
         self.estado.set_aguardando(contar_aguardando(cfg["pastas"]))
 
         for pasta in cfg["pastas"]:
             if self._parar.is_set():
-                return
+                return "ok"
             for caminho, mtime in arquivos_novos(pasta):
                 if self._parar.is_set():
-                    return
-                # Filtro de data de corte — decidido pelo SERVIDOR, aplicado aqui.
-                if corte and _dt.date.fromtimestamp(mtime) < corte:
-                    if self._ignorados.get(caminho) != mtime:
-                        self._ignorados[caminho] = mtime
-                        log.info("Ignorado (anterior a %s): %s", corte, os.path.basename(caminho))
-                    continue
+                    return "ok"
+                nome = os.path.basename(caminho)
                 try:
+                    # Filtro de data de corte — decidido pelo SERVIDOR, aplicado aqui.
+                    if corte and _dt.date.fromtimestamp(mtime) < corte:
+                        if self._ignorados.get(caminho) != mtime:
+                            self._ignorados[caminho] = mtime
+                            log.info("Ignorado (anterior a %s): %s", corte, nome)
+                        continue
                     resultado, motivo = self._enviar(cfg, caminho)
                 except ChaveInvalida:
                     self.estado.set_conexao("chave_invalida",
                                             "A chave e invalida ou foi revogada. Abra Configurar.")
-                    log.warning("Chave invalida/revogada no envio — parando este ciclo.")
-                    return
+                    log.warning("Chave invalida/revogada no envio — pausando (programa aberto).")
+                    return "chave_invalida"
                 except requests.RequestException as exc:
                     self.estado.set_conexao("sem_conexao", "Sem conexao — vai tentar de novo.")
-                    log.info("Falha de rede ao enviar '%s': %s",
-                             os.path.basename(caminho), exc.__class__.__name__)
-                    return          # deixa onde está; tenta no próximo ciclo
+                    log.info("Falha de rede ao enviar '%s': %s", nome, exc.__class__.__name__)
+                    return "sem_conexao"
+                except Exception as exc:         # erro num arquivo NÃO derruba o ciclo
+                    log.exception("Erro ao processar '%s' (seguindo para o proximo): %s",
+                                  nome, exc)
+                    continue
                 self._aplicar_resultado(caminho, resultado, motivo)
 
         self.estado.set_aguardando(contar_aguardando(cfg["pastas"]))
+        return "ok"
 
     def _aplicar_resultado(self, caminho, resultado, motivo):
         nome = os.path.basename(caminho)
@@ -409,21 +509,48 @@ def rodar_gui():
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox
 
+    # Bandeja: pystray + Pillow. Se faltarem (ex.: ambiente sem elas), o programa
+    # não quebra — cai para minimizar na barra de tarefas.
+    try:
+        import pystray
+        from PIL import Image, ImageDraw
+        tem_tray = True
+    except Exception:
+        tem_tray = False
+
     montar_log()
     estado = Estado()
     worker = Worker(estado)
+    tray_icon = None
 
     root = tk.Tk()
     root.title("Q-Colabore — agente")
-    root.geometry("420x300")
-    root.minsize(400, 280)
+    root.geometry("440x360")
+    root.minsize(420, 340)
+
+    # -------- mostrar / esconder (esconder = bandeja se houver, senão barra) -----
+    def _mostrar(*_a):
+        root.after(0, lambda: (root.deiconify(), root.lift(), root.focus_force()))
+
+    def _esconder(*_a):
+        root.after(0, root.withdraw if tem_tray else root.iconify)
+
+    def _sair(*_a):
+        if tray_icon is not None:
+            try:
+                tray_icon.stop()
+            except Exception:
+                pass
+        worker.parar()
+        root.after(0, root.destroy)
 
     # -------- janela de configuração (Toplevel) --------
     def abrir_config(primeira=False):
+        root.deiconify()                          # garante visível (pode vir da bandeja)
         cfg = carregar_config()
         win = tk.Toplevel(root)
         win.title("Configurar Q-Colabore")
-        win.geometry("520x460")
+        win.geometry("520x540")
         win.transient(root)
         win.grab_set()
 
@@ -461,6 +588,12 @@ def rodar_gui():
         tk.Button(botoes, text="Adicionar…", command=_add).pack(fill="x", pady=2)
         tk.Button(botoes, text="Remover", command=_rem).pack(fill="x", pady=2)
 
+        # Início automático — MARCADO por padrão (no 1º uso reflete "ligar";
+        # reabrindo, reflete o estado real do registro).
+        iniciar_var = tk.BooleanVar(value=(True if primeira else autostart_ativo()))
+        tk.Checkbutton(win, text="Iniciar junto com o Windows", variable=iniciar_var,
+                       font=("Segoe UI", 9)).pack(anchor="w", padx=12, pady=(8, 0))
+
         rodape = tk.Frame(win); rodape.pack(fill="x", padx=14, pady=12)
         def _salvar():
             chave = chave_var.get().strip()
@@ -474,16 +607,19 @@ def rodar_gui():
             salvar_config({"servidor": serv_var.get().strip() or SERVIDOR_PADRAO,
                            "chave": chave, "pastas": pastas,
                            "intervalo_seg": cfg["intervalo_seg"]})
+            # aplica o início automático conforme a caixa (marcada -> registra).
+            autostart_definir(iniciar_var.get())
             log.info("Configuracao salva (%d pasta(s)).", len(pastas))   # nunca a chave
             win.destroy()
             if not worker.is_alive():
                 worker.start()
             else:
                 worker.cutucar()
+            _esconder()                            # some para a bandeja e trabalha só
         def _cancelar():
             win.destroy()
             if primeira and not config_completa(carregar_config()):
-                root.destroy()          # 1º uso sem salvar: não há o que rodar
+                _sair()                            # 1º uso sem salvar: não há o que rodar
         tk.Button(rodape, text="Salvar", width=12, command=_salvar,
                   default="active").pack(side="right")
         tk.Button(rodape, text="Cancelar", width=10, command=_cancelar).pack(side="right", padx=6)
@@ -495,12 +631,13 @@ def rodar_gui():
     tk.Label(wrap, text="Q-Colabore", font=("Segoe UI", 14, "bold")).pack(anchor="w")
     lbl_conexao = tk.Label(wrap, text="", font=("Segoe UI", 10, "bold"))
     lbl_conexao.pack(anchor="w", pady=(6, 0))
-    lbl_detalhe = tk.Label(wrap, text="", fg="#666", font=("Segoe UI", 8), wraplength=380, justify="left")
+    lbl_detalhe = tk.Label(wrap, text="", fg="#666", font=("Segoe UI", 8), wraplength=400, justify="left")
     lbl_detalhe.pack(anchor="w")
     ttk.Separator(wrap).pack(fill="x", pady=10)
     lbl_hoje = tk.Label(wrap, text="", font=("Segoe UI", 10)); lbl_hoje.pack(anchor="w")
     lbl_ultimo = tk.Label(wrap, text="", font=("Segoe UI", 10)); lbl_ultimo.pack(anchor="w")
     lbl_aguard = tk.Label(wrap, text="", font=("Segoe UI", 10)); lbl_aguard.pack(anchor="w")
+    lbl_auto = tk.Label(wrap, text="", font=("Segoe UI", 9), fg="#475569"); lbl_auto.pack(anchor="w", pady=(8, 0))
 
     barra = tk.Frame(root); barra.pack(fill="x", padx=16, pady=(0, 12))
     tk.Button(barra, text="Configurar…", command=lambda: abrir_config()).pack(side="left")
@@ -526,24 +663,46 @@ def rodar_gui():
             text=("Em “Não enviados”: %d — precisa de atenção" % aguard) if aguard
                  else "Em “Não enviados”: 0",
             fg="#b91c1c" if aguard else "#333")
+        lbl_auto.config(text="Início automático: " +
+                        ("ativo" if autostart_ativo() else "desligado"))
         root.after(1500, tick)
 
     def ao_fechar():
-        # Fechar a janela minimiza (o agente é de fundo); sair de verdade só pela
-        # bandeja/gerenciador. Sem tray nesta versão: minimiza para a barra.
-        root.iconify()
+        # Fechar no X MINIMIZA para a bandeja (ou barra, se não houver tray) —
+        # NÃO encerra. Sair de verdade só pelo menu "Sair" da bandeja.
+        _esconder()
     root.protocol("WM_DELETE_WINDOW", ao_fechar)
+
+    # -------- ícone na bandeja (ao lado do relógio) --------
+    if tem_tray:
+        def _fazer_icone():
+            img = Image.new("RGBA", (64, 64), (15, 61, 46, 255))
+            d = ImageDraw.Draw(img)
+            d.ellipse((16, 16, 48, 48), fill=(34, 197, 94, 255))
+            return img
+        menu = pystray.Menu(
+            pystray.MenuItem("Abrir", lambda i, it: _mostrar(), default=True),
+            pystray.MenuItem("Configurar…", lambda i, it: root.after(0, abrir_config)),
+            pystray.MenuItem("Sair", lambda i, it: _sair()),
+        )
+        tray_icon = pystray.Icon("qcolabore", _fazer_icone(), "Q-Colabore", menu)
+        threading.Thread(target=tray_icon.run, daemon=True).start()
 
     # 1º uso: sem config -> abre a configuração antes de tudo.
     if not config_completa(carregar_config()):
         root.after(200, lambda: abrir_config(primeira=True))
     else:
         worker.start()
-        root.after(400, root.iconify)     # sobe minimizado e trabalha sozinho
+        root.after(400, _esconder)     # sobe escondido (bandeja) e trabalha sozinho
 
     tick()
     root.mainloop()
     worker.parar()
+    if tray_icon is not None:
+        try:
+            tray_icon.stop()
+        except Exception:
+            pass
 
 
 def main():
