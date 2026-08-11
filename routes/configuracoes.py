@@ -1,11 +1,15 @@
 """Rotas do módulo Configurações — Usuários e Perfis de Acesso"""
 import logging
 import re
+from io import BytesIO
+from datetime import date, datetime, timedelta
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import (Blueprint, render_template, request, redirect, url_for, flash,
+                   jsonify, send_file)
 from flask_login import current_user
 from utils.auth_helper import login_required, admin_required, permission_required, hash_password
 from utils.atividade import registrar
+from utils.auditoria_fmt import hist_preparar, MODULO_LABEL, AUDITORIA_INICIO
 from utils.db_helper import execute_query, transacao
 from utils.permissions import PERMISSION_CATALOG
 from utils import cadastro_token
@@ -30,6 +34,187 @@ def index():
         from utils.dropbox_space import get_space
         espaco = get_space()
     return render_template('configuracoes/index.html', dropbox_espaco=espaco)
+
+
+# ---------------------------------------------------------------------------
+# D4 — Auditoria (tela geral de movimentações). SÓ ADMIN (trava no servidor).
+# ---------------------------------------------------------------------------
+_AUD_MODULOS = ['fiscal', 'cadastros', 'contabil', 'dp', 'colabore', 'configuracoes']
+_AUD_PER = 50
+
+
+def _aud_filtros():
+    """Filtros da query string. Período padrão: últimos 7 dias."""
+    hoje = date.today()
+    return {
+        'pessoa': request.args.get('pessoa', '').strip(),
+        'modulo': request.args.get('modulo', '').strip(),
+        'tipo': request.args.get('tipo', '').strip(),          # ''|escrita|leitura
+        'empresa': request.args.get('empresa', '').strip(),
+        'data_ini': request.args.get('data_ini', '').strip() or (hoje - timedelta(days=7)).isoformat(),
+        'data_fim': request.args.get('data_fim', '').strip() or hoje.isoformat(),
+    }
+
+
+def _aud_where(f):
+    """(cond, params) do WHERE. Exclui usuários de teste (ZZ TESTE), como o card."""
+    cond = ["COALESCE(l.usuario_nome,'') NOT LIKE 'ZZ TESTE%%'",
+            "l.data_hora >= %s", "l.data_hora <= %s"]
+    params = [f['data_ini'] + ' 00:00:00', f['data_fim'] + ' 23:59:59']
+    if f['pessoa']:
+        cond.append("l.usuario_nome = %s"); params.append(f['pessoa'])
+    if f['modulo']:
+        cond.append("l.modulo = %s"); params.append(f['modulo'])
+    if f['tipo'] == 'escrita':
+        cond.append("l.acao LIKE 'escrita.%%'")
+    elif f['tipo'] == 'leitura':
+        cond.append("l.acao LIKE 'leitura.%%'")
+    if f['empresa']:
+        emp = execute_query(
+            "SELECT id, numero_cliente FROM clientes "
+            "WHERE numero_cliente = %s OR nome_razao_social LIKE %s",
+            (f['empresa'], '%' + f['empresa'] + '%'), fetch=True) or []
+        ids = [e['id'] for e in emp]
+        nums = [str(e['numero_cliente']) for e in emp if e.get('numero_cliente')]
+        if not ids and not nums:
+            cond.append("1=0")                       # empresa não encontrada -> vazio
+        else:
+            ors, p2 = [], []
+            if ids:
+                ph = ','.join(['%s'] * len(ids))
+                ors.append("(l.tabela_afetada IN ('clientes','dfe_certificados') "
+                           f"AND l.registro_id IN ({ph}))")
+                p2 += ids
+            if nums:
+                ph = ','.join(['%s'] * len(nums))
+                for path in ('$.cliente_numero', '$.filtros.cliente_numero',
+                             '$.numero_cliente', '$.numero'):
+                    ors.append(f"JSON_UNQUOTE(JSON_EXTRACT(l.dados_novos,'{path}')) IN ({ph})")
+                    p2 += nums
+            cond.append('(' + ' OR '.join(ors) + ')')
+            params += p2
+    return ' AND '.join(cond), params
+
+
+def _aud_resolver(rows):
+    """{usuario_id: nome} para linhas antigas + {registro_id: '#num nome'} p/ empresa."""
+    nomes = {}
+    faltam = {r['usuario_id'] for r in rows if not r.get('usuario_nome') and r.get('usuario_id')}
+    if faltam:
+        ph = ','.join(['%s'] * len(faltam))
+        for u in execute_query(f"SELECT id, nome FROM usuarios WHERE id IN ({ph})",
+                               tuple(faltam), fetch=True) or []:
+            nomes[u['id']] = u['nome']
+    cids = {r['registro_id'] for r in rows
+            if r.get('tabela_afetada') in ('clientes', 'dfe_certificados') and r.get('registro_id')}
+    emp_map = {}
+    if cids:
+        ph = ','.join(['%s'] * len(cids))
+        for c in execute_query(
+                f"SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE id IN ({ph})",
+                tuple(cids), fetch=True) or []:
+            num, nome = c.get('numero_cliente'), (c.get('nome_razao_social') or '').strip()
+            emp_map[c['id']] = ('#%s %s' % (num, nome)).strip() if num else nome
+    return nomes, emp_map
+
+
+_AUD_SELECT = ("SELECT l.id, l.data_hora, l.usuario_id, l.usuario_nome, l.acao, l.modulo, "
+               "l.tabela_afetada, l.registro_id, l.dados_anteriores, l.dados_novos "
+               "FROM logs_sistema l WHERE ")
+
+
+def _aud_qs(f):
+    from urllib.parse import urlencode
+    return urlencode({k: v for k, v in f.items() if v})
+
+
+@configuracoes.route('/auditoria')
+@admin_required
+def auditoria():
+    """Tela geral de auditoria — todas as movimentações de logs_sistema."""
+    f = _aud_filtros()
+    cond, params = _aud_where(f)
+
+    if request.args.get('export') == 'xlsx':
+        return _aud_export(f, cond, params)
+
+    try:
+        page = max(1, int(request.args.get('page', 1) or 1))
+    except (TypeError, ValueError):
+        page = 1
+    off = (page - 1) * _AUD_PER
+
+    total = (execute_query(f"SELECT COUNT(*) AS c FROM logs_sistema l WHERE {cond}",
+                           tuple(params), fetch=True, fetch_one=True) or {}).get('c', 0)
+    rows = execute_query(_AUD_SELECT + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT %s OFFSET %s",
+                         tuple(params + [_AUD_PER, off]), fetch=True) or []
+    nomes, emp_map = _aud_resolver(rows)
+    itens = [hist_preparar(r, nomes, emp_map) for r in rows]
+
+    # Resumo (participação por pessoa no filtro) — o mesmo número do card.
+    rr = execute_query(f"SELECT COALESCE(l.usuario_nome,'—') AS nome, COUNT(*) AS n "
+                       f"FROM logs_sistema l WHERE {cond} GROUP BY l.usuario_nome ORDER BY n DESC",
+                       tuple(params), fetch=True) or []
+    rtot = sum(int(r['n']) for r in rr)
+    resumo = [{'nome': r['nome'], 'n': int(r['n']),
+               'pct': round(100 * int(r['n']) / rtot) if rtot else 0} for r in rr]
+
+    pessoas = [r['usuario_nome'] for r in execute_query(
+        "SELECT DISTINCT usuario_nome FROM logs_sistema WHERE usuario_nome IS NOT NULL "
+        "AND usuario_nome NOT LIKE 'ZZ TESTE%%' ORDER BY usuario_nome", fetch=True) or []]
+
+    total_paginas = max(1, (total + _AUD_PER - 1) // _AUD_PER)
+    return render_template('configuracoes/auditoria.html',
+                           itens=itens, resumo=resumo, resumo_total=rtot, total=total,
+                           page=page, total_paginas=total_paginas, f=f, pessoas=pessoas,
+                           modulos=_AUD_MODULOS, modulo_label=MODULO_LABEL,
+                           auditoria_inicio=AUDITORIA_INICIO, qs=_aud_qs(f))
+
+
+def _aud_campos_txt(campos):
+    parts = []
+    for c in campos:
+        if c['tipo'] == 'sensivel':
+            parts.append('%s alterada' % c['label'])
+        elif c['tipo'] == 'novo':
+            parts.append('%s: %s' % (c['label'], c.get('depois')))
+        elif c['tipo'] == 'removido':
+            parts.append('%s: %s' % (c['label'], c.get('antes')))
+        else:
+            parts.append('%s: %s -> %s' % (c['label'], c.get('antes'), c.get('depois')))
+    return ' | '.join(parts)
+
+
+def _aud_export(f, cond, params):
+    """XLSX do conjunto filtrado. O export TAMBÉM é participação: registra leitura."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    rows = execute_query(_AUD_SELECT + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT 5000",
+                         tuple(params), fetch=True) or []
+    nomes, emp_map = _aud_resolver(rows)
+    itens = [hist_preparar(r, nomes, emp_map) for r in rows]
+
+    wb = Workbook(); ws = wb.active; ws.title = 'Auditoria'
+    cols = ['Data/hora', 'Usuário', 'Ação', 'Módulo', 'Empresa', 'Mudanças']
+    ws.append(cols)
+    for i in range(1, len(cols) + 1):
+        cell = ws.cell(row=1, column=i)
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='15803D')
+    for it in itens:
+        ws.append([it['data_hora'], it['autor'], it['verbo'],
+                   MODULO_LABEL.get(it.get('modulo'), it.get('modulo') or ''),
+                   it.get('empresa') or '', _aud_campos_txt(it['campos'])])
+    for i, w in enumerate((17, 22, 28, 13, 34, 70), 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+    bio = BytesIO(); wb.save(bio); bio.seek(0)
+
+    registrar('leitura.exportou_arquivo', 'configuracoes', tabela='logs_sistema',
+              depois={'formato': 'xlsx', 'escopo': 'auditoria', 'total': len(itens),
+                      'filtros': {k: v for k, v in f.items() if v}})
+    return send_file(bio, as_attachment=True,
+                     download_name='auditoria_%s_a_%s.xlsx' % (f['data_ini'], f['data_fim']),
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @configuracoes.route('/dropbox/espaco/atualizar', methods=['POST'])

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Auditoria - Qualicontax{% endblock %}
+{% block content %}
+<style>
+.aud-filtros { border:1px solid #e5e7eb; border-radius:12px; background:#fff; margin-bottom:16px; }
+.aud-filtros > summary { cursor:pointer; padding:12px 16px; font-weight:700; color:#0f3d2e;
+    list-style:none; display:flex; align-items:center; gap:8px; }
+.aud-filtros > summary::-webkit-details-marker { display:none; }
+.aud-filtros > summary::before { content:'\f0b0'; font-family:'Font Awesome 6 Free'; font-weight:900; color:#16a34a; }
+.aud-form { padding:0 16px 16px; }
+.aud-fgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+.aud-fgrid label { display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:#475569; }
+.aud-fgrid select, .aud-fgrid input { height:36px; border:1px solid #d1d5db; border-radius:8px;
+    padding:0 10px; font-size:13px; background:#fff; }
+.aud-fbtn { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center; }
+.aud-fbtn button { background:#0f3d2e; color:#fff; border:none; padding:8px 18px; border-radius:8px;
+    font-weight:700; cursor:pointer; }
+.aud-fbtn a { font-size:13px; color:#475569; text-decoration:none; padding:8px 10px; }
+.aud-fbtn a.aud-export { margin-left:auto; border:1px solid #16a34a; color:#15803d; border-radius:8px; font-weight:700; }
+.aud-resumo { border:1px solid #e5e7eb; border-radius:12px; background:#f8fdfa; padding:12px 16px; margin-bottom:16px; }
+.aud-resumo-tot { font-weight:800; color:#0f3d2e; margin-bottom:8px; }
+.aud-resumo-lista { display:flex; flex-wrap:wrap; gap:8px; }
+.aud-chip { background:#fff; border:1px solid #d1fae5; border-radius:999px; padding:4px 12px;
+    font-size:12px; color:#334155; }
+.aud-chip b { color:#0f3d2e; }
+.aud-vazio { color:#64748b; padding:24px 4px; }
+.aud-lista { display:flex; flex-direction:column; gap:10px; }
+.aud-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:10px;
+    padding:12px 14px; background:#fff; }
+.aud-head { font-size:13px; color:#334155; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.aud-dt { color:#64748b; } .aud-autor { font-weight:800; color:#0f3d2e; text-transform:uppercase; letter-spacing:.2px; }
+.aud-verbo { font-weight:600; }
+.aud-mod { margin-left:auto; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5;
+    border-radius:999px; padding:1px 9px; font-size:11px; font-weight:700; }
+.aud-emp { font-size:12.5px; font-weight:700; color:#0f3d2e; margin-top:4px; }
+.aud-campos { display:flex; flex-direction:column; gap:2px; margin-top:5px; }
+.aud-campo { font-size:12.5px; line-height:1.5; color:#0f172a; word-break:break-word; }
+.aud-lbl { color:#475569; font-weight:600; }
+.aud-old { color:#94a3b8; text-decoration:line-through; }
+.aud-pag { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; font-size:13px; }
+.aud-pag a { color:#15803d; text-decoration:none; border:1px solid #d1d5db; border-radius:8px; padding:6px 12px; }
+.aud-pag .off { color:#cbd5e1; border:1px solid #eef2f0; border-radius:8px; padding:6px 12px; }
+.aud-pag span.info { color:#64748b; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Auditoria</h1>
+        <p class="page-subtitle">Todas as movimentações registradas — quem fez o quê, quando e em qual empresa</p>
+    </div>
+</div>
+
+{% set tem_filtro = f.pessoa or f.modulo or f.tipo or f.empresa %}
+<details class="aud-filtros" {% if tem_filtro %}open{% endif %}>
+    <summary>Filtros</summary>
+    <form method="get" class="aud-form">
+        <div class="aud-fgrid">
+            <label>Pessoa
+                <select name="pessoa">
+                    <option value="">Todos</option>
+                    {% for p in pessoas %}<option value="{{ p }}" {{ 'selected' if f.pessoa == p else '' }}>{{ p }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>De <input type="date" name="data_ini" value="{{ f.data_ini }}"></label>
+            <label>Até <input type="date" name="data_fim" value="{{ f.data_fim }}"></label>
+            <label>Módulo
+                <select name="modulo">
+                    <option value="">Todos</option>
+                    {% for m in modulos %}<option value="{{ m }}" {{ 'selected' if f.modulo == m else '' }}>{{ modulo_label.get(m, m) }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>Tipo
+                <select name="tipo">
+                    <option value="">Todas</option>
+                    <option value="escrita" {{ 'selected' if f.tipo == 'escrita' else '' }}>Alterações</option>
+                    <option value="leitura" {{ 'selected' if f.tipo == 'leitura' else '' }}>Consultas</option>
+                </select>
+            </label>
+            <label>Empresa <input type="text" name="empresa" value="{{ f.empresa }}" placeholder="número ou nome"></label>
+        </div>
+        <div class="aud-fbtn">
+            <button type="submit">Filtrar</button>
+            <a href="{{ url_for('configuracoes.auditoria') }}">Limpar</a>
+            <a class="aud-export" href="?{{ qs }}{% if qs %}&{% endif %}export=xlsx">
+                <i class="fas fa-file-excel"></i> Exportar XLSX</a>
+        </div>
+    </form>
+</details>
+
+<div class="aud-resumo">
+    <div class="aud-resumo-tot">{{ total }} ação(ões) no período</div>
+    {% if resumo %}
+    <div class="aud-resumo-lista">
+        {% for r in resumo %}
+        <span class="aud-chip"><b>{{ r.nome }}</b> · {{ r.n }} · {{ r.pct }}%</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+{% if total == 0 %}
+    <div class="aud-vazio">Nenhuma movimentação no filtro. A auditoria começou em {{ auditoria_inicio }}.</div>
+{% else %}
+    <div class="aud-lista">
+        {% for it in itens %}
+        <div class="aud-card">
+            <div class="aud-head">
+                <span class="aud-dt">{{ it.data_hora }}</span>
+                <span>·</span>
+                <span class="aud-autor">{{ it.autor }}</span>
+                <span>·</span>
+                <span class="aud-verbo">{{ it.verbo }}</span>
+                {% if it.modulo %}<span class="aud-mod">{{ modulo_label.get(it.modulo, it.modulo) }}</span>{% endif %}
+            </div>
+            {% if it.empresa %}<div class="aud-emp">{{ it.empresa }}</div>{% endif %}
+            {% if it.campos %}
+            <div class="aud-campos">
+                {% for c in it.campos %}
+                <div class="aud-campo">
+                    {% if c.tipo == 'sensivel' %}
+                        <span class="aud-lbl">{{ c.label }} alterada</span>
+                    {% elif c.tipo == 'novo' %}
+                        <span class="aud-lbl">{{ c.label }}:</span> <span>{{ c.depois }}</span>
+                    {% elif c.tipo == 'removido' %}
+                        <span class="aud-lbl">{{ c.label }}:</span> <span class="aud-old">{{ c.antes }}</span>
+                    {% else %}
+                        <span class="aud-lbl">{{ c.label }}:</span>
+                        <span class="aud-old">{{ c.antes }}</span> → <span>{{ c.depois }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total_paginas > 1 %}
+    <div class="aud-pag">
+        {% if page > 1 %}<a href="?{{ qs }}{% if qs %}&{% endif %}page={{ page - 1 }}">‹ Anterior</a>
+        {% else %}<span class="off">‹ Anterior</span>{% endif %}
+        <span class="info">Página {{ page }} de {{ total_paginas }} · {{ total }} registro(s)</span>
+        {% if page < total_paginas %}<a href="?{{ qs }}{% if qs %}&{% endif %}page={{ page + 1 }}">Próxima ›</a>
+        {% else %}<span class="off">Próxima ›</span>{% endif %}
+    </div>
+    {% endif %}
+{% endif %}
+{% endblock %}

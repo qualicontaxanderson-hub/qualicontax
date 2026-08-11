@@ -156,6 +156,17 @@ async function atualizarEspacoDropbox() {
         <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
     </a>
 
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('configuracoes.auditoria') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #0f3d2e, #15803d);">
+            <i class="fas fa-clipboard-list"></i>
+        </div>
+        <h3 class="module-tile-title">Auditoria</h3>
+        <p class="module-tile-desc">Todas as movimentações do sistema — quem fez o quê, quando e onde</p>
+        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
+    </a>
+    {% endif %}
+
     <a href="#" class="module-tile">
         <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
             <i class="fas fa-building"></i>
