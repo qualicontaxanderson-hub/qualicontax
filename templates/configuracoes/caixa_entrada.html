@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Caixa de entrada - Qualicontax{% endblock %}
+{% block content %}
+<style>
+.ce-erro { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:10px;
+    padding:12px 16px; margin-bottom:16px; font-size:13px; }
+.ce-resumo { border:1px solid #e5e7eb; border-radius:12px; background:#f8fdfa; padding:12px 16px; margin-bottom:16px; }
+.ce-resumo-tot { font-weight:800; color:#0f3d2e; margin-bottom:8px; }
+.ce-resumo-lista { display:flex; flex-wrap:wrap; gap:8px; }
+.ce-chip { background:#fff; border:1px solid #d1fae5; border-radius:999px; padding:4px 12px; font-size:12px; color:#334155; }
+.ce-filtros { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+.ce-filtros select, .ce-filtros input { height:36px; border:1px solid #d1d5db; border-radius:8px; padding:0 10px; font-size:13px; }
+.ce-filtros input { min-width:180px; }
+.ce-filtros button { background:#0f3d2e; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
+.ce-filtros a { font-size:13px; color:#475569; text-decoration:none; }
+.ce-vazio { color:#64748b; padding:24px 4px; }
+.ce-lista { display:flex; flex-direction:column; gap:10px; }
+.ce-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:10px; padding:12px 14px; background:#fff; }
+.ce-head { display:flex; align-items:center; gap:9px; }
+.ce-ico { color:#16a34a; }
+.ce-nome { font-weight:700; color:#0f172a; font-size:13px; word-break:break-all; }
+.ce-meta { font-size:12px; color:#64748b; margin-top:4px; }
+.ce-tipo { font-weight:600; color:#334155; }
+.ce-emp { font-size:12.5px; font-weight:700; margin-top:5px; }
+.ce-emp-ok { color:#0f3d2e; }
+.ce-emp-sem { color:#b45309; }
+.ce-acoes { margin-top:9px; }
+.ce-btn-ren { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; border-radius:8px;
+    padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; }
+.ce-ren-box { margin-top:9px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.ce-ren-input { flex:1 1 260px; min-width:220px; height:34px; border:1px solid #16a34a; border-radius:8px; padding:0 10px; font-size:13px; }
+.ce-ren-ok { background:#15803d; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-weight:700; cursor:pointer; }
+.ce-ren-cancel { background:#fff; color:#475569; border:1px solid #d1d5db; border-radius:8px; padding:7px 12px; cursor:pointer; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Caixa de entrada</h1>
+        <p class="page-subtitle">Arquivos parados na pasta <code>_ENTRADA</code> do Dropbox — só metadados, nada é baixado</p>
+    </div>
+</div>
+
+{% if erro %}
+<div class="ce-erro"><i class="fas fa-triangle-exclamation"></i> {{ erro }}</div>
+{% endif %}
+
+{% if not erro %}
+<div class="ce-resumo">
+    <div class="ce-resumo-tot">
+        {{ total }} arquivo(s) na caixa{% if mais_antigo %} · o mais antigo está aqui {{ mais_antigo }}{% endif %}
+    </div>
+    {% if resumo %}
+    <div class="ce-resumo-lista">
+        {% for t, n in resumo.items() %}<span class="ce-chip">{{ t }}: <b>{{ n }}</b></span>{% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<form method="get" class="ce-filtros">
+    <select name="tipo">
+        <option value="">Todos os tipos</option>
+        {% for ext, meta in tipos.items() %}
+        <option value="{{ ext }}" {{ 'selected' if f_tipo == ext else '' }}>{{ meta[0] }}</option>
+        {% endfor %}
+    </select>
+    <input type="text" name="busca" value="{{ busca }}" placeholder="buscar por nome">
+    <button type="submit">Filtrar</button>
+    <a href="{{ url_for('configuracoes.caixa_entrada') }}">Limpar</a>
+</form>
+
+{% if itens %}
+<div class="ce-lista">
+    {% for it in itens %}
+    <div class="ce-card" data-nome="{{ it.nome }}">
+        <div class="ce-head">
+            <span class="ce-ico"><i class="fas {{ it.icone }}"></i></span>
+            <span class="ce-nome">{{ it.nome }}</span>
+        </div>
+        <div class="ce-meta">
+            <span class="ce-tipo">{{ it.tipo }}</span> · {{ it.tamanho }} · {{ it.idade }}
+        </div>
+        <div class="ce-emp {{ 'ce-emp-ok' if it.empresa else 'ce-emp-sem' }}">
+            {% if it.empresa %}<i class="fas fa-building"></i> {{ it.empresa }}
+            {% else %}<i class="fas fa-circle-question"></i> sem empresa identificada{% endif %}
+        </div>
+        <div class="ce-acoes">
+            <button type="button" class="ce-btn-ren" onclick="ceRenAbrir(this)">
+                <i class="fas fa-pen"></i> Renomear</button>
+        </div>
+        <div class="ce-ren-box" style="display:none;">
+            <input type="text" class="ce-ren-input" value="{{ it.nome }}">
+            <button type="button" class="ce-ren-ok" onclick="ceRenConfirmar(this)">Confirmar</button>
+            <button type="button" class="ce-ren-cancel" onclick="ceRenCancelar(this)">Cancelar</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="ce-vazio">Nenhum arquivo {{ 'com esse filtro' if (f_tipo or busca) else 'na caixa de entrada' }}.</div>
+{% endif %}
+{% endif %}
+
+<script>
+function _ceCard(el) { return el.closest('.ce-card'); }
+function ceRenAbrir(btn) {
+    var c = _ceCard(btn);
+    c.querySelector('.ce-ren-box').style.display = 'flex';
+    c.querySelector('.ce-acoes').style.display = 'none';
+    c.querySelector('.ce-ren-input').focus();
+}
+function ceRenCancelar(btn) {
+    var c = _ceCard(btn);
+    c.querySelector('.ce-ren-box').style.display = 'none';
+    c.querySelector('.ce-acoes').style.display = '';
+    c.querySelector('.ce-ren-input').value = c.getAttribute('data-nome');
+}
+function ceRenConfirmar(btn) {
+    var c = _ceCard(btn);
+    var atual = c.getAttribute('data-nome');
+    var novo = c.querySelector('.ce-ren-input').value.trim();
+    if (!novo || novo === atual) { ceRenCancelar(btn); return; }
+    btn.disabled = true;
+    fetch('{{ url_for("configuracoes.caixa_entrada_renomear") }}', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atual: atual, novo: novo })
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok || !res.d.ok) { alert(res.d.msg || 'Falha ao renomear.'); return; }
+        c.setAttribute('data-nome', novo);
+        c.querySelector('.ce-nome').textContent = novo;
+        var emp = c.querySelector('.ce-emp');
+        if (res.d.empresa) {
+            emp.className = 'ce-emp ce-emp-ok';
+            emp.innerHTML = '<i class="fas fa-building"></i> ' + res.d.empresa +
+                            ' <span style="color:#15803d">✓ agora casa</span>';
+        } else {
+            emp.className = 'ce-emp ce-emp-sem';
+            emp.innerHTML = '<i class="fas fa-circle-question"></i> sem empresa identificada (ainda)';
+        }
+        c.querySelector('.ce-ren-box').style.display = 'none';
+        c.querySelector('.ce-acoes').style.display = '';
+    }).catch(function () { btn.disabled = false; alert('Erro de rede ao renomear.'); });
+}
+</script>
+{% endblock %}

@@ -74,6 +74,7 @@ _HIST_VERBO = {
     'escrita.gerou_chave_robo': 'gerou a chave do Q-Robô',
     'escrita.aprovou_cadastro_colabore': 'aprovou uma candidatura',
     'escrita.recusou_cadastro_colabore': 'recusou uma candidatura',
+    'escrita.renomeou_caixa_entrada': 'renomeou arquivo da caixa de entrada',
     'leitura.abriu_ficha_cliente': 'abriu a ficha',
     'leitura.buscou_entradas': 'consultou as entradas',
     'leitura.buscou_saidas': 'consultou as saídas',

@@ -2,7 +2,7 @@
 import logging
 import re
 from io import BytesIO
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from flask import (Blueprint, render_template, request, redirect, url_for, flash,
                    jsonify, send_file)
@@ -240,6 +240,180 @@ def _aud_export(f, cond, params):
     return send_file(bio, as_attachment=True,
                      download_name='auditoria_%s_a_%s.xlsx' % (f['data_ini'], f['data_fim']),
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ---------------------------------------------------------------------------
+# F1 — Caixa de entrada (_ENTRADA do Dropbox). SÓ ADMIN. SÓ metadados: nunca
+# baixa/abre arquivo, nunca grava o NOME no log (nomes de .pfx podem conter a
+# senha do certificado). Só listar e renomear.
+# ---------------------------------------------------------------------------
+_ENTRADA_TIPOS = {
+    'pfx': ('Certificado', 'fa-certificate'),
+    'xml': ('Nota fiscal (XML)', 'fa-file-code'),
+    'pdf': ('Documento (PDF)', 'fa-file-pdf'),
+    'zip': ('Compactado (ZIP)', 'fa-file-zipper'),
+}
+_ENTRADA_SEP = ('-', '_', ' ', '.')
+
+
+def _ent_sem_ext(nome):
+    return nome.rsplit('.', 1)[0] if '.' in nome else nome
+
+
+def _ent_casa_empresa(nome, empresas):
+    """'#num NOME' da empresa cujo NÚMERO é prefixo (com separador) ou cujo
+    CNPJ/CPF está contido (fronteira de dígitos) no nome. Mesma régua do
+    certificado, generalizada p/ qualquer extensão. None se não casar."""
+    base = _ent_sem_ext(nome)
+    base_l = base.lower()
+    for e in empresas:
+        num = (e.get('numero_cliente') or '').strip()
+        doc = re.sub(r'\D', '', e.get('cpf_cnpj') or '')
+        casa_num = bool(num) and (base_l == num.lower() or (
+            base_l.startswith(num.lower()) and len(base_l) > len(num)
+            and base_l[len(num)] in _ENTRADA_SEP))
+        casa_doc = len(doc) in (11, 14) and re.search(
+            r'(?<!\d)' + re.escape(doc) + r'(?!\d)', base) is not None
+        if casa_num or casa_doc:
+            nm = (e.get('nome_razao_social') or '').strip()
+            return ('#%s %s' % (num, nm)).strip() if num else (nm or '#? empresa')
+    return None
+
+
+def _ent_humano(n):
+    n = float(n or 0)
+    for u in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024:
+            return ('%d %s' % (n, u)) if u == 'B' else ('%.1f %s' % (n, u))
+        n /= 1024
+    return '%.1f TB' % n
+
+
+def _ent_parse_dt(s):
+    if not s:
+        return None
+    s = str(s).strip().replace('Z', '+00:00')
+    for cand in (s, s[:19]):
+        try:
+            dt = datetime.fromisoformat(cand)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+        except ValueError:
+            continue
+    return None
+
+
+def _ent_idade(s):
+    dt = _ent_parse_dt(s)
+    if not dt:
+        return '—'
+    delta = datetime.utcnow() - dt
+    if delta.days >= 1:
+        return 'há %d dia%s' % (delta.days, '' if delta.days == 1 else 's')
+    h = delta.seconds // 3600
+    if h >= 1:
+        return 'há %d hora%s' % (h, '' if h == 1 else 's')
+    m = (delta.seconds % 3600) // 60
+    return ('há %d min' % m) if m else 'agora'
+
+
+def _ent_montar(arquivos, empresas):
+    """Metadados prontos p/ a tela, mais antigo primeiro."""
+    itens = []
+    for i in arquivos:
+        nome = i.get('name') or ''
+        ext = nome.rsplit('.', 1)[-1].lower() if '.' in nome else ''
+        tlabel, ticone = _ENTRADA_TIPOS.get(ext, ('Outro', 'fa-file'))
+        itens.append({
+            'nome': nome, 'ext': ext, 'tipo': tlabel, 'icone': ticone,
+            'tamanho': _ent_humano(i.get('size', 0)),
+            'idade': _ent_idade(i.get('modified')),
+            'empresa': _ent_casa_empresa(nome, empresas),
+            '_ord': _ent_parse_dt(i.get('modified')) or datetime.max,
+        })
+    itens.sort(key=lambda x: x['_ord'])          # mais antigo em cima
+    return itens
+
+
+@configuracoes.route('/caixa-entrada')
+@admin_required
+def caixa_entrada():
+    """Lista o _ENTRADA do Dropbox (só metadados). Filtro por tipo + busca."""
+    from utils import dropbox_sync
+    svc = dropbox_sync._service
+    f_tipo = request.args.get('tipo', '').strip().lower()
+    busca = request.args.get('busca', '').strip().lower()
+
+    erro, itens, resumo, mais_antigo = None, [], {}, None
+    if not svc.is_configured():
+        erro = 'Dropbox não configurado (DROPBOX_APP_KEY / DROPBOX_REFRESH_TOKEN).'
+    else:
+        try:
+            crus = svc.list_folder(svc.pasta_cert_novo())     # {ROOT}/_ENTRADA
+        except Exception as exc:
+            crus = []
+            erro = 'Falha ao listar a caixa de entrada: %s' % str(exc)[:140]
+        if not erro:
+            empresas = execute_query(
+                "SELECT numero_cliente, cpf_cnpj, nome_razao_social FROM clientes",
+                fetch=True) or []
+            todos = _ent_montar([i for i in crus if i.get('is_file')], empresas)
+            # resumo por tipo + o mais antigo (item 5) — SOBRE O TOTAL, não o filtro
+            for it in todos:
+                resumo[it['tipo']] = resumo.get(it['tipo'], 0) + 1
+            mais_antigo = todos[0]['idade'] if todos else None
+            itens = todos
+            if f_tipo:
+                itens = [it for it in itens if it['ext'] == f_tipo]
+            if busca:
+                itens = [it for it in itens if busca in it['nome'].lower()]
+
+    return render_template('configuracoes/caixa_entrada.html',
+                           itens=itens, resumo=resumo, total=sum(resumo.values()),
+                           mais_antigo=mais_antigo, erro=erro, f_tipo=f_tipo, busca=busca,
+                           tipos=_ENTRADA_TIPOS)
+
+
+@configuracoes.route('/caixa-entrada/renomear', methods=['POST'])
+@admin_required
+def caixa_entrada_renomear():
+    """Renomeia um arquivo DENTRO do _ENTRADA (move_file). Recalcula o match e
+    devolve o resultado. NÃO grava o nome no log (pode conter senha do .pfx)."""
+    from utils import dropbox_sync
+    svc = dropbox_sync._service
+    if not svc.is_configured():
+        return jsonify(ok=False, msg='Dropbox não configurado.'), 400
+    data = request.get_json(silent=True) or {}
+    atual = (data.get('atual') or '').strip()
+    novo = (data.get('novo') or '').strip()
+    if not atual or not novo:
+        return jsonify(ok=False, msg='Informe o nome atual e o novo.'), 400
+    # nomes de arquivo simples — sem barra, sem traversal (fica na própria _ENTRADA)
+    if any(c in novo for c in '/\\') or novo in ('.', '..') or any(c in atual for c in '/\\'):
+        return jsonify(ok=False, msg='Nome inválido.'), 400
+    if atual == novo:
+        return jsonify(ok=False, msg='O nome é o mesmo.'), 400
+
+    base = svc.pasta_cert_novo()
+    de, para = base + '/' + atual, base + '/' + novo
+    try:
+        if svc._path_exists(para):
+            return jsonify(ok=False, msg='Já existe um arquivo com esse nome na caixa.'), 409
+        if not svc.move_file(de, para):
+            return jsonify(ok=False, msg='Falha ao renomear no Dropbox.'), 502
+    except dropbox_sync.DropboxAuthError:
+        return jsonify(ok=False, msg='Credenciais Dropbox inválidas ou expiradas.'), 401
+    except dropbox_sync.DropboxError as exc:
+        return jsonify(ok=False, msg='Erro no Dropbox: %s' % str(exc)[:120]), 502
+
+    empresas = execute_query(
+        "SELECT numero_cliente, cpf_cnpj, nome_razao_social FROM clientes", fetch=True) or []
+    emp = _ent_casa_empresa(novo, empresas)
+    # AUDITORIA: ação + módulo, SEM o nome (nomes de .pfx podem trazer a senha).
+    registrar('escrita.renomeou_caixa_entrada', 'configuracoes', tabela=None,
+              depois={'resultado': 'casou empresa' if emp else 'sem empresa identificada'})
+    return jsonify(ok=True, empresa=emp)
 
 
 @configuracoes.route('/dropbox/espaco/atualizar', methods=['POST'])

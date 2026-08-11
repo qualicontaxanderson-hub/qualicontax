@@ -165,6 +165,15 @@ async function atualizarEspacoDropbox() {
         <p class="module-tile-desc">Todas as movimentações do sistema — quem fez o quê, quando e onde</p>
         <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
     </a>
+
+    <a href="{{ url_for('configuracoes.caixa_entrada') }}" class="module-tile">
+        <div class="module-tile-icon" style="background: linear-gradient(135deg, #d97706, #b45309);">
+            <i class="fas fa-inbox"></i>
+        </div>
+        <h3 class="module-tile-title">Caixa de entrada</h3>
+        <p class="module-tile-desc">Arquivos parados na pasta _ENTRADA do Dropbox — ver e renomear</p>
+        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
+    </a>
     {% endif %}
 
     <a href="#" class="module-tile">
