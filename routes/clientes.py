@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import current_user
 from decimal import Decimal, InvalidOperation
 from utils.auth_helper import login_required, permission_required
+from utils.atividade import registrar
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
@@ -189,8 +190,12 @@ def novo():
         }
         
         cliente_id = Cliente.create(data)
-        
+
         if cliente_id:
+            # AUDITORIA (D2): quem criou este cadastro.
+            registrar('escrita.criou_cliente', 'cadastros', tabela='clientes',
+                      registro_id=cliente_id, depois=data)
+
             # Marca de CONTADOR (fora do INSERT: a lista de colunas do create()
             # é explícita e não inclui is_contador).
             if request.form.get('is_contador'):
@@ -257,7 +262,12 @@ def detalhes(id):
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
-    
+
+    # AUDITORIA (D2): leitura — alguém abriu a ficha deste cliente de propósito.
+    registrar('leitura.abriu_ficha_cliente', 'cadastros', tabela='clientes',
+              registro_id=id, depois={'numero': cliente.get('numero_cliente'),
+                                       'nome': cliente.get('nome_razao_social')})
+
     with ThreadPoolExecutor(max_workers=11) as executor:
         f_enderecos = executor.submit(EnderecoCliente.get_by_cliente, id)
         f_contatos = executor.submit(ContatoCliente.get_by_cliente, id)
@@ -694,6 +704,19 @@ def certificado_vincular(id):
         return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
                         f'Atenção: o arquivo ficou em {destino} — avise o suporte.'}), 500
 
+    # AUDITORIA (D2): vinculou/trocou certificado. senha_cifrada e dropbox_path
+    # estão na lista negra — entram só pelo NOME, nunca o valor (nada de dentro
+    # do .pfx). Registra a troca (antes = cert anterior, se houver).
+    _antes_cert = None
+    if anterior:
+        _antes_cert = {'cnpj': anterior.get('cnpj'), 'validade': anterior.get('validade'),
+                       'senha_cifrada': '(anterior)', 'dropbox_path': anterior.get('dropbox_path')}
+    registrar('escrita.vinculou_certificado', 'cadastros', tabela='dfe_certificados',
+              registro_id=id, antes=_antes_cert,
+              depois={'cnpj': doc_cert, 'tipo_doc': info['tipo_doc'],
+                      'validade': info['validade'], 'procuracao': procuracao,
+                      'senha_cifrada': '(nova)', 'dropbox_path': destino})
+
     return jsonify({
         'ok': True,
         'documento': doc_cert,
@@ -764,13 +787,25 @@ def editar(id):
                 'data_inicio_atividade': request.form.get('data_inicio_atividade'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes'),
-                'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0
+                'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
+                'alterado_por': current_user.id      # AUDITORIA (D2): quem alterou
             }
 
             sucesso = Cliente.update(id, data)
-            
+
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
             if sucesso is not None:
+                # AUDITORIA (D2): grava só os campos de negócio que mudaram
+                # (o helper calcula o diff; alterado_por/criado_por ficam fora).
+                _campos_log = ('numero_cliente', 'tipo_pessoa', 'nome_razao_social',
+                               'cpf_cnpj', 'inscricao_estadual', 'inscricao_municipal',
+                               'email', 'telefone', 'celular', 'regime_tributario',
+                               'porte_empresa', 'cnae_fiscal', 'cnae_fiscal_descricao',
+                               'situacao', 'observacoes', 'aberta_pela_casa')
+                registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes',
+                          registro_id=id,
+                          antes={k: cliente.get(k) for k in _campos_log},
+                          depois={k: data.get(k) for k in _campos_log})
                 # Marca de CONTADOR (fora do UPDATE, que tem lista de colunas
                 # explícita). Desmarcar pode ser RECUSADO se o cadastro ainda
                 # for contador de alguém.

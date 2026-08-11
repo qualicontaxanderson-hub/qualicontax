@@ -276,9 +276,9 @@ class Cliente:
                 numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
                 porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade,
-                data_inicio_contrato, situacao, observacoes, aberta_pela_casa
+                data_inicio_contrato, situacao, observacoes, aberta_pela_casa, criado_por
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             data.get('numero_cliente') or None,
@@ -298,7 +298,8 @@ class Cliente:
             data_inicio_contrato,
             data.get('situacao', 'ATIVO'),
             data.get('observacoes') or None,
-            1 if data.get('aberta_pela_casa') else 0
+            1 if data.get('aberta_pela_casa') else 0,
+            data.get('criado_por') or None      # AUTORIA (D2): quem criou
         )
         return execute_query(query, params)
     
@@ -341,7 +342,8 @@ class Cliente:
                 telefone = %s, celular = %s, regime_tributario = %s,
                 porte_empresa = %s, cnae_fiscal = %s, cnae_fiscal_descricao = %s,
                 data_inicio_atividade = %s, data_inicio_contrato = %s, situacao = %s,
-                observacoes = %s, aberta_pela_casa = %s
+                observacoes = %s, aberta_pela_casa = %s,
+                alterado_por = %s, alterado_em = CURRENT_TIMESTAMP
             WHERE id = %s
         """
         params = (
@@ -363,6 +365,7 @@ class Cliente:
             data.get('situacao'),
             data.get('observacoes') or None,
             1 if data.get('aberta_pela_casa') else 0,
+            data.get('alterado_por') or None,    # AUTORIA (D2): quem alterou
             cliente_id
         )
         return execute_query(query, params)

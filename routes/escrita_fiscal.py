@@ -16,6 +16,7 @@ from flask import (
 from io import BytesIO
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
+from utils.atividade import registrar
 from utils.db_helper import execute_query, execute_many, transacao
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
@@ -1552,6 +1553,21 @@ def api_notas():
     f_cancelado = request.args.get('cancelado', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
+
+    # AUDITORIA (D2): leitura — registra a BUSCA (não a paginação). Só na 1ª
+    # página e só quando há termo ou algum filtro (abrir a aba vazia não conta).
+    _termo = f_chave or f_num_nota
+    _filtros = {k: v for k, v in (
+        ('cliente_id', f_cliente_id), ('grupo_id', f_grupo_id),
+        ('emit_cnpj', request.args.get('emit_cnpj', '').strip()),
+        ('data_ini', f_data_ini), ('data_fim', f_data_fim), ('cfop', f_cfop),
+        ('emit_uf', request.args.get('emit_uf', '').strip()),
+        ('dest_cnpj', f_dest_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
+        ('origem', f_origem), ('vinc_status', f_vinc_status),
+        ('cancelado', f_cancelado)) if v}
+    if page == 1 and (_termo or _filtros):
+        registrar('leitura.buscou_entradas', 'fiscal', tabela='nfe_importacoes',
+                  depois={'termo': _termo or None, 'filtros': _filtros})
 
     extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
     where = ["n.tipo = 'entrada'"] + extra_clauses
