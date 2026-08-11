@@ -41,6 +41,9 @@ def index():
 # ---------------------------------------------------------------------------
 _AUD_MODULOS = ['fiscal', 'cadastros', 'contabil', 'dp', 'colabore', 'configuracoes']
 _AUD_PER = 50
+# Teto do export. Auditoria pode crescer; 20k é seguro no openpyxl e nunca corta
+# calado (avisa na tela e na 1ª linha da planilha se o filtro tiver mais).
+_AUD_EXPORT_CAP = 20000
 
 
 def _aud_filtros():
@@ -51,16 +54,20 @@ def _aud_filtros():
         'modulo': request.args.get('modulo', '').strip(),
         'tipo': request.args.get('tipo', '').strip(),          # ''|escrita|leitura
         'empresa': request.args.get('empresa', '').strip(),
+        # OPCIONAL, desmarcado por padrão: auditoria mostra TUDO por padrão (esconder
+        # linha não audita). Só filtra teste quem marcar a caixa.
+        'ocultar_teste': '1' if request.args.get('ocultar_teste') else '',
         'data_ini': request.args.get('data_ini', '').strip() or (hoje - timedelta(days=7)).isoformat(),
         'data_fim': request.args.get('data_fim', '').strip() or hoje.isoformat(),
     }
 
 
 def _aud_where(f):
-    """(cond, params) do WHERE. Exclui usuários de teste (ZZ TESTE), como o card."""
-    cond = ["COALESCE(l.usuario_nome,'') NOT LIKE 'ZZ TESTE%%'",
-            "l.data_hora >= %s", "l.data_hora <= %s"]
+    """(cond, params) do WHERE. ZZ TESTE só sai se a pessoa PEDIR (ocultar_teste)."""
+    cond = ["l.data_hora >= %s", "l.data_hora <= %s"]
     params = [f['data_ini'] + ' 00:00:00', f['data_fim'] + ' 23:59:59']
+    if f['ocultar_teste']:
+        cond.append("COALESCE(l.usuario_nome,'') NOT LIKE 'ZZ TESTE%%'")
     if f['pessoa']:
         cond.append("l.usuario_nome = %s"); params.append(f['pessoa'])
     if f['modulo']:
@@ -159,16 +166,19 @@ def auditoria():
     resumo = [{'nome': r['nome'], 'n': int(r['n']),
                'pct': round(100 * int(r['n']) / rtot) if rtot else 0} for r in rr]
 
+    # Mostra TODOS os usuários com registro (inclusive teste) — a auditoria não
+    # esconde ninguém; ocultar teste é opção da própria pessoa.
     pessoas = [r['usuario_nome'] for r in execute_query(
         "SELECT DISTINCT usuario_nome FROM logs_sistema WHERE usuario_nome IS NOT NULL "
-        "AND usuario_nome NOT LIKE 'ZZ TESTE%%' ORDER BY usuario_nome", fetch=True) or []]
+        "ORDER BY usuario_nome", fetch=True) or []]
 
     total_paginas = max(1, (total + _AUD_PER - 1) // _AUD_PER)
     return render_template('configuracoes/auditoria.html',
                            itens=itens, resumo=resumo, resumo_total=rtot, total=total,
                            page=page, total_paginas=total_paginas, f=f, pessoas=pessoas,
                            modulos=_AUD_MODULOS, modulo_label=MODULO_LABEL,
-                           auditoria_inicio=AUDITORIA_INICIO, qs=_aud_qs(f))
+                           auditoria_inicio=AUDITORIA_INICIO, qs=_aud_qs(f),
+                           export_cap=_AUD_EXPORT_CAP)
 
 
 def _aud_campos_txt(campos):
@@ -186,19 +196,31 @@ def _aud_campos_txt(campos):
 
 
 def _aud_export(f, cond, params):
-    """XLSX do conjunto filtrado. O export TAMBÉM é participação: registra leitura."""
+    """XLSX do conjunto filtrado. NUNCA trunca calado: se o filtro tiver mais que
+    o teto, avisa na 1ª linha da planilha (e a tela já avisou antes). O export
+    TAMBÉM é participação: registra leitura."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
-    rows = execute_query(_AUD_SELECT + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT 5000",
-                         tuple(params), fetch=True) or []
+
+    total = (execute_query(f"SELECT COUNT(*) AS c FROM logs_sistema l WHERE {cond}",
+                           tuple(params), fetch=True, fetch_one=True) or {}).get('c', 0)
+    rows = execute_query(_AUD_SELECT + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT %s",
+                         tuple(params + [_AUD_EXPORT_CAP]), fetch=True) or []
     nomes, emp_map = _aud_resolver(rows)
     itens = [hist_preparar(r, nomes, emp_map) for r in rows]
+    truncou = total > _AUD_EXPORT_CAP
 
     wb = Workbook(); ws = wb.active; ws.title = 'Auditoria'
     cols = ['Data/hora', 'Usuário', 'Ação', 'Módulo', 'Empresa', 'Mudanças']
+    if truncou:
+        ws.append(['ATENÇÃO: o filtro tem %d registros; este arquivo traz os %d mais '
+                   'recentes. Refine o período para levar tudo.' % (total, _AUD_EXPORT_CAP)])
+        ws.cell(row=1, column=1).font = Font(bold=True, color='B45309')
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(cols))
     ws.append(cols)
+    hrow = ws.max_row
     for i in range(1, len(cols) + 1):
-        cell = ws.cell(row=1, column=i)
+        cell = ws.cell(row=hrow, column=i)
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill('solid', fgColor='15803D')
     for it in itens:
@@ -210,7 +232,8 @@ def _aud_export(f, cond, params):
     bio = BytesIO(); wb.save(bio); bio.seek(0)
 
     registrar('leitura.exportou_arquivo', 'configuracoes', tabela='logs_sistema',
-              depois={'formato': 'xlsx', 'escopo': 'auditoria', 'total': len(itens),
+              depois={'formato': 'xlsx', 'escopo': 'auditoria', 'total_filtro': total,
+                      'trazidos': len(itens), 'truncou': truncou,
                       'filtros': {k: v for k, v in f.items() if v}})
     return send_file(bio, as_attachment=True,
                      download_name='auditoria_%s_a_%s.xlsx' % (f['data_ini'], f['data_fim']),
