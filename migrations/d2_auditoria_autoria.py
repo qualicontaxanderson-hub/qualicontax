@@ -61,6 +61,20 @@ AUTORIA = {
                               ('usuario_login', 'VARCHAR(80) NULL')],
 }
 
+# Índices (idempotente). idx_logs_modulo_dh serve as agregações da home por
+# módulo/período (D1: "quem mais entregou", "trabalhando agora").
+INDICES = {
+    'logs_sistema': [('idx_logs_modulo_dh', 'modulo, data_hora')],
+}
+
+
+def _indice_existe(tabela, indice):
+    r = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s",
+        (tabela, indice), fetch=True, fetch_one=True) or {}
+    return r.get('cnt', 0) > 0
+
 
 def _migrate(sql):
     """DDL fatal (mesma semântica de add_procuracao_certificado)."""
@@ -86,11 +100,23 @@ def aplicar():
                 continue
             _migrate(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}")
             print(f"  [+] {tabela}.{coluna} ({definicao})")
+    for tabela, indices in INDICES.items():
+        for indice, cols in indices:
+            if _indice_existe(tabela, indice):
+                print(f"  [ja existe] indice {tabela}.{indice}")
+                continue
+            _migrate(f"CREATE INDEX {indice} ON {tabela} ({cols})")
+            print(f"  [+] indice {tabela}.{indice} ({cols})")
     print("\n[ok] Concluido.")
 
 
 def reverter():
     print("Revertendo D2 - DROP das colunas de autoria...\n")
+    for tabela, indices in INDICES.items():
+        for indice, _cols in indices:
+            if _indice_existe(tabela, indice):
+                _migrate(f"DROP INDEX {indice} ON {tabela}")
+                print(f"  [-] indice {tabela}.{indice} removido")
     for tabela, colunas in AUTORIA.items():
         for coluna, _definicao in colunas:
             if not _coluna_existe(tabela, coluna):

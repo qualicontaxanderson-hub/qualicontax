@@ -67,7 +67,34 @@
         return '<span class="ef-cc-pill ef-pill-' + (t.tipo || 'neutro') + '">' + esc(txt) + '</span>';
     }
 
+    // Card tipo LISTA: ranking rolante. Cada linha = posição, quantidade (à
+    // direita, tabular), rótulo (com reticências) e, atrás, barra proporcional
+    // ao 1º colocado. NÃO desenha sparkline — a lista já é a visualização.
+    function listCardHTML(c) {
+        var itens = c.itens || [];
+        var max = 0;
+        itens.forEach(function (it) { if (typeof it.valor === 'number' && it.valor > max) max = it.valor; });
+        var rows = itens.map(function (it, i) {
+            var isNum = typeof it.valor === 'number';
+            var val = isNum ? nfmt(it.valor) : esc(it.valor);
+            var bar = (it.barra != null) ? (it.barra * 100)
+                : (isNum && max > 0 ? (it.valor / max) * 100 : 0);
+            return '<div class="ef-cc-lrow">' +
+                '<span class="ef-cc-lbar" style="width:' + bar.toFixed(1) + '%"></span>' +
+                '<span class="ef-cc-lpos">' + (i + 1) + 'º</span>' +
+                '<span class="ef-cc-lval">' + val + '</span>' +
+                '<span class="ef-cc-lrot">' + esc(it.rotulo) + '</span>' +
+                '</div>';
+        }).join('');
+        return '<div class="ef-car-card is-lista">' +
+            '<div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas ' + esc(c.icone) + '"></i>' +
+                esc(c.titulo) + '</span>' + pill(c.trend) + '</div>' +
+            '<div class="ef-cc-lviewport"><div class="ef-cc-lista">' + rows + '</div></div>' +
+            '</div>';
+    }
+
     function cardHTML(c) {
+        if (c && c.tipo === 'lista') return listCardHTML(c);
         var suf = c.valor_sufixo ? '<small>' + esc(c.valor_sufixo) + '</small>' : '';
         // Sem série real não desenha sparkline: uma linha reta inventada é
         // decoração que passa por dado. Card sem spark simplesmente não tem.
@@ -93,12 +120,49 @@
     }
 
     var track, dots, timer = null, idx = 0, paused = false, resumeT = null;
-    function cardW() { var c = track && track.querySelector('.ef-car-card'); return c ? c.offsetWidth + 14 : 286; }
+    // Cards têm larguras diferentes (272px número, 300px lista): navego pelo
+    // offsetLeft real de cada card, não por uma largura única.
+    function nearestIdx() {
+        if (!track) return 0;
+        var sl = track.scrollLeft, best = 0, bd = Infinity, ch = track.children;
+        for (var i = 0; i < ch.length; i++) {
+            var d = Math.abs(ch[i].offsetLeft - sl);
+            if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+    }
     function setDot(i) { if (dots) dots.forEach(function (d, ix) { d.classList.toggle('on', ix === i); }); }
-    function go(i) { idx = i; track.scrollTo({ left: i * cardW(), behavior: 'smooth' }); setDot(i); }
-    function syncDot() { if (!track) return; var i = Math.round(track.scrollLeft / cardW()); if (i !== idx) { idx = i; setDot(i); } }
+    function go(i) { idx = i; var c = track.children[i]; track.scrollTo({ left: c ? c.offsetLeft : 0, behavior: 'smooth' }); setDot(i); }
+    function syncDot() { if (!track) return; var i = nearestIdx(); if (i !== idx) { idx = i; setDot(i); } }
     function pauseAWhile() { paused = true; if (resumeT) clearTimeout(resumeT); resumeT = setTimeout(function () { paused = false; }, 8000); }
     function startAuto(n) { if (timer) clearInterval(timer); if (n <= 1) return; timer = setInterval(function () { if (!paused) go((idx + 1) % n); }, 4000); }
+
+    // Auto-scroll VERTICAL dos cards LISTA: janela de 5 linhas, sobe de página em
+    // página (~4s), fase escalonada por card; pausa no hover; parada quando
+    // prefers-reduced-motion está ligado ou a lista tem <= 5 itens.
+    function setupListas() {
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var PER = 5;
+        Array.prototype.forEach.call(carEl.querySelectorAll('.ef-car-card.is-lista'), function (card, ci) {
+            var lista = card.querySelector('.ef-cc-lista');
+            var vp = card.querySelector('.ef-cc-lviewport');
+            if (!lista || !vp || !lista.children.length) return;
+            var rowH = lista.children[0].offsetHeight;
+            var n = lista.children.length, visN = Math.min(n, PER);
+            vp.style.height = (rowH * visN) + 'px';   // janela de até 5 linhas
+            if (reduce || n <= PER) return;           // parada
+            var pages = Math.ceil(n / PER), maxOff = (n - PER) * rowH, pg = 0, hover = false;
+            card.addEventListener('mouseenter', function () { hover = true; });
+            card.addEventListener('mouseleave', function () { hover = false; });
+            setTimeout(function () {
+                setInterval(function () {
+                    if (hover) return;
+                    pg = (pg + 1) % pages;
+                    lista.style.transform = 'translateY(-' + Math.min(pg * PER * rowH, maxOff) + 'px)';
+                }, 4000);
+            }, ci * 1300);   // fase diferente por card
+        });
+    }
 
     function render(cards) {
         carEl.innerHTML = '<div class="ef-car-track" id="efCarTrack">' + cards.map(cardHTML).join('') +
@@ -113,6 +177,7 @@
         ['pointerdown', 'touchstart', 'wheel'].forEach(function (ev) { track.addEventListener(ev, pauseAWhile, { passive: true }); });
         carEl.hidden = false;
         startAuto(cards.length);
+        setupListas();
     }
 
     fetch(endpoint, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })

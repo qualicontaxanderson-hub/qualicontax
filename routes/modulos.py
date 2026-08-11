@@ -8,6 +8,7 @@ from flask_login import current_user
 
 from routes.adicionais import TIPOS_CADASTROS
 from utils.auth_helper import permission_required
+from utils.home_atividade import card_quem_entregou, card_trabalhando_agora
 from utils.db_helper import execute_query
 
 logger = logging.getLogger(__name__)
@@ -237,44 +238,47 @@ def _cadastros_home_payload():
         'trend': {'tipo': 'neutro', 'rotulo': 'total'},
     })
 
-    # 8) Distribuição por RAMO DE ATIVIDADE — top 5. Ranking, não série do tempo:
-    #    o sparkline é a própria distribuição (barra), igual ao card de validade.
+    # 8) Distribuição por RAMO DE ATIVIDADE — card LISTA (até 15). Sem sparkline:
+    #    a lista já é a visualização.
     ramo_rows = execute_query(
         "SELECT ra.nome, COUNT(DISTINCT rel.cliente_id) n "
         "FROM cliente_ramo_atividade_relacao rel "
         "JOIN ramos_atividade ra ON ra.id=rel.ramo_atividade_id "
         "JOIN clientes c ON c.id=rel.cliente_id "
-        "WHERE c.situacao='ATIVO' GROUP BY ra.id ORDER BY n DESC LIMIT 5",
+        "WHERE c.situacao='ATIVO' GROUP BY ra.id ORDER BY n DESC LIMIT 15",
         fetch=True) or []
     if ramo_rows:
-        def _sh(nm):
-            nm = (nm or '').strip()
-            return (nm[:15] + '…') if len(nm) > 16 else nm
         cards.append({
-            'titulo': 'Clientes por ramo', 'icone': 'fa-industry',
-            'valor': int(ramo_rows[0]['n']), 'valor_sufixo': ' · ' + _sh(ramo_rows[0]['nome']),
-            'apoio': ' · '.join('%s %d' % (_sh(r['nome']), int(r['n'])) for r in ramo_rows[1:]),
-            'spark': [int(r['n']) for r in ramo_rows], 'spark_tipo': 'barra',
-            'trend': {'tipo': 'neutro', 'rotulo': 'top 5'},
+            'titulo': 'Clientes por ramo', 'icone': 'fa-industry', 'tipo': 'lista',
+            'itens': [{'valor': int(r['n']), 'rotulo': (r['nome'] or '').strip()} for r in ramo_rows],
+            'trend': {'tipo': 'neutro', 'rotulo': 'total'},
         })
 
-    # 9) Distribuição por MUNICÍPIO — top 5 (cidade do endereço do cliente ativo).
+    # 9) Distribuição por MUNICÍPIO — card LISTA (até 15; cidade do endereço).
     mun_rows = execute_query(
         "SELECT ec.cidade, ec.estado, COUNT(DISTINCT ec.cliente_id) n "
         "FROM enderecos_clientes ec JOIN clientes c ON c.id=ec.cliente_id "
         "WHERE c.situacao='ATIVO' AND COALESCE(ec.cidade,'')<>'' "
-        "GROUP BY ec.cidade, ec.estado ORDER BY n DESC LIMIT 5",
+        "GROUP BY ec.cidade, ec.estado ORDER BY n DESC LIMIT 15",
         fetch=True) or []
     if mun_rows:
         def _mun(r):
             return '%s/%s' % ((r['cidade'] or '').strip().title(), (r['estado'] or '').strip())
         cards.append({
-            'titulo': 'Clientes por município', 'icone': 'fa-map-marked-alt',
-            'valor': int(mun_rows[0]['n']), 'valor_sufixo': ' · ' + _mun(mun_rows[0]),
-            'apoio': ' · '.join('%s %d' % (_mun(r), int(r['n'])) for r in mun_rows[1:]),
-            'spark': [int(r['n']) for r in mun_rows], 'spark_tipo': 'barra',
-            'trend': {'tipo': 'neutro', 'rotulo': 'top 5'},
+            'titulo': 'Clientes por município', 'icone': 'fa-map-marked-alt', 'tipo': 'lista',
+            'itens': [{'valor': int(r['n']), 'rotulo': _mun(r)} for r in mun_rows],
+            'trend': {'tipo': 'neutro', 'rotulo': 'total'},
         })
+
+    # 10/11) ATIVIDADE do módulo cadastros (só aparece com dado real).
+    for _fn in (lambda: card_quem_entregou('cadastros'),
+                lambda: card_trabalhando_agora('cadastros')):
+        try:
+            _ac = _fn()
+            if _ac:
+                cards.append(_ac)
+        except Exception:
+            logger.exception('[cadastros-destaques] card de atividade omitido')
 
     counters = {
         'clientes': ativos, 'grupos': grupos, 'ramos': ramos,

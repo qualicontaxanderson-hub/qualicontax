@@ -17,6 +17,8 @@ from io import BytesIO
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
 from utils.atividade import registrar, rotulo_empresa
+from utils.home_atividade import (card_quem_entregou, card_trabalhando_agora,
+                                  card_chegando_cliente)
 from utils.db_helper import execute_query, execute_many, transacao
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
@@ -954,68 +956,55 @@ def _home_destaques_payload():
                 'trend': {'tipo': 'neutro', 'rotulo': 'ativas'}}
     _card(_c6)
 
-    # Ranking: sem série temporal — o sparkline é a PRÓPRIA distribuição top-5
-    # (barra), como o card de validade do Cadastros. Líder no valor+sufixo; os
-    # 2º–5º com número no apoio. Sem inventar linha do tempo.
-    def _rank_apoio(rows, rotulo):
-        return ' · '.join('%s %s' % (rotulo(r), _hi(r['n'])) for r in rows[1:])
-
-    # Abrevia o nome com reticências (272px de card), preservando o caixa-alta
-    # da razão social — igual ao corte do card de fornecedores.
-    def _abbr(nm):
-        nm = (nm or '').strip()
-        return (nm[:15] + '…') if len(nm) > 16 else nm
-
-    # ---- 7) MAIS ENTRADAS (top 5 empresas: número + nome) ----
+    # Rankings agora são cards tipo LISTA (até 15 posições; sem sparkline — a
+    # lista já é a visualização). Rótulo com o número do cliente antes do nome
+    # ("#515 PETROGOIAS"); reticências ficam por conta do CSS (300px de card).
+    # ---- 7) MAIS ENTRADAS (top 15 empresas) ----
     def _c7():
         rows = _hqn("SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
                     "FROM nfe_importacoes ni JOIN clientes c ON c.id=ni.cliente_id "
-                    "WHERE ni.tipo='entrada' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
+                    "WHERE ni.tipo='entrada' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 15")
         if not rows:
             return None
         return {'id': 'top_entradas', 'icone': 'fa-arrow-down-wide-short',
-                'titulo': 'Mais entradas',
-                'valor': _hi(rows[0]['n']),
-                'valor_sufixo': " · #%s %s" % (rows[0]['num'], _abbr(rows[0]['nome'])),
-                'apoio': _rank_apoio(rows, lambda r: '#%s %s' % (r['num'], _abbr(r['nome']))),
-                'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
-                'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
+                'titulo': 'Mais entradas', 'tipo': 'lista',
+                'itens': [{'valor': _hi(r['n']),
+                           'rotulo': '#%s %s' % (r['num'], (r['nome'] or '').strip())} for r in rows],
+                'trend': {'tipo': 'neutro', 'rotulo': 'total'}}
     _card(_c7)
 
-    # ---- 8) MAIS SAÍDAS (top 5 empresas: número + nome) ----
+    # ---- 8) MAIS SAÍDAS (top 15 empresas) ----
     def _c8():
         rows = _hqn("SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
                     "FROM nfe_importacoes ni JOIN clientes c ON c.id=ni.cliente_id "
-                    "WHERE ni.tipo='saida' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 5")
+                    "WHERE ni.tipo='saida' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 15")
         if not rows:
             return None
         return {'id': 'top_saidas', 'icone': 'fa-arrow-up-wide-short',
-                'titulo': 'Mais saídas',
-                'valor': _hi(rows[0]['n']),
-                'valor_sufixo': " · #%s %s" % (rows[0]['num'], _abbr(rows[0]['nome'])),
-                'apoio': _rank_apoio(rows, lambda r: '#%s %s' % (r['num'], _abbr(r['nome']))),
-                'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
-                'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
+                'titulo': 'Mais saídas', 'tipo': 'lista',
+                'itens': [{'valor': _hi(r['n']),
+                           'rotulo': '#%s %s' % (r['num'], (r['nome'] or '').strip())} for r in rows],
+                'trend': {'tipo': 'neutro', 'rotulo': 'total'}}
     _card(_c8)
 
-    # ---- 9) FORNECEDORES FREQUENTES (top 5 emitentes de entrada) ----
+    # ---- 9) FORNECEDORES FREQUENTES (top 15 emitentes de entrada) ----
     def _c9():
         rows = _hqn("SELECT MAX(emit_nome) nome, COUNT(*) n FROM nfe_importacoes "
                     "WHERE tipo='entrada' AND COALESCE(emit_cnpj,'')<>'' "
-                    "GROUP BY emit_cnpj ORDER BY n DESC LIMIT 5")
+                    "GROUP BY emit_cnpj ORDER BY n DESC LIMIT 15")
         if not rows:
             return None
-
-        def _sh(nm):
-            nm = (nm or '').strip().title()
-            return (nm[:15] + '…') if len(nm) > 16 else nm
         return {'id': 'top_fornecedores', 'icone': 'fa-truck-ramp-box',
-                'titulo': 'Fornecedores frequentes',
-                'valor': _hi(rows[0]['n']), 'valor_sufixo': ' · ' + _sh(rows[0]['nome']),
-                'apoio': _rank_apoio(rows, lambda r: _sh(r['nome'])),
-                'spark': [_hi(r['n']) for r in rows], 'spark_tipo': 'barra',
-                'trend': {'tipo': 'neutro', 'rotulo': 'top 5'}}
+                'titulo': 'Fornecedores frequentes', 'tipo': 'lista',
+                'itens': [{'valor': _hi(r['n']), 'rotulo': (r['nome'] or '').strip().title()}
+                          for r in rows],
+                'trend': {'tipo': 'neutro', 'rotulo': 'total'}}
     _card(_c9)
+
+    # ---- ATIVIDADE (logs_sistema / roteador_log) — só aparecem com dado real ----
+    _card(lambda: card_quem_entregou('fiscal'))
+    _card(lambda: card_trabalhando_agora('fiscal'))
+    _card(card_chegando_cliente)
 
     # ---- 10) MEMORIZAÇÕES NO MÊS (vs mês anterior — variação real, mesmo negativa) ----
     def _c10():

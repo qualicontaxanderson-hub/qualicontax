@@ -290,6 +290,20 @@
 .ef-cc-apoio { font-size:11px; color:#7d968a; }
 .ef-cc-spark { margin-top:2px; height:34px; }
 .ef-cc-spark svg { display:block; width:100%; height:34px; overflow:visible; }
+/* D1 — card tipo LISTA (ranking rolante). Mais largo que o de número único. */
+.ef-car-card.is-lista { flex-basis:300px; }
+.ef-cc-lviewport { overflow:hidden; margin-top:6px; }
+.ef-cc-lista { transition:transform .5s ease; will-change:transform; }
+.ef-cc-lrow { position:relative; display:flex; align-items:center; gap:8px; height:24px;
+    font-size:12px; overflow:hidden; }
+.ef-cc-lbar { position:absolute; left:0; top:2px; bottom:2px; z-index:0;
+    background:rgba(34,197,94,.13); border-radius:5px; }
+.ef-cc-lpos { position:relative; z-index:1; flex:0 0 22px; width:22px;
+    color:#9ab3a6; font-size:10px; font-weight:700; }
+.ef-cc-lval { position:relative; z-index:1; flex:0 0 64px; width:64px; text-align:right;
+    font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.ef-cc-lrot { position:relative; z-index:1; flex:1 1 auto; min-width:0; color:#3f5a4e;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ef-car-dots { display:flex; gap:6px; justify-content:center; margin-top:12px; }
 .ef-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.35);
     cursor:pointer; transition:background .2s ease, width .2s ease; }
