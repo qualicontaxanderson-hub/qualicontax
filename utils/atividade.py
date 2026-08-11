@@ -135,6 +135,42 @@ def _json(d):
         return json.dumps({'_erro_serializacao': True})
 
 
+# H1 — janela de silêncio para LEITURA (minutos). Uma consulta idêntica repetida
+# dentro dessa janela (mesma tela/empresa/período a cada F5) NÃO vira linha nova.
+# Só vale para leitura; escrita sempre grava (dois fatos iguais são dois fatos).
+JANELA_SILENCIO_LEITURA_MIN = 5
+
+
+def _leitura_recente_identica(usuario_id, acao, modulo, tabela, registro_id,
+                              a_str, d_str):
+    """True se JÁ existe uma leitura IDÊNTICA (mesmo usuário, ação, módulo, tabela,
+    registro e MESMO conteúdo de filtros) nos últimos JANELA_SILENCIO_LEITURA_MIN
+    minutos. SELECT leve: começa por (modulo, data_hora) — o índice
+    idx_logs_modulo_dh já existente — e casa o resto com `<=>` (NULL-safe). Os
+    filtros (dados_anteriores/dados_novos) são colunas JSON: o banco normaliza o
+    JSON (ordena chaves, tira espaços) ao gravar, então compara-se com
+    ``CAST(%s AS JSON)`` — igualdade por VALOR, não pela string do json.dumps. Em
+    qualquer erro devolve False: na dúvida, grava (nunca perder auditoria por isto)."""
+    try:
+        achou = execute_query(
+            "SELECT 1 FROM logs_sistema "
+            " WHERE modulo = %s "
+            "   AND data_hora >= NOW() - INTERVAL %s MINUTE "
+            "   AND acao = %s "
+            "   AND usuario_id <=> %s "
+            "   AND tabela_afetada <=> %s "
+            "   AND registro_id <=> %s "
+            "   AND dados_anteriores <=> CAST(%s AS JSON) "
+            "   AND dados_novos <=> CAST(%s AS JSON) "
+            " LIMIT 1",
+            (modulo, JANELA_SILENCIO_LEITURA_MIN, acao, usuario_id, tabela,
+             registro_id, a_str, d_str),
+            fetch=True, fetch_one=True)
+        return achou is not None
+    except Exception:
+        return False
+
+
 def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=None):
     """Grava uma linha de atividade em logs_sistema. NUNCA estoura para fora.
 
@@ -145,6 +181,9 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
         registro_id: id do registro afetado (opcional).
         antes/depois: dicts. Só os campos MUDADOS vão para o log; campos da lista
                       negra entram como {campo: "alterado"}.
+
+    LEITURA repetida idêntica em <5 min é suprimida (janela de silêncio, H1);
+    ESCRITA sempre grava.
     """
     try:
         # Só grava o que uma PESSOA LOGADA pediu. Ação de robô/scheduler (sem
@@ -162,14 +201,24 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
                          or getattr(current_user, 'nick', None) or '')[:80] or None
 
         a_json, d_json = _diff(antes, depois)
+        a_str, d_str = _json(a_json), _json(d_json)
+        acao_curta = acao[:100]
+        modulo_curto = (modulo or '')[:20]
+
+        # H1 — leitura idêntica repetida (mesma consulta a cada F5): não regrava se
+        # já houve uma igual nos últimos 5 min. Escrita NUNCA passa por aqui.
+        if acao_curta.startswith('leitura.') and _leitura_recente_identica(
+                usuario_id, acao_curta, modulo_curto, tabela, registro_id, a_str, d_str):
+            return
+
         execute_query(
             "INSERT INTO logs_sistema "
             "(usuario_id, usuario_nome, usuario_login, acao, modulo, tabela_afetada, "
             " registro_id, dados_anteriores, dados_novos, ip_address, user_agent) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (usuario_id, usuario_nome, usuario_login,
-             acao[:100], (modulo or '')[:20], tabela, registro_id,
-             _json(a_json), _json(d_json),
+             acao_curta, modulo_curto, tabela, registro_id,
+             a_str, d_str,
              (request.remote_addr or '')[:45],
              (request.headers.get('User-Agent') or '')[:255]),
             fetch=False)
