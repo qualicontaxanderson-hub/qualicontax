@@ -1,6 +1,8 @@
 """Rotas de Contratos"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
+from utils.atividade import registrar
 from utils.db_helper import execute_query
 from models.cliente import Cliente
 
@@ -83,9 +85,9 @@ def create():
         query = """
             INSERT INTO contratos (
                 cliente_id, numero_contrato, tipo_servico, valor_mensal,
-                data_inicio, data_fim, situacao, observacoes, data_criacao
+                data_inicio, data_fim, situacao, observacoes, data_criacao, criado_por
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
         """
         params = (
             data['cliente_id'],
@@ -95,12 +97,15 @@ def create():
             data['data_inicio'],
             data['data_fim'],
             data['situacao'],
-            data['observacoes']
+            data['observacoes'],
+            current_user.id                      # AUTORIA (D2): quem criou
         )
-        
+
         contrato_id = execute_query(query, params)
-        
+
         if contrato_id:
+            registrar('escrita.criou_contrato', 'cadastros', tabela='contratos',
+                      registro_id=contrato_id, depois=data)
             flash('Contrato cadastrado com sucesso!', 'success')
             return redirect(url_for('contratos.list_contratos'))
         else:

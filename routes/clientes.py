@@ -939,10 +939,16 @@ def novo_endereco(cliente_id):
     )
     
     if endereco_id:
+        registrar('escrita.criou_endereco', 'cadastros', tabela='enderecos_clientes',
+                  registro_id=endereco_id,
+                  depois={'cliente_id': cliente_id, 'tipo': request.form.get('tipo'),
+                          'cep': request.form.get('cep'), 'logradouro': request.form.get('logradouro'),
+                          'numero': request.form.get('numero'), 'bairro': request.form.get('bairro'),
+                          'cidade': request.form.get('cidade'), 'estado': request.form.get('estado')})
         flash('Endereço adicionado com sucesso!', 'success')
     else:
         flash('Erro ao adicionar endereço!', 'danger')
-    
+
     return redirect(url_for('clientes.detalhes', id=cliente_id))
 
 
@@ -956,9 +962,13 @@ def excluir_endereco(id):
         return redirect(url_for('clientes.index'))
     
     cliente_id = endereco['cliente_id']
-    
+
     sucesso = EnderecoCliente.delete(id)
     if sucesso:
+        registrar('escrita.excluiu_endereco', 'cadastros', tabela='enderecos_clientes',
+                  registro_id=id,
+                  antes={'cliente_id': cliente_id, 'tipo': endereco.get('tipo'),
+                         'logradouro': endereco.get('logradouro'), 'cidade': endereco.get('cidade')})
         flash('Endereço excluído com sucesso!', 'success')
     else:
         flash('Erro ao excluir endereço!', 'danger')
@@ -1112,6 +1122,11 @@ def novo_socio(cliente_id):
     )
 
     if socio_id:
+        registrar('escrita.criou_socio', 'cadastros', tabela='socios_clientes',
+                  registro_id=socio_id,
+                  depois={'cliente_id': cliente_id, 'nome': nome, 'cpf': cpf,
+                          'email': email, 'telefone': telefone,
+                          'percentual_participacao': str(percentual), 'responsavel': responsavel})
         total_final = SocioCliente.get_total_percentual(cliente_id)
         if total_final == Decimal('100'):
             flash('Sócio adicionado com sucesso! Total de participação atingiu 100%.', 'success')
@@ -1136,6 +1151,10 @@ def excluir_socio(id):
     sucesso = SocioCliente.delete(id)
 
     if sucesso:
+        registrar('escrita.excluiu_socio', 'cadastros', tabela='socios_clientes',
+                  registro_id=id,
+                  antes={'cliente_id': cliente_id, 'nome': socio.get('nome'),
+                         'cpf': socio.get('cpf')})
         total_final = SocioCliente.get_total_percentual(cliente_id)
         flash(f'Sócio excluído com sucesso. Total atual de participação: {total_final:.2f}%.', 'success')
     else:

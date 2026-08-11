@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
+from utils.atividade import registrar
 from models.grupo_cliente import GrupoCliente
 from models.cliente import Cliente
 
@@ -55,8 +56,11 @@ def novo():
             
             # Criar grupo
             grupo_id = GrupoCliente.create(nome, descricao, situacao)
-            
+
             if grupo_id:
+                registrar('escrita.criou_grupo', 'cadastros', tabela='grupos_clientes',
+                          registro_id=grupo_id,
+                          depois={'nome': nome, 'descricao': descricao, 'situacao': situacao})
                 flash('Grupo criado com sucesso!', 'success')
                 return redirect(url_for('grupos.detalhes', id=grupo_id))
             else:
@@ -121,8 +125,13 @@ def editar(id):
             
             # Atualizar grupo
             sucesso = GrupoCliente.update(id, nome, descricao, situacao)
-            
+
             if sucesso is not None:
+                registrar('escrita.alterou_grupo', 'cadastros', tabela='grupos_clientes',
+                          registro_id=id,
+                          antes={'nome': grupo.get('nome'), 'descricao': grupo.get('descricao'),
+                                 'situacao': grupo.get('situacao')},
+                          depois={'nome': nome, 'descricao': descricao, 'situacao': situacao})
                 flash('Grupo atualizado com sucesso!', 'success')
                 return redirect(url_for('grupos.detalhes', id=id))
             else:

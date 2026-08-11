@@ -51,7 +51,20 @@ CAMPOS_SENSIVEIS = {
     'dropbox_path', 'caminho_certificado',
 }
 
+# Campos de CONTROLE/autoria: NUNCA entram no antes/depois. Quem fez já é o dono
+# da linha de log (usuario_id/nome/login) — repetir criado_por/alterado_por no
+# corpo seria ruído. Removidos ANTES do diff, dos dois lados.
+CAMPOS_CONTROLE = {'criado_por', 'criado_em', 'alterado_por', 'alterado_em',
+                   'atualizado_em', 'data_criacao'}
+
 _MASCARA = 'alterado'   # o que grava no lugar do valor sensível
+
+
+def _sem_controle(d):
+    """Remove os campos de controle/autoria do dict (dos dois lados do diff)."""
+    if not d:
+        return d
+    return {k: v for k, v in d.items() if k not in CAMPOS_CONTROLE}
 
 
 def _mascarar(d):
@@ -68,7 +81,10 @@ def _diff(antes, depois):
     - criação (só depois): grava o depois inteiro.
     - exclusão(só antes):  grava o antes inteiro.
     - leitura (nenhum dos dois ou depois=contexto de busca): grava o que vier.
+    Campos de controle (criado_por/alterado_por/...) saem sempre, dos dois lados.
     """
+    antes = _sem_controle(antes)
+    depois = _sem_controle(depois)
     if antes and depois:
         chaves = set(depois) | set(antes)
         mud = [k for k in chaves if antes.get(k) != depois.get(k)]
@@ -107,14 +123,21 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
         if not getattr(current_user, 'is_authenticated', False):
             return
         usuario_id = getattr(current_user, 'id', None)
+        # Nome e login COPIADOS no momento da ação: a auditoria não pode depender
+        # da FK usuario_id (ON DELETE SET NULL). Apagar o usuário zera o id, mas
+        # estes dois continuam dizendo quem fez.
+        usuario_nome = (getattr(current_user, 'nome', None) or '')[:120] or None
+        usuario_login = (getattr(current_user, 'login', None)
+                         or getattr(current_user, 'nick', None) or '')[:80] or None
 
         a_json, d_json = _diff(antes, depois)
         execute_query(
             "INSERT INTO logs_sistema "
-            "(usuario_id, acao, modulo, tabela_afetada, registro_id, "
-            " dados_anteriores, dados_novos, ip_address, user_agent) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (usuario_id, acao[:100], (modulo or '')[:20], tabela, registro_id,
+            "(usuario_id, usuario_nome, usuario_login, acao, modulo, tabela_afetada, "
+            " registro_id, dados_anteriores, dados_novos, ip_address, user_agent) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (usuario_id, usuario_nome, usuario_login,
+             acao[:100], (modulo or '')[:20], tabela, registro_id,
              _json(a_json), _json(d_json),
              (request.remote_addr or '')[:45],
              (request.headers.get('User-Agent') or '')[:255]),

@@ -5,6 +5,7 @@ import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from utils.auth_helper import login_required, admin_required, permission_required, hash_password
+from utils.atividade import registrar
 from utils.db_helper import execute_query, transacao
 from utils.permissions import PERMISSION_CATALOG
 from utils import cadastro_token
@@ -291,6 +292,10 @@ def usuario_pendente_detalhe(pid):
     c['cpf'] = _fmt_cpf(cand.get('cpf'))
     c['celular_pessoal'] = _fmt_cel(cand.get('celular_pessoal'))
     c['celular_corporativo'] = _fmt_cel(cand.get('celular_corporativo'))
+    # AUDITORIA (D2): leitura — abriu a candidatura para análise. Grava SÓ o id
+    # (nada do corpo: os dados bancários NUNCA vão a log).
+    registrar('leitura.abriu_cadastro_colabore', 'colabore',
+              tabela='cadastro_pendente', registro_id=pid)
     return jsonify(ok=True, cand=c, banco=banco, departamentos_pedidos=deps)
 
 
@@ -408,6 +413,10 @@ def usuario_pendente_aprovar(pid):
 
     logger.info('[qcolabore] pendência %s aprovada por %s → usuário %s.',
                 pid, current_user.id, uid)
+    # AUDITORIA (D2): candidatura recebida foi TRATADA (aprovada). Sem dado bancário.
+    registrar('escrita.aprovou_cadastro_colabore', 'colabore',
+              tabela='cadastro_pendente', registro_id=pid,
+              depois={'usuario_id': uid, 'tipo_usuario': tipo})
     return jsonify(ok=True, usuario_id=uid,
                    senha_url=senha_url, senha_prefixo=senha_prefixo)
 
@@ -435,6 +444,9 @@ def usuario_pendente_recusar(pid):
             return jsonify(ok=False, msg='Candidatura já decidida ou inexistente.'), 409
 
     logger.info('[qcolabore] pendência %s recusada por %s.', pid, current_user.id)
+    # AUDITORIA (D2): candidatura recebida foi TRATADA (recusada).
+    registrar('escrita.recusou_cadastro_colabore', 'colabore',
+              tabela='cadastro_pendente', registro_id=pid, depois={'motivo': motivo})
     return jsonify(ok=True)
 
 

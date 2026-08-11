@@ -1103,6 +1103,12 @@ def status_sefaz():
     }
     filtros_ativos = any(fs.values())
 
+    # AUDITORIA (D2): leitura — abrir o Status SEFAZ de UMA empresa (com a empresa
+    # escolhida). Sem empresa é o painel geral/auto-refresh — não registra.
+    if fs['empresa']:
+        registrar('leitura.abriu_status_sefaz', 'fiscal',
+                  depois={k: v for k, v in fs.items() if v})
+
     def _fmt(d):
         return d.strftime('%d/%m/%Y %H:%M') if hasattr(d, 'strftime') else None
 
@@ -1837,6 +1843,12 @@ def nota_capturar(nfe_id):
 
     r = dfe_captura.capturar_por_chave(nota['cliente_id'], chave, origem='manual')
 
+    # AUDITORIA (D2): leitura — consulta à SEFAZ disparada pelo usuário (botão
+    # "Capturar documento"). A chave de acesso é pública, não é dado sensível.
+    registrar('leitura.consultou_sefaz', 'fiscal', tabela='nfe_importacoes',
+              registro_id=nfe_id,
+              depois={'chave': chave, 'cliente_id': nota['cliente_id'], 'origem': 'manual'})
+
     if r.get('bloqueado') or r.get('consumo_indevido'):
         return jsonify({'ok': False, 'aguardar': True,
                         'erro': r.get('erro') or 'A SEFAZ pediu para aguardar.'})
@@ -2383,6 +2395,11 @@ def _lote_xml_nfe(escopo, permissao):
         return jsonify({'error': f'{total} notas — o limite é {_LOTE_MAX_XML} por vez. '
                                  f'Refine o período ou marque as notas que quer.'}), 413
 
+    # AUDITORIA (D2): exportação de arquivo (XML em lote) por ação do usuário.
+    registrar('escrita.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
+              depois={'escopo': escopo, 'formato': 'xml', 'total': total,
+                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+
     # Seleção da página (ids marcados) → poucos: zip em memória. "Tudo do filtro"
     # (sem ids) → pode ser dezenas de milhares: zip em STREAMING.
     if ids:
@@ -2416,6 +2433,12 @@ def _lote_pdf_nfe(escopo, permissao):
                                  f'(você marcou {len(ids)}).'}), 413
 
     where, params = _where_lote(escopo, data)
+
+    # AUDITORIA (D2): exportação de arquivo (PDF em lote) por ação do usuário.
+    registrar('escrita.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
+              depois={'escopo': escopo, 'formato': 'pdf', 'marcadas': len(ids),
+                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+
     where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
     rows = execute_query(
         "SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n "
@@ -2514,6 +2537,11 @@ def lote_xml_cte():
                                  f'(cada XML é baixado do Dropbox). Refine o período '
                                  f'ou marque os que quer.'}), 413
 
+    # AUDITORIA (D2): exportação de arquivo (CT-e XML em lote) por ação do usuário.
+    registrar('escrita.exportou_arquivo', 'fiscal', tabela='cte_documentos',
+              depois={'escopo': 'cte', 'formato': 'xml', 'total': total,
+                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+
     rows = execute_query(
         f"SELECT t.id, t.chave_acesso, t.data_emissao, t.xml_raw, t.xml_caminho "
         f"FROM cte_documentos t {where_sql}", tuple(params), fetch=True) or []
@@ -2539,6 +2567,11 @@ def lote_pdf_cte():
     if len(ids) > _LOTE_MAX_PDF:
         return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
                                  f'(você marcou {len(ids)}).'}), 413
+
+    # AUDITORIA (D2): exportação de arquivo (CT-e PDF em lote) por ação do usuário.
+    registrar('escrita.exportou_arquivo', 'fiscal', tabela='cte_documentos',
+              depois={'escopo': 'cte', 'formato': 'pdf', 'marcadas': len(ids),
+                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
 
     where, params = _where_lote('cte', data)
     where = list(where) + ["t.modelo = '57'"]
@@ -2803,6 +2836,11 @@ def _exportar_relatorio(escopo, permissao, titulo):
 
     where_sql, params = _rel_filtro(escopo)
 
+    # AUDITORIA (D2): exportação de RELATÓRIO (PDF/XLSX) por ação do usuário.
+    registrar('escrita.exportou_arquivo', 'fiscal',
+              tabela=('cte_documentos' if escopo == 'cte' else 'nfe_importacoes'),
+              depois={'escopo': escopo, 'formato': formato, 'relatorio': titulo})
+
     # KPIs + total sobre o FILTRO INTEIRO (independe do teto do PDF).
     if escopo == 'cte':
         agg = execute_query(
@@ -3051,6 +3089,13 @@ def api_vincular_produto():
         "UPDATE nfe_itens SET produto_catalogo_id = %s WHERE id = %s",
         (produto_id, item_id),
     )
+
+    # AUDITORIA (D2): vincular (produto_id) ou desvincular (produto_id None) produto.
+    registrar('escrita.vinculou_produto' if produto_id else 'escrita.desvinculou_produto',
+              'fiscal', tabela='nfe_itens', registro_id=item_id,
+              depois={'item_id': item_id, 'nfe_id': item.get('nfe_id'), 'produto_id': produto_id,
+                      'emit_cnpj': item.get('emit_cnpj'), 'codigo': item.get('codigo_produto'),
+                      'salvar_regra': salvar_regra, 'tipo': tipo_nota})
 
     # Salva regra de auto-vínculo e aplica retroativamente nos itens históricos
     # DESTA MESMA EMPRESA.
@@ -3455,6 +3500,12 @@ def importar_xml():
         except Exception as exc:
             err += 1
             errors.append(f'{nome}: erro inesperado — {exc}')
+
+    # AUDITORIA (D2): importação MANUAL de XML por um usuário logado (a importação
+    # AUTOMÁTICA do robô/scheduler não passa por esta rota e não loga).
+    registrar('escrita.importou_manual', 'fiscal', tabela='nfe_importacoes',
+              depois={'arquivos': len(entradas), 'ok': ok, 'duplicados': dup, 'erros': err,
+                      'cliente_id': cliente_id, 'grupo_id': grupo_id})
 
     # Resposta JSON para chamadas AJAX (modal de Importação Manual)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -5933,7 +5984,13 @@ def memorizacoes_editar(vid):
 @escrita_fiscal.route('/memorizacoes/excluir/<int:vid>', methods=['POST'])
 @login_required
 def memorizacoes_excluir(vid):
+    # AUDITORIA (D2): captura o vínculo ANTES de apagar (para o 'antes' do log).
+    _antes = execute_query(
+        "SELECT emit_cnpj, codigo_produto_xml, produto_catalogo_id, tipo "
+        "FROM nfe_produto_vinculo WHERE id = %s", (vid,), fetch=True, fetch_one=True)
     execute_query("DELETE FROM nfe_produto_vinculo WHERE id = %s", (vid,))
+    registrar('escrita.desvinculou_produto', 'fiscal', tabela='nfe_produto_vinculo',
+              registro_id=vid, antes=_antes)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'ok': True})
     flash('Memorização excluída.', 'success')
@@ -7344,6 +7401,13 @@ def q_robo_gerar():
     # Queima o token: F5 na tela da chave não gera outra.
     from routes.qrobo import _rotaciona_csrf
     _rotaciona_csrf()
+    # AUDITORIA (D2): ação MANUAL de um usuário logado gerando/regerando a chave do
+    # Q-Robô (a importação AUTOMÁTICA do scheduler não passa por aqui e não loga).
+    registrar('escrita.gerou_chave_robo', 'fiscal', tabela='robo_config',
+              registro_id=res['cliente']['cliente_id'],
+              depois={'numero': numero, 'cliente_id': res['cliente']['cliente_id'],
+                      'data_inicio': data_inicio or None, 'acao': r.get('acao'),
+                      'versao': r.get('versao')})
     logger.info('[q-robo/admin] %s por %s (id=%s) para cliente_id=%s versao=%s',
                 r['acao'], current_user.nome, current_user.id,
                 res['cliente']['cliente_id'], r['versao'])
@@ -7371,6 +7435,20 @@ def api_notas_saidas():
     f_vinc_status = request.args.get('vinc_status', '').strip()
     page          = max(1, int(request.args.get('page', 1)))
     per_page      = 50
+
+    # AUDITORIA (D2): leitura — busca de Saídas (só 1ª página com termo/filtro).
+    _termo = f_chave or f_num_nota
+    _filtros = {k: v for k, v in (
+        ('cliente_id', f_cliente_id), ('grupo_id', f_grupo_id),
+        ('dest_cnpj', request.args.get('dest_cnpj', '').strip()),
+        ('data_ini', f_data_ini), ('data_fim', f_data_fim), ('cfop', f_cfop),
+        ('dest_uf', request.args.get('dest_uf', '').strip()),
+        ('emit_cnpj', f_emit_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
+        ('origem', f_origem), ('cancelado', f_cancelado),
+        ('vinc_status', f_vinc_status)) if v}
+    if page == 1 and (_termo or _filtros):
+        registrar('leitura.buscou_saidas', 'fiscal', tabela='nfe_importacoes',
+                  depois={'termo': _termo or None, 'filtros': _filtros})
 
     extra_clauses, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
     where = ["n.tipo = 'saida'"] + extra_clauses
@@ -7741,6 +7819,20 @@ def api_ctes():
     f_papel = request.args.get('papel', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
+
+    # AUDITORIA (D2): leitura — busca de CT-e (só 1ª página com termo/filtro).
+    _termo = f_chave or f_num_cte
+    _filtros = {k: v for k, v in (
+        ('cliente_id', f_cliente_id), ('grupo_id', f_grupo_id),
+        ('emit_cnpj', request.args.get('emit_cnpj', '').strip()), ('tomador_cnpj', f_tomador),
+        ('data_ini', f_data_ini), ('data_fim', f_data_fim), ('modelo', f_modelo),
+        ('uf_ini', request.args.get('uf_ini', '').strip()),
+        ('uf_fim', request.args.get('uf_fim', '').strip()),
+        ('vmin', f_vmin), ('vmax', f_vmax), ('origem', f_origem),
+        ('cancelado', f_cancelado), ('papel', f_papel)) if v}
+    if page == 1 and (_termo or _filtros):
+        registrar('leitura.buscou_ctes', 'fiscal', tabela='cte_documentos',
+                  depois={'termo': _termo or None, 'filtros': _filtros})
 
     where, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
 

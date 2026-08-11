@@ -52,8 +52,13 @@ AUTORIA = {
     'socios_clientes':       [('criado_por', 'INT NULL'),
                               ('alterado_por', 'INT NULL'),
                               ('alterado_em', 'TIMESTAMP NULL DEFAULT NULL')],
-    # logs_sistema ganha o módulo do registro de atividade.
-    'logs_sistema':          [('modulo', 'VARCHAR(20) NULL')],
+    # logs_sistema ganha o módulo do registro de atividade + o NOME e o LOGIN do
+    # autor copiados no momento da ação. A auditoria NÃO pode depender da FK
+    # usuario_id (ON DELETE SET NULL): apagar o usuário zera o id, mas o nome e o
+    # login gravados aqui continuam sendo a verdade de quem fez.
+    'logs_sistema':          [('modulo', 'VARCHAR(20) NULL'),
+                              ('usuario_nome', 'VARCHAR(120) NULL'),
+                              ('usuario_login', 'VARCHAR(80) NULL')],
 }
 
 
