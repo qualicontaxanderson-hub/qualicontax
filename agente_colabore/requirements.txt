@@ -1,0 +1,6 @@
+# Dependências do agente Q-Colabore (a máquina do funcionário).
+# Só uma dependência externa — o resto é stdlib (tkinter, logging, socket...).
+requests==2.31.0
+
+# Só para COMPILAR (não vai no executável final):
+#   nuitka
