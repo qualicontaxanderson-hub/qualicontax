@@ -38,6 +38,8 @@
 .aud-mod { margin-left:auto; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5;
     border-radius:999px; padding:1px 9px; font-size:11px; font-weight:700; }
 .aud-emp { font-size:12.5px; font-weight:700; color:#0f3d2e; margin-top:4px; }
+.aud-busca { font-size:12.5px; color:#0f172a; margin-top:3px; }
+.aud-detalhe { font-size:11px; color:#94a3b8; margin-top:3px; }
 .aud-campos { display:flex; flex-direction:column; gap:2px; margin-top:5px; }
 .aud-campo { font-size:12.5px; line-height:1.5; color:#0f172a; word-break:break-word; }
 .aud-lbl { color:#475569; font-weight:600; }
@@ -130,6 +132,8 @@
                 {% if it.modulo %}<span class="aud-mod">{{ modulo_label.get(it.modulo, it.modulo) }}</span>{% endif %}
             </div>
             {% if it.empresa %}<div class="aud-emp">{{ it.empresa }}</div>{% endif %}
+            {% if it.busca %}<div class="aud-busca">buscou: <b>{{ it.busca }}</b></div>{% endif %}
+            {% if it.detalhe %}<div class="aud-detalhe">{{ it.detalhe }}</div>{% endif %}
             {% if it.campos %}
             <div class="aud-campos">
                 {% for c in it.campos %}

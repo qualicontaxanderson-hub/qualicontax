@@ -9,7 +9,8 @@ from flask import (Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from utils.auth_helper import login_required, admin_required, permission_required, hash_password
 from utils.atividade import registrar
-from utils.auditoria_fmt import hist_preparar, MODULO_LABEL, AUDITORIA_INICIO
+from utils.auditoria_fmt import (hist_preparar, coletar_cliente_ids,
+                                 MODULO_LABEL, AUDITORIA_INICIO)
 from utils.db_helper import execute_query, transacao
 from utils.permissions import PERMISSION_CATALOG
 from utils import cadastro_token
@@ -112,8 +113,9 @@ def _aud_resolver(rows):
         for u in execute_query(f"SELECT id, nome FROM usuarios WHERE id IN ({ph})",
                                tuple(faltam), fetch=True) or []:
             nomes[u['id']] = u['nome']
-    cids = {r['registro_id'] for r in rows
-            if r.get('tabela_afetada') in ('clientes', 'dfe_certificados') and r.get('registro_id')}
+    # Todos os cliente_id da página (registro_id + JSON: inclui filtros.cliente_id
+    # das buscas antigas, que só têm o id cru). Resolvidos em UMA consulta.
+    cids = coletar_cliente_ids(rows)
     emp_map = {}
     if cids:
         ph = ','.join(['%s'] * len(cids))

@@ -119,12 +119,57 @@ def _hist_campo(k, antes, depois, modo=None):
     return {'label': label, 'tipo': 'alterado', 'antes': _hist_val(antes), 'depois': _hist_val(depois)}
 
 
+def _br(d):
+    """'YYYY-MM-DD...' -> 'DD/MM/YYYY'. Deixa passar o que não for data ISO."""
+    s = str(d or '')[:10]
+    try:
+        y, m, dd = s.split('-')
+        return '%s/%s/%s' % (dd, m, y)
+    except ValueError:
+        return str(d)
+
+
+def _json_dict(v):
+    try:
+        d = json.loads(v) if v else {}
+    except Exception:
+        d = {}
+    return d if isinstance(d, dict) else {}
+
+
+def _cliente_id_do_log(ant, nov, row):
+    """cliente_id que a ação referencia — do JSON (topo ou filtros) ou do
+    registro_id quando a ação é sobre a própria empresa. Int ou None."""
+    for src in (nov, nov.get('filtros') if isinstance(nov.get('filtros'), dict) else {}, ant):
+        if isinstance(src, dict) and src.get('cliente_id'):
+            try:
+                return int(src['cliente_id'])
+            except (TypeError, ValueError):
+                pass
+    if row.get('tabela_afetada') in ('clientes', 'dfe_certificados') and row.get('registro_id'):
+        try:
+            return int(row['registro_id'])
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def coletar_cliente_ids(rows):
+    """Todos os cliente_id referenciados pela PÁGINA (registro_id + JSON). O
+    chamador resolve #número/nome em UMA consulta, não uma por linha."""
+    ids = set()
+    for row in rows:
+        cid = _cliente_id_do_log(_json_dict(row.get('dados_anteriores')),
+                                 _json_dict(row.get('dados_novos')), row)
+        if cid is not None:
+            ids.add(cid)
+    return ids
+
+
 def _empresa_do_log(ant, nov, row, emp_map=None):
-    """'#num nome' da empresa a que o log se refere, resolvido do que o log já
-    grava (cliente_numero/nome, numero_cliente/nome_razao_social, numero/nome, ou
-    dentro de filtros). Fallback: registro_id quando a ação é sobre a empresa."""
-    fontes = [nov, nov.get('filtros') if isinstance(nov.get('filtros'), dict) else {}, ant]
-    for src in fontes:
+    """'#num nome' da empresa a que o log se refere. (a) número/nome já gravados
+    no log; (b) senão, resolve o cliente_id pelo emp_map (lote da página)."""
+    for src in (nov, nov.get('filtros') if isinstance(nov.get('filtros'), dict) else {}, ant):
         if not isinstance(src, dict):
             continue
         num = src.get('cliente_numero') or src.get('numero_cliente') or src.get('numero')
@@ -132,9 +177,50 @@ def _empresa_do_log(ant, nov, row, emp_map=None):
         if num or nome:
             nome = str(nome or '').strip()
             return ('#%s %s' % (num, nome)).strip() if num else (nome or None)
-    if emp_map and row.get('tabela_afetada') in ('clientes', 'dfe_certificados'):
-        return emp_map.get(row.get('registro_id'))
+    if emp_map:
+        cid = _cliente_id_do_log(ant, nov, row)
+        if cid is not None:
+            return emp_map.get(cid)
     return None
+
+
+# Rótulos curtos dos filtros de busca (linha discreta). Empresa/grupo/termo/datas
+# saem daqui — têm tratamento próprio.
+_FILTRO_CURTO = {
+    'cfop': 'CFOP', 'emit_uf': 'UF', 'dest_uf': 'UF', 'uf_ini': 'UF orig', 'uf_fim': 'UF dest',
+    'emit_cnpj': 'emit.', 'dest_cnpj': 'dest.', 'tomador_cnpj': 'tomador', 'origem': 'origem',
+    'cancelado': 'cancelado', 'modelo': 'modelo', 'papel': 'papel', 'vinc_status': 'vínculo',
+    'num_nota': 'nº', 'num_cte': 'nº CT-e', 'vmin': 'valor ≥', 'vmax': 'valor ≤',
+}
+_FILTRO_IGNORA = {'cliente_id', 'grupo_id', 'cliente_numero', 'cliente_nome', 'grupo_nome',
+                  'termo', 'data_ini', 'data_fim'}
+
+
+def _leitura_resumo(nov):
+    """(busca, detalhe) de uma ação de LEITURA. busca = termo em destaque;
+    detalhe = período (BR) + filtros preenchidos, compacto e discreto."""
+    flt = nov.get('filtros') if isinstance(nov.get('filtros'), dict) else {}
+    termo = nov.get('termo') or flt.get('termo')
+    partes = []
+    di = flt.get('data_ini') or nov.get('data_ini')
+    df = flt.get('data_fim') or nov.get('data_fim')
+    if di and df:
+        partes.append('período %s a %s' % (_br(di), _br(df)))
+    elif di:
+        partes.append('desde %s' % _br(di))
+    elif df:
+        partes.append('até %s' % _br(df))
+    if nov.get('formato'):
+        partes.append(str(nov['formato']).upper())
+    if nov.get('escopo') and str(nov['escopo']) not in ('cliente', 'grupo', 'todas'):
+        partes.append(str(nov['escopo']))
+    if nov.get('relatorio'):
+        partes.append(str(nov['relatorio']))
+    for k, v in flt.items():
+        if k in _FILTRO_IGNORA or not v:
+            continue
+        partes.append('%s %s' % (_FILTRO_CURTO.get(k, k), v))
+    return (termo or None, ' · '.join(partes) if partes else None)
 
 
 def hist_preparar(row, nomes, emp_map=None):
@@ -168,17 +254,12 @@ def hist_preparar(row, nomes, emp_map=None):
     if acao.startswith('leitura.'):
         if not verbo:
             verbo = 'consultou'
-        flt = nov.get('filtros') if isinstance(nov.get('filtros'), dict) else {}
-        for k in ('termo', 'data_ini', 'data_fim'):
-            val = flt.get(k) or (nov.get(k) if k == 'termo' else None)
-            if val:
-                campos.append(_hist_campo(k, None, val, modo='novo'))
-        for k in ('formato', 'relatorio', 'escopo'):
-            if nov.get(k):
-                campos.append(_hist_campo(k, None, nov.get(k), modo='novo'))
+        # A empresa é o destaque; o termo buscado (se houver) também. Período e
+        # filtros viram uma linha discreta — não duas linhas com "De:/Até:".
+        busca, detalhe = _leitura_resumo(nov)
         return {'data_hora': _hist_dt(row.get('data_hora')), 'autor': autor,
                 'verbo': verbo, 'acao': acao, 'modulo': modulo, 'empresa': empresa,
-                'campos': campos}
+                'busca': busca, 'detalhe': detalhe, 'campos': []}
 
     # escrita
     if not verbo:
@@ -211,4 +292,4 @@ def hist_preparar(row, nomes, emp_map=None):
 
     return {'data_hora': _hist_dt(row.get('data_hora')), 'autor': autor,
             'verbo': verbo, 'acao': acao, 'modulo': modulo, 'empresa': empresa,
-            'campos': campos}
+            'busca': None, 'detalhe': None, 'campos': campos}
