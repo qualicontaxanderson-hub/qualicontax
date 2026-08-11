@@ -69,3 +69,12 @@ backups/
 
 # Trilhas de auditoria dos backfills (saida de execucao, nao codigo)
 scripts/backfill_*.csv
+
+# Scratch de render/prova visual (screenshots, HTML antes/depois, scripts CDP).
+# Nao e codigo do app — fica no disco, mas nao versiona.
+.render/
+.jscheck/
+
+# Scripts de diagnostico de uso unico e screenshots avulsos da raiz.
+diag_*.py
+shot_*.png
