@@ -151,6 +151,33 @@
     .cert-tbl td.cert-td-act form { width:100%; }
     .cert-tbl td.cert-td-act .btn { width:100%; justify-content:center; }
 }
+
+/* D3 — Histórico (cartões; nada de tabela que role de lado no celular) */
+.hist-box { max-width:820px; }
+.hist-toggle { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.hist-tab { border:1px solid #d1d5db; background:#fff; color:#374151;
+    padding:6px 16px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer; }
+.hist-tab.on { background:#0f3d2e; color:#fff; border-color:#0f3d2e; }
+.hist-vazio { color:#64748b; font-size:14px; padding:22px 4px; }
+.hist-lista { display:flex; flex-direction:column; gap:10px; }
+.hist-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:10px;
+    padding:12px 14px; background:#fff; }
+.hist-head { font-size:13px; color:#334155; margin-bottom:6px; }
+.hist-dt { color:#64748b; }
+.hist-autor { font-weight:800; color:#0f3d2e; text-transform:uppercase; letter-spacing:.2px; }
+.hist-verbo { font-weight:600; }
+.hist-sep { color:#cbd5e1; margin:0 6px; }
+.hist-campos { display:flex; flex-direction:column; gap:3px; }
+.hist-campo { font-size:13px; line-height:1.5; word-break:break-word; }
+.hist-lbl { color:#475569; font-weight:600; }
+.hist-v { color:#0f172a; }
+.hist-old { color:#94a3b8; text-decoration:line-through; }
+.hist-arrow { color:#16a34a; margin:0 3px; }
+.hist-pag { display:flex; align-items:center; gap:12px; margin-top:14px; flex-wrap:wrap; }
+.hist-pg { border:1px solid #d1d5db; background:#fff; color:#374151; padding:6px 12px;
+    border-radius:8px; font-size:13px; cursor:pointer; }
+.hist-pg[disabled] { opacity:.45; cursor:default; }
+.hist-pg-info { font-size:12px; color:#64748b; }
 </style>
 {% endblock %}
 
@@ -254,6 +281,12 @@
                 <a href="#certificado" class="tabs-link nff-tab">
                     <i class="fas fa-certificate"></i>
                     Certificado Digital
+                </a>
+            </li>
+            <li class="tabs-item">
+                <a href="#historico" class="tabs-link nff-tab">
+                    <i class="fas fa-clock-rotate-left"></i>
+                    Histórico
                 </a>
             </li>
         </ul>
@@ -1305,6 +1338,13 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Histórico Tab (D3) — lazy-load via AJAX -->
+            <div id="historico" class="tab-pane">
+                <div id="hist-box" class="hist-box">
+                    <div class="hist-vazio">Carregando…</div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1559,6 +1599,39 @@ document.querySelectorAll('.tabs-link').forEach(link => {
         document.querySelector(target).classList.add('active');
     });
 });
+
+// D3 — Histórico: lazy-load ao abrir a aba + troca de visão + paginação.
+(function () {
+    var pane = document.getElementById('historico');
+    if (!pane) return;
+    var CID = {{ cliente.id }};
+    var carregado = false;
+    function carregar(view, page) {
+        var box = document.getElementById('hist-box');
+        if (!box) return;
+        box.innerHTML = '<div class="hist-vazio">Carregando…</div>';
+        fetch('{{ url_for("clientes.historico", id=cliente.id) }}?view='
+              + encodeURIComponent(view) + '&page=' + encodeURIComponent(page))
+            .then(function (r) { return r.text(); })
+            .then(function (html) { box.innerHTML = html; })
+            .catch(function () {
+                box.innerHTML = '<div class="hist-vazio">Falha ao carregar o histórico.</div>';
+            });
+    }
+    var link = document.querySelector('.tabs-link[href="#historico"]');
+    if (link) {
+        link.addEventListener('click', function () {
+            if (!carregado) { carregado = true; carregar('alteracoes', 1); }
+        });
+    }
+    // Delegação: os botões vêm do partial recarregado a cada fetch.
+    pane.addEventListener('click', function (e) {
+        var t = e.target.closest('.hist-tab');
+        if (t) { carregar(t.getAttribute('data-view'), 1); return; }
+        var p = e.target.closest('.hist-pg');
+        if (p && !p.disabled) { carregar(p.getAttribute('data-view'), p.getAttribute('data-page')); }
+    });
+})();
 
 // Bloco B: atalho do card-resumo de Certificado → abre a aba
 function irParaAba(hash) {

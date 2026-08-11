@@ -1,0 +1,63 @@
+{# D3 — partial (AJAX) do Histórico do cliente. Renderiza o seletor de visão,
+   os cards (mais recente → mais antigo) e a paginação. Só cartões: nada de
+   tabela que faça a página rolar de lado no celular. #}
+<div class="hist-toggle">
+  <button type="button" class="hist-tab {{ 'on' if view == 'alteracoes' else '' }}"
+          data-view="alteracoes">Alterações</button>
+  {% if is_admin %}
+  <button type="button" class="hist-tab {{ 'on' if view == 'consultas' else '' }}"
+          data-view="consultas">Consultas</button>
+  {% endif %}
+</div>
+
+{% if total == 0 %}
+  <div class="hist-vazio">
+    Sem histórico — a auditoria começou em {{ auditoria_inicio }}.
+  </div>
+{% else %}
+  <div class="hist-lista">
+    {% for it in itens %}
+    <div class="hist-card">
+      <div class="hist-head">
+        <span class="hist-dt">{{ it.data_hora }}</span>
+        <span class="hist-sep">·</span>
+        <span class="hist-autor">{{ it.autor }}</span>
+        <span class="hist-sep">·</span>
+        <span class="hist-verbo">{{ it.verbo }}</span>
+      </div>
+      {% if it.campos %}
+      <div class="hist-campos">
+        {% for c in it.campos %}
+        <div class="hist-campo">
+          {% if c.tipo == 'sensivel' %}
+            <span class="hist-lbl">{{ c.label }} alterada</span>
+          {% elif c.tipo == 'novo' %}
+            <span class="hist-lbl">{{ c.label }}:</span>
+            <span class="hist-v">{{ c.depois }}</span>
+          {% elif c.tipo == 'removido' %}
+            <span class="hist-lbl">{{ c.label }}:</span>
+            <span class="hist-v hist-old">{{ c.antes }}</span>
+          {% else %}
+            <span class="hist-lbl">{{ c.label }}:</span>
+            <span class="hist-v hist-old">{{ c.antes }}</span>
+            <span class="hist-arrow">→</span>
+            <span class="hist-v">{{ c.depois }}</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if total_paginas > 1 %}
+  <div class="hist-pag">
+    <button type="button" class="hist-pg" data-view="{{ view }}" data-page="{{ page - 1 }}"
+            {{ 'disabled' if page <= 1 else '' }}>‹ Anterior</button>
+    <span class="hist-pg-info">Página {{ page }} de {{ total_paginas }} · {{ total }} registro(s)</span>
+    <button type="button" class="hist-pg" data-view="{{ view }}" data-page="{{ page + 1 }}"
+            {{ 'disabled' if page >= total_paginas else '' }}>Próxima ›</button>
+  </div>
+  {% endif %}
+{% endif %}

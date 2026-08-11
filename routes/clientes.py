@@ -1,12 +1,14 @@
 """Rotas de Clientes - CRUD completo"""
 import re
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from decimal import Decimal, InvalidOperation
 from utils.auth_helper import login_required, permission_required
-from utils.atividade import registrar, rotulo_empresa
+from utils.atividade import registrar, rotulo_empresa, CAMPOS_SENSIVEIS
+from utils.db_helper import execute_query
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
@@ -1631,3 +1633,227 @@ edit_cliente = editar
 create = novo
 view = detalhes
 edit = editar
+
+
+# ===========================================================================
+# D3 — Histórico de auditoria na ficha do cliente
+# ===========================================================================
+# Antes desta data não há registro: a auditoria (D2) começou aqui.
+AUDITORIA_INICIO = '11/08/2026'
+
+# Rótulos em PORTUGUÊS — os mesmos do formulário de cadastro. NUNCA coluna crua.
+_HIST_LABELS = {
+    # clientes
+    'numero_cliente': 'Número do cliente', 'tipo_pessoa': 'Tipo de pessoa',
+    'nome_razao_social': 'Razão social', 'nome_fantasia': 'Nome fantasia',
+    'cpf_cnpj': 'CPF/CNPJ', 'inscricao_estadual': 'Inscrição estadual',
+    'inscricao_municipal': 'Inscrição municipal', 'email': 'E-mail',
+    'telefone': 'Telefone', 'celular': 'Celular', 'regime_tributario': 'Regime tributário',
+    'porte_empresa': 'Porte', 'cnae_fiscal': 'CNAE', 'cnae_fiscal_descricao': 'CNAE (descrição)',
+    'situacao': 'Situação', 'observacoes': 'Observações', 'aberta_pela_casa': 'Aberta pela casa',
+    'data_inicio_atividade': 'Início de atividade', 'data_inicio_contrato': 'Início do contrato',
+    # endereço
+    'tipo': 'Tipo', 'cep': 'CEP', 'logradouro': 'Logradouro', 'numero': 'Número',
+    'complemento': 'Complemento', 'bairro': 'Bairro', 'cidade': 'Cidade', 'estado': 'Estado',
+    # sócio
+    'nome': 'Nome', 'cpf': 'CPF', 'percentual_participacao': 'Participação (%)',
+    'responsavel': 'Responsável',
+    # certificado
+    'cnpj': 'CNPJ', 'tipo_doc': 'Tipo de documento', 'validade': 'Validade',
+    'procuracao': 'Procuração', 'senha_cifrada': 'Senha', 'dropbox_path': 'Arquivo',
+    # contrato
+    'numero_contrato': 'Número do contrato', 'tipo_servico': 'Tipo de serviço',
+    'valor_mensal': 'Valor mensal', 'data_inicio': 'Data de início', 'data_fim': 'Data de fim',
+    # busca/consulta
+    'termo': 'Termo', 'data_ini': 'De', 'data_fim': 'Até', 'formato': 'Formato',
+    'relatorio': 'Relatório', 'escopo': 'Escopo',
+}
+
+# Chaves de CONTEXTO/meta — não são "campos alterados", ficam fora do campo-a-campo.
+_HIST_META = {'cliente_id', 'cliente_numero', 'cliente_nome', 'grupo_id', 'grupo_nome',
+              'criado_por', 'criado_em', 'alterado_por', 'alterado_em', 'item_id', 'nfe_id',
+              'job_id', 'versao', 'produto_id', 'emit_cnpj', 'codigo', 'chave', 'origem',
+              'salvar_regra', 'departamento', 'ok', 'duplicados', 'erros', 'arquivos',
+              'total', 'marcadas', 'filtros', 'acao', 'usuario_id', 'numero',
+              # caminho do .pfx: ruído no card (e concordância feia em "alterada");
+              # a Senha já representa a troca do certificado.
+              'dropbox_path'}
+
+_HIST_ENTIDADE = {
+    'clientes': 'o cadastro', 'enderecos_clientes': 'um endereço',
+    'socios_clientes': 'um sócio', 'dfe_certificados': 'o certificado',
+    'contratos': 'um contrato',
+}
+
+_HIST_VERBO = {
+    'escrita.criou_cliente': 'criou o cadastro',
+    'escrita.alterou_cliente': 'alterou o cadastro',
+    'escrita.vinculou_certificado': 'vinculou o certificado',
+    'escrita.criou_endereco': 'adicionou um endereço',
+    'escrita.excluiu_endereco': 'excluiu um endereço',
+    'escrita.criou_socio': 'adicionou um sócio',
+    'escrita.excluiu_socio': 'excluiu um sócio',
+    'escrita.criou_contrato': 'adicionou um contrato',
+    'leitura.abriu_ficha_cliente': 'abriu a ficha',
+    'leitura.buscou_entradas': 'consultou as entradas',
+    'leitura.buscou_saidas': 'consultou as saídas',
+    'leitura.buscou_ctes': 'consultou os CT-e',
+    'leitura.exportou_arquivo': 'exportou um arquivo',
+    'leitura.consultou_sefaz': 'consultou a SEFAZ',
+}
+
+
+def _hist_val(v):
+    """Valor legível: nulo/vazio/'None'/'null' viram '(vazio)'."""
+    if v is None:
+        return '(vazio)'
+    s = str(v).strip()
+    if s == '' or s in ('None', 'null'):
+        return '(vazio)'
+    return s
+
+
+def _hist_dt(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M')
+    except Exception:
+        return str(dt or '')
+
+
+def _hist_campo(k, antes, depois, modo=None):
+    """Um campo do card: rótulo PT + tipo (sensivel/novo/removido/alterado)."""
+    label = _HIST_LABELS.get(k) or k.replace('_', ' ').capitalize()
+    # lista negra: valor é 'alterado' ou nome de coluna sensível -> só o nome.
+    if k in CAMPOS_SENSIVEIS or str(depois) == 'alterado' or str(antes) == 'alterado':
+        return {'label': label, 'tipo': 'sensivel'}
+    if modo == 'novo':
+        return {'label': label, 'tipo': 'novo', 'depois': _hist_val(depois)}
+    if modo == 'removido':
+        return {'label': label, 'tipo': 'removido', 'antes': _hist_val(antes)}
+    return {'label': label, 'tipo': 'alterado', 'antes': _hist_val(antes), 'depois': _hist_val(depois)}
+
+
+def _hist_preparar(row, nomes):
+    """Transforma uma linha de logs_sistema no card pronto para a tela."""
+    try:
+        ant = json.loads(row['dados_anteriores']) if row.get('dados_anteriores') else {}
+    except Exception:
+        ant = {}
+    try:
+        nov = json.loads(row['dados_novos']) if row.get('dados_novos') else {}
+    except Exception:
+        nov = {}
+    if not isinstance(ant, dict):
+        ant = {}
+    if not isinstance(nov, dict):
+        nov = {}
+    acao = row.get('acao') or ''
+    autor = row.get('usuario_nome') or nomes.get(row.get('usuario_id')) or 'usuário removido'
+    tab = row.get('tabela_afetada')
+    verbo = _HIST_VERBO.get(acao)
+    campos = []
+
+    if acao.startswith('leitura.'):
+        if not verbo:
+            verbo = 'consultou'
+        flt = nov.get('filtros') if isinstance(nov.get('filtros'), dict) else {}
+        for k in ('termo', 'data_ini', 'data_fim'):
+            val = flt.get(k) or (nov.get(k) if k == 'termo' else None)
+            if val:
+                campos.append(_hist_campo(k, None, val, modo='novo'))
+        for k in ('formato', 'relatorio', 'escopo'):
+            if nov.get(k):
+                campos.append(_hist_campo(k, None, nov.get(k), modo='novo'))
+        return {'data_hora': _hist_dt(row.get('data_hora')), 'autor': autor,
+                'verbo': verbo, 'acao': acao, 'campos': campos}
+
+    # escrita
+    if not verbo:
+        if acao.startswith('escrita.excluiu'):
+            verbo = 'excluiu ' + _HIST_ENTIDADE.get(tab, 'um registro')
+        elif acao.startswith('escrita.alterou'):
+            verbo = 'alterou'
+        else:
+            verbo = 'adicionou ' + _HIST_ENTIDADE.get(tab, 'um registro')
+
+    is_exclusao = acao.startswith('escrita.excluiu') or (ant and not nov)
+    is_alteracao = acao.startswith('escrita.alterou') and ant and nov
+
+    if is_alteracao:
+        for k in sorted((set(nov) | set(ant)) - _HIST_META):
+            campo = _hist_campo(k, ant.get(k), nov.get(k))
+            # Ex.: null -> "None" normalizam ambos para "(vazio)": nada mudou de
+            # fato para quem lê — não polui o card com "(vazio) → (vazio)".
+            if campo['tipo'] == 'alterado' and campo.get('antes') == campo.get('depois'):
+                continue
+            campos.append(campo)
+    elif is_exclusao:
+        for k, v in ant.items():
+            if k not in _HIST_META:
+                campos.append(_hist_campo(k, v, None, modo='removido'))
+    else:  # criação / vínculo
+        for k, v in nov.items():
+            if k not in _HIST_META:
+                campos.append(_hist_campo(k, None, v, modo='novo'))
+
+    return {'data_hora': _hist_dt(row.get('data_hora')), 'autor': autor,
+            'verbo': verbo, 'acao': acao, 'campos': campos}
+
+
+@clientes.route('/clientes/<int:id>/historico')
+@login_required
+def historico(id):
+    """Partial (AJAX) da aba Histórico: alterações (padrão) ou consultas (admin)."""
+    view = 'consultas' if request.args.get('view') == 'consultas' else 'alteracoes'
+    # GUARDA NO SERVIDOR: consultas só ADMIN (esconder no front não é trava).
+    if view == 'consultas' and not current_user.is_admin():
+        return ('<div class="hist-vazio">Apenas administradores podem ver as consultas.</div>'), 403
+
+    try:
+        page = max(1, int(request.args.get('page', 1) or 1))
+    except (TypeError, ValueError):
+        page = 1
+    per = 30
+    off = (page - 1) * per
+    sid = str(id)
+
+    if view == 'alteracoes':
+        # Cadastro inteiro: clientes + certificado (registro_id = cliente_id) e as
+        # filhas endereços/sócios/contratos (cliente_id vive no JSON do log).
+        cond = ("acao LIKE 'escrita.%%' AND ("
+                "(tabela_afetada IN ('clientes','dfe_certificados') AND registro_id = %s) "
+                "OR (tabela_afetada IN ('enderecos_clientes','socios_clientes','contratos') AND "
+                "(JSON_UNQUOTE(JSON_EXTRACT(dados_novos,'$.cliente_id')) = %s "
+                "OR JSON_UNQUOTE(JSON_EXTRACT(dados_anteriores,'$.cliente_id')) = %s)))")
+        params = [id, sid, sid]
+    else:
+        # Consultas: abrir ficha (registro_id) + buscas/exportações desta empresa
+        # (cliente_id no filtro) + captura SEFAZ (cliente_id no corpo).
+        cond = ("acao LIKE 'leitura.%%' AND ("
+                "(tabela_afetada = 'clientes' AND registro_id = %s) "
+                "OR JSON_UNQUOTE(JSON_EXTRACT(dados_novos,'$.filtros.cliente_id')) = %s "
+                "OR JSON_UNQUOTE(JSON_EXTRACT(dados_novos,'$.cliente_id')) = %s)")
+        params = [id, sid, sid]
+
+    total = (execute_query(f"SELECT COUNT(*) AS c FROM logs_sistema WHERE {cond}",
+                           tuple(params), fetch=True, fetch_one=True) or {}).get('c', 0)
+    rows = execute_query(
+        f"SELECT id, data_hora, usuario_id, usuario_nome, acao, tabela_afetada, registro_id, "
+        f"dados_anteriores, dados_novos FROM logs_sistema WHERE {cond} "
+        f"ORDER BY data_hora DESC, id DESC LIMIT %s OFFSET %s",
+        tuple(params + [per, off]), fetch=True) or []
+
+    # Autor: usa usuario_nome (D2). Linha antiga sem nome → join por id; senão removido.
+    faltam = {r['usuario_id'] for r in rows if not r.get('usuario_nome') and r.get('usuario_id')}
+    nomes = {}
+    if faltam:
+        ph = ','.join(['%s'] * len(faltam))
+        for u in execute_query(f"SELECT id, nome FROM usuarios WHERE id IN ({ph})",
+                               tuple(faltam), fetch=True) or []:
+            nomes[u['id']] = u['nome']
+
+    itens = [_hist_preparar(r, nomes) for r in rows]
+    total_paginas = max(1, (total + per - 1) // per)
+    return render_template('clientes/_historico.html', itens=itens, view=view, page=page,
+                           total=total, total_paginas=total_paginas, cliente_id=id,
+                           auditoria_inicio=AUDITORIA_INICIO, is_admin=current_user.is_admin())
