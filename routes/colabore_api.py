@@ -216,6 +216,9 @@ def config():
     ColaboreConfig.touch_ultimo_contato(cfg['usuario_id'])
     di = cfg.get('data_inicio_captura')
     return jsonify({
+        # 'funcionario': dono da chave — o agente mostra no "Testar conexão" para a
+        # pessoa confirmar que é a chave certa (como o Q-Robô mostra a razão social).
+        'funcionario': cfg.get('usuario_nome'),
         'ativo': bool(cfg['ativo']),
         'data_inicio_captura': di.isoformat() if di else None,
         'tamanho_max_bytes': TAMANHO_MAX_BYTES,

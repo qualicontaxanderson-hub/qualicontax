@@ -47,14 +47,16 @@ remove o registro. A janela de status mostra se está ativo.
 
 ## Instalar (a partir do .zip)
 
-1. Baixe **`qcolabore-0.2.0.zip`** da pasta do Dropbox
+1. Baixe **`qcolabore-0.3.0.zip`** da pasta do Dropbox
    `/Aplicativos/QUALICONTAX/Q-Colabore/`.
 2. **Extraia tudo** para uma pasta fixa — o mais simples é **`C:\qcolabore`**
    (clique direito no `.zip` → *Extrair tudo…*).
 3. Rode **`qcolabore.exe`** de dentro dessa pasta.
-4. Na janela de configuração: **cole a chave** (gerada em *Configurações ›
-   Usuários › Q-Colabore*), **Adicione** a(s) pasta(s) a vigiar, deixe *"Iniciar
-   junto com o Windows"* marcada e clique **Salvar**.
+4. Na janela (uma só, com as etapas numeradas como a do Q-Robô):
+   **(1)** cole a chave e clique **Testar conexão** — ela mostra o **nome do
+   funcionário** dono da chave, para você confirmar; **(2)** **Adicione** a(s)
+   pasta(s) a vigiar; **(3)** deixe *"Iniciar junto com o Windows"* marcada e
+   clique **Ativar**.
 
 Pronto — o agente vai para a **bandeja** (ao lado do relógio) e trabalha sozinho.
 Clique no ícone para abrir; botão direito tem **Abrir**, **Configurar…** e
@@ -79,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File .\build_qcolabore.ps1
 O script:
 - deriva a `--file-version` do `__version__` do fonte (não hardcoded);
 - gera a pasta `build\qcolabore_agente.dist\` (o `.exe` + DLLs + tcl/tk);
-- compacta o **conteúdo** dela na raiz de `build\qcolabore-0.2.0.zip` — a **mesma
+- compacta o **conteúdo** dela na raiz de `build\qcolabore-0.3.0.zip` — a **mesma
   convenção do `qualicontax.zip` do Q-Robô** (raiz do zip = o programa, sem
   subpasta extra).
 
@@ -107,8 +109,10 @@ A solução definitiva é **assinar** o executável com um certificado de códig
 
 | Arquivo | O quê |
 |---------|-------|
-| `qcolabore_agente.py` | o agente (loop + janelas + bandeja + envio) |
-| `build_qcolabore.ps1` | build Nuitka (pasta) + zip |
+| `qcolabore_agente.py` | o agente (janela única + loop + bandeja + envio) |
+| `build_qcolabore.ps1` | build Nuitka (pasta) + zip, com logo/ícone embutidos |
+| `gerar_assets.py` | gera logo/ícone/.ico a partir das imagens do sistema |
+| `qcolabore_logo.png` / `qcolabore_icon.png` / `qcolabore.ico` | assets embutidos |
 | `requirements.txt` | dependências (`requests`, `pystray`, `Pillow`) |
 | `README.md` | este arquivo |
 

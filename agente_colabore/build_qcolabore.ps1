@@ -34,12 +34,18 @@ $fileVersion = ($versao.Split('.') + @('0','0','0','0'))[0..3] -join '.'
 Write-Host "Q-Colabore agente - versao $versao (file-version $fileVersion)" -ForegroundColor Cyan
 
 $icone = Join-Path $raiz "qcolabore.ico"
+$logoPng = Join-Path $raiz "qcolabore_logo.png"
+$iconPng = Join-Path $raiz "qcolabore_icon.png"
 $argsNuitka = @(
     "-m", "nuitka",
     "--standalone",                      # PASTA, sem --onefile
     "--assume-yes-for-downloads",
     "--enable-plugin=tk-inter",
     "--include-package=pystray",         # backend do tray e importado por plataforma
+    # imagens embutidas (logo do cabecalho + "Q" verde da janela/bandeja) — ficam
+    # ao lado do .exe; o codigo as acha via _recurso(). Ver gerar_assets.py.
+    "--include-data-file=$logoPng=qcolabore_logo.png",
+    "--include-data-file=$iconPng=qcolabore_icon.png",
     "--windows-console-mode=disable",    # app de janela, sem console preto
     "--company-name=Qualicontax",
     "--product-name=Q-Colabore Agente",

@@ -39,7 +39,23 @@ try:
 except ImportError:                  # noqa: em outra plataforma o autostart vira no-op
     winreg = None
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
+
+# Assets embutidos no executável (Nuitka --include-data-file) — ver gerar_assets.py.
+# Em produção ficam ao lado do .exe; em desenvolvimento, ao lado deste .py.
+ASSET_LOGO = "qcolabore_logo.png"     # logo Qualicontax do cabeçalho
+ASSET_ICON = "qcolabore_icon.png"     # "Q" verde: ícone da janela e da bandeja
+
+
+def _recurso(nome):
+    """Caminho de um asset embutido, ou None. Procura ao lado do executável
+    (standalone) e ao lado deste módulo (desenvolvimento)."""
+    for base in (os.path.dirname(os.path.abspath(sys.argv[0])),
+                 os.path.dirname(os.path.abspath(__file__))):
+        p = os.path.join(base, nome)
+        if os.path.exists(p):
+            return p
+    return None
 
 # ---------------------------------------------------------------------------
 # Constantes — um só lugar para mudar.
@@ -312,6 +328,26 @@ def proxima_espera(atual, base, sem_conexao):
     return base
 
 
+def testar_conexao(servidor, chave):
+    """Bate no GET /api/colabore/config com a chave dada. Devolve:
+      (True,  nome_do_funcionario)  se a chave é válida;
+      (False, motivo)               se inválida/revogada ou sem conexão.
+    É o que o botão 'Testar conexão' usa para confirmar a chave na hora."""
+    servidor = (servidor or SERVIDOR_PADRAO).rstrip("/")
+    try:
+        r = requests.get(servidor + "/api/colabore/config",
+                        headers={"Authorization": "Bearer " + (chave or "").strip(),
+                                 "User-Agent": "QColaboreAgente/%s" % __version__},
+                        timeout=TIMEOUT_CONFIG)
+        if r.status_code in (401, 403):
+            return False, "Chave inválida ou revogada."
+        r.raise_for_status()
+        nome = (r.json() or {}).get("funcionario") or "(sem nome no cadastro)"
+        return True, nome
+    except requests.RequestException:
+        return False, "Sem conexão com o servidor."
+
+
 class Worker(threading.Thread):
     daemon = True
 
@@ -507,13 +543,13 @@ def trava_instancia():
 # ===========================================================================
 def rodar_gui():
     import tkinter as tk
-    from tkinter import ttk, filedialog, messagebox
+    from tkinter import filedialog, messagebox
 
     # Bandeja: pystray + Pillow. Se faltarem (ex.: ambiente sem elas), o programa
     # não quebra — cai para minimizar na barra de tarefas.
     try:
         import pystray
-        from PIL import Image, ImageDraw
+        from PIL import Image
         tem_tray = True
     except Exception:
         tem_tray = False
@@ -523,12 +559,27 @@ def rodar_gui():
     worker = Worker(estado)
     tray_icon = None
 
-    root = tk.Tk()
-    root.title("Q-Colabore — agente")
-    root.geometry("440x360")
-    root.minsize(420, 340)
+    VERDE = "#15803d"      # títulos das seções e status — verde da marca (como o Q-Robô)
+    CINZA = "#64748b"
 
-    # -------- mostrar / esconder (esconder = bandeja se houver, senão barra) -----
+    cfg0 = carregar_config()
+
+    root = tk.Tk()
+    root.title("Q-Colabore %s — Configuração" % __version__)   # mesmo padrão do Q-Robô
+    root.geometry("600x640")
+    root.minsize(560, 600)
+    root.configure(bg="white")
+
+    # Ícone da JANELA (o "Q" verde embutido). Mantido em _refs p/ não ser coletado.
+    _refs = []
+    p_icone = _recurso(ASSET_ICON)
+    if p_icone:
+        try:
+            ico = tk.PhotoImage(file=p_icone); _refs.append(ico)
+            root.iconphoto(True, ico)
+        except Exception:
+            pass
+
     def _mostrar(*_a):
         root.after(0, lambda: (root.deiconify(), root.lift(), root.focus_force()))
 
@@ -544,156 +595,150 @@ def rodar_gui():
         worker.parar()
         root.after(0, root.destroy)
 
-    # -------- janela de configuração (Toplevel) --------
-    def abrir_config(primeira=False):
-        root.deiconify()                          # garante visível (pode vir da bandeja)
-        cfg = carregar_config()
-        win = tk.Toplevel(root)
-        win.title("Configurar Q-Colabore")
-        win.geometry("520x540")
-        win.transient(root)
-        win.grab_set()
+    def _titulo(txt):
+        tk.Label(root, text=txt, font=("Segoe UI", 10, "bold"), fg=VERDE, bg="white",
+                 anchor="w").pack(fill="x", padx=16, pady=(12, 2))
 
-        pad = {"padx": 14, "pady": 6}
-        tk.Label(win, text="Chave do funcionário", font=("Segoe UI", 9, "bold")).pack(anchor="w", **pad)
-        chave_var = tk.StringVar(value=cfg["chave"])
-        linha = tk.Frame(win); linha.pack(fill="x", padx=14)
-        ent_chave = tk.Entry(linha, textvariable=chave_var, show="•")
-        ent_chave.pack(side="left", fill="x", expand=True)
-        mostrar = tk.BooleanVar(value=False)
-        def _toggle():
-            ent_chave.config(show="" if mostrar.get() else "•")
-        tk.Checkbutton(linha, text="mostrar", variable=mostrar, command=_toggle).pack(side="left", padx=6)
-        tk.Label(win, text="Cole aqui a chave gerada no sistema (Configurações › Usuários).",
-                 fg="#666", font=("Segoe UI", 8)).pack(anchor="w", padx=14)
+    # ===== Cabeçalho: logo + "Q-Colabore" + versão (igual ao Q-Robô) =====
+    top = tk.Frame(root, bg="white"); top.pack(fill="x", padx=16, pady=(14, 4))
+    p_logo = _recurso(ASSET_LOGO)
+    if p_logo:
+        try:
+            logo = tk.PhotoImage(file=p_logo); _refs.append(logo)
+            tk.Label(top, image=logo, bg="white").pack(side="left")
+        except Exception:
+            pass
+    tk.Label(top, text="Q-Colabore", font=("Segoe UI", 18, "bold"), bg="white"
+             ).pack(side="left", padx=(10, 6))
+    tk.Label(top, text=__version__, font=("Segoe UI", 11), fg=CINZA, bg="white"
+             ).pack(side="left", pady=(8, 0))
 
-        tk.Label(win, text="Servidor", font=("Segoe UI", 9, "bold")).pack(anchor="w", **pad)
-        serv_var = tk.StringVar(value=cfg["servidor"])
-        tk.Entry(win, textvariable=serv_var).pack(fill="x", padx=14)
+    # ===== 1. Chave de ativação → campo + "Testar conexão" =====
+    _titulo("1. Chave de ativação")
+    f1 = tk.Frame(root, bg="white"); f1.pack(fill="x", padx=16)
+    chave_var = tk.StringVar(value=cfg0["chave"])
+    ent_chave = tk.Entry(f1, textvariable=chave_var, show="•")
+    ent_chave.pack(side="left", fill="x", expand=True, ipady=3)
+    tk.Button(f1, text="Testar conexão", command=lambda: _testar()).pack(side="left", padx=(8, 0))
+    lbl_teste = tk.Label(root, text="", font=("Segoe UI", 9), bg="white", anchor="w",
+                         justify="left", wraplength=560)
+    lbl_teste.pack(fill="x", padx=16, pady=(3, 0))
 
-        tk.Label(win, text="Pastas vigiadas", font=("Segoe UI", 9, "bold")).pack(anchor="w", **pad)
-        quadro = tk.Frame(win); quadro.pack(fill="both", expand=True, padx=14)
-        lista = tk.Listbox(quadro, height=6)
-        lista.pack(side="left", fill="both", expand=True)
-        for p in cfg["pastas"]:
-            lista.insert("end", p)
-        botoes = tk.Frame(quadro); botoes.pack(side="left", fill="y", padx=8)
-        def _add():
-            d = filedialog.askdirectory(title="Escolha uma pasta para vigiar")
-            if d and d not in lista.get(0, "end"):
-                lista.insert("end", os.path.normpath(d))
-        def _rem():
-            for i in reversed(lista.curselection()):
-                lista.delete(i)
-        tk.Button(botoes, text="Adicionar…", command=_add).pack(fill="x", pady=2)
-        tk.Button(botoes, text="Remover", command=_rem).pack(fill="x", pady=2)
+    # ===== 2. Pastas monitoradas → lista + Adicionar…/Remover =====
+    _titulo("2. Pastas monitoradas")
+    f2 = tk.Frame(root, bg="white"); f2.pack(fill="both", expand=True, padx=16)
+    lista = tk.Listbox(f2, height=6)
+    lista.pack(side="left", fill="both", expand=True)
+    for p in cfg0["pastas"]:
+        lista.insert("end", p)
+    b2 = tk.Frame(f2, bg="white"); b2.pack(side="left", fill="y", padx=8)
+    def _add():
+        d = filedialog.askdirectory(title="Escolha uma pasta para vigiar")
+        if d and d not in lista.get(0, "end"):
+            lista.insert("end", os.path.normpath(d))
+    def _rem():
+        for i in reversed(lista.curselection()):
+            lista.delete(i)
+    tk.Button(b2, text="Adicionar…", width=12, command=_add).pack(pady=(0, 4))
+    tk.Button(b2, text="Remover", width=12, command=_rem).pack()
 
-        # Início automático — MARCADO por padrão (no 1º uso reflete "ligar";
-        # reabrindo, reflete o estado real do registro).
-        iniciar_var = tk.BooleanVar(value=(True if primeira else autostart_ativo()))
-        tk.Checkbutton(win, text="Iniciar junto com o Windows", variable=iniciar_var,
-                       font=("Segoe UI", 9)).pack(anchor="w", padx=12, pady=(8, 0))
+    # ===== 3. Ativar → botão que salva e liga (+ iniciar com o Windows) =====
+    _titulo("3. Ativar")
+    f3 = tk.Frame(root, bg="white"); f3.pack(fill="x", padx=16)
+    tk.Button(f3, text="Ativar", width=12, command=lambda: _ativar()).pack(side="left")
+    iniciar_var = tk.BooleanVar(value=(autostart_ativo() if config_completa(cfg0) else True))
+    tk.Checkbutton(f3, text="Iniciar junto com o Windows", variable=iniciar_var,
+                   bg="white", font=("Segoe UI", 9)).pack(side="left", padx=12)
 
-        rodape = tk.Frame(win); rodape.pack(fill="x", padx=14, pady=12)
-        def _salvar():
-            chave = chave_var.get().strip()
-            pastas = list(lista.get(0, "end"))
-            if not chave:
-                messagebox.showwarning("Falta a chave", "Cole a chave do funcionário.", parent=win)
-                return
-            if not pastas:
-                messagebox.showwarning("Falta pasta", "Escolha ao menos uma pasta para vigiar.", parent=win)
-                return
-            salvar_config({"servidor": serv_var.get().strip() or SERVIDOR_PADRAO,
-                           "chave": chave, "pastas": pastas,
-                           "intervalo_seg": cfg["intervalo_seg"]})
-            # aplica o início automático conforme a caixa (marcada -> registra).
-            autostart_definir(iniciar_var.get())
-            log.info("Configuracao salva (%d pasta(s)).", len(pastas))   # nunca a chave
-            win.destroy()
-            if not worker.is_alive():
-                worker.start()
-            else:
-                worker.cutucar()
-            _esconder()                            # some para a bandeja e trabalha só
-        def _cancelar():
-            win.destroy()
-            if primeira and not config_completa(carregar_config()):
-                _sair()                            # 1º uso sem salvar: não há o que rodar
-        tk.Button(rodape, text="Salvar", width=12, command=_salvar,
-                  default="active").pack(side="right")
-        tk.Button(rodape, text="Cancelar", width=10, command=_cancelar).pack(side="right", padx=6)
-        win.protocol("WM_DELETE_WINDOW", _cancelar)
+    # ===== Status (quadro embaixo) =====
+    _titulo("Status")
+    quad = tk.Frame(root, bg="#f8fdfa", highlightbackground="#e5e7eb", highlightthickness=1)
+    quad.pack(fill="x", padx=16, pady=(2, 14))
+    lbl_status = tk.Label(quad, text="", font=("Segoe UI", 9), fg=VERDE, bg="#f8fdfa",
+                          justify="left", anchor="w")
+    lbl_status.pack(fill="x", padx=12, pady=10)
 
-    # -------- janela de status (root) --------
-    wrap = tk.Frame(root, padx=16, pady=14)
-    wrap.pack(fill="both", expand=True)
-    tk.Label(wrap, text="Q-Colabore", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-    lbl_conexao = tk.Label(wrap, text="", font=("Segoe UI", 10, "bold"))
-    lbl_conexao.pack(anchor="w", pady=(6, 0))
-    lbl_detalhe = tk.Label(wrap, text="", fg="#666", font=("Segoe UI", 8), wraplength=400, justify="left")
-    lbl_detalhe.pack(anchor="w")
-    ttk.Separator(wrap).pack(fill="x", pady=10)
-    lbl_hoje = tk.Label(wrap, text="", font=("Segoe UI", 10)); lbl_hoje.pack(anchor="w")
-    lbl_ultimo = tk.Label(wrap, text="", font=("Segoe UI", 10)); lbl_ultimo.pack(anchor="w")
-    lbl_aguard = tk.Label(wrap, text="", font=("Segoe UI", 10)); lbl_aguard.pack(anchor="w")
-    lbl_auto = tk.Label(wrap, text="", font=("Segoe UI", 9), fg="#475569"); lbl_auto.pack(anchor="w", pady=(8, 0))
+    # ---- ação: Testar conexão (mostra o NOME do funcionário, como o Q-Robô a razão social) ----
+    def _testar():
+        chave = chave_var.get().strip()
+        if not chave:
+            lbl_teste.config(text="Cole a chave primeiro.", fg="#b45309")
+            return
+        lbl_teste.config(text="Testando…", fg=CINZA)
 
-    barra = tk.Frame(root); barra.pack(fill="x", padx=16, pady=(0, 12))
-    tk.Button(barra, text="Configurar…", command=lambda: abrir_config()).pack(side="left")
-    tk.Label(barra, text="v%s" % __version__, fg="#999").pack(side="right")
+        def _bg():
+            ok, msg = testar_conexao(cfg0["servidor"], chave)
+            def _mostra():
+                if ok:
+                    lbl_teste.config(text="✓ Chave válida — funcionário: %s" % msg, fg=VERDE)
+                else:
+                    lbl_teste.config(text="✗ %s" % msg, fg="#b91c1c")
+            root.after(0, _mostra)
+        threading.Thread(target=_bg, daemon=True).start()
 
-    CORES = {"conectado": "#15803d", "sem_conexao": "#b45309",
-             "chave_invalida": "#b91c1c", "iniciando": "#64748b"}
-    ROTULO = {"conectado": "Conectado", "sem_conexao": "Sem conexão",
-              "chave_invalida": "Atenção — chave", "iniciando": "Iniciando…"}
+    # ---- ação: Ativar (salva + liga o início automático + trabalha na bandeja) ----
+    def _ativar():
+        chave = chave_var.get().strip()
+        pastas = list(lista.get(0, "end"))
+        if not chave:
+            messagebox.showwarning("Falta a chave", "Cole a chave de ativação.", parent=root)
+            return
+        if not pastas:
+            messagebox.showwarning("Falta pasta", "Adicione ao menos uma pasta.", parent=root)
+            return
+        salvar_config({"servidor": cfg0["servidor"], "chave": chave, "pastas": pastas,
+                       "intervalo_seg": cfg0["intervalo_seg"]})
+        autostart_definir(iniciar_var.get())
+        log.info("Configuracao salva (%d pasta(s)).", len(pastas))   # nunca a chave
+        worker.cutucar() if worker.is_alive() else worker.start()
+        _esconder()
+
+    ROT = {"conectado": "Conectado", "sem_conexao": "Sem conexão",
+           "chave_invalida": "Atenção — verifique a chave", "iniciando": "Iniciando…"}
 
     def tick():
         s = estado.snapshot()
-        lbl_conexao.config(text="● " + ROTULO.get(s["conexao"], s["conexao"]),
-                           fg=CORES.get(s["conexao"], "#333"))
-        lbl_detalhe.config(text=s["detalhe"] or "")
-        lbl_hoje.config(text="Enviados hoje: %d" % s["enviados_hoje"])
-        if s["ultimo_nome"]:
-            lbl_ultimo.config(text="Último: %s  às %s" % (s["ultimo_nome"], s["ultimo_hora"]))
-        else:
-            lbl_ultimo.config(text="Último: —")
         aguard = s["aguardando"]
-        lbl_aguard.config(
-            text=("Em “Não enviados”: %d — precisa de atenção" % aguard) if aguard
-                 else "Em “Não enviados”: 0",
-            fg="#b91c1c" if aguard else "#333")
-        lbl_auto.config(text="Início automático: " +
-                        ("ativo" if autostart_ativo() else "desligado"))
+        ult = ("%s às %s" % (s["ultimo_nome"], s["ultimo_hora"])) if s["ultimo_nome"] else "—"
+        linhas = ["Conexão: %s" % ROT.get(s["conexao"], s["conexao"])]
+        if s["detalhe"]:
+            linhas.append("   %s" % s["detalhe"])
+        linhas += [
+            "Enviados hoje: %d" % s["enviados_hoje"],
+            "Último enviado: %s" % ult,
+            'Em "Não enviados": %d%s' % (aguard, "  — precisa de atenção" if aguard else ""),
+            "Início automático: %s" % ("ativo" if autostart_ativo() else "desligado"),
+            "Versão do programa: %s" % __version__,
+        ]
+        lbl_status.config(text="\n".join(linhas))
         root.after(1500, tick)
 
-    def ao_fechar():
-        # Fechar no X MINIMIZA para a bandeja (ou barra, se não houver tray) —
-        # NÃO encerra. Sair de verdade só pelo menu "Sair" da bandeja.
-        _esconder()
-    root.protocol("WM_DELETE_WINDOW", ao_fechar)
+    # Fechar no X minimiza para a bandeja (não encerra) — sair só pelo menu da bandeja.
+    root.protocol("WM_DELETE_WINDOW", _esconder)
 
-    # -------- ícone na bandeja (ao lado do relógio) --------
+    # ===== Bandeja (ao lado do relógio) — mesmo "Q" verde da janela =====
     if tem_tray:
-        def _fazer_icone():
-            img = Image.new("RGBA", (64, 64), (15, 61, 46, 255))
-            d = ImageDraw.Draw(img)
-            d.ellipse((16, 16, 48, 48), fill=(34, 197, 94, 255))
-            return img
+        def _img_tray():
+            p = _recurso(ASSET_ICON)
+            if p:
+                try:
+                    return Image.open(p)
+                except Exception:
+                    pass
+            return Image.new("RGBA", (64, 64), (46, 158, 46, 255))
         menu = pystray.Menu(
             pystray.MenuItem("Abrir", lambda i, it: _mostrar(), default=True),
-            pystray.MenuItem("Configurar…", lambda i, it: root.after(0, abrir_config)),
+            pystray.MenuItem("Configurar…", lambda i, it: _mostrar()),
             pystray.MenuItem("Sair", lambda i, it: _sair()),
         )
-        tray_icon = pystray.Icon("qcolabore", _fazer_icone(), "Q-Colabore", menu)
+        tray_icon = pystray.Icon("qcolabore", _img_tray(), "Q-Colabore", menu)
         threading.Thread(target=tray_icon.run, daemon=True).start()
 
-    # 1º uso: sem config -> abre a configuração antes de tudo.
-    if not config_completa(carregar_config()):
-        root.after(200, lambda: abrir_config(primeira=True))
-    else:
-        worker.start()
-        root.after(400, _esconder)     # sobe escondido (bandeja) e trabalha sozinho
+    # O worker roda sempre (idle-a se faltar config). Se já está configurado, a
+    # janela sobe escondida na bandeja; senão, fica visível para configurar.
+    worker.start()
+    if config_completa(cfg0):
+        root.after(400, _esconder)
 
     tick()
     root.mainloop()
