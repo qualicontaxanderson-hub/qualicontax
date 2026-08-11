@@ -14,6 +14,7 @@ from utils.auditoria_fmt import (hist_preparar, coletar_cliente_ids,
 from utils.db_helper import execute_query, transacao
 from utils.permissions import PERMISSION_CATALOG
 from utils import cadastro_token
+from utils import colabore_chaves
 
 logger = logging.getLogger(__name__)
 
@@ -453,6 +454,8 @@ def usuarios():
                            departamentos_disponiveis=_departamentos_ativos(),
                            tipos_usuario=TIPOS_USUARIO,
                            senha_links=_links_senha_por_usuario(),
+                           colabore_por_usuario=colabore_chaves.estado_por_usuario(),
+                           hoje_iso=date.today().isoformat(),
                            csrf_token=_qrobo_csrf_token())
 
 
@@ -882,6 +885,70 @@ def usuario_senha_link(uid):
     logger.info('[qcolabore] link de senha para usuário %s por %s (bloquear=%s).',
                 uid, current_user.id, int(bloquear))
     return jsonify(ok=True, url=url, prefixo=prefixo, bloqueado=bool(bloquear))
+
+
+# ===========================================================================
+# Q-COLABORE F2 — chave do agente POR FUNCIONÁRIO (gerar/regenerar/revogar)
+#
+# A chave autentica o agente instalado na máquina da pessoa (POST /api/colabore/
+# enviar). O segredo aparece UMA vez aqui, na resposta; depois só o prefixo. Toda
+# a lógica de hash+prefixo mora em utils/colabore_chaves. Admin, trava no servidor.
+# ===========================================================================
+@configuracoes.route('/usuarios/<int:uid>/colabore/gerar', methods=['POST'])
+@admin_required
+def usuario_colabore_gerar(uid):
+    """Gera (ou regenera) a chave do Q-Colabore do funcionário. Devolve o segredo
+    UMA vez. ``regerar=1`` confirma a rotação (invalida a chave anterior). A data
+    de corte (data_inicio_captura) vem do form; padrão = hoje no servidor."""
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    regerar = request.form.get('regerar') == '1'
+    data_inicio = (request.form.get('data_inicio') or '').strip() or None
+    ip, ua = colabore_chaves.contexto_request()
+
+    res = colabore_chaves.gerar_chave(uid, current_user.id, regerar=regerar,
+                                      data_inicio=data_inicio, ip=ip, user_agent=ua)
+    if not res.get('ok'):
+        erro = res.get('erro')
+        if erro == 'ja_existe':
+            # A tela precisa avisar e pedir a 2ª confirmação antes de rotacionar.
+            return jsonify(ok=False, erro='ja_existe',
+                           msg='Este funcionário já tem uma chave. Gerar nova '
+                               'INVALIDA a atual — confirme para continuar.'), 409
+        mapa = {'usuario_inexistente': ('Usuário não encontrado.', 404),
+                'data_invalida': ('Data de corte inválida.', 400),
+                'data_futura': ('A data de corte não pode ser no futuro.', 400)}
+        msg, cod = mapa.get(erro, ('Não foi possível gerar a chave agora.', 500))
+        return jsonify(ok=False, erro=erro, msg=msg), cod
+
+    di = res.get('data_inicio_captura')
+    # AUDITORIA: ação + funcionário + versão + data de corte. NUNCA o segredo
+    # (nem parcial além do prefixo). CAMPOS_SENSIVEIS já mascara 'token'/'chave'.
+    registrar('escrita.gerou_chave_colabore', 'colabore',
+              tabela='colabore_config', registro_id=uid,
+              depois={'acao': res['acao'], 'versao': res['versao'],
+                      'prefixo': res['prefixo'],
+                      'data_inicio_captura': di.isoformat() if hasattr(di, 'isoformat') else di})
+    return jsonify(ok=True, token=res['token'], prefixo=res['prefixo'],
+                   versao=res['versao'], acao=res['acao'],
+                   data_inicio_captura=di.isoformat() if hasattr(di, 'isoformat') else di)
+
+
+@configuracoes.route('/usuarios/<int:uid>/colabore/revogar', methods=['POST'])
+@admin_required
+def usuario_colabore_revogar(uid):
+    """Revoga a chave do funcionário (ativo=0). O agente passa a receber 403. O
+    prefixo continua visível (histórico); gerar nova reativa e rotaciona."""
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    res = colabore_chaves.revogar_chave(uid)
+    if not res.get('ok'):
+        return jsonify(ok=False, msg='Não foi possível revogar agora.'), 500
+    registrar('escrita.revogou_chave_colabore', 'colabore',
+              tabela='colabore_config', registro_id=uid, depois={'ativo': 0})
+    return jsonify(ok=True)
 
 
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])

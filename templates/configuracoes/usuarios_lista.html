@@ -87,6 +87,24 @@
                                 <i class="fas fa-key"></i> Redefinir senha
                             </button>
                         {% endif %}
+                        {# Q-Colabore F2: chave do agente da máquina deste funcionário.
+                           Estado (prefixo/versão/ativo/corte) vai nos data-* p/ o modal ler. #}
+                        {% set cc = colabore_por_usuario.get(u.id) %}
+                        <button class="btn btn-sm btn-secondary" title="Chave do agente Q-Colabore deste funcionário"
+                                onclick="colabAbrir(this)"
+                                data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
+                                data-tem="{{ '1' if cc and cc.tem_chave else '0' }}"
+                                data-ativo="{{ '1' if cc and cc.ativo else '0' }}"
+                                data-prefixo="{{ cc.token_prefixo if cc else '' }}"
+                                data-versao="{{ cc.versao if cc else '' }}"
+                                data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
+                                data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
+                            <i class="fas fa-robot"></i> Q-Colabore
+                            {% if cc and cc.tem_chave %}
+                                {% if cc.ativo %}<span class="badge badge-success"><code>{{ cc.token_prefixo }}…</code></span>
+                                {% else %}<span class="badge badge-danger">revogada</span>{% endif %}
+                            {% endif %}
+                        </button>
                     </td>
                 </tr>
                 {% else %}
@@ -381,6 +399,60 @@
     <div class="qc-aviso">
       Prefixo <code id="qsPrefixo"></code>. Ao fechar, o link continua recopiável na
       lista (botão <strong>Copiar link de senha</strong>) enquanto estiver pendente.
+    </div>
+  </div>
+</div>
+
+{# ---- Modal: chave do Q-Colabore (gerar/regenerar/revogar; segredo 1 vez) ---- #}
+<div class="qc-modal-fundo" id="qcColabore" onclick="if(event.target===this) colabFechar()">
+  <div class="qc-modal">
+    <button type="button" class="qc-x" title="Fechar" onclick="colabFechar()">&times;</button>
+
+    {# Passo 1: estado + gerar/revogar #}
+    <div id="colabPasso1">
+      <h3 class="qc-modal-tit">Chave do Q-Colabore</h3>
+      <p class="qc-modal-sub">Funcionário <strong id="colabNome"></strong>. Esta chave
+         autentica o <strong>agente</strong> instalado na máquina dele — é o que deixa o
+         agente enviar arquivos para a caixa de entrada. O segredo aparece
+         <strong>uma única vez</strong>, ao gerar.</p>
+
+      <div class="qc-aviso" id="colabEstado" style="display:none; background:#f8fafc; border-color:#e2e8f0; color:#334155"></div>
+      <div id="colabErro" class="qa-erro" style="display:none"></div>
+
+      <label class="qc-label" for="colabCorte" style="margin-top:6px">Data de corte
+        <span class="text-muted" style="font-weight:400">(o agente não manda nada anterior a ela)</span></label>
+      <input type="date" id="colabCorte" class="qc-input" value="{{ hoje_iso }}" max="{{ hoje_iso }}">
+
+      <label class="qr-op qr-perigo" id="colabConfirmaBox" style="display:none; margin-top:14px">
+        <input type="checkbox" id="colabConfirma">
+        <span>Entendo que gerar uma nova chave <strong>invalida a atual</strong> na hora —
+          o agente para de enviar até receber a nova.</span>
+      </label>
+
+      <div class="qc-modal-acoes" style="justify-content:space-between">
+        <button type="button" class="btn btn-danger" id="colabBtnRevogar" style="display:none"
+                onclick="colabRevogar()"><i class="fas fa-ban"></i> Revogar</button>
+        <button type="button" class="btn btn-primary" id="colabBtnGerar" onclick="colabGerar()">
+          <i class="fas fa-key"></i> <span id="colabBtnGerarTxt">Gerar chave</span>
+        </button>
+      </div>
+    </div>
+
+    {# Passo 2: o segredo, uma única vez #}
+    <div id="colabPasso2" style="display:none">
+      <h3 class="qc-modal-tit">Chave gerada</h3>
+      <div class="qc-url-area">
+        <div class="qc-url-rot">Chave do Q-Colabore — versão <span id="colabVersao"></span></div>
+        <div class="qc-url" id="colabToken"></div>
+      </div>
+      <button type="button" class="qc-btn-copiar" id="colabBtnCopiar" onclick="colabCopiar()">
+        COPIAR CHAVE
+      </button>
+      <div class="qc-aviso">
+        Guarde agora: ao fechar, só o prefixo <code id="colabPrefixo"></code> continua
+        visível. Cole esta chave na configuração do agente do funcionário. Se ela vazar,
+        volte aqui e gere uma nova (a antiga para de valer).
+      </div>
     </div>
   </div>
 </div>
@@ -801,6 +873,117 @@ function confirmarRedefinir() {
         btn.disabled = false;
     })
     .catch(function () { alert('Sem resposta do servidor.'); btn.disabled = false; });
+}
+
+// ===================================================================
+// Q-COLABORE F2 — chave do agente por funcionário
+// ===================================================================
+var colabUid = null, colabTem = false;
+
+function colabAbrir(btn) {
+    var d = btn.dataset;
+    colabUid = d.uid;
+    colabTem = d.tem === '1';
+    document.getElementById('colabNome').textContent = d.nome || '';
+    document.getElementById('colabErro').style.display = 'none';
+    document.getElementById('colabPasso1').style.display = '';
+    document.getElementById('colabPasso2').style.display = 'none';
+
+    // Estado atual (se já há chave) — prefixo/versão/ativo/corte/último contato.
+    var est = document.getElementById('colabEstado');
+    if (colabTem) {
+        var ativo = d.ativo === '1';
+        est.style.display = '';
+        est.innerHTML = 'Chave atual: <code>' + (d.prefixo || '—') + '…</code>' +
+            ' · versão <strong>' + (d.versao || '?') + '</strong>' +
+            ' · <strong style="color:' + (ativo ? '#15803d' : '#b91c1c') + '">' +
+            (ativo ? 'ativa' : 'revogada') + '</strong>' +
+            (d.corte ? ' · corte ' + d.corte : '') +
+            (d.contato ? ' · último contato ' + d.contato : ' · nunca contatou');
+    } else {
+        est.style.display = 'none';
+    }
+
+    // Regenerar exige a confirmação (2ª trava). Gerar a primeira, não.
+    var box = document.getElementById('colabConfirmaBox');
+    var chk = document.getElementById('colabConfirma');
+    chk.checked = false;
+    box.style.display = colabTem ? '' : 'none';
+    document.getElementById('colabBtnRevogar').style.display =
+        (colabTem && d.ativo === '1') ? '' : 'none';
+    document.getElementById('colabBtnGerarTxt').textContent =
+        colabTem ? 'Gerar nova chave' : 'Gerar chave';
+    colabAtualizaBotao();
+    document.getElementById('qcColabore').classList.add('aberto');
+}
+
+function colabAtualizaBotao() {
+    // Botão de gerar só habilita quando a confirmação (regeneração) está marcada.
+    var precisa = colabTem;
+    var ok = !precisa || document.getElementById('colabConfirma').checked;
+    document.getElementById('colabBtnGerar').disabled = !ok;
+}
+document.getElementById('colabConfirma').addEventListener('change', colabAtualizaBotao);
+
+function colabFechar() {
+    document.getElementById('qcColabore').classList.remove('aberto');
+    // Se algo mudou (gerou/revogou), recarrega para a lista mostrar o novo estado.
+    if (colabMudou) { location.reload(); }
+    colabUid = null;
+}
+var colabMudou = false;
+
+function colabGerar() {
+    if (!colabUid) { return; }
+    var dados = new FormData();
+    dados.append('csrf_token', QC_CSRF);
+    dados.append('data_inicio', document.getElementById('colabCorte').value || '');
+    if (colabTem) { dados.append('regerar', '1'); }
+    var btn = document.getElementById('colabBtnGerar'); btn.disabled = true;
+    var err = document.getElementById('colabErro'); err.style.display = 'none';
+    fetch('/configuracoes/usuarios/' + colabUid + '/colabore/gerar',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.d.ok) {
+            colabMudou = true;
+            document.getElementById('colabToken').textContent = res.d.token;
+            document.getElementById('colabPrefixo').textContent = res.d.prefixo + '…';
+            document.getElementById('colabVersao').textContent = res.d.versao;
+            document.getElementById('colabPasso1').style.display = 'none';
+            document.getElementById('colabPasso2').style.display = '';
+            return;
+        }
+        err.textContent = res.d.msg || 'Não foi possível gerar a chave.';
+        err.style.display = '';
+        colabAtualizaBotao();
+    })
+    .catch(function () { err.textContent = 'Sem resposta do servidor.'; err.style.display = ''; colabAtualizaBotao(); });
+}
+
+function colabRevogar() {
+    if (!colabUid) { return; }
+    if (!confirm('Revogar a chave deste funcionário? O agente para de enviar imediatamente.')) { return; }
+    var dados = new FormData(); dados.append('csrf_token', QC_CSRF);
+    var btn = document.getElementById('colabBtnRevogar'); btn.disabled = true;
+    fetch('/configuracoes/usuarios/' + colabUid + '/colabore/revogar',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        btn.disabled = false;
+        if (res.ok && res.d.ok) { colabMudou = true; colabFechar(); return; }
+        alert(res.d.msg || 'Não foi possível revogar.');
+    })
+    .catch(function () { btn.disabled = false; alert('Sem resposta do servidor.'); });
+}
+
+function colabCopiar() {
+    var txt = document.getElementById('colabToken').textContent;
+    var btn = document.getElementById('colabBtnCopiar');
+    navigator.clipboard.writeText(txt).then(function () {
+        btn.textContent = 'CHAVE COPIADA ✓'; btn.classList.add('ok');
+        setTimeout(function () { btn.textContent = 'COPIAR CHAVE'; btn.classList.remove('ok'); }, 1800);
+    }).catch(function () { alert('Copie manualmente: ' + txt); });
 }
 </script>
 {% endblock %}

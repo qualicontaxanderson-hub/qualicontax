@@ -179,3 +179,44 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
             logger.warning("atividade.registrar falhou (%s): %s", acao, e)
         except Exception:
             pass
+
+
+def registrar_agente(acao, modulo, usuario_id, usuario_nome, usuario_login=None,
+                     tabela=None, registro_id=None, depois=None):
+    """Igual a ``registrar``, mas para um ATOR DE MÁQUINA que se identifica sozinho.
+
+    O ``registrar`` normal pega o autor da SESSÃO e some quando não há usuário
+    logado (item 7) — de propósito. Mas o agente do Q-Colabore posta arquivos
+    autenticado por chave (Bearer), sem sessão, E o ato TEM um dono conhecido: o
+    funcionário cuja chave foi usada. Este atalho grava a mesma linha em
+    logs_sistema atribuindo-a a essa pessoa. Mesmas garantias: NUNCA estoura,
+    aplica a lista negra, e — como o caller já monta o ``depois`` — a regra de
+    "nunca o NOME do arquivo" fica com quem chama (aqui só se mascara valor de
+    campo sensível por nome de coluna).
+    """
+    try:
+        # request pode ou não existir (a API roda em request; um teste pode não).
+        try:
+            in_req = has_request_context()
+        except Exception:
+            in_req = False
+        ip = (request.remote_addr or '')[:45] if in_req else None
+        ua = (request.headers.get('User-Agent') or '')[:255] if in_req else None
+
+        _antes, d_json = _diff(None, depois)
+        execute_query(
+            "INSERT INTO logs_sistema "
+            "(usuario_id, usuario_nome, usuario_login, acao, modulo, tabela_afetada, "
+            " registro_id, dados_anteriores, dados_novos, ip_address, user_agent) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (usuario_id, (usuario_nome or '')[:120] or None,
+             (usuario_login or '')[:80] or None,
+             acao[:100], (modulo or '')[:20], tabela, registro_id,
+             None, _json(d_json), ip, ua),
+            fetch=False)
+    except Exception as e:                       # engole tudo — nunca quebra o fluxo
+        try:
+            print(f"[atividade] falha ao registrar_agente '{acao}': {e}")
+            logger.warning("atividade.registrar_agente falhou (%s): %s", acao, e)
+        except Exception:
+            pass

@@ -94,6 +94,9 @@ from routes.configuracoes import configuracoes as configuracoes_bp
 from routes.adicionais import adicionais
 from routes.dfe import dfe_bp
 from routes.robo_saidas import robo_saidas
+# Q-Colabore F2: API de MÁQUINA (Bearer) do agente do funcionário -> _ENTRADA.
+# Sem login_required — a credencial é a chave por funcionário, como o robo_saidas.
+from routes.colabore_api import colabore_api
 from routes.qrobo import qrobo, gate_escopo_instalador
 # Q-Colabore: formulário PÚBLICO de cadastro (/cadastro/<token>). Sem
 # login_required — quem chega não tem conta; a credencial é o token da URL.
@@ -122,6 +125,7 @@ app.register_blueprint(configuracoes_bp)
 app.register_blueprint(adicionais)
 app.register_blueprint(dfe_bp)
 app.register_blueprint(robo_saidas)
+app.register_blueprint(colabore_api)
 app.register_blueprint(cadastro_bp)
 app.register_blueprint(senha_bp)
 app.register_blueprint(qrobo)
