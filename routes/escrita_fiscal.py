@@ -17,7 +17,7 @@ from io import BytesIO
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
 from utils.atividade import registrar, rotulo_empresa
-from utils.home_atividade import (card_quem_entregou, card_trabalhando_agora,
+from utils.home_atividade import (card_participacoes, card_trabalhando_agora,
                                   card_chegando_cliente)
 from utils.db_helper import execute_query, execute_many, transacao
 from utils.nfe_parser import parse_nfe_xml
@@ -1002,7 +1002,7 @@ def _home_destaques_payload():
     _card(_c9)
 
     # ---- ATIVIDADE (logs_sistema / roteador_log) — só aparecem com dado real ----
-    _card(lambda: card_quem_entregou('fiscal'))
+    _card(lambda: card_participacoes('fiscal'))
     _card(lambda: card_trabalhando_agora('fiscal'))
     _card(card_chegando_cliente)
 

@@ -8,7 +8,7 @@ from flask_login import current_user
 
 from routes.adicionais import TIPOS_CADASTROS
 from utils.auth_helper import permission_required
-from utils.home_atividade import card_quem_entregou, card_trabalhando_agora
+from utils.home_atividade import card_participacoes, card_trabalhando_agora
 from utils.db_helper import execute_query
 
 logger = logging.getLogger(__name__)
@@ -271,7 +271,7 @@ def _cadastros_home_payload():
         })
 
     # 10/11) ATIVIDADE do módulo cadastros (só aparece com dado real).
-    for _fn in (lambda: card_quem_entregou('cadastros'),
+    for _fn in (lambda: card_participacoes('cadastros'),
                 lambda: card_trabalhando_agora('cadastros')):
         try:
             _ac = _fn()

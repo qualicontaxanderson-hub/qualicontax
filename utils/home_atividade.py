@@ -14,15 +14,25 @@ query, e não removendo linhas.
 from utils.db_helper import execute_query
 
 
-def card_quem_entregou(modulo):
-    """Lista: no mês corrente, ESCRITAS por usuário no módulo. Rótulo = nome + %.
+def card_participacoes(modulo):
+    """Lista: PARTICIPAÇÃO no módulo no mês corrente, por usuário. Rótulo = nome + %.
 
-    Denominador = soma das escritas dos usuários listados (LIMIT 15). No escritório
+    Participação = TODAS as ações (escrita E leitura) — consultar também é
+    participar. A home mede uso do módulo, não entrega; por isso NÃO filtra por
+    acao (a separação escrita/leitura fica na aba Histórico da ficha, onde o
+    propósito é auditoria de responsabilidade, não medição de uso).
+
+    Q-COLABORE (futuro): quando o agente existir, o ENVIO de documento por um
+    funcionário PRECISA gravar em logs_sistema com o usuário que enviou e o módulo
+    do documento — isso é participação e tem de entrar nesta contagem. O desenho
+    do agente já deve nascer com esse gancho (registrar(...)) previsto.
+
+    Denominador = soma das ações dos usuários listados (LIMIT 15). No escritório
     real são poucos usuários, então a soma é o total do módulo no período.
     """
     rows = execute_query(
         "SELECT usuario_nome, COUNT(*) AS n FROM logs_sistema "
-        "WHERE modulo = %s AND acao LIKE 'escrita.%%' AND usuario_nome IS NOT NULL "
+        "WHERE modulo = %s AND usuario_nome IS NOT NULL "
         "AND usuario_nome NOT LIKE 'ZZ TESTE%%' "          # filtra teste, não apaga
         "AND data_hora >= DATE_FORMAT(CURDATE(), '%Y-%m-01') "
         "GROUP BY usuario_nome ORDER BY n DESC LIMIT 15",
@@ -33,8 +43,8 @@ def card_quem_entregou(modulo):
     itens = [{'valor': int(r['n']),
               'rotulo': '%s · %d%%' % (r['usuario_nome'], round(100 * int(r['n']) / total))}
              for r in rows]
-    return {'id': 'quem_entregou', 'tipo': 'lista', 'icone': 'fa-trophy',
-            'titulo': 'Quem mais entregou', 'itens': itens,
+    return {'id': 'participacoes', 'tipo': 'lista', 'icone': 'fa-people-group',
+            'titulo': 'Participações', 'itens': itens,
             'trend': {'tipo': 'neutro', 'rotulo': 'no mês'}}
 
 
