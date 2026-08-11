@@ -8,6 +8,7 @@ from flask_login import current_user
 from decimal import Decimal, InvalidOperation
 from utils.auth_helper import login_required, permission_required
 from utils.atividade import registrar, rotulo_empresa, CAMPOS_SENSIVEIS
+from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
@@ -190,7 +191,9 @@ def novo():
             'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
             'criado_por': current_user.id
         }
-        
+        # E1: 'None'/'null'/'' de qualquer caminho viram VAZIO antes de gravar.
+        data = limpar_form(data)
+
         cliente_id = Cliente.create(data)
 
         if cliente_id:
@@ -792,6 +795,8 @@ def editar(id):
                 'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
                 'alterado_por': current_user.id      # AUDITORIA (D2): quem alterou
             }
+            # E1: 'None'/'null'/'' de qualquer caminho viram VAZIO antes de gravar.
+            data = limpar_form(data)
 
             sucesso = Cliente.update(id, data)
 

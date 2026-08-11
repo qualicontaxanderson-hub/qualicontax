@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
 from utils.atividade import registrar
+from utils.form_helpers import limpar_vazio
 from models.grupo_cliente import GrupoCliente
 from models.cliente import Cliente
 
@@ -45,8 +46,8 @@ def novo():
     """Criar novo grupo"""
     if request.method == 'POST':
         try:
-            nome = request.form.get('nome')
-            descricao = request.form.get('descricao')
+            nome = limpar_vazio(request.form.get('nome'))          # E1: sem "None"
+            descricao = limpar_vazio(request.form.get('descricao'))
             situacao = request.form.get('situacao', 'ATIVO')
             
             # Validação
@@ -114,8 +115,8 @@ def editar(id):
     
     if request.method == 'POST':
         try:
-            nome = request.form.get('nome')
-            descricao = request.form.get('descricao')
+            nome = limpar_vazio(request.form.get('nome'))          # E1: sem "None"
+            descricao = limpar_vazio(request.form.get('descricao'))
             situacao = request.form.get('situacao', 'ATIVO')
             
             # Validação

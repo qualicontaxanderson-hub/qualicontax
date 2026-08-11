@@ -142,6 +142,13 @@ app.jinja_env.filters['format_phone'] = format_phone
 app.jinja_env.filters['format_currency'] = format_currency
 app.jinja_env.filters['format_date'] = format_date
 
+# E1: campo vazio renderiza VAZIO, nunca a palavra "None". O Jinja imprime o
+# None do Python como str(None)=="None" quando ele vem de uma expressão (ex.:
+# {{ cliente.observacoes if cliente else '' }} com valor NULL) — isto era
+# reenviado no form e virava a string "None" no banco. finalize corta na raiz,
+# para TODOS os templates de uma vez.
+app.jinja_env.finalize = lambda v: '' if v is None else v
+
 
 # Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens.
 # Só é seguro por causa do cache-busting logo abaixo: a URL carrega a versão do

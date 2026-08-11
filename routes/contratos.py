@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
 from utils.atividade import registrar, rotulo_empresa
+from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
 from models.cliente import Cliente
 
@@ -75,7 +76,9 @@ def create():
             'situacao': request.form.get('situacao', 'Ativo'),
             'observacoes': request.form.get('observacoes')
         }
-        
+        # E1: 'None'/'null'/'' de qualquer caminho viram VAZIO antes de gravar.
+        data = limpar_form(data)
+
         # Validações básicas
         if not data['cliente_id'] or not data['numero_contrato'] or not data['tipo_servico']:
             flash('Preencha todos os campos obrigatórios.', 'danger')
