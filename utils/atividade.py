@@ -94,6 +94,37 @@ def _diff(antes, depois):
     return _mascarar(antes), _mascarar(depois)
 
 
+def rotulo_empresa(cliente_id=None, grupo_id=None):
+    """Resolve NÚMERO e NOME da empresa (e nome do grupo) para o log se explicar
+    sozinho — sem obrigar a cruzar com a tabela de clientes na tela de auditoria.
+
+    Regra da casa: empresa se identifica pelo NÚMERO do cliente, nunca pelo id
+    interno. Query LEVE por id e SÓ quando o id vem preenchido; chamar apenas no
+    caminho que já vai gravar log (não adicionar consulta onde hoje não há).
+    Nunca estoura: em erro devolve o que tiver.
+    """
+    out = {}
+    try:
+        if cliente_id:
+            r = execute_query(
+                "SELECT numero_cliente, nome_razao_social FROM clientes WHERE id = %s",
+                (cliente_id,), fetch=True, fetch_one=True)
+            if r:
+                out['cliente_numero'] = r.get('numero_cliente')
+                out['cliente_nome'] = r.get('nome_razao_social')
+        if grupo_id:
+            r = execute_query("SELECT nome FROM grupos_clientes WHERE id = %s",
+                              (grupo_id,), fetch=True, fetch_one=True)
+            if r:
+                out['grupo_nome'] = r.get('nome')
+    except Exception as e:
+        try:
+            print(f"[atividade] rotulo_empresa falhou: {e}")
+        except Exception:
+            pass
+    return out
+
+
 def _json(d):
     """Serializa para a coluna JSON. default=str cobre date/Decimal/etc."""
     if d is None:

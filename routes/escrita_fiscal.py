@@ -16,7 +16,7 @@ from flask import (
 from io import BytesIO
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
-from utils.atividade import registrar
+from utils.atividade import registrar, rotulo_empresa
 from utils.db_helper import execute_query, execute_many, transacao
 from utils.nfe_parser import parse_nfe_xml
 from utils import dropbox_sync
@@ -1572,6 +1572,7 @@ def api_notas():
         ('origem', f_origem), ('vinc_status', f_vinc_status),
         ('cancelado', f_cancelado)) if v}
     if page == 1 and (_termo or _filtros):
+        _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
         registrar('leitura.buscou_entradas', 'fiscal', tabela='nfe_importacoes',
                   depois={'termo': _termo or None, 'filtros': _filtros})
 
@@ -1847,7 +1848,8 @@ def nota_capturar(nfe_id):
     # "Capturar documento"). A chave de acesso é pública, não é dado sensível.
     registrar('leitura.consultou_sefaz', 'fiscal', tabela='nfe_importacoes',
               registro_id=nfe_id,
-              depois={'chave': chave, 'cliente_id': nota['cliente_id'], 'origem': 'manual'})
+              depois={'chave': chave, 'cliente_id': nota['cliente_id'], 'origem': 'manual',
+                      **rotulo_empresa(nota['cliente_id'])})
 
     if r.get('bloqueado') or r.get('consumo_indevido'):
         return jsonify({'ok': False, 'aguardar': True,
@@ -2399,7 +2401,8 @@ def _lote_xml_nfe(escopo, permissao):
     # altera dado; fica fora do histórico de alterações do cliente.
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
               depois={'escopo': escopo, 'formato': 'xml', 'total': total,
-                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+                      'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
+                                  **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
     # Seleção da página (ids marcados) → poucos: zip em memória. "Tudo do filtro"
     # (sem ids) → pode ser dezenas de milhares: zip em STREAMING.
@@ -2438,7 +2441,8 @@ def _lote_pdf_nfe(escopo, permissao):
     # AUDITORIA (D2): exportação de arquivo (PDF em lote) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
               depois={'escopo': escopo, 'formato': 'pdf', 'marcadas': len(ids),
-                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+                      'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
+                                  **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
     where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
     rows = execute_query(
@@ -2541,7 +2545,8 @@ def lote_xml_cte():
     # AUDITORIA (D2): exportação de arquivo (CT-e XML em lote) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='cte_documentos',
               depois={'escopo': 'cte', 'formato': 'xml', 'total': total,
-                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+                      'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
+                                  **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
     rows = execute_query(
         f"SELECT t.id, t.chave_acesso, t.data_emissao, t.xml_raw, t.xml_caminho "
@@ -2572,7 +2577,8 @@ def lote_pdf_cte():
     # AUDITORIA (D2): exportação de arquivo (CT-e PDF em lote) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='cte_documentos',
               depois={'escopo': 'cte', 'formato': 'pdf', 'marcadas': len(ids),
-                      'filtros': {k: v for k, v in data.items() if k != 'ids' and v}})
+                      'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
+                                  **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
     where, params = _where_lote('cte', data)
     where = list(where) + ["t.modelo = '57'"]
@@ -2840,7 +2846,9 @@ def _exportar_relatorio(escopo, permissao, titulo):
     # AUDITORIA (D2): exportação de RELATÓRIO (PDF/XLSX) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal',
               tabela=('cte_documentos' if escopo == 'cte' else 'nfe_importacoes'),
-              depois={'escopo': escopo, 'formato': formato, 'relatorio': titulo})
+              depois={'escopo': escopo, 'formato': formato, 'relatorio': titulo,
+                      **rotulo_empresa(request.args.get('cliente_id'),
+                                       request.args.get('grupo_id'))})
 
     # KPIs + total sobre o FILTRO INTEIRO (independe do teto do PDF).
     if escopo == 'cte':
@@ -3096,7 +3104,9 @@ def api_vincular_produto():
               'fiscal', tabela='nfe_itens', registro_id=item_id,
               depois={'item_id': item_id, 'nfe_id': item.get('nfe_id'), 'produto_id': produto_id,
                       'emit_cnpj': item.get('emit_cnpj'), 'codigo': item.get('codigo_produto'),
-                      'salvar_regra': salvar_regra, 'tipo': tipo_nota})
+                      'salvar_regra': salvar_regra, 'tipo': tipo_nota,
+                      'cliente_id': item.get('cliente_id'),
+                      **rotulo_empresa(item.get('cliente_id'))})
 
     # Salva regra de auto-vínculo e aplica retroativamente nos itens históricos
     # DESTA MESMA EMPRESA.
@@ -3506,7 +3516,8 @@ def importar_xml():
     # AUTOMÁTICA do robô/scheduler não passa por esta rota e não loga).
     registrar('escrita.importou_manual', 'fiscal', tabela='nfe_importacoes',
               depois={'arquivos': len(entradas), 'ok': ok, 'duplicados': dup, 'erros': err,
-                      'cliente_id': cliente_id, 'grupo_id': grupo_id})
+                      'cliente_id': cliente_id, 'grupo_id': grupo_id,
+                      **rotulo_empresa(cliente_id, grupo_id)})
 
     # Resposta JSON para chamadas AJAX (modal de Importação Manual)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -4411,7 +4422,8 @@ def api_importar_dropbox_start():
     registrar('escrita.executou_importacao', 'fiscal',
               depois={'departamento': departamento,
                       'escopo': 'cliente' if cliente_id else ('grupo' if grupo_id else 'todas'),
-                      'cliente_id': cliente_id, 'grupo_id': grupo_id, 'job_id': job_id})
+                      'cliente_id': cliente_id, 'grupo_id': grupo_id, 'job_id': job_id,
+                      **rotulo_empresa(cliente_id, grupo_id)})
     return jsonify({'job_id': job_id})
 
 
@@ -7415,7 +7427,8 @@ def q_robo_gerar():
               registro_id=res['cliente']['cliente_id'],
               depois={'numero': numero, 'cliente_id': res['cliente']['cliente_id'],
                       'data_inicio': data_inicio or None, 'acao': r.get('acao'),
-                      'versao': r.get('versao')})
+                      'versao': r.get('versao'),
+                      **rotulo_empresa(res['cliente']['cliente_id'])})
     logger.info('[q-robo/admin] %s por %s (id=%s) para cliente_id=%s versao=%s',
                 r['acao'], current_user.nome, current_user.id,
                 res['cliente']['cliente_id'], r['versao'])
@@ -7455,6 +7468,7 @@ def api_notas_saidas():
         ('origem', f_origem), ('cancelado', f_cancelado),
         ('vinc_status', f_vinc_status)) if v}
     if page == 1 and (_termo or _filtros):
+        _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
         registrar('leitura.buscou_saidas', 'fiscal', tabela='nfe_importacoes',
                   depois={'termo': _termo or None, 'filtros': _filtros})
 
@@ -7839,6 +7853,7 @@ def api_ctes():
         ('vmin', f_vmin), ('vmax', f_vmax), ('origem', f_origem),
         ('cancelado', f_cancelado), ('papel', f_papel)) if v}
     if page == 1 and (_termo or _filtros):
+        _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
         registrar('leitura.buscou_ctes', 'fiscal', tabela='cte_documentos',
                   depois={'termo': _termo or None, 'filtros': _filtros})
 

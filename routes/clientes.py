@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import current_user
 from decimal import Decimal, InvalidOperation
 from utils.auth_helper import login_required, permission_required
-from utils.atividade import registrar
+from utils.atividade import registrar, rotulo_empresa
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
@@ -944,7 +944,8 @@ def novo_endereco(cliente_id):
                   depois={'cliente_id': cliente_id, 'tipo': request.form.get('tipo'),
                           'cep': request.form.get('cep'), 'logradouro': request.form.get('logradouro'),
                           'numero': request.form.get('numero'), 'bairro': request.form.get('bairro'),
-                          'cidade': request.form.get('cidade'), 'estado': request.form.get('estado')})
+                          'cidade': request.form.get('cidade'), 'estado': request.form.get('estado'),
+                          **rotulo_empresa(cliente_id)})
         flash('Endereço adicionado com sucesso!', 'success')
     else:
         flash('Erro ao adicionar endereço!', 'danger')
@@ -968,7 +969,8 @@ def excluir_endereco(id):
         registrar('escrita.excluiu_endereco', 'cadastros', tabela='enderecos_clientes',
                   registro_id=id,
                   antes={'cliente_id': cliente_id, 'tipo': endereco.get('tipo'),
-                         'logradouro': endereco.get('logradouro'), 'cidade': endereco.get('cidade')})
+                         'logradouro': endereco.get('logradouro'), 'cidade': endereco.get('cidade'),
+                         **rotulo_empresa(cliente_id)})
         flash('Endereço excluído com sucesso!', 'success')
     else:
         flash('Erro ao excluir endereço!', 'danger')
@@ -1126,7 +1128,8 @@ def novo_socio(cliente_id):
                   registro_id=socio_id,
                   depois={'cliente_id': cliente_id, 'nome': nome, 'cpf': cpf,
                           'email': email, 'telefone': telefone,
-                          'percentual_participacao': str(percentual), 'responsavel': responsavel})
+                          'percentual_participacao': str(percentual), 'responsavel': responsavel,
+                          **rotulo_empresa(cliente_id)})
         total_final = SocioCliente.get_total_percentual(cliente_id)
         if total_final == Decimal('100'):
             flash('Sócio adicionado com sucesso! Total de participação atingiu 100%.', 'success')
@@ -1154,7 +1157,7 @@ def excluir_socio(id):
         registrar('escrita.excluiu_socio', 'cadastros', tabela='socios_clientes',
                   registro_id=id,
                   antes={'cliente_id': cliente_id, 'nome': socio.get('nome'),
-                         'cpf': socio.get('cpf')})
+                         'cpf': socio.get('cpf'), **rotulo_empresa(cliente_id)})
         total_final = SocioCliente.get_total_percentual(cliente_id)
         flash(f'Sócio excluído com sucesso. Total atual de participação: {total_final:.2f}%.', 'success')
     else:

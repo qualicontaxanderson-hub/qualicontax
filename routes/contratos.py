@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from utils.auth_helper import login_required, permission_required
-from utils.atividade import registrar
+from utils.atividade import registrar, rotulo_empresa
 from utils.db_helper import execute_query
 from models.cliente import Cliente
 
@@ -105,7 +105,8 @@ def create():
 
         if contrato_id:
             registrar('escrita.criou_contrato', 'cadastros', tabela='contratos',
-                      registro_id=contrato_id, depois=data)
+                      registro_id=contrato_id,
+                      depois={**data, **rotulo_empresa(data.get('cliente_id'))})
             flash('Contrato cadastrado com sucesso!', 'success')
             return redirect(url_for('contratos.list_contratos'))
         else:
