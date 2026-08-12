@@ -1382,6 +1382,12 @@ tr:hover { background-color: #fafafa; }
     cursor: pointer;
 }
 
+/* Gaveta mobile — no desktop o rail está sempre visível, então nem o véu nem
+   o botão existem. Ficam desligados AQUI, fora da media query, para não
+   dependerem de ordem de carregamento. */
+.nav-scrim { display: none; }
+.top-bar-menu { display: none; }
+
 /* ==========================================
    RESPONSIVE
    ========================================== */
@@ -1402,7 +1408,88 @@ tr:hover { background-color: #fafafa; }
 }
 
 @media (max-width: 600px) {
-    .nav-rail { display: none; }
+    /* ==========================================================
+       GAVETA DE DEPARTAMENTOS (mobile)
+
+       Antes aqui havia `.nav-rail { display: none }` — e NADA no lugar.
+       No celular o sistema ficava sem menu: os 10 departamentos sumiam e a
+       única porta era o "Acesso rápido" da home. Entrando num módulo, não
+       havia como trocar de departamento sem voltar para o início.
+
+       Agora o MESMO rail (mesma marcação, mesmas permissões já resolvidas no
+       Jinja) vira gaveta: sai da tela por padrão e entra arrastando o dedo da
+       borda esquerda, tocando no botão do topo, ou por teclado. Nada foi
+       duplicado — é o rail de sempre, com outra roupa.
+       ========================================================== */
+    .nav-rail {
+        width: min(80vw, 280px);
+        transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 300;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        /* 100dvh acompanha a barra do navegador que aparece e some ao rolar;
+           o 100vh do bloco base fica como reserva para quem não suporta. */
+        height: 100dvh;
+    }
+    /* Enquanto o dedo arrasta, o JS escreve o transform a cada frame: a
+       transição TEM de sair do caminho, senão o menu anda atrasado em relação
+       ao dedo. */
+    .nav-rail.arrastando { transition: none; }
+    .nav-rail.aberta {
+        transform: translateX(0);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.28);
+    }
+
+    /* Na gaveta há largura de sobra: o item vira linha (ícone à esquerda,
+       nome à direita) em vez do empilhado de 80px, e ganha altura de alvo de
+       toque decente. */
+    .nav-rail .rail-link {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 14px;
+        padding: 14px 18px;
+    }
+    .nav-rail .rail-link i { font-size: 20px; width: 26px; text-align: center; }
+    .nav-rail .rail-link span { font-size: 15px; font-weight: 600; }
+    .nav-rail .rail-logo { justify-content: flex-start; padding-left: 18px; }
+
+    /* Véu: escurece o conteúdo e captura o toque para fechar. Fica FORA da
+       gaveta no DOM, então não atrapalha a rolagem dela. */
+    .nav-scrim {
+        display: block;        /* liga o que está desligado no desktop */
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.28s ease, visibility 0.28s ease;
+        z-index: 290;
+    }
+    .nav-scrim.visivel { opacity: 1; visibility: visible; }
+
+    /* Abre espaço para o botão sem espremer a busca: a barra tem gap 16 e
+       padding 24 pensados para o desktop. */
+    .top-bar { padding: 0 12px; gap: 10px; }
+
+    /* Botão do topo — a gaveta precisa de uma porta VISÍVEL. Gesto sem
+       affordance ninguém descobre, e no Safari (fora do PWA) o arrasto da
+       borda disputa com o "voltar" do próprio navegador. */
+    .top-bar-menu {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px; height: 40px;
+        flex-shrink: 0;
+        border: none;
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+        border-radius: 10px;
+        font-size: 18px;
+        cursor: pointer;
+    }
+    .top-bar-menu:active { background: rgba(255, 255, 255, 0.3); }
+
     .main-area { margin-left: 0; }
     .content { padding: 16px; }
 

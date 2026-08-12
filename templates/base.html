@@ -140,11 +140,20 @@
         </div>
     </nav>
 
+    <!-- Véu da gaveta (só existe no mobile — ver .nav-scrim no style.css) -->
+    <div class="nav-scrim" id="navScrim"></div>
+
     <!-- Main Area -->
     <div class="main-area">
 
         <!-- Top Bar -->
         <header class="top-bar">
+            <button type="button" class="top-bar-menu" id="navToggle"
+                    aria-label="Abrir menu de departamentos"
+                    aria-controls="navRail" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+
             <div class="top-bar-search">
                 <i class="fas fa-search"></i>
                 <input type="text" placeholder="Buscar...">
@@ -178,6 +187,8 @@
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+    <!-- Gaveta de departamentos no mobile (arrastar da borda esquerda) -->
+    <script src="{{ url_for('static', filename='js/nav_gaveta.js') }}" defer></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>
