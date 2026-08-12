@@ -17,104 +17,93 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body p-0">
-        <table class="data-table qc-tbl">
-            <thead>
-                <tr>
-                    <th>Nome</th>
-                    <th>Login</th>
-                    <th>E-mail</th>
-                    <th>Tipo</th>
-                    <th>Perfis de Acesso</th>
-                    <th>Status</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for u in usuarios %}
-                <tr>
-                    <td data-label="Nome"><strong>{{ u.nome }}</strong></td>
-                    <td data-label="Login"><code>{{ u.login or '—' }}</code></td>
-                    <td data-label="E-mail">{{ u.email }}</td>
-                    <td data-label="Tipo">
-                        <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
-                            {{ u.tipo_usuario }}
-                        </span>
-                    </td>
-                    <td data-label="Perfis">
-                        {% if u.perfis %}
-                            {{ u.perfis }}
-                        {% else %}
-                            <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-                    <td data-label="Status">
-                        <span class="status-badge status-{{ 'ativo' if u.situacao == 'ATIVO' else 'inativo' }}">
-                            {{ u.situacao }}
-                        </span>
-                        {% if u.senha_pendente %}
-                        <span class="badge badge-warning" title="Aprovado — aguardando a pessoa definir a senha">
-                            SEM SENHA
-                        </span>
-                        {% endif %}
-                    </td>
-                    <td class="qc-td-act">
-                        <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
-                           class="btn btn-sm btn-secondary" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        <button class="btn btn-sm btn-{{ 'warning' if u.situacao == 'ATIVO' else 'success' }}"
-                                title="{{ 'Desativar' if u.situacao == 'ATIVO' else 'Ativar' }}"
-                                onclick="toggleUsuario({{ u.id }}, this)">
-                            <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
-                        </button>
-                        {% set slink = senha_links.get(u.id) %}
-                        {% if slink %}
-                        <button class="btn btn-sm btn-info" title="Copiar link de senha"
-                                data-url="{{ slink }}" onclick="copiarLista(this)">
-                            <i class="fas fa-key"></i> Copiar link de senha
-                        </button>
-                        {% endif %}
-                        {% if u.senha_pendente %}
-                            <button class="btn btn-sm btn-primary" title="Gerar novo link de senha (revoga o anterior)"
-                                    onclick="gerarLinkSenha({{ u.id }}, this)">
-                                <i class="fas fa-rotate"></i> Novo link de senha
-                            </button>
-                        {% else %}
-                            <button class="btn btn-sm btn-warning" title="Redefinir a senha deste usuário"
-                                    onclick="abrirRedefinir({{ u.id }}, '{{ u.login|e }}', {{ 'true' if u.id == current_user.id else 'false' }})">
-                                <i class="fas fa-key"></i> Redefinir senha
-                            </button>
-                        {% endif %}
-                        {# Q-Colabore F2: chave do agente da máquina deste funcionário.
-                           Estado (prefixo/versão/ativo/corte) vai nos data-* p/ o modal ler. #}
-                        {% set cc = colabore_por_usuario.get(u.id) %}
-                        <button class="btn btn-sm btn-secondary" title="Chave do agente Q-Colabore deste funcionário"
-                                onclick="colabAbrir(this)"
-                                data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
-                                data-tem="{{ '1' if cc and cc.tem_chave else '0' }}"
-                                data-ativo="{{ '1' if cc and cc.ativo else '0' }}"
-                                data-prefixo="{{ cc.token_prefixo if cc else '' }}"
-                                data-versao="{{ cc.versao if cc else '' }}"
-                                data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
-                                data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
-                            <i class="fas fa-robot"></i> Q-Colabore
-                            {% if cc and cc.tem_chave %}
-                                {% if cc.ativo %}<span class="badge badge-success"><code>{{ cc.token_prefixo }}…</code></span>
-                                {% else %}<span class="badge badge-danger">revogada</span>{% endif %}
-                            {% endif %}
-                        </button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7" class="text-center text-muted py-4">Nenhum usuário cadastrado.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{# Usuário é "coisa com estado" (ativo / sem senha / perfil), e pelo critério da
+   casa isso é CARTÃO — não tabela. Aqui vale no desktop também, então a
+   marcação é de cartão de verdade, e não uma tabela disfarçada de grade por
+   media query. Uma forma só, um CSS só. #}
+<div class="usr-grid">
+{% for u in usuarios %}
+<article class="usr-card">
+    <header class="usr-top">
+        <span class="usr-ini">{{ (u.nome or '?')[:1]|upper }}</span>
+        <div class="usr-id">
+            <strong class="usr-nome">{{ u.nome }}</strong>
+            <code class="usr-login">{{ u.login or '—' }}</code>
+        </div>
+    </header>
+
+    <div class="usr-selos">
+        <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
+            {{ u.tipo_usuario }}
+        </span>
+        <span class="status-badge status-{{ 'ativo' if u.situacao == 'ATIVO' else 'inativo' }}">
+            {{ u.situacao }}
+        </span>
+        {% if u.senha_pendente %}
+        <span class="badge badge-warning" title="Aprovado — aguardando a pessoa definir a senha">
+            SEM SENHA
+        </span>
+        {% endif %}
     </div>
+
+    <dl class="usr-dados">
+        <dt>E-mail</dt>
+        <dd>{{ u.email }}</dd>
+        <dt>Perfis</dt>
+        <dd>{% if u.perfis %}{{ u.perfis }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
+    </dl>
+
+    <footer class="usr-acoes">
+        <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
+           class="btn btn-sm btn-secondary" title="Editar">
+            <i class="fas fa-edit"></i>
+        </a>
+        <button class="btn btn-sm btn-{{ 'warning' if u.situacao == 'ATIVO' else 'success' }}"
+                title="{{ 'Desativar' if u.situacao == 'ATIVO' else 'Ativar' }}"
+                onclick="toggleUsuario({{ u.id }}, this)">
+            <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
+        </button>
+        {% set slink = senha_links.get(u.id) %}
+        {% if slink %}
+        <button class="btn btn-sm btn-info" title="Copiar link de senha"
+                data-url="{{ slink }}" onclick="copiarLista(this)">
+            <i class="fas fa-key"></i> Copiar link de senha
+        </button>
+        {% endif %}
+        {% if u.senha_pendente %}
+            <button class="btn btn-sm btn-primary" title="Gerar novo link de senha (revoga o anterior)"
+                    onclick="gerarLinkSenha({{ u.id }}, this)">
+                <i class="fas fa-rotate"></i> Novo link de senha
+            </button>
+        {% else %}
+            <button class="btn btn-sm btn-warning" title="Redefinir a senha deste usuário"
+                    onclick="abrirRedefinir({{ u.id }}, '{{ u.login|e }}', {{ 'true' if u.id == current_user.id else 'false' }})">
+                <i class="fas fa-key"></i> Redefinir senha
+            </button>
+        {% endif %}
+        {# Q-Colabore F2: chave do agente da máquina deste funcionário.
+           Estado (prefixo/versão/ativo/corte) vai nos data-* p/ o modal ler. #}
+        {% set cc = colabore_por_usuario.get(u.id) %}
+        <button class="btn btn-sm btn-secondary" title="Chave do agente Q-Colabore deste funcionário"
+                onclick="colabAbrir(this)"
+                data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
+                data-tem="{{ '1' if cc and cc.tem_chave else '0' }}"
+                data-ativo="{{ '1' if cc and cc.ativo else '0' }}"
+                data-prefixo="{{ cc.token_prefixo if cc else '' }}"
+                data-versao="{{ cc.versao if cc else '' }}"
+                data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
+                data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
+            <i class="fas fa-robot"></i> Q-Colabore
+            {% if cc and cc.tem_chave %}
+                {% if cc.ativo %}<span class="badge badge-success"><code>{{ cc.token_prefixo }}…</code></span>
+                {% else %}<span class="badge badge-danger">revogada</span>{% endif %}
+            {% endif %}
+        </button>
+    </footer>
+</article>
+{% else %}
+<p class="usr-vazio">Nenhum usuário cadastrado.</p>
+{% endfor %}
 </div>
 
 {# ==================================================================== #}
@@ -458,6 +447,56 @@
 </div>
 
 <style>
+/* ── USUÁRIOS EM CARTÃO — desktop e celular, uma forma só ─────────────────
+   Pelo critério da casa, usuário é "coisa com estado" (ativo / sem senha /
+   perfil), e coisa com estado vira CARTÃO. Antes era tabela de 7 colunas com
+   cinco botões na última: a coluna Ações sozinha comia metade da largura no
+   desktop e no celular jogava e-mail, tipo e status para fora da tela.
+
+   O cartão é a mesma peça nas duas larguras — só muda quantos cabem por
+   linha. Por isso NÃO há media query trocando de forma aqui: é grade fluida,
+   e o número de colunas sai do minmax. */
+.usr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+    margin-bottom: 4px;
+}
+.usr-card {
+    background: #fff; border: 1px solid #e3ece7; border-radius: 14px;
+    padding: 16px 16px 12px;
+    display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+}
+.usr-top { display: flex; align-items: center; gap: 12px; }
+.usr-ini {
+    width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%;
+    background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 17px;
+}
+.usr-id { display: flex; flex-direction: column; min-width: 0; }
+.usr-nome { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.usr-login { font-size: 12px; color: #64748b; background: none; padding: 0; }
+.usr-selos { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Rótulo e valor em duas colunas: o valor alinha e o olho desce em coluna. */
+.usr-dados { display: grid; grid-template-columns: 62px 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
+.usr-dados dt {
+    font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
+    color: #7d968a; line-height: 1.6;
+}
+.usr-dados dd { margin: 0; color: var(--text-primary); word-break: break-word; }
+
+/* Ações no pé, separadas por um fio. Botão ocupa metade da linha: alvo de
+   toque decente no celular e alinhamento previsível no desktop. */
+.usr-acoes {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding-top: 10px; border-top: 1px dashed #eef2f0; margin-top: auto;
+}
+.usr-acoes .btn { flex: 1 1 calc(50% - 4px); justify-content: center; }
+.usr-vazio { color: #64748b; padding: 18px 2px; }
+
 /* ── Tabelas desta tela → CARTÕES no celular ──────────────────────────────
    Regra da casa: nenhuma tabela pode fazer a PÁGINA rolar de lado. As três
    tabelas daqui têm 7, 7 e 9 colunas e ainda botão de ação por linha — não
