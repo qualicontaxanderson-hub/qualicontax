@@ -14,20 +14,28 @@
 .ce-filtros button { background:#0f3d2e; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
 .ce-filtros a { font-size:13px; color:#475569; text-decoration:none; }
 .ce-vazio { color:#64748b; padding:24px 4px; }
-.ce-lista { display:flex; flex-direction:column; gap:10px; }
-.ce-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:10px; padding:12px 14px; background:#fff; }
-.ce-head { display:flex; align-items:center; gap:9px; }
-.ce-ico { color:#16a34a; }
-.ce-nome { font-weight:700; color:#0f172a; font-size:13px; word-break:break-all; }
-.ce-meta { font-size:12px; color:#64748b; margin-top:4px; }
-.ce-tipo { font-weight:600; color:#334155; }
-.ce-emp { font-size:12.5px; font-weight:700; margin-top:5px; }
-.ce-emp-ok { color:#0f3d2e; }
-.ce-emp-sem { color:#b45309; }
-.ce-acoes { margin-top:9px; }
-.ce-btn-ren { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; border-radius:8px;
-    padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; }
-.ce-ren-box { margin-top:9px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+/* O cartão do arquivo é o componente compartilhado .ficha-* (style.css), o
+   mesmo de Usuários e Perfis — arquivo parado na caixa também é "coisa com
+   estado": tipo, empresa identificada ou não, e há quanto tempo espera.
+   Aqui ficam só os ajustes próprios desta tela. */
+.ce-ico {
+    width:42px; height:42px; flex-shrink:0; border-radius:12px;
+    background:#ecfdf5; color:#16a34a; font-size:17px;
+    display:flex; align-items:center; justify-content:center;
+}
+/* break-word e NÃO break-all: o nome do arquivo é longo, mas picotar no meio
+   da palavra ("Senh / a", "LT / DA") é pior de ler que uma linha curta. Quebra
+   entre palavras e só parte a palavra quando ela sozinha não couber. */
+.ce-nome { font-size:13.5px; font-weight:700; color:#0f172a;
+    overflow-wrap:break-word; word-break:normal; line-height:1.35; }
+.ce-emp-sem { color:#b45309; font-weight:700; }
+.ce-acoes { flex:1 1 auto; }
+.ce-btn-ren { width:100%; background:#f1f5f9; color:#334155; border:1px solid #e2e8f0;
+    border-radius:8px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; }
+/* flex-basis 100%: a caixa de renomear ocupa a linha inteira do rodapé — o
+   campo precisa de largura para caber um nome de arquivo longo. */
+.ce-ren-box { display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex-basis:100%; }
 .ce-ren-input { flex:1 1 260px; min-width:220px; height:34px; border:1px solid #16a34a; border-radius:8px; padding:0 10px; font-size:13px; }
 .ce-ren-ok { background:#15803d; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-weight:700; cursor:pointer; }
 .ce-ren-cancel { background:#fff; color:#475569; border:1px solid #d1d5db; border-radius:8px; padding:7px 12px; cursor:pointer; }
@@ -69,30 +77,48 @@
 </form>
 
 {% if itens %}
-<div class="ce-lista">
+<div class="ficha-grid">
     {% for it in itens %}
-    <div class="ce-card" data-nome="{{ it.nome }}">
-        <div class="ce-head">
+    <article class="ficha ce-card" data-nome="{{ it.nome }}">
+        <header class="ficha-top">
             <span class="ce-ico"><i class="fas {{ it.icone }}"></i></span>
-            <span class="ce-nome">{{ it.nome }}</span>
+            <div class="ficha-id">
+                <strong class="ce-nome">{{ it.nome }}</strong>
+            </div>
+        </header>
+
+        <div class="ficha-selos">
+            <span class="badge badge-secondary">{{ it.tipo }}</span>
+            <span class="badge badge-secondary">{{ it.tamanho }}</span>
+            <span class="badge badge-{{ 'secondary' if it.empresa else 'warning' }}">
+                <i class="fas fa-clock"></i> {{ it.idade }}
+            </span>
         </div>
-        <div class="ce-meta">
-            <span class="ce-tipo">{{ it.tipo }}</span> · {{ it.tamanho }} · {{ it.idade }}
-        </div>
-        <div class="ce-emp {{ 'ce-emp-ok' if it.empresa else 'ce-emp-sem' }}">
-            {% if it.empresa %}<i class="fas fa-building"></i> {{ it.empresa }}
-            {% else %}<i class="fas fa-circle-question"></i> sem empresa identificada{% endif %}
-        </div>
-        <div class="ce-acoes">
-            <button type="button" class="ce-btn-ren" onclick="ceRenAbrir(this)">
-                <i class="fas fa-pen"></i> Renomear</button>
-        </div>
-        <div class="ce-ren-box" style="display:none;">
-            <input type="text" class="ce-ren-input" value="{{ it.nome }}">
-            <button type="button" class="ce-ren-ok" onclick="ceRenConfirmar(this)">Confirmar</button>
-            <button type="button" class="ce-ren-cancel" onclick="ceRenCancelar(this)">Cancelar</button>
-        </div>
-    </div>
+
+        <dl class="ficha-dados">
+            <dt>Empresa</dt>
+            {# classe .ce-emp preservada: o JS do Renomear reescreve este
+               elemento quando o nome novo passa a identificar a empresa. #}
+            <dd class="ce-emp {{ 'ce-emp-ok' if it.empresa else 'ce-emp-sem' }}">
+                {% if it.empresa %}<i class="fas fa-building"></i> {{ it.empresa }}
+                {% else %}<i class="fas fa-circle-question"></i> sem empresa identificada{% endif %}
+            </dd>
+        </dl>
+
+        <footer class="ficha-acoes">
+            {# .ce-acoes envolve o botão porque o JS esconde este bloco inteiro
+               ao abrir a caixa de renomear. #}
+            <div class="ce-acoes">
+                <button type="button" class="ce-btn-ren" onclick="ceRenAbrir(this)">
+                    <i class="fas fa-pen"></i> Renomear</button>
+            </div>
+            <div class="ce-ren-box" style="display:none;">
+                <input type="text" class="ce-ren-input" value="{{ it.nome }}">
+                <button type="button" class="ce-ren-ok" onclick="ceRenConfirmar(this)">Confirmar</button>
+                <button type="button" class="ce-ren-cancel" onclick="ceRenCancelar(this)">Cancelar</button>
+            </div>
+        </footer>
+    </article>
     {% endfor %}
 </div>
 {% else %}
