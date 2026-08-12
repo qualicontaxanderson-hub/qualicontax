@@ -19,7 +19,7 @@
 
 <div class="card">
     <div class="card-body p-0">
-        <table class="data-table">
+        <table class="data-table qc-tbl">
             <thead>
                 <tr>
                     <th>Nome</th>
@@ -34,22 +34,22 @@
             <tbody>
                 {% for u in usuarios %}
                 <tr>
-                    <td><strong>{{ u.nome }}</strong></td>
-                    <td><code>{{ u.login or '—' }}</code></td>
-                    <td>{{ u.email }}</td>
-                    <td>
+                    <td data-label="Nome"><strong>{{ u.nome }}</strong></td>
+                    <td data-label="Login"><code>{{ u.login or '—' }}</code></td>
+                    <td data-label="E-mail">{{ u.email }}</td>
+                    <td data-label="Tipo">
                         <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
                             {{ u.tipo_usuario }}
                         </span>
                     </td>
-                    <td>
+                    <td data-label="Perfis">
                         {% if u.perfis %}
                             {{ u.perfis }}
                         {% else %}
                             <span class="text-muted">—</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-label="Status">
                         <span class="status-badge status-{{ 'ativo' if u.situacao == 'ATIVO' else 'inativo' }}">
                             {{ u.situacao }}
                         </span>
@@ -59,7 +59,7 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="qc-td-act">
                         <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
                            class="btn btn-sm btn-secondary" title="Editar">
                             <i class="fas fa-edit"></i>
@@ -128,7 +128,7 @@
                Depois de fechado o modal, só o prefixo continua visível.</p>
         </div>
     </div>
-    <table class="data-table">
+    <table class="data-table qc-tbl">
         <thead>
             <tr>
                 <th>Prefixo</th>
@@ -143,18 +143,18 @@
         <tbody>
             {% for l in links %}
             <tr>
-                <td><code>{{ l.token_prefixo }}…</code></td>
-                <td><span class="badge badge-secondary">{{ l.tipo }}</span></td>
-                <td>{{ l.destinatario or '—' }}</td>
-                <td>
+                <td data-label="Prefixo"><code>{{ l.token_prefixo }}…</code></td>
+                <td data-label="Tipo"><span class="badge badge-secondary">{{ l.tipo }}</span></td>
+                <td data-label="Destinatário">{{ l.destinatario or '—' }}</td>
+                <td data-label="Status">
                     {% set cor = {'pendente':'info', 'usado':'success',
                                   'expirado':'warning', 'revogado':'danger'} %}
                     <span class="badge badge-{{ cor.get(l.status, 'secondary') }}">{{ l.status }}</span>
                 </td>
-                <td>{{ l.expira_em.strftime('%d/%m/%Y %H:%M') if l.expira_em else '—' }}</td>
-                <td>{{ l.criado_por_nome or '—' }}<br>
+                <td data-label="Validade">{{ l.expira_em.strftime('%d/%m/%Y %H:%M') if l.expira_em else '—' }}</td>
+                <td data-label="Gerado por">{{ l.criado_por_nome or '—' }}<br>
                     <small class="text-muted">{{ l.criado_em.strftime('%d/%m/%Y %H:%M') if l.criado_em else '' }}</small></td>
-                <td>
+                <td class="qc-td-act">
                     {# status 'pendente' já exclui vencido/usado/revogado
                        (status_do_link). Só aqui o link ainda existe no banco e
                        tem url_claro para copiar. #}
@@ -193,7 +193,7 @@
     </div>
     {% set modal_lbl = {'HOME_OFFICE':'Home office','ESCRITORIO':'Escritório','HIBRIDO':'Híbrido'} %}
     {% set modal_cor = {'HOME_OFFICE':'info','ESCRITORIO':'secondary','HIBRIDO':'success'} %}
-    <table class="data-table">
+    <table class="data-table qc-tbl">
         <thead>
             <tr>
                 <th>Nome</th>
@@ -210,10 +210,10 @@
         <tbody>
             {% for p in pendentes %}
             <tr>
-                <td><strong>{{ p.nome_completo }}</strong></td>
-                <td><code>{{ p.login_escolhido }}</code></td>
-                <td>{{ p.nick_escolhido or '—' }}</td>
-                <td>
+                <td data-label="Nome"><strong>{{ p.nome_completo }}</strong></td>
+                <td data-label="Login"><code>{{ p.login_escolhido }}</code></td>
+                <td data-label="Nick">{{ p.nick_escolhido or '—' }}</td>
+                <td data-label="Contato">
                     {% if p.email_corporativo or p.celular_corporativo %}
                         {% if p.email_corporativo %}
                         <div><span class="badge badge-secondary">corp</span> {{ p.email_corporativo }}</div>
@@ -225,17 +225,17 @@
                         {{ p.email_pessoal }}
                     {% else %}—{% endif %}
                 </td>
-                <td>
+                <td data-label="Modalidade">
                     {% if p.modalidade_trabalho %}
                     <span class="badge badge-{{ modal_cor.get(p.modalidade_trabalho, 'secondary') }}">
                         {{ modal_lbl.get(p.modalidade_trabalho, p.modalidade_trabalho) }}
                     </span>
                     {% else %}<span class="text-muted">—</span>{% endif %}
                 </td>
-                <td>{{ p.departamentos or '—' }}</td>
-                <td>{{ 'Sim' if p.ja_funcionario else 'Não' }}</td>
-                <td>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '—' }}</td>
-                <td>
+                <td data-label="Departamentos">{{ p.departamentos or '—' }}</td>
+                <td data-label="Já funcionário?">{{ 'Sim' if p.ja_funcionario else 'Não' }}</td>
+                <td data-label="Recebido em">{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '—' }}</td>
+                <td class="qc-td-act">
                     <button class="btn btn-sm btn-primary" title="Analisar candidatura"
                             onclick="analisarPendente({{ p.id }})">
                         <i class="fas fa-clipboard-check"></i> Analisar
@@ -458,6 +458,60 @@
 </div>
 
 <style>
+/* ── Tabelas desta tela → CARTÕES no celular ──────────────────────────────
+   Regra da casa: nenhuma tabela pode fazer a PÁGINA rolar de lado. As três
+   tabelas daqui têm 7, 7 e 9 colunas e ainda botão de ação por linha — não
+   cabem em 390px de jeito nenhum, e no celular o nome quebrava em três linhas
+   enquanto e-mail e status ficavam fora da tela.
+
+   Mesmo padrão já usado em "Contadores responsáveis" (.cert-tbl, na ficha do
+   cliente): cada <tr> vira cartão, cada <td> vira a linha "RÓTULO  valor" com
+   o rótulo saindo do data-label. MESMA marcação do desktop — nada duplicado,
+   e os botões continuam sendo os mesmos.
+
+   Usuário é "coisa com estado" (ativo/sem senha/perfil), então no celular o
+   cartão é a forma certa: o selo salta aos olhos em vez de se perder numa
+   coluna que só aparece rolando. */
+@media (max-width: 820px) {
+    .qc-tbl, .qc-tbl tbody, .qc-tbl tr, .qc-tbl td { display: block; width: 100%; }
+    .qc-tbl thead { display: none; }
+    /* O style.css põe `.data-table { min-width: 600px }` abaixo de 768px, para
+       a tabela rolar dentro do contêiner. Aqui ela não rola — vira cartão — e
+       esse mínimo faria justamente o que a regra da casa proíbe: empurrar a
+       PÁGINA de lado. Por isso é anulado. */
+    .qc-tbl { font-size: 13px; min-width: 0; }
+    .qc-tbl tr {
+        background: #fff; border: 1px solid #e3ece7; border-radius: 14px;
+        padding: 12px 14px; margin: 0 0 10px;
+    }
+    .qc-tbl td {
+        border: 0 !important; padding: 5px 0 !important;
+        display: flex; gap: 10px; align-items: baseline;
+    }
+    .qc-tbl td::before {
+        content: attr(data-label);
+        flex: 0 0 92px; font-size: 10px; font-weight: 800; letter-spacing: .6px;
+        text-transform: uppercase; color: #7d968a; line-height: 1.5;
+    }
+    /* E-mail e perfis são longos: quebram dentro do cartão em vez de esticá-lo. */
+    .qc-tbl td { word-break: break-word; }
+
+    /* Célula de ações: sem rótulo, botões empilhados e ocupando a largura —
+       no celular botão pequeno lado a lado erra o dedo. */
+    .qc-tbl td.qc-td-act {
+        padding-top: 10px !important; margin-top: 6px;
+        border-top: 1px dashed #eef2f0 !important;
+        display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .qc-tbl td.qc-td-act::before { content: none; }
+    .qc-tbl td.qc-td-act .btn { flex: 1 1 calc(50% - 4px); justify-content: center; }
+    .qc-tbl td.qc-td-act form { width: 100%; }
+
+    /* Linha de "nenhum registro": não vira cartão nem ganha rótulo. */
+    .qc-tbl td[colspan]::before { content: none; }
+    .qc-tbl td[colspan] { display: block; text-align: center; }
+}
+
 .qc-secao { margin-top: 24px; padding: 0; overflow: hidden; }
 .qc-secao:hover { transform: none; }
 .qc-secao-topo { padding: 18px 20px 12px; border-bottom: 1px solid var(--gray-light); }
