@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Configurações - Qualicontax{% endblock %}
 {% block content %}
+{# Sem <style> próprio para hero/tiles/carrossel: tudo vem de identidade.css —
+   os MESMOS componentes das homes de Cadastros e Escrita Fiscal. As três têm
+   de parecer irmãs porque são literalmente o mesmo CSS. O único <style> desta
+   tela é o do card detalhado do Dropbox (barra + botão Atualizar), que não
+   existe em nenhuma outra. #}
+
 {% if dropbox_espaco and dropbox_espaco.alerta %}
-<!-- Alerta destacado: espaço do Dropbox acima do limite (85% por padrão).
-     Usa as classes .alert globais, a mesma linguagem visual dos flash messages. -->
 <div class="alert {{ 'alert-danger' if dropbox_espaco.alerta_nivel == 'vermelho' else 'alert-warning' }}"
      style="margin-bottom:18px;">
     <i class="fas fa-{{ 'circle-exclamation' if dropbox_espaco.alerta_nivel == 'vermelho' else 'triangle-exclamation' }}"></i>
@@ -16,192 +20,181 @@
 </div>
 {% endif %}
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Configurações</h1>
-        <p class="page-subtitle">Gerenciamento de usuários, perfis de acesso e parâmetros do sistema</p>
+<!-- ===== HERO verde ===== -->
+<div class="ef-hero">
+    <div class="ef-hero-inner">
+        <div class="ef-hero-head">
+            <div>
+                <h1 class="ef-hero-title">Configurações</h1>
+                <p class="ef-hero-sub">Usuários, perfis de acesso, auditoria e armazenamento</p>
+            </div>
+            <div class="ef-hero-actions">
+                <a href="{{ url_for('configuracoes.auditoria') }}" class="ef-btn">
+                    <i class="fas fa-clipboard-list"></i> Auditoria
+                </a>
+                <a href="{{ url_for('configuracoes.usuario_novo') }}" class="ef-btn ef-btn-primary">
+                    <i class="fas fa-plus"></i> Novo Usuário
+                </a>
+            </div>
+        </div>
+        <!-- carrossel: preenchido por fetch; some se falhar ou se o dado tiver
+             mais de 5 min (melhor omitir que mentir) -->
+        <div class="ef-car-skel" id="efCarSkel" aria-hidden="true">
+            <div class="ef-skel-card"></div><div class="ef-skel-card"></div><div class="ef-skel-card"></div>
+        </div>
+        <div class="ef-carousel" id="efCarousel" hidden
+             data-endpoint="{{ url_for('configuracoes.api_config_destaques') }}"></div>
     </div>
 </div>
 
-{% if dropbox_espaco %}
-<!-- ============ Armazenamento Dropbox (admin, somente leitura) ============ -->
-<style>
-.dbx-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 20px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
-.dbx-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
-.dbx-tit { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; color:#1e293b; }
-.dbx-tit i { color:#0061ff; font-size:16px; }
-.dbx-pct { font-size:22px; font-weight:800; line-height:1; }
-.dbx-pct.verde { color:#16a34a; } .dbx-pct.amarelo { color:#d97706; }
-.dbx-pct.vermelho { color:#dc2626; } .dbx-pct.cinza { color:#94a3b8; }
-.dbx-bar { height:10px; border-radius:99px; background:#f1f5f9; overflow:hidden; }
-.dbx-bar-fill { height:100%; border-radius:99px; transition:width .4s ease; }
-.dbx-bar-fill.verde { background:linear-gradient(90deg,#22c55e,#16a34a); }
-.dbx-bar-fill.amarelo { background:linear-gradient(90deg,#fbbf24,#d97706); }
-.dbx-bar-fill.vermelho { background:linear-gradient(90deg,#f87171,#dc2626); }
-.dbx-bar-fill.cinza { background:#cbd5e1; }
-.dbx-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:9px; font-size:12px; color:#64748b; }
-.dbx-texto { font-size:13.5px; font-weight:600; color:#334155; }
-.dbx-btn { background:#f1f5f9; color:#475569; border:1.5px solid #e2e8f0; padding:6px 13px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
-.dbx-btn:hover { background:#e2e8f0; }
-.dbx-btn:disabled { opacity:.6; cursor:default; }
-.dbx-alerta { margin-top:10px; padding:9px 13px; border-radius:9px; font-size:12.5px; line-height:1.5; }
-.dbx-alerta.amarelo { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
-.dbx-alerta.vermelho { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
-.dbx-alerta.cinza { background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
-</style>
+<!-- ===== CORPO branco ===== -->
+<div class="ef-body">
 
-<div class="dbx-card">
-    <div class="dbx-head">
-        <div class="dbx-tit">
-            <i class="fab fa-dropbox"></i> Armazenamento Dropbox
-            <span style="font-weight:600;color:#94a3b8;font-size:11px;">somente leitura</span>
+    <div class="ef-section-label">Dia a dia</div>
+    <div class="ef-grid">
+        <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-users-cog"></i></div>
+            <h3 class="ef-card-title">Usuários</h3>
+            <div class="ef-card-num" data-counter="usuarios"></div>
+            <p class="ef-card-desc">Cadastro e gerenciamento de usuários do sistema</p>
+        </a>
+        <a href="{{ url_for('configuracoes.perfis') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-shield-halved"></i></div>
+            <h3 class="ef-card-title">Perfis de Acesso</h3>
+            <div class="ef-card-num" data-counter="perfis"></div>
+            <p class="ef-card-desc">Defina permissões e níveis de acesso por perfil ou usuário</p>
+        </a>
+        <a href="{{ url_for('configuracoes.auditoria') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-clipboard-list"></i></div>
+            <h3 class="ef-card-title">Auditoria</h3>
+            <p class="ef-card-desc">Quem fez o quê, quando e em qual empresa</p>
+        </a>
+        <a href="{{ url_for('configuracoes.caixa_entrada') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-inbox"></i></div>
+            <h3 class="ef-card-title">Caixa de entrada</h3>
+            <p class="ef-card-desc">Arquivos aguardando destino na _ENTRADA</p>
+        </a>
+    </div>
+
+    {% if dropbox_espaco %}
+    <div class="ef-section-label">Armazenamento</div>
+
+    {# Card detalhado do Dropbox: barra, idade da leitura e botão Atualizar.
+       O carrossel acima mostra o percentual de relance; aqui fica o detalhe e
+       a ação. Quando a credencial falha, o carrossel OMITE o card (0 GB
+       pareceria disco vazio) e o motivo aparece aqui, escrito. #}
+    <style>
+    .dbx-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 20px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .dbx-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .dbx-tit { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; color:#1e293b; }
+    .dbx-tit i { color:#0061ff; font-size:16px; }
+    .dbx-pct { font-size:22px; font-weight:800; line-height:1; }
+    .dbx-pct.verde { color:#16a34a; } .dbx-pct.amarelo { color:#d97706; }
+    .dbx-pct.vermelho { color:#dc2626; } .dbx-pct.cinza { color:#94a3b8; }
+    .dbx-bar { height:10px; border-radius:99px; background:#f1f5f9; overflow:hidden; }
+    .dbx-bar-fill { height:100%; border-radius:99px; transition:width .4s ease; }
+    .dbx-bar-fill.verde { background:linear-gradient(90deg,#22c55e,#16a34a); }
+    .dbx-bar-fill.amarelo { background:linear-gradient(90deg,#fbbf24,#d97706); }
+    .dbx-bar-fill.vermelho { background:linear-gradient(90deg,#f87171,#dc2626); }
+    .dbx-bar-fill.cinza { background:#cbd5e1; }
+    .dbx-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:9px; font-size:12px; color:#64748b; }
+    .dbx-texto { font-size:13.5px; font-weight:600; color:#334155; }
+    .dbx-btn { background:#f1f5f9; color:#475569; border:1.5px solid #e2e8f0; padding:6px 13px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .dbx-btn:hover { background:#e2e8f0; }
+    .dbx-btn:disabled { opacity:.6; cursor:default; }
+    .dbx-alerta { margin-top:10px; padding:9px 13px; border-radius:9px; font-size:12.5px; line-height:1.5; }
+    .dbx-alerta.amarelo { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .dbx-alerta.vermelho { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .dbx-alerta.cinza { background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
+    </style>
+
+    <div class="dbx-card">
+        <div class="dbx-head">
+            <div class="dbx-tit">
+                <i class="fab fa-dropbox"></i> Armazenamento Dropbox
+                <span style="font-weight:600;color:#94a3b8;font-size:11px;">somente leitura</span>
+            </div>
+            {% if dropbox_espaco.ok and dropbox_espaco.pct is not none %}
+            <div class="dbx-pct {{ dropbox_espaco.cor }}" id="dbxPct">{{ dropbox_espaco.pct_fmt }}%</div>
+            {% endif %}
         </div>
-        {% if dropbox_espaco.ok and dropbox_espaco.pct is not none %}
-        <div class="dbx-pct {{ dropbox_espaco.cor }}" id="dbxPct">{{ dropbox_espaco.pct_fmt }}%</div>
-        {% endif %}
-    </div>
 
-    {% if dropbox_espaco.ok %}
-    <div class="dbx-bar">
-        <div class="dbx-bar-fill {{ dropbox_espaco.cor }}" id="dbxBar"
-             style="width:{{ dropbox_espaco.pct_barra }}%;"></div>
-    </div>
-    <div class="dbx-foot">
-        <span class="dbx-texto" id="dbxTexto">{{ dropbox_espaco.texto }}</span>
-        <span style="display:flex;align-items:center;gap:10px;">
-            <span id="dbxIdade">
-                {% if dropbox_espaco.idade_seg < 60 %}atualizado agora
-                {% elif dropbox_espaco.idade_seg < 3600 %}atualizado há {{ (dropbox_espaco.idade_seg // 60) }} min
-                {% else %}atualizado há {{ (dropbox_espaco.idade_seg // 3600) }} h{% endif %}
+        {% if dropbox_espaco.ok %}
+        <div class="dbx-bar">
+            <div class="dbx-bar-fill {{ dropbox_espaco.cor }}" id="dbxBar"
+                 style="width:{{ dropbox_espaco.pct_barra }}%;"></div>
+        </div>
+        <div class="dbx-foot">
+            <span class="dbx-texto" id="dbxTexto">{{ dropbox_espaco.texto }}</span>
+            <span style="display:flex;align-items:center;gap:10px;">
+                <span id="dbxIdade">
+                    {% if dropbox_espaco.idade_seg < 60 %}atualizado agora
+                    {% elif dropbox_espaco.idade_seg < 3600 %}atualizado há {{ (dropbox_espaco.idade_seg // 60) }} min
+                    {% else %}atualizado há {{ (dropbox_espaco.idade_seg // 3600) }} h{% endif %}
+                </span>
+                <button class="dbx-btn" id="dbxBtn" onclick="atualizarEspacoDropbox()">
+                    <i class="fas fa-rotate-right"></i> Atualizar
+                </button>
             </span>
-            <button class="dbx-btn" id="dbxBtn" onclick="atualizarEspacoDropbox()">
-                <i class="fas fa-rotate-right"></i> Atualizar
-            </button>
-        </span>
-    </div>
-        {% if dropbox_espaco.stale %}
-        <div class="dbx-alerta cinza" id="dbxAviso">
-            <i class="fas fa-triangle-exclamation"></i>
-            Mostrando o último valor conhecido — a consulta ao Dropbox falhou:
-            {{ dropbox_espaco.erro }}
+        </div>
+            {% if dropbox_espaco.stale %}
+            <div class="dbx-alerta cinza" id="dbxAviso">
+                <i class="fas fa-triangle-exclamation"></i>
+                Mostrando o último valor conhecido — a consulta ao Dropbox falhou:
+                {{ dropbox_espaco.erro }}
+            </div>
+            {% endif %}
+        {% else %}
+        <div class="dbx-alerta cinza">
+            <i class="fas fa-circle-info"></i> {{ dropbox_espaco.erro or 'Espaço indisponível.' }}
         </div>
         {% endif %}
-        {# O aviso de espaço alto NÃO se repete aqui: ele já aparece como banner
-           destacado no topo da página (>= 85%). A barra colorida basta no card. #}
-    {% else %}
-    <div class="dbx-alerta cinza">
-        <i class="fas fa-circle-info"></i> {{ dropbox_espaco.erro or 'Espaço indisponível.' }}
     </div>
-    {% endif %}
-</div>
 
-<script>
-// Estado do alerta no momento do render (server-side). Se um "Atualizar" cruzar o
-// limite (para cima ou para baixo), recarregamos a página para o banner do topo
-// entrar/sair — em vez de duplicar o markup do banner aqui no JS.
-const DBX_ALERTA_INICIAL = {{ 'true' if dropbox_espaco.alerta else 'false' }};
+    <script>
+    // Estado do alerta no momento do render (server-side). Se um "Atualizar"
+    // cruzar o limite, recarrega a página para o banner do topo entrar/sair.
+    const DBX_ALERTA_INICIAL = {{ 'true' if dropbox_espaco.alerta else 'false' }};
 
-// "Atualizar" ignora o TTL do cache e relê a quota. Continua só leitura.
-async function atualizarEspacoDropbox() {
-    const btn = document.getElementById('dbxBtn');
-    const original = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
-    try {
-        const r = await fetch('{{ url_for("configuracoes.dropbox_espaco_atualizar") }}',
-                              {method: 'POST'});
-        const d = await r.json();
-        if (d.ok) {
-            const bar = document.getElementById('dbxBar');
-            const pct = document.getElementById('dbxPct');
-            const cores = ['verde', 'amarelo', 'vermelho', 'cinza'];
-            document.getElementById('dbxTexto').textContent = d.texto;
-            document.getElementById('dbxIdade').textContent =
-                d.stale ? 'valor anterior (falha na consulta)' : 'atualizado agora';
-            if (bar) { bar.classList.remove(...cores); bar.classList.add(d.cor);
-                       bar.style.width = (d.pct_barra || 0) + '%'; }
-            if (pct) { pct.classList.remove(...cores); pct.classList.add(d.cor);
-                       pct.textContent = (d.pct_fmt || '—') + '%'; }
-            if (!!d.alerta !== DBX_ALERTA_INICIAL) { location.reload(); return; }
-        } else {
-            alert('Não foi possível consultar o Dropbox: ' + (d.erro || 'erro desconhecido'));
+    async function atualizarEspacoDropbox() {
+        const btn = document.getElementById('dbxBtn');
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
+        try {
+            const r = await fetch('{{ url_for("configuracoes.dropbox_espaco_atualizar") }}',
+                                  {method: 'POST'});
+            const d = await r.json();
+            if (d.ok) {
+                const bar = document.getElementById('dbxBar');
+                const pct = document.getElementById('dbxPct');
+                const cores = ['verde', 'amarelo', 'vermelho', 'cinza'];
+                document.getElementById('dbxTexto').textContent = d.texto;
+                document.getElementById('dbxIdade').textContent =
+                    d.stale ? 'valor anterior (falha na consulta)' : 'atualizado agora';
+                if (bar) { bar.classList.remove(...cores); bar.classList.add(d.cor);
+                           bar.style.width = (d.pct_barra || 0) + '%'; }
+                if (pct) { pct.classList.remove(...cores); pct.classList.add(d.cor);
+                           pct.textContent = (d.pct_fmt || '—') + '%'; }
+                if (!!d.alerta !== DBX_ALERTA_INICIAL) { location.reload(); return; }
+            } else {
+                alert('Não foi possível consultar o Dropbox: ' + (d.erro || 'erro desconhecido'));
+            }
+        } catch (e) {
+            alert('Falha ao consultar o espaço do Dropbox: ' + e);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
         }
-    } catch (e) {
-        alert('Falha ao consultar o espaço do Dropbox: ' + e);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = original;
     }
-}
-</script>
-{% endif %}
-
-<div class="module-tiles">
-
-    <a href="{{ url_for('configuracoes.usuarios') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-            <i class="fas fa-users-cog"></i>
-        </div>
-        <h3 class="module-tile-title">Usuários</h3>
-        <p class="module-tile-desc">Cadastro e gerenciamento de usuários do sistema</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="{{ url_for('configuracoes.perfis') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-            <i class="fas fa-shield-alt"></i>
-        </div>
-        <h3 class="module-tile-title">Perfis de Acesso</h3>
-        <p class="module-tile-desc">Defina permissões e níveis de acesso por perfil ou usuário</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    {% if current_user.is_admin() %}
-    <a href="{{ url_for('configuracoes.auditoria') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #0f3d2e, #15803d);">
-            <i class="fas fa-clipboard-list"></i>
-        </div>
-        <h3 class="module-tile-title">Auditoria</h3>
-        <p class="module-tile-desc">Todas as movimentações do sistema — quem fez o quê, quando e onde</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
-
-    <a href="{{ url_for('configuracoes.caixa_entrada') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #d97706, #b45309);">
-            <i class="fas fa-inbox"></i>
-        </div>
-        <h3 class="module-tile-title">Caixa de entrada</h3>
-        <p class="module-tile-desc">Arquivos parados na pasta _ENTRADA do Dropbox — ver e renomear</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Acessar</span>
-    </a>
+    </script>
     {% endif %}
 
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
-            <i class="fas fa-building"></i>
-        </div>
-        <h3 class="module-tile-title">Empresa</h3>
-        <p class="module-tile-desc">Dados da empresa, logomarca e informações gerais do sistema</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Em breve</span>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <i class="fas fa-cloud"></i>
-        </div>
-        <h3 class="module-tile-title">Integrações</h3>
-        <p class="module-tile-desc">Configuração de Dropbox, APIs e serviços externos</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Em breve</span>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
-            <i class="fas fa-key"></i>
-        </div>
-        <h3 class="module-tile-title">Alterar Senha</h3>
-        <p class="module-tile-desc">Troque a senha de acesso da sua conta</p>
-        <span class="module-tile-action"><i class="fas fa-arrow-right"></i> Em breve</span>
-    </a>
-
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{# Mesmo carrossel das homes de Cadastros e Fiscal — arquivo compartilhado; o
+   endpoint desta tela vai no data-endpoint do #efCarousel, acima. #}
+<script src="{{ url_for('static', filename='js/home_destaques.js') }}" defer></script>
 {% endblock %}

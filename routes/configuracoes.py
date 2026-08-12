@@ -1,6 +1,7 @@
 """Rotas do módulo Configurações — Usuários e Perfis de Acesso"""
 import logging
 import re
+import threading
 from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 
@@ -36,6 +37,198 @@ def index():
         from utils.dropbox_space import get_space
         espaco = get_space()
     return render_template('configuracoes/index.html', dropbox_espaco=espaco)
+
+
+# ---------------------------------------------------------------------------
+# Home do Configurações — carrossel e contadores.
+#
+# Mesmo contrato JSON das homes de Cadastros e Escrita Fiscal (cards /
+# counters / gerado_em_ms), para reaproveitar static/js/home_destaques.js sem
+# copiar uma linha de JavaScript.
+#
+# Regra da casa: NADA de número inventado. Card cuja fonte não responde
+# simplesmente não entra — e nenhum card ganha sparkline sem série real por
+# trás. Aqui isso pesa mais que nas outras telas, porque os dois indicadores
+# de armazenamento existem para DECIDIR (pagar mais, limpar, migrar): um
+# número errado sai caro.
+# ---------------------------------------------------------------------------
+_CFG_HOME_CACHE: dict = {}
+_CFG_HOME_CACHE_LOCK = threading.Lock()
+_CFG_HOME_TTL_S = 60
+
+
+def _cfg_q1(sql, params=None):
+    """Escalar isolado: query que falha derruba o card dela, não a tela."""
+    try:
+        return execute_query(sql, tuple(params or ()), fetch=True, fetch_one=True) or {}
+    except Exception:
+        logger.exception('[config-home] query omitida')
+        return {}
+
+
+def _cfg_i(d, k):
+    v = (d or {}).get(k)
+    return int(v) if v is not None else 0
+
+
+def _cfg_trend(atual, anterior):
+    if not anterior:
+        return {'tipo': 'neutro', 'rotulo': 'no mês'}
+    pct = round((atual - anterior) * 100.0 / anterior)
+    if pct > 0:
+        return {'tipo': 'alta', 'pct': pct}
+    if pct < 0:
+        return {'tipo': 'baixa', 'pct': pct}
+    return {'tipo': 'igual', 'pct': 0}
+
+
+def _config_home_payload():
+    from utils.dropbox_space import formatar_bytes
+
+    cards = []
+
+    # ---- Usuários e perfis -------------------------------------------------
+    u = _cfg_q1(
+        "SELECT "
+        " (SELECT COUNT(*) FROM usuarios)                                  total,"
+        " (SELECT COUNT(*) FROM usuarios WHERE situacao='ATIVO')           ativos,"
+        " (SELECT COUNT(*) FROM usuarios WHERE tipo_usuario='ADMIN')       admins,"
+        " (SELECT COUNT(*) FROM usuarios WHERE senha_pendente=1)           pendentes,"
+        " (SELECT COUNT(*) FROM perfis_acesso)                             perfis,"
+        " (SELECT COUNT(*) FROM perfis_acesso WHERE situacao='ATIVO')      perfis_at")
+    total_u, ativos_u = _cfg_i(u, 'total'), _cfg_i(u, 'ativos')
+    admins, pendentes = _cfg_i(u, 'admins'), _cfg_i(u, 'pendentes')
+    perfis, perfis_at = _cfg_i(u, 'perfis'), _cfg_i(u, 'perfis_at')
+
+    # Série real de usuários criados por mês (usuarios.criado_em).
+    serie = execute_query(
+        "SELECT DATE_FORMAT(criado_em,'%Y-%m') ym, COUNT(*) n FROM usuarios "
+        "WHERE criado_em >= DATE_FORMAT(CURDATE() - INTERVAL 5 MONTH,'%Y-%m-01') "
+        "GROUP BY ym ORDER BY ym", fetch=True) or []
+    por_mes = {r['ym']: int(r['n']) for r in serie}
+    hoje = date.today()
+    meses = []
+    for i in range(5, -1, -1):
+        m = hoje.month - i
+        a = hoje.year + (m - 1) // 12
+        m = (m - 1) % 12 + 1
+        meses.append('%04d-%02d' % (a, m))
+    spark_u = [por_mes.get(m, 0) for m in meses]
+
+    apoio_u = '%d ativo%s · %d administrador%s' % (
+        ativos_u, '' if ativos_u == 1 else 's',
+        admins, '' if admins == 1 else 'es')
+    if pendentes:
+        apoio_u += ' · %d com senha pendente' % pendentes
+    cards.append({
+        'titulo': 'Usuários cadastrados', 'icone': 'fa-users-cog',
+        'valor': total_u, 'apoio': apoio_u,
+        'trend': _cfg_trend(spark_u[-1], spark_u[-2]),
+        # Só desenha a série se ela tiver algum movimento: uma linha reta em
+        # zero é decoração se passando por informação.
+        **({'spark': spark_u, 'spark_tipo': 'linha'} if any(spark_u) else {}),
+    })
+
+    cards.append({
+        'titulo': 'Perfis de acesso', 'icone': 'fa-shield-halved',
+        'valor': perfis,
+        'apoio': '%d ativo%s · define o que cada um enxerga'
+                 % (perfis_at, '' if perfis_at == 1 else 's'),
+        'trend': {'tipo': 'neutro', 'rotulo': 'total'},
+    })
+
+    # ---- Armazenamento: Dropbox -------------------------------------------
+    # Só entra quando a consulta deu certo. Com credencial inválida o card
+    # SOME — o motivo já aparece em destaque no card detalhado da tela, e um
+    # "0 GB" aqui pareceria disco vazio em vez de leitura indisponível.
+    try:
+        from utils.dropbox_space import get_space
+        esp = get_space()
+        if esp and esp.get('ok') and esp.get('usado') is not None:
+            usado, total_b = int(esp['usado']), int(esp.get('total') or 0)
+            livre = max(total_b - usado, 0)
+            cards.append({
+                'titulo': 'Dropbox usado', 'icone': 'fa-cloud',
+                'valor': int(round(esp.get('pct') or 0)), 'valor_sufixo': '%',
+                'apoio': '%s de %s · %s livre%s'
+                         % (formatar_bytes(usado), formatar_bytes(total_b),
+                            formatar_bytes(livre),
+                            ' (valor anterior)' if esp.get('stale') else ''),
+                'trend': {'tipo': 'neutro', 'rotulo': 'nuvem'},
+                'spark': [usado, livre], 'spark_tipo': 'barra',
+            })
+    except Exception:
+        logger.exception('[config-home] card do Dropbox omitido')
+
+    # ---- Armazenamento: banco no Railway -----------------------------------
+    # É o que cresce e o que se paga. NÃO se mostra percentual: o plano do
+    # Railway não expõe cota por aqui, e inventar um teto para desenhar barra
+    # seria número falso. Mostra-se o tamanho real e de onde ele vem.
+    tam = _cfg_q1(
+        "SELECT COUNT(*) tabelas, "
+        "       CAST(COALESCE(SUM(data_length + index_length),0) AS UNSIGNED) bytes "
+        "  FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()")
+    db_bytes, db_tabelas = _cfg_i(tam, 'bytes'), _cfg_i(tam, 'tabelas')
+    maiores = execute_query(
+        "SELECT TABLE_NAME t, "
+        "       CAST((data_length + index_length) AS UNSIGNED) b "
+        "  FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+        " ORDER BY (data_length + index_length) DESC LIMIT 12", fetch=True) or []
+
+    if db_bytes:
+        # Valor em GB quando passa de 1 GB; abaixo disso, MB — número redondo
+        # de ler, sem esconder a ordem de grandeza.
+        if db_bytes >= 1024 ** 3:
+            valor, sufixo = round(db_bytes / (1024.0 ** 3), 1), ' GB'
+        else:
+            valor, sufixo = int(round(db_bytes / (1024.0 ** 2))), ' MB'
+        maior = maiores[0] if maiores else None
+        cards.append({
+            'titulo': 'Banco no Railway', 'icone': 'fa-database',
+            'valor': valor, 'valor_sufixo': sufixo,
+            'apoio': ('%d tabelas · maior: %s (%s)'
+                      % (db_tabelas, maior['t'], formatar_bytes(int(maior['b'])))
+                      if maior else '%d tabelas' % db_tabelas),
+            'trend': {'tipo': 'neutro', 'rotulo': 'em disco'},
+        })
+
+    if maiores:
+        cards.append({
+            'titulo': 'Maiores tabelas', 'icone': 'fa-database', 'tipo': 'lista',
+            'itens': [{'valor': formatar_bytes(int(r['b'])), 'rotulo': r['t'],
+                       'barra': (int(r['b']) / float(maiores[0]['b']))
+                                if int(maiores[0]['b']) else 0}
+                      for r in maiores],
+            'trend': {'tipo': 'neutro', 'rotulo': 'em disco'},
+        })
+
+    counters = {
+        'usuarios': total_u,
+        'perfis': perfis,
+    }
+    return {
+        'cards': cards,
+        'counters': counters,
+        'gerado_em_ms': int(datetime.now(timezone.utc).timestamp() * 1000),
+    }
+
+
+@configuracoes.route('/api/destaques')
+@permission_required('configuracoes.index')
+def api_config_destaques():
+    """Números da home do Configurações. Cache de 60s por usuário — o mesmo
+    molde do Cadastros, e o que impede a consulta de tamanho do banco de rodar
+    a cada refresh."""
+    uid = getattr(current_user, 'id', None)
+    agora = datetime.now(timezone.utc).timestamp()
+    with _CFG_HOME_CACHE_LOCK:
+        hit = _CFG_HOME_CACHE.get(uid)
+        if hit and (agora - hit[0]) < _CFG_HOME_TTL_S:
+            return jsonify(hit[1])
+    payload = _config_home_payload()
+    with _CFG_HOME_CACHE_LOCK:
+        _CFG_HOME_CACHE[uid] = (agora, payload)
+    return jsonify(payload)
 
 
 # ---------------------------------------------------------------------------
