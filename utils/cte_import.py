@@ -16,7 +16,7 @@ Regras de idempotência (mesmas do motor de NF-e):
   * ``cancelado`` só sobe, nunca desce (``GREATEST``): o cancelamento vem por
     evento, que pode chegar ANTES de uma reimportação do CT-e autorizado.
 """
-from utils.db_helper import execute_query, execute_many
+from utils.db_helper import execute_query, execute_many, transacao
 from utils.cte_parser import papel_do_cliente
 
 _MAX_XML_SIZE = 16_000_000  # MEDIUMTEXT max is 16 MB
@@ -49,11 +49,18 @@ SQL_NFE_INS = (
     "VALUES (%s,%s,%s,%s,%s)"
 )
 
-# Cancelamento por evento (procEventoCTe). Guard origem='SEFAZ': o evento da
-# captura não mexe numa linha que o escritório importou à mão.
+# Cancelamento por evento (procEventoCTe). Marca TODAS as linhas da chave,
+# qualquer origem — mesmo critério que a NF-e já usa em SQL_CANCELA_NOTA.
+#
+# O WHERE antigo tinha "AND origem = 'SEFAZ'", para o evento da captura não
+# mexer numa linha que o escritório importou à mão. A distinção não se sustenta:
+# o 110111 vem ASSINADO pela SEFAZ e a chave identifica o CT-e de forma única —
+# se a SEFAZ cancelou, cancelou para todo mundo. Não existe "CT-e nosso" e
+# "CT-e manual" nesse quesito, e o guard deixava passar exatamente o caso que
+# motivou a frente I1: cancelamento largado na _ENTRADA de um CT-e que entrou
+# pelo Dropbox/upload ficava sem efeito, com o documento seguindo ativo na tela.
 SQL_CANCELA = (
-    "UPDATE cte_documentos SET cancelado = 1 "
-    "WHERE chave_acesso = %s AND origem = 'SEFAZ'"
+    "UPDATE cte_documentos SET cancelado = 1 WHERE chave_acesso = %s"
 )
 
 
@@ -159,8 +166,22 @@ def _save_cte(parsed: dict, nome_arquivo: str, origem: str,
     return 'ok'
 
 
-def marcar_cte_cancelado(chave: str) -> bool:
-    """Marca o CT-e como cancelado (evento 110111). Só em linha origem='SEFAZ'."""
+def marcar_cte_cancelado(chave: str) -> int:
+    """Marca o CT-e como cancelado (evento 110111). Devolve QUANTAS linhas MUDARAM.
+
+    Devolve contagem, e não bool, porque ``execute_query`` devolve True para
+    UPDATE mesmo com rowcount 0 — não dá para saber se algo mudou. Daí o cursor
+    explícito.
+
+    ATENÇÃO ao significado do zero: sem ``CLIENT_FOUND_ROWS`` (o pool do
+    db_helper não liga essa flag), o MySQL conta linhas ALTERADAS, não CASADAS.
+    Então 0 significa "nada mudou", o que engloba DOIS casos diferentes: o CT-e
+    não existe, ou já estava cancelado. Medido contra o banco real. Quem precisa
+    distinguir tem de perguntar pela EXISTÊNCIA antes (é o que o
+    ``fiscal_ingest.importar_evento_cte`` faz, via ``dono_da_nota``) — este
+    retorno sozinho não serve para isso."""
     if not chave:
-        return False
-    return execute_query(SQL_CANCELA, (chave,), fetch=False) is not None
+        return 0
+    with transacao() as cur:
+        cur.execute(SQL_CANCELA, (chave,))
+        return int(cur.rowcount or 0)

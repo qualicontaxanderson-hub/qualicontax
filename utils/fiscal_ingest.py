@@ -133,11 +133,33 @@ _RAIZES_CTE = {'cteproc', 'cteosproc', 'cte', 'cteos', 'gtve',
 # tela. Agora entra em dfe_eventos e, no 110111, marca a nota.
 _RAIZES_EVENTO_NFE = {'proceventonfe', 'procevento', 'evento', 'reteventonfe'}
 
-# Inutilização e evento de CT-e continuam sem trilha por XML avulso: viram
-# 'skip' declarado (arquiva, não lança) em vez de morrer no parser de NF-e.
-# O cancelamento de CT-e tem caminho próprio (utils.cte_import.marcar_cte_cancelado,
-# hoje só alimentado pela captura SEFAZ) — fica para uma fatia futura.
-_RAIZES_SEM_IMPORT = {'proceventocte', 'inutnfe', 'procinutnfe', 'retinutnfe'}
+# Evento de CT-e: TEM trilha de import (ver importar_evento_cte). Antes caía no
+# 'skip' junto com a inutilização — um cancelamento de CT-e largado na _ENTRADA
+# era arquivado na pasta certa da empresa e o CT-e seguia ATIVO na tela.
+_RAIZES_EVENTO_CTE = {'proceventocte', 'eventocte', 'reteventocte'}
+
+# Inutilização continua sem trilha por XML avulso: vira 'skip' declarado
+# (arquiva, não lança) em vez de morrer no parser de NF-e.
+_RAIZES_SEM_IMPORT = {'inutnfe', 'procinutnfe', 'retinutnfe'}
+
+# cStat de evento REGISTRADO na SEFAZ (135 = registrado e vinculado; 136 =
+# registrado, não vinculado). Qualquer outro valor é REJEIÇÃO — o pedido de
+# cancelamento existe como arquivo, mas a SEFAZ não o homologou e o documento
+# continua VÁLIDO. Sem esta conferência, um cancelamento rejeitado (573 "duplic.
+# de evento", 594 "prazo excedido"...) cancelaria o CT-e no nosso banco enquanto
+# ele segue ativo na SEFAZ — divergência que só apareceria na fiscalização.
+_CSTAT_EVENTO_REGISTRADO = {'135', '136'}
+
+# Ator de máquina do roteador na auditoria (logs_sistema).
+#
+# usuario_id fica NULL DE PROPÓSITO: não existe — e não deve existir — uma linha
+# em `usuarios` para um cron; inventar um usuário fake só para satisfazer a FK
+# sujaria o cadastro de gente e apareceria nas telas de seleção. A coluna é
+# NULLABLE, e a auditoria já foi desenhada para não depender dela: usuario_nome
+# e usuario_login são COPIADOS no ato justamente para sobreviver ao
+# ON DELETE SET NULL da FK (ver utils/atividade.py). São eles que dizem quem fez.
+_ATOR_ROTEADOR_NOME = 'ROTEADOR (_ENTRADA)'
+_ATOR_ROTEADOR_LOGIN = 'roteador'
 
 
 def _modelo_do_xml(content: str) -> str:
@@ -294,6 +316,123 @@ def importar_evento(nome: str, content: str, chave_nota: str = None) -> tuple:
     return 'ok', f"evento {ev['tp_evento']} registrado"
 
 
+def importar_evento_cte(nome: str, content: str) -> tuple:
+    """Lança UM procEventoCTe. Devolve ``(status, motivo)``.
+
+    Espelha o ``importar_evento`` da NF-e, com uma diferença de fundo: NÃO existe
+    tabela de histórico de evento de CT-e (o ``dfe_eventos`` é NF-e — ``ch_nfe``
+    é NOT NULL). Então "registrar no banco", aqui, é exatamente o que a captura
+    de CT-e já faz em ``cte_captura._gravar_evento``: só o CANCELAMENTO mexe na
+    linha, marcando ``cte_documentos.cancelado=1``. O parser e o SQL vêm de lá —
+    não há segunda implementação.
+
+    TRÊS GUARDAS, nesta ordem:
+
+    1. TIPO — a raiz ``procEventoCTe`` é a MESMA para todo evento de CT-e: Carta
+       de Correção (110110), Comprovante de Entrega (110160), Prestação em
+       Desacordo (610110), EPEC... Só o 110111 pode marcar. Sem esta guarda, uma
+       carta de correção cancelaria o CT-e.
+    2. STATUS — só marca com ``cStat`` de evento REGISTRADO (135/136), lido do
+       ``retEventoCTe`` (o bloco de RESPOSTA da SEFAZ, não o do pedido). Um
+       cancelamento REJEITADO não cancela nada.
+    3. ÓRFÃO — o CT-e existe no banco? A pergunta é feita ao ``dono_da_nota``,
+       o MESMO helper que o lado NF-e usa, e ANTES do UPDATE. Não morre em
+       silêncio: loga e devolve 'erro'. O efeito no roteador é o que interessa:
+       'erro' faz o arquivo FICAR na _ENTRADA, e o tick seguinte reprocessa
+       sozinho depois que o documento entrar. Foi assim que o caso da CC-e de
+       11/08 se resolveu — o evento ficou parado às 20:31 e passou às 20:46,
+       sem intervenção.
+
+       Por que NÃO se usa o rowcount do UPDATE para isso: sem ``CLIENT_FOUND_ROWS``
+       (e o pool do db_helper não liga essa flag), o MySQL devolve em rowcount as
+       linhas ALTERADAS, não as CASADAS. Um CT-e JÁ cancelado e um CT-e AUSENTE
+       dão os dois rowcount=0 — medido contra o banco real. Decidir "órfão" por
+       esse número prenderia para sempre na _ENTRADA todo evento reprocessado,
+       repetindo de 15 em 15 minutos um aviso falso de "CT-e não está no sistema".
+       Reprocessar o mesmo evento é rotina aqui: é o que torna seguro lançar
+       antes de arquivar.
+    """
+    from utils.cte_import import marcar_cte_cancelado
+    from utils.integrations.cte_captura import (
+        TP_CANCELAMENTO_CTE, _extrair_evento_cte)
+    from utils.integrations.dfe_sefaz import _find, _text
+
+    root = _parse(content)
+    if root is None:
+        return 'erro', f'{nome}: evento de CT-e ilegível'
+    try:
+        ev = _extrair_evento_cte(root)
+    except Exception as exc:
+        return 'erro', f'{nome}: evento de CT-e sem identificação ({exc})'
+
+    # GUARDA 1 — TIPO. Arquiva e sai, sem UPDATE.
+    if ev['tp_evento'] != TP_CANCELAMENTO_CTE:
+        return 'skip', (f"evento de CT-e {ev['tp_evento'] or '?'} "
+                        '(não é cancelamento) — só arquivamento')
+
+    ch = ev['ch_cte']
+    if not ch:
+        return 'skip', 'evento de CT-e sem chCTe — só arquivamento'
+
+    # GUARDA 2 — STATUS. O cStat do PEDIDO não existe; o que vale é o da
+    # resposta. _find varre por nome local, então busca-se dentro do retEventoCTe
+    # para não pegar um cStat de outro bloco.
+    ret = _find(root, 'retEventoCTe')
+    c_stat = _text(ret, 'cStat') if ret is not None else None
+    if c_stat not in _CSTAT_EVENTO_REGISTRADO:
+        logger.warning('[fiscal_ingest] cancelamento de CT-e %s NÃO homologado '
+                       '(cStat=%s) — CT-e segue ativo.', ch, c_stat)
+        return 'skip', (f'cancelamento de CT-e não homologado (cStat={c_stat or "?"}) '
+                        '— só arquivamento')
+
+    # GUARDA 3 — ÓRFÃO, perguntado ANTES do UPDATE (ver docstring: o rowcount
+    # NÃO distingue "ausente" de "já cancelado"). Mesmo critério do lado NF-e:
+    # não arquiva, fica na _ENTRADA e o próximo tick tenta de novo.
+    if not dono_da_nota(ch):
+        logger.warning('[fiscal_ingest] evento 110111 de CT-e ÓRFÃO: o CT-e %s '
+                       'não está no sistema — nada marcado, arquivo segue na '
+                       '_ENTRADA para o próximo tick.', ch)
+        return 'erro', (f'o CT-e {ch[:12]}… do cancelamento não está no sistema '
+                        '— importe o CT-e antes')
+
+    try:
+        linhas = marcar_cte_cancelado(ch)
+    except Exception as exc:
+        return 'erro', f'{nome}: falha ao cancelar CT-e — {exc}'
+
+    # linhas == 0 aqui significa JÁ ESTAVA cancelado (o CT-e existe — a guarda 3
+    # acabou de confirmar). É o reprocessamento do mesmo evento: nada mudou, nada
+    # a auditar. Só um fato que muda estado vira linha de auditoria.
+    if not linhas:
+        logger.info('[fiscal_ingest] CT-e %s já estava cancelado — evento '
+                    'reprocessado, nada a alterar.', ch)
+        return 'dup', 'CT-e já estava cancelado'
+
+    # Auditoria. SEM o nome do arquivo, de propósito: a linha identifica o
+    # DOCUMENTO (chave), não o caminho de onde ele veio.
+    try:
+        from utils.atividade import registrar_agente
+        registrar_agente(
+            'escrita.cancelou_cte_por_evento', 'fiscal',
+            usuario_id=None, usuario_nome=_ATOR_ROTEADOR_NOME,
+            usuario_login=_ATOR_ROTEADOR_LOGIN,
+            tabela='cte_documentos',
+            # registro_id fica None: a mesma chave pode ter uma linha por
+            # cliente (dual-save), então não há UM id a apontar.
+            registro_id=None,
+            depois={'chave_acesso': ch, 'cancelado': 1,
+                    'tp_evento': ev['tp_evento'], 'c_stat': c_stat,
+                    'chave_evento': ev['chave_evento'],
+                    'linhas_afetadas': linhas})
+    except Exception:
+        logger.exception('[fiscal_ingest] falha ao registrar auditoria do '
+                         'cancelamento de CT-e %s (o cancelamento VALE).', ch)
+
+    logger.info('[fiscal_ingest] evento 110111 de CT-e %s (cStat=%s): %d linha(s) '
+                'marcadas como canceladas.', ch, c_stat, linhas)
+    return 'ok', f'CT-e cancelado ({linhas} linha(s))'
+
+
 # ---------------------------------------------------------------------------
 # A porta de entrada do roteador
 # ---------------------------------------------------------------------------
@@ -323,11 +462,16 @@ def importar_xml(nome: str, dados: bytes, cache: dict,
         return 'erro', 'arquivo vazio'
 
     raiz = _raiz_do_xml(content)
+    # Evento de CT-e ANTES do de NF-e: 'proceventocte' não casa com nenhuma raiz
+    # de _RAIZES_EVENTO_NFE, mas a ordem deixa a precedência explícita para quem
+    # for mexer nos conjuntos depois.
+    if raiz in _RAIZES_EVENTO_CTE:
+        return importar_evento_cte(nome, content)
     if raiz in _RAIZES_EVENTO_NFE:
         return importar_evento(nome, content)
     if raiz in _RAIZES_SEM_IMPORT:
-        # Arquivar sim, lançar não: inutilização e evento de CT-e não têm import
-        # por XML avulso. 'skip' declarado, não silêncio.
+        # Arquivar sim, lançar não: inutilização não tem import por XML avulso.
+        # 'skip' declarado, não silêncio.
         return 'skip', f'{raiz}: sem trilha de import (só arquivamento)'
 
     if _e_cte(content):
