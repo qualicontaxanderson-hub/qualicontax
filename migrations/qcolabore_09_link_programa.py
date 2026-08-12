@@ -1,32 +1,32 @@
 # -*- coding: utf-8 -*-
 """
-Q-COLABORE — migration 07: acrescenta 'PROGRAMA' ao ENUM ``tipo`` de
+Q-COLABORE â€” migration 09: acrescenta 'PROGRAMA' ao ENUM ``tipo`` de
 ``cadastro_link``.
 
 Por que
 -------
-Passa a existir um link de uso único para BAIXAR o instalador do Q-Colabore,
-para o Anderson mandar por WhatsApp a quem não tem acesso ao sistema. A
-mecânica (token com hash, prefixo, validade, uso único, revogação) é a MESMA
-dos links de cadastro e de senha que já existem — então o link novo mora na
-mesma tabela, com um tipo novo, em vez de ganhar tabela própria.
+Passa a existir um link de uso Ãºnico para BAIXAR o instalador do Q-Colabore,
+para o Anderson mandar por WhatsApp a quem nÃ£o tem acesso ao sistema. A
+mecÃ¢nica (token com hash, prefixo, validade, uso Ãºnico, revogaÃ§Ã£o) Ã© a MESMA
+dos links de cadastro e de senha que jÃ¡ existem â€” entÃ£o o link novo mora na
+mesma tabela, com um tipo novo, em vez de ganhar tabela prÃ³pria.
 
 POR QUE O VALOR VAI NO FIM DA LISTA
 -----------------------------------
-Um ENUM é armazenado como o ÍNDICE do valor, não como o texto. Acrescentar no
-fim não mexe em índice nenhum dos valores existentes: é alteração de metadado,
-instantânea. Inserir no meio renumeraria tudo a partir dali, forçaria a
-reescrita da tabela e — pior — mudaria o significado das linhas já gravadas.
+Um ENUM Ã© armazenado como o ÃNDICE do valor, nÃ£o como o texto. Acrescentar no
+fim nÃ£o mexe em Ã­ndice nenhum dos valores existentes: Ã© alteraÃ§Ã£o de metadado,
+instantÃ¢nea. Inserir no meio renumeraria tudo a partir dali, forÃ§aria a
+reescrita da tabela e â€” pior â€” mudaria o significado das linhas jÃ¡ gravadas.
 
-Por isso o ALTER exige ``ALGORITHM=INSTANT`` explicitamente: se um dia alguém
+Por isso o ALTER exige ``ALGORITHM=INSTANT`` explicitamente: se um dia alguÃ©m
 editar este arquivo e puser o valor fora do fim, o servidor RECUSA em vez de
-reescrever a tabela caladamente. A exigência é a rede de proteção. (Mesmo
-raciocínio, e mesma medição, da migration 06.)
+reescrever a tabela caladamente. A exigÃªncia Ã© a rede de proteÃ§Ã£o. (Mesmo
+raciocÃ­nio, e mesma mediÃ§Ã£o, da migration 06.)
 
-Idempotente e reversível.
+Idempotente e reversÃ­vel.
 
-  python migrations/qcolabore_07_link_programa.py             # aplica
-  python migrations/qcolabore_07_link_programa.py --reverter  # tira do ENUM
+  python migrations/qcolabore_09_link_programa.py             # aplica
+  python migrations/qcolabore_09_link_programa.py --reverter  # tira do ENUM
 """
 import os
 import sys
@@ -62,12 +62,12 @@ def _alterar(valores):
 
 def aplicar():
     atual = _tipo_atual()
-    print('ENUM atual: %s' % (atual or '(coluna não encontrada)'))
+    print('ENUM atual: %s' % (atual or '(coluna nÃ£o encontrada)'))
     if not atual:
-        print('ABORTADO: %s.%s não existe.' % (TABELA, COLUNA))
+        print('ABORTADO: %s.%s nÃ£o existe.' % (TABELA, COLUNA))
         return 1
     if 'PROGRAMA' in atual:
-        print('Já contém PROGRAMA — nada a fazer.')
+        print('JÃ¡ contÃ©m PROGRAMA â€” nada a fazer.')
         return 0
     _alterar(DEPOIS)
     print('ENUM depois: %s' % _tipo_atual())
@@ -78,7 +78,7 @@ def reverter():
     atual = _tipo_atual()
     print('ENUM atual: %s' % atual)
     if 'PROGRAMA' not in atual:
-        print('Não contém PROGRAMA — nada a fazer.')
+        print('NÃ£o contÃ©m PROGRAMA â€” nada a fazer.')
         return 0
     # Guard: reverter com linhas PROGRAMA gravadas as truncaria para ''.
     r = execute_query("SELECT COUNT(*) n FROM %s WHERE %s = 'PROGRAMA'" % (TABELA, COLUNA),
@@ -94,3 +94,4 @@ def reverter():
 
 if __name__ == '__main__':
     sys.exit(reverter() if '--reverter' in sys.argv else aplicar())
+
