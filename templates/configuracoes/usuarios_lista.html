@@ -438,6 +438,21 @@
           <i class="fas fa-key"></i> <span id="colabBtnGerarTxt">Gerar chave</span>
         </button>
       </div>
+
+      {# ── O PROGRAMA ────────────────────────────────────────────────────
+         A chave sozinha não serve: o funcionário precisa do agente instalado.
+         Os dois passos ficam no MESMO lugar para ninguém ter de caçar o
+         instalador em outra tela — nem no Dropbox.
+
+         O conteúdo é preenchido por colabInstalador(), chamado ao abrir o
+         modal: uma consulta ao Dropbox por abertura, não por carregamento da
+         lista de usuários. #}
+      <div class="colab-inst" id="colabInst" style="display:none">
+        <div class="colab-inst-tit">
+          <i class="fas fa-download"></i> Programa para instalar na máquina
+        </div>
+        <div class="colab-inst-corpo" id="colabInstCorpo"></div>
+      </div>
     </div>
 
     {# Passo 2: o segredo, uma única vez #}
@@ -518,6 +533,24 @@
 /* Selo da chave do Q-Colabore: o <code> dentro do badge herda fundo e padding
    do estilo global de <code> e ficaria com uma caixa dentro da outra. */
 .usr-selos .badge code { background: none; padding: 0; font-size: inherit; color: inherit; }
+
+/* Bloco do instalador dentro do modal da chave. Fica depois das ações porque é
+   o SEGUNDO passo: primeiro a chave, depois o programa que vai usá-la. */
+.colab-inst {
+    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--gray-light);
+}
+.colab-inst-tit {
+    font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+    color: #64748b; display: flex; align-items: center; gap: 7px; margin-bottom: 10px;
+}
+.colab-inst-corpo { display: flex; flex-wrap: wrap; gap: 8px; }
+.colab-inst-btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+.colab-inst-pe { flex-basis: 100%; font-size: 11.5px; color: #94a3b8; }
+.colab-inst-aviso {
+    flex-basis: 100%; font-size: 12px; line-height: 1.5;
+    background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+    border-radius: 8px; padding: 7px 11px;
+}
 
 /* ── Tabelas desta tela → CARTÕES no celular ──────────────────────────────
    Regra da casa: nenhuma tabela pode fazer a PÁGINA rolar de lado. As três
@@ -1029,7 +1062,61 @@ function colabAbrir(btn) {
     document.getElementById('colabBtnGerarTxt').textContent =
         colabTem ? 'Gerar nova chave' : 'Gerar chave';
     colabAtualizaBotao();
+    colabInstalador();
     document.getElementById('qcColabore').classList.add('aberto');
+}
+
+// Instalador do Q-Colabore: o que existe na pasta do Dropbox hoje. O Anderson
+// põe o pacote lá; o FUNCIONÁRIO baixa por aqui e nunca abre o Dropbox.
+//
+// O resultado é lembrado entre aberturas do modal (colabInstCache): a pasta não
+// muda enquanto a tela está aberta, e assim não se bate no Dropbox a cada clique.
+var colabInstCache = null;
+
+function colabInstalador() {
+    var caixa = document.getElementById('colabInst');
+    var corpo = document.getElementById('colabInstCorpo');
+    if (!caixa || !corpo) return;
+
+    function pinta(d) {
+        if (!d.ok) {
+            // Some em vez de mostrar botão que não baixa: o motivo já aparece
+            // inteiro na tela de Configurações, com o card do Dropbox.
+            caixa.style.display = 'none';
+            return;
+        }
+        var mb = d.tamanho ? (d.tamanho / 1048576).toFixed(1).replace('.', ',') + ' MB' : '';
+        var linhas = '<a class="btn btn-sm btn-primary colab-inst-btn" ' +
+            'href="{{ url_for("configuracoes.colabore_baixar", qual="pacote") }}">' +
+            '<i class="fas fa-file-zipper"></i> Baixar o programa' +
+            (d.versao ? ' (versão ' + d.versao + ')' : '') + '</a>';
+        if (d.tem_manual) {
+            linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" ' +
+                'href="{{ url_for("configuracoes.colabore_baixar", qual="manual") }}">' +
+                '<i class="fas fa-file-pdf"></i> Manual de instalação</a>';
+        }
+        if (d.tem_leiame) {
+            linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" ' +
+                'href="{{ url_for("configuracoes.colabore_baixar", qual="leiame") }}">' +
+                '<i class="fas fa-file-lines"></i> Como instalar</a>';
+        }
+        corpo.innerHTML = linhas +
+            '<div class="colab-inst-pe">' + (mb ? mb + ' · ' : '') +
+            (d.nome || '') + (d.hash_curto ? ' · ' + d.hash_curto : '') + '</div>' +
+            (d.avisos && d.avisos.length
+                ? '<div class="colab-inst-aviso"><i class="fas fa-triangle-exclamation"></i> ' +
+                  d.avisos.join(' ') + '</div>' : '');
+        caixa.style.display = '';
+    }
+
+    if (colabInstCache) { pinta(colabInstCache); return; }
+    caixa.style.display = '';
+    corpo.innerHTML = '<div class="colab-inst-pe">Consultando…</div>';
+    fetch('{{ url_for("configuracoes.colabore_instalador_info") }}',
+          { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (d) { colabInstCache = d; pinta(d); })
+        .catch(function () { caixa.style.display = 'none'; });
 }
 
 function colabAtualizaBotao() {

@@ -1081,6 +1081,80 @@ def usuario_senha_link(uid):
 
 
 # ===========================================================================
+# Q-COLABORE — INSTALADOR
+#
+# O funcionário NUNCA abre o Dropbox: baixa por aqui. O Anderson põe o pacote em
+# Dropbox/Aplicativos/QUALICONTAX/Q-Colabore/ e o app só lê — mesmo mecanismo já
+# usado pelo instalador do Q-Robô.
+#
+# `@login_required` e não `@admin_required`: quem instala o agente é o próprio
+# funcionário, na máquina dele. Sem a chave (essa sim, só o admin gera) o
+# programa não envia nada, então o pacote em si não é segredo.
+# ===========================================================================
+_COLAB_ARQS = ('pacote', 'manual', 'leiame')
+
+
+@configuracoes.route('/q-colabore/instalador.json')
+@login_required
+def colabore_instalador_info():
+    """O que existe hoje na pasta do instalador. Lido quando o modal abre —
+    uma chamada ao Dropbox por abertura, não por carregamento de página."""
+    from utils import qcolabore_instalador as inst
+    m = inst.manifesto()
+    return jsonify({
+        'ok': bool(m.get('ok')),
+        'erro': m.get('erro'),
+        'nome': m.get('nome'),
+        'versao': m.get('rotulo'),
+        'tamanho': m.get('tamanho'),
+        'hash_curto': m.get('hash_curto'),
+        'avisos': m.get('avisos') or [],
+        'tem_manual': bool(m.get('manual')),
+        'tem_leiame': bool(m.get('leiame')),
+    })
+
+
+@configuracoes.route('/q-colabore/baixar/<qual>')
+@login_required
+def colabore_baixar(qual):
+    """Serve o pacote, o manual ou o leia-me do Q-Colabore.
+
+    ``qual`` é uma lista FECHADA e o caminho real sai do MANIFESTO, nunca da
+    requisição: aceitar caminho da query string deixaria esta rota ler qualquer
+    arquivo do Dropbox da empresa.
+    """
+    from utils import qcolabore_instalador as inst
+
+    if qual not in _COLAB_ARQS:
+        return jsonify(ok=False, msg='Arquivo desconhecido.'), 404
+
+    m = inst.manifesto()
+    if qual == 'pacote':
+        if not m.get('ok'):
+            logger.warning('[q-colabore] download do pacote indisponivel: %s',
+                           m.get('erro'))
+            return jsonify(ok=False, msg=m.get('erro') or 'Instalador indisponível.'), 503
+        caminho, nome = m['caminho'], m['nome_download']
+    else:
+        extra = m.get('manual' if qual == 'manual' else 'leiame')
+        if not extra:
+            return jsonify(ok=False, msg='Arquivo não está na pasta.'), 404
+        caminho, nome = extra['caminho'], extra['nome']
+
+    dados = inst.baixar(caminho)
+    if not dados:
+        return jsonify(ok=False, msg='Falha ao ler o arquivo no Dropbox.'), 503
+
+    registrar('leitura.baixou_instalador_colabore', 'colabore',
+              depois={'arquivo': qual, 'versao': m.get('rotulo'),
+                      'hash': m.get('hash_curto')})
+    logger.info('[q-colabore] %s baixou %s (%s) — versao %s.',
+                getattr(current_user, 'login', '?'), qual, nome, m.get('rotulo'))
+    return send_file(BytesIO(dados), as_attachment=True, download_name=nome,
+                     mimetype='application/octet-stream')
+
+
+# ===========================================================================
 # Q-COLABORE F2 — chave do agente POR FUNCIONÁRIO (gerar/regenerar/revogar)
 #
 # A chave autentica o agente instalado na máquina da pessoa (POST /api/colabore/
