@@ -23,6 +23,9 @@
    media query. Uma forma só, um CSS só. #}
 <div class="usr-grid">
 {% for u in usuarios %}
+{# Q-Colabore F2: o estado da chave (prefixo/versão/ativo/corte) é lido tanto
+   pelos selos quanto pelos data-* do botão, então o `set` vem antes dos dois. #}
+{% set cc = colabore_por_usuario.get(u.id) %}
 <article class="usr-card">
     <header class="usr-top">
         <span class="usr-ini">{{ (u.nome or '?')[:1]|upper }}</span>
@@ -43,6 +46,20 @@
         <span class="badge badge-warning" title="Aprovado — aguardando a pessoa definir a senha">
             SEM SENHA
         </span>
+        {% endif %}
+        {# A chave do Q-Colabore é ESTADO deste usuário, não ação: o lugar dela é
+           aqui com os outros selos. Dentro do botão ela espremia o rótulo em
+           "Q-Colab / ore" em três linhas quando o botão ocupa meia largura. #}
+        {% if cc and cc.tem_chave %}
+            {% if cc.ativo %}
+            <span class="badge badge-success" title="Chave do agente Q-Colabore ativa">
+                <i class="fas fa-robot"></i> <code>{{ cc.token_prefixo }}…</code>
+            </span>
+            {% else %}
+            <span class="badge badge-danger" title="Chave do agente Q-Colabore revogada">
+                <i class="fas fa-robot"></i> revogada
+            </span>
+            {% endif %}
         {% endif %}
     </div>
 
@@ -81,9 +98,9 @@
                 <i class="fas fa-key"></i> Redefinir senha
             </button>
         {% endif %}
-        {# Q-Colabore F2: chave do agente da máquina deste funcionário.
-           Estado (prefixo/versão/ativo/corte) vai nos data-* p/ o modal ler. #}
-        {% set cc = colabore_por_usuario.get(u.id) %}
+        {# Botão do Q-Colabore: só o verbo. O estado da chave já está nos selos,
+           lá em cima — repetir aqui era o que quebrava o rótulo em três linhas.
+           O modal continua lendo tudo destes data-*. #}
         <button class="btn btn-sm btn-secondary" title="Chave do agente Q-Colabore deste funcionário"
                 onclick="colabAbrir(this)"
                 data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
@@ -94,10 +111,6 @@
                 data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
                 data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
             <i class="fas fa-robot"></i> Q-Colabore
-            {% if cc and cc.tem_chave %}
-                {% if cc.ativo %}<span class="badge badge-success"><code>{{ cc.token_prefixo }}…</code></span>
-                {% else %}<span class="badge badge-danger">revogada</span>{% endif %}
-            {% endif %}
         </button>
     </footer>
 </article>
@@ -488,14 +501,23 @@
 }
 .usr-dados dd { margin: 0; color: var(--text-primary); word-break: break-word; }
 
-/* Ações no pé, separadas por um fio. Botão ocupa metade da linha: alvo de
-   toque decente no celular e alinhamento previsível no desktop. */
+/* Ações no pé, separadas por um fio.
+   `flex: 1 1 auto` + `nowrap` em vez de meia largura fixa: com 50% travado, um
+   rótulo longo como "Novo link de senha" quebrava em duas linhas e o botão
+   ficava com o dobro da altura dos vizinhos. Assim os curtos dividem a linha e
+   o longo toma a linha inteira — sem nunca picotar a palavra. */
 .usr-acoes {
     display: flex; flex-wrap: wrap; gap: 8px;
     padding-top: 10px; border-top: 1px dashed #eef2f0; margin-top: auto;
 }
-.usr-acoes .btn { flex: 1 1 calc(50% - 4px); justify-content: center; }
+.usr-acoes .btn {
+    flex: 1 1 auto; justify-content: center; white-space: nowrap;
+}
 .usr-vazio { color: #64748b; padding: 18px 2px; }
+
+/* Selo da chave do Q-Colabore: o <code> dentro do badge herda fundo e padding
+   do estilo global de <code> e ficaria com uma caixa dentro da outra. */
+.usr-selos .badge code { background: none; padding: 0; font-size: inherit; color: inherit; }
 
 /* ── Tabelas desta tela → CARTÕES no celular ──────────────────────────────
    Regra da casa: nenhuma tabela pode fazer a PÁGINA rolar de lado. As três

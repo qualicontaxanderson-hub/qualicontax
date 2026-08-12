@@ -1382,6 +1382,34 @@ tr:hover { background-color: #fafafa; }
     cursor: pointer;
 }
 
+/* Link "voltar" das telas internas (Usuários, Perfis e os dois formulários de
+   Configurações). Estava SEM CSS NENHUM: saía como âncora crua do navegador —
+   roxa, sublinhada, destoando de tudo em volta. Vira um chip discreto, que é
+   um caminho de volta e não a ação principal da tela. */
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 5px 13px 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    background: #fff;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1.6;
+    transition: color .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.back-link:hover,
+.back-link:focus-visible {
+    color: var(--primary-green);
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    text-decoration: none;
+}
+
 /* Gaveta mobile — no desktop o rail está sempre visível, então nem o véu nem
    o botão existem. Ficam desligados AQUI, fora da media query, para não
    dependerem de ordem de carregamento. */
