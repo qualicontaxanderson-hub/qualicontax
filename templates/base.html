@@ -41,6 +41,8 @@
     <nav class="nav-rail" id="navRail">
         <a href="{{ url_for('dashboard.index') }}" class="rail-logo">
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax" class="rail-logo-img">
+            <!-- Só aparece na gaveta do mobile: no rail de 80px não há largura -->
+            <span class="rail-marca">Qualicontax</span>
         </a>
 
         <ul class="rail-nav">
@@ -133,6 +135,19 @@
         </ul>
 
         <div class="rail-bottom">
+            <!-- Cartão de quem está logado — só na gaveta do mobile. Preenche o
+                 pé da gaveta e responde "com qual usuário eu estou aqui?", que
+                 no celular não aparece em lugar nenhum. -->
+            <div class="rail-usuario">
+                <span class="rail-usuario-inicial">
+                    {{ (current_user.nome or '?')[:1]|upper }}
+                </span>
+                <span class="rail-usuario-dados">
+                    <strong>{{ current_user.nome or 'Usuário' }}</strong>
+                    <small>{{ current_user.cargo or current_user.tipo_usuario|title }}</small>
+                </span>
+            </div>
+
             <a href="{{ url_for('auth.logout') }}" class="rail-link" title="Sair">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Sair</span>

@@ -1387,6 +1387,10 @@ tr:hover { background-color: #fafafa; }
    dependerem de ordem de carregamento. */
 .nav-scrim { display: none; }
 .top-bar-menu { display: none; }
+/* Marca e cartão do usuário só existem na gaveta: no rail de 80px do desktop
+   não há largura para nenhum dos dois. */
+.rail-marca { display: none; }
+.rail-usuario { display: none; }
 
 /* ==========================================
    RESPONSIVE
@@ -1467,7 +1471,66 @@ tr:hover { background-color: #fafafa; }
     }
     .nav-rail .rail-link.active span { color: inherit; font-weight: 600; }
 
-    .nav-rail .rail-logo { justify-content: flex-start; padding-left: 18px; }
+    /* CABEÇALHO DA GAVETA.
+       Antes era o logo de 36px sozinho num bloco branco de 64px de altura —
+       muito espaço para nenhuma informação. Agora é uma faixa verde da marca,
+       com o logo maior e o nome ao lado: a gaveta abre dizendo onde você está. */
+    .nav-rail .rail-logo {
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 0 18px;
+        height: auto;
+        min-height: 84px;
+        background: linear-gradient(135deg, #16A34A, #15803D);
+        border-bottom: none;
+    }
+    .nav-rail .rail-logo-img {
+        width: 46px; height: 46px;
+        background: #fff;
+        border-radius: 10px;
+        padding: 5px;
+        flex-shrink: 0;
+    }
+    .rail-marca {
+        display: block;
+        color: #fff;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+    }
+
+    /* CARTÃO DO USUÁRIO, no pé.
+       Preenche o vazio que sobrava acima do "Sair" e responde uma pergunta que
+       no celular não tinha resposta em lugar nenhum: com qual usuário estou? */
+    .rail-usuario {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+    }
+    .rail-usuario-inicial {
+        width: 38px; height: 38px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--primary-green, #16A34A);
+        color: #fff;
+        font-weight: 700;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .rail-usuario-dados { display: flex; flex-direction: column; min-width: 0; }
+    .rail-usuario-dados strong {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .rail-usuario-dados small { font-size: 12px; color: var(--text-secondary); }
 
     /* Barra de gestos do iPhone: sem isto o "Sair" encosta nela. */
     .nav-rail .rail-bottom {
