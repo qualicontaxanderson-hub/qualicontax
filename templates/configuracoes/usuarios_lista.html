@@ -17,6 +17,22 @@
     </div>
 </div>
 
+{# ── PROGRAMA DO Q-COLABORE ────────────────────────────────────────────────
+   O instalador é UM arquivo do sistema, não algo por usuário — então mora
+   aqui, visível na página, e não escondido dentro do modal da chave de alguém.
+   O funcionário baixa daqui e NUNCA abre o Dropbox: quem lê a pasta é o
+   servidor, com a credencial que só ele tem.
+
+   Preenchido por colabInstalador() no carregamento da página. Falhando, o
+   ADMIN vê o motivo escrito — sumir calado foi o que fez a primeira versão
+   parecer que nada tinha sido feito. #}
+<div class="colab-inst" id="colabInst" data-admin="{{ '1' if current_user.is_admin() else '0' }}" hidden>
+    <div class="colab-inst-tit">
+        <i class="fas fa-robot"></i> Programa do Q-Colabore
+    </div>
+    <div class="colab-inst-corpo" id="colabInstCorpo"></div>
+</div>
+
 {# Usuário é "coisa com estado" (ativo / sem senha / perfil), e pelo critério da
    casa isso é CARTÃO — não tabela. Aqui vale no desktop também, então a
    marcação é de cartão de verdade, e não uma tabela disfarçada de grade por
@@ -439,20 +455,6 @@
         </button>
       </div>
 
-      {# ── O PROGRAMA ────────────────────────────────────────────────────
-         A chave sozinha não serve: o funcionário precisa do agente instalado.
-         Os dois passos ficam no MESMO lugar para ninguém ter de caçar o
-         instalador em outra tela — nem no Dropbox.
-
-         O conteúdo é preenchido por colabInstalador(), chamado ao abrir o
-         modal: uma consulta ao Dropbox por abertura, não por carregamento da
-         lista de usuários. #}
-      <div class="colab-inst" id="colabInst" style="display:none">
-        <div class="colab-inst-tit">
-          <i class="fas fa-download"></i> Programa para instalar na máquina
-        </div>
-        <div class="colab-inst-corpo" id="colabInstCorpo"></div>
-      </div>
     </div>
 
     {# Passo 2: o segredo, uma única vez #}
@@ -534,11 +536,14 @@
    do estilo global de <code> e ficaria com uma caixa dentro da outra. */
 .usr-selos .badge code { background: none; padding: 0; font-size: inherit; color: inherit; }
 
-/* Bloco do instalador dentro do modal da chave. Fica depois das ações porque é
-   o SEGUNDO passo: primeiro a chave, depois o programa que vai usá-la. */
+/* Faixa do instalador, na PÁGINA (não no modal): o programa é um só do sistema,
+   e quem precisa dele tem de achá-lo sem abrir a ficha de ninguém. */
 .colab-inst {
-    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--gray-light);
+    background: #fff; border: 1px solid #e3ece7; border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
 }
+.colab-inst[hidden] { display: none; }
 .colab-inst-tit {
     font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
     color: #64748b; display: flex; align-items: center; gap: 7px; margin-bottom: 10px;
@@ -1062,33 +1067,41 @@ function colabAbrir(btn) {
     document.getElementById('colabBtnGerarTxt').textContent =
         colabTem ? 'Gerar nova chave' : 'Gerar chave';
     colabAtualizaBotao();
-    colabInstalador();
     document.getElementById('qcColabore').classList.add('aberto');
 }
 
 // Instalador do Q-Colabore: o que existe na pasta do Dropbox hoje. O Anderson
-// põe o pacote lá; o FUNCIONÁRIO baixa por aqui e nunca abre o Dropbox.
+// põe o pacote lá; o FUNCIONÁRIO baixa por aqui e NUNCA abre o Dropbox — quem
+// lê a pasta é o servidor, com a credencial que só ele tem.
 //
-// O resultado é lembrado entre aberturas do modal (colabInstCache): a pasta não
-// muda enquanto a tela está aberta, e assim não se bate no Dropbox a cada clique.
-var colabInstCache = null;
-
+// Falhando, o ADMIN vê o motivo escrito. A primeira versão sumia calada, com o
+// argumento de que "botão que não baixa é pior que botão nenhum" — mas ausência
+// silenciosa é pior ainda: parece que a funcionalidade não existe, e ninguém
+// descobre que o problema é a credencial. Para quem não é admin, aí sim some:
+// não há o que essa pessoa faça a respeito.
 function colabInstalador() {
     var caixa = document.getElementById('colabInst');
     var corpo = document.getElementById('colabInstCorpo');
     if (!caixa || !corpo) return;
+    var ehAdmin = caixa.getAttribute('data-admin') === '1';
+
+    function mostra(html) { corpo.innerHTML = html; caixa.hidden = false; }
+    function some() { caixa.hidden = true; }
 
     function pinta(d) {
         if (!d.ok) {
-            // Some em vez de mostrar botão que não baixa: o motivo já aparece
-            // inteiro na tela de Configurações, com o card do Dropbox.
-            caixa.style.display = 'none';
+            if (!ehAdmin) { some(); return; }
+            mostra('<div class="colab-inst-aviso">' +
+                '<i class="fas fa-triangle-exclamation"></i> ' +
+                'Instalador indisponível: ' + (d.erro || 'motivo desconhecido') +
+                ' <br><small>Só administradores veem este aviso. Corrija as ' +
+                'variáveis DROPBOX_* no serviço web do Railway.</small></div>');
             return;
         }
         var mb = d.tamanho ? (d.tamanho / 1048576).toFixed(1).replace('.', ',') + ' MB' : '';
         var linhas = '<a class="btn btn-sm btn-primary colab-inst-btn" ' +
             'href="{{ url_for("configuracoes.colabore_baixar", qual="pacote") }}">' +
-            '<i class="fas fa-file-zipper"></i> Baixar o programa' +
+            '<i class="fas fa-download"></i> Baixar o programa' +
             (d.versao ? ' (versão ' + d.versao + ')' : '') + '</a>';
         if (d.tem_manual) {
             linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" ' +
@@ -1100,24 +1113,27 @@ function colabInstalador() {
                 'href="{{ url_for("configuracoes.colabore_baixar", qual="leiame") }}">' +
                 '<i class="fas fa-file-lines"></i> Como instalar</a>';
         }
-        corpo.innerHTML = linhas +
+        mostra(linhas +
             '<div class="colab-inst-pe">' + (mb ? mb + ' · ' : '') +
             (d.nome || '') + (d.hash_curto ? ' · ' + d.hash_curto : '') + '</div>' +
             (d.avisos && d.avisos.length
                 ? '<div class="colab-inst-aviso"><i class="fas fa-triangle-exclamation"></i> ' +
-                  d.avisos.join(' ') + '</div>' : '');
-        caixa.style.display = '';
+                  d.avisos.join(' ') + '</div>' : ''));
     }
 
-    if (colabInstCache) { pinta(colabInstCache); return; }
-    caixa.style.display = '';
-    corpo.innerHTML = '<div class="colab-inst-pe">Consultando…</div>';
+    mostra('<div class="colab-inst-pe">Consultando o instalador…</div>');
     fetch('{{ url_for("configuracoes.colabore_instalador_info") }}',
           { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-        .then(function (d) { colabInstCache = d; pinta(d); })
-        .catch(function () { caixa.style.display = 'none'; });
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+        .then(pinta)
+        .catch(function (e) {
+            if (!ehAdmin) { some(); return; }
+            mostra('<div class="colab-inst-aviso">' +
+                '<i class="fas fa-triangle-exclamation"></i> ' +
+                'Não consegui consultar o instalador (' + e.message + ').</div>');
+        });
 }
+document.addEventListener('DOMContentLoaded', colabInstalador);
 
 function colabAtualizaBotao() {
     // Botão de gerar só habilita quando a confirmação (regeneração) está marcada.
