@@ -104,6 +104,8 @@ from routes.cadastro import cadastro_bp
 # Q-Colabore Parte 6: definição PÚBLICA de senha (/senha/<token>). Também sem
 # login_required — a credencial é o token; destrava a conta senha_pendente.
 from routes.senha import senha_bp
+# Download público do instalador do Q-Colabore por link de uso único.
+from routes.programa import programa as programa_bp
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -128,6 +130,7 @@ app.register_blueprint(robo_saidas)
 app.register_blueprint(colabore_api)
 app.register_blueprint(cadastro_bp)
 app.register_blueprint(senha_bp)
+app.register_blueprint(programa_bp)
 app.register_blueprint(qrobo)
 
 # Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo

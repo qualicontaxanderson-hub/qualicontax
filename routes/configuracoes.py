@@ -1093,6 +1093,11 @@ def usuario_senha_link(uid):
 # ===========================================================================
 _COLAB_ARQS = ('pacote', 'manual', 'leiame')
 
+# Link avulso do instalador: prazo curto porque ele anda por WhatsApp; a
+# tolerância existe porque são ~26 MB e cair no meio em 4G é comum.
+COLAB_LINK_HORAS = 2
+COLAB_LINK_TOLERANCIA_MIN = 15
+
 
 @configuracoes.route('/q-colabore/instalador.json')
 @login_required
@@ -1112,6 +1117,55 @@ def colabore_instalador_info():
         'tem_manual': bool(m.get('manual')),
         'tem_leiame': bool(m.get('leiame')),
     })
+
+
+@configuracoes.route('/q-colabore/link', methods=['POST'])
+@admin_required
+def colabore_link_gerar():
+    """Link de uso ÚNICO para baixar o instalador, para mandar a quem NÃO tem
+    acesso ao sistema (WhatsApp, telefone, o funcionário novo que ainda não
+    logou).
+
+    Vale 2 horas e um download, com 15 minutos de retomada se a conexão cair —
+    ver ``cadastro_token.consumir_tolerante``. Mesma mecânica dos links de
+    cadastro e de senha: token com hash no banco, prefixo visível, revogável.
+
+    O link entrega SÓ o programa. Não dá acesso a tela nenhuma, não gera chave
+    e não vale como login — sem a chave (que só o admin gera) o agente não
+    envia nada.
+    """
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    # Não gera link para um instalador que não existe: melhor recusar aqui do
+    # que a pessoa receber uma URL que devolve erro do outro lado.
+    from utils import qcolabore_instalador as inst
+    m = inst.manifesto()
+    if not m.get('ok'):
+        return jsonify(ok=False, msg=m.get('erro') or 'Instalador indisponível.'), 503
+
+    destinatario = (request.form.get('destinatario') or '').strip()[:255] or None
+    try:
+        token, _link_id = cadastro_token.gerar(
+            'PROGRAMA', current_user.id, destinatario=destinatario,
+            validade_horas=COLAB_LINK_HORAS,
+            url_builder=lambda t: url_for('programa.baixar', token=t, _external=True))
+    except ValueError as exc:
+        return jsonify(ok=False, msg=str(exc)), 400
+    except Exception:
+        # NUNCA ecoar a exceção crua: pode carregar o SQL e o parâmetro.
+        logger.exception('[q-colabore] falha ao gerar link do instalador')
+        return jsonify(ok=False, msg='Falha ao gerar o link.'), 500
+
+    url = url_for('programa.baixar', token=token, _external=True)
+    registrar('escrita.gerou_link_programa_colabore', 'colabore',
+              depois={'prefixo': token[:8], 'destinatario': destinatario,
+                      'versao': m.get('rotulo'), 'horas': COLAB_LINK_HORAS})
+    logger.info('[q-colabore] link de instalador %s… gerado por %s (versao %s).',
+                token[:8], current_user.id, m.get('rotulo'))
+    return jsonify(ok=True, url=url, prefixo=token[:8],
+                   versao=m.get('rotulo'), horas=COLAB_LINK_HORAS,
+                   tolerancia=COLAB_LINK_TOLERANCIA_MIN)
 
 
 @configuracoes.route('/q-colabore/baixar/<qual>')

@@ -46,7 +46,7 @@ from utils.db_helper import execute_query, transacao
 logger = logging.getLogger(__name__)
 
 TABELA = 'cadastro_link'
-TIPOS = ('CADASTRO', 'SENHA')
+TIPOS = ('CADASTRO', 'SENHA', 'PROGRAMA')
 
 TOKEN_BYTES = 32                 # secrets.token_urlsafe(32) -> 43 chars
 PREFIXO_LEN = 8
@@ -313,6 +313,51 @@ def consumir(token_claro: str, tipo: str, *, ip: str = None) -> dict:
     logger.info('[cadastro_token] link %s id=%s CONSUMIDO.', tipo,
                 (link or {}).get('id'))
     return {'ok': True, 'motivo': OK, 'link': link}
+
+
+def consumir_tolerante(token_claro: str, tipo: str, *, tolerancia_min: int = 0,
+                       ip: str = None) -> dict:
+    """``consumir`` com uma JANELA de retomada depois do primeiro uso.
+
+    Existe por causa do download do instalador: são ~26 MB, e em 4G ruim cair
+    na metade é comum. Queimar o link no primeiro byte deixaria a pessoa a pé
+    justamente quando quem pode gerar outro está na rua.
+
+    A janela conta a partir do PRIMEIRO uso e NÃO se renova: quem retoma dentro
+    dela não empurra o prazo para frente. Sem isso, baixar de 14 em 14 minutos
+    manteria o link vivo para sempre.
+
+    ``tolerancia_min=0`` devolve exatamente o comportamento de ``consumir`` —
+    é o default de propósito, para CADASTRO e SENHA seguirem intactos.
+
+    NÃO se usa rowcount para decidir a retomada: sem CLIENT_FOUND_ROWS o MySQL
+    conta linhas ALTERADAS, e um segundo consumo não altera nada (usado_em já
+    preenchido, url_claro já NULL) — daria rowcount 0 e pareceria recusa. Por
+    isso o caminho da tolerância é uma CONSULTA explícita.
+    """
+    res = consumir(token_claro, tipo, ip=ip)
+    if res['ok'] or not tolerancia_min or res['motivo'] != USADO:
+        return res
+
+    tipo = _valida_tipo(tipo)
+    row = execute_query(
+        f"""SELECT id, tipo, token_prefixo, destinatario, usuario_id, criado_por,
+                   criado_em, expira_em, usado_em, usado_ip
+              FROM {TABELA}
+             WHERE token_hash = %s
+               AND tipo = %s
+               AND revogado_em IS NULL
+               AND expira_em > NOW()
+               AND usado_em IS NOT NULL
+               AND usado_em > NOW() - INTERVAL %s MINUTE""",
+        (_hash(token_claro), tipo, int(tolerancia_min)), fetch=True, fetch_one=True)
+    if not row:
+        return res
+
+    logger.info('[cadastro_token] link %s id=%s RETOMADO dentro da janela de '
+                '%s min (usado em %s).', tipo, row.get('id'), tolerancia_min,
+                row.get('usado_em'))
+    return {'ok': True, 'motivo': OK, 'link': row, 'retomada': True}
 
 
 # ---------------------------------------------------------------------------

@@ -28,9 +28,56 @@
    parecer que nada tinha sido feito. #}
 <div class="colab-inst" id="colabInst" data-admin="{{ '1' if current_user.is_admin() else '0' }}" hidden>
     <div class="colab-inst-tit">
-        <i class="fas fa-robot"></i> Programa do Q-Colabore
+        {# A marca de verdade, como no portal do Q-Robô — não um ícone genérico
+           de robozinho do Font Awesome. #}
+        <img src="{{ url_for('static', filename='images/logo.png') }}"
+             alt="" class="colab-inst-logo">
+        <span>Programa do Q-Colabore</span>
     </div>
     <div class="colab-inst-corpo" id="colabInstCorpo"></div>
+</div>
+
+{# Modal do link avulso — para mandar a quem NÃO tem acesso ao sistema. #}
+<div class="qc-modal-fundo" id="qcPrograma" onclick="if(event.target===this) progFechar()">
+  <div class="qc-modal">
+    <button type="button" class="qc-x" title="Fechar" onclick="progFechar()">&times;</button>
+
+    <div id="progPasso1">
+      <h3 class="qc-modal-tit">Link para baixar o programa</h3>
+      <p class="qc-modal-sub">Para quem <strong>não tem acesso ao sistema</strong>.
+         Vale <strong>2 horas</strong> e <strong>um download</strong> — se a conexão
+         cair no meio, dá para retomar por 15 minutos. O link entrega só o programa:
+         não abre tela nenhuma e não vale como senha.</p>
+
+      <label class="qc-label" for="progPara">Para quem é
+        <span class="text-muted" style="font-weight:400">(opcional, só para você lembrar)</span></label>
+      <input type="text" id="progPara" class="qc-input" maxlength="255"
+             placeholder="ex.: Gabriel — posto Castelinho">
+
+      <div id="progErro" class="qa-erro" style="display:none"></div>
+
+      <div class="qc-modal-acoes">
+        <button type="button" class="btn btn-primary" id="progBtn" onclick="progGerar()">
+          <i class="fas fa-link"></i> Gerar link
+        </button>
+      </div>
+    </div>
+
+    <div id="progPasso2" style="display:none">
+      <h3 class="qc-modal-tit">Link gerado</h3>
+      <div class="qc-url-area">
+        <div class="qc-url-rot">Vale 2 horas e um download — versão <span id="progVersao"></span></div>
+        <div class="qc-url" id="progUrl"></div>
+      </div>
+      <button type="button" class="qc-btn-copiar" id="progCopiar" onclick="progCopiarUrl()">
+        COPIAR LINK
+      </button>
+      <div class="qc-aviso">
+        Mande por WhatsApp. Quem receber baixa o programa direto, sem login e sem
+        Dropbox. Depois de usado, o link morre — gere outro se precisar.
+      </div>
+    </div>
+  </div>
 </div>
 
 {# Usuário é "coisa com estado" (ativo / sem senha / perfil), e pelo critério da
@@ -546,8 +593,9 @@
 .colab-inst[hidden] { display: none; }
 .colab-inst-tit {
     font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
-    color: #64748b; display: flex; align-items: center; gap: 7px; margin-bottom: 10px;
+    color: #64748b; display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
 }
+.colab-inst-logo { width: 26px; height: 26px; object-fit: contain; border-radius: 6px; }
 .colab-inst-corpo { display: flex; flex-wrap: wrap; gap: 8px; }
 .colab-inst-btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
 .colab-inst-pe { flex-basis: 100%; font-size: 11.5px; color: #94a3b8; }
@@ -1113,6 +1161,11 @@ function colabInstalador() {
                 'href="{{ url_for("configuracoes.colabore_baixar", qual="leiame") }}">' +
                 '<i class="fas fa-file-lines"></i> Como instalar</a>';
         }
+        if (ehAdmin) {
+            linhas += '<button type="button" class="btn btn-sm btn-secondary colab-inst-btn" ' +
+                'onclick="progAbrir()"><i class="fas fa-link"></i> ' +
+                'Gerar link para quem não tem acesso</button>';
+        }
         mostra(linhas +
             '<div class="colab-inst-pe">' + (mb ? mb + ' · ' : '') +
             (d.nome || '') + (d.hash_curto ? ' · ' + d.hash_curto : '') + '</div>' +
@@ -1134,6 +1187,61 @@ function colabInstalador() {
         });
 }
 document.addEventListener('DOMContentLoaded', colabInstalador);
+
+// ── Link avulso do instalador ────────────────────────────────────────────
+function progAbrir() {
+    document.getElementById('progPasso1').style.display = '';
+    document.getElementById('progPasso2').style.display = 'none';
+    document.getElementById('progErro').style.display = 'none';
+    document.getElementById('progPara').value = '';
+    document.getElementById('qcPrograma').classList.add('aberto');
+}
+function progFechar() {
+    document.getElementById('qcPrograma').classList.remove('aberto');
+}
+
+function progGerar() {
+    var btn = document.getElementById('progBtn');
+    var erro = document.getElementById('progErro');
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando…';
+    erro.style.display = 'none';
+
+    var fd = new FormData();
+    fd.append('destinatario', document.getElementById('progPara').value || '');
+    fd.append('csrf_token', QC_CSRF);
+
+    fetch('{{ url_for("configuracoes.colabore_link_gerar") }}',
+          { method: 'POST', body: fd })
+        .then(function (r) { return r.json().then(function (d) { return { s: r.status, d: d }; }); })
+        .then(function (res) {
+            if (!res.d.ok) {
+                erro.textContent = res.d.msg || 'Não foi possível gerar o link.';
+                erro.style.display = '';
+                return;
+            }
+            document.getElementById('progUrl').textContent = res.d.url;
+            document.getElementById('progVersao').textContent = res.d.versao || '—';
+            document.getElementById('progPasso1').style.display = 'none';
+            document.getElementById('progPasso2').style.display = '';
+        })
+        .catch(function (e) {
+            erro.textContent = 'Falha de rede: ' + e;
+            erro.style.display = '';
+        })
+        .finally(function () { btn.disabled = false; btn.innerHTML = original; });
+}
+
+function progCopiarUrl() {
+    var txt = document.getElementById('progUrl').textContent || '';
+    var btn = document.getElementById('progCopiar');
+    navigator.clipboard.writeText(txt).then(function () {
+        var antes = btn.textContent;
+        btn.textContent = 'COPIADO!';
+        setTimeout(function () { btn.textContent = antes; }, 1600);
+    });
+}
 
 function colabAtualizaBotao() {
     // Botão de gerar só habilita quando a confirmação (regeneração) está marcada.
