@@ -84,6 +84,7 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
+import hashlib                                         # noqa: E402
 import re                                              # noqa: E402
 import xml.etree.ElementTree as ET                     # noqa: E402
 from datetime import datetime, timezone, timedelta     # noqa: E402
@@ -94,6 +95,12 @@ NAO_DIGITO = re.compile(r'\D+')
 MESES = {f'{i:02d}' for i in range(1, 13)}
 
 PASTAS_ORIGEM = ['_ENTRADA']
+
+# Ator de máquina do roteador na auditoria. usuario_id fica NULL: não existe
+# linha em `usuarios` para um cron, e a auditoria não depende da FK — nome e
+# login são copiados no ato (ver utils/atividade.py).
+_ATOR_NOME = 'ROTEADOR (_ENTRADA)'
+_ATOR_LOGIN = 'roteador'
 
 # REGRA DE FERRO: este cron só toca em arquivo .xml. NADA MAIS.
 #
@@ -298,6 +305,169 @@ def classificar(dados, nome_arquivo, empresas, dono_por_chave=None):
 
 
 # ==========================================================================
+# IDENTIDADE DO DOCUMENTO — lida de DENTRO do XML
+#
+# O NOME DO ARQUIVO NÃO DECIDE NADA. Nome é apelido: o usuário renomeia, o
+# Windows põe " (1)", o agente do Q-Colabore gera nome livre quando o dele já
+# está ocupado. Quem diz "é a mesma nota" é a chave de acesso que está no
+# conteúdo — e, no caso de evento, o Id do próprio evento.
+# ==========================================================================
+def _elem(root, nome):
+    """Primeiro elemento com esse nome local (ignora namespace)."""
+    for e in root.iter():
+        if local(e.tag) == nome:
+            return e
+    return None
+
+
+def _attr_id(el):
+    return ((el.get('Id') or el.get('id') or '').strip()) if el is not None else ''
+
+
+def dv_ok(chave):
+    """Dígito verificador da chave (módulo 11, pesos 2..9 da direita p/ esquerda).
+
+    Pega chave truncada, digitada errada ou remontada de nome de arquivo. Sem
+    isto, um XML corrompido entraria na pasta da empresa com identidade falsa.
+    """
+    if not chave or len(chave) != 44 or not chave.isdigit():
+        return False
+    soma, peso = 0, 2
+    for d in reversed(chave[:43]):
+        soma += int(d) * peso
+        peso = 2 if peso == 9 else peso + 1
+    resto = soma % 11
+    dv = 0 if resto in (0, 1) else 11 - resto
+    return dv == int(chave[43])
+
+
+def chave_em(texto):
+    """Primeira janela de 44 dígitos com DV VÁLIDO dentro de ``texto``. '' se não há.
+
+    Por que janela deslizante e não ``\\d{44}``: o Id de um evento é
+    ``ID`` + tpEvento(6) + chave(44) + nSeqEvento(2) — 52 dígitos seguidos. Um
+    ``\\d{44}`` casa os 44 PRIMEIROS, que são ``110110`` + os 38 primeiros
+    dígitos da chave: uma chave que não existe. Medido no acervo: essa leitura
+    ingênua recusava 2.920 eventos e marcava 13.567 nomes como DV inválido.
+
+    O DV é o que desambigua — a janela certa passa no módulo 11 e as vizinhas
+    não. Custa nada: são poucas dezenas de posições numa string curta.
+    """
+    d = NAO_DIGITO.sub('', texto or '')
+    for i in range(0, max(0, len(d) - 43)):
+        cand = d[i:i + 44]
+        if dv_ok(cand):
+            return cand
+    return ''
+
+
+def identidade(root):
+    """Identidade do DOCUMENTO. Devolve ``(ident, chave, erro)``.
+
+    ``ident``  string que identifica ESTE documento (é o que dedupe compara);
+    ``chave``  a chave de acesso de 44 dígitos (vai para log/auditoria);
+    ``erro``   != None → o arquivo NÃO pode ser arquivado (vira REVISAR).
+
+    EVENTO tem regra própria, e é por um motivo concreto: a chNFe de um evento é
+    a chave da NOTA, não do evento. Duas Cartas de Correção da mesma nota
+    (nSeqEvento 1 e 2) são documentos DIFERENTES que têm de coexistir na pasta —
+    se a identidade deles fosse a chNFe, a segunda apagaria a primeira. Então a
+    identidade do evento é o Id do infEvento (que embute tpEvento + chave + seq).
+    Medido: hoje a pasta do cliente 106 tem 122 arquivos para 121 chaves, e a
+    "chave repetida" é exatamente uma nota + a CC-e dela — documentos distintos.
+
+    Pela mesma razão, a conferência "Id bate com o protocolo" só se aplica
+    quando HÁ protocolo. Arquivo sem protNFe não é corrompido: é não-autorizado,
+    e o PASSO 2 é que decide entre ele e um protocolado. Exigir os dois sempre
+    mandaria todo XML sem protocolo para REVISAR.
+    """
+    raiz = local(root.tag).lower()
+
+    if raiz.startswith('procevento') or raiz.startswith('retevento') \
+            or raiz.startswith('evento'):
+        inf = _elem(root, 'infEvento')
+        idv = _attr_id(inf)
+        # O Id É a fonte da verdade do OBJETO do evento — vem assinado pela
+        # SEFAZ e tem forma fixa: ID + tpEvento(6) + chave(44) + nSeq. Daí a
+        # fatia [6:50], conferida pelo DV.
+        #
+        # Não se pode escolher a chave pela tag: num procEventoCTe de
+        # Comprovante de Entrega (110180) existe um <chNFe> que é a NOTA
+        # TRANSPORTADA, não o CT-e do evento. Preferir chNFe fazia o evento ser
+        # recusado — 2 casos no acervo do cliente 162.
+        d_id = NAO_DIGITO.sub('', idv)
+        chave = d_id[6:50] if (len(d_id) >= 50 and dv_ok(d_id[6:50])) else chave_em(idv)
+        marcadas = [so_digitos(texto_local(root, t) or '')
+                    for t in ('chCTe', 'chNFe')]
+        marcadas = [c for c in marcadas if c]
+        if chave and marcadas and chave not in marcadas:
+            return None, chave, 'evento: chave do Id nao confere com chNFe/chCTe'
+        if not chave:
+            chave = marcadas[0] if marcadas else ''
+        if not chave:
+            return None, '', 'evento sem chave de 44 digitos'
+        if not dv_ok(chave):
+            return None, chave, 'digito verificador da chave invalido'
+        if not idv:
+            return None, chave, 'evento sem Id — nao ha como identifica-lo'
+        return idv, chave, None
+
+    inf = None
+    for tag in ('infNFe', 'infCte', 'infCteOS', 'infGTVe'):
+        inf = _elem(root, tag)
+        if inf is not None:
+            break
+    ch_id = chave_em(_attr_id(inf))
+    # A chave do protocolo sai de DENTRO do protNFe/protCTe, não de qualquer
+    # lugar do documento: um CT-e lista as chNFe das notas que TRANSPORTA, e
+    # comparar o Id do CT-e com a chave de uma nota transportada dava
+    # divergência falsa — 78 CT-e recusados na medição contra o acervo.
+    prot = _elem(root, 'protNFe') or _elem(root, 'protCTe')
+    ch_prot = so_digitos(
+        (texto_local(prot, 'chNFe') or texto_local(prot, 'chCTe') or '')
+        if prot is not None else '')
+    if not ch_id and not ch_prot:
+        return None, '', 'sem chave de 44 digitos no conteudo (Id/protocolo)'
+    if ch_id and ch_prot and ch_id != ch_prot:
+        return None, ch_id, 'chave do Id difere da chave do protocolo'
+    chave = ch_id or ch_prot
+    if not dv_ok(chave):
+        return None, chave, 'digito verificador da chave invalido'
+    return chave, chave, None
+
+
+# ==========================================================================
+# QUALIDADE — qual das duas cópias fica (PASSO 2)
+# ==========================================================================
+_RE_CSTAT_100 = re.compile(r'<cStat>\s*100\s*</cStat>')
+_RE_DET = re.compile(r'<det\b')
+
+
+def qualidade(dados):
+    """(autorizado, assinado, completa) — tupla comparável: MAIOR ganha.
+
+    A ordem dos campos É a ordem de desempate pedida:
+      1. protocolo de autorização com cStat 100;
+      2. assinatura digital presente;
+      3. nota completa (tem <det>) em vez de resumo.
+    Empate em tudo → fica a que já está arquivada (o chamador decide).
+    """
+    t = dados.decode('utf-8', 'replace')
+    autorizado = 1 if (('<protNFe' in t or '<protCTe' in t)
+                       and _RE_CSTAT_100.search(t)) else 0
+    return (autorizado, 1 if '<Signature' in t else 0,
+            1 if _RE_DET.search(t) else 0)
+
+
+def rotulo_criterio(q_novo, q_atual):
+    """Qual critério decidiu — para a auditoria dizer POR QUE substituiu."""
+    for i, nome in enumerate(('protocolo', 'assinatura', 'completa')):
+        if q_novo[i] != q_atual[i]:
+            return nome
+    return 'empate'
+
+
+# ==========================================================================
 # Infra: mapa do BANCO, log, lock
 # ==========================================================================
 def _mapa_empresas():
@@ -330,6 +500,33 @@ def _log(rodada, origem, destino, resultado, tipo_doc=None,
         logger.exception('[roteador] falha ao gravar roteador_log (segue a rodada)')
 
 
+def _auditar_substituicao(chave, criterio, b_atual, b_novo, sha_atual, sha_novo,
+                          empresa_numero):
+    """Auditoria da SUBSTITUIÇÃO de um arquivo já arquivado.
+
+    Só é chamada quando o conteúdo guardado MUDA. O porquê: o banco não é
+    tocado (é a mesma nota, o 'dup' está certo), então a pasta passa a contar
+    uma história diferente da que contava — e isso não pode acontecer em
+    silêncio.
+
+    NUNCA o nome do arquivo: a linha identifica o DOCUMENTO pela chave.
+    Best-effort — falhar aqui não desfaz a substituição nem derruba a rodada.
+    """
+    try:
+        from utils.atividade import registrar_agente
+        registrar_agente(
+            'escrita.substituiu_arquivo_arquivado', 'fiscal',
+            usuario_id=None, usuario_nome=_ATOR_NOME, usuario_login=_ATOR_LOGIN,
+            tabela=None, registro_id=None,
+            depois={'chave_acesso': chave, 'criterio': criterio,
+                    'empresa_numero': empresa_numero,
+                    'tamanho_anterior': len(b_atual), 'tamanho_novo': len(b_novo),
+                    'sha256_anterior': sha_atual, 'sha256_novo': sha_novo})
+    except Exception:
+        logger.exception('[roteador] falha ao auditar substituicao de %s '
+                         '(a substituicao VALE).', chave)
+
+
 def _conectar_lock():
     """Conexão dedicada para segurar o GET_LOCK durante toda a rodada."""
     import mysql.connector
@@ -339,6 +536,62 @@ def _conectar_lock():
         user=Config.DB_USER, password=Config.DB_PASSWORD,
         connection_timeout=Config.DB_CONNECT_TIMEOUT,
         autocommit=True, time_zone='-03:00')
+
+
+# ==========================================================================
+# ÍNDICE DA PASTA DE DESTINO — chave -> arquivos já lá
+#
+# Custo (PASSO 4): UM list_folder por pasta de destino tocada na rodada, e
+# reuso pelo resto da rodada. NÃO se baixa a pasta inteira: o nome do arquivo
+# serve de PISTA para achar o candidato, e só o candidato é baixado — e é o
+# CONTEÚDO dele que decide. A pista nunca decide sozinha.
+#
+# Arquivo cujo nome não traz chave não tem pista: esse precisa ser baixado para
+# entrar no índice. Medido na árvore inteira do Dropbox: 66.589 .xml, ZERO sem
+# chave no nome — então hoje esse custo é zero. O contador existe para o dia em
+# que deixar de ser.
+# ==========================================================================
+def indice_destino(svc, destino_dir, cache):
+    """{chave44: [caminhos]} da pasta, montado uma vez por rodada."""
+    if destino_dir in cache:
+        return cache[destino_dir]
+    idx = {}
+    sem_pista = []
+    try:
+        itens = svc.list_folder(destino_dir, recursive=False)
+    except Exception:
+        # Pasta nova (ainda não existe) ou falha de listagem: índice vazio. O
+        # _path_exists do fluxo normal continua sendo a rede de segurança.
+        itens = []
+    for it in itens:
+        if not it.get('is_file'):
+            continue
+        nome = it.get('name') or ''
+        if not nome.lower().endswith(EXTENSAO_PROCESSADA):
+            continue
+        # chave_em, não CHAVE_RE: o nome de evento é ID<tpEvento><chave><seq>,
+        # e um \d{44} cru extrai a janela errada — o índice ficaria com uma
+        # chave inexistente e NUNCA casaria com o documento.
+        ch_nome = chave_em(nome)
+        if ch_nome:
+            idx.setdefault(ch_nome, []).append(it['path'])
+        else:
+            sem_pista.append(it['path'])
+    for caminho in sem_pista:
+        try:
+            b = svc.download_file(caminho)
+            r = parse_xml_bytes(b) if b else None
+            if r is not None:
+                _ident, ch, err = identidade(r)
+                if ch and not err:
+                    idx.setdefault(ch, []).append(caminho)
+        except Exception:
+            logger.exception('[roteador] falha ao indexar %s', caminho)
+    if sem_pista:
+        logger.info('[roteador] indice de %s: %d arquivo(s) sem chave no nome '
+                    'precisaram ser lidos.', destino_dir, len(sem_pista))
+    cache[destino_dir] = idx
+    return idx
 
 
 # ==========================================================================
@@ -371,10 +624,20 @@ def rodar():
     prazo = time.monotonic() + PRAZO_SEG
     n = {'MOVIDO': 0, 'SIMULADO': 0, 'CONFLITO': 0,
          'REVISAR': 0, 'SEM_MATCH': 0, 'ERRO': 0,
+         # SUBSTITUIDO: o mesmo documento já estava lá e ficou UMA cópia (a de
+         # melhor integridade). DESCARTADO: a que já estava era melhor/igual e
+         # a nova saiu da _ENTRADA para a quarentena.
+         'SUBSTITUIDO': 0, 'DESCARTADO': 0,
          # não-XML deixados em paz (o .pfx à espera de vínculo cai aqui)
          'IGNORADO': 0}
     n_imp = {}              # ok/dup/skip/off — placar do LANÇAMENTO
-    vistos = set()          # dedupe intra-rodada por destino
+    # Placar do DRYRUN. São contadores PRÓPRIOS, de propósito: o vocabulário de
+    # roteador_log.resultado continua sendo SIMULADO na simulação — a decisão
+    # que SERIA tomada vai no motivo e aqui, não num resultado novo.
+    sim = {'substituiria': 0, 'descartaria': 0, 'novos': 0}
+    vistos = set()          # dedupe intra-rodada por CAMINHO de destino
+    idents_vistos = set()   # dedupe intra-rodada pela IDENTIDADE do documento
+    idx_cache = {}          # {pasta_destino: {chave: [caminhos]}} — 1x por rodada
     total = 0
 
     try:
@@ -455,6 +718,25 @@ def rodar():
                              tipo_doc=info['tipo_doc'], motivo=info['motivo'])
                         continue
 
+                    # IDENTIDADE PELO CONTEÚDO — antes de lançar e antes de
+                    # arquivar. Arquivo cuja identidade não se sustenta (chave do
+                    # Id divergindo do protocolo, dígito verificador errado) NÃO
+                    # entra na pasta da empresa nem no banco: vira REVISAR e fica
+                    # na origem para alguém olhar.
+                    _root = parse_xml_bytes(dados)
+                    ident, chave, err_ident = (
+                        identidade(_root) if _root is not None
+                        else (None, '', 'XML ilegivel'))
+                    if err_ident or not ident:
+                        n['REVISAR'] += 1
+                        logger.warning('[roteador] identidade recusada em %s: %s',
+                                       origem, err_ident)
+                        _log(rodada, origem, None, 'REVISAR',
+                             tipo_doc=info['tipo_doc'],
+                             empresa_numero=info['empresa_numero'],
+                             motivo=f'identidade: {err_ident}')
+                        continue
+
                     # LANÇAMENTO ANTES DO ARQUIVAMENTO.
                     #
                     # A ordem é o coração da correção. Se o import falha, o
@@ -483,23 +765,183 @@ def rodar():
                         'FISCAL', info['sentido'], info['ano'], info['mes'])
                     destino = f'{destino_dir}/{nome}'
 
-                    # TRAVA (a): move_file SOBRESCREVE por padrão. Sem esta
-                    # checagem, um homônimo no destino seria APAGADO.
-                    if destino.lower() in vistos or svc._path_exists(destino):
+                    # ------------------------------------------------------
+                    # NUNCA DUPLICAR: procura o MESMO DOCUMENTO já arquivado.
+                    #
+                    # A busca é pela IDENTIDADE lida do conteúdo, não pelo
+                    # nome. Isto pega o furo que não aparecia como conflito
+                    # nenhum: a mesma nota chegando com nome diferente era
+                    # arquivada duas vezes, calada.
+                    # ------------------------------------------------------
+                    if ident in idents_vistos:
+                        n['CONFLITO'] += 1
+                        _log(rodada, origem, None, 'CONFLITO',
+                             tipo_doc=info['tipo_doc'],
+                             empresa_numero=info['empresa_numero'],
+                             motivo='documento repetido na MESMA rodada — '
+                                    f'ficou na origem [import={imp}]')
+                        continue
+
+                    existente = None          # (caminho, bytes) do já arquivado
+                    ilegivel = None
+                    for cand in indice_destino(svc, destino_dir, idx_cache).get(chave, []):
+                        b_cand = svc.download_file(cand)
+                        r_cand = parse_xml_bytes(b_cand) if b_cand else None
+                        if r_cand is None:
+                            # NUNCA decidir por ausência de informação: destino
+                            # que não se consegue ler vira CONFLITO, não
+                            # sobrescrita.
+                            ilegivel = cand
+                            break
+                        id_cand, _ch, err_cand = identidade(r_cand)
+                        if err_cand or id_cand is None:
+                            ilegivel = cand
+                            break
+                        if id_cand == ident:
+                            existente = (cand, b_cand)
+                            break
+
+                    if ilegivel:
+                        n['CONFLITO'] += 1
+                        logger.warning('[roteador] destino ILEGIVEL (%s) — nao '
+                                       'sobrescrevo; %s fica na origem.', ilegivel, chave)
+                        _log(rodada, origem, ilegivel, 'CONFLITO',
+                             tipo_doc=info['tipo_doc'],
+                             empresa_numero=info['empresa_numero'],
+                             motivo=f'destino ilegivel — nao sobrescrito [import={imp}]')
+                        continue
+
+                    # Colisão de NOME sem ser o mesmo documento: o caminho de
+                    # destino está ocupado por OUTRA nota. Sobrescrever aqui
+                    # apagaria documento bom — é o caso que mantém o CONFLITO.
+                    if existente is None and (destino.lower() in vistos
+                                              or svc._path_exists(destino)):
                         n['CONFLITO'] += 1
                         _log(rodada, origem, destino, 'CONFLITO',
                              tipo_doc=info['tipo_doc'],
                              empresa_numero=info['empresa_numero'],
-                             motivo=f'destino ja existe — ficou na origem [import={imp}]')
+                             motivo='nome ja usado por OUTRO documento — '
+                                    f'ficou na origem [import={imp}]')
                         continue
 
                     if DRYRUN:
+                        # SIMULAÇÃO NÃO DEIXA RASTRO NO DROPBOX. Daqui não sai
+                        # move, rename nem ensure_folder — nem a pasta de
+                        # quarentena é criada. E NADA em logs_sistema: auditoria
+                        # registra o que ACONTECEU, não o que aconteceria.
+                        #
+                        # O que se faz é só decidir e ANOTAR a decisão, para o
+                        # placar responder "quantos seriam substituídos" ANTES
+                        # de qualquer arquivo se mexer.
                         n['SIMULADO'] += 1
-                        _log(rodada, origem, destino, 'SIMULADO',
+                        if existente:
+                            alvo_sim, b_atual = existente
+                            q_novo, q_atual = qualidade(dados), qualidade(b_atual)
+                            if q_novo > q_atual:
+                                sim['substituiria'] += 1
+                                motivo_sim = ('simulado: substituiria — criterio '
+                                              + rotulo_criterio(q_novo, q_atual))
+                            elif (hashlib.sha256(dados).hexdigest()
+                                  == hashlib.sha256(b_atual).hexdigest()):
+                                sim['substituiria'] += 1
+                                motivo_sim = 'simulado: substituiria — copia identica'
+                            else:
+                                sim['descartaria'] += 1
+                                motivo_sim = ('simulado: descartaria — '
+                                              'ja ha copia melhor')
+                            destino_sim = alvo_sim
+                        else:
+                            sim['novos'] += 1
+                            motivo_sim = ('simulado: arquivaria novo — '
+                                          + info['motivo'])
+                            destino_sim = destino
+                        _log(rodada, origem, destino_sim, 'SIMULADO',
                              tipo_doc=info['tipo_doc'],
                              empresa_numero=info['empresa_numero'],
-                             motivo=info['motivo'])
+                             motivo=motivo_sim)
                         vistos.add(destino.lower())
+                        idents_vistos.add(ident)
+                        continue
+
+                    # ------------------------------------------------------
+                    # CAMINHO NOVO: já existe o mesmo documento. Fica UM.
+                    # ------------------------------------------------------
+                    if existente:
+                        alvo, b_atual = existente
+                        q_novo, q_atual = qualidade(dados), qualidade(b_atual)
+                        sha_novo = hashlib.sha256(dados).hexdigest()
+                        sha_atual = hashlib.sha256(b_atual).hexdigest()
+
+                        if q_novo > q_atual:
+                            # O novo é melhor: sobrescreve NO CAMINHO DO QUE JÁ
+                            # ESTÁ (não no nome novo) — senão sobrariam dois.
+                            if not svc.move_file(origem, alvo):
+                                n['ERRO'] += 1
+                                _log(rodada, origem, alvo, 'ERRO',
+                                     motivo='move_file retornou False na substituicao')
+                                continue
+                            criterio = rotulo_criterio(q_novo, q_atual)
+                            n['SUBSTITUIDO'] += 1
+                            n_imp[imp] = n_imp.get(imp, 0) + 1
+                            vistos.add(alvo.lower())
+                            idents_vistos.add(ident)
+                            _auditar_substituicao(chave, criterio, b_atual, dados,
+                                                  sha_atual, sha_novo,
+                                                  info['empresa_numero'])
+                            _log(rodada, origem, alvo, 'SUBSTITUIDO',
+                                 tipo_doc=info['tipo_doc'],
+                                 empresa_numero=info['empresa_numero'],
+                                 motivo=f'SUBSTITUIDO conteudo diferente '
+                                        f'({criterio}) [import={imp}]')
+                            continue
+
+                        if sha_novo == sha_atual:
+                            # Byte-idênticos: sobrescrever é inócuo e esvazia a
+                            # _ENTRADA sem apagar nada. Nada mudou de fato →
+                            # sem auditoria.
+                            if not svc.move_file(origem, alvo):
+                                n['ERRO'] += 1
+                                _log(rodada, origem, alvo, 'ERRO',
+                                     motivo='move_file retornou False na copia identica')
+                                continue
+                            n['SUBSTITUIDO'] += 1
+                            n_imp[imp] = n_imp.get(imp, 0) + 1
+                            vistos.add(alvo.lower())
+                            idents_vistos.add(ident)
+                            _log(rodada, origem, alvo, 'SUBSTITUIDO',
+                                 tipo_doc=info['tipo_doc'],
+                                 empresa_numero=info['empresa_numero'],
+                                 motivo=f'copia identica [import={imp}]')
+                            continue
+
+                        # O que já está é melhor (ou empata sem ser idêntico):
+                        # fica ele. O novo tem de sair da _ENTRADA, mas NÃO se
+                        # apaga nada — o dropbox_sync nem tem delete. Vai para
+                        # _DESCARTADOS, de onde dá para conferir e recuperar.
+                        quarentena_dir = svc._build_path(
+                            '_DESCARTADOS', info['ano'], info['mes'])
+                        svc.ensure_folder(quarentena_dir)
+                        alvo_q = f'{quarentena_dir}/{nome}'
+                        if svc._path_exists(alvo_q):
+                            n['CONFLITO'] += 1
+                            _log(rodada, origem, alvo_q, 'CONFLITO',
+                                 tipo_doc=info['tipo_doc'],
+                                 empresa_numero=info['empresa_numero'],
+                                 motivo='quarentena ja ocupada — ficou na origem')
+                            continue
+                        if not svc.move_file(origem, alvo_q):
+                            n['ERRO'] += 1
+                            _log(rodada, origem, alvo_q, 'ERRO',
+                                 motivo='move_file retornou False na quarentena')
+                            continue
+                        n['DESCARTADO'] += 1
+                        n_imp[imp] = n_imp.get(imp, 0) + 1
+                        idents_vistos.add(ident)
+                        _log(rodada, origem, alvo_q, 'DESCARTADO',
+                             tipo_doc=info['tipo_doc'],
+                             empresa_numero=info['empresa_numero'],
+                             motivo=f'ja havia copia melhor/igual no destino '
+                                    f'[import={imp}]')
                         continue
 
                     svc.ensure_folder(destino_dir)
@@ -507,6 +949,12 @@ def rodar():
                         n['MOVIDO'] += 1
                         n_imp[imp] = n_imp.get(imp, 0) + 1
                         vistos.add(destino.lower())
+                        idents_vistos.add(ident)
+                        # O índice da rodada tem de aprender o que acabou de
+                        # entrar — senão dois arquivos do MESMO documento no
+                        # mesmo lote seriam ambos arquivados.
+                        idx_cache.get(destino_dir, {}).setdefault(
+                            chave, []).append(destino)
                         _log(rodada, origem, destino, 'MOVIDO',
                              tipo_doc=info['tipo_doc'],
                              empresa_numero=info['empresa_numero'],
@@ -523,12 +971,22 @@ def rodar():
                 continue
             break        # respeita teto/prazo saindo das duas pastas
 
-        logger.warning('[roteador] rodada %s: %d avaliados | movidos=%d simulados=%d '
+        logger.warning('[roteador] rodada %s: %d avaliados | movidos=%d '
+                       'substituidos=%d descartados=%d simulados=%d '
                        'conflitos=%d revisar=%d sem_match=%d erros=%d | '
                        'ignorados_nao_xml=%d | lancamento=%s',
-                       rodada, total, n['MOVIDO'], n['SIMULADO'], n['CONFLITO'],
+                       rodada, total, n['MOVIDO'], n['SUBSTITUIDO'],
+                       n['DESCARTADO'], n['SIMULADO'], n['CONFLITO'],
                        n['REVISAR'], n['SEM_MATCH'], n['ERRO'], n['IGNORADO'],
                        dict(sorted(n_imp.items())) or '{}')
+        if DRYRUN:
+            # A linha que responde "o que aconteceria" sem nada ter acontecido.
+            logger.warning('[roteador] rodada %s SIMULADA: simulados=%d '
+                           '(substituiria=%d, descartaria=%d, conflitos=%d, '
+                           'revisar=%d, novos=%d)',
+                           rodada, n['SIMULADO'], sim['substituiria'],
+                           sim['descartaria'], n['CONFLITO'], n['REVISAR'],
+                           sim['novos'])
     finally:
         try:
             cur.execute("SELECT RELEASE_LOCK('roteador')")
