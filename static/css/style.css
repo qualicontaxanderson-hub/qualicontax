@@ -1382,6 +1382,71 @@ tr:hover { background-color: #fafafa; }
     cursor: pointer;
 }
 
+/* ==========================================================================
+   FICHA — cartão de "coisa com estado", em grade fluida
+   ==========================================================================
+   Pelo critério da casa, o que é coisa com estado (usuário, perfil de acesso)
+   vira CARTÃO; o que é registro para percorrer e comparar continua tabela.
+   Este é o cartão, compartilhado: nasceu na lista de Usuários e foi extraído
+   para cá quando Perfis de Acesso virou o segundo dono — antes que a terceira
+   tela virasse a terceira cópia do mesmo CSS.
+
+   A grade é fluida (auto-fill + minmax): o número de colunas sai da largura
+   disponível, então NÃO há media query trocando de forma. Desktop e celular
+   usam a mesma peça — muda só quantas cabem por linha.
+   ========================================================================== */
+.ficha-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+    margin-bottom: 4px;
+}
+.ficha {
+    background: #fff;
+    border: 1px solid #e3ece7;
+    border-radius: 14px;
+    padding: 16px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+}
+.ficha-top { display: flex; align-items: center; gap: 12px; }
+.ficha-ini {
+    width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%;
+    background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 17px;
+}
+.ficha-id { display: flex; flex-direction: column; min-width: 0; }
+.ficha-nome { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.ficha-sub { font-size: 12px; color: #64748b; background: none; padding: 0; }
+.ficha-selos { display: flex; flex-wrap: wrap; gap: 6px; }
+/* <code> dentro de selo herdaria fundo e padding do <code> global e ficaria
+   com uma caixa dentro da outra. */
+.ficha-selos .badge code { background: none; padding: 0; font-size: inherit; color: inherit; }
+
+/* Rótulo e valor em duas colunas: o valor alinha e o olho desce em coluna. */
+.ficha-dados { display: grid; grid-template-columns: 62px 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
+.ficha-dados dt {
+    font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
+    color: #7d968a; line-height: 1.6;
+}
+.ficha-dados dd { margin: 0; color: var(--text-primary); word-break: break-word; }
+
+/* Ações no pé, separadas por um fio.
+   `flex: 1 1 auto` + `nowrap` em vez de meia largura fixa: com 50% travado, um
+   rótulo longo quebrava em duas linhas e o botão ficava com o dobro da altura
+   dos vizinhos. Assim os curtos dividem a linha e o longo toma a linha inteira,
+   sem nunca picotar palavra. */
+.ficha-acoes {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding-top: 10px; border-top: 1px dashed #eef2f0; margin-top: auto;
+}
+.ficha-acoes .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+.ficha-acoes form { display: contents; }   /* o <form> não vira item do flex */
+.ficha-vazio { color: #64748b; padding: 18px 2px; }
+
 /* Link "voltar" das telas internas (Usuários, Perfis e os dois formulários de
    Configurações). Estava SEM CSS NENHUM: saía como âncora crua do navegador —
    roxa, sublinhada, destoando de tudo em volta. Vira um chip discreto, que é

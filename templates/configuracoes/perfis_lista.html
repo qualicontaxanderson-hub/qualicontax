@@ -14,54 +14,61 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body p-0">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Nome</th>
-                    <th>Descrição</th>
-                    <th>Permissões</th>
-                    <th>Usuários</th>
-                    <th>Status</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in perfis %}
-                <tr>
-                    <td><strong>{{ p.nome }}</strong></td>
-                    <td>{{ p.descricao or '—' }}</td>
-                    <td><span class="badge badge-info">{{ p.qtd_permissoes }}</span></td>
-                    <td><span class="badge badge-secondary">{{ p.qtd_usuarios }}</span></td>
-                    <td>
-                        <span class="status-badge status-{{ 'ativo' if p.situacao == 'ATIVO' else 'inativo' }}">
-                            {{ p.situacao }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}"
-                           class="btn btn-sm btn-secondary" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        <form method="POST" action="{{ url_for('configuracoes.perfil_excluir', pid=p.id) }}"
-                              style="display:inline"
-                              onsubmit="return confirm('Excluir o perfil \"{{ p.nome }}\"? Esta ação não pode ser desfeita.')">
-                            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted py-4">
-                        Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar o primeiro perfil</a>.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{# Perfil é "coisa com estado" (ativo/inativo, quantas permissões, quantos
+   usuários o usam) — e pelo critério da casa isso é CARTÃO, não tabela. Eram 6
+   colunas mais ações: no celular metade ficava fora da tela.
+
+   O cartão é o componente compartilhado .ficha-* do style.css, o MESMO da lista
+   de Usuários. Nada de CSS próprio aqui: se a peça mudar, muda nas duas. #}
+<div class="ficha-grid">
+{% for p in perfis %}
+<article class="ficha">
+    <header class="ficha-top">
+        <span class="ficha-ini">{{ (p.nome or '?')[:1]|upper }}</span>
+        <div class="ficha-id">
+            <strong class="ficha-nome">{{ p.nome }}</strong>
+            <span class="ficha-sub">{{ p.descricao or 'sem descrição' }}</span>
+        </div>
+    </header>
+
+    <div class="ficha-selos">
+        <span class="status-badge status-{{ 'ativo' if p.situacao == 'ATIVO' else 'inativo' }}">
+            {{ p.situacao }}
+        </span>
+        <span class="badge badge-info" title="Permissões neste perfil">
+            <i class="fas fa-key"></i> {{ p.qtd_permissoes }} permiss{{ 'ão' if p.qtd_permissoes == 1 else 'ões' }}
+        </span>
+        {# Quantos usuários dependem deste perfil. Vale como AVISO: é o número
+           que diz o tamanho do estrago de uma exclusão. #}
+        <span class="badge badge-{{ 'warning' if p.qtd_usuarios else 'secondary' }}"
+              title="Usuários que usam este perfil">
+            <i class="fas fa-users"></i>
+            {% if p.qtd_usuarios %}
+                {{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }}
+            {% else %}
+                sem usuários
+            {% endif %}
+        </span>
     </div>
+
+    <footer class="ficha-acoes">
+        <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}"
+           class="btn btn-sm btn-secondary" title="Editar perfil e permissões">
+            <i class="fas fa-edit"></i> Editar
+        </a>
+        <form method="POST" action="{{ url_for('configuracoes.perfil_excluir', pid=p.id) }}"
+              onsubmit="return confirm('Excluir o perfil &quot;{{ p.nome }}&quot;?{% if p.qtd_usuarios %} {{ p.qtd_usuarios }} usuário(s) usam este perfil e perderão as permissões dele.{% endif %} Esta ação não pode ser desfeita.')">
+            <button type="submit" class="btn btn-sm btn-danger" title="Excluir perfil">
+                <i class="fas fa-trash"></i> Excluir
+            </button>
+        </form>
+    </footer>
+</article>
+{% else %}
+<p class="ficha-vazio">
+    Nenhum perfil cadastrado.
+    <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar o primeiro perfil</a>.
+</p>
+{% endfor %}
 </div>
 {% endblock %}

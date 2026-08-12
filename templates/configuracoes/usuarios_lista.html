@@ -84,21 +84,21 @@
    casa isso é CARTÃO — não tabela. Aqui vale no desktop também, então a
    marcação é de cartão de verdade, e não uma tabela disfarçada de grade por
    media query. Uma forma só, um CSS só. #}
-<div class="usr-grid">
+<div class="ficha-grid">
 {% for u in usuarios %}
 {# Q-Colabore F2: o estado da chave (prefixo/versão/ativo/corte) é lido tanto
    pelos selos quanto pelos data-* do botão, então o `set` vem antes dos dois. #}
 {% set cc = colabore_por_usuario.get(u.id) %}
-<article class="usr-card">
-    <header class="usr-top">
-        <span class="usr-ini">{{ (u.nome or '?')[:1]|upper }}</span>
-        <div class="usr-id">
-            <strong class="usr-nome">{{ u.nome }}</strong>
-            <code class="usr-login">{{ u.login or '—' }}</code>
+<article class="ficha">
+    <header class="ficha-top">
+        <span class="ficha-ini">{{ (u.nome or '?')[:1]|upper }}</span>
+        <div class="ficha-id">
+            <strong class="ficha-nome">{{ u.nome }}</strong>
+            <code class="ficha-sub">{{ u.login or '—' }}</code>
         </div>
     </header>
 
-    <div class="usr-selos">
+    <div class="ficha-selos">
         <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
             {{ u.tipo_usuario }}
         </span>
@@ -126,14 +126,14 @@
         {% endif %}
     </div>
 
-    <dl class="usr-dados">
+    <dl class="ficha-dados">
         <dt>E-mail</dt>
         <dd>{{ u.email }}</dd>
         <dt>Perfis</dt>
         <dd>{% if u.perfis %}{{ u.perfis }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
     </dl>
 
-    <footer class="usr-acoes">
+    <footer class="ficha-acoes">
         <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
            class="btn btn-sm btn-secondary" title="Editar">
             <i class="fas fa-edit"></i>
@@ -178,7 +178,7 @@
     </footer>
 </article>
 {% else %}
-<p class="usr-vazio">Nenhum usuário cadastrado.</p>
+<p class="ficha-vazio">Nenhum usuário cadastrado.</p>
 {% endfor %}
 </div>
 
@@ -524,64 +524,9 @@
 </div>
 
 <style>
-/* ── USUÁRIOS EM CARTÃO — desktop e celular, uma forma só ─────────────────
-   Pelo critério da casa, usuário é "coisa com estado" (ativo / sem senha /
-   perfil), e coisa com estado vira CARTÃO. Antes era tabela de 7 colunas com
-   cinco botões na última: a coluna Ações sozinha comia metade da largura no
-   desktop e no celular jogava e-mail, tipo e status para fora da tela.
-
-   O cartão é a mesma peça nas duas larguras — só muda quantos cabem por
-   linha. Por isso NÃO há media query trocando de forma aqui: é grade fluida,
-   e o número de colunas sai do minmax. */
-.usr-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 14px;
-    margin-bottom: 4px;
-}
-.usr-card {
-    background: #fff; border: 1px solid #e3ece7; border-radius: 14px;
-    padding: 16px 16px 12px;
-    display: flex; flex-direction: column; gap: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
-}
-.usr-top { display: flex; align-items: center; gap: 12px; }
-.usr-ini {
-    width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%;
-    background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 17px;
-}
-.usr-id { display: flex; flex-direction: column; min-width: 0; }
-.usr-nome { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
-.usr-login { font-size: 12px; color: #64748b; background: none; padding: 0; }
-.usr-selos { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* Rótulo e valor em duas colunas: o valor alinha e o olho desce em coluna. */
-.usr-dados { display: grid; grid-template-columns: 62px 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
-.usr-dados dt {
-    font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
-    color: #7d968a; line-height: 1.6;
-}
-.usr-dados dd { margin: 0; color: var(--text-primary); word-break: break-word; }
-
-/* Ações no pé, separadas por um fio.
-   `flex: 1 1 auto` + `nowrap` em vez de meia largura fixa: com 50% travado, um
-   rótulo longo como "Novo link de senha" quebrava em duas linhas e o botão
-   ficava com o dobro da altura dos vizinhos. Assim os curtos dividem a linha e
-   o longo toma a linha inteira — sem nunca picotar a palavra. */
-.usr-acoes {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    padding-top: 10px; border-top: 1px dashed #eef2f0; margin-top: auto;
-}
-.usr-acoes .btn {
-    flex: 1 1 auto; justify-content: center; white-space: nowrap;
-}
-.usr-vazio { color: #64748b; padding: 18px 2px; }
-
-/* Selo da chave do Q-Colabore: o <code> dentro do badge herda fundo e padding
-   do estilo global de <code> e ficaria com uma caixa dentro da outra. */
-.usr-selos .badge code { background: none; padding: 0; font-size: inherit; color: inherit; }
+/* O cartão de "coisa com estado" (.ficha-*) mora no style.css: nasceu aqui e
+   foi extraído quando Perfis de Acesso virou o segundo dono. Esta tela só o
+   usa — nada de CSS de cartão duplicado por aqui. */
 
 /* Faixa do instalador, na PÁGINA (não no modal): o programa é um só do sistema,
    e quem precisa dele tem de achá-lo sem abrir a ficha de ninguém. */
