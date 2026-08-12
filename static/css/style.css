@@ -1451,8 +1451,28 @@ tr:hover { background-color: #fafafa; }
         padding: 14px 18px;
     }
     .nav-rail .rail-link i { font-size: 20px; width: 26px; text-align: center; }
-    .nav-rail .rail-link span { font-size: 15px; font-weight: 600; }
+
+    /* A COR FICA NO ÍCONE, O TEXTO FICA NEUTRO.
+       As dez cores por departamento definem `color:` no link, e isso pinta o
+       ícone E o rótulo. No desktop o rótulo tem 10px espremido em 80px e a cor
+       é um detalhe. Na gaveta ele tem 15px: as dez cores saturadas passam a
+       competir entre si e a lista vira arco-íris — cansa de ler e não ajuda a
+       achar nada. O ícone sozinho já identifica o departamento de relance.
+       Só o item ATIVO se pinta, que é a informação que importa: onde estou. */
+    .nav-rail .rail-link span {
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--text-primary);
+        letter-spacing: 0;
+    }
+    .nav-rail .rail-link.active span { color: inherit; font-weight: 600; }
+
     .nav-rail .rail-logo { justify-content: flex-start; padding-left: 18px; }
+
+    /* Barra de gestos do iPhone: sem isto o "Sair" encosta nela. */
+    .nav-rail .rail-bottom {
+        padding-bottom: max(4px, env(safe-area-inset-bottom));
+    }
 
     /* Véu: escurece o conteúdo e captura o toque para fechar. Fica FORA da
        gaveta no DOM, então não atrapalha a rolagem dela. */
