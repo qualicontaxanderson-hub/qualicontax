@@ -63,8 +63,14 @@ OCIOSO_SEGUNDOS = 2 * 60 * 60          # 2 horas
 #   'static'      -> css/js/imagem do próprio portal
 #   'health'      -> health check do Railway (não tem sessão, mas é inofensivo)
 #   'auth.logout' -> saída de emergência, nunca deixa o usuário preso
+#   'manuais.qrobo' -> o manual do próprio produto que ele está instalando.
+#       O portal linka para ele, e sem esta linha o instalador batia em "Fora do
+#       escopo desta sessão" ao clicar no próprio botão da tela. É página
+#       PÚBLICA e sem dado fiscal — mas entra pelo nome EXATO, e não como
+#       prefixo 'manuais.', para o deny-by-default continuar valendo para
+#       qualquer manual que apareça depois.
 ENDPOINTS_LIBERADOS = ('qrobo.',)
-ENDPOINTS_LIBERADOS_EXATOS = ('static', 'health', 'auth.logout')
+ENDPOINTS_LIBERADOS_EXATOS = ('static', 'health', 'auth.logout', 'manuais.qrobo')
 
 
 # ---------------------------------------------------------------------------
