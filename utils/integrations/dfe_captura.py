@@ -51,6 +51,19 @@ _TZ_BR = timezone(timedelta(hours=-3))
 
 TP_CANCELAMENTO = "110111"  # tpEvento de cancelamento de NF-e
 
+# cStat da RESPOSTA da SEFAZ que significam "cancelamento ACEITO". Só com um
+# destes a nota pode ser marcada — um pedido REJEITADO (573 duplicidade, 594
+# fora do prazo, ...) deixa a nota ATIVA na SEFAZ, e marcá-la aqui produz uma
+# divergência que só aparece na fiscalização.
+#
+# O 155 está na lista de propósito: é "cancelamento homologado FORA DE PRAZO" —
+# aceito, apenas registrado como atrasado. Medido em 13/08/2026 sobre os 110
+# eventos já recebidos: 99 vieram 135 e 11 vieram 155. Cortar o 155 (como o lado
+# CT-e faz, que só conhece 135/136) descancelaria 11 notas legitimamente
+# canceladas — o erro oposto, e pior, porque faz apurar imposto de nota que não
+# existe mais.
+CSTAT_CANCELAMENTO_OK = {"135", "136", "155"}
+
 # Scheduler (Fase 3): lock global + prazo suave por rodada.
 _LOCK_CAPTURA = 'dfe_captura'
 _PRAZO_SUAVE_SEG = int(os.getenv('DFE_SCHED_PRAZO_SEG', '960'))  # ~16 min
@@ -369,6 +382,15 @@ def extrair_evento(root):
     if descricao:
         descricao = descricao[:160]
 
+    # cStat da RESPOSTA da SEFAZ — quem decide se o cancelamento vale.
+    #
+    # CUIDADO: um procEventoNFe tem DOIS infEvento, o do PEDIDO e o da RESPOSTA,
+    # e o _find devolve o PRIMEIRO. Procurar cStat na raiz pega o bloco errado
+    # (o pedido, que não tem cStat) e o valor viria vazio — o que, na guarda,
+    # faria parar de cancelar TUDO. Por isso desce-se no retEvento antes.
+    ret = _find(root, "retEvento")
+    c_stat = _text(ret, "cStat") if ret is not None else None
+
     if not chave_evento:
         if tp_evento and ch_nfe and n_seq is not None:
             chave_evento = f"ID{tp_evento}{ch_nfe}{str(n_seq).zfill(2)}"
@@ -378,7 +400,7 @@ def extrair_evento(root):
     return {
         "chave_evento": chave_evento[:60], "ch_nfe": ch_nfe, "tp_evento": tp_evento,
         "n_seq": n_seq, "org_cnpj": org_cnpj, "descricao": descricao,
-        "dh_txt": dh_txt, "ano": ano, "mes": mes,
+        "dh_txt": dh_txt, "ano": ano, "mes": mes, "c_stat": c_stat,
     }
 
 
@@ -651,7 +673,18 @@ def gravar_evento(conn, cur, empresa, ev, xml_bytes):
                        ev["chave_evento"])
 
     if ev["tp_evento"] == TP_CANCELAMENTO and ev["ch_nfe"]:
-        cur.execute(SQL_CANCELA_NOTA, (ev["ch_nfe"],))
+        # GUARDA DE STATUS: só cancela se a SEFAZ tiver ACEITADO o pedido. O
+        # evento fica registrado em dfe_eventos de qualquer jeito — o histórico
+        # é de TODOS os eventos, inclusive dos recusados; o que a guarda decide
+        # é apenas se a nota muda de estado.
+        if ev.get("c_stat") in CSTAT_CANCELAMENTO_OK:
+            cur.execute(SQL_CANCELA_NOTA, (ev["ch_nfe"],))
+        else:
+            logger.warning(
+                "[dfe] cancelamento da nota %s NAO aceito pela SEFAZ "
+                "(cStat=%s) — nota segue ATIVA. Evento %s registrado no "
+                "historico.", ev["ch_nfe"], ev.get("c_stat") or "?",
+                ev["chave_evento"])
     conn.commit()
 
 

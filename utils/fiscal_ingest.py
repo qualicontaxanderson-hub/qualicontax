@@ -272,7 +272,8 @@ def importar_evento(nome: str, content: str, chave_nota: str = None) -> tuple:
     nota marcada, ou nada entra.
     """
     from utils.integrations.dfe_captura import (
-        SQL_CANCELA_NOTA, SQL_EVENTO_UPSERT, TP_CANCELAMENTO, extrair_evento)
+        CSTAT_CANCELAMENTO_OK, SQL_CANCELA_NOTA, SQL_EVENTO_UPSERT,
+        TP_CANCELAMENTO, extrair_evento)
 
     root = _parse(content)
     if root is None:
@@ -295,6 +296,17 @@ def importar_evento(nome: str, content: str, chave_nota: str = None) -> tuple:
         return 'erro', (f'{nome}: a nota {ch[:12]}… do evento não está no sistema '
                         '— importe a nota antes')
 
+    # GUARDA DE STATUS — mesma regra do lado da captura (gravar_evento), lida da
+    # MESMA constante. Um cancelamento REJEITADO pela SEFAZ (573 duplicidade,
+    # 594 fora do prazo, ...) deixa a nota ATIVA lá; marcá-la aqui só produz
+    # divergência. O evento continua sendo REGISTRADO no histórico dos dois
+    # jeitos — a guarda decide apenas se a nota muda de estado.
+    #
+    # c_stat vazio significa XML só com o PEDIDO, sem o retEvento da resposta:
+    # não dá para afirmar que a SEFAZ aceitou, então não se marca.
+    cancela = (ev['tp_evento'] == TP_CANCELAMENTO
+               and ev.get('c_stat') in CSTAT_CANCELAMENTO_OK)
+
     cancelou = 0
     try:
         with transacao() as cur:
@@ -303,16 +315,26 @@ def importar_evento(nome: str, content: str, chave_nota: str = None) -> tuple:
                 ev['n_seq'], ev['descricao'], ev['dh_txt'], None, None,
                 ev['org_cnpj'], None, content[:_MAX_XML_EVENTO],
             ))
-            if ev['tp_evento'] == TP_CANCELAMENTO:
+            if cancela:
                 cur.execute(SQL_CANCELA_NOTA, (ch,))
                 cancelou = int(cur.rowcount or 0)
     except Exception as exc:
         return 'erro', f'{nome}: falha ao gravar evento — {exc}'
 
-    if ev['tp_evento'] == TP_CANCELAMENTO:
-        logger.info('[fiscal_ingest] evento 110111 %s: %d linha(s) da nota %s '
-                    'marcadas como canceladas.', ev['chave_evento'], cancelou, ch)
+    if cancela:
+        logger.info('[fiscal_ingest] evento 110111 %s (cStat=%s): %d linha(s) da '
+                    'nota %s marcadas como canceladas.', ev['chave_evento'],
+                    ev.get('c_stat'), cancelou, ch)
         return 'ok', f"cancelamento aplicado ({cancelou} linha(s))"
+
+    if ev['tp_evento'] == TP_CANCELAMENTO:
+        logger.warning('[fiscal_ingest] cancelamento da nota %s NAO aceito pela '
+                       'SEFAZ (cStat=%s) — nota segue ATIVA. Evento %s registrado '
+                       'no historico.', ch, ev.get('c_stat') or '?',
+                       ev['chave_evento'])
+        return 'ok', (f"evento 110111 registrado, mas NAO aceito pela SEFAZ "
+                      f"(cStat={ev.get('c_stat') or '?'}) — nota segue ativa")
+
     return 'ok', f"evento {ev['tp_evento']} registrado"
 
 
