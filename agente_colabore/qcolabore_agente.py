@@ -22,8 +22,10 @@ registro do Windows, ou log. O início automático guarda no registro apenas o
 CAMINHO do executável (HKCU\\...\\Run), jamais a chave.
 """
 import datetime as _dt
+import hashlib
 import json
 import logging
+import re
 import os
 import shutil
 import socket
@@ -39,7 +41,7 @@ try:
 except ImportError:                  # noqa: em outra plataforma o autostart vira no-op
     winreg = None
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # Assets embutidos no executável (Nuitka --include-data-file) — ver gerar_assets.py.
 # Em produção ficam ao lado do .exe; em desenvolvimento, ao lado deste .py.
@@ -67,9 +69,22 @@ BASE_DIR = os.environ.get("QCOLABORE_HOME") or r"C:\qcolabore"
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 LOG_PATH = os.path.join(BASE_DIR, "qcolabore.log")
 
-SUBPASTA_OK = "Enviados"          # 200/409 -> arquivo entregue
-SUBPASTA_ERRO = "Nao enviados"    # 413/415 -> não adianta repetir
+# O agente NÃO MOVE MAIS NADA. O arquivo do funcionário fica exatamente onde
+# ele salvou — a memória do que já foi enviado é o CADERNINHO (ver Registro).
+#
+# Estas duas continuam declaradas por um motivo: as instalações antigas moviam
+# para cá, e agora que a varredura entra em subpastas o agente ENCONTRARIA tudo
+# que já foi entregue e mandaria de novo. Elas são pulada na varredura.
+SUBPASTA_OK = "Enviados"          # legado: só para IGNORAR na varredura
+SUBPASTA_ERRO = "Nao enviados"    # cópia dos recusados (o original não sai do lugar)
 SUBPASTAS = (SUBPASTA_OK, SUBPASTA_ERRO)
+SUBPASTAS_IGNORADAS = {s.lower() for s in SUBPASTAS}
+
+REGISTRO_PATH = os.path.join(BASE_DIR, "enviados.json")
+# Teto do caderninho. Cada entrada tem ~140 bytes; 200 mil dá ~28 MB e cobre
+# anos de uso. Passando disso, as mais antigas saem — e o pior que acontece é
+# reenviar um arquivo velho, que o servidor devolve como duplicado.
+REGISTRO_MAX = 200_000
 
 INTERVALO_PADRAO = 60             # segundos entre varreduras (também é o heartbeat)
 MARGEM_ESTABILIDADE = 5           # segundos: ignora arquivo mexido agora (meio-cópia)
@@ -230,6 +245,125 @@ class Estado:
 # ===========================================================================
 # Utilidades de arquivo — mover SEM apagar, sem sobrescrever
 # ===========================================================================
+# ===========================================================================
+# CADERNINHO — o que já foi enviado
+#
+# Antes, a memória do agente era o MOVER: se o arquivo não estava mais na
+# pasta, é porque tinha sido entregue. Isso obrigava a mexer no material do
+# funcionário — e ele reclamava, com razão, que "o sistema sumiu com o
+# arquivo". Agora nada se move e a memória mora aqui.
+#
+# A identidade é o SHA-256 do CONTEÚDO, não o caminho. Assim:
+#   * renomear não faz reenviar;
+#   * mover de subpasta não faz reenviar;
+#   * copiar para outra pasta não faz reenviar;
+#   * ALTERAR o arquivo faz reenviar — que é o certo, é outro documento.
+#
+# Hashear tudo a cada minuto seria caro numa pasta com 100 subpastas, então há
+# um atalho: o trio (caminho, tamanho, mtime). Bateu, pula sem abrir o arquivo.
+# Só quando o trio muda é que se lê o conteúdo para tirar o hash.
+# ===========================================================================
+class Registro:
+    """Caderninho em JSON, na pasta do programa (não na do funcionário)."""
+
+    def __init__(self, caminho=REGISTRO_PATH):
+        self.caminho = caminho
+        self.hashes = {}        # sha256 -> {"quando": iso, "estado": ok|recusado, "motivo": str}
+        self.rapido = {}        # "caminho|tamanho|mtime" -> sha256
+        self._lock = threading.Lock()
+        self.carregar()
+
+    # -- persistência ------------------------------------------------------
+    def carregar(self):
+        try:
+            with open(self.caminho, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            self.hashes = d.get("hashes") or {}
+            self.rapido = d.get("rapido") or {}
+        except (OSError, ValueError):
+            self.hashes, self.rapido = {}, {}
+
+    def salvar(self):
+        """Grava de forma atômica: escreve num .tmp e renomeia. Uma queda de
+        energia no meio não deixa o caderninho pela metade — na pior hipótese
+        ele fica com o conteúdo anterior."""
+        try:
+            os.makedirs(os.path.dirname(self.caminho), exist_ok=True)
+            tmp = self.caminho + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"hashes": self.hashes, "rapido": self.rapido}, f)
+            os.replace(tmp, self.caminho)
+        except OSError as exc:
+            log.warning("Nao consegui gravar o registro: %s", exc)
+
+    # -- consulta ----------------------------------------------------------
+    @staticmethod
+    def _chave_rapida(caminho, st):
+        return "%s|%d|%d" % (os.path.normcase(caminho), st.st_size, int(st.st_mtime))
+
+    @staticmethod
+    def hash_do_arquivo(caminho):
+        """SHA-256 lendo em blocos — não carrega um .zip de 200 MB na memória."""
+        h = hashlib.sha256()
+        with open(caminho, "rb") as f:
+            for bloco in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(bloco)
+        return h.hexdigest()
+
+    def ja_tratado(self, caminho, st):
+        """(True, motivo) se este arquivo já foi enviado ou já foi recusado.
+
+        Devolve também o hash, para quem for enviar não precisar ler de novo.
+        """
+        with self._lock:
+            ch = self._chave_rapida(caminho, st)
+            sha = self.rapido.get(ch)
+            if sha and sha in self.hashes:
+                return True, self.hashes[sha], sha
+        try:
+            sha = self.hash_do_arquivo(caminho)
+        except OSError:
+            return False, None, None
+        with self._lock:
+            reg = self.hashes.get(sha)
+            if reg:
+                # Mesmo conteúdo em caminho novo (renomeado/copiado/movido pelo
+                # funcionário): aprende o atalho e NÃO reenvia.
+                self.rapido[self._chave_rapida(caminho, st)] = sha
+                return True, reg, sha
+        return False, None, sha
+
+    # -- escrita -----------------------------------------------------------
+    def anotar(self, caminho, st, sha, estado, motivo=None):
+        with self._lock:
+            self.hashes[sha] = {"quando": _dt.datetime.now().isoformat(timespec="seconds"),
+                                "estado": estado, "motivo": motivo,
+                                "nome": os.path.basename(caminho)}
+            self.rapido[self._chave_rapida(caminho, st)] = sha
+            if len(self.hashes) > REGISTRO_MAX:
+                # Poda pelas mais antigas. Reenviar um arquivo velho é
+                # inofensivo (o servidor devolve duplicado); crescer sem limite
+                # não é.
+                mais_velhas = sorted(self.hashes.items(),
+                                     key=lambda kv: kv[1].get("quando") or "")
+                for k, _ in mais_velhas[: len(self.hashes) - REGISTRO_MAX]:
+                    self.hashes.pop(k, None)
+                vivos = set(self.hashes)
+                self.rapido = {k: v for k, v in self.rapido.items() if v in vivos}
+        self.salvar()
+
+    def recusados(self):
+        """Lista dos que o servidor recusou — é o que a janela mostra."""
+        with self._lock:
+            return [dict(v, sha=k) for k, v in self.hashes.items()
+                    if v.get("estado") == "recusado"]
+
+
+# Caracteres que o Windows recusa em nome de arquivo — o nome da cópia é montado
+# a partir do caminho relativo, que pode trazer qualquer coisa.
+_CHARS_PROIBIDOS_ARQ = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+
 def _nome_livre(destino_dir, nome):
     """Nome que não colide em destino_dir; 'x.pdf' -> 'x (1).pdf' ... Nunca
     devolve um nome já ocupado (não sobrescreve nada do usuário)."""
@@ -245,70 +379,83 @@ def _nome_livre(destino_dir, nome):
         i += 1
 
 
-def mover_para(sub, caminho, motivo=None):
-    """Move o arquivo para <pasta_de_origem>/<sub> sem sobrescrever. Se 'motivo'
-    vier (Nao enviados), grava um <nome>.motivo.txt ao lado. Devolve o caminho
-    final, ou None em falha (aí o arquivo fica onde está)."""
+def copiar_para_nao_enviados(raiz_vigiada, caminho, motivo):
+    """COPIA (não move) o recusado para <raiz_vigiada>/Nao enviados/.
+
+    O original NUNCA sai do lugar — é o ponto da mudança inteira. A cópia é só
+    o aviso para quem não abre o programa.
+
+    UMA pasta na raiz da pasta vigiada, e não uma por subpasta: com cem
+    subpastas, uma "Nao enviados" em cada seria caçar aviso em cem lugares.
+
+    O nome da cópia carrega DE ONDE veio ("158 - Auto Posto Fenix — nota.xml"),
+    senão dois arquivos de mesmo nome vindos de subpastas diferentes se
+    atropelariam aqui dentro.
+
+    Devolve o caminho da cópia, ou None (falhar aqui não é motivo para o ciclo
+    parar — o registro já sabe que foi recusado).
+    """
     try:
-        origem_dir = os.path.dirname(caminho)
-        nome = os.path.basename(caminho)
-        destino_dir = os.path.join(origem_dir, sub)
+        destino_dir = os.path.join(raiz_vigiada, SUBPASTA_ERRO)
         os.makedirs(destino_dir, exist_ok=True)
-        nome_final = _nome_livre(destino_dir, nome)
-        destino = os.path.join(destino_dir, nome_final)
-        shutil.move(caminho, destino)
-        if motivo:
-            try:
-                with open(destino + ".motivo.txt", "w", encoding="utf-8") as f:
-                    f.write(f"Arquivo: {nome_final}\r\n")
-                    f.write(f"Motivo: {motivo}\r\n")
-                    f.write(f"Quando: {_dt.datetime.now():%d/%m/%Y %H:%M:%S}\r\n")
-            except OSError:
-                pass
+
+        rel = os.path.relpath(os.path.dirname(caminho), raiz_vigiada)
+        nome = os.path.basename(caminho)
+        if rel and rel != ".":
+            prefixo = rel.replace(os.sep, " - ")
+            nome = "%s — %s" % (prefixo, nome)
+        nome = _CHARS_PROIBIDOS_ARQ.sub("_", nome)[:180]
+
+        destino = os.path.join(destino_dir, _nome_livre(destino_dir, nome))
+        shutil.copy2(caminho, destino)
+        try:
+            with open(destino + ".motivo.txt", "w", encoding="utf-8") as f:
+                f.write(f"Arquivo original: {caminho}\r\n")
+                f.write(f"Motivo: {motivo}\r\n")
+                f.write(f"Quando: {_dt.datetime.now():%d/%m/%Y %H:%M:%S}\r\n")
+                f.write("\r\nEsta e uma COPIA. O arquivo original continua onde voce\r\n"
+                        "salvou e nao foi tocado.\r\n")
+        except OSError:
+            pass
         return destino
     except OSError as exc:
-        log.warning("Falha ao mover '%s' para '%s': %s",
-                    os.path.basename(caminho), sub, exc)
+        log.warning("Falha ao copiar '%s' para '%s': %s",
+                    os.path.basename(caminho), SUBPASTA_ERRO, exc)
         return None
 
 
-def contar_aguardando(pastas):
-    """Quantos arquivos (não .motivo.txt) esperam atenção em 'Nao enviados'."""
-    total = 0
-    for p in pastas:
-        d = os.path.join(p, SUBPASTA_ERRO)
-        try:
-            for n in os.listdir(d):
-                cheio = os.path.join(d, n)
-                if os.path.isfile(cheio) and not n.endswith(".motivo.txt"):
-                    total += 1
-        except OSError:
-            pass
-    return total
+def arquivos_para_olhar(pasta):
+    """TODOS os arquivos da pasta e das SUBPASTAS, em qualquer profundidade.
 
+    Antes só olhava o topo, e por isso a estrutura que o escritório usa de
+    verdade — uma subpasta por empresa dentro da pasta vigiada — era ignorada
+    inteira: o agente não capturava nada.
 
-def arquivos_novos(pasta):
-    """Arquivos no TOPO da pasta (não entra em Enviados/Nao enviados), estáveis
-    (não mexidos nos últimos MARGEM_ESTABILIDADE seg — evita pegar meio-cópia)."""
+    Pula:
+      * 'Enviados' e 'Nao enviados' — a primeira é legado das instalações
+        antigas (reenviaria tudo o que já foi entregue) e a segunda é a nossa
+        própria pasta de cópias (reenviaria o recusado para sempre);
+      * '.motivo.txt' — bilhete nosso, não documento do funcionário;
+      * arquivo mexido nos últimos MARGEM_ESTABILIDADE segundos, que pode
+        estar sendo copiado ainda (pegaria meio arquivo).
+    """
     saida = []
     agora = time.time()
-    try:
-        nomes = os.listdir(pasta)
-    except OSError:
-        return saida
-    for n in nomes:
-        if n.endswith(".motivo.txt"):
-            continue
-        cheio = os.path.join(pasta, n)
-        if not os.path.isfile(cheio):
-            continue                      # ignora subpastas (inclui Enviados/…)
-        try:
-            st = os.stat(cheio)
-        except OSError:
-            continue
-        if agora - st.st_mtime < MARGEM_ESTABILIDADE:
-            continue                      # ainda sendo escrito
-        saida.append((cheio, st.st_mtime))
+    for dirpath, dirnames, filenames in os.walk(pasta):
+        dirnames[:] = [d for d in dirnames if d.lower() not in SUBPASTAS_IGNORADAS]
+        for n in filenames:
+            if n.endswith(".motivo.txt"):
+                continue
+            cheio = os.path.join(dirpath, n)
+            try:
+                st = os.stat(cheio)
+            except OSError:
+                continue
+            if not os.path.isfile(cheio):
+                continue
+            if agora - st.st_mtime < MARGEM_ESTABILIDADE:
+                continue
+            saida.append((cheio, st))
     return saida
 
 
@@ -358,6 +505,9 @@ class Worker(threading.Thread):
         self._acordar = threading.Event()
         self.sessao = requests.Session()
         self._ignorados = {}              # caminho -> mtime já ignorado (não re-loga)
+        # O caderninho substitui o antigo "mover para Enviados": é ele que
+        # lembra o que já foi entregue, agora que nada sai do lugar.
+        self.registro = Registro()
 
     def parar(self):
         self._parar.set()
@@ -460,21 +610,31 @@ class Worker(threading.Thread):
             return "sem_conexao"
 
         self.estado.set_conexao("conectado", "" if ativo else "Chave desligada no servidor.")
-        self.estado.set_aguardando(contar_aguardando(cfg["pastas"]))
+        self.estado.set_aguardando(len(self.registro.recusados()))
 
         for pasta in cfg["pastas"]:
             if self._parar.is_set():
                 return "ok"
-            for caminho, mtime in arquivos_novos(pasta):
+            for caminho, st in arquivos_para_olhar(pasta):
                 if self._parar.is_set():
                     return "ok"
                 nome = os.path.basename(caminho)
                 try:
-                    # Filtro de data de corte — decidido pelo SERVIDOR, aplicado aqui.
-                    if corte and _dt.date.fromtimestamp(mtime) < corte:
-                        if self._ignorados.get(caminho) != mtime:
-                            self._ignorados[caminho] = mtime
+                    # Filtro de data de corte — decidido pelo SERVIDOR, aplicado
+                    # aqui. Vem ANTES do caderninho de propósito: numa pasta com
+                    # anos de histórico, nem vale calcular hash do que é velho
+                    # demais para mandar.
+                    if corte and _dt.date.fromtimestamp(st.st_mtime) < corte:
+                        if self._ignorados.get(caminho) != st.st_mtime:
+                            self._ignorados[caminho] = st.st_mtime
                             log.info("Ignorado (anterior a %s): %s", corte, nome)
+                        continue
+
+                    # Já passou por aqui? O trio caminho+tamanho+data resolve
+                    # sem abrir o arquivo; só quando ele muda é que se lê o
+                    # conteúdo para tirar a impressão digital.
+                    tratado, reg, sha = self.registro.ja_tratado(caminho, st)
+                    if tratado:
                         continue
                     resultado, motivo = self._enviar(cfg, caminho)
                 except ChaveInvalida:
@@ -490,21 +650,33 @@ class Worker(threading.Thread):
                     log.exception("Erro ao processar '%s' (seguindo para o proximo): %s",
                                   nome, exc)
                     continue
-                self._aplicar_resultado(caminho, resultado, motivo)
+                self._aplicar_resultado(pasta, caminho, st, sha, resultado, motivo)
 
-        self.estado.set_aguardando(contar_aguardando(cfg["pastas"]))
+        self.estado.set_aguardando(len(self.registro.recusados()))
         return "ok"
 
-    def _aplicar_resultado(self, caminho, resultado, motivo):
+    def _aplicar_resultado(self, raiz_vigiada, caminho, st, sha, resultado, motivo):
+        """O que fazer depois do POST. NADA é movido — o arquivo do funcionário
+        fica onde ele salvou. O que muda é só o caderninho."""
         nome = os.path.basename(caminho)
         if resultado == "ok":
-            if mover_para(SUBPASTA_OK, caminho):
-                self.estado.marcar_enviado(nome)
-                log.info("Enviado e movido para %s: %s", SUBPASTA_OK, nome)
+            self.registro.anotar(caminho, st, sha, "ok")
+            self.estado.marcar_enviado(nome)
+            log.info("Enviado: %s", caminho)
+
         elif resultado == "rejeitado":
-            mover_para(SUBPASTA_ERRO, caminho, motivo=motivo)
-            log.warning("Recusado (%s) e movido para %s: %s", motivo, SUBPASTA_ERRO, nome)
-        else:  # retry — não move, tenta depois
+            # Recusa definitiva (extensão fora da lista, arquivo grande demais):
+            # anota para não tentar de novo e deixa uma CÓPIA de aviso. O
+            # original continua onde está.
+            self.registro.anotar(caminho, st, sha, "recusado", motivo)
+            copiar_para_nao_enviados(raiz_vigiada, caminho, motivo)
+            log.warning("Recusado (%s): %s — copia em '%s' (original intacto)",
+                        motivo, caminho, SUBPASTA_ERRO)
+
+        else:
+            # 'retry': falha temporária. NÃO anota — para tentar de novo no
+            # próximo ciclo. Anotar aqui faria o arquivo sumir para sempre por
+            # causa de uma indisponibilidade de minutos.
             log.info("Adiado (%s): %s", motivo, nome)
 
 

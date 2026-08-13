@@ -49,7 +49,17 @@ TAMANHO_MAX_BYTES = 200 * 1024 * 1024            # 200 MB
 #   .pfx  certificado digital A1        .txt  layouts/retornos texto
 #   .ofx  extrato bancário              .zip  lotes compactados
 #   .dec/.rec  arquivos da contabilidade/declarações
-EXTENSOES_PERMITIDAS = ('.xml', '.pdf', '.pfx', '.txt', '.ofx', '.zip', '.dec', '.rec')
+#
+# As cinco últimas entraram porque o agente é TÁXI: ele não decide o que vale,
+# só entrega. Quem recusava era esta portaria — e ela barrava coisa corriqueira
+# que o funcionário larga na pasta junto com a nota: a foto do comprovante, a
+# planilha de conferência, o contrato em Word. Recusar isso não protegia nada;
+# só criava um "não enviado" que ninguém entendia.
+#   .jpg/.png  foto de comprovante, print de portal
+#   .xlsx/.docx  planilha e documento do Office
+#   .csv  extrato/relatório exportado
+EXTENSOES_PERMITIDAS = ('.xml', '.pdf', '.pfx', '.txt', '.ofx', '.zip', '.dec', '.rec',
+                        '.jpg', '.jpeg', '.png', '.xlsx', '.docx', '.csv')
 
 # Caracteres que o Dropbox recusa em nome de arquivo (/ \ : ? * " < > |) + controle.
 _CHARS_PROIBIDOS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')

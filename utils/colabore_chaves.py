@@ -154,6 +154,39 @@ def gerar_chave(usuario_id, admin_id, *, regerar=False, data_inicio=None,
             'data_inicio_captura': gravado['data_inicio_captura']}
 
 
+def definir_corte(usuario_id, data_inicio):
+    """Muda SÓ a data de corte do funcionário. NÃO toca na chave.
+
+    Por que existe separado de ``gerar_chave``
+    ------------------------------------------
+    A data de corte só era editável no formulário que GERA a chave — e gerar
+    chave invalida a anterior na hora, derrubando o agente que já está
+    instalado. Na prática isso tornava a data imutável: ninguém vai derrubar o
+    agente do funcionário só para dizer "quero desde 01/08".
+
+    E é justamente o contrário do desenho: o agente relê o corte a cada ciclo
+    (``GET /api/colabore/config``), então mudar aqui já vale no ciclo seguinte,
+    sem ninguém tocar na máquina de ninguém.
+
+    Devolve ``{'ok': True, 'data_inicio_captura': date}`` ou ``{'ok': False,
+    'erro': ...}``. Não cria linha: se o funcionário ainda não tem chave, não há
+    corte a definir — gere a chave primeiro.
+    """
+    if data_inicio is None:
+        return {'ok': False, 'erro': 'data_ausente'}
+    r = execute_query(
+        "UPDATE colabore_config SET data_inicio_captura = %s WHERE usuario_id = %s",
+        (data_inicio, usuario_id), fetch=False)
+    if r is None:
+        return {'ok': False, 'erro': 'falha_banco'}
+    atual = execute_query(
+        "SELECT data_inicio_captura FROM colabore_config WHERE usuario_id = %s",
+        (usuario_id,), fetch=True, fetch_one=True)
+    if not atual:
+        return {'ok': False, 'erro': 'sem_chave'}
+    return {'ok': True, 'data_inicio_captura': atual['data_inicio_captura']}
+
+
 def revogar_chave(usuario_id):
     """Desliga a chave do funcionário (ativo=0). A linha e o prefixo continuam
     (histórico); o agente passa a receber 403. Devolve dict ok=True/False."""

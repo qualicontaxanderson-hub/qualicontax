@@ -1272,6 +1272,49 @@ def usuario_colabore_revogar(uid):
     return jsonify(ok=True)
 
 
+@configuracoes.route('/usuarios/<int:uid>/colabore/corte', methods=['POST'])
+@admin_required
+def usuario_colabore_corte(uid):
+    """Muda SÓ a data de corte do funcionário, sem tocar na chave.
+
+    Antes a data só existia no formulário que GERA a chave — e gerar chave
+    invalida a anterior na hora, derrubando o agente instalado. Ou seja: na
+    prática a data era imutável, porque ninguém derruba o agente do funcionário
+    para mudar uma data.
+
+    O agente relê o corte a cada ciclo, então o efeito é imediato e sem ninguém
+    tocar na máquina de ninguém: mudou aqui, vale no ciclo seguinte.
+    """
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+
+    bruto = (request.form.get('data_inicio') or '').strip()
+    try:
+        nova = date.fromisoformat(bruto)
+    except ValueError:
+        return jsonify(ok=False, msg='Data inválida.'), 400
+    if nova > date.today():
+        # Corte no futuro faria o agente ignorar TUDO até aquele dia chegar, e
+        # ninguém entenderia por que parou de chegar arquivo.
+        return jsonify(ok=False, msg='A data de corte não pode ser no futuro.'), 400
+
+    antes = colabore_chaves.estado_colabore(uid) or {}
+    res = colabore_chaves.definir_corte(uid, nova)
+    if not res.get('ok'):
+        if res.get('erro') == 'sem_chave':
+            return jsonify(ok=False, msg='Este funcionário ainda não tem chave. '
+                                         'Gere a chave primeiro.'), 400
+        return jsonify(ok=False, msg='Não foi possível salvar agora.'), 500
+
+    registrar('escrita.alterou_corte_colabore', 'colabore',
+              tabela='colabore_config', registro_id=uid,
+              antes={'data_inicio_captura': antes.get('data_inicio_captura')},
+              depois={'data_inicio_captura': nova.isoformat()})
+    logger.info('[qcolabore] corte do usuario %s alterado para %s por %s.',
+                uid, nova, current_user.id)
+    return jsonify(ok=True, data_inicio=nova.strftime('%d/%m/%Y'))
+
+
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])
 @admin_required
 def usuario_novo():

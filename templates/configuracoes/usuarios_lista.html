@@ -172,6 +172,9 @@
                 data-prefixo="{{ cc.token_prefixo if cc else '' }}"
                 data-versao="{{ cc.versao if cc else '' }}"
                 data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
+                {# ISO separado: o <input type="date"> só aceita AAAA-MM-DD, e o
+                   data-corte acima é o formato brasileiro que vai para a tela. #}
+                data-corte-iso="{{ cc.data_inicio_captura.isoformat() if cc and cc.data_inicio_captura else '' }}"
                 data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
             <i class="fas fa-robot"></i> Q-Colabore
         </button>
@@ -487,6 +490,19 @@
       <label class="qc-label" for="colabCorte" style="margin-top:6px">Data de corte
         <span class="text-muted" style="font-weight:400">(o agente não manda nada anterior a ela)</span></label>
       <input type="date" id="colabCorte" class="qc-input" value="{{ hoje_iso }}" max="{{ hoje_iso }}">
+
+      {# Salvar a data SEM gerar chave. Antes ela só existia no formulário de
+         gerar — e gerar invalida a chave atual, derrubando o agente instalado.
+         Ou seja: a data era imutável na prática. O agente relê o corte a cada
+         ciclo, então mudar aqui vale no ciclo seguinte, sem tocar na máquina
+         do funcionário. Só aparece para quem JÁ tem chave. #}
+      <div id="colabCorteBox" style="display:none; margin-top:8px">
+        <button type="button" class="btn btn-sm btn-secondary" id="colabBtnCorte"
+                onclick="colabSalvarCorte()">
+          <i class="fas fa-calendar-check"></i> Salvar só a data (não mexe na chave)
+        </button>
+        <span id="colabCorteOk" class="text-muted" style="display:none; margin-left:8px"></span>
+      </div>
 
       <label class="qr-op qr-perigo" id="colabConfirmaBox" style="display:none; margin-top:14px">
         <input type="checkbox" id="colabConfirma">
@@ -1059,8 +1075,53 @@ function colabAbrir(btn) {
         (colabTem && d.ativo === '1') ? '' : 'none';
     document.getElementById('colabBtnGerarTxt').textContent =
         colabTem ? 'Gerar nova chave' : 'Gerar chave';
+    // A data de corte já vem preenchida com a atual do funcionário, e o botão
+    // de salvar só ela aparece para quem JÁ tem chave — sem chave não há corte
+    // a definir.
+    var corte = document.getElementById('colabCorte');
+    if (colabTem && d.corteIso) { corte.value = d.corteIso; }
+    document.getElementById('colabCorteBox').style.display = colabTem ? '' : 'none';
+    document.getElementById('colabCorteOk').style.display = 'none';
+
     colabAtualizaBotao();
     document.getElementById('qcColabore').classList.add('aberto');
+}
+
+// Salva SÓ a data de corte. Não gera chave, não invalida a atual: o agente
+// instalado continua funcionando e apenas passa a obedecer a data nova no
+// próximo ciclo.
+function colabSalvarCorte() {
+    var btn = document.getElementById('colabBtnCorte');
+    var ok = document.getElementById('colabCorteOk');
+    var erro = document.getElementById('colabErro');
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
+    erro.style.display = 'none';
+    ok.style.display = 'none';
+
+    var dados = new FormData();
+    dados.append('csrf_token', QC_CSRF);
+    dados.append('data_inicio', document.getElementById('colabCorte').value || '');
+
+    fetch('/configuracoes/usuarios/' + colabUid + '/colabore/corte',
+          { method: 'POST', body: dados })
+        .then(function (r) { return r.json().then(function (d) { return { s: r.status, d: d }; }); })
+        .then(function (res) {
+            if (!res.d.ok) {
+                erro.textContent = res.d.msg || 'Não foi possível salvar a data.';
+                erro.style.display = '';
+                return;
+            }
+            ok.textContent = 'Salvo — vale a partir do próximo ciclo do agente.';
+            ok.style.display = '';
+            colabMudou = true;
+        })
+        .catch(function (e) {
+            erro.textContent = 'Falha de rede: ' + e;
+            erro.style.display = '';
+        })
+        .finally(function () { btn.disabled = false; btn.innerHTML = original; });
 }
 
 // Instalador do Q-Colabore: o que existe na pasta do Dropbox hoje. O Anderson

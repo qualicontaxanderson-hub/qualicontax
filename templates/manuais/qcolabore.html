@@ -24,9 +24,13 @@
     uma ou mais pastas para ele vigiar; quando aparece um arquivo novo, ele manda para o
     Qualicontax sozinho — em segundo plano, sem atrapalhar o seu trabalho. Serve para XML de
     nota, PDF, SPED, extrato e o que mais precisar mandar.</p>
-    <p><strong>Ele nunca apaga nada seu.</strong> Só organiza: o que foi enviado vai para a
-    subpasta <code>Enviados</code>; o que não pôde ser enviado vai para
-    <code>Nao enviados</code>, com um bilhete ao lado explicando o motivo.</p>
+    <p><strong>Ele não mexe nos seus arquivos.</strong> Não move, não renomeia, não apaga.
+    Cada documento fica exatamente onde você salvou — inclusive dentro das suas subpastas
+    por empresa. O programa apenas lê e envia; do lado dele fica anotado o que já foi, para
+    não mandar duas vezes.</p>
+    <p>Isso vale mesmo se você <strong>renomear</strong> o arquivo ou <strong>mudar de
+    pasta</strong> depois: ele reconhece pelo conteúdo e não reenvia. Só manda de novo se o
+    documento for realmente alterado.</p>
 </div>
 
 <div class="bloco azul">
@@ -66,9 +70,12 @@
         a chave estiver certa — é assim que você confirma que é a chave certa.
         Copie e cole, não digite: um caractere errado já invalida.</li>
     <li><strong>As pastas monitoradas.</strong> Clique em <strong>“Adicionar…”</strong> e
-        escolha a pasta que o programa deve vigiar. Pode adicionar mais de uma — por exemplo,
-        uma para XML e outra para PDF. Escolha as pastas onde você <strong>já salva</strong>
-        as coisas; não precisa mudar o seu jeito de trabalhar.</li>
+        escolha a pasta que o programa deve vigiar. Escolha as pastas onde você
+        <strong>já salva</strong> as coisas; não precisa mudar o seu jeito de trabalhar.
+        <br><strong>Basta apontar a pasta de cima.</strong> Se você organiza em subpastas por
+        empresa — <span class="cam">Qualicontax\158 - Auto Posto Fenix</span>,
+        <span class="cam">Qualicontax\170 - Auto Posto Nacional</span> — aponte só
+        <span class="cam">Qualicontax</span>: ele entra em todas as subpastas sozinho.</li>
     <li><strong>Ativar.</strong> Deixe <strong>“Iniciar junto com o Windows”</strong> marcado,
         para o programa voltar sozinho quando você ligar o computador, e clique em
         <strong>“Ativar”</strong>.</li>
@@ -89,9 +96,18 @@
 <ul class="simples">
     <li>se está <strong>conectado</strong>;</li>
     <li>quantos arquivos <strong>enviou hoje</strong> e qual foi o último;</li>
-    <li>se há algo em <code>Nao enviados</code> esperando atenção;</li>
+    <li>se algum arquivo <strong>não pôde ser enviado</strong>;</li>
     <li>se o <strong>início automático</strong> está ativo.</li>
 </ul>
+
+<div class="bloco">
+    <p><strong>E se algum arquivo não puder ser enviado?</strong> É raro — só acontece com
+    arquivo acima de 200 MB. Nesse caso o programa avisa na janela e deixa uma
+    <strong>cópia</strong> na pasta <code>Nao enviados</code>, criada na raiz da pasta que
+    você escolheu, com um bilhete explicando o motivo.</p>
+    <p>O nome da cópia mostra de qual subpasta ela veio. E vale repetir: é uma
+    <strong>cópia</strong> — o seu arquivo original continua onde estava, intocado.</p>
+</div>
 
 <div class="bloco">
     <p>Ele aguenta ficar o dia todo de pé: se a internet cair ou o servidor sair do ar, ele
@@ -117,8 +133,12 @@ libere a pasta onde ele foi extraído:</p>
     <p><strong>Importante</strong></p>
     <ul class="simples">
         <li>A sua chave é <strong>pessoal</strong>. Não passe para ninguém.</li>
-        <li>O programa <strong>não apaga arquivos</strong> — só move para
-            <code>Enviados</code> / <code>Nao enviados</code> dentro da própria pasta vigiada.</li>
+        <li>O programa <strong>não move, não renomeia e não apaga</strong> nenhum arquivo
+            seu. A única coisa que ele escreve na sua pasta é a cópia de aviso em
+            <code>Nao enviados</code>, e só quando algum arquivo não pôde ser enviado.</li>
+        <li>Ele só manda o que for <strong>a partir da data de corte</strong> combinada com o
+            escritório. Documento mais antigo que ela fica onde está e não é enviado — e essa
+            data o escritório pode ajustar a qualquer momento, sem mexer no seu computador.</li>
     </ul>
 </div>
 
