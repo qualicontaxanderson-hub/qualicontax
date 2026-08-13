@@ -1,0 +1,127 @@
+{# Manual do Q-Colabore. Conteúdo fiel ao "COMO INSTALAR.txt" da versão 0.3.0
+   (que estava CERTO) — o PDF antigo é que dizia 0.1.0 e mandava pegar o
+   arquivo no Dropbox. Aqui não há caminho de Dropbox: o programa se baixa pelo
+   sistema, e a versão vem do próprio pacote publicado. #}
+{% extends "manuais/_base.html" %}
+
+{% block titulo %}Manual de Instalação — Q-Colabore{% endblock %}
+{% block cabecalho %}Manual de Instalação — Q-Colabore{% endblock %}
+{% block subtitulo %}Guia do colaborador · como instalar no seu computador{% endblock %}
+{% block rodape %}manual do Q-Colabore{% endblock %}
+
+{% block selo %}
+<span class="capa-selo">
+    {% if versao %}Versão do programa: <strong>{{ versao }}</strong> &nbsp;•&nbsp; {% endif %}
+    Envio automático de arquivos para o escritório
+</span>
+{% endblock %}
+
+{% block conteudo %}
+
+<div class="bloco verde">
+    <p><strong>O que é o Q-Colabore?</strong> Um programa pequeno que fica rodando no
+    <strong>seu</strong> computador, perto do relógio (na bandeja do Windows). Você escolhe
+    uma ou mais pastas para ele vigiar; quando aparece um arquivo novo, ele manda para o
+    Qualicontax sozinho — em segundo plano, sem atrapalhar o seu trabalho. Serve para XML de
+    nota, PDF, SPED, extrato e o que mais precisar mandar.</p>
+    <p><strong>Ele nunca apaga nada seu.</strong> Só organiza: o que foi enviado vai para a
+    subpasta <code>Enviados</code>; o que não pôde ser enviado vai para
+    <code>Nao enviados</code>, com um bilhete ao lado explicando o motivo.</p>
+</div>
+
+<div class="bloco azul">
+    <p><strong>Antes de começar, tenha em mãos:</strong></p>
+    <ul class="simples">
+        <li><strong>A sua chave pessoal</strong> do Q-Colabore — quem gera é o escritório.
+            Se ainda não tem, peça antes de começar.</li>
+        <li><strong>O programa</strong>, que você baixa pelo próprio sistema
+            {% if tem_download %}(botão <em>Baixar o programa</em>){% endif %} ou pelo link
+            que o escritório enviar. Não é preciso Dropbox nem nenhuma outra conta.</li>
+    </ul>
+</div>
+
+<h2><span class="n">1</span> Instalar o programa</h2>
+<ol class="passos">
+    <li><strong>Baixe o arquivo</strong> <code>qcolabore-{{ versao or '0.0.0' }}.zip</code>.</li>
+    <li><strong>Extraia.</strong> Clique com o botão direito no arquivo e escolha
+        <strong>“Extrair tudo…”</strong>. Mande extrair para <span class="cam">C:\qcolabore</span>
+        — basta digitar esse caminho na janela de extração. Assim o programa e os arquivos
+        dele ficam todos juntos.</li>
+    <li><strong>Abra.</strong> Entre na pasta <span class="cam">C:\qcolabore</span> e dê dois
+        cliques em <code>qcolabore.exe</code>.</li>
+</ol>
+
+<div class="bloco aviso">
+    <p><strong>Se aparecer a tela azul “O Windows protegeu o computador”</strong>, é normal —
+    <strong>não é vírus</strong>. Acontece porque o programa é novo e o Windows ainda não o
+    conhece. Clique em <strong>“Mais informações”</strong> e depois em
+    <strong>“Executar assim mesmo”</strong>. Isso só acontece na primeira vez.</p>
+</div>
+
+<h2><span class="n">2</span> Configurar (só na primeira vez)</h2>
+<p>Ao abrir pela primeira vez, aparece uma janela pedindo três coisas:</p>
+<ol class="passos">
+    <li><strong>A chave de ativação.</strong> Cole a chave que o escritório gerou para você e
+        clique em <strong>“Testar conexão”</strong>. Ele mostra o <strong>seu nome</strong> se
+        a chave estiver certa — é assim que você confirma que é a chave certa.
+        Copie e cole, não digite: um caractere errado já invalida.</li>
+    <li><strong>As pastas monitoradas.</strong> Clique em <strong>“Adicionar…”</strong> e
+        escolha a pasta que o programa deve vigiar. Pode adicionar mais de uma — por exemplo,
+        uma para XML e outra para PDF. Escolha as pastas onde você <strong>já salva</strong>
+        as coisas; não precisa mudar o seu jeito de trabalhar.</li>
+    <li><strong>Ativar.</strong> Deixe <strong>“Iniciar junto com o Windows”</strong> marcado,
+        para o programa voltar sozinho quando você ligar o computador, e clique em
+        <strong>“Ativar”</strong>.</li>
+</ol>
+<p>Pronto: o programa vai para a bandeja e trabalha sozinho.</p>
+
+<h2><span class="n">3</span> O dia a dia</h2>
+<h3>O ícone perto do relógio</h3>
+<ul class="simples">
+    <li>Um clique no ícone <strong>abre a janela</strong>.</li>
+    <li>Botão direito no ícone: <strong>Abrir</strong>, <strong>Configurar…</strong> e
+        <strong>Sair</strong>.</li>
+    <li>Fechar no <strong>X não encerra</strong> — só esconde na bandeja. Para encerrar de
+        verdade, use <strong>Sair</strong> no menu do botão direito.</li>
+</ul>
+
+<h3>O que a janela mostra</h3>
+<ul class="simples">
+    <li>se está <strong>conectado</strong>;</li>
+    <li>quantos arquivos <strong>enviou hoje</strong> e qual foi o último;</li>
+    <li>se há algo em <code>Nao enviados</code> esperando atenção;</li>
+    <li>se o <strong>início automático</strong> está ativo.</li>
+</ul>
+
+<div class="bloco">
+    <p>Ele aguenta ficar o dia todo de pé: se a internet cair ou o servidor sair do ar, ele
+    espera e tenta de novo sozinho, sem fechar. Só para de enviar se a <strong>chave</strong>
+    estiver inválida — e mesmo assim continua aberto, mostrando o aviso, para você colar a
+    chave nova em <strong>Configurar…</strong>.</p>
+</div>
+
+<h2><span class="n">4</span> Se o Windows Defender reclamar</h2>
+<p>Como o programa é novo, o Windows pode desconfiar dele na primeira vez. Se isso acontecer,
+libere a pasta onde ele foi extraído:</p>
+<ol class="passos">
+    <li>Abra <strong>“Segurança do Windows”</strong>.</li>
+    <li>Vá em <strong>“Proteção contra vírus e ameaças”</strong>.</li>
+    <li>Em “Configurações de proteção…”, clique em <strong>“Gerenciar configurações”</strong>.</li>
+    <li>Desça até <strong>“Exclusões”</strong> → <strong>“Adicionar ou remover exclusões”</strong>.</li>
+    <li><strong>“Adicionar uma exclusão”</strong> → <strong>“Pasta”</strong> → escolha a pasta
+        do programa (ex.: <span class="cam">C:\qcolabore</span>).</li>
+</ol>
+<p>Isso libera só este programa. Em dúvida, chame o escritório antes.</p>
+
+<div class="bloco aviso">
+    <p><strong>Importante</strong></p>
+    <ul class="simples">
+        <li>A sua chave é <strong>pessoal</strong>. Não passe para ninguém.</li>
+        <li>O programa <strong>não apaga arquivos</strong> — só move para
+            <code>Enviados</code> / <code>Nao enviados</code> dentro da própria pasta vigiada.</li>
+    </ul>
+</div>
+
+<p style="margin:22px 0 0; color:#475569">Dúvidas? Fale com o Qualicontax.</p>
+
+{% endblock %}

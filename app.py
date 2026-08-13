@@ -106,6 +106,8 @@ from routes.cadastro import cadastro_bp
 from routes.senha import senha_bp
 # Download público do instalador do Q-Colabore por link de uso único.
 from routes.programa import programa as programa_bp
+# Manuais de instalação servidos como página (públicos, sem login).
+from routes.manuais import manuais as manuais_bp
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)
@@ -131,6 +133,7 @@ app.register_blueprint(colabore_api)
 app.register_blueprint(cadastro_bp)
 app.register_blueprint(senha_bp)
 app.register_blueprint(programa_bp)
+app.register_blueprint(manuais_bp)
 app.register_blueprint(qrobo)
 
 # Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo

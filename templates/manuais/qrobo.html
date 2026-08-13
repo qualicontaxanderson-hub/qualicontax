@@ -1,0 +1,112 @@
+{# Manual do Q-Robô. PRIMEIRA VERSÃO reescrita a partir do que o Portal do
+   Instalador realmente faz hoje (routes/qrobo.py e templates/qrobo/) — o PDF
+   anterior foi montado fora do repositório e o fonte se perdeu, então não havia
+   o que preservar. Anderson revisa antes de virar PDF.
+
+   Público-alvo diferente do Q-Colabore: aqui quem lê é o INSTALADOR, que vai à
+   máquina do posto. O colaborador comum não usa este manual. #}
+{% extends "manuais/_base.html" %}
+
+{% block titulo %}Manual de Instalação — Q-Robô{% endblock %}
+{% block cabecalho %}Manual de Instalação — Q-Robô{% endblock %}
+{% block subtitulo %}Guia do instalador · como instalar na máquina do cliente{% endblock %}
+{% block rodape %}manual do Q-Robô{% endblock %}
+
+{% block selo %}
+<span class="capa-selo">
+    {% if versao %}Versão validada: <strong>{{ versao }}</strong> &nbsp;•&nbsp; {% endif %}
+    Captura automática de cupons no posto
+</span>
+{% endblock %}
+
+{% block conteudo %}
+
+<div class="bloco verde">
+    <p><strong>O que é o Q-Robô?</strong> Um programa que fica rodando na máquina do
+    <strong>cliente</strong> (o posto) e envia os cupons emitidos para o Qualicontax
+    automaticamente, sem ninguém precisar lembrar de mandar nada.</p>
+    <p>Ele é instalado <strong>uma vez por cliente</strong>, por quem tem acesso ao
+    <strong>Portal do Instalador</strong>. Depois disso trabalha sozinho.</p>
+</div>
+
+<div class="bloco azul">
+    <p><strong>Antes de ir até o cliente, tenha em mãos:</strong></p>
+    <ul class="simples">
+        <li>o seu <strong>acesso ao Portal do Instalador</strong>;</li>
+        <li>o <strong>número do cliente</strong> onde o robô será instalado;</li>
+        <li>acesso à máquina do posto onde o robô vai ficar ligado.</li>
+    </ul>
+</div>
+
+<h2><span class="n">1</span> Baixar o instalador</h2>
+<ol class="passos">
+    <li>Entre no <strong>Portal do Instalador</strong>.</li>
+    <li>Clique em <strong>“Baixar instalador”</strong>. O portal entrega sempre a
+        <strong>versão validada</strong> — não pegue arquivo de outro lugar, nem de uma pasta
+        antiga sua.</li>
+    <li>Se aparecer <strong>“Instalador indisponível”</strong>, não improvise:
+        <strong>avise o escritório</strong>. Significa que o pacote não está publicado.</li>
+</ol>
+
+<h2><span class="n">2</span> Gerar a chave do cliente</h2>
+<ol class="passos">
+    <li>No portal, informe o <strong>número do cliente</strong> e clique em
+        <strong>“Conferir empresa”</strong>.</li>
+    <li><strong>Confira a empresa que aparece na tela.</strong> É a trava contra instalar no
+        cliente errado — leia a razão social inteira antes de seguir.</li>
+    <li>Confirmando, o portal gera a <strong>chave de acesso do robô</strong>.</li>
+</ol>
+
+<div class="bloco aviso">
+    <p><strong>A chave aparece uma única vez.</strong> Copie antes de sair da tela. Se perder,
+    é preciso gerar outra — e gerar outra <strong>invalida a anterior</strong>, então um robô
+    já configurado com a chave velha para de enviar.</p>
+</div>
+
+<h2><span class="n">3</span> Instalar na máquina do cliente</h2>
+<ol class="passos">
+    <li><strong>Copie o instalador</strong> para a máquina do posto.</li>
+    <li><strong>Extraia e execute</strong> o programa.</li>
+    <li><strong>Cole a chave</strong> na configuração do robô. Copie e cole — não digite.</li>
+    <li><strong>Confirme a empresa</strong> que aparece na tela do robô: tem de ser a mesma
+        que você conferiu no portal. Se não for, pare e revise a chave.</li>
+    <li>Deixe o robô <strong>iniciando junto com o Windows</strong>, para ele voltar sozinho
+        quando a máquina for religada.</li>
+</ol>
+
+<h2><span class="n">4</span> Conferir antes de ir embora</h2>
+<p>Instalação só está pronta quando o escritório <strong>recebe sinal</strong> do robô.</p>
+<ol class="passos">
+    <li>Volte ao portal e clique em <strong>“Verificar”</strong>.</li>
+    <li>Veja o <strong>sinal do robô</strong> e o <strong>último contato</strong>: o cliente
+        tem que dar sinal de vida.</li>
+    <li>Na lista <strong>“Meus clientes”</strong>, <strong>verde é processo rodando</strong>.
+        Robô desligado aparece apagado no painel.</li>
+</ol>
+
+<div class="bloco aviso">
+    <p><strong>Não encerre a visita sem ver o sinal chegar.</strong> Robô instalado que nunca
+    contatou é o mesmo que robô não instalado — e o problema só aparece dias depois, quando
+    faltarem cupons.</p>
+</div>
+
+<h2><span class="n">5</span> Problemas comuns</h2>
+<ul class="simples">
+    <li><strong>O robô não dá sinal.</strong> Confira se o processo está rodando na máquina e
+        se a máquina tem internet. Depois confira no portal se a chave é a do cliente certo.</li>
+    <li><strong>A empresa que aparece no robô é outra.</strong> Chave trocada. Gere a chave
+        certa no portal e cole de novo.</li>
+    <li><strong>O Windows reclama do programa.</strong> Acontece por ser um programa novo.
+        Libere a pasta onde ele foi extraído nas exclusões da Segurança do Windows — em
+        dúvida, chame o escritório antes.</li>
+</ul>
+
+<div class="bloco">
+    <p><strong>Tudo o que você faz no portal fica registrado</strong> — qual cliente, qual
+    versão do instalador e quando. Isso existe para reconstruir o histórico depois, se algum
+    posto parar de enviar.</p>
+</div>
+
+<p style="margin:22px 0 0; color:#475569">Dúvidas? Fale com o Qualicontax.</p>
+
+{% endblock %}

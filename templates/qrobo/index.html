@@ -149,13 +149,13 @@
                 <button class="btn off" disabled>INSTALADOR INDISPONÍVEL</button>
                 <span class="breve">avise o escritório — o arquivo não está na pasta</span>
             {% endif %}
-            {# Manual é opcional: sem PDF na pasta, o botão simplesmente não existe. #}
-            {% if instalador.manual %}
-                <a href="{{ url_for('qrobo.manual') }}" class="btn claro">
-                    BAIXAR MANUAL (PDF)
-                </a>
-                <span class="breve">{{ instalador.manual.nome }}{% if instalador.manual.tamanho %} · {{ (instalador.manual.tamanho / 1048576) | round(1) }} MB{% endif %}</span>
-            {% endif %}
+            {# O manual virou PÁGINA do sistema, versionada no repositório — não
+               depende mais de haver um PDF na pasta, que envelhecia sozinho.
+               Quem quiser PDF imprime pelo navegador. #}
+            <a href="{{ url_for('manuais.qrobo') }}" class="btn claro" target="_blank">
+                ABRIR O MANUAL
+            </a>
+            <span class="breve">abre em nova aba · para PDF, Ctrl+P</span>
         </div>
 
         <div class="card">

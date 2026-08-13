@@ -1096,16 +1096,12 @@ function colabInstalador() {
             'href="{{ url_for("configuracoes.colabore_baixar", qual="pacote") }}">' +
             '<i class="fas fa-download"></i> Baixar o programa' +
             (d.versao ? ' (versão ' + d.versao + ')' : '') + '</a>';
-        if (d.tem_manual) {
-            linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" ' +
-                'href="{{ url_for("configuracoes.colabore_baixar", qual="manual") }}">' +
-                '<i class="fas fa-file-pdf"></i> Manual de instalação</a>';
-        }
-        if (d.tem_leiame) {
-            linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" ' +
-                'href="{{ url_for("configuracoes.colabore_baixar", qual="leiame") }}">' +
-                '<i class="fas fa-file-lines"></i> Como instalar</a>';
-        }
+        // O manual agora é PÁGINA do sistema, versionada no repositório — não
+        // mais um PDF na pasta do Dropbox que envelhecia sozinho. Por isso o
+        // botão não depende de tem_manual/tem_leiame: ele existe sempre.
+        linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" target="_blank" ' +
+            'href="{{ url_for("manuais.qcolabore") }}">' +
+            '<i class="fas fa-book"></i> Manual de instalação</a>';
         if (ehAdmin) {
             linhas += '<button type="button" class="btn btn-sm btn-secondary colab-inst-btn" ' +
                 'onclick="progAbrir()"><i class="fas fa-link"></i> ' +
