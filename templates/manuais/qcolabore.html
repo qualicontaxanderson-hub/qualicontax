@@ -1,7 +1,13 @@
-{# Manual do Q-Colabore. Conteúdo fiel ao "COMO INSTALAR.txt" da versão 0.3.0
-   (que estava CERTO) — o PDF antigo é que dizia 0.1.0 e mandava pegar o
-   arquivo no Dropbox. Aqui não há caminho de Dropbox: o programa se baixa pelo
-   sistema, e a versão vem do próprio pacote publicado. #}
+{# Manual do Q-Colabore — a ÚNICA fonte, desde 13/08/2026.
+
+   O PDF e o "COMO INSTALAR.txt" saíram da pasta do Dropbox de propósito: lá
+   ficam só os instaladores. Documento solto no Dropbox envelhece calado (o PDF
+   chegou a dizer 0.1.0 e a mandar buscar o programa lá), e aqui o manual fica
+   no mesmo commit do código que ele descreve.
+
+   Conteúdo alinhado ao agente 0.4.0: NÃO move/renomeia/apaga nada, entra em
+   subpastas, reconhece pelo conteúdo. Mexeu no agente, revise esta página.
+   A versão do selo vem do pacote publicado, nunca escrita à mão. #}
 {% extends "manuais/_base.html" %}
 
 {% block titulo %}Manual de Instalação — Q-Colabore{% endblock %}
@@ -23,7 +29,8 @@
     <strong>seu</strong> computador, perto do relógio (na bandeja do Windows). Você escolhe
     uma ou mais pastas para ele vigiar; quando aparece um arquivo novo, ele manda para o
     Qualicontax sozinho — em segundo plano, sem atrapalhar o seu trabalho. Serve para XML de
-    nota, PDF, SPED, extrato e o que mais precisar mandar.</p>
+    nota, PDF, SPED, extrato bancário, planilha, documento do Word e foto de comprovante —
+    a lista completa está mais abaixo.</p>
     <p><strong>Ele não mexe nos seus arquivos.</strong> Não move, não renomeia, não apaga.
     Cada documento fica exatamente onde você salvou — inclusive dentro das suas subpastas
     por empresa. O programa apenas lê e envia; do lado dele fica anotado o que já foi, para
@@ -60,6 +67,15 @@
     <strong>não é vírus</strong>. Acontece porque o programa é novo e o Windows ainda não o
     conhece. Clique em <strong>“Mais informações”</strong> e depois em
     <strong>“Executar assim mesmo”</strong>. Isso só acontece na primeira vez.</p>
+</div>
+
+<div class="bloco">
+    <p><strong>Já tem uma versão anterior instalada?</strong> Antes de extrair, clique com o
+    botão direito no ícone perto do relógio e escolha <strong>Sair</strong> — com o programa
+    aberto, o Windows não deixa substituir o arquivo. Depois extraia por cima da mesma pasta,
+    mandando substituir, e abra o <code>qcolabore.exe</code> de novo.</p>
+    <p>A sua chave e as suas pastas continuam configuradas: não é preciso cadastrar nada
+    outra vez.</p>
 </div>
 
 <h2><span class="n">2</span> Configurar (só na primeira vez)</h2>
@@ -101,10 +117,19 @@
 </ul>
 
 <div class="bloco">
-    <p><strong>E se algum arquivo não puder ser enviado?</strong> É raro — só acontece com
-    arquivo acima de 200 MB. Nesse caso o programa avisa na janela e deixa uma
+    <p><strong>E se algum arquivo não puder ser enviado?</strong> Acontece por dois motivos:
+    o arquivo passa de <strong>200 MB</strong>, ou é de um <strong>tipo que não
+    recebemos</strong>. Nesse caso o programa avisa na janela e deixa uma
     <strong>cópia</strong> na pasta <code>Nao enviados</code>, criada na raiz da pasta que
     você escolheu, com um bilhete explicando o motivo.</p>
+    <p><strong>Os tipos que recebemos:</strong> XML, PDF, certificado <code>.pfx</code>,
+    texto e SPED (<code>.txt</code>), extrato <code>.ofx</code>, <code>.zip</code>,
+    <code>.dec</code>, <code>.rec</code>, imagem (<code>.jpg</code>, <code>.png</code>),
+    planilha (<code>.xlsx</code>, <code>.csv</code>) e Word (<code>.docx</code>). Fora dessa
+    lista não passa — arquivo de e-mail (<code>.msg</code>, <code>.eml</code>),
+    <code>.rar</code> e os formatos antigos do Office (<code>.doc</code>, <code>.xls</code>)
+    são os que mais aparecem em <code>Nao enviados</code>. Se precisar mandar algum deles,
+    fale com o escritório.</p>
     <p>O nome da cópia mostra de qual subpasta ela veio. E vale repetir: é uma
     <strong>cópia</strong> — o seu arquivo original continua onde estava, intocado.</p>
 </div>
