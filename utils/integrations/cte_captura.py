@@ -57,6 +57,24 @@ logger = logging.getLogger(__name__)
 
 TP_CANCELAMENTO_CTE = '110111'   # tpEvento de cancelamento de CT-e
 
+# cStat da RESPOSTA da SEFAZ que significam cancelamento ACEITO. Fonte única
+# para os DOIS caminhos que cancelam CT-e (esta captura e o fiscal_ingest, que
+# importa da _ENTRADA) — até 14/08/2026 eles divergiam, e o resultado era erro
+# nas duas direções: aqui não se conferia NADA (pedido rejeitado cancelava), e
+# lá só se aceitava {135,136} (cancelamento tardio legítimo era descartado).
+#
+# O 155 é "cancelamento homologado FORA DE PRAZO" — aceito, apenas tardio.
+# Medido no lado NF-e em 14/08/2026: dos 110 eventos reais, 99 vieram 135 e
+# **11 vieram 155**. Ignorá-lo descartaria 1 em cada 10 cancelamentos legítimos.
+#
+# RESSALVA HONESTA: no CT-e isso NÃO foi medido — os XML de evento de CT-e não
+# ficam no banco, só no Dropbox, e não houve como varrer. A inclusão do 155 aqui
+# é aposta fundamentada (a tabela de cStat da SEFAZ é largamente compartilhada
+# entre os modelos), e o pior caso dela é inofensivo: se o CT-e nunca emitir
+# 155, a constante simplesmente nunca casa. O log abaixo resolve a dúvida no
+# primeiro evento que chegar fora do conjunto.
+CSTAT_CANCELAMENTO_CTE_OK = {'135', '136', '155'}
+
 # Scheduler: lock global próprio + prazo suave por rodada.
 _LOCK_CAPTURA = 'dfe_captura_cte'
 _PRAZO_SUAVE_SEG = int(os.getenv('CTE_SCHED_PRAZO_SEG', '480'))   # ~8 min
@@ -232,6 +250,15 @@ def _extrair_evento_cte(root):
     n_seq = _to_int(_text(inf, 'nSeqEvento')) if inf is not None else None
     _dh, ano, mes = _parse_dh(_text(inf, 'dhEvento') if inf is not None else None)
 
+    # cStat da RESPOSTA da SEFAZ — quem decide se o cancelamento vale.
+    #
+    # CUIDADO: um procEventoCTe tem DOIS infEvento, o do PEDIDO e o da RESPOSTA,
+    # e o _find devolve o PRIMEIRO. Procurar cStat na raiz pega o bloco do
+    # pedido, que não tem cStat, e o valor viria vazio — o que faria a guarda
+    # parar de cancelar TUDO. Por isso desce-se no retEventoCTe antes.
+    ret = _find(root, 'retEventoCTe')
+    c_stat = _text(ret, 'cStat') if ret is not None else None
+
     chave_evento = (idv or '').strip() or None
     if not chave_evento:
         if tp_evento and ch_cte and n_seq is not None:
@@ -239,7 +266,7 @@ def _extrair_evento_cte(root):
         else:
             raise ValueError('evento de CT-e sem Id/chave identificável')
     return {'chave_evento': chave_evento[:60], 'ch_cte': ch_cte,
-            'tp_evento': tp_evento, 'ano': ano, 'mes': mes}
+            'tp_evento': tp_evento, 'ano': ano, 'mes': mes, 'c_stat': c_stat}
 
 
 def _gravar_evento(empresa, ev, xml_bytes):
@@ -253,7 +280,22 @@ def _gravar_evento(empresa, ev, xml_bytes):
     _subir_xml(_caminho_fiscal(empresa, ano, mes, ev['chave_evento'], 'EVENTOS'),
                xml_bytes)
     if ev['tp_evento'] == TP_CANCELAMENTO_CTE and ev['ch_cte']:
-        marcar_cte_cancelado(ev['ch_cte'])
+        # GUARDA DE STATUS: só cancela se a SEFAZ tiver ACEITADO o pedido.
+        # Antes daqui não saía guarda nenhuma — bastava o tpEvento ser 110111
+        # para o CT-e ser marcado, e um pedido REJEITADO (573 duplicidade, 594
+        # prazo, ...) cancelava um CT-e que segue ATIVO na SEFAZ. Em frete isso
+        # vira crédito de ICMS que não deveria existir.
+        c_stat = ev.get('c_stat')
+        if c_stat in CSTAT_CANCELAMENTO_CTE_OK:
+            marcar_cte_cancelado(ev['ch_cte'])
+        else:
+            # Este log é também o INSTRUMENTO que resolve a dúvida do 155 no
+            # CT-e: cada cStat inesperado aparece aqui com a chave, e a
+            # distribuição real se revela sem precisar varrer o Dropbox.
+            logger.warning(
+                '[cte] cancelamento do CT-e %s NAO aceito pela SEFAZ '
+                '(cStat=%s) — CT-e segue ATIVO. Evento %s arquivado.',
+                ev['ch_cte'], c_stat or '?', ev['chave_evento'])
 
 
 def processar_um_doc(empresa, d):

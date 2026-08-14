@@ -142,13 +142,19 @@ _RAIZES_EVENTO_CTE = {'proceventocte', 'eventocte', 'reteventocte'}
 # (arquiva, não lança) em vez de morrer no parser de NF-e.
 _RAIZES_SEM_IMPORT = {'inutnfe', 'procinutnfe', 'retinutnfe'}
 
-# cStat de evento REGISTRADO na SEFAZ (135 = registrado e vinculado; 136 =
-# registrado, não vinculado). Qualquer outro valor é REJEIÇÃO — o pedido de
-# cancelamento existe como arquivo, mas a SEFAZ não o homologou e o documento
+# cStat de evento ACEITO pela SEFAZ. Qualquer outro valor é REJEIÇÃO — o pedido
+# de cancelamento existe como arquivo, mas a SEFAZ não o homologou e o documento
 # continua VÁLIDO. Sem esta conferência, um cancelamento rejeitado (573 "duplic.
 # de evento", 594 "prazo excedido"...) cancelaria o CT-e no nosso banco enquanto
 # ele segue ativo na SEFAZ — divergência que só apareceria na fiscalização.
-_CSTAT_EVENTO_REGISTRADO = {'135', '136'}
+#
+# IMPORTADO da captura de CT-e em 14/08/2026, em vez de declarado aqui. Antes
+# eram DOIS conjuntos para a mesma regra, e eles divergiram: este aceitava
+# {135,136} e o da captura não conferia nada. O mesmo cancelamento tinha
+# desfecho diferente conforme entrasse pela SEFAZ ou pela _ENTRADA — e o 155
+# (homologado FORA DE PRAZO, portanto aceito) era descartado por este lado.
+from utils.integrations.cte_captura import (                     # noqa: E402
+    CSTAT_CANCELAMENTO_CTE_OK as _CSTAT_EVENTO_REGISTRADO)
 
 # Ator de máquina do roteador na auditoria (logs_sistema).
 #
