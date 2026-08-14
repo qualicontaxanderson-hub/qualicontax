@@ -55,6 +55,15 @@ PERMISSION_CATALOG = {
         'configuracoes.index':            'Acessar Configurações',
         'configuracoes.usuarios':         'Gerenciar Usuários',
         'configuracoes.perfis':           'Gerenciar Perfis de Acesso',
+        # A caixa era @admin_required, e admin não passa por perfil: para
+        # delegar a alguém a tarefa de organizar o _ENTRADA, só havia o caminho
+        # de fazer a pessoa admin — o que entregava junto usuários e perfis.
+        # Esta permissão existe para haver o meio-termo.
+        #
+        # VER e RENOMEAR ficam na MESMA permissão, por decisão do Anderson em
+        # 13/08/2026: quem entra na caixa entra para organizá-la, e separar em
+        # duas criaria um perfil que enxerga o problema e não pode resolver.
+        'configuracoes.caixa_entrada':    'Caixa de entrada (ver e renomear)',
     },
     'Dashboard': {
         'dashboard.index':                'Acessar Dashboard',

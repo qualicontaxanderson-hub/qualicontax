@@ -69,11 +69,16 @@
             <h3 class="ef-card-title">Auditoria</h3>
             <p class="ef-card-desc">Quem fez o quê, quando e em qual empresa</p>
         </a>
+        {# Só para quem tem a permissão: sem isto o cartão apareceria para todo
+           mundo que acessa Configurações e o clique bateria num 403. Admin
+           enxerga sempre — has_permission devolve True para admin. #}
+        {% if current_user.has_permission('configuracoes.caixa_entrada') %}
         <a href="{{ url_for('configuracoes.caixa_entrada') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-inbox"></i></div>
             <h3 class="ef-card-title">Caixa de entrada</h3>
             <p class="ef-card-desc">Arquivos aguardando destino na _ENTRADA</p>
         </a>
+        {% endif %}
     </div>
 
     {% if dropbox_espaco %}

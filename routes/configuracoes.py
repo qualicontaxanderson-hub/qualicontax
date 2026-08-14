@@ -531,7 +531,7 @@ def _ent_montar(arquivos, empresas):
 
 
 @configuracoes.route('/caixa-entrada')
-@admin_required
+@permission_required('configuracoes.caixa_entrada')
 def caixa_entrada():
     """Lista o _ENTRADA do Dropbox (só metadados). Filtro por tipo + busca."""
     from utils import dropbox_sync
@@ -570,7 +570,7 @@ def caixa_entrada():
 
 
 @configuracoes.route('/caixa-entrada/renomear', methods=['POST'])
-@admin_required
+@permission_required('configuracoes.caixa_entrada')
 def caixa_entrada_renomear():
     """Renomeia um arquivo DENTRO do _ENTRADA (move_file). Recalcula o match e
     devolve o resultado. NÃO grava o nome no log (pode conter senha do .pfx)."""
