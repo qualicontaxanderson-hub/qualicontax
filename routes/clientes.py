@@ -325,8 +325,33 @@ def detalhes(id):
             anp['produtos'] = anp_produtos_map.get(anp['id'], [])
     
     grupos_disponiveis = []
-    
+
+    # Estado do cursor de NSU, para a aba Certificado mostrar SEM precisar clicar
+    # em "Consultar (teste)". Existe porque o 656 é invisível: a empresa some da
+    # captura e ninguém percebe até faltar nota. Com o atraso na tela, o admin vê
+    # o problema ao abrir o cliente.
+    #
+    # ult_nsu é o nosso cursor; sefaz_ult é o maior ultNSU que a SEFAZ mandou
+    # usar nas últimas consultas. Diferença grande = cursor desalinhado, que é o
+    # caso do seed manual.
+    dfe_cursor = execute_query(
+        """SELECT n.ult_nsu, n.ult_consulta, n.ult_status, n.proximo_permitido,
+                  (SELECT MAX(l.ret_ult_nsu) FROM dfe_consulta_log l
+                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
+                      AND l.momento >= NOW() - INTERVAL 7 DAY) AS sefaz_ult,
+                  (SELECT MAX(l.momento) FROM dfe_consulta_log l
+                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
+                      AND l.c_stat IN ('137','138')) AS ult_sucesso
+             FROM dfe_nsu n WHERE n.cliente_id = %s""",
+        (id,), fetch=True, fetch_one=True)
+    if dfe_cursor:
+        atraso = (dfe_cursor.get('sefaz_ult') or 0) - (dfe_cursor.get('ult_nsu') or 0)
+        dfe_cursor['atraso'] = atraso if atraso > 0 else 0
+        dfe_cursor['travado'] = bool(
+            (dfe_cursor.get('ult_status') or '').startswith('656') and atraso > 0)
+
     return render_template('clientes/detalhes.html',
+                         dfe_cursor=dfe_cursor,
                          cliente=cliente,
                          enderecos=enderecos,
                          contatos=contatos,

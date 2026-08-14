@@ -1315,9 +1315,40 @@
                             </button>
                             <div id="dfeMsg" style="margin-top:14px; display:none;"></div>
 
+                            {% if current_user.is_admin() and dfe_cursor %}
+                            {# ESTADO DO CURSOR, sempre visível.
+                               O 656 é invisível por natureza: a empresa some da captura e
+                               ninguém percebe até faltar nota — foi o que aconteceu com o
+                               162 (2 dias) e o Serafim (uma semana). Mostrar o atraso aqui
+                               faz o problema aparecer ao abrir o cliente, sem depender de
+                               ninguém rodar "Consultar (teste)" no celular. #}
+                            <div style="margin-top:16px; padding:12px 14px; border-radius:8px; font-size:13px;
+                                        background:{{ '#fef2f2' if dfe_cursor.travado else '#f0fdf4' }};
+                                        border:1px solid {{ '#fecaca' if dfe_cursor.travado else '#bbf7d0' }};
+                                        color:{{ '#991b1b' if dfe_cursor.travado else '#166534' }};">
+                                {% if dfe_cursor.travado %}
+                                <b>Captura travada.</b> A SEFAZ está recusando com
+                                <code>656 — consumo indevido</code> e há
+                                <b>{{ dfe_cursor.atraso }} documento(s)</b> represado(s).
+                                {% else %}
+                                <b>Captura em dia.</b>
+                                {% endif %}
+                                <div style="margin-top:6px; opacity:.85;">
+                                    nosso cursor: <b>{{ dfe_cursor.ult_nsu }}</b>
+                                    {% if dfe_cursor.sefaz_ult %} · a SEFAZ aponta:
+                                    <b>{{ dfe_cursor.sefaz_ult }}</b>{% endif %}
+                                    {% if dfe_cursor.ult_sucesso %} · última captura com sucesso:
+                                    {{ dfe_cursor.ult_sucesso.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+
                             {% if current_user.is_admin() %}
-                            {# Alavanca perigosa: recolhida atrás de um clique e marcada como avançada. #}
-                            <details class="fv-nsu-adv" style="margin-top:16px;">
+                            {# Alavanca perigosa: recolhida atrás de um clique e marcada como avançada.
+                               Abre SOZINHA quando o cursor está travado — é exatamente quando ela
+                               serve, e no celular ninguém vai caçar um <details> fechado. #}
+                            <details class="fv-nsu-adv" style="margin-top:16px;"
+                                     {% if dfe_cursor and dfe_cursor.travado %}open{% endif %}>
                                 <summary>Ajuste avançado (admin) — semear cursor de NSU</summary>
                                 <div style="margin-top:10px; padding:12px; border:1px dashed #d1d5db; border-radius:6px; background:#fafafa;">
                                     <div style="font-size:13px; color:#64748b; margin-bottom:8px;">
@@ -1327,10 +1358,14 @@
                                         capturados</strong> — se precisar deles, obtenha por outro meio
                                         (importação manual do XML).
                                     </div>
+                                    {# value já vem preenchido com o ultNSU que a SEFAZ mandou
+                                       usar: no celular, digitar número de 5 dígitos a partir de
+                                       um log é convite a errar. O campo segue editável. #}
                                     <input type="number" id="dfeSeedNsu" min="0"
                                            placeholder="ultNSU informado pela SEFAZ"
-                                           style="width:240px; padding:6px; margin-right:6px;">
-                                    <button type="button" class="btn" style="background:#b45309; color:#fff;"
+                                           {% if dfe_cursor and dfe_cursor.travado %}value="{{ dfe_cursor.sefaz_ult }}"{% endif %}
+                                           style="width:240px; max-width:100%; padding:8px; margin-right:6px;">
+                                    <button type="button" class="btn" style="background:#b45309; color:#fff; padding:10px 16px;"
                                             onclick="dfeSeed({{ cliente.id }})">Semear cursor de NSU</button>
                                 </div>
                             </details>
