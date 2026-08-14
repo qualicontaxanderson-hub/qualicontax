@@ -114,6 +114,16 @@ class RejeicaoADN(ADNError):
     """StatusProcessamento = REJEICAO. NÃO é fim de fila; o cursor NÃO avança."""
 
 
+class LimiteDeTaxa(ADNError):
+    """HTTP 429 — o ADN mandou desacelerar, e não há mais espera a fazer.
+
+    Medido em 14/08/2026, na primeira consulta real: o ADN devolve 429 depois de
+    POUCAS chamadas seguidas, com corpo em HTML. Não é erro de dado nem de
+    credencial; é ritmo. Quem recebe isto deve PARAR a empresa e retomar no
+    ciclo seguinte — o cursor fica onde está e nada se perde.
+    """
+
+
 # Status que o ADN devolve. Nomes fechados; qualquer outro é tratado como
 # desconhecido e vira erro, em vez de ser silenciosamente lido como "acabou".
 STATUS_COM_DOCS = 'DOCUMENTOS_LOCALIZADOS'
@@ -289,6 +299,25 @@ def _get(sessao, url, params, tentativa_de=TENTATIVAS):
                 raise ADNAuthError(
                     f'ADN recusou o certificado para esta consulta (HTTP {r.status_code}). '
                     f'Provável: o certificado não tem a mesma raiz de CNPJ do consultado.')
+            if r.status_code == 429:
+                # LIMITE DE TAXA. Antes caía no ramo "< 500 devolve", e o corpo
+                # HTML do 429 chegava ao _para_lote como "resposta que não é
+                # JSON" — mensagem que manda investigar o lugar errado. Espera
+                # o Retry-After quando ele vem; senão, backoff normal.
+                espera = r.headers.get('Retry-After')
+                try:
+                    espera = int(espera) if espera else BACKOFF_BASE ** (n + 1)
+                except ValueError:
+                    espera = BACKOFF_BASE ** (n + 1)
+                if n < tentativa_de - 1:
+                    logger.info('[nfse-adn] 429 em %s — aguardando %ss (tentativa %d/%d)',
+                                url, espera, n + 1, tentativa_de)
+                    time.sleep(min(espera, 60))
+                    continue
+                raise LimiteDeTaxa(
+                    f'ADN recusou por limite de taxa (429) após {tentativa_de} '
+                    f'tentativas. Pare esta empresa e retome no ciclo seguinte; '
+                    f'o cursor fica onde está.')
             if r.status_code == 404:
                 # 404 é resposta de negócio no ADN (devolve o mesmo schema),
                 # não erro de transporte — quem interpreta é o chamador.
@@ -312,7 +341,14 @@ def _para_lote(resposta, ambiente: 'Ambiente' = None) -> LoteDFe:
     try:
         d = resposta.json() or {}
     except ValueError as exc:
-        raise ADNError(f'ADN devolveu resposta que não é JSON: {exc}') from exc
+        # Diz o QUE veio, não só que falhou. "Não é JSON" sozinho manda o leitor
+        # investigar o parser quando o problema é HTTP — foi o que aconteceu no
+        # 429 de 14/08/2026, cuja pagina de erro vem em HTML.
+        ct = (resposta.headers.get('Content-Type') or '?')
+        amostra = (resposta.text or '')[:120].replace('\n', ' ')
+        raise ADNError(
+            f'ADN devolveu HTTP {resposta.status_code} com Content-Type {ct}, '
+            f'não JSON. Começo do corpo: {amostra!r}') from exc
 
     status = d.get('StatusProcessamento')
     lote = LoteDFe(
