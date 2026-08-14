@@ -214,22 +214,38 @@ def enviar(token):
     modalidade = (request.form.get('modalidade_trabalho') or '').strip().upper()
     deps = [int(d) for d in request.form.getlist('departamentos') if d.isdigit()]
 
-    def erro(msg):
+    def erro(msg, causa):
+        """Recusa de validação: devolve o formulário com a mensagem E DEIXA
+        RASTRO.
+
+        Antes este caminho era CEGO. As recusas abaixo acontecem ANTES do
+        consumo do token — de propósito, para um erro de digitação não queimar
+        o convite —, mas isso significa que um candidato barrado não deixa
+        marca em lugar nenhum: o link continua PENDENTE, nada entra em
+        cadastro_pendente, e o log ficava mudo. Em 13/08/2026 cinco candidatos
+        não chegaram à fila e não houve como saber se erraram algo, se o
+        formulário quebrou ou se nem enviaram.
+
+        Só o motivo e o prefixo do token vão para o log — nunca o token inteiro
+        (é credencial) nem CPF/endereço/dado bancário do candidato.
+        """
+        logger.info('[cadastro] envio BARRADO na validacao (%s) — link %s… '
+                    'segue PENDENTE, nada gravado.', causa, (token or '')[:8])
         return render_template('cadastro/formulario.html',
                                token=token, erro=msg, form=request.form,
                                departamentos=_departamentos()), 400
 
     if len(nome) < 5 or ' ' not in nome:
-        return erro('Informe seu nome completo (nome e sobrenome).')
+        return erro('Informe seu nome completo (nome e sobrenome).', 'nome_incompleto')
     if not cadastro_sugestoes.login_valido(login):
-        return erro('Escolha um dos logins sugeridos.')
+        return erro('Escolha um dos logins sugeridos.', 'login_formato_invalido')
     if not cadastro_sugestoes.login_disponivel(login):
-        return erro('Esse login acabou de ser tomado. Escolha outro da lista.')
+        return erro('Esse login acabou de ser tomado. Escolha outro da lista.', 'login_ja_tomado')
 
     # Modalidade é obrigatória para TODOS e checada contra o ENUM no servidor:
     # o front manda um dos três; lixo forjado cai aqui como 400, não 500.
     if modalidade not in _MODALIDADES:
-        return erro('Escolha como você vai trabalhar: home office, escritório ou híbrido.')
+        return erro('Escolha como você vai trabalhar: home office, escritório ou híbrido.', 'modalidade_ausente')
 
     # Quem JÁ é funcionário: e-mail e celular corporativos são obrigatórios e
     # validados no servidor (o front esconde/mostra, mas não é a fonte da verdade).
@@ -238,12 +254,12 @@ def enviar(token):
     if ja_func:
         if not email_corp:
             return erro('Informe seu e-mail corporativo — você marcou que já '
-                        'trabalha na Qualicontax.')
+                        'trabalha na Qualicontax.', 'email_corp_ausente')
         if not _EMAIL_RE.match(email_corp):
-            return erro('O e-mail corporativo não parece válido. Confira e tente de novo.')
+            return erro('O e-mail corporativo não parece válido. Confira e tente de novo.', 'email_corp_invalido')
         if len(cel_corp_dig) < 10:
             return erro('Informe seu celular corporativo com DDD — você marcou que '
-                        'já trabalha na Qualicontax.')
+                        'já trabalha na Qualicontax.', 'celular_corp_invalido')
 
     # O consumo é ATÔMICO: quem obtiver rowcount==1 segue. Dois envios
     # simultâneos do mesmo link resultam num cadastro e num "já utilizado".
