@@ -84,6 +84,36 @@
     {% if dropbox_espaco %}
     <div class="ef-section-label">Armazenamento</div>
 
+    {# SAÚDE — o indicador que vale. Mede escopo de ARQUIVO (files_get_metadata
+       na _ENTRADA), que é a capacidade da qual o sistema depende de verdade.
+       Fica ACIMA do espaço porque é o que responde "está funcionando?". #}
+    {% if dropbox_saude %}
+    <style>
+    .dbx-saude { display:flex; align-items:flex-start; gap:10px; border-radius:12px;
+                 padding:12px 16px; margin-bottom:12px; font-size:13px; line-height:1.5; }
+    .dbx-saude.ok  { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+    .dbx-saude.mal { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .dbx-saude i   { margin-top:2px; }
+    .dbx-saude b   { font-weight:800; }
+    </style>
+    <div class="dbx-saude {{ 'ok' if dropbox_saude.ok else 'mal' }}">
+        <i class="fas fa-{{ 'circle-check' if dropbox_saude.ok else 'circle-exclamation' }}"></i>
+        <span>
+        {% if dropbox_saude.ok %}
+            <b>Arquivos funcionando.</b> Leitura e gravação no Dropbox respondendo
+            normalmente.
+        {% elif dropbox_saude.escopo_faltando %}
+            <b>Falta um escopo no app do Dropbox.</b> As credenciais estão válidas —
+            conceda o escopo no App Console e gere um refresh token <b>novo</b>
+            (escopo novo não vale para token já emitido).
+            <div style="margin-top:6px;font-size:11px;opacity:.8;">{{ dropbox_saude.erro }}</div>
+        {% else %}
+            <b>Arquivos indisponíveis.</b> {{ dropbox_saude.erro }}
+        {% endif %}
+        </span>
+    </div>
+    {% endif %}
+
     {# Card detalhado do Dropbox: barra, idade da leitura e botão Atualizar.
        O carrossel acima mostra o percentual de relance; aqui fica o detalhe e
        a ação. Quando a credencial falha, o carrossel OMITE o card (0 GB
@@ -150,8 +180,16 @@
             </div>
             {% endif %}
         {% else %}
+        {# ESPAÇO indisponível NÃO é alarme de credencial. A leitura de espaço
+           usa account_info.read, escopo que nada tem a ver com arquivo — o
+           sistema segue gravando e lendo sem ele. O motivo fica em letra
+           miúda, para diagnóstico, sem virar susto. #}
         <div class="dbx-alerta cinza">
-            <i class="fas fa-circle-info"></i> {{ dropbox_espaco.erro or 'Espaço indisponível.' }}
+            <i class="fas fa-circle-info"></i>
+            <b>Espaço indisponível.</b> Não afeta o envio nem a leitura de arquivos.
+            {% if dropbox_espaco.erro %}
+            <div style="margin-top:6px;font-size:11px;opacity:.75;">{{ dropbox_espaco.erro }}</div>
+            {% endif %}
         </div>
         {% endif %}
     </div>

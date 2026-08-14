@@ -32,11 +32,17 @@ def index():
     # cache de 1h em app_config — o render normal não bate na API do Dropbox.
     # Consultado apenas para admin para que um refresh de não-admin nem chegue
     # perto de gastar rate limit.
-    espaco = None
+    # SAÚDE e ESPAÇO são coisas diferentes e passaram a ser medidas separado:
+    # saúde por escopo de ARQUIVO (o que o sistema usa), espaço por
+    # account_info.read (informativo). Antes o painel gritava "credencial
+    # inválida" por causa do segundo, com o primeiro funcionando perfeitamente.
+    espaco = saude = None
     if current_user.is_admin():
-        from utils.dropbox_space import get_space
+        from utils.dropbox_space import get_saude, get_space
+        saude = get_saude()
         espaco = get_space()
-    return render_template('configuracoes/index.html', dropbox_espaco=espaco)
+    return render_template('configuracoes/index.html',
+                           dropbox_espaco=espaco, dropbox_saude=saude)
 
 
 # ---------------------------------------------------------------------------

@@ -199,3 +199,71 @@ def get_space(force: bool = False) -> dict:
     payload = _montar(bruto['usado'], bruto['total'], bruto.get('tipo'))
     _gravar_cache(payload)
     return payload
+
+
+# ---------------------------------------------------------------------------
+# SAÚDE — separada de ESPAÇO, e de propósito
+#
+# O painel dizia "Dropbox quebrado" com base numa chamada que o app NÃO precisa
+# para funcionar: users_get_space_usage exige o escopo account_info.read, que
+# não tem relação nenhuma com arquivo. Resultado real, medido em 14/08/2026: o
+# aviso de credencial inválida ficou aceso na tela enquanto o Q-Colabore gravava
+# arquivos e o Portal servia o instalador — os dois lendo e escrevendo no
+# Dropbox sem qualquer problema.
+#
+# O estrago não é o incômodo de hoje. É que a MESMA mensagem vai aparecer no dia
+# em que o refresh token expirar de verdade, e a essa altura todo mundo já terá
+# aprendido a ignorá-la. Um alerta que mente rotineiramente deixa de ser alerta.
+#
+# Por isso agora são dois eixos independentes:
+#   SAÚDE  = escopo de ARQUIVO (files_get_metadata). É a capacidade da qual o
+#            sistema depende; se ela cai, algo realmente parou.
+#   ESPAÇO = informativo. Falhar aqui vira "espaço indisponível", nunca alarme
+#            de credencial.
+#
+# Não há cache aqui de propósito: é UMA chamada de metadados, só para admin, e
+# um número de saúde velho não serve para nada — ou funciona agora, ou não.
+# ---------------------------------------------------------------------------
+
+def get_saude() -> dict:
+    """O Dropbox está utilizável para ARQUIVO? NUNCA levanta exceção.
+
+    Devolve ``{'ok', 'erro', 'escopo_faltando', 'caminho'}``.
+
+    Mede pedindo os metadados da ``_ENTRADA`` — a porta por onde todo arquivo
+    do sistema entra. Pasta ausente devolve None sem erro: isso é 'autenticou,
+    mas a pasta não existe', que é problema de configuração de pasta e não de
+    credencial. Os dois casos são reportados com textos diferentes porque as
+    ações são diferentes.
+    """
+    from utils import dropbox_sync
+
+    if not dropbox_sync.is_configured():
+        return {'ok': False, 'escopo_faltando': False, 'caminho': None,
+                'erro': 'Dropbox não configurado (DROPBOX_REFRESH_TOKEN, '
+                        'DROPBOX_APP_KEY e DROPBOX_APP_SECRET).'}
+
+    svc = dropbox_sync._service
+    try:
+        caminho = svc.pasta_cert_novo()
+    except Exception as exc:
+        logger.warning('[dropbox-saude] falha ao montar o caminho: %s', exc)
+        return {'ok': False, 'escopo_faltando': False, 'caminho': None,
+                'erro': 'Não consegui montar o caminho da _ENTRADA: %s' % exc}
+
+    try:
+        md = svc.file_metadata(caminho)
+    except Exception as exc:
+        escopo = getattr(dropbox_sync.DropboxService, '_is_scope_error')(exc)
+        logger.warning('[dropbox-saude] leitura de %s falhou (escopo=%s): %s',
+                       caminho, escopo, exc)
+        return {'ok': False, 'escopo_faltando': bool(escopo),
+                'caminho': caminho, 'erro': str(exc)}
+
+    if md is None:
+        # Autenticou e leu — a pasta é que não está lá.
+        return {'ok': False, 'escopo_faltando': False, 'caminho': caminho,
+                'erro': 'A pasta %s não existe no Dropbox. As credenciais estão '
+                        'válidas — o que falta é a pasta.' % caminho}
+
+    return {'ok': True, 'escopo_faltando': False, 'caminho': caminho, 'erro': None}

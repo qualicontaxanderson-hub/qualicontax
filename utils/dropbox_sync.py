@@ -157,6 +157,40 @@ class DropboxService:
             or 'insufficient_scope' in exc_str
         )
 
+    @staticmethod
+    def _is_scope_error(exc: Exception) -> bool:
+        """True quando o 401 é de ESCOPO, não de credencial.
+
+        As duas coisas chegam aqui como AuthError e por muito tempo foram
+        tratadas como uma só. Não são: token válido + escopo faltando resulta
+        em operação recusada com credencial perfeita. Foi o que aconteceu com
+        ``users_get_space_usage`` (exige ``account_info.read``), que passou a
+        acusar "credenciais expiradas" enquanto o app gravava e lia arquivo
+        normalmente — acusação do inocente, e das piores, porque manda o
+        operador trocar justamente o que está certo.
+        """
+        s = str(exc)
+        return 'missing_scope' in s or 'insufficient_scope' in s
+
+    def _erro_auth(self, exc: Exception) -> 'DropboxAuthError':
+        """Constrói o erro de auth com a mensagem CERTA para a causa.
+
+        Único lugar que redige esse texto. Antes eram nove pontos repetindo a
+        mesma frase, o que garantia que qualquer melhora de diagnóstico
+        precisaria ser feita nove vezes — e que uma delas ficaria para trás.
+        """
+        if self._is_scope_error(exc):
+            return DropboxAuthError(
+                'O app do Dropbox não tem permissão para esta operação '
+                '(escopo faltando). As credenciais estão válidas — conceda o '
+                'escopo no App Console e gere um refresh token NOVO, porque '
+                'escopo novo não vale para token já emitido.'
+            )
+        return DropboxAuthError(
+            'Credenciais Dropbox inválidas ou expiradas. '
+            'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
+        )
+
     def list_folder(self, path: str, recursive: bool = False) -> list:
         """Lista itens de uma pasta (arquivos e sub-pastas).
 
@@ -204,10 +238,7 @@ class DropboxService:
                         logger.info('Dropbox list_folder: token expirado, renovando silenciosamente...')
                         continue
                     logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
-                    raise DropboxAuthError(
-                        'Credenciais Dropbox inválidas ou expiradas. '
-                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
-                    ) from exc
+                    raise self._erro_auth(exc) from exc
                 logger.error('Dropbox list_folder ERRO path=%r: %s', path, exc)
                 raise DropboxError(f'Erro ao listar pasta Dropbox {path!r}: {exc}') from exc
 
@@ -242,10 +273,7 @@ class DropboxService:
                     if _attempt == 0:
                         logger.info('Dropbox file_metadata: token expirado, renovando...')
                         continue
-                    raise DropboxAuthError(
-                        'Credenciais Dropbox inválidas ou expiradas. '
-                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
-                    ) from exc
+                    raise self._erro_auth(exc) from exc
                 if 'not_found' in str(exc):
                     return None
                 raise DropboxError(f'Erro ao ler metadados de {path!r}: {exc}') from exc
@@ -269,10 +297,7 @@ class DropboxService:
                     if _attempt == 0:
                         logger.info('Dropbox _path_exists: token expirado, renovando silenciosamente...')
                         continue
-                    raise DropboxAuthError(
-                        'Credenciais Dropbox inválidas ou expiradas. '
-                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
-                    ) from exc
+                    raise self._erro_auth(exc) from exc
                 if 'not_found' in str(exc):
                     return False
                 logger.warning(
@@ -337,7 +362,7 @@ class DropboxService:
                         if _auth_try == 0:
                             logger.info('Dropbox download_file: token expirado, renovando silenciosamente...')
                             continue
-                        raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                        raise self._erro_auth(exc) from exc
                     # Erro de rede transiente → retry no loop externo
                     if _is_retryable(exc) and _net_try < _MAX_NETWORK_TRIES - 1:
                         logger.warning('Dropbox download_file: erro transiente (tentativa %d/%d): %s',
@@ -366,7 +391,7 @@ class DropboxService:
                     if _attempt == 0:
                         logger.info('Dropbox ensure_folder: token expirado, renovando silenciosamente...')
                         continue
-                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                    raise self._erro_auth(exc) from exc
                 if 'conflict' not in str(exc):
                     logger.warning('Falha ao criar pasta %s: %s', path, exc)
                 return
@@ -398,7 +423,7 @@ class DropboxService:
                     if _attempt == 0:
                         logger.info('Dropbox move_file: token expirado, renovando silenciosamente...')
                         continue
-                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                    raise self._erro_auth(exc) from exc
                 logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
                 return False
 
@@ -427,7 +452,7 @@ class DropboxService:
                     if _attempt == 0:
                         logger.info('Dropbox copy_file: token expirado, renovando silenciosamente...')
                         continue
-                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                    raise self._erro_auth(exc) from exc
                 logger.error('Erro ao copiar %s → %s: %s', from_path, to_path, exc)
                 return False
 
@@ -458,7 +483,7 @@ class DropboxService:
                     if _attempt == 0:
                         logger.info('Dropbox upload_bytes: token expirado, renovando silenciosamente...')
                         continue
-                    raise DropboxAuthError('Credenciais Dropbox inválidas ou expiradas.') from exc
+                    raise self._erro_auth(exc) from exc
                 logger.error('Erro ao enviar %s ao Dropbox: %s', path, exc)
                 return False
         return False
@@ -518,10 +543,7 @@ class DropboxService:
                         logger.info('Dropbox get_space_usage: token expirado, renovando...')
                         continue
                     logger.error('Dropbox get_space_usage ERRO: %s', exc)
-                    raise DropboxAuthError(
-                        'Credenciais Dropbox inválidas ou expiradas. '
-                        'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
-                    ) from exc
+                    raise self._erro_auth(exc) from exc
                 logger.error('Dropbox get_space_usage ERRO: %s', exc)
                 raise DropboxError(f'Erro ao consultar o espaço do Dropbox: {exc}') from exc
 
