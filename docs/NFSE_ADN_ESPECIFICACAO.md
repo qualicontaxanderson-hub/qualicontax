@@ -451,7 +451,7 @@ Mesma convenção do DFe.
 utils/integrations/nfse_adn/
 ├── __init__.py
 ├── client.py         ✅ JÁ ESCRITO (commit 6dea581)
-├── parser.py         ⬜ único lugar que conhece nome de campo/XPath
+├── parser.py         ✅ JÁ ESCRITO (commit 53c72c9) — o único que conhece campo
 ├── repositorio.py    ⬜ persistência e o escritor único de situacao
 └── captura.py        ⬜ orquestração, backfill vs incremental
 ```
@@ -504,14 +504,26 @@ NFSe/
 ```
 
 > ### ⚠️ TODO XPATH DEVE SER ABSOLUTO
-> Quatro nomes existem em níveis diferentes: **`valores`**, **`IBSCBS`**,
-> **`trib`** e **`CST`**.
+> **Cinco** nomes existem em níveis diferentes — a spec dizia quatro até a
+> extração dos XPaths para o `parser.py` revelar o quinto:
 >
-> O pior é o `CST`: aparece em `tribFed/piscofins/CST` (PIS/COFINS) **e** em
-> `IBSCBS/.../gIBSCBS/CST` (IBS/CBS). Tributos completamente diferentes, mesmo
-> nome — e ler o errado não quebra nada, só fica errado em silêncio.
+> | Nome | Onde |
+> |---|---|
+> | `valores` | `infNFSe/valores/` × `.../DPS/infDPS/valores/` |
+> | `IBSCBS` | `infNFSe/IBSCBS/` × `.../DPS/infDPS/IBSCBS/` |
+> | `trib` | `.../valores/trib/` × `.../IBSCBS/valores/trib/` |
+> | `CST` | `tribFed/piscofins/CST` (PIS/COFINS) × `gIBSCBS/CST` (IBS/CBS) |
+> | **`vBC`** | `infNFSe/valores/vBC` (base do ISS) × `infNFSe/IBSCBS/valores/vBC` (base do IBS/CBS) |
 >
-> **Nenhuma busca por nome de elemento. Nunca.**
+> E ainda `vIBSUF`, `vIBSMun` e `vCBS`, que existem no totalizador normal **e de
+> novo** em `totCIBS/gTribCompraGov/`.
+>
+> O pior continua sendo o `CST`: tributos completamente diferentes, mesmo nome —
+> e ler o errado não quebra nada, só fica errado em silêncio.
+>
+> **Nenhuma busca por nome de elemento. Nunca.** O `parser._no()` desce filho a
+> filho por esse motivo: busca larga pega o primeiro que encontrar, e "o
+> primeiro" não é regra nenhuma.
 
 ### 9.2 `cStat` é de GERAÇÃO, não de cancelamento
 
