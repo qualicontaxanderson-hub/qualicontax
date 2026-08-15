@@ -1492,7 +1492,73 @@ def status_sefaz():
         filtros=fs, filters_active=filtros_ativos,
         total_empresas=total_empresas, total_certs=total_certs,
         cert_laranja=laranja, cert_amarelo=amarelo,
+        travadas=_capturas_travadas(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Capturas travadas — quem parou de receber nota, e há quanto tempo
+#
+# POR QUE ISTO EXISTE. O 656 ("consumo indevido") é invisível: a empresa some da
+# captura e ninguém percebe até faltar nota na conferência. Medido em 14/08/2026:
+# o Novo Horizonte estava parado havia 2 dias, o Serafim havia UMA SEMANA, e o
+# Pavão e o B2T NUNCA tinham capturado — cursor em 0 desde o cadastro.
+#
+# A tela mostrava totais bonitos (6.445 CT-e, R$ 20 milhões de frete) e escondia
+# isso. Aqui o critério é o oposto: só aparece quem está com problema, ordenado
+# pelo pior. Empresa em dia não polui a lista.
+#
+# O ATRASO É A MEDIDA CERTA, e não "dias sem capturar": medido na mesma data, a
+# taxa de recusa da SEFAZ cresce com o tamanho do atraso — 35% em dia, 78% com
+# 1–50 atrasados, 100% acima de 500. É um círculo vicioso, e o atraso é o que
+# diz a que altura do poço a empresa está.
+# ---------------------------------------------------------------------------
+def _capturas_travadas(limite=25):
+    """Empresas cuja captura de NF-e parou. Só leitura, uma consulta.
+
+    Devolve dicts com atraso (documentos represados), dias parada, taxa de 656 e
+    se o cursor nunca saiu do zero — este último é o caso que NÃO se resolve
+    sozinho e exige seed manual.
+    """
+    linhas = execute_query(
+        """SELECT c.id, c.numero_cliente AS numero, c.nome_razao_social AS razao,
+                  n.ult_nsu, n.ult_status, n.proximo_permitido,
+                  (SELECT MAX(l.ret_ult_nsu) FROM dfe_consulta_log l
+                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
+                      AND l.momento >= NOW() - INTERVAL 7 DAY) AS sefaz_ult,
+                  (SELECT MAX(l.momento) FROM dfe_consulta_log l
+                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
+                      AND l.c_stat IN ('137','138')) AS ult_sucesso,
+                  (SELECT ROUND(100 * SUM(l.c_stat='656') / COUNT(*))
+                     FROM dfe_consulta_log l
+                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
+                      AND l.evento = 'consulta'
+                      AND l.momento >= NOW() - INTERVAL 7 DAY) AS taxa656
+             FROM dfe_nsu n
+             JOIN clientes c ON c.id = n.cliente_id AND c.situacao = 'ATIVO'""",
+        fetch=True) or []
+
+    agora = datetime.now(ZoneInfo('America/Sao_Paulo')).replace(tzinfo=None)
+    saida = []
+    for r in linhas:
+        atraso = (r.get('sefaz_ult') or 0) - (r.get('ult_nsu') or 0)
+        if atraso <= 0:
+            continue                      # em dia: não é assunto desta lista
+        ult = r.get('ult_sucesso')
+        dias = (agora - ult).days if ult else None
+        saida.append({
+            'id': r['id'], 'numero': r['numero'], 'razao': r['razao'],
+            'atraso': atraso, 'ult_nsu': r['ult_nsu'], 'sefaz_ult': r['sefaz_ult'],
+            'taxa656': int(r['taxa656'] or 0),
+            'ult_sucesso': ult, 'dias_parada': dias,
+            # Cursor em 0 = nunca capturou. A SEFAZ não despeja o histórico
+            # inteiro de uma vez, então esta NUNCA destrava sozinha: é o único
+            # caso em que o seed manual é o remédio, e não paliativo.
+            'nunca_capturou': not r.get('ult_nsu'),
+        })
+    # Pior primeiro: quem nunca capturou, depois pelo tamanho do atraso.
+    saida.sort(key=lambda x: (not x['nunca_capturou'], -x['atraso']))
+    return saida[:limite]
 
 
 # ---------------------------------------------------------------------------

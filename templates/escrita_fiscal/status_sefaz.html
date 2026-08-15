@@ -224,6 +224,88 @@
     <div><b>CT-e tem fila própria.</b> O <b>CTeDistribuicaoDFe</b> é outro webservice: cursor de NSU e cota de 1h (656) <b>independentes</b> da NF-e — capturar CT-e não gasta a cota de NF-e. E CT-e <b>não tem resumo</b>: o documento já vem completo, então não existe linha incompleta esperando complemento.</div>
 </div>
 
+{# ── CAPTURAS TRAVADAS ────────────────────────────────────────────────────
+   Fica ANTES dos filtros e da lista geral de propósito: é a única parte desta
+   tela que pede AÇÃO. Os totais acima informam; isto cobra.
+
+   Só aparece quem tem documento represado — empresa em dia não entra. Se a
+   lista some, é porque não há nada travado, e o silêncio aqui é boa notícia. #}
+{% if travadas %}
+<style>
+.trv-card{background:#fff;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:12px;
+          padding:16px 18px;margin-bottom:22px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.trv-tit{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;color:#991b1b;margin-bottom:4px;}
+.trv-sub{font-size:12.5px;color:#64748b;margin-bottom:12px;line-height:1.5;}
+.trv-tab{width:100%;border-collapse:collapse;font-size:13px;}
+.trv-tab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;
+            color:#64748b;font-weight:700;padding:6px 8px;border-bottom:1px solid #e5e7eb;}
+.trv-tab td{padding:9px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+.trv-tab tr:last-child td{border-bottom:none;}
+.trv-emp{font-weight:700;color:#0f172a;text-decoration:none;}
+.trv-emp:hover{text-decoration:underline;}
+.trv-num{font-variant-numeric:tabular-nums;font-weight:700;}
+.trv-tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
+.trv-tag.nunca{background:#fee2e2;color:#991b1b;}
+.trv-tag.parada{background:#ffedd5;color:#9a3412;}
+@media(max-width:720px){
+  .trv-tab thead{display:none;}
+  .trv-tab tr{display:block;border-bottom:1px solid #e5e7eb;padding:10px 0;}
+  .trv-tab td{display:flex;justify-content:space-between;gap:12px;border:none;padding:3px 0;}
+  .trv-tab td::before{content:attr(data-rot);font-size:11px;text-transform:uppercase;
+                      color:#94a3b8;font-weight:700;}
+}
+</style>
+<div class="trv-card">
+    <div class="trv-tit">
+        <i class="fas fa-triangle-exclamation"></i>
+        Capturas travadas — {{ travadas|length }} empresa(s)
+    </div>
+    <div class="trv-sub">
+        Estas empresas têm documento esperando na SEFAZ e não estão recebendo. O
+        <b>atraso</b> é quantos documentos estão represados; quanto maior, mais a SEFAZ
+        recusa — é um círculo vicioso. Quem está em dia não aparece aqui.
+    </div>
+    <table class="trv-tab">
+        <thead>
+            <tr>
+                <th>Empresa</th><th>Atraso</th><th>Situação</th>
+                <th>Recusa</th><th>Cursor</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for t in travadas %}
+            <tr>
+                <td data-rot="Empresa">
+                    <a class="trv-emp" href="{{ url_for('clientes.detalhes', id=t.id) }}#certificado">
+                        {{ t.numero or 's/nº' }} — {{ t.razao }}
+                    </a>
+                </td>
+                <td data-rot="Atraso"><span class="trv-num">{{ t.atraso }}</span> doc.</td>
+                <td data-rot="Situação">
+                    {% if t.nunca_capturou %}
+                        <span class="trv-tag nunca">nunca capturou</span>
+                    {% elif t.dias_parada is not none %}
+                        <span class="trv-tag parada">parada há {{ t.dias_parada }} dia(s)</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td data-rot="Recusa">{{ t.taxa656 }}% de 656</td>
+                <td data-rot="Cursor">{{ t.ult_nsu }} → {{ t.sefaz_ult }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if travadas | selectattr('nunca_capturou') | first %}
+    <div style="margin-top:12px;padding:10px 12px;background:#fef2f2;border-radius:8px;
+                font-size:12.5px;color:#991b1b;line-height:1.55;">
+        <b>As marcadas como “nunca capturou” não destravam sozinhas.</b> O cursor está em
+        zero e a SEFAZ não entrega o histórico inteiro de uma vez — por mais que o cron
+        insista, elas seguem recusadas. Abra a empresa e use <b>semear cursor de NSU</b>,
+        ciente de que os documentos anteriores não serão capturados.
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- POR EMPRESA -->
 
 <!-- ── Filtros ─────────────────────────────────────────────────────────── -->
