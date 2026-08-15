@@ -270,12 +270,38 @@ SQL_NSU_OK = (
 #   656 = "recusei". Medido: em 51% dos casos a SEFAZ estava anunciando fila
 #         REAL, que apareceu na consulta seguinte. Aqui esperar é caro — são
 #         justamente as empresas atrasadas, as que precisam de mais tentativas,
-#         não de menos. Volta para 60.
+#         não de menos. Vai para 75.
 #
-# Continua em env var: se a taxa de 656 subir de forma relevante, `railway
-# variables set DFE_COOLDOWN_656_MIN=130` desfaz sem redeploy.
+# ── POR QUE 75 E NÃO 60 (Nota Técnica 2014.002) ─────────────────────────────
+#
+# A NT manda esperar 1 HORA após um 137/656. E o detalhe que decide o número:
+# consultar ANTES de completar a hora **ZERA o relógio e recomeça a contagem**.
+# Quem tenta cedo demais não se atrasa um pouco — fica preso para sempre, e
+# cada nova tentativa renova a própria punição.
+#
+# 60 é exatamente o limite: qualquer diferença de relógio entre nós e a SEFAZ,
+# ou alguns segundos de fila no cron, e a consulta cai DENTRO da hora. 75 dá
+# 15 minutos de margem e ainda é quase o dobro do ritmo dos 130.
+#
+# ── E O QUE O RELÓGIO REALMENTE MEDE ────────────────────────────────────────
+#
+# A NT 1.14 diz que o 656 devolve "o número da última consulta realizada para o
+# CNPJ" — do CNPJ, não da aplicação. O contador e o relógio são COMPARTILHADOS
+# por qualquer sistema que consulte com certificado daquele CNPJ.
+#
+# Consequência prática, medida em 15/08/2026: o app.novohorizonte.com.br tem
+# captura própria dos MESMOS CNPJs. Quando ele consulta, o relógio zera; quando
+# nós consultamos minutos depois, cai dentro da hora e leva 656 — e o nosso 656
+# zera de novo, prejudicando o próximo. Os dois se atropelam indefinidamente.
+#
+# É por isso que o seed do Pavão NÃO resolveu (nunca foi o cursor) e por que 35
+# empresas funcionam sem problema: são as que só nós consultamos. Margem de
+# tempo AJUDA, mas não conserta CNPJ com dois consumidores — isso é decisão de
+# quem captura o quê.
+#
+# Continua em env var: `DFE_COOLDOWN_656_MIN` ajusta sem redeploy.
 _COOLDOWN_137_MIN = int(os.getenv('DFE_COOLDOWN_137_MIN', '130'))
-_COOLDOWN_656_MIN = int(os.getenv('DFE_COOLDOWN_656_MIN', '60'))
+_COOLDOWN_656_MIN = int(os.getenv('DFE_COOLDOWN_656_MIN', '75'))
 
 SQL_NSU_656 = (
     "INSERT INTO dfe_nsu "
