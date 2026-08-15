@@ -857,6 +857,25 @@ captura de NF-e, que já está estável em produção.
 
 Não implementar junto com a captura; spec própria depois da captura estável.
 
+> ### A TELA NASCE IGUAL ÀS DE ENTRADAS E SAÍDAS (decidido pelo Anderson, 15/08/2026)
+>
+> Não é tela nova inventada — é o mesmo molde que o escritório já usa todo dia:
+> cartões de indicadores no topo, bloco de **Filtros**, abas **Notas Fiscais /
+> Por Emissor / Por Produto / Chaves XML**, e os botões **Baixar XMLs**,
+> **Gerar PDF**, **Exportar** e **Excluir em Lote**. Cada nota como cartão, com
+> os mesmos selos.
+>
+> O que muda é só o conteúdo, e cabe no molde sem forçar:
+> * no lugar de ICMS/PIS/COFINS, os indicadores são **ISS, retenções e valor
+>   líquido**;
+> * o **papel** (emitida × tomada) vira filtro, como o tipo hoje;
+> * o período filtra por **competência** (`dCompet`), não por data de emissão —
+>   serviço de dezembro emitido em janeiro pertence a dezembro.
+>
+> Motivo: quem opera a Escrita Fiscal já sabe usar aquela tela. Uma tela com
+> outra lógica obrigaria a reaprender o que já é sabido, e o NFS-e não tem nada
+> de tão diferente que justifique isso.
+
 Escopo previsto: aba **NFS-e à direita do CT-e**, listagem por competência e
 papel, filtro por empresa, download de XML, e **conciliação com os lançamentos
 manuais** — que é onde o valor aparece para o escritório.
