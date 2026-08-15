@@ -249,8 +249,33 @@ SQL_NSU_OK = (
 # Em env var para calibrar sem redeploy: se 130 não derrubar a taxa, o plano B
 # é backoff progressivo por empresa (dobrar a cada 656 consecutivo, zerar no
 # primeiro sucesso), que exige coluna de contador.
+#
+# ── MEDIÇÃO DE 15/08/2026: os 130 no 656 NÃO derrubaram a taxa. ──────────────
+#
+#   com 60 min (01–03/08)    52–57% de 656   ~30 consultas/empresa/dia
+#   com 130 min (08–14/08)   48–54% de 656   ~10 consultas/empresa/dia
+#
+# Quatro pontos de melhora custaram DOIS TERÇOS da velocidade. E o preço não é
+# distribuído por igual: quem está em dia não perde nada com dez consultas ao
+# dia, mas quem está atrasado precisa de MUITAS rodadas para drenar o passado —
+# e com uma tentativa a cada 2h20 não alcança nunca. Foi assim que o B2T (1.236
+# atrasados) e o Serafim ficaram presos.
+#
+# OS DOIS CASOS PASSAM A SER DIFERENTES, porque significam coisas opostas:
+#
+#   137 = "não há nada novo". Perguntar de novo logo é inútil por definição:
+#         não há documento para trazer. Fica em 130 — é a maioria das rodadas e
+#         é onde a espera longa é gratuita.
+#
+#   656 = "recusei". Medido: em 51% dos casos a SEFAZ estava anunciando fila
+#         REAL, que apareceu na consulta seguinte. Aqui esperar é caro — são
+#         justamente as empresas atrasadas, as que precisam de mais tentativas,
+#         não de menos. Volta para 60.
+#
+# Continua em env var: se a taxa de 656 subir de forma relevante, `railway
+# variables set DFE_COOLDOWN_656_MIN=130` desfaz sem redeploy.
 _COOLDOWN_137_MIN = int(os.getenv('DFE_COOLDOWN_137_MIN', '130'))
-_COOLDOWN_656_MIN = int(os.getenv('DFE_COOLDOWN_656_MIN', '130'))
+_COOLDOWN_656_MIN = int(os.getenv('DFE_COOLDOWN_656_MIN', '60'))
 
 SQL_NSU_656 = (
     "INSERT INTO dfe_nsu "
@@ -794,10 +819,36 @@ def _retry_pendentes(empresa, ctx):
     empresa, busca a completa por chave (consChNFe) dentro do orçamento de cota
     RESTANTE do ciclo e faz o upgrade. Resolve os resumos antigos (29) e os que
     ficaram pendentes por teto/erro. Devolve o nº de resumos promovidos a completa."""
+    # LOG DE ENTRADA. Esta função era CEGA: não registrava nada, e por isso não
+    # havia como saber se os resumos pendentes estavam sendo tentados ou
+    # simplesmente ignorados. Em 15/08/2026 eram 243 resumos parados na base
+    # (65 da CLIRA, 21 da Petrogoiás, 6 do Easy Petro desde 10/08) sem uma única
+    # linha no log explicando o porquê. Diagnóstico no escuro é o que estas
+    # linhas eliminam.
+    cid = empresa["cliente_id"]
     if ctx.get("cooldown_656"):
+        # Metade das rodadas leva 656 — e nessas o retry NUNCA acontece. Sem
+        # este registro, um resumo pode ficar meses parado parecendo esquecido.
+        _n_pend = (execute_query(
+            "SELECT COUNT(*) AS c FROM nfe_importacoes WHERE cliente_id=%s "
+            "AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1",
+            (cid,), fetch=True, fetch_one=True) or {}).get('c') or 0
+        if _n_pend:
+            dfe_log.registrar('retry_pulado', cid, empresa.get('cnpj'),
+                              detalhe=f'{_n_pend} resumo(s) pendente(s) NÃO tentados: '
+                                      f'a rodada terminou em 656 (cota da SEFAZ)')
         return 0
     restante = ctx["chnfe_max"] - ctx["chnfe_usadas"]
     if restante <= 0:
+        _n_pend = (execute_query(
+            "SELECT COUNT(*) AS c FROM nfe_importacoes WHERE cliente_id=%s "
+            "AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1",
+            (cid,), fetch=True, fetch_one=True) or {}).get('c') or 0
+        if _n_pend:
+            dfe_log.registrar('retry_pulado', cid, empresa.get('cnpj'),
+                              detalhe=f'{_n_pend} resumo(s) pendente(s) NÃO tentados: '
+                                      f'a cota de consulta por chave do ciclo acabou '
+                                      f'({ctx["chnfe_usadas"]}/{ctx["chnfe_max"]})')
         return 0
     pend = execute_query(
         "SELECT chave_acesso FROM nfe_importacoes "
@@ -805,7 +856,10 @@ def _retry_pendentes(empresa, ctx):
         "ORDER BY id LIMIT %s",
         (empresa["cliente_id"], int(restante)), fetch=True,
     ) or []
+    if not pend:
+        return 0
     promovidas = 0
+    sem_completa = 0
     for row in pend:
         if ctx["chnfe_usadas"] >= ctx["chnfe_max"] or ctx.get("cooldown_656"):
             break
@@ -820,12 +874,27 @@ def _retry_pendentes(empresa, ctx):
             break
         xmlc = _primeiro_nfeproc(ret)
         if xmlc is None:
+            # A SEFAZ respondeu, mas SEM a nota completa. É o caso que mantém o
+            # resumo preso: contado à parte porque tentar-e-não-vir é diagnóstico
+            # diferente de nem-tentar.
+            sem_completa += 1
             continue
         try:
             _importar_nfe_completa(empresa, xmlc, ctx.get("cli_index"))
             promovidas += 1
         except Exception:
             logger.exception("[dfe] falha ao promover resumo pendente %s", chave)
+
+    # LOG DE SAÍDA: o que foi tentado e o que aconteceu. Sem isto, "6 resumos
+    # parados" é um fato sem causa — e não dá para saber se o remédio é esperar,
+    # mexer na cota ou buscar por outro caminho.
+    dfe_log.registrar(
+        'retry_pendentes', cid, empresa.get('cnpj'), docs=len(pend),
+        notas=promovidas,
+        detalhe=(f'{len(pend)} resumo(s) tentado(s) por chave: '
+                 f'{promovidas} promovido(s) a completa, '
+                 f'{sem_completa} sem completa disponível na SEFAZ'
+                 + (', 656 no meio (cota)' if ctx.get('cooldown_656') else '')))
     return promovidas
 
 
