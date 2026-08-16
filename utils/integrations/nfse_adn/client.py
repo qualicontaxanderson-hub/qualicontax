@@ -251,7 +251,35 @@ def resolver_certificado(cliente_id: int) -> Certificado:
                        dono_id=linha['cliente_id'])
 
 
-def abrir_sessao(cert: Certificado):
+class SessaoADN:
+    """Parece uma sessão, mas é uma FÁBRICA de sessões — uma por chamada.
+
+    O ``AdaptadorCertMemoria`` monta um contexto pyOpenSSL por pool e o reusa.
+    O ADN fecha a conexão entre chamadas, e ao abrir a segunda o urllib3 ajusta
+    ``verify_mode`` num contexto que já produziu conexão; o pyOpenSSL proíbe e
+    levanta ``Context has already been used to create a Connection``.
+
+    Descoberto no primeiro backfill real (MEGA, 15/08/2026): o primeiro lote
+    passou com 50 documentos e o segundo morreu no TLS. A captura de DFe nunca
+    tropeçou nisso porque faz UMA requisição por sessão — aqui são dezenas.
+
+    O material do certificado fica em memória e cada chamada ganha sessão nova:
+    custa um handshake por lote, irrelevante ao lado da pausa de 6s que já
+    existe, e não encosta no adaptador compartilhado com a captura de DFe.
+    """
+
+    def __init__(self, x509, chave_priv, cadeia):
+        self._material = (x509, chave_priv, cadeia)
+
+    def get(self, url, **kw):
+        s = montar_sessao_mtls(*self._material)
+        try:
+            return s.get(url, **kw)
+        finally:
+            s.close()
+
+
+def abrir_sessao(cert: Certificado) -> 'SessaoADN':
     """Sessão ``requests`` com mTLS pronta para o ADN.
 
     Reusa exatamente o caminho da captura de DFe: baixa o .pfx do Dropbox,
@@ -275,7 +303,7 @@ def abrir_sessao(cert: Certificado):
     except CertificadoError as exc:
         raise SemCertificado(f'Falha ao abrir o certificado: {exc}') from exc
 
-    return montar_sessao_mtls(x509, chave_priv, cadeia)
+    return SessaoADN(x509, chave_priv, cadeia)
 
 
 def _get(sessao, url, params, tentativa_de=TENTATIVAS):

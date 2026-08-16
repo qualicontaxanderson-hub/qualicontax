@@ -241,7 +241,11 @@ def capturar_empresa(empresa_id, cnpj, ambiente=client.Ambiente.PRODUCAO_RESTRIT
         parada, erro = 'erro do ADN', str(exc)
         _marcar_erro(cnpj, exc)
     except Exception as exc:                                  # noqa: BLE001
-        parada, erro = 'falha ao gravar', str(exc)
+        # Rede e ADN já foram tratados acima, então aqui é falha de gravação ou
+        # algo que não previmos. O rótulo é genérico DE PROPÓSITO: dizer "falha
+        # ao gravar" para um erro de TLS manda quem investiga para o lugar
+        # errado — foi o que aconteceu no backfill da MEGA em 15/08/2026.
+        parada, erro = 'falha inesperada', f'{type(exc).__name__}: {exc}'
         logger.exception('[nfse-captura] falha em %s', cnpj)
         _marcar_erro(cnpj, exc)
 

@@ -403,12 +403,20 @@ def _iss_retido(root, val_decl):
 # ---------------------------------------------------------------------------
 # Evento
 # ---------------------------------------------------------------------------
+# O pedido de registro mora DENTRO de infEvento, não solto na raiz. Confirmado
+# no primeiro backfill real (MEGA, 15/08/2026): a árvore que o ADN entrega é
+# evento > infEvento > pedRegEvento > infPedReg. Com o caminho errado, _no()
+# devolvia None e TODO evento saía sem chave, sem motivo e sem elemento — ou
+# seja, nenhum cancelamento jamais teria sido aplicado.
+CAMINHO_INFPEDREG = 'infEvento/pedRegEvento/infPedReg'
+
+
 def _grupo_especifico(root):
     """(nome_do_elemento, nó) do grupo de escolha dentro de infPedReg.
 
     O tipo do evento É o nome deste elemento — não existe tag ``tpEvento``.
     """
-    inf = _no(root, 'pedRegEvento/infPedReg')
+    inf = _no(root, CAMINHO_INFPEDREG)
     if inf is None:
         return None, None
     for filho in inf:
@@ -429,7 +437,7 @@ def evento_para_registro(xml_texto: str, envelope: dict, empresa_id: int,
     debaixo de nós.
     """
     root = _raiz(xml_texto, 'evento')
-    inf_pr = 'pedRegEvento/infPedReg'
+    inf_pr = CAMINHO_INFPEDREG
 
     tipo_envelope = envelope.get('TipoEvento')
     elemento, grupo = _grupo_especifico(root)
@@ -443,12 +451,33 @@ def evento_para_registro(xml_texto: str, envelope: dict, empresa_id: int,
 
     tipo = tipo_envelope or tipo_elemento
 
+    # A chave também vem do ENVELOPE, com o chNFSe do XML de conferência —
+    # mesma regra do tipo. O evento NSU 79 da MEGA (15/08/2026) chegou com
+    # chNFSe de 40 dígitos, o município cortou os dez zeros finais, enquanto o
+    # envelope trazia os 50. Ter confiado no XML gravaria uma referência que não
+    # casa com documento nenhum, e o cancelamento sumiria em silêncio.
+    chave_env = ''.join(c for c in str(envelope.get('ChaveAcesso') or '')
+                        if c.isdigit())
+    chave_xml = _txt(root, f'{inf_pr}/chNFSe')
+    if chave_xml and chave_env and chave_xml != chave_env:
+        if chave_env.startswith(chave_xml):
+            # Truncamento: o prefixo prova que é o MESMO documento, e o
+            # envelope tem a chave inteira. Fica no log e não vai para revisão —
+            # painel com defeito conhecido de município é painel ignorado.
+            logger.info('[nfse-parser] chNFSe truncado (%d de %d dígitos) no NSU %s; '
+                        'valendo a chave do envelope',
+                        len(chave_xml), len(chave_env), envelope.get('NSU'))
+        else:
+            d = f'envelope diz {chave_env} e o XML traz {chave_xml}'
+            divergencia = f'{divergencia}; {d}' if divergencia else d
+            logger.warning('[nfse-parser] divergência de chave no evento: %s', d)
+
     reg = {
         'empresa_id_origem': empresa_id,
         'cnpj_origem': ''.join(c for c in str(cnpj_interessado or '') if c.isdigit()),
         'nsu_origem': envelope.get('NSU'),
 
-        'chave_referenciada': _txt(root, f'{inf_pr}/chNFSe'),
+        'chave_referenciada': chave_env or chave_xml,
         'tipo_evento': tipo,
         # nSeqEvento é obrigatório (3 dígitos) e existe de verdade — nada de
         # default 0. Cancelamento é sempre 001; tipos repetíveis são numerados.
