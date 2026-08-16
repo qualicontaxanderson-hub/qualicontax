@@ -446,12 +446,33 @@ function renderEmpresaDropdown(q) {
     if (!filtered.length) {
         list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
     } else {
+        // O nome vai em data-nome, NUNCA dentro de um handler inline. A primeira
+        // versão desta tela montava onmousedown="selectEmpresa('1', "RAZAO SOCIAL")"
+        // — o atributo é delimitado por aspas duplas e terminava na primeira aspa
+        // do nome, então a lista abria e nada selecionava (15/08/2026, achado pelo
+        // Anderson no celular). Nome de empresa é dado do usuário; dado do usuário
+        // não entra em código executável.
         list.innerHTML = filtered.slice(0, 60).map(e =>
-            `<div class="cc-ac-item${e.id ? '' : ' all'}" onmousedown="selectEmpresa('${e.id}', ${JSON.stringify(e.nome)})">${esc(e.nome)}</div>`
+            `<div class="cc-ac-item${e.id ? '' : ' all'}" data-id="${esc(e.id)}" data-nome="${esc(e.nome)}">${esc(e.nome)}</div>`
         ).join('');
     }
     list.style.display = '';
 }
+
+// Delegação em POINTERDOWN, não mousedown: cobre dedo, mouse e caneta com um
+// só caminho. E o preventDefault segura o foco no campo — sem ele o blur
+// fecharia a lista antes de o toque virar clique, que é o jeito clássico de um
+// autocomplete "não selecionar" só no celular.
+(function ligarSelecaoDaEmpresa() {
+    const lista = document.getElementById('empresaAcList');
+    if (!lista) return;
+    lista.addEventListener('pointerdown', function (ev) {
+        const item = ev.target.closest('.cc-ac-item');
+        if (!item) return;
+        ev.preventDefault();
+        selectEmpresa(item.dataset.id || '', item.dataset.nome || '');
+    });
+})();
 function onEmpresaKeydown(e) {
     const items = document.getElementById('empresaAcList').querySelectorAll('.cc-ac-item');
     if (!items.length) return;
@@ -464,8 +485,10 @@ function onEmpresaKeydown(e) {
         items[acActiveIndex].scrollIntoView({block: 'nearest'});
     } else if (e.key === 'Enter') {
         e.preventDefault();
+        // Chama a seleção direto. Disparar um MouseEvent sintético aqui só
+        // funcionaria enquanto o handler fosse de mouse — e ele é de pointer.
         const t = acActiveIndex >= 0 ? items[acActiveIndex] : items[0];
-        if (t) t.dispatchEvent(new MouseEvent('mousedown'));
+        if (t) selectEmpresa(t.dataset.id || '', t.dataset.nome || '');
     } else if (e.key === 'Escape') {
         closeEmpresaDropdown();
     }
