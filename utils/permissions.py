@@ -15,6 +15,11 @@ PERMISSION_CATALOG = {
         # invalidar os perfis já cadastrados) — só o rótulo mudou.
         'escrita_fiscal.conf_compras':    'Conferência de Entradas',
         'escrita_fiscal.conf_cte':        'Conferência de CT-e',
+        # Nasce SEM vínculo com perfil nenhum: o admin já enxerga por
+        # has_permission, e liberar para um perfil vira um clique quando o
+        # Anderson decidir. Nada de @admin_required aqui — foi a lição da Caixa
+        # de entrada em 13/08/2026.
+        'escrita_fiscal.conf_nfse':       'Conferência de NFS-e',
         'escrita_fiscal.conf_saidas':     'Conferência de Saídas',
         'escrita_fiscal.q_robo':          'Painel do Q-Robô',
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',

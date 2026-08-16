@@ -1,0 +1,933 @@
+{% extends "base.html" %}
+{% block title %}Conferência de NFS-e - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
+<style>
+/* Espelha as classes cc-* da Conferência de CT-e (conf_cte.html), que por sua
+   vez espelha a de Entradas. A paleta é ÍNDIGO — mesma razão pela qual o CT-e
+   ficou teal: três telas com a mesma forma precisam de um sinal de cor para
+   ninguém achar que está na aba errada. Prefixo próprio (ns-) só onde o
+   comportamento difere. */
+
+/* ---- Layout ---- */
+.cc-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.cc-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+
+/* ---- Empresa selector bar ---- */
+.cc-empresa-bar { background:linear-gradient(120deg,#0b3b2b,#116a43); border-radius:12px; padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 2px 10px rgba(0,0,0,.15); }
+.cc-empresa-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.75); text-transform:uppercase; white-space:nowrap; letter-spacing:.5px; }
+.cc-empresa-bar select { padding:7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#312e81; background:rgba(255,255,255,.92); min-width:200px; font-weight:600; }
+.cc-empresa-ac { position:relative; min-width:320px; }
+.cc-empresa-ac input[type=text] { width:100%; padding:7px 32px 7px 12px; border:1.5px solid rgba(255,255,255,.25); border-radius:8px; font-size:13px; color:#312e81; background:rgba(255,255,255,.92); font-weight:600; box-sizing:border-box; cursor:text; }
+.cc-empresa-ac input[type=text]::placeholder { color:#64748b; font-weight:400; }
+.cc-empresa-ac .cc-ac-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; display:none; }
+.cc-ac-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:9999; max-height:260px; overflow-y:auto; }
+.cc-ac-item { padding:8px 12px; font-size:13px; color:#1e293b; cursor:pointer; border-bottom:1px solid #f1f5f9; }
+.cc-ac-item:last-child { border-bottom:none; }
+.cc-ac-item:hover, .cc-ac-item.active { background:#eef2ff; color:#4338ca; }
+.cc-ac-item.all { color:#64748b; font-style:italic; }
+.cc-ac-empty { padding:10px 12px; font-size:12px; color:#94a3b8; text-align:center; }
+.cc-scope-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700; margin-left:auto; }
+.cc-scope-badge.empresa { background:#dcfce7; color:#15803d; }
+.cc-scope-badge.grupo   { background:#eef2f0; color:#5b7468; }
+.cc-scope-badge.global  { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+
+/* ---- KPI cards ---- */
+.cc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+.cc-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.cc-kpi:nth-child(1) { background:linear-gradient(135deg,#312e81,#4f46e5); }
+.cc-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.cc-kpi:nth-child(3) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.cc-kpi:nth-child(4) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.cc-kpi:nth-child(5) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.cc-kpi-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
+.cc-kpi-value { font-size:20px; font-weight:800; color:#fff; margin-top:4px; }
+
+/* ---- Filters ---- */
+.cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+.cc-filters-head { display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:0; }
+.cc-filters-head h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
+.cc-filter-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+.cc-filter-grid label { font-size:10px; font-weight:700; color:#94a3b8; display:block; margin-bottom:3px; text-transform:uppercase; }
+.cc-filter-grid input, .cc-filter-grid select { width:100%; padding:6px 10px; border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; color:#1e293b; background:#f8fafc; }
+.cc-filter-grid input:focus, .cc-filter-grid select:focus { border-color:#4f46e5; outline:none; background:#fff; }
+.cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
+
+/* ---- Tabs ---- */
+.cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; align-items:center; justify-content:space-between; }
+.cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
+.cc-tab:hover { color:#1e293b; background:#f1f5f9; }
+.cc-tab.active { color:#4338ca; border-bottom-color:#4f46e5; background:#eef2ff; }
+
+/* ---- Table ---- */
+.cc-table-wrap { background:#fff; border-radius:12px; border:1.5px solid #e2e8f0; overflow-x:auto; box-shadow:0 1px 6px rgba(0,0,0,.05); }
+table.cc-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:1180px; }
+table.cc-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 12px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-table td { padding:9px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+table.cc-table tr.cc-row-clickable:hover td { background:#eef2ff; cursor:pointer; }
+table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:#4338ca; }
+
+/* CANCELADA / SUBSTITUÍDA: selo + linha tingida, mesmo padrão de Entradas,
+   Saídas e CT-e. As regras de :hover vêm DEPOIS da do cc-row-clickable (mesma
+   especificidade, a última vence) — senão o hover apagaria o aviso. */
+.badge-cancelada { background:#dc2626; color:#fff; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; letter-spacing:.3px; white-space:nowrap; }
+.badge-substituida { background:#b45309; color:#fff; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; letter-spacing:.3px; white-space:nowrap; }
+.badge-ativa { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+table.cc-table tr.cc-row-cancelada td { background:#fef2f2; }
+table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
+table.cc-table tr.cc-row-substituida td { background:#fffbeb; }
+table.cc-table tr.cc-row-substituida:hover td { background:#fef3c7; }
+
+/* Papel da empresa NESTA nota. É o eixo próprio da NFS-e: a mesma empresa pode
+   prestar numa nota e tomar em outra, e a chave única é (chave_acesso, papel). */
+.ns-papel { padding:2px 8px; border-radius:99px; font-size:9.5px; font-weight:700; white-space:nowrap; text-transform:uppercase; }
+.ns-papel.emitente      { background:#dcfce7; color:#166534; }
+.ns-papel.tomador       { background:#e0e7ff; color:#4338ca; }
+.ns-papel.intermediario { background:#fef3c7; color:#92400e; }
+/* ISS retido na fonte: quem paga o imposto é o tomador, não o prestador —
+   informação que muda o lançamento, então tem selo próprio. */
+.ns-retido { background:#fce7f3; color:#9d174d; padding:2px 7px; border-radius:6px; font-size:9.5px; font-weight:800; white-space:nowrap; }
+/* Bloqueio de ofício: NÃO é estado da nota. O município impediu que ela seja
+   CANCELADA; ela segue ativa e válida. Por isso é selo separado da situação. */
+.ns-restrita { background:#ede9fe; color:#5b21b6; padding:2px 7px; border-radius:6px; font-size:9.5px; font-weight:800; white-space:nowrap; }
+.ns-serv { font-family:ui-monospace,monospace; font-size:11px; color:#475569; }
+.ns-muni { font-family:ui-monospace,monospace; font-size:11px; color:#64748b; }
+
+/* ---- Tom Select ---- */
+.cc-filter-grid .ts-wrapper { width:100%; }
+.cc-filter-grid .ts-control { border:1.5px solid #e2e8f0; border-radius:7px; background:#f8fafc; font-size:13px; padding:3px 8px; min-height:33px; }
+.cc-filter-grid .ts-wrapper.focus .ts-control { border-color:#4f46e5; background:#fff; box-shadow:none; }
+.cc-filter-grid .ts-control > input { font-size:13px; }
+.cc-filter-grid .ts-control .item { background:#e0e7ff; color:#4338ca; border-radius:5px; font-size:11px; font-weight:700; padding:1px 5px; margin:1px 3px 1px 0; }
+.cc-filter-grid .ts-control .item .remove { border-left-color:rgba(0,0,0,.12); padding:0 4px; }
+.ts-dropdown { font-size:12.5px; border:1.5px solid #e2e8f0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); }
+.ts-dropdown .active { background:#4f46e5; color:#fff; }
+.ts-dropdown .no-results { color:#94a3b8; }
+
+/* ---- Botões de período rápido ---- */
+.btn-periodo { display:inline-flex; align-items:center; gap:5px; border:none; color:#fff; padding:7px 13px; border-radius:99px; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(15,23,42,.18); transition:transform .12s ease, box-shadow .12s ease, background .12s ease; }
+.btn-periodo:hover { transform:translateY(-1px); box-shadow:0 5px 12px rgba(15,23,42,.26); }
+.btn-periodo:active { transform:translateY(0); }
+.btn-periodo i { font-size:10.5px; opacity:.9; }
+.btn-periodo.verde { background:#16a34a; }
+.btn-periodo.verde:hover { background:#15803d; }
+.btn-periodo.azul  { background:#fff; color:#0f3d2e; border:1px solid #d7e3dc; box-shadow:none; }
+.btn-periodo.azul:hover  { border-color:#a5b4fc; background:#eef2ff; }
+.btn-periodo.roxo  { background:#fff; color:#0f3d2e; border:1px solid #d7e3dc; box-shadow:none; }
+.btn-periodo.roxo:hover  { border-color:#a5b4fc; background:#eef2ff; }
+
+/* ---- Pagination / Empty / Loading ---- */
+.cc-pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; padding:4px 0; }
+.cc-pagination button { padding:5px 14px; border:1.5px solid #e2e8f0; border-radius:7px; background:#fff; cursor:pointer; font-weight:600; color:#374151; }
+.cc-pagination button:hover { background:#f1f5f9; }
+.cc-pagination button:disabled { opacity:.4; cursor:not-allowed; }
+.cc-empty { text-align:center; padding:40px 20px; color:#94a3b8; }
+.cc-empty i { font-size:36px; margin-bottom:10px; display:block; }
+.cc-loading { text-align:center; padding:30px; color:#64748b; display:none; }
+.cc-loading i { animation:spin 1s linear infinite; font-size:22px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ---- Painel de detalhe ---- */
+.cc-panel-overlay { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999; display:none; align-items:center; justify-content:center; padding:20px; }
+.cc-panel-overlay.open { display:flex; }
+.cc-panel { background:#fff; border-radius:16px; z-index:1000; display:flex; flex-direction:column; width:1000px; max-width:100%; max-height:92vh; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+.cc-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:2px solid #e2e8f0; background:linear-gradient(135deg,#312e81,#4f46e5); border-radius:16px 16px 0 0; }
+.cc-panel-header h3 { font-size:15px; font-weight:700; color:#fff; margin:0; }
+.cc-panel-body { flex:1; overflow-y:auto; padding:18px 22px; background:#f8fafc; }
+.cc-panel-footer { padding:12px 22px; border-top:1.5px solid #e2e8f0; background:#fff; border-radius:0 0 16px 16px; text-align:right; }
+.panel-info { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px 20px; margin-bottom:16px; background:linear-gradient(135deg,#eef2ff,#e0e7ff); border-radius:10px; padding:14px 16px; border:1.5px solid #a5b4fc; }
+.panel-info dt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
+.panel-info dd { font-size:13px; font-weight:600; color:#1e293b; margin:0; word-break:break-word; }
+.panel-sec { font-size:11px; font-weight:800; color:#4338ca; text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px; }
+table.cc-items-table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border-radius:10px; overflow:hidden; }
+table.cc-items-table th { background:linear-gradient(180deg,#f8fafc,#f1f5f9); font-weight:700; font-size:10px; color:#64748b; text-transform:uppercase; padding:8px 10px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+table.cc-items-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; color:#334155; }
+table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
+.ns-disc { background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; padding:12px 14px; font-size:12.5px; color:#334155; white-space:pre-wrap; word-break:break-word; }
+
+/* Chaves XML */
+.chave-cell { font-family:ui-monospace,monospace; font-size:11px; color:#374151; word-break:break-all; }
+.btn-copy-chave { background:transparent; border:1px solid #d1d5db; color:#374151; padding:3px 9px; border-radius:6px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.btn-copy-chave:hover { background:#eef2ff; border-color:#a5b4fc; color:#4338ca; }
+.btn-copy-chave.copied { background:#e0e7ff; border-color:#a5b4fc; color:#4338ca; }
+.cc-chaves-toolbar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f8fafc; border-bottom:1.5px solid #e2e8f0; gap:10px; flex-wrap:wrap; }
+.cc-chaves-count { font-size:12px; color:#64748b; font-weight:600; }
+
+/* ---- MOBILE: a tabela vira cartão ----
+   Regra da casa: tabela não rola a página no celular. Abaixo de 820px cada
+   linha vira um cartão com rótulo à esquerda e valor à direita, igual às
+   outras telas do fiscal. */
+@media (max-width: 820px) {
+    table.cc-table { min-width:0; }
+    table.cc-table thead { display:none; }
+    table.cc-table, table.cc-table tbody, table.cc-table tr, table.cc-table td { display:block; width:100%; }
+    table.cc-table tr { border:1.5px solid #e2e8f0; border-radius:12px; margin-bottom:10px; padding:6px 2px; background:#fff; }
+    table.cc-table td { border:none; border-bottom:1px solid #f6f7f9; display:flex; justify-content:space-between; gap:12px; padding:7px 12px; }
+    table.cc-table td:last-child { border-bottom:none; }
+    table.cc-table td::before { content:attr(data-l); font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; flex-shrink:0; }
+    table.cc-table td.money { text-align:right; }
+    .cc-filter-grid { grid-template-columns:1fr 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
+<div class="cc-header">
+    <div>
+        <h1><i class="fas fa-file-invoice-dollar" style="color:#4f46e5;margin-right:8px;"></i>Conferência de NFS-e</h1>
+    </div>
+</div>
+
+<!-- Seletor empresa / grupo -->
+<div class="cc-empresa-bar">
+    <label><i class="fas fa-building"></i> Visualizar por</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="cc-empresa-ac" id="empresaAcWrap">
+            <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
+                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
+            <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
+            <input type="hidden" id="sel_empresa" value="">
+            <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
+        </div>
+        <span style="color:rgba(255,255,255,.5);font-size:11px;">OU</span>
+        <select id="sel_grupo" onchange="onGrupoChange()">
+            <option value="">— Todos os Grupos —</option>
+            {% for g in grupos %}
+            <option value="{{ g.id }}">{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <span id="scopeBadge" class="cc-scope-badge global"><i class="fas fa-globe-americas"></i> Visão Global</span>
+</div>
+
+<!-- KPIs -->
+<div class="cc-kpis">
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Total de NFS-e</div>
+        <div class="cc-kpi-value" id="kpiNfse">{{ stats.total_nfse or 0 }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Valor dos Serviços</div>
+        <div class="cc-kpi-value" id="kpiServicos">{{ stats.total_servicos | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">ISS</div>
+        <div class="cc-kpi-value" id="kpiISS">{{ stats.total_iss | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Retenções</div>
+        <div class="cc-kpi-value" id="kpiRetencoes">{{ stats.total_retencoes | default(0) | format_currency }}</div>
+    </div>
+    <div class="cc-kpi">
+        <div class="cc-kpi-label">Canceladas</div>
+        <div class="cc-kpi-value" id="kpiCanceladas">{{ stats.total_canceladas or 0 }}</div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="cc-filters">
+    <div class="cc-filters-head" onclick="toggleFilters()">
+        <h3><i class="fas fa-filter" style="color:#4f46e5;margin-right:4px;"></i>Filtros</h3>
+        <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
+    </div>
+    <div id="filterBody" style="display:none;">
+        <div class="cc-filter-grid">
+            <div><label>Data Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
+            <div>
+                <label>Período rápido</label>
+                <div style="display:flex;gap:6px;">
+                    <button type="button" class="btn-periodo verde" onclick="setPeriodo('atual')"
+                            title="Do dia 1º do mês corrente até hoje"><i class="fas fa-calendar-day"></i>Atual</button>
+                    <button type="button" class="btn-periodo azul" onclick="setPeriodo('anterior')"
+                            title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
+                    <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
+                            title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+                </div>
+            </div>
+            {# Prestador e município nascem vazios: carregarOpcoesFiltros() preenche
+               com o que existe na empresa escolhida. #}
+            <div>
+                <label>Prestador (CNPJ/CPF)</label>
+                <select id="f_prestador_doc" multiple placeholder="Todos — digite para buscar"></select>
+            </div>
+            <div><label>Doc. do Tomador</label><input type="text" id="f_tomador_doc" placeholder="Parcial ou completo"></div>
+            <div><label>Nº da NFS-e</label><input type="text" id="f_numero" placeholder="Ex: 342"></div>
+            <div>
+                <label>Município (IBGE)</label>
+                <select id="f_municipio" multiple placeholder="Todos"></select>
+            </div>
+            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
+            <div><label>Código do Serviço</label><input type="text" id="f_codigo_servico" placeholder="Ex: 1701 (começa com)"></div>
+            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
+            <div>
+                <label>Papel da Empresa</label>
+                <select id="f_papel">
+                    <option value="">— Todos —</option>
+                    <option value="emitente">Prestador (emitiu)</option>
+                    <option value="tomador">Tomador (contratou)</option>
+                    <option value="intermediario">Intermediário</option>
+                </select>
+            </div>
+            <div>
+                <label>Situação</label>
+                <select id="f_situacao">
+                    <option value="">— Todas —</option>
+                    <option value="ativa">Ativas</option>
+                    <option value="cancelada">Canceladas</option>
+                    <option value="substituida">Substituídas</option>
+                </select>
+            </div>
+        </div>
+        <div class="cc-filter-actions">
+            <button onclick="applyFilters()"
+                    style="background:#4f46e5;color:#fff;border:none;padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+            <button onclick="clearFilters()"
+                    style="background:#f3f4f6;border:1px solid #d1d5db;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;">
+                <i class="fas fa-times"></i> Limpar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="cc-tabs">
+    <div class="cc-tab active" data-tab="notas" onclick="switchTab('notas')">
+        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+        <span id="tabBadgeNotas" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+    <div class="cc-tab" data-tab="chaves" onclick="switchTab('chaves')">
+        <i class="fas fa-key"></i> Chaves
+        <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
+    </div>
+</div>
+
+<div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
+
+<!-- Tab: NFS-e -->
+<div id="tab-notas">
+    <div class="cc-table-wrap">
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Nº / Série</th>
+                    <th>Papel</th>
+                    <th>Prestador</th>
+                    <th>Tomador</th>
+                    <th>Munic.</th>
+                    <th>Serviço</th>
+                    <th style="text-align:right;">Serviços R$</th>
+                    <th style="text-align:right;">ISS</th>
+                    <th style="text-align:right;">Retenções</th>
+                    <th>Situação</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyNotas">
+                <tr><td colspan="11" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i>Selecione uma empresa e clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationNotas"></div>
+</div>
+
+<!-- Tab: Chaves -->
+<div id="tab-chaves" style="display:none;">
+    <div class="cc-table-wrap">
+        <div class="cc-chaves-toolbar">
+            <span class="cc-chaves-count" id="chavesCount">0 chave(s)</span>
+            <button onclick="copiarTodasChaves()"
+                    style="background:linear-gradient(135deg,#4f46e5,#4338ca);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-copy"></i> Copiar Todas
+            </button>
+        </div>
+        <table class="cc-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Prestador</th>
+                    <th>Chave de Acesso da NFS-e</th>
+                    <th style="text-align:center;">Copiar</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyChaves">
+                <tr><td colspan="4" class="cc-empty"><i class="fas fa-key"></i>Clique em Buscar</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="cc-pagination" id="paginationChaves"></div>
+</div>
+
+<!-- ===================== PAINEL: detalhe da NFS-e ===================== -->
+<div class="cc-panel-overlay" id="panelOverlay" onclick="closePanel()">
+<div class="cc-panel" onclick="event.stopPropagation()">
+    <div class="cc-panel-header">
+        <h3 id="panelTitle">Detalhe da NFS-e</h3>
+        <button onclick="closePanel()" style="background:rgba(255,255,255,.15);border:none;font-size:18px;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;line-height:32px;">&times;</button>
+    </div>
+    <div class="cc-panel-body" id="panelBody">
+        <div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>
+    </div>
+    <div class="cc-panel-footer">
+        <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Fechar</button>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script>
+// ===========================================================================
+// Conferência de NFS-e — SOMENTE LEITURA. Só dois endpoints, ambos GET:
+// /conf-nfse/api/notas e /conf-nfse/api/detalhe/<id>. Nenhuma escrita, e nada
+// que fale com o ADN a partir do navegador.
+// ===========================================================================
+const empresasData = [
+    {id:'', nome:'— Todas as Empresas —'},
+    {% for e in empresas %}
+    {id:'{{ e.id }}', nome:{{ ((e.numero_cliente ~ ' - ' if e.numero_cliente else '') ~ e.nome_razao_social) | tojson }}},
+    {% endfor %}
+];
+const URL_API_DETALHE = '{{ url_for("escrita_fiscal.api_nfse_detalhe", nfse_id=0) }}';
+
+let currentClienteId = '';
+let currentGrupoId = '';
+let currentPage = 1;
+let chavesCurrentPage = 1;
+let currentTab = 'notas';
+let hasSearched = false;
+let lastRows = [];
+let acActiveIndex = -1;
+let tsPrestador = null, tsMunicipio = null;
+
+// Busca nova cancela a anterior: sem isso, a resposta lenta de um clique antigo
+// chega depois e sobrescreve a lista do clique novo.
+const _controllers = {};
+function _fetchWithAbort(key, url) {
+    if (_controllers[key]) _controllers[key].abort();
+    _controllers[key] = new AbortController();
+    return fetch(url, {signal: _controllers[key].signal});
+}
+function _isAbort(err) { return err && err.name === 'AbortError'; }
+
+// ---- Autocomplete de empresa ----
+function onEmpresaInput() {
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    acActiveIndex = -1;
+    renderEmpresaDropdown(q);
+}
+function onEmpresaFocus() {
+    document.getElementById('sel_grupo').value = '';
+    currentGrupoId = '';
+    renderEmpresaDropdown(document.getElementById('sel_empresa_input').value.trim().toLowerCase());
+}
+function onEmpresaBlur() {
+    setTimeout(function () {
+        const id = document.getElementById('sel_empresa').value;
+        const input = document.getElementById('sel_empresa_input');
+        if (!id) { input.value = ''; }
+        else {
+            const found = empresasData.find(e => e.id == id);
+            if (found) input.value = found.nome;
+        }
+        closeEmpresaDropdown();
+    }, 180);
+}
+function renderEmpresaDropdown(q) {
+    const list = document.getElementById('empresaAcList');
+    const filtered = !q ? empresasData
+        : empresasData.filter(e => !e.id || e.nome.toLowerCase().includes(q));
+    if (!filtered.length) {
+        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
+    } else {
+        list.innerHTML = filtered.slice(0, 60).map(e =>
+            `<div class="cc-ac-item${e.id ? '' : ' all'}" onmousedown="selectEmpresa('${e.id}', ${JSON.stringify(e.nome)})">${esc(e.nome)}</div>`
+        ).join('');
+    }
+    list.style.display = '';
+}
+function onEmpresaKeydown(e) {
+    const items = document.getElementById('empresaAcList').querySelectorAll('.cc-ac-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        acActiveIndex += (e.key === 'ArrowDown' ? 1 : -1);
+        if (acActiveIndex < 0) acActiveIndex = items.length - 1;
+        if (acActiveIndex >= items.length) acActiveIndex = 0;
+        items.forEach((it, i) => it.classList.toggle('active', i === acActiveIndex));
+        items[acActiveIndex].scrollIntoView({block: 'nearest'});
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const t = acActiveIndex >= 0 ? items[acActiveIndex] : items[0];
+        if (t) t.dispatchEvent(new MouseEvent('mousedown'));
+    } else if (e.key === 'Escape') {
+        closeEmpresaDropdown();
+    }
+}
+function selectEmpresa(id, nome) {
+    document.getElementById('sel_empresa').value = id;
+    document.getElementById('sel_empresa_input').value = id ? nome : '';
+    document.getElementById('sel_empresa_clear').style.display = id ? 'block' : 'none';
+    closeEmpresaDropdown();
+    onEmpresaChange();
+}
+function clearEmpresa() { selectEmpresa('', ''); }
+function closeEmpresaDropdown() { document.getElementById('empresaAcList').style.display = 'none'; }
+document.addEventListener('click', function (e) {
+    if (!document.getElementById('empresaAcWrap').contains(e.target)) closeEmpresaDropdown();
+});
+
+function onEmpresaChange() {
+    currentClienteId = document.getElementById('sel_empresa').value;
+    if (currentClienteId) {
+        document.getElementById('sel_grupo').value = '';
+        currentGrupoId = '';
+        const nome = (empresasData.find(e => e.id == currentClienteId) || {}).nome || '';
+        updateScopeBadge('empresa', nome);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    aoMudarEscopo();
+}
+function onGrupoChange() {
+    currentGrupoId = document.getElementById('sel_grupo').value;
+    if (currentGrupoId) {
+        selectEmpresaSilencioso('');
+        const s = document.getElementById('sel_grupo');
+        updateScopeBadge('grupo', s.options[s.selectedIndex].text);
+    } else {
+        updateScopeBadge('global', 'Visão Global');
+    }
+    aoMudarEscopo();
+}
+// Limpa a empresa sem disparar onEmpresaChange (que zeraria o grupo recém-escolhido).
+function selectEmpresaSilencioso(id) {
+    document.getElementById('sel_empresa').value = id;
+    document.getElementById('sel_empresa_input').value = '';
+    document.getElementById('sel_empresa_clear').style.display = 'none';
+    currentClienteId = id;
+}
+function updateScopeBadge(type, label) {
+    const b = document.getElementById('scopeBadge');
+    b.className = 'cc-scope-badge ' + type;
+    const icons = {empresa:'fas fa-building', grupo:'fas fa-layer-group', global:'fas fa-globe-americas'};
+    b.innerHTML = `<i class="${icons[type]}"></i> ${esc(label)}`;
+}
+
+// ---- Tom Select nos multi ----
+function _initFiltrosBusca() {
+    const cfg = {plugins:['remove_button'], maxOptions:1000, persist:false, create:false};
+    tsPrestador = new TomSelect('#f_prestador_doc', cfg);
+    tsMunicipio = new TomSelect('#f_municipio', cfg);
+}
+document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
+
+function _preencheTS(ts, opcoes) {
+    if (!ts) return;
+    const anteriores = ts.getValue();
+    ts.clear(true);
+    ts.clearOptions();
+    ts.addOptions(opcoes.map(o => ({value: String(o.valor), text: String(o.texto)})));
+    const mantidos = (Array.isArray(anteriores) ? anteriores : [anteriores])
+        .filter(v => v && ts.options[v]);
+    if (mantidos.length) ts.setValue(mantidos, true);
+}
+function carregarOpcoesFiltros() {
+    if (!currentClienteId && !currentGrupoId) {
+        _preencheTS(tsPrestador, []);
+        _preencheTS(tsMunicipio, []);
+        return;
+    }
+    const p = new URLSearchParams({
+        cliente_id: currentClienteId || '',
+        grupo_id: currentGrupoId || '',
+        data_ini: document.getElementById('f_data_ini').value,
+        data_fim: document.getElementById('f_data_fim').value,
+    });
+    fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_nfse") }}?' + p)
+        .then(r => r.json())
+        .then(d => {
+            _preencheTS(tsPrestador,
+                (d.prestadores || []).map(o => ({valor: o.doc, texto: `${o.nome || o.doc} (${o.doc})`})));
+            _preencheTS(tsMunicipio, (d.municipios || []).map(m => ({valor: m, texto: m})));
+        })
+        .catch(() => {});
+}
+
+// ---- Datas rápidas ----
+// _iso usa o horário LOCAL de propósito: toISOString() converteria para UTC e,
+// à noite, jogaria a data um dia para trás.
+function _iso(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function setPeriodo(tipo, buscar) {
+    const hoje = new Date();
+    let ini, fim;
+    if (tipo === 'atual') {
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        fim = hoje;
+    } else if (tipo === 'anterior') {
+        ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    } else if (tipo === 'ano') {
+        ini = new Date(hoje.getFullYear(), 0, 1);
+        fim = hoje;
+    } else {
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 45);
+        fim = hoje;
+    }
+    document.getElementById('f_data_ini').value = _iso(ini);
+    document.getElementById('f_data_fim').value = _iso(fim);
+    carregarOpcoesFiltros();
+    if (buscar !== false) applyFilters();
+}
+function aoMudarEscopo() {
+    if (currentClienteId || currentGrupoId) setPeriodo('45d');
+    else carregarOpcoesFiltros();
+}
+
+// ---- Tabs / filtros ----
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.cc-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    ['notas','chaves'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
+    });
+    if (hasSearched) loadActiveTab();
+}
+function toggleFilters() {
+    const b = document.getElementById('filterBody');
+    const c = document.getElementById('filterChevron');
+    const hidden = b.style.display === 'none';
+    b.style.display = hidden ? '' : 'none';
+    c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
+}
+const CAMPOS_TEXTO = ['f_data_ini','f_data_fim','f_tomador_doc','f_numero','f_chave','f_codigo_servico','f_vmin','f_vmax'];
+const CAMPOS_SELECT = ['f_papel','f_situacao'];
+
+// O painel nasce FECHADO; abre se a URL trouxer filtro. Mesma regra do CT-e.
+(function abrirFiltrosSeUrlTemFiltro() {
+    var qs = new URLSearchParams(window.location.search);
+    var achou = false;
+    qs.forEach(function (valor, chave) {
+        if (!valor) { return; }
+        if (chave.indexOf('f_') === 0 || CAMPOS_TEXTO.indexOf(chave) >= 0) { achou = true; }
+    });
+    if (!achou) { return; }
+    var b = document.getElementById('filterBody');
+    var c = document.getElementById('filterChevron');
+    if (b) { b.style.display = ''; }
+    if (c) { c.className = 'fas fa-chevron-up'; }
+})();
+
+function clearFilters() {
+    CAMPOS_TEXTO.forEach(id => { document.getElementById(id).value = ''; });
+    CAMPOS_SELECT.forEach(id => { document.getElementById(id).value = ''; });
+    [tsPrestador, tsMunicipio].forEach(ts => { if (ts) ts.clear(true); });
+    currentPage = 1;
+    // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
+    // um Buscar puxaria a base inteira da empresa.
+    setPeriodo('45d');
+}
+function getFilters() {
+    return {
+        cliente_id: currentClienteId,
+        grupo_id: currentGrupoId,
+        data_ini: document.getElementById('f_data_ini').value,
+        data_fim: document.getElementById('f_data_fim').value,
+        prestador_doc: tsPrestador ? tsPrestador.getValue().join(',') : '',
+        tomador_doc: document.getElementById('f_tomador_doc').value,
+        numero: document.getElementById('f_numero').value,
+        municipio: tsMunicipio ? tsMunicipio.getValue().join(',') : '',
+        chave: document.getElementById('f_chave').value,
+        codigo_servico: document.getElementById('f_codigo_servico').value,
+        vmin: document.getElementById('f_vmin').value,
+        vmax: document.getElementById('f_vmax').value,
+        papel: document.getElementById('f_papel').value,
+        situacao: document.getElementById('f_situacao').value,
+    };
+}
+function applyFilters() {
+    // Mesmo guard das outras telas: sem empresa ou grupo a busca varreria as
+    // NFS-e de toda a carteira.
+    if (!currentClienteId && !currentGrupoId) {
+        const inp = document.getElementById('sel_empresa_input');
+        inp.style.borderColor = '#ef4444';
+        inp.style.boxShadow = '0 0 0 3px rgba(239,68,68,.2)';
+        setTimeout(() => { inp.style.borderColor = ''; inp.style.boxShadow = ''; }, 2500);
+        alert('Selecione uma Empresa ou um Grupo antes de buscar.');
+        return;
+    }
+    currentPage = 1;
+    chavesCurrentPage = 1;
+    hasSearched = true;
+    loadActiveTab();
+}
+function loadActiveTab() {
+    if (currentTab === 'notas') loadNotas();
+    else loadChaves();
+}
+
+// ---- Formatters ----
+function fmtBRL(v) {
+    return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtDate(v) {
+    if (!v) return '—';
+    const p = v.toString().substring(0, 10).split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : v;
+}
+function esc(s) {
+    return (s == null ? '' : String(s)).replace(/[&<>"]/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function showLoad() { document.getElementById('loadingIndicator').style.display='block'; }
+function hideLoad() { document.getElementById('loadingIndicator').style.display='none'; }
+
+// Papel do cliente NESTA nota. 'emitente' é o nome gravado pelo parser; o rótulo
+// na tela é "Prestador", que é como o contador chama.
+const PAPEL_ROTULO = {emitente:'Prestador', tomador:'Tomador', intermediario:'Intermed.'};
+function papelBadge(p) {
+    const cls = ['emitente','tomador','intermediario'].includes(p) ? p : 'tomador';
+    return `<span class="ns-papel ${cls}">${esc(PAPEL_ROTULO[p] || p || '—')}</span>`;
+}
+function situacaoBadge(r) {
+    const s = r.situacao || 'ativa';
+    let html;
+    if (s === 'cancelada') html = '<span class="badge-cancelada" title="Cancelada por evento — não escriturar">CANCELADA</span>';
+    else if (s === 'substituida') html = '<span class="badge-substituida" title="Substituída por outra NFS-e">SUBSTITUÍDA</span>';
+    else html = '<span class="badge-ativa">ATIVA</span>';
+    // Bloqueio de ofício NÃO é situação: a nota segue válida, o município só
+    // impediu que ela seja cancelada. Por isso vem ao lado, não no lugar.
+    if (r.restricao_eventos) {
+        html += ' <span class="ns-restrita" title="Bloqueio de ofício: a prefeitura impediu o cancelamento. A nota continua válida.">BLOQ. OFÍCIO</span>';
+    }
+    return html;
+}
+
+// ---- Lista de NFS-e ----
+function loadNotas() {
+    const params = new URLSearchParams({...getFilters(), page: currentPage});
+    showLoad();
+    document.getElementById('tbodyNotas').innerHTML = '';
+    _fetchWithAbort('notas', '{{ url_for("escrita_fiscal.api_nfse") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            lastRows = data.rows || [];
+            document.getElementById('tabBadgeNotas').textContent = data.total;
+            document.getElementById('kpiNfse').textContent = data.total;
+            if (data.kpi) {
+                document.getElementById('kpiServicos').textContent = fmtBRL(data.kpi.total_servicos);
+                document.getElementById('kpiISS').textContent = fmtBRL(data.kpi.total_iss);
+                document.getElementById('kpiRetencoes').textContent = fmtBRL(data.kpi.total_retencoes);
+                document.getElementById('kpiCanceladas').textContent = data.kpi.total_canceladas;
+            }
+            const tbody = document.getElementById('tbodyNotas');
+            if (!lastRows.length) {
+                tbody.innerHTML = '<tr><td colspan="11" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i><br>Nenhuma NFS-e encontrada</td></tr>';
+                document.getElementById('paginationNotas').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = lastRows.map(r => {
+                const rowCls = r.situacao === 'cancelada' ? ' cc-row-cancelada'
+                             : r.situacao === 'substituida' ? ' cc-row-substituida' : '';
+                const retido = r.iss_retido ? ' <span class="ns-retido" title="ISS retido na fonte — quem recolhe é o tomador">RETIDO</span>' : '';
+                return `<tr class="cc-row-clickable${rowCls}" onclick="openPanel(${r.id})">
+                    <td data-l="Emissão">${fmtDate(r.data_emissao)}</td>
+                    <td data-l="Nº/Série">${esc(r.numero)||'—'} / ${esc(r.serie)||'—'}</td>
+                    <td data-l="Papel">${papelBadge(r.papel)}</td>
+                    <td data-l="Prestador" title="${esc(r.prestador_doc)}" style="text-transform:uppercase;">${esc(r.prestador_nome||r.prestador_doc)||'—'}</td>
+                    <td data-l="Tomador" title="${esc(r.tomador_doc)}" style="text-transform:uppercase;">${esc(r.tomador_nome||r.tomador_doc)||'—'}</td>
+                    <td data-l="Munic." class="ns-muni">${esc(r.municipio_ibge)||'—'}</td>
+                    <td data-l="Serviço" class="ns-serv" title="${esc(r.discriminacao||'')}">${esc(r.codigo_servico)||'—'}</td>
+                    <td data-l="Serviços" class="money"><strong>${fmtBRL(r.valor_servicos)}</strong></td>
+                    <td data-l="ISS" class="money">${fmtBRL(r.valor_iss)}${retido}</td>
+                    <td data-l="Retenções" class="money">${fmtBRL(r.total_retencoes)}</td>
+                    <td data-l="Situação">${situacaoBadge(r)}</td>
+                </tr>`;
+            }).join('');
+            renderPagination('paginationNotas', data.total, data.per_page, data.page, p => { currentPage = p; loadNotas(); });
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+// ---- Aba Chaves (reusa o mesmo endpoint; só muda a apresentação) ----
+function loadChaves() {
+    const params = new URLSearchParams({...getFilters(), page: chavesCurrentPage});
+    showLoad();
+    _fetchWithAbort('chaves', '{{ url_for("escrita_fiscal.api_nfse") }}?' + params)
+        .then(r => r.json())
+        .then(data => {
+            hideLoad();
+            const rows = data.rows || [];
+            lastRows = rows;
+            document.getElementById('tabBadgeChaves').textContent = data.total;
+            document.getElementById('chavesCount').textContent = data.total + ' chave(s)';
+            const tbody = document.getElementById('tbodyChaves');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="cc-empty"><i class="fas fa-key"></i><br>Nenhuma NFS-e encontrada</td></tr>';
+                document.getElementById('paginationChaves').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = rows.map(r => `<tr>
+                <td data-l="Emissão">${fmtDate(r.data_emissao)}</td>
+                <td data-l="Prestador" style="text-transform:uppercase;">${esc(r.prestador_nome)||'—'}</td>
+                <td data-l="Chave" class="chave-cell">${esc(r.chave_acesso)}</td>
+                <td data-l="Copiar" style="text-align:center;">
+                    <button class="btn-copy-chave" onclick="copiarChave('${esc(r.chave_acesso)}', this)">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </td>
+            </tr>`).join('');
+            renderPagination('paginationChaves', data.total, data.per_page, data.page, p => { chavesCurrentPage = p; loadChaves(); });
+        })
+        .catch(err => { if (!_isAbort(err)) hideLoad(); });
+}
+
+function copiarChave(chave, btn) {
+    navigator.clipboard.writeText(chave).then(() => {
+        const html = btn.innerHTML;
+        btn.classList.add('copied');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiado';
+        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = html; }, 1500);
+    });
+}
+function copiarTodasChaves() {
+    if (!lastRows.length) { alert('Nada para copiar — faça uma busca primeiro.'); return; }
+    navigator.clipboard.writeText(lastRows.map(r => r.chave_acesso).join('\n'))
+        .then(() => alert(lastRows.length + ' chave(s) copiada(s).'));
+}
+
+// ---- Paginação ----
+function renderPagination(elId, total, perPage, page, onGo) {
+    const el = document.getElementById(elId);
+    const pages = Math.ceil(total / perPage);
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button ${page <= 1 ? 'disabled' : ''} id="${elId}_prev"><i class="fas fa-chevron-left"></i></button>
+        <span style="color:#64748b;">Página <strong>${page}</strong> de ${pages} · ${total} registro(s)</span>
+        <button ${page >= pages ? 'disabled' : ''} id="${elId}_next"><i class="fas fa-chevron-right"></i></button>`;
+    const prev = document.getElementById(elId+'_prev');
+    const next = document.getElementById(elId+'_next');
+    if (prev && page > 1) prev.onclick = () => onGo(page - 1);
+    if (next && page < pages) next.onclick = () => onGo(page + 1);
+}
+
+// ---- Painel de detalhe ----
+const EVENTO_ROTULO = {
+    CANCELAMENTO: 'Cancelamento',
+    CANCELAMENTO_POR_SUBSTITUICAO: 'Cancelamento por substituição',
+    SOLICITACAO_CANCELAMENTO_ANALISE_FISCAL: 'Pedido de cancelamento (em análise)',
+    CANCELAMENTO_DEFERIDO_ANALISE_FISCAL: 'Cancelamento deferido',
+    CANCELAMENTO_INDEFERIDO_ANALISE_FISCAL: 'Cancelamento INDEFERIDO',
+    CANCELAMENTO_POR_OFICIO: 'Cancelamento de ofício',
+    BLOQUEIO_POR_OFICIO: 'Bloqueio de ofício',
+    DESBLOQUEIO_POR_OFICIO: 'Desbloqueio de ofício',
+    CONFIRMACAO_PRESTADOR: 'Confirmação do prestador',
+    CONFIRMACAO_TOMADOR: 'Confirmação do tomador',
+    CONFIRMACAO_INTERMEDIARIO: 'Confirmação do intermediário',
+    CONFIRMACAO_TACITA: 'Confirmação tácita',
+    REJEICAO_PRESTADOR: 'Rejeição do prestador',
+    REJEICAO_TOMADOR: 'Rejeição do tomador',
+    REJEICAO_INTERMEDIARIO: 'Rejeição do intermediário',
+    ANULACAO_REJEICAO: 'Anulação da rejeição',
+};
+function _dd(rot, val) {
+    return `<div><dt>${esc(rot)}</dt><dd>${val == null || val === '' ? '—' : val}</dd></div>`;
+}
+function openPanel(id) {
+    document.getElementById('panelOverlay').classList.add('open');
+    const body = document.getElementById('panelBody');
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+    // url_for com id placeholder e troca no fim: não depende de concatenar
+    // caminho na mão (que quebraria se o prefixo do blueprint mudasse).
+    fetch(URL_API_DETALHE.replace(/0$/, id))
+        .then(r => r.json())
+        .then(d => {
+            if (d.erro) { body.innerHTML = `<p style="color:#dc2626;">${esc(d.erro)}</p>`; return; }
+            const n = d.nfse;
+            document.getElementById('panelTitle').textContent =
+                `NFS-e ${n.numero || '—'}/${n.serie || '—'} — ${PAPEL_ROTULO[n.papel] || n.papel || ''}`;
+
+            const info = '<dl class="panel-info">'
+                + _dd('Situação', situacaoBadge(n))
+                + _dd('Emissão', fmtDate(n.data_emissao))
+                + _dd('Competência', fmtDate(n.competencia))
+                + _dd('Processamento', fmtDate(n.data_processamento))
+                + _dd('Município (IBGE)', esc(n.municipio_ibge))
+                + _dd('Papel da empresa', papelBadge(n.papel))
+                + '</dl>';
+
+            const partes = '<div class="panel-sec">Partes</div><dl class="panel-info">'
+                + _dd('Prestador', `<span style="text-transform:uppercase;">${esc(n.prestador_nome)||'—'}</span><br><small>${esc(n.prestador_doc)||''}</small>`)
+                + _dd('Tomador', `<span style="text-transform:uppercase;">${esc(n.tomador_nome)||'—'}</span><br><small>${esc(n.tomador_doc)||''}</small>`)
+                + (n.intermediario_doc ? _dd('Intermediário', esc(n.intermediario_doc)) : '')
+                + '</dl>';
+
+            const valores = '<div class="panel-sec">Valores</div><dl class="panel-info">'
+                + _dd('Serviços', fmtBRL(n.valor_servicos))
+                + _dd('Base de cálculo', fmtBRL(n.base_calculo))
+                + _dd('Alíquota ISS', (n.aliquota_iss || 0).toFixed(2) + '%')
+                + _dd('ISS', fmtBRL(n.valor_iss) + (n.iss_retido ? ' <span class="ns-retido">RETIDO</span>' : ''))
+                + _dd('Retenções', fmtBRL(n.total_retencoes))
+                + _dd('Líquido', fmtBRL(n.valor_liquido))
+                + '</dl>';
+
+            const serv = '<div class="panel-sec">Serviço</div><dl class="panel-info">'
+                + _dd('Cód. nacional', esc(n.codigo_servico))
+                + _dd('Cód. municipal', esc(n.codigo_servico_mun))
+                + _dd('NBS', esc(n.codigo_nbs))
+                + '</dl>'
+                + (n.discriminacao ? `<div class="ns-disc">${esc(n.discriminacao)}</div>` : '');
+
+            // IBS/CBS só aparece quando existe: a reforma ainda está entrando, e
+            // um bloco de zeros em toda nota antiga seria ruído, não informação.
+            const temIbs = (n.ibs_total || 0) || (n.cbs_valor || 0) || n.ibscbs_cst;
+            const ibs = !temIbs ? '' : ('<div class="panel-sec">IBS / CBS</div><dl class="panel-info">'
+                + _dd('CST', esc(n.ibscbs_cst))
+                + _dd('cClassTrib', esc(n.ibscbs_cclasstrib))
+                + _dd('Base', fmtBRL(n.ibscbs_bc))
+                + _dd('IBS UF', fmtBRL(n.ibs_uf_valor))
+                + _dd('IBS Município', fmtBRL(n.ibs_mun_valor))
+                + _dd('IBS total', fmtBRL(n.ibs_total))
+                + _dd('CBS', fmtBRL(n.cbs_valor))
+                + _dd('Total da nota', fmtBRL(n.valor_total_nf))
+                + '</dl>');
+
+            let eventos = '<div class="panel-sec">Eventos</div>';
+            if (!(d.eventos || []).length) {
+                eventos += '<p style="color:#94a3b8;font-size:12.5px;margin:0;">Nenhum evento para esta nota.</p>';
+            } else {
+                eventos += `<table class="cc-items-table"><thead><tr>
+                    <th>Data</th><th>Evento</th><th>Seq.</th><th>Motivo</th><th>NSU</th>
+                    </tr></thead><tbody>` + d.eventos.map(e => `<tr>
+                        <td>${fmtDate(e.data_evento)}</td>
+                        <td>${esc(EVENTO_ROTULO[e.tipo_evento] || e.tipo_evento || '—')}
+                            ${e.revisar ? '<span class="ns-restrita" title="Tipo de evento que o sistema ainda não sabe interpretar">REVISAR</span>' : ''}
+                            ${e.chave_substituta ? `<br><small>substituída por ${esc(e.chave_substituta)}</small>` : ''}</td>
+                        <td>${esc(e.sequencia)||'—'}</td>
+                        <td>${esc(e.motivo)||'—'}</td>
+                        <td>${esc(e.nsu_origem)||'—'}</td>
+                    </tr>`).join('') + '</tbody></table>';
+            }
+
+            const chave = `<div class="panel-sec">Chave de acesso</div>
+                <div class="chave-cell" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 12px;">
+                    ${esc(n.chave_acesso)}
+                </div>`;
+
+            body.innerHTML = info + partes + valores + serv + ibs + eventos + chave;
+        })
+        .catch(() => { body.innerHTML = '<p style="color:#dc2626;">Falha ao carregar o detalhe.</p>'; });
+}
+function closePanel() { document.getElementById('panelOverlay').classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+</script>
+{% endblock %}

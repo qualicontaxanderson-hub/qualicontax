@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from decimal import Decimal
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import (
@@ -8067,3 +8068,262 @@ def api_cte_nfes(cte_id):
         n['na_conferencia'] = n.get('nfe_id') is not None
 
     return jsonify({'cte': cte, 'nfes': nfes})
+
+
+# ===========================================================================
+# CONFERÊNCIA DE NFS-e  (/conf-nfse/)
+#
+# Espelha a de CT-e: mesma barra de empresa, mesmos KPIs, mesmos filtros, mesma
+# paginação por window function num round-trip só.
+#
+# O QUE MUDA EM RELAÇÃO ÀS OUTRAS TELAS, e por quê:
+#
+# 1) A empresa NÃO é dona do documento, é PARTE dele. Na NF-e o cliente é
+#    emitente ou destinatário; na NFS-e ele pode ser prestador, tomador OU
+#    intermediário, e a mesma nota aparece para duas empresas da carteira com
+#    papéis diferentes (a chave única é (chave_acesso, papel)). Por isso o
+#    filtro de papel existe e a coluna aparece na tabela: sem ela, "500 notas"
+#    não diz se o escritório prestou ou contratou.
+#
+# 2) NÃO há cancelado 0/1 — há ``situacao`` derivada de evento
+#    ('ativa' | 'cancelada' | 'substituida'), com escritor único no
+#    repositório. A tela só LÊ; nunca escreve situação.
+#
+# 3) Município é código IBGE cru. A tabela ``municipios`` do projeto tem duas
+#    linhas e serve para outra coisa (link de prefeitura), então não há de onde
+#    tirar o nome. Mostrar o código é honesto; inventar nome, não.
+#
+# SOMENTE LEITURA, como o CT-e. Nenhum endpoint de escrita aqui — e o ADN
+# aceita eventos de manifestação que este sistema nunca envia.
+# ===========================================================================
+def _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=None):
+    """Filtro empresa/grupo para NFS-e.
+
+    Sem o fallback por CNPJ que as outras telas têm: ``empresa_id`` é gravado
+    pela captura a partir do cursor e nunca vem nulo. Fallback aqui seria código
+    para um caso que não existe.
+    """
+    if params is None:
+        params = []
+    clauses = []
+    if f_cliente_id:
+        clauses.append(f'{alias}.empresa_id = %s')
+        params.append(int(f_cliente_id))
+    if f_grupo_id:
+        clauses.append(
+            f'{alias}.empresa_id IN (SELECT cliente_id FROM cliente_grupo_relacao'
+            f'                        WHERE grupo_id = %s)')
+        params.append(int(f_grupo_id))
+    return clauses, params
+
+
+@escrita_fiscal.route('/conf-nfse/')
+@permission_required('escrita_fiscal.conf_nfse')
+def conf_nfse():
+    stats = {'total_nfse': 0, 'total_servicos': 0, 'total_iss': 0,
+             'total_canceladas': 0, 'total_retencoes': 0}
+    return render_template(
+        'escrita_fiscal/conf_nfse.html',
+        stats=stats,
+        empresas=_get_empresas(),
+        grupos=_get_grupos(),
+    )
+
+
+@escrita_fiscal.route('/conf-nfse/api/opcoes-filtros')
+@login_required
+def api_opcoes_filtros_nfse():
+    """Prestadores e municípios que EXISTEM no escopo escolhido.
+
+    Mesma ideia da de CT-e: sem escopo devolve vazio, para não varrer a base
+    inteira montando um combo que ninguém pediu.
+    """
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+    if not f_cliente_id and not f_grupo_id:
+        return jsonify({'prestadores': [], 'municipios': []})
+
+    where, params = _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=[])
+    for campo, arg in (('n.data_emissao >= %s', 'data_ini'),
+                       ('n.data_emissao <= %s', 'data_fim')):
+        v = request.args.get(arg, '').strip()
+        if v:
+            where.append(campo)
+            params.append(v if arg == 'data_ini' else v + ' 23:59:59')
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    prest = execute_query(
+        f"""SELECT n.prestador_doc AS doc, MAX(n.prestador_nome) AS nome
+              FROM nfse_capturadas n {where_sql}
+             GROUP BY n.prestador_doc
+            HAVING doc IS NOT NULL AND doc <> ''
+             ORDER BY nome LIMIT 500""", tuple(params), fetch=True) or []
+    muni = execute_query(
+        f"""SELECT DISTINCT n.municipio_ibge AS m FROM nfse_capturadas n {where_sql}
+            HAVING m IS NOT NULL AND m <> '' ORDER BY m""",
+        tuple(params), fetch=True) or []
+    return jsonify({'prestadores': prest, 'municipios': [r['m'] for r in muni]})
+
+
+@escrita_fiscal.route('/conf-nfse/api/notas')
+@login_required
+def api_nfse():
+    """Lista paginada de NFS-e + KPIs da seleção (window functions, 1 round-trip)."""
+    f_cliente_id = request.args.get('cliente_id', '').strip()
+    f_grupo_id = request.args.get('grupo_id', '').strip()
+    f_prestador = _filtro_lista(request.args.get('prestador_doc', ''))
+    f_tomador = request.args.get('tomador_doc', '').strip()
+    f_data_ini = request.args.get('data_ini', '').strip()
+    f_data_fim = request.args.get('data_fim', '').strip()
+    f_chave = request.args.get('chave', '').strip()
+    f_numero = request.args.get('numero', '').strip()
+    f_municipio = _filtro_lista(request.args.get('municipio', ''))
+    f_servico = request.args.get('codigo_servico', '').strip()
+    f_vmin = request.args.get('vmin', '').strip()
+    f_vmax = request.args.get('vmax', '').strip()
+    f_papel = request.args.get('papel', '').strip()
+    f_situacao = request.args.get('situacao', '').strip()
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 50
+
+    # AUDITORIA (D2): leitura — mesma regra das outras telas (só 1ª página).
+    _termo = f_chave or f_numero
+    _filtros = {k: v for k, v in (
+        ('cliente_id', f_cliente_id), ('grupo_id', f_grupo_id),
+        ('prestador_doc', request.args.get('prestador_doc', '').strip()),
+        ('tomador_doc', f_tomador), ('data_ini', f_data_ini), ('data_fim', f_data_fim),
+        ('municipio', request.args.get('municipio', '').strip()),
+        ('codigo_servico', f_servico), ('vmin', f_vmin), ('vmax', f_vmax),
+        ('papel', f_papel), ('situacao', f_situacao)) if v}
+    if page == 1 and (_termo or _filtros):
+        _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
+        registrar('leitura.buscou_nfse', 'fiscal', tabela='nfse_capturadas',
+                  depois={'termo': _termo or None, 'filtros': _filtros})
+
+    where, params = _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=[])
+
+    if f_prestador:
+        where.append(_clausula_in('n.prestador_doc', f_prestador, params))
+    if f_tomador:
+        where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
+        params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
+    if f_data_ini:
+        where.append('n.data_emissao >= %s')
+        params.append(f_data_ini)
+    if f_data_fim:
+        # data_emissao é DATETIME: sem o 23:59:59 o último dia do período ficaria
+        # de fora, e o usuário veria "faltou nota" num filtro que ele fez certo.
+        where.append('n.data_emissao <= %s')
+        params.append(f_data_fim + ' 23:59:59')
+    if f_chave:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{f_chave}%')
+    if f_numero:
+        where.append('n.numero = %s')
+        params.append(f_numero)
+    if f_municipio:
+        where.append(_clausula_in('n.municipio_ibge', f_municipio, params))
+    if f_servico:
+        where.append('n.codigo_servico LIKE %s')
+        params.append(f'{f_servico}%')
+    if f_vmin:
+        where.append('n.valor_servicos >= %s')
+        params.append(float(f_vmin))
+    if f_vmax:
+        where.append('n.valor_servicos <= %s')
+        params.append(float(f_vmax))
+    if f_papel:
+        where.append('n.papel = %s')
+        params.append(f_papel)
+    if f_situacao:
+        where.append('n.situacao = %s')
+        params.append(f_situacao)
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    offset = (page - 1) * per_page
+
+    all_rows = execute_query(
+        f"""SELECT n.id, n.chave_acesso, n.numero, n.serie, n.papel,
+                   n.data_emissao, n.competencia, n.municipio_ibge,
+                   n.prestador_doc, n.prestador_nome,
+                   n.tomador_doc, n.tomador_nome, n.intermediario_doc,
+                   n.codigo_servico, n.codigo_servico_mun, n.discriminacao,
+                   n.valor_servicos, n.base_calculo, n.aliquota_iss, n.valor_iss,
+                   n.total_retencoes, n.valor_liquido, n.iss_retido,
+                   n.situacao, n.cstat, n.restricao_eventos, n.criado_em,
+                   n.empresa_id, cl.nome_razao_social AS empresa_nome,
+                   COUNT(*) OVER() AS _total,
+                   COALESCE(SUM(n.valor_servicos)  OVER(), 0) AS _kpi_servicos,
+                   COALESCE(SUM(n.valor_iss)       OVER(), 0) AS _kpi_iss,
+                   COALESCE(SUM(n.total_retencoes) OVER(), 0) AS _kpi_ret,
+                   COALESCE(SUM(n.situacao = 'cancelada') OVER(), 0) AS _kpi_canc
+              FROM nfse_capturadas n
+              LEFT JOIN clientes cl ON cl.id = n.empresa_id
+              {where_sql}
+             ORDER BY n.data_emissao DESC, n.id DESC
+             LIMIT %s OFFSET %s""",
+        tuple(params) + (per_page, offset), fetch=True) or []
+
+    first = all_rows[0] if all_rows else {}
+    kpi = {
+        'total_servicos': float(first.get('_kpi_servicos') or 0),
+        'total_iss': float(first.get('_kpi_iss') or 0),
+        'total_retencoes': float(first.get('_kpi_ret') or 0),
+        'total_canceladas': int(first.get('_kpi_canc') or 0),
+    }
+    total = int(first.get('_total') or 0)
+    if not all_rows:
+        total = 0
+        kpi = {'total_servicos': 0, 'total_iss': 0, 'total_retencoes': 0,
+               'total_canceladas': 0}
+
+    _win = {'_total', '_kpi_servicos', '_kpi_iss', '_kpi_ret', '_kpi_canc'}
+    rows = []
+    for r in all_rows:
+        row = {k: v for k, v in r.items() if k not in _win}
+        for k in ('data_emissao', 'competencia', 'criado_em'):
+            if row.get(k) and hasattr(row[k], 'isoformat'):
+                row[k] = row[k].isoformat()
+        for k in ('valor_servicos', 'base_calculo', 'aliquota_iss', 'valor_iss',
+                  'total_retencoes', 'valor_liquido'):
+            row[k] = float(row.get(k) or 0)
+        rows.append(row)
+
+    return jsonify({'total': total, 'page': page, 'per_page': per_page,
+                    'rows': rows, 'kpi': kpi})
+
+
+@escrita_fiscal.route('/conf-nfse/api/detalhe/<int:nfse_id>')
+@login_required
+def api_nfse_detalhe(nfse_id):
+    """Uma NFS-e por inteiro + os eventos dela — o detalhe da linha.
+
+    Os eventos vêm por ``chave_referenciada``, NÃO por empresa: ``nfse_eventos``
+    colapsa o mesmo evento visto por cursores diferentes numa linha só, e os
+    campos ``*_origem`` são proveniência, nunca filtro. Filtrar por empresa aqui
+    esconderia o cancelamento de uma nota sempre que ele tivesse chegado pelo
+    cursor da outra parte.
+    """
+    n = execute_query(
+        'SELECT * FROM nfse_capturadas WHERE id = %s', (nfse_id,),
+        fetch=True, fetch_one=True)
+    if not n:
+        return jsonify({'erro': 'NFS-e não encontrada'}), 404
+
+    n.pop('raw_json', None)                      # o envelope cru não vai para a tela
+    for k, v in list(n.items()):
+        if hasattr(v, 'isoformat'):
+            n[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            n[k] = float(v)
+
+    eventos = execute_query(
+        'SELECT tipo_evento, sequencia, data_evento, motivo, chave_substituta, '
+        '       revisar, divergencia, nsu_origem '
+        '  FROM nfse_eventos WHERE chave_referenciada = %s '
+        ' ORDER BY data_evento, sequencia', (n['chave_acesso'],), fetch=True) or []
+    for e in eventos:
+        if e.get('data_evento') and hasattr(e['data_evento'], 'isoformat'):
+            e['data_evento'] = e['data_evento'].isoformat()
+
+    return jsonify({'nfse': n, 'eventos': eventos})
