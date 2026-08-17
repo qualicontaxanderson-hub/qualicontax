@@ -536,13 +536,20 @@ function _isAbort(err) { return err && err.name === 'AbortError'; }
 
 // ---- Autocomplete de empresa ----
 function onEmpresaInput() {
-    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
-    acActiveIndex = -1;
-    renderEmpresaDropdown(q);
+    renderEmpresaDropdown(
+        document.getElementById('sel_empresa_input').value.trim().toLowerCase());
 }
 function onEmpresaFocus() {
-    document.getElementById('sel_grupo').value = '';
-    currentGrupoId = '';
+    // LIMPA O TEXTO quando já há empresa escolhida — igual ao CT-e. Sem isto o
+    // nome selecionado vira o filtro da própria lista: sobra a empresa que já
+    // estava escolhida e não há como trocar. O onEmpresaBlur repõe o nome se o
+    // usuário desistir, então limpar aqui não perde nada.
+    if (document.getElementById('sel_empresa').value) {
+        document.getElementById('sel_empresa_input').value = '';
+    }
+    // NÃO zera o grupo aqui. Focar não é escolher: quem limpa o grupo é
+    // onEmpresaChange, quando uma empresa é de fato selecionada. Zerar no foco
+    // fazia um clique sem querer apagar o filtro de grupo.
     renderEmpresaDropdown(document.getElementById('sel_empresa_input').value.trim().toLowerCase());
 }
 function onEmpresaBlur() {
@@ -559,8 +566,14 @@ function onEmpresaBlur() {
 }
 function renderEmpresaDropdown(q) {
     const list = document.getElementById('empresaAcList');
+    // Zera o item destacado AQUI, não só no oninput: no CT-e é assim, e é o
+    // certo — abrir a lista pelo foco deixava o índice da digitação anterior,
+    // e o Enter escolheria uma empresa que não está mais em destaque.
+    acActiveIndex = -1;
+    // Casa por NOME ou por NÚMERO, como o CT-e: digitar "13" acha a empresa 13.
     const filtered = !q ? empresasData
-        : empresasData.filter(e => !e.id || e.nome.toLowerCase().includes(q));
+        : empresasData.filter(e => e.nome.toLowerCase().includes(q)
+                                   || String(e.id).includes(q));
     if (!filtered.length) {
         list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
     } else {
@@ -570,7 +583,7 @@ function renderEmpresaDropdown(q) {
         // do nome, então a lista abria e nada selecionava (15/08/2026, achado pelo
         // Anderson no celular). Nome de empresa é dado do usuário; dado do usuário
         // não entra em código executável.
-        list.innerHTML = filtered.slice(0, 60).map(e =>
+        list.innerHTML = filtered.map(e =>
             `<div class="cc-ac-item${e.id ? '' : ' all'}" data-id="${esc(e.id)}" data-nome="${esc(e.nome)}">${esc(e.nome)}</div>`
         ).join('');
     }
