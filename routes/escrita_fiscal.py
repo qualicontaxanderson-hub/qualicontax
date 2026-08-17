@@ -8335,11 +8335,18 @@ def api_nfse_detalhe(nfse_id):
         elif isinstance(v, Decimal):
             n[k] = float(v)
 
+    # SEM ``or []`` AQUI. ``execute_query`` devolve None quando a query FALHA, e
+    # None vira lista vazia sem ninguém notar: em 17/08/2026 esta consulta pedia
+    # uma coluna inexistente e o painel mostrava "Nenhum evento" para TODA nota,
+    # cancelada inclusive, com HTTP 200. Falha de banco tem de parecer falha.
     eventos = execute_query(
         'SELECT tipo_evento, sequencia, data_evento, motivo, chave_substituta, '
         '       revisar, divergencia, nsu_origem '
         '  FROM nfse_eventos WHERE chave_referenciada = %s '
-        ' ORDER BY data_evento, sequencia', (n['chave_acesso'],), fetch=True) or []
+        ' ORDER BY data_evento, sequencia', (n['chave_acesso'],), fetch=True)
+    if eventos is None:
+        return jsonify({'erro': 'Não foi possível ler os eventos desta NFS-e. '
+                                'O registro da nota está acima; os eventos, não.'}), 502
     for e in eventos:
         if e.get('data_evento') and hasattr(e['data_evento'], 'isoformat'):
             e['data_evento'] = e['data_evento'].isoformat()

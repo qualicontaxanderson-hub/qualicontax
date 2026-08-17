@@ -225,11 +225,17 @@ def salvar_documento(reg: dict, cur=None) -> None:
 SQL_EVT_UPSERT = (
     "INSERT INTO nfse_eventos "
     "(chave_referenciada, tipo_evento, sequencia, empresa_id_origem, cnpj_origem, "
-    " nsu_origem, data_evento, motivo, chave_substituta, revisar, orfao, raw_json) "
-    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+    " nsu_origem, data_evento, motivo, chave_substituta, revisar, orfao, raw_json, "
+    " divergencia) "
+    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
     "ON DUPLICATE KEY UPDATE "
     # revisar É recalculado: o mapa pode ter ganhado o tipo desde a 1ª entrega.
     "  revisar=VALUES(revisar), "
+    # divergencia também: é conferência do leiaute ATUAL, não histórico. Se o
+    # município corrigir o XML, o alerta some no reprocessamento — e é isso que
+    # se quer. O parser calculava esse sinal desde o início e ele morria aqui,
+    # porque a coluna não existia (add_nfse_evento_divergencia.py, 17/08/2026).
+    "  divergencia=VALUES(divergencia), "
     # COALESCE: um reprocessamento sem a chave não apaga a que já estava.
     "  chave_substituta=COALESCE(VALUES(chave_substituta), chave_substituta), "
     "  raw_json=VALUES(raw_json)"
@@ -250,6 +256,7 @@ def salvar_evento(reg: dict, cur=None) -> None:
         reg.get('sequencia'), reg.get('empresa_id_origem'), reg.get('cnpj_origem'),
         reg.get('nsu_origem'), reg.get('data_evento'), reg.get('motivo'),
         reg.get('chave_substituta'), int(reg.get('revisar') or 0), orfao, raw,
+        reg.get('divergencia'),
     )
     if cur is not None:
         cur.execute(SQL_EVT_UPSERT, params)
