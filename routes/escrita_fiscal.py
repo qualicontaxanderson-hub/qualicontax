@@ -8232,15 +8232,28 @@ def api_nfse():
     if f_vmax:
         where.append('n.valor_servicos <= %s')
         params.append(float(f_vmax))
-    if f_papel:
-        where.append('n.papel = %s')
-        params.append(f_papel)
     if f_situacao:
         where.append('n.situacao = %s')
         params.append(f_situacao)
 
+    # O PAPEL entra POR ÚLTIMO e fica guardado à parte de propósito: a contagem
+    # por papel que alimenta o seletor da tela precisa do mesmo filtro SEM ele.
+    # Se contasse já filtrada, "Tomados" mostraria zero sempre que "Prestados"
+    # estivesse selecionado — o seletor apagaria a informação que existe para
+    # ajudar a escolher.
+    where_sem_papel = list(where)
+    params_sem_papel = list(params)
+    if f_papel:
+        where.append('n.papel = %s')
+        params.append(f_papel)
+
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    sql_sem_papel = ('WHERE ' + ' AND '.join(where_sem_papel)) if where_sem_papel else ''
     offset = (page - 1) * per_page
+
+    papeis = {r['papel']: r['n'] for r in (execute_query(
+        f'SELECT n.papel, COUNT(*) n FROM nfse_capturadas n {sql_sem_papel} '
+        f'GROUP BY n.papel', tuple(params_sem_papel), fetch=True) or [])}
 
     all_rows = execute_query(
         f"""SELECT n.id, n.chave_acesso, n.numero, n.serie, n.papel,
@@ -8290,7 +8303,12 @@ def api_nfse():
         rows.append(row)
 
     return jsonify({'total': total, 'page': page, 'per_page': per_page,
-                    'rows': rows, 'kpi': kpi})
+                    'rows': rows, 'kpi': kpi,
+                    # Contagem por papel do MESMO filtro, sem o recorte de papel.
+                    'papeis': {'emitente': papeis.get('emitente', 0),
+                               'tomador': papeis.get('tomador', 0),
+                               'intermediario': papeis.get('intermediario', 0),
+                               'todos': sum(papeis.values())}})
 
 
 @escrita_fiscal.route('/conf-nfse/api/detalhe/<int:nfse_id>')
