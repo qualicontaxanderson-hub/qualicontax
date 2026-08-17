@@ -810,6 +810,22 @@ function papelBadge(p) {
     const cls = ['emitente','tomador','intermediario'].includes(p) ? p : 'tomador';
     return `<span class="ns-papel ${cls}">${esc(PAPEL_ROTULO[p] || p || '—')}</span>`;
 }
+// A MAIORIA DOS MUNICIPIOS NAO PREENCHE prest/xNome na DPS: em 16/08/2026, 968
+// de 1.008 notas capturadas vieram sem o nome do prestador. O parser lê o campo
+// certo; o campo é que chega vazio. Nos serviços TOMADOS isso dói, porque o
+// prestador é justamente a outra parte — o cartão fica com um CNPJ de manchete.
+//
+// Cai no CNPJ e para por aí. Chegou a existir aqui um atalho que, no papel
+// 'emitente', usava o nome da empresa selecionada: trocava um CNPJ inútil por
+// um nome repetido em 439 cartões, que é o mesmo defeito de hierarquia que o
+// cartão veio corrigir. CNPJ verdadeiro é melhor que nome que não informa.
+//
+// O conserto de raiz é ler o nome de infNFSe/emit (o registro do emitente feito
+// pela prefeitura) em vez de depender só da DPS — e recapturar, porque o XML não
+// fica guardado. Depende de conferir num documento real antes de codificar.
+function nomePrestador(r) {
+    return esc(r.prestador_nome) || esc(r.prestador_doc) || '—';
+}
 function situacaoBadge(r) {
     const s = r.situacao || 'ativa';
     let html;
@@ -852,6 +868,7 @@ function loadNotas() {
                 const rowCls = r.situacao === 'cancelada' ? ' cc-row-cancelada'
                              : r.situacao === 'substituida' ? ' cc-row-substituida' : '';
                 const retido = r.iss_retido ? ' <span class="ns-retido" title="ISS retido na fonte — quem recolhe é o tomador">RETIDO</span>' : '';
+                const prest = nomePrestador(r);
                 // A ORDEM das células é a do cabeçalho (desktop). No celular o
                 // grid-template-areas reordena pelas classes mc-*, então a
                 // manchete do cartão é o PRESTADOR mesmo ele vindo na 4ª coluna.
@@ -859,7 +876,7 @@ function loadNotas() {
                     <td data-l="Emissão" class="mc-data">${fmtDate(r.data_emissao)}</td>
                     <td data-l="Nº/Série" class="mc-num">${esc(r.numero)||'—'} / ${esc(r.serie)||'—'}</td>
                     <td data-l="Papel" class="mc-papel">${papelBadge(r.papel)}</td>
-                    <td data-l="Prestador" class="mc-prest" title="${esc(r.prestador_doc)}" style="text-transform:uppercase;">${esc(r.prestador_nome||r.prestador_doc)||'—'}</td>
+                    <td data-l="Prestador" class="mc-prest" title="${esc(r.prestador_doc)}" style="text-transform:uppercase;">${prest}</td>
                     <td data-l="Tomador" class="mc-toma" title="${esc(r.tomador_doc)}" style="text-transform:uppercase;">${esc(r.tomador_nome||r.tomador_doc)||'—'}</td>
                     <td data-l="Munic." class="mc-muni ns-muni">${esc(r.municipio_ibge)||'—'}</td>
                     <td data-l="Serviço" class="mc-serv ns-serv" title="${esc(r.discriminacao||'')}">${esc(r.codigo_servico)||'—'}</td>
@@ -894,7 +911,7 @@ function loadChaves() {
             }
             tbody.innerHTML = rows.map(r => `<tr>
                 <td data-l="Emissão">${fmtDate(r.data_emissao)}</td>
-                <td data-l="Prestador" style="text-transform:uppercase;">${esc(r.prestador_nome)||'—'}</td>
+                <td data-l="Prestador" style="text-transform:uppercase;">${nomePrestador(r)}</td>
                 <td data-l="Chave" class="chave-cell">${esc(r.chave_acesso)}</td>
                 <td data-l="Copiar" style="text-align:center;">
                     <button class="btn-copy-chave" onclick="copiarChave('${esc(r.chave_acesso)}', this)">

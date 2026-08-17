@@ -162,6 +162,31 @@ _COLS_DOC = (
     'ibs_mun_aliq_efet', 'ibs_mun_valor', 'ibs_mun_dif', 'ibs_total',
     'cbs_aliq_efet', 'cbs_valor', 'cbs_dif',
     'ibs_cred_pres', 'cbs_cred_pres', 'valor_total_nf',
+
+    # --- Ampliação de 17/08/2026 (migrations/add_nfse_campos_completos.py) ---
+    # Tributos federais: guardávamos o TOTAL de retenções e jogávamos fora a
+    # composição, que vinha ao lado no XML. Total sem composição não se escritura.
+    'pis_valor', 'cofins_valor', 'piscofins_cst',
+    'trib_total_federal', 'trib_total_estadual', 'trib_total_municipal',
+    # ISS: iss_retido diz SE houve; estes dizem COMO.
+    'iss_tributacao', 'iss_tipo_retencao', 'iss_aliquota_declarada',
+    'regime_especial',
+    # Município pelo nome, não só pelo código IBGE.
+    'municipio_incid_nome', 'municipio_emissao_nome',
+    'municipio_prestacao_ibge', 'municipio_prestacao_nome',
+    'servico_descricao_nacional', 'codigo_interno_contrib',
+    'prestador_im', 'prestador_email', 'prestador_fone',
+    'prestador_logradouro', 'prestador_numero', 'prestador_complemento',
+    'prestador_bairro', 'prestador_municipio_ibge', 'prestador_uf', 'prestador_cep',
+    'tomador_im', 'tomador_email', 'tomador_fone',
+    'tomador_logradouro', 'tomador_numero', 'tomador_complemento',
+    'tomador_bairro', 'tomador_municipio_ibge', 'tomador_cep',
+    'numero_dps', 'numero_dfse', 'consumidor_final', 'tipo_emitente',
+    # Dois verAplic, dois campos: um é o sistema da prefeitura, outro o emissor
+    # do contribuinte. Junto perderia a distinção que os torna úteis.
+    'aplicativo_prefeitura', 'aplicativo_emitente',
+    'tipo_emissao', 'processo_emissao', 'ambiente_gerador', 'ambiente_dps',
+
     'xml_path', 'raw_json',
 )
 

@@ -326,8 +326,21 @@ def para_registro(xml_texto: str, envelope: dict, empresa_id: int,
         'municipio_ibge': _txt(root, f'{inf}/cLocIncid'),
         'municipio_emissao': _txt(root, f'{dps}/cLocEmi'),
 
-        'prestador_doc': _doc_de(root, f'{dps}/prest'),
-        'prestador_nome': _txt(root, f'{dps}/prest/xNome'),
+        # O NOME DO PRESTADOR VEM DE infNFSe/emit, não da DPS. Conferido em
+        # documento real (16/08/2026): o ``prest`` da declaração traz CNPJ,
+        # telefone, e-mail e regime tributário — e NÃO traz ``xNome``. O nome
+        # mora em ``emit``, que é o cadastro que a prefeitura mantém do emitente.
+        # Medido antes de mexer: 968 das 1.008 primeiras notas capturadas ficaram
+        # sem nome de prestador por lerem só a DPS. A DPS fica de reserva porque
+        # 40 notas TINHAM o xNome lá — municípios preenchem diferente.
+        #
+        # Isto NÃO afeta extrair_papel(), que continua olhando só
+        # prest/toma/interm: ``emit`` diz QUEM emitiu, não que papel a empresa
+        # consultada tem na nota. Nome e papel vêm de lugares diferentes de
+        # propósito.
+        'prestador_doc': _doc_de(root, f'{dps}/prest') or _doc_de(root, f'{inf}/emit'),
+        'prestador_nome': (_txt(root, f'{inf}/emit/xNome')
+                           or _txt(root, f'{dps}/prest/xNome')),
         'tomador_doc': _doc_de(root, f'{dps}/toma'),
         'tomador_nome': _txt(root, f'{dps}/toma/xNome'),
         'intermediario_doc': _doc_de(root, f'{dps}/interm'),
@@ -384,6 +397,97 @@ def para_registro(xml_texto: str, envelope: dict, empresa_id: int,
         'cbs_cred_pres': _dec(root, f'{ibs_calc}/totCIBS/gCBS/gCBSCredPres/vCredPresCBS'),
         'valor_total_nf': _dec(root, f'{ibs_calc}/totCIBS/vTotNF'),
     }
+
+    # --- Ampliação de 17/08/2026 -------------------------------------------
+    # Levantada por inventário de documento real, não por leitura de spec: o
+    # XML trazia 76 campos com valor e nós gravávamos pouco mais da metade.
+    trib = f'{dps}/valores/trib'
+    reg.update({
+        # A COMPOSIÇÃO da retenção. total_retencoes trazia 9,05 e o XML tinha
+        # PIS 1,60 + COFINS 7,45 no elemento vizinho.
+        'pis_valor': _dec(root, f'{trib}/tribFed/piscofins/vPis'),
+        'cofins_valor': _dec(root, f'{trib}/tribFed/piscofins/vCofins'),
+        'piscofins_cst': _txt(root, f'{trib}/tribFed/piscofins/CST'),
+
+        # Um por ente. Somar destrói a apuração — mesma razão pela qual IBS de UF
+        # e de município já ficam separados.
+        'trib_total_federal': _dec(root, f'{trib}/totTrib/vTotTrib/vTotTribFed'),
+        'trib_total_estadual': _dec(root, f'{trib}/totTrib/vTotTrib/vTotTribEst'),
+        'trib_total_municipal': _dec(root, f'{trib}/totTrib/vTotTrib/vTotTribMun'),
+
+        'iss_tributacao': _int(root, f'{trib}/tribMun/tribISSQN'),
+        'iss_tipo_retencao': _int(root, f'{trib}/tribMun/tpRetISSQN'),
+        # DECLARADA pelo contribuinte. A aliquota_iss que já existia é a
+        # CALCULADA pela prefeitura (infNFSe/valores/pAliqAplic) — divergir entre
+        # as duas é exatamente o que a fiscalização olha, então nenhuma
+        # sobrescreve a outra.
+        'iss_aliquota_declarada': _dec(root, f'{trib}/tribMun/pAliq'),
+        'regime_especial': _int(root, f'{dps}/prest/regTrib/regEspTrib'),
+
+        # DOIS lugares possíveis para o nome da localidade de incidência, e
+        # documentos reais usam um ou outro: o EmissorWeb da prefeitura escreve
+        # infNFSe/xLocIncid; o emissor do contribuinte que gerou a NSU 925 só
+        # trouxe IBSCBS/xLocalidadeIncid. Ler só o primeiro deixava o campo vazio
+        # sem que nada avisasse.
+        'municipio_incid_nome': (_txt(root, f'{inf}/xLocIncid')
+                                 or _txt(root, f'{ibs_calc}/xLocalidadeIncid')),
+        'municipio_emissao_nome': _txt(root, f'{inf}/xLocEmi'),
+        # Onde o serviço foi PRESTADO. Pode diferir de onde o ISS incide, e é a
+        # diferença que decide qual prefeitura cobra.
+        'municipio_prestacao_ibge': _txt(root, f'{dps}/serv/locPrest/cLocPrestacao'),
+        'municipio_prestacao_nome': _txt(root, f'{inf}/xLocPrestacao'),
+
+        'servico_descricao_nacional': _txt(root, f'{inf}/xTribNac'),
+        'codigo_interno_contrib': _txt(root, f'{dps}/serv/cServ/cIntContrib'),
+
+        # Prestador: vem de infNFSe/emit, o cadastro da prefeitura — mesmo lugar
+        # de onde o nome passou a vir.
+        'prestador_im': _txt(root, f'{inf}/emit/IM'),
+        'prestador_email': _txt(root, f'{inf}/emit/email'),
+        'prestador_fone': _txt(root, f'{inf}/emit/fone'),
+        'prestador_logradouro': _txt(root, f'{inf}/emit/enderNac/xLgr'),
+        'prestador_numero': _txt(root, f'{inf}/emit/enderNac/nro'),
+        'prestador_complemento': _txt(root, f'{inf}/emit/enderNac/xCpl'),
+        'prestador_bairro': _txt(root, f'{inf}/emit/enderNac/xBairro'),
+        'prestador_municipio_ibge': _txt(root, f'{inf}/emit/enderNac/cMun'),
+        'prestador_uf': _txt(root, f'{inf}/emit/enderNac/UF'),
+        'prestador_cep': _txt(root, f'{inf}/emit/enderNac/CEP'),
+
+        # Tomador: caminho DIFERENTE do prestador. O endereço fica em toma/end, e
+        # município/UF/CEP descem um nível a mais, dentro de endNac. Copiar o
+        # caminho do prestador aqui devolveria None em tudo.
+        'tomador_im': _txt(root, f'{dps}/toma/IM'),
+        'tomador_email': _txt(root, f'{dps}/toma/email'),
+        'tomador_fone': _txt(root, f'{dps}/toma/fone'),
+        'tomador_logradouro': _txt(root, f'{dps}/toma/end/xLgr'),
+        'tomador_numero': _txt(root, f'{dps}/toma/end/nro'),
+        'tomador_complemento': _txt(root, f'{dps}/toma/end/xCpl'),
+        'tomador_bairro': _txt(root, f'{dps}/toma/end/xBairro'),
+        'tomador_municipio_ibge': _txt(root, f'{dps}/toma/end/endNac/cMun'),
+        'tomador_cep': _txt(root, f'{dps}/toma/end/endNac/CEP'),
+
+        # nDPS é o número da DECLARAÇÃO e nNFSe o da NOTA — não são o mesmo
+        # número e podem divergir muito (visto 2989824 contra 145).
+        'numero_dps': _txt(root, f'{dps}/nDPS'),
+        'numero_dfse': _txt(root, f'{inf}/nDFSe'),
+        'consumidor_final': _int(root, f'{ibs_decl}/indFinal'),
+        'tipo_emitente': _int(root, f'{dps}/tpEmit'),
+
+        # DUAS colunas para o mesmo dado, e de propósito. O XSD declara verAplic
+        # em dois níveis — no infNFSe (lado da prefeitura) e na DPS (lado do
+        # contribuinte). Nos quatro documentos reais medidos em 17/08/2026 os dois
+        # trouxeram VALOR IDÊNTICO ('EmissorWeb_1.6.0.0', '1.2.7+E9033D',
+        # '1.2.9+70F0E1'), então a distinção é POSSÍVEL, não observada. Ficam
+        # separados porque o dia em que divergirem é o dia em que a informação
+        # vale: é o que explica um município passar a mandar leiaute diferente da
+        # noite para o dia (como o chNFSe truncado do Giss 1.00, em 15/08/2026).
+        'aplicativo_prefeitura': _txt(root, f'{inf}/verAplic'),
+        'aplicativo_emitente': _txt(root, f'{dps}/verAplic'),
+        'tipo_emissao': _int(root, f'{inf}/tpEmis'),
+        'processo_emissao': _int(root, f'{inf}/procEmi'),
+        'ambiente_gerador': _int(root, f'{inf}/ambGer'),
+        'ambiente_dps': _int(root, f'{dps}/tpAmb'),
+    })
     return reg
 
 
