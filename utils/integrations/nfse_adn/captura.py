@@ -28,6 +28,24 @@ Exceção numa empresa NUNCA interrompe as demais — mesmo princípio do
 um vira registro e a fila continua. O que derruba a rodada inteira é só falha de
 banco, e aí é certo derrubar.
 
+O XML VAI PARA O DROPBOX, E SÓ PARA LÁ
+--------------------------------------
+Mesma escolha do ``cte_captura``, e por um motivo medido: 6,2 KB por nota, que
+em 49 empresas viram ~260 MB. No Dropbox é barato; dentro do MySQL do Railway,
+não. Fica só o ``xml_path`` apontando, e quem baixa é o servidor — o navegador
+do usuário nunca fala com o Dropbox. Esse caminho já roda em produção há meses
+no CT-e, cuja coluna ``xml_raw`` está vazia em 100% das linhas.
+
+E o arquivo NÃO é opcional por preciosismo: sem ele, mudar uma linha do parser
+obriga a puxar tudo do ADN de novo. Foi o que custou 90 minutos em 17/08/2026,
+em duas recapturas que teriam sido reprocessamento local.
+
+FALHA NO DROPBOX NÃO SEGURA A NOTA
+----------------------------------
+Se o upload falhar, a nota entra com ``xml_path=NULL`` e a fila segue — o dado
+fiscal é o que importa, o arquivo é cópia. É o que a spec manda (§ tratamento de
+erros) e o oposto de travar a captura de uma empresa porque o Dropbox oscilou.
+
 Spec: docs/NFSE_ADN_ESPECIFICACAO.md
 """
 import argparse
@@ -36,6 +54,7 @@ import time
 from datetime import datetime
 
 from utils.db_helper import execute_query
+from utils import dropbox_sync
 from utils.integrations.nfse_adn import client, parser, repositorio
 
 logger = logging.getLogger(__name__)
@@ -107,7 +126,38 @@ def _virar_incremental(cnpj):
         "       ultimo_sucesso = NOW() WHERE cnpj = %s", (cnpj,), fetch=False)
 
 
-def _processar_documento(d, empresa_id, cnpj):
+def _arquivar_xml(xml, reg, empresa):
+    """Sobe o XML e devolve o caminho, ou None se não deu.
+
+    UMA PASTA SÓ, ``NFSE``, sem separar prestadas de tomadas. O papel já está no
+    banco, e uma nota pode chegar como INTERMEDIÁRIO — que não tem casa num
+    esquema de duas pastas. Pasta é armazenamento; classificação é consulta.
+
+    A convenção é a MESMA do roteador e das outras capturas
+    (``EMPRESAS/{nº - razão}/FISCAL/{SENTIDO}/{ano}/{mês}``) e é para ficar
+    intocada: foi mexer nela que quebrou 4.542 CT-e, não o fato de o arquivo
+    existir.
+
+    Nunca levanta. Falha de Dropbox vira log e ``xml_path=NULL``.
+    """
+    chave = reg.get('chave_acesso')
+    if not chave or not empresa.get('razao'):
+        return None
+    dt = reg.get('data_emissao') or datetime.now()
+    try:
+        pasta = dropbox_sync._service.pasta_fiscal(
+            empresa['razao'], dt.year, dt.month, 'NFSE', empresa.get('numero'))
+        caminho = f'{pasta}/{chave}.xml'
+        if dropbox_sync._service.upload_bytes(caminho, xml.encode('utf-8')):
+            return caminho
+        logger.warning('[nfse-captura] Dropbox recusou o upload de %s', caminho)
+    except Exception as exc:                                  # noqa: BLE001
+        logger.warning('[nfse-captura] falha ao arquivar o XML da chave %s: %s',
+                       chave, exc)
+    return None
+
+
+def _processar_documento(d, empresa_id, cnpj, empresa=None):
     """UM documento do lote. Devolve 'salvo' | 'quarentena' | 'evento'.
 
     Quarentena NÃO é erro que trava: documento malformado não pode parar a fila
@@ -157,6 +207,10 @@ def _processar_documento(d, empresa_id, cnpj):
         return 'quarentena'
 
     reg['raw_json'] = {k: v for k, v in d.items() if k != 'ArquivoXml'}
+    # Arquiva ANTES de gravar: assim ``xml_path`` nunca aponta para arquivo que
+    # não existe. Se o upload falhar, entra NULL e a nota é gravada mesmo assim —
+    # arquivo órfão no Dropbox é inofensivo, ponteiro quebrado no banco é mentira.
+    reg['xml_path'] = _arquivar_xml(xml, reg, empresa or {})
     repositorio.gravar_documento_completo(reg)
     return 'salvo'
 
@@ -172,6 +226,14 @@ def capturar_empresa(empresa_id, cnpj, ambiente=client.Ambiente.PRODUCAO_RESTRIT
     """
     t0 = time.monotonic()
     cur = _cursor(empresa_id, cnpj)
+    # Razão e número saem daqui UMA vez por rodada: são só para montar a pasta do
+    # Dropbox, e consultar por documento seriam 900 idas ao banco para responder
+    # sempre a mesma coisa.
+    e = execute_query(
+        'SELECT nome_razao_social, numero_cliente FROM clientes WHERE id = %s',
+        (empresa_id,), fetch=True, fetch_one=True) or {}
+    empresa = {'razao': e.get('nome_razao_social'),
+               'numero': e.get('numero_cliente')}
     nsu_inicial = int(cur['ult_nsu'] or 0)
     nsu = nsu_inicial
     salvos = eventos = quarentena = lotes = 0
@@ -202,7 +264,7 @@ def capturar_empresa(empresa_id, cnpj, ambiente=client.Ambiente.PRODUCAO_RESTRIT
 
             nsu_antes = nsu
             for d in lote.documentos:
-                r = _processar_documento(d, empresa_id, cnpj)
+                r = _processar_documento(d, empresa_id, cnpj, empresa)
                 if r == 'salvo':
                     salvos += 1
                 elif r == 'evento':
