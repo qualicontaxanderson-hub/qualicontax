@@ -145,8 +145,9 @@
         </button>
         {% set slink = senha_links.get(u.id) %}
         {% if slink %}
-        <button class="btn btn-sm btn-info" title="Copiar link de senha"
-                data-url="{{ slink }}" onclick="copiarLista(this)">
+        <button class="btn btn-sm btn-info" title="Copiar mensagem com o link de senha"
+                data-url="{{ slink }}" data-nome="{{ u.nome }}" data-login="{{ u.login }}"
+                onclick="copiarLista(this)">
             <i class="fas fa-key"></i> Copiar link de senha
         </button>
         {% endif %}
@@ -752,8 +753,9 @@ function copiarUrl() {
         btn.textContent = 'COPIE MANUALMENTE — Ctrl+C';
         btn.classList.add('ok');
     }
+    var msg = msgLinkSenha(el.dataset.nome, el.dataset.login, el.textContent.trim());
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(el.textContent.trim()).then(copiouEfecha, copieManual);
+        navigator.clipboard.writeText(msg).then(copiouEfecha, copieManual);
     } else { copieManual(); }
 }
 
@@ -761,6 +763,10 @@ function copiarUrl() {
 function copiarLista(btn) {
     var url = btn.getAttribute('data-url');
     if (!url) { return; }
+    // Com nome no botão, copia a mensagem pronta; sem (outros usos), só a URL.
+    if (btn.getAttribute('data-nome')) {
+        url = msgLinkSenha(btn.getAttribute('data-nome'), btn.getAttribute('data-login'), url);
+    }
     function ok() {
         var orig = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
@@ -900,7 +906,7 @@ function aprovarPendente() {
             fecharAnalise();
             // Mostra o link de senha (se veio); senão só recarrega — o admin gera
             // pela lista com "Novo link de senha".
-            if (res.d.senha_url) { mostrarSenhaLink(res.d.senha_url, res.d.senha_prefixo); }
+            if (res.d.senha_url) { mostrarSenhaLink(res.d.senha_url, res.d.senha_prefixo, res.d.senha_nome, res.d.senha_login); }
             else { location.reload(); }
             return;
         }
@@ -932,8 +938,27 @@ function recusarPendente() {
 }
 
 // ================= Q-Colabore Parte 6: link de definição de senha ===========
-function mostrarSenhaLink(url, prefixo) {
-    document.getElementById('qsUrl').textContent = url;
+// Mensagem PRONTA para o WhatsApp: cumprimenta pelo primeiro nome e diz de quem
+// é o link — o link cru no chat não diz (pedido do Anderson, 18/08/2026). A
+// página /senha já cumprimenta pelo nome ao abrir; isto cuida do ANTES do clique.
+function msgLinkSenha(nome, login, url) {
+    var primeiro = (nome || '').trim().split(/\s+/)[0] || 'colega';
+    return 'Olá, ' + primeiro + '! 👋
+
+'
+         + 'Segue o seu link para definir a sua senha de acesso ao Qualicontax:
+
+'
+         + url + '
+
+'
+         + 'O link é pessoal (usuário: ' + (login || '') + '), vale 1 vez e expira em 72 horas.';
+}
+function mostrarSenhaLink(url, prefixo, nome, login) {
+    var el = document.getElementById('qsUrl');
+    el.textContent = url;
+    el.dataset.nome = nome || '';
+    el.dataset.login = login || '';
     document.getElementById('qsPrefixo').textContent = (prefixo || '') + '…';
     var btn = document.getElementById('qsBtnCopiar');
     btn.textContent = 'COPIAR LINK'; btn.classList.remove('ok');
@@ -968,7 +993,7 @@ function gerarLinkSenha(uid, btn) {
           { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
     .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
     .then(function (res) {
-        if (res.ok && res.d.ok) { mostrarSenhaLink(res.d.url, res.d.prefixo); return; }
+        if (res.ok && res.d.ok) { mostrarSenhaLink(res.d.url, res.d.prefixo, res.d.nome, res.d.login); return; }
         alert(res.d.msg || 'Não foi possível gerar o link.');
         if (btn) { btn.disabled = false; }
     })
@@ -1028,7 +1053,7 @@ function confirmarRedefinir() {
     .then(function (res) {
         if (res.ok && res.d.ok) {
             fecharRedefinir();
-            mostrarSenhaLink(res.d.url, res.d.prefixo);   // mesmo modal COPIAR LINK
+            mostrarSenhaLink(res.d.url, res.d.prefixo, res.d.nome, res.d.login);   // mesmo modal COPIAR LINK
             return;
         }
         alert(res.d.msg || 'Não foi possível gerar o link.');

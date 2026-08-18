@@ -931,7 +931,7 @@ def _aprovar_pendente(pid, tipo, perfis, deps, admin_id):
                  (nome, nick, email, login, senha_hash, senha_pendente,
                   tipo_usuario, classe_conta, situacao, cpf, telefone, departamento_id)
                VALUES (%s, %s, %s, %s, NULL, 1, %s, 'FUNCIONARIO', 'ATIVO', %s, %s, %s)""",
-            (cand['nome_completo'], nick, email, login, tipo, cpf, telefone, dep_primario))
+            (_nome_proprio(cand['nome_completo']), nick, email, login, tipo, cpf, telefone, dep_primario))
         uid = cur.lastrowid
 
         # perfis escolhidos pelo admin
@@ -1004,7 +1004,9 @@ def usuario_pendente_aprovar(pid):
               tabela='cadastro_pendente', registro_id=pid,
               depois={'usuario_id': uid, 'tipo_usuario': tipo})
     return jsonify(ok=True, usuario_id=uid,
-                   senha_url=senha_url, senha_prefixo=senha_prefixo)
+                   senha_url=senha_url, senha_prefixo=senha_prefixo,
+                   senha_nome=cand.get('nome_completo') or '',
+                   senha_login=login)
 
 
 @configuracoes.route('/usuarios/pendente/<int:pid>/recusar', methods=['POST'])
@@ -1053,7 +1055,7 @@ def usuario_senha_link(uid):
     """
     if not _qrobo_csrf_ok():
         return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
-    u = execute_query('SELECT id, senha_pendente FROM usuarios WHERE id = %s',
+    u = execute_query('SELECT id, senha_pendente, nome, login FROM usuarios WHERE id = %s',
                       (uid,), fetch=True, fetch_one=True)
     if not u:
         return jsonify(ok=False, msg='Usuário não encontrado.'), 404
@@ -1083,7 +1085,10 @@ def usuario_senha_link(uid):
 
     logger.info('[qcolabore] link de senha para usuário %s por %s (bloquear=%s).',
                 uid, current_user.id, int(bloquear))
-    return jsonify(ok=True, url=url, prefixo=prefixo, bloqueado=bool(bloquear))
+    # nome/login vão junto para o modal montar a MENSAGEM PRONTA de WhatsApp —
+    # o link cru no chat não diz de quem é (pedido do Anderson, 18/08/2026).
+    return jsonify(ok=True, url=url, prefixo=prefixo, bloqueado=bool(bloquear),
+                   nome=u.get('nome') or '', login=u.get('login') or '')
 
 
 # ===========================================================================
@@ -1321,6 +1326,23 @@ def usuario_colabore_corte(uid):
     return jsonify(ok=True, data_inicio=nova.strftime('%d/%m/%Y'))
 
 
+def _nome_proprio(nome):
+    """Padroniza nome de pessoa: Cada Palavra Maiúscula, conectivos minúsculos.
+
+    'GUILHERME ROCHA DE SOUSA' -> 'Guilherme Rocha de Sousa', igual ao padrão dos
+    demais cadastros ('Miguel da Cunha Abreu Sousa'). Pedido do Anderson em
+    18/08/2026, ao ver dois cartões gritando em caixa alta no meio da lista.
+    Aplicado NA ENTRADA (aprovação, criar, editar) — corrigir só o banco deixaria
+    o problema voltar na próxima candidatura digitada em maiúsculas.
+    """
+    minusculas = {'da', 'das', 'de', 'do', 'dos', 'e'}
+    partes = []
+    for i, p in enumerate((nome or '').strip().split()):
+        pl = p.lower()
+        partes.append(pl if (i > 0 and pl in minusculas) else pl.capitalize())
+    return ' '.join(partes)
+
+
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])
 @admin_required
 def usuario_novo():
@@ -1334,7 +1356,7 @@ def usuario_novo():
     ) or []
 
     if request.method == 'POST':
-        nome     = request.form.get('nome', '').strip()
+        nome     = _nome_proprio(request.form.get('nome', ''))
         login    = request.form.get('login', '').strip().lower().replace(' ', '')
         email    = request.form.get('email', '').strip().lower()
         senha    = request.form.get('senha', '').strip()
@@ -1429,7 +1451,7 @@ def usuario_editar(uid):
     }
 
     if request.method == 'POST':
-        nome     = request.form.get('nome', '').strip()
+        nome     = _nome_proprio(request.form.get('nome', ''))
         login    = request.form.get('login', '').strip().lower().replace(' ', '')
         email    = request.form.get('email', '').strip().lower()
         tipo     = request.form.get('tipo_usuario', 'ASSISTENTE')
