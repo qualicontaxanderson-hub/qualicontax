@@ -45,7 +45,7 @@ from utils.integrations.cte_sefaz import (
     _find, _text, _local,
 )
 from utils.integrations import dfe_log
-from utils.cte_parser import parse_cte_xml
+from utils.cte_parser import parse_cte_xml, papel_do_cliente, _digitos
 from utils.cte_import import _save_cte, marcar_cte_cancelado
 # Fundação compartilhada com o motor de NF-e (mesma semântica, um só lugar).
 from utils.integrations.dfe_captura import (
@@ -196,6 +196,68 @@ def _ler_ult_nsu(cliente_id):
     return int(row['ult_nsu']) if row and row.get('ult_nsu') is not None else 0
 
 
+def _index_clientes():
+    """{cpf_cnpj_só_dígitos: {id, numero, razao}} de todos os clientes.
+
+    UMA consulta por rodada. A captura de NF-e usa ``Cliente.index_cpf_cnpj()``,
+    que devolve só o id; aqui também é preciso número e razão, porque a pasta do
+    Dropbox é montada com eles e o XML tem de ser arquivado na pasta do DONO do
+    documento, não na de quem consultou.
+    """
+    rows = execute_query(
+        "SELECT id, numero_cliente, nome_razao_social, "
+        "  REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-',''),' ','') AS d "
+        "FROM clientes WHERE cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
+        fetch=True) or []
+    return {r['d']: {'cliente_id': r['id'], 'numero': r['numero_cliente'],
+                     'razao': r['nome_razao_social'], 'cnpj': r['d']}
+            for r in rows if r['d'] and len(r['d']) >= 11}
+
+
+def _destinos_do_cte(header, empresa, cli_index):
+    """Para QUEM este CT-e deve ser gravado. Devolve [(empresa_alvo, papel), ...].
+
+    A REGRA (Anderson, 18/08/2026)
+    ------------------------------
+      1. o dono do certificado É PARTE do CT-e  -> linha dele, com o papel real
+      2. chegou por autXML (dono não é parte)   -> procura, entre TODAS as partes,
+         quem é cliente cadastrado; achou, a linha é DELE
+      3. ninguém cadastrado                     -> FICA no dono do certificado
+
+    Por que isto existe: o ``autXML`` do CT-e leva o CNPJ do contador, e é assim
+    que o certificado do escritório puxa da SEFAZ o frete que o cliente emitiu.
+    Sem este roteamento, a captura gravava tudo em ``empresa['cliente_id']`` e o
+    CT-e da HPA ia parar na Conferência da Qualicontax — 126 documentos assim, em
+    18/08/2026. A captura de NF-e já fazia o equivalente (o "dual-save"), e foi
+    isso que fez as saídas da KET migrarem sozinhas quando ela foi cadastrada.
+
+    DIVERGE DA NF-e no caso 3 de propósito: lá o autXML de terceiro puro é
+    DESCARTADO; aqui fica com o escritório, porque frete que ele foi autorizado a
+    ver continua interessando a ele.
+    """
+    destinos = []
+    vistos = set()
+
+    papel_dono = papel_do_cliente(header, empresa.get('cnpj') or '')
+    if papel_dono != 'outro':
+        destinos.append((empresa, papel_dono))
+        vistos.add(empresa['cliente_id'])
+
+    # Todas as partes, na mesma ordem de precedência do papel_do_cliente.
+    for campo in ('tomador_cnpj', 'rem_cnpj', 'dest_cnpj', 'exped_cnpj',
+                  'receb_cnpj', 'emit_cnpj'):
+        alvo = cli_index.get(_digitos(header.get(campo)))
+        if not alvo or alvo['cliente_id'] in vistos:
+            continue
+        destinos.append((alvo, papel_do_cliente(header, alvo['cnpj'])))
+        vistos.add(alvo['cliente_id'])
+
+    # Caso 3: ninguém reconhecido — fica com quem consultou.
+    if not destinos:
+        destinos.append((empresa, 'outro'))
+    return destinos
+
+
 # ==========================================================================
 # Gravação de UM documento
 # ==========================================================================
@@ -210,33 +272,49 @@ def _importar_cte(empresa, xml_bytes, nsu=None):
     xml_str = xml_bytes.decode('utf-8', 'replace')
     parsed = parse_cte_xml(xml_str)                  # pode levantar ValueError
     chave = parsed['chave']
-    data_emissao = parsed['header'].get('data_emissao')
-    caminho = f"{_pasta_dfe(empresa, data_emissao, 'CTE')}/{chave}.xml"
+    header = parsed['header']
+    data_emissao = header.get('data_emissao')
 
-    try:
-        # xml_raw + xml_caminho: cinto E suspensório. O XML vai para o BANCO (o
-        # olhinho/DACTE/zip preferem xml_raw e param de depender do arquivo — foi
-        # o que quebrou 4.542 CT-e quando as pastas mudaram) e o caminho continua
-        # gravado como ponteiro do arquivo arquivado. _save_cte trunca em 16 MB e
-        # o UPDATE usa COALESCE, então reprocessar nunca apaga o que já existe.
-        res = _save_cte(
-            parsed, f'{chave}.xml', 'SEFAZ',
-            cliente_id=empresa['cliente_id'], xml_raw=xml_str,
-            xml_caminho=caminho, nsu=nsu,
-            cnpj_cliente=empresa['cnpj'],
-        )
-    except Exception:
-        # Gravação falhou → arquiva em ERROS (best-effort) e propaga (para o lote).
+    # QUEM é o dono deste CT-e — pode não ser quem consultou. Ver _destinos_do_cte.
+    destinos = _destinos_do_cte(header, empresa,
+                                empresa.get('cli_index') or _index_clientes())
+    if len(destinos) > 1 or destinos[0][0]['cliente_id'] != empresa['cliente_id']:
+        logger.info('[cte] chave=%s roteado para %s', chave,
+                    [(d['cliente_id'], p) for d, p in destinos])
+
+    res = None
+    for alvo, papel in destinos:
+        # A pasta é a do DONO da linha, não a de quem consultou: o XML da HPA tem
+        # de ficar no arquivo fiscal da HPA.
+        caminho = f"{_pasta_dfe(alvo, data_emissao, 'CTE')}/{chave}.xml"
         try:
-            _subir_xml(f"{_pasta_dfe(empresa, data_emissao, 'ERROS')}/{chave}.xml",
-                       xml_bytes)
+            # xml_raw + xml_caminho: cinto E suspensório. O XML vai para o BANCO (o
+            # olhinho/DACTE/zip preferem xml_raw e param de depender do arquivo — foi
+            # o que quebrou 4.542 CT-e quando as pastas mudaram) e o caminho continua
+            # gravado como ponteiro do arquivo arquivado. _save_cte trunca em 16 MB e
+            # o UPDATE usa COALESCE, então reprocessar nunca apaga o que já existe.
+            r = _save_cte(
+                parsed, f'{chave}.xml', 'SEFAZ',
+                cliente_id=alvo['cliente_id'], xml_raw=xml_str,
+                xml_caminho=caminho, nsu=nsu,
+                papel_cliente=papel, cnpj_cliente=alvo.get('cnpj'),
+            )
         except Exception:
-            pass
-        raise
-
-    # Sucesso no banco → sobe o XML. Falha aqui aborta o doc; o retry re-grava
-    # (o _save_cte vira 'upd', idempotente) e re-sobe.
-    _subir_xml(caminho, xml_bytes)
+            # Gravação falhou → arquiva em ERROS (best-effort) e propaga (para o lote).
+            try:
+                _subir_xml(f"{_pasta_dfe(alvo, data_emissao, 'ERROS')}/{chave}.xml",
+                           xml_bytes)
+            except Exception:
+                pass
+            raise
+        # Sucesso no banco → sobe o XML. Falha aqui aborta o doc; o retry re-grava
+        # (o _save_cte vira 'upd', idempotente) e re-sobe.
+        _subir_xml(caminho, xml_bytes)
+        # O resultado que conta para a estatística é o do PRIMEIRO destino: os
+        # demais são cópias do mesmo documento para outros clientes, e contá-las
+        # inflaria o "n_cte" da rodada.
+        if res is None:
+            res = r
     return res, len(parsed.get('nfes') or [])
 
 
@@ -440,8 +518,10 @@ def _preparar(cliente_id, origem, dry_run=False, checar_cota=True):
         'sess': montar_sessao_mtls(cert, chave_priv, cadeia),
         'cnpj': cnpj, 'cuf': cuf, 'rotulo': rotulo,
         'validade': vinc.get('validade'),   # p/ traduzir um 403 em 'cert vencido'
+        # cli_index vai no contexto para ser montado UMA vez por rodada, e não
+        # uma vez por documento — a rodada pode ter centenas de CT-e.
         'empresa': {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
-                    'cnpj': cnpj, 'uf': uf},
+                    'cnpj': cnpj, 'uf': uf, 'cli_index': _index_clientes()},
     }
     return ctx, None
 
