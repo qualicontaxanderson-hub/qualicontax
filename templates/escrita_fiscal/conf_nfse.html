@@ -120,6 +120,19 @@ table.cc-table tr.cc-row-substituida:hover td { background:#fef3c7; }
 .ns-serv { font-family:ui-monospace,monospace; font-size:11px; color:#475569; }
 .ns-muni { font-family:ui-monospace,monospace; font-size:11px; color:#64748b; }
 
+/* ---- Seleção + export em lote — COPIADO do conf_cte.html (paleta índigo).
+   A regra é a de sempre: não "melhorar" isoladamente; mudança aqui é nas
+   quatro telas no mesmo commit. ---- */
+.chk-linha, #chkTodos { width:15px; height:15px; cursor:pointer; accent-color:#4f46e5; }
+.btn-lote { display:inline-flex; align-items:center; gap:6px; border:1px solid #d7e3dc; background:#fff; color:#0f3d2e; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.btn-lote:disabled { opacity:.6; cursor:progress; }
+.btn-lote:hover:not(:disabled) { border-color:#a5b4fc; background:#eef2ff; }
+.sel-banner { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:8px; padding:8px 14px; margin-bottom:10px; font-size:13px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+.sel-banner.all { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+.sel-banner a { color:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
+.btn-exp { background:transparent; border:none; color:#6b7280; padding:4px 6px; border-radius:5px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-flex; }
+.btn-exp:hover { background:#eef2ff; color:#4338ca; }
+
 /* ---- Tom Select ---- */
 .cc-filter-grid .ts-wrapper { width:100%; }
 .cc-filter-grid .ts-control { border:1.5px solid #e2e8f0; border-radius:7px; background:#f8fafc; font-size:13px; padding:3px 8px; min-height:33px; }
@@ -210,14 +223,15 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
        posicionamento automático do mesmo grid — cada uma num canto. */
     #tab-notas table.cc-table tbody tr {
         display:grid;
-        grid-template-columns:1fr 1fr 1fr auto;
+        grid-template-columns:auto 1fr 1fr 1fr auto;
         grid-template-areas:
-            "prest prest prest valor"
-            "num   data  papel papel"
-            "toma  toma  toma  toma"
-            "muni  serv  serv  serv"
-            "iss   iss   ret   ret"
-            "sit   sit   sit   sit";
+            "chk  prest prest prest valor"
+            "chk  num   data  papel papel"
+            "chk  toma  toma  toma  toma"
+            "chk  muni  serv  serv  serv"
+            "chk  iss   iss   ret   ret"
+            "chk  sit   sit   sit   sit"
+            "acoes acoes acoes acoes acoes";
         gap:5px 9px; align-items:baseline;
     }
     table.cc-table tbody tr {
@@ -245,6 +259,12 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
     td.mc-iss { grid-area:iss; }   td.mc-ret { grid-area:ret; }
     td.mc-sit { grid-area:sit; padding-top:9px !important; margin-top:3px;
                 border-top:1px dashed #eef2f0 !important; }
+    td.mc-chk { grid-area:chk; align-self:start; padding-top:2px !important; }
+    td.mc-acoes { grid-area:acoes; padding-top:10px !important; margin-top:4px;
+                  border-top:1px dashed #eef2f0 !important;
+                  display:flex; gap:8px; }
+    td.mc-acoes .btn-exp { flex:1 1 auto; min-height:40px; justify-content:center;
+                           border:1px solid #e2e8f0; border-radius:10px; }
 
     td.mc-num, td.mc-data, td.mc-muni, td.mc-serv, td.mc-iss, td.mc-ret {
         font-size:11.5px; color:#334155; white-space:nowrap; overflow-wrap:normal; }
@@ -433,16 +453,28 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
         <i class="fas fa-key"></i> Chaves
         <span id="tabBadgeChaves" style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:99px;font-size:10px;margin-left:5px;">0</span>
     </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        <button class="btn-lote" onclick="baixarXmlLote(this)"
+                title="Os marcados; se nada estiver marcado, todos do filtro atual">
+            <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
+        </button>
+        <button class="btn-lote" onclick="gerarPdfLote(this)"
+                title="Só os marcados, no máximo 10 por vez">
+            <i class="fas fa-file-pdf"></i> Gerar PDF (até 10)
+        </button>
+    </div>
 </div>
 
 <div class="cc-loading" id="loadingIndicator"><i class="fas fa-spinner"></i><br>Carregando...</div>
 
 <!-- Tab: NFS-e -->
 <div id="tab-notas">
+    <div id="selBanner" class="sel-banner" style="display:none;"></div>
     <div class="cc-table-wrap">
         <table class="cc-table">
             <thead>
                 <tr>
+                    <th style="width:34px;text-align:center;"><input type="checkbox" id="chkTodos" onclick="marcarTodos(this)" title="Marcar todas desta página"></th>
                     <th>Data</th>
                     <th>Nº / Série</th>
                     <th>Papel</th>
@@ -454,10 +486,11 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
                     <th style="text-align:right;">ISS</th>
                     <th style="text-align:right;">Retenções</th>
                     <th>Situação</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody id="tbodyNotas">
-                <tr><td colspan="11" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i>Selecione uma empresa e clique em Buscar</td></tr>
+                <tr><td colspan="13" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -752,6 +785,7 @@ function setPapel(p) {
     if (!hasSearched) return;      // sem busca ainda, só marca a escolha
     currentPage = 1;
     chavesCurrentPage = 1;
+    desmarcarTodos();
     loadActiveTab();
 }
 function pintaContagens(papeis) {
@@ -833,6 +867,114 @@ function loadActiveTab() {
     else loadChaves();
 }
 
+// ---- Seleção + export em lote — COPIADO do conf_cte.html. Só mudam os
+// endpoints e o rótulo. Não "melhorar" isoladamente. ----
+let selTudoFiltro = false;
+let notasTotal = 0, notasPerPage = 50;
+const URL_XML_UMA = '{{ url_for("escrita_fiscal.nfse_xml", nfse_id=0) }}';
+const URL_PDF_UMA = '{{ url_for("escrita_fiscal.nfse_pdf", nfse_id=0) }}';
+
+function idsMarcados() {
+    return Array.from(document.querySelectorAll('.chk-linha:checked')).map(c => c.value);
+}
+function _selPage() { return document.querySelectorAll('.chk-linha:checked').length; }
+function _selPageTotal() { return document.querySelectorAll('.chk-linha').length; }
+
+function atualizaSelUI() {
+    const pageSel = _selPage();
+    const cnt = document.getElementById('xmlCount');
+    const n = selTudoFiltro ? notasTotal : pageSel;
+    if (cnt) cnt.textContent = n ? `(${n})` : '';
+    const banner = document.getElementById('selBanner');
+    if (!banner) return;
+    if (selTudoFiltro) {
+        banner.className = 'sel-banner all';
+        banner.style.display = '';
+        banner.innerHTML = `<span><i class="fas fa-check-circle"></i> Todas as ${notasTotal} do filtro selecionadas.</span>`
+            + ` <a onclick="sairTudoFiltro()">voltar para só esta página</a>`;
+    } else if (pageSel && notasTotal > notasPerPage && pageSel === _selPageTotal()) {
+        banner.className = 'sel-banner';
+        banner.style.display = '';
+        banner.innerHTML = `<span>As ${pageSel} desta página estão selecionadas.</span>`
+            + ` <a onclick="selecionarTudoFiltro()">Selecionar todas as ${notasTotal} do filtro</a>`;
+    } else {
+        banner.style.display = 'none';
+    }
+}
+function selecionarTudoFiltro() { selTudoFiltro = true; atualizaSelUI(); }
+function sairTudoFiltro() { selTudoFiltro = false; atualizaSelUI(); }
+function marcarTodos(chk) {
+    document.querySelectorAll('.chk-linha').forEach(c => { c.checked = chk.checked; });
+    if (!chk.checked) selTudoFiltro = false;
+    atualizaSelUI();
+}
+function chkLinhaChange() {
+    selTudoFiltro = false;
+    const t = document.getElementById('chkTodos');
+    if (t) t.checked = _selPageTotal() > 0 && _selPage() === _selPageTotal();
+    atualizaSelUI();
+}
+function desmarcarTodos() {
+    const t = document.getElementById('chkTodos');
+    if (t) t.checked = false;
+    document.querySelectorAll('.chk-linha').forEach(c => { c.checked = false; });
+    selTudoFiltro = false;
+    atualizaSelUI();
+}
+
+function _baixarZip(url, corpo, btn) {
+    const rotulo = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...'; }
+    fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(corpo)})
+        .then(async resp => {
+            const tipo = resp.headers.get('Content-Type') || '';
+            if (!resp.ok || tipo.indexOf('application/json') >= 0) {
+                const d = await resp.json().catch(() => ({}));
+                alert(d.error || 'Não foi possível gerar o arquivo.');
+                return;
+            }
+            const blob = await resp.blob();
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const utf8 = cd.match(/filename\*=UTF-8''([^;]+)/i);
+            const simples = cd.match(/filename="?([^";]+)"?/);
+            let nome = 'export.zip';
+            if (utf8) {
+                try { nome = decodeURIComponent(utf8[1]); } catch (e) { nome = utf8[1]; }
+            } else if (simples) {
+                nome = simples[1];
+            }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = nome;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        })
+        .catch(() => alert('Erro de conexão ao gerar o arquivo.'))
+        .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } });
+}
+function baixarXmlLote(btn) {
+    const pageIds = idsMarcados();
+    if (!hasSearched) { alert('Faça uma busca primeiro.'); return; }
+    // Marcados = só eles; nada marcado (ou "tudo do filtro") = o filtro inteiro.
+    const ids = selTudoFiltro ? [] : pageIds;
+    _baixarZip('{{ url_for("escrita_fiscal.lote_xml_nfse") }}',
+               {...getFilters(), ids: ids}, btn);
+}
+function gerarPdfLote(btn) {
+    const ids = idsMarcados();
+    if (!ids.length) { alert('Marque as NFS-e que quer em PDF (máximo 10).'); return; }
+    _baixarZip('{{ url_for("escrita_fiscal.lote_pdf_nfse") }}',
+               {...getFilters(), ids: ids}, btn);
+}
+function exportBtns(r) {
+    const rot = `NFS-e ${r.numero||'—'}/${r.serie||'—'}`;
+    return `<a class="btn-exp" href="${URL_XML_UMA.replace(/0$/, r.id)}" title="Baixar o XML de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`
+         + `<a class="btn-exp" href="${URL_PDF_UMA.replace(/0$/, r.id)}" title="Baixar o DANFSE de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
+}
+
 // ---- Formatters ----
 function fmtBRL(v) {
     return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -899,6 +1041,14 @@ function loadNotas() {
             document.getElementById('tabBadgeNotas').textContent = data.total;
             document.getElementById('kpiNfse').textContent = data.total;
             pintaContagens(data.papeis);
+            // Nova página/busca zera a seleção e o modo "tudo do filtro" — igual
+            // ao CT-e: as caixinhas são da página que acabou de ser redesenhada.
+            notasTotal = data.total || 0;
+            notasPerPage = data.per_page || 50;
+            selTudoFiltro = false;
+            const _chkTop = document.getElementById('chkTodos');
+            if (_chkTop) _chkTop.checked = false;
+            atualizaSelUI();
             if (data.kpi) {
                 document.getElementById('kpiServicos').textContent = fmtBRL(data.kpi.total_servicos);
                 document.getElementById('kpiISS').textContent = fmtBRL(data.kpi.total_iss);
@@ -907,7 +1057,7 @@ function loadNotas() {
             }
             const tbody = document.getElementById('tbodyNotas');
             if (!lastRows.length) {
-                tbody.innerHTML = '<tr><td colspan="11" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i><br>Nenhuma NFS-e encontrada</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i><br>Nenhuma NFS-e encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }
@@ -920,6 +1070,7 @@ function loadNotas() {
                 // grid-template-areas reordena pelas classes mc-*, então a
                 // manchete do cartão é o PRESTADOR mesmo ele vindo na 4ª coluna.
                 return `<tr class="cc-row-clickable${rowCls}" onclick="openPanel(${r.id})">
+                    <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" onchange="chkLinhaChange()"></td>
                     <td data-l="Emissão" class="mc-data">${fmtDate(r.data_emissao)}</td>
                     <td data-l="Nº/Série" class="mc-num">${esc(r.numero)||'—'} / ${esc(r.serie)||'—'}</td>
                     <td data-l="Papel" class="mc-papel">${papelBadge(r.papel)}</td>
@@ -931,6 +1082,7 @@ function loadNotas() {
                     <td data-l="ISS" class="mc-iss money">${fmtBRL(r.valor_iss)}${retido}</td>
                     <td data-l="Retenções" class="mc-ret money">${fmtBRL(r.total_retencoes)}</td>
                     <td data-l="Situação" class="mc-sit">${situacaoBadge(r)}</td>
+                    <td class="mc-acoes" onclick="event.stopPropagation()">${exportBtns(r)}</td>
                 </tr>`;
             }).join('');
             renderPagination('paginationNotas', data.total, data.per_page, data.page, p => { currentPage = p; loadNotas(); });

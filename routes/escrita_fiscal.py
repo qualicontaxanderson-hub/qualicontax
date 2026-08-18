@@ -8370,3 +8370,271 @@ def api_nfse_detalhe(nfse_id):
             e['data_evento'] = e['data_evento'].isoformat()
 
     return jsonify({'nfse': n, 'eventos': eventos})
+
+
+# ===========================================================================
+# EXPORT DE NFS-e — XML e DANFSE (PDF), uma nota e em lote
+#
+# Espelha o export de CT-e, com UMA diferença de fundo: em ``nfse_capturadas``
+# NÃO EXISTE coluna ``xml_raw``. A captura arquiva o XML no Dropbox e guarda só
+# o ``xml_path`` — decisão de 17/08/2026, medida: 6,2 KB por nota, ~260 MB
+# projetando 49 empresas, que é barato no Dropbox e caro no MySQL do Railway.
+# Então a fonte aqui é SEMPRE o arquivo, e o caminho tem de tolerar o Dropbox
+# fora do ar com mensagem honesta em vez de 500.
+#
+# Guard de acesso = a MESMA permissão da tela que lista (conf_nfse).
+# ===========================================================================
+_LOTE_MAX_XML_NFSE = 200
+
+
+def _carregar_nfse_export(nfse_id):
+    """(nfse, xml, None) pronto para exportar, ou (None, None, (msg, status)).
+
+    Cobre: nota inexistente (404), sem permissão (403), sem XML arquivado (404)
+    e falha de download (502). O 404 de "sem arquivo" é caso real: a captura
+    grava a nota mesmo quando o upload falha, com ``xml_path`` NULL — o dado
+    fiscal vale mais que a cópia do arquivo.
+    """
+    n = execute_query(
+        'SELECT id, chave_acesso, numero, serie, xml_path '
+        '  FROM nfse_capturadas WHERE id = %s', (nfse_id,), fetch=True, fetch_one=True)
+    if not n:
+        return None, None, ('NFS-e não encontrada.', 404)
+    if not current_user.has_permission('escrita_fiscal.conf_nfse'):
+        return None, None, ('Você não tem permissão para baixar esta NFS-e.', 403)
+
+    caminho = (n.get('xml_path') or '').strip()
+    if not caminho:
+        return None, None, ('Esta NFS-e não tem o XML arquivado — nada a exportar. '
+                            '(A nota foi capturada, mas o upload do arquivo falhou.)', 404)
+    try:
+        xml = dropbox_sync.download_xml(caminho)
+    except (DropboxAuthError, DropboxError) as exc:
+        logging.getLogger(__name__).warning(
+            '[export] falha ao baixar XML da NFS-e id=%s (%s): %s', nfse_id, caminho, exc)
+        return None, None, ('Não foi possível ler o XML no Dropbox agora. '
+                            'Tente de novo em instantes.', 502)
+    if not xml:
+        return None, None, ('O XML desta NFS-e não está mais no Dropbox '
+                            '(o arquivo pode ter sido movido ou removido).', 404)
+    return n, xml, None
+
+
+@escrita_fiscal.route('/nfse/<int:nfse_id>/xml')
+@login_required
+def nfse_xml(nfse_id):
+    """Baixa o XML da NFS-e (do Dropbox, que é onde ele mora)."""
+    n, xml, erro = _carregar_nfse_export(nfse_id)
+    if erro:
+        return erro
+    chave = n.get('chave_acesso') or str(nfse_id)
+    return send_file(BytesIO(xml.encode('utf-8')), as_attachment=True,
+                     download_name=f'{chave}.xml', mimetype='application/xml')
+
+
+@escrita_fiscal.route('/nfse/<int:nfse_id>/pdf')
+@login_required
+def nfse_pdf(nfse_id):
+    """DANFSE em PDF a partir do XML arquivado.
+
+    ?inline=1 → Content-Disposition inline, para um <iframe> renderizar em vez
+    de baixar. A geração é BLINDADA: qualquer falha vira 422 com recado, nunca
+    500 — o leiaute da NFS-e nacional ainda varia entre municípios, e uma nota
+    fora do padrão não pode derrubar a tela.
+    """
+    n, xml, erro = _carregar_nfse_export(nfse_id)
+    if erro:
+        return erro
+    chave = n.get('chave_acesso') or ''
+    try:
+        from brazilfiscalreport.danfse import Danfse
+        pdf_bytes = bytes(Danfse(xml=xml).output())
+    except Exception:
+        logging.getLogger(__name__).exception(
+            '[export] falha ao gerar DANFSE da nfse_id=%s (chave=%s)', nfse_id, chave)
+        return ('Não foi possível gerar o PDF desta NFS-e (o XML pode estar fora do '
+                'padrão esperado). Baixe o XML por enquanto.', 422)
+    inline = request.args.get('inline') in ('1', 'true', 'sim')
+    return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
+                     download_name=f'{chave or nfse_id}.pdf', mimetype='application/pdf')
+
+
+def _where_lote_nfse(data):
+    """Mesmas cláusulas da listagem, a partir do corpo JSON do lote."""
+    where, params = _empresa_where_nfse(str(data.get('cliente_id', '')).strip(),
+                                        str(data.get('grupo_id', '')).strip(),
+                                        alias='n', params=[])
+    f_prestador = _filtro_lista(data.get('prestador_doc', ''))
+    if f_prestador:
+        where.append(_clausula_in('n.prestador_doc', f_prestador, params))
+    f_mun = _filtro_lista(data.get('municipio', ''))
+    if f_mun:
+        where.append(_clausula_in('n.municipio_ibge', f_mun, params))
+
+    v = str(data.get('tomador_doc', '')).strip()
+    if v:
+        where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
+        params.append('%' + re.sub(r'\D', '', v) + '%')
+    v = str(data.get('chave', '')).strip()
+    if v:
+        where.append('n.chave_acesso LIKE %s')
+        params.append(f'%{v}%')
+    v = str(data.get('numero', '')).strip()
+    if v:
+        where.append('n.numero = %s')
+        params.append(v)
+    v = str(data.get('codigo_servico', '')).strip()
+    if v:
+        where.append('n.codigo_servico LIKE %s')
+        params.append(f'{v}%')
+    v = str(data.get('papel', '')).strip()
+    if v:
+        where.append('n.papel = %s')
+        params.append(v)
+    v = str(data.get('situacao', '')).strip()
+    if v:
+        where.append('n.situacao = %s')
+        params.append(v)
+    v = str(data.get('data_ini', '')).strip()
+    if v:
+        where.append('n.data_emissao >= %s')
+        params.append(v)
+    v = str(data.get('data_fim', '')).strip()
+    if v:
+        # data_emissao é DATETIME: sem o 23:59:59 o último dia ficaria de fora.
+        where.append('n.data_emissao <= %s')
+        params.append(v + ' 23:59:59')
+    v = str(data.get('vmin', '')).strip()
+    if v:
+        where.append('n.valor_servicos >= %s')
+        params.append(float(v))
+    v = str(data.get('vmax', '')).strip()
+    if v:
+        where.append('n.valor_servicos <= %s')
+        params.append(float(v))
+    return where, params
+
+
+def _xmls_nfse(rows):
+    """Resolve o XML de cada NFS-e — SEMPRE do Dropbox, que é onde ele mora.
+
+    Os downloads vão em paralelo porque cada um é uma chamada de rede: em série,
+    algumas dezenas já estourariam o tempo da requisição. Quem falhar fica de
+    fora do zip em vez de derrubar o lote inteiro.
+    """
+    pendentes = [r for r in rows if (r.get('xml_path') or '').strip()]
+    baixados = {}
+    if pendentes:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futuros = {pool.submit(dropbox_sync.download_xml, r['xml_path']): r['id']
+                       for r in pendentes}
+            for fut in as_completed(futuros):
+                nid = futuros[fut]
+                try:
+                    baixados[nid] = fut.result()
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        '[export-lote] falha ao baixar XML da nfse_id=%s', nid)
+    return [(r, baixados[r['id']]) for r in rows if baixados.get(r['id'])]
+
+
+def _where_lote_nfse_ids(data, ids):
+    """WHERE por ids MARCADOS, sempre com o escopo de empresa junto: uma lista
+    forjada não pode alcançar nota de outra empresa."""
+    where, params = _empresa_where_nfse(str(data.get('cliente_id', '')).strip(),
+                                        str(data.get('grupo_id', '')).strip(),
+                                        alias='n', params=[])
+    where.append(_clausula_in('n.id', [str(i) for i in ids], params))
+    return where, params
+
+
+@escrita_fiscal.route('/conf-nfse/export/xml-lote', methods=['POST'])
+@login_required
+def lote_xml_nfse():
+    if not current_user.has_permission('escrita_fiscal.conf_nfse'):
+        return jsonify({'error': 'Você não tem permissão para exportar estas NFS-e.'}), 403
+    data = request.get_json(silent=True) or {}
+    ids = _ids_do_lote(data)
+    where, params = (_where_lote_nfse_ids(data, ids) if ids else _where_lote_nfse(data))
+    where.append("COALESCE(n.xml_path,'') <> ''")
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
+    total = int((execute_query(
+        f'SELECT COUNT(*) AS t FROM nfse_capturadas n {where_sql}',
+        tuple(params), fetch=True, fetch_one=True) or {}).get('t', 0))
+    if total == 0:
+        return jsonify({'error': 'Nenhuma NFS-e com XML arquivado na seleção/filtro.'}), 404
+    if total > _LOTE_MAX_XML_NFSE:
+        return jsonify({'error': f'{total} NFS-e — o limite é {_LOTE_MAX_XML_NFSE} por vez '
+                                 f'(cada XML é baixado do Dropbox). Refine o período '
+                                 f'ou marque as que quer.'}), 413
+
+    # AUDITORIA (D2): exportação de arquivo por ação do usuário.
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfse_capturadas',
+              depois={'escopo': 'nfse', 'formato': 'xml', 'total': total,
+                      'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
+                                  **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
+
+    rows = execute_query(
+        f'SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_path '
+        f'FROM nfse_capturadas n {where_sql}', tuple(params), fetch=True) or []
+    arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml', xml.encode('utf-8'))
+                for r, xml in _xmls_nfse(rows)]
+    if not arquivos:
+        return jsonify({'error': 'Não foi possível ler os XMLs no Dropbox agora. '
+                                 'Tente de novo em instantes.'}), 502
+    return _zip_download(arquivos, _nome_zip_lote(
+        data, [r['data_emissao'] for r in rows], 'NFSE XML'))
+
+
+@escrita_fiscal.route('/conf-nfse/export/pdf-lote', methods=['POST'])
+@login_required
+def lote_pdf_nfse():
+    """DANFSE em lote — SÓ por seleção e no máximo _LOTE_MAX_PDF.
+
+    Diferente do XML, cada PDF é MONTADO na hora (baixa o XML e renderiza), e
+    isso não escala em centenas dentro de uma requisição. Por isso aqui não vale
+    o "todos do filtro": é preciso marcar.
+    """
+    if not current_user.has_permission('escrita_fiscal.conf_nfse'):
+        return jsonify({'error': 'Você não tem permissão para exportar estas NFS-e.'}), 403
+    data = request.get_json(silent=True) or {}
+    ids = _ids_do_lote(data)
+    if not ids:
+        return jsonify({'error': f'Marque as NFS-e que quer em PDF '
+                                 f'(no máximo {_LOTE_MAX_PDF}).'}), 400
+    if len(ids) > _LOTE_MAX_PDF:
+        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
+                                 f'(cada um é gerado na hora).'}), 400
+
+    where, params = _where_lote_nfse_ids(data, ids)
+    where.append("COALESCE(n.xml_path,'') <> ''")
+    rows = execute_query(
+        f"SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_path "
+        f"FROM nfse_capturadas n WHERE {' AND '.join(where)}",
+        tuple(params), fetch=True) or []
+    if not rows:
+        return jsonify({'error': 'Nenhuma das NFS-e marcadas tem XML arquivado.'}), 404
+
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfse_capturadas',
+              depois={'escopo': 'nfse', 'formato': 'pdf', 'total': len(rows),
+                      'filtros': rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))})
+
+    from brazilfiscalreport.danfse import Danfse
+    arquivos, falhas = [], 0
+    for r, xml in _xmls_nfse(rows):
+        try:
+            arquivos.append(((r['chave_acesso'] or str(r['id'])) + '.pdf',
+                             bytes(Danfse(xml=xml).output())))
+        except Exception:
+            falhas += 1
+            logging.getLogger(__name__).warning(
+                '[export-lote] falha ao gerar DANFSE da nfse_id=%s', r['id'])
+    if not arquivos:
+        return jsonify({'error': 'Não foi possível gerar nenhum PDF das NFS-e '
+                                 'marcadas (XML fora do padrão ou Dropbox fora).'}), 422
+    if falhas:
+        logging.getLogger(__name__).info(
+            '[export-lote] %s PDF(s) de NFS-e ficaram de fora do zip', falhas)
+    return _zip_download(arquivos, _nome_zip_lote(
+        data, [r['data_emissao'] for r in rows], 'NFSE PDF'))
