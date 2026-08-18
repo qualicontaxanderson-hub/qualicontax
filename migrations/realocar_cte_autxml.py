@@ -131,8 +131,9 @@ def main():
                          fetch=True, fetch_one=True)
     print(f"Sobraram {rest['n']} linha(s) com papel 'outro' — devem ser as {fica['n']} de terceiro puro.")
     print()
-    print('FALTA A CAPTURA: daqui para frente o cte_captura ainda grava no dono do')
-    print('certificado. Sem isso, os próximos CT-e voltam a cair no escritório.')
+    print('A CAPTURA JÁ FOI CORRIGIDA (commit 1182418): o cte_captura passou a rotear')
+    print('pelo autXML antes desta migração rodar, então o que entrar de agora em')
+    print('diante já nasce no cliente certo. Esta migração é só o passado.')
     return 0
 
 
