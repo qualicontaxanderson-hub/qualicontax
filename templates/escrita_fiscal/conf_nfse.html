@@ -535,91 +535,63 @@ function _fetchWithAbort(key, url) {
 function _isAbort(err) { return err && err.name === 'AbortError'; }
 
 // ---- Autocomplete de empresa ----
+// ===========================================================================
+// SELETOR DE EMPRESA -- COPIA LITERAL DO conf_cte.html.
+//
+// Nao 'melhorar' este bloco. Ele foi reescrito por mim tres vezes e as tres
+// viraram defeito que o Anderson achou em minutos de uso: a lista que abria e
+// nao selecionava (JSON.stringify quebrando o atributo), o texto que nao era
+// limpo no foco (impedindo trocar de empresa) e o botao de limpar que nao
+// aparecia. O do CT-e roda ha meses no celular e no computador.
+//
+// Se algum dia precisar mudar, mude NAS QUATRO TELAS -- Entradas, Saidas, CT-e
+// e NFS-e -- e no mesmo commit. Divergir aqui e como a divergencia comeca.
+// ===========================================================================
 function onEmpresaInput() {
-    renderEmpresaDropdown(
-        document.getElementById('sel_empresa_input').value.trim().toLowerCase());
+    const q = document.getElementById('sel_empresa_input').value.trim().toLowerCase();
+    renderEmpresaDropdown(q);
+    document.getElementById('sel_empresa_clear').style.display = q ? '' : 'none';
 }
 function onEmpresaFocus() {
-    // LIMPA O TEXTO quando já há empresa escolhida — igual ao CT-e. Sem isto o
-    // nome selecionado vira o filtro da própria lista: sobra a empresa que já
-    // estava escolhida e não há como trocar. O onEmpresaBlur repõe o nome se o
-    // usuário desistir, então limpar aqui não perde nada.
     if (document.getElementById('sel_empresa').value) {
         document.getElementById('sel_empresa_input').value = '';
     }
-    // NÃO zera o grupo aqui. Focar não é escolher: quem limpa o grupo é
-    // onEmpresaChange, quando uma empresa é de fato selecionada. Zerar no foco
-    // fazia um clique sem querer apagar o filtro de grupo.
     renderEmpresaDropdown(document.getElementById('sel_empresa_input').value.trim().toLowerCase());
 }
 function onEmpresaBlur() {
     setTimeout(function () {
         const id = document.getElementById('sel_empresa').value;
         const input = document.getElementById('sel_empresa_input');
-        if (!id) { input.value = ''; }
-        else {
+        if (id && input.value === '') {
             const found = empresasData.find(e => e.id == id);
             if (found) input.value = found.nome;
         }
-        closeEmpresaDropdown();
-    }, 180);
+    }, 200);
 }
 function renderEmpresaDropdown(q) {
     const list = document.getElementById('empresaAcList');
-    // Zera o item destacado AQUI, não só no oninput: no CT-e é assim, e é o
-    // certo — abrir a lista pelo foco deixava o índice da digitação anterior,
-    // e o Enter escolheria uma empresa que não está mais em destaque.
     acActiveIndex = -1;
-    // Casa por NOME ou por NÚMERO, como o CT-e: digitar "13" acha a empresa 13.
     const filtered = !q ? empresasData
-        : empresasData.filter(e => e.nome.toLowerCase().includes(q)
-                                   || String(e.id).includes(q));
-    if (!filtered.length) {
-        list.innerHTML = '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>';
-    } else {
-        // O nome vai em data-nome, NUNCA dentro de um handler inline. A primeira
-        // versão desta tela montava onmousedown="selectEmpresa('1', "RAZAO SOCIAL")"
-        // — o atributo é delimitado por aspas duplas e terminava na primeira aspa
-        // do nome, então a lista abria e nada selecionava (15/08/2026, achado pelo
-        // Anderson no celular). Nome de empresa é dado do usuário; dado do usuário
-        // não entra em código executável.
-        list.innerHTML = filtered.map(e =>
-            `<div class="cc-ac-item${e.id ? '' : ' all'}" data-id="${esc(e.id)}" data-nome="${esc(e.nome)}">${esc(e.nome)}</div>`
-        ).join('');
-    }
+        : empresasData.filter(e => e.nome.toLowerCase().includes(q) || e.id.toString().includes(q));
+    list.innerHTML = filtered.length === 0
+        ? '<div class="cc-ac-empty">Nenhuma empresa encontrada</div>'
+        : filtered.map(e => `<div class="cc-ac-item${e.id === '' ? ' all' : ''}" data-id="${e.id}" data-nome="${e.nome}" onmousedown="selectEmpresa('${e.id}', '${e.nome.replace(/'/g, "\\'")}')">${e.nome}</div>`).join('');
     list.style.display = '';
 }
-
-// Delegação em POINTERDOWN, não mousedown: cobre dedo, mouse e caneta com um
-// só caminho. E o preventDefault segura o foco no campo — sem ele o blur
-// fecharia a lista antes de o toque virar clique, que é o jeito clássico de um
-// autocomplete "não selecionar" só no celular.
-(function ligarSelecaoDaEmpresa() {
-    const lista = document.getElementById('empresaAcList');
-    if (!lista) return;
-    lista.addEventListener('pointerdown', function (ev) {
-        const item = ev.target.closest('.cc-ac-item');
-        if (!item) return;
-        ev.preventDefault();
-        selectEmpresa(item.dataset.id || '', item.dataset.nome || '');
-    });
-})();
 function onEmpresaKeydown(e) {
     const items = document.getElementById('empresaAcList').querySelectorAll('.cc-ac-item');
-    if (!items.length) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (e.key === 'ArrowDown') {
+        acActiveIndex = Math.min(acActiveIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
         e.preventDefault();
-        acActiveIndex += (e.key === 'ArrowDown' ? 1 : -1);
-        if (acActiveIndex < 0) acActiveIndex = items.length - 1;
-        if (acActiveIndex >= items.length) acActiveIndex = 0;
-        items.forEach((it, i) => it.classList.toggle('active', i === acActiveIndex));
-        items[acActiveIndex].scrollIntoView({block: 'nearest'});
+    } else if (e.key === 'ArrowUp') {
+        acActiveIndex = Math.max(acActiveIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === acActiveIndex));
+        e.preventDefault();
     } else if (e.key === 'Enter') {
-        e.preventDefault();
-        // Chama a seleção direto. Disparar um MouseEvent sintético aqui só
-        // funcionaria enquanto o handler fosse de mouse — e ele é de pointer.
         const t = acActiveIndex >= 0 ? items[acActiveIndex] : items[0];
-        if (t) selectEmpresa(t.dataset.id || '', t.dataset.nome || '');
+        if (t) selectEmpresa(t.dataset.id, t.dataset.nome);
+        e.preventDefault();
     } else if (e.key === 'Escape') {
         closeEmpresaDropdown();
     }
@@ -627,7 +599,7 @@ function onEmpresaKeydown(e) {
 function selectEmpresa(id, nome) {
     document.getElementById('sel_empresa').value = id;
     document.getElementById('sel_empresa_input').value = id ? nome : '';
-    document.getElementById('sel_empresa_clear').style.display = id ? 'block' : 'none';
+    document.getElementById('sel_empresa_clear').style.display = id ? '' : 'none';
     closeEmpresaDropdown();
     onEmpresaChange();
 }
@@ -642,8 +614,7 @@ function onEmpresaChange() {
     if (currentClienteId) {
         document.getElementById('sel_grupo').value = '';
         currentGrupoId = '';
-        const nome = (empresasData.find(e => e.id == currentClienteId) || {}).nome || '';
-        updateScopeBadge('empresa', nome);
+        updateScopeBadge('empresa', document.getElementById('sel_empresa_input').value);
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
@@ -652,20 +623,16 @@ function onEmpresaChange() {
 function onGrupoChange() {
     currentGrupoId = document.getElementById('sel_grupo').value;
     if (currentGrupoId) {
-        selectEmpresaSilencioso('');
+        document.getElementById('sel_empresa').value = '';
+        document.getElementById('sel_empresa_input').value = '';
+        document.getElementById('sel_empresa_clear').style.display = 'none';
+        currentClienteId = '';
         const s = document.getElementById('sel_grupo');
         updateScopeBadge('grupo', s.options[s.selectedIndex].text);
     } else {
         updateScopeBadge('global', 'Visão Global');
     }
     aoMudarEscopo();
-}
-// Limpa a empresa sem disparar onEmpresaChange (que zeraria o grupo recém-escolhido).
-function selectEmpresaSilencioso(id) {
-    document.getElementById('sel_empresa').value = id;
-    document.getElementById('sel_empresa_input').value = '';
-    document.getElementById('sel_empresa_clear').style.display = 'none';
-    currentClienteId = id;
 }
 function updateScopeBadge(type, label) {
     const b = document.getElementById('scopeBadge');
