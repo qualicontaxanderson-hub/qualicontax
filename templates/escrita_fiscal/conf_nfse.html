@@ -359,8 +359,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
     </div>
     <div id="filterBody" style="display:none;">
         <div class="cc-filter-grid">
-            <div><label>Data Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
-            <div><label>Data Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
+            <div><label>Data Início</label><input type="date" id="f_data_ini" autocomplete="off" onchange="carregarOpcoesFiltros()"></div>
+            <div><label>Data Fim</label><input type="date" id="f_data_fim" autocomplete="off" onchange="carregarOpcoesFiltros()"></div>
             <div>
                 <label>Período rápido</label>
                 <div style="display:flex;gap:6px;">
@@ -378,16 +378,16 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
                 <label>Prestador (CNPJ/CPF)</label>
                 <select id="f_prestador_doc" multiple placeholder="Todos — digite para buscar"></select>
             </div>
-            <div><label>Doc. do Tomador</label><input type="text" id="f_tomador_doc" placeholder="Parcial ou completo"></div>
-            <div><label>Nº da NFS-e</label><input type="text" id="f_numero" placeholder="Ex: 342"></div>
+            <div><label>Doc. do Tomador</label><input type="text" id="f_tomador_doc" autocomplete="off" placeholder="Parcial ou completo"></div>
+            <div><label>Nº da NFS-e</label><input type="text" id="f_numero" autocomplete="off" placeholder="Ex: 342"></div>
             <div>
-                <label>Município (IBGE)</label>
-                <select id="f_municipio" multiple placeholder="Todos"></select>
+                <label>Cód. IBGE</label>
+                <select id="f_cod_ibge" multiple placeholder="Todos"></select>
             </div>
-            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
-            <div><label>Código do Serviço</label><input type="text" id="f_codigo_servico" placeholder="Ex: 1701 (começa com)"></div>
-            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
-            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Chave de Acesso</label><input type="text" id="f_chave" autocomplete="off" placeholder="Parcial ou completa"></div>
+            <div><label>Código do Serviço</label><input type="text" id="f_codigo_servico" autocomplete="off" placeholder="Ex: 1701 (começa com)"></div>
+            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" autocomplete="off" placeholder="0,00" min="0" step="0.01"></div>
+            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" autocomplete="off" placeholder="0,00" min="0" step="0.01"></div>
             {# O papel saiu daqui para a barra acima dos filtros — dois controles
                para a mesma coisa é convite a divergirem. #}
             <div>
@@ -645,7 +645,7 @@ function updateScopeBadge(type, label) {
 function _initFiltrosBusca() {
     const cfg = {plugins:['remove_button'], maxOptions:1000, persist:false, create:false};
     tsPrestador = new TomSelect('#f_prestador_doc', cfg);
-    tsMunicipio = new TomSelect('#f_municipio', cfg);
+    tsMunicipio = new TomSelect('#f_cod_ibge', cfg);
 }
 document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
 
