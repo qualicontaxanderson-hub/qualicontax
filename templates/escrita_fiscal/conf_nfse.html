@@ -119,6 +119,11 @@ table.cc-table tr.cc-row-substituida:hover td { background:#fef3c7; }
 .ns-restrita { background:#ede9fe; color:#5b21b6; padding:2px 7px; border-radius:6px; font-size:9.5px; font-weight:800; white-space:nowrap; }
 .ns-serv { font-family:ui-monospace,monospace; font-size:11px; color:#475569; }
 .ns-muni { font-family:ui-monospace,monospace; font-size:11px; color:#64748b; }
+/* Descrição nacional do serviço (xTribNac), truncada — o título mostra inteira. */
+.ns-serv-desc { font-size:11px; color:#64748b; display:inline-block; max-width:150px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+/* Composição da retenção: só aparece quando o XML trouxe PIS/COFINS separados. */
+.ns-ret-comp { font-size:9.5px; color:#94a3b8; font-weight:600; white-space:nowrap; }
 
 /* ---- Seleção + export em lote — COPIADO do conf_cte.html (paleta índigo).
    A regra é a de sempre: não "melhorar" isoladamente; mudança aqui é nas
@@ -1076,11 +1081,12 @@ function loadNotas() {
                     <td data-l="Papel" class="mc-papel">${papelBadge(r.papel)}</td>
                     <td data-l="Prestador" class="mc-prest" title="${esc(r.prestador_doc)}" style="text-transform:uppercase;">${prest}</td>
                     <td data-l="Tomador" class="mc-toma" title="${esc(r.tomador_doc)}" style="text-transform:uppercase;">${esc(r.tomador_nome||r.tomador_doc)||'—'}</td>
-                    <td data-l="Munic." class="mc-muni ns-muni">${esc(r.municipio_ibge)||'—'}</td>
-                    <td data-l="Serviço" class="mc-serv ns-serv" title="${esc(r.discriminacao||'')}">${esc(r.codigo_servico)||'—'}</td>
+                    <td data-l="Munic." class="mc-muni" title="IBGE ${esc(r.municipio_ibge)}">${esc(r.municipio_incid_nome || r.municipio_prestacao_nome) || '<span class='ns-muni'>' + (esc(r.municipio_ibge)||'—') + '</span>'}</td>
+                    <td data-l="Serviço" class="mc-serv" title="${esc(r.servico_descricao_nacional || r.discriminacao || '')}">
+                        <span class="ns-serv">${esc(r.codigo_servico)||'—'}</span>${r.servico_descricao_nacional ? ' <span class="ns-serv-desc">' + esc(r.servico_descricao_nacional) + '</span>' : ''}</td>
                     <td data-l="Serviços" class="mc-valor money"><strong>${fmtBRL(r.valor_servicos)}</strong></td>
                     <td data-l="ISS" class="mc-iss money">${fmtBRL(r.valor_iss)}${retido}</td>
-                    <td data-l="Retenções" class="mc-ret money">${fmtBRL(r.total_retencoes)}</td>
+                    <td data-l="Retenções" class="mc-ret money" title="${(r.pis_valor||r.cofins_valor) ? 'PIS ' + fmtBRL(r.pis_valor) + ' + COFINS ' + fmtBRL(r.cofins_valor) : ''}">${fmtBRL(r.total_retencoes)}${(r.pis_valor||r.cofins_valor) ? '<div class='ns-ret-comp'>PIS ' + fmtBRL(r.pis_valor) + ' · COF ' + fmtBRL(r.cofins_valor) + '</div>' : ''}</td>
                     <td data-l="Situação" class="mc-sit">${situacaoBadge(r)}</td>
                     <td class="mc-acoes" onclick="event.stopPropagation()">${exportBtns(r)}</td>
                 </tr>`;
@@ -1194,13 +1200,23 @@ function openPanel(id) {
                 + _dd('Emissão', fmtDate(n.data_emissao))
                 + _dd('Competência', fmtDate(n.competencia))
                 + _dd('Processamento', fmtDate(n.data_processamento))
-                + _dd('Município (IBGE)', esc(n.municipio_ibge))
+                + _dd('Município', (esc(n.municipio_incid_nome || n.municipio_prestacao_nome) || '—')
+                        + ' <small style="color:#94a3b8">IBGE ' + esc(n.municipio_ibge) + '</small>')
                 + _dd('Papel da empresa', papelBadge(n.papel))
                 + '</dl>';
 
+            // Endereço numa linha só — os 10 campos separados existem no banco;
+            // aqui viram leitura de gente.
+            const endPrest = [n.prestador_logradouro, n.prestador_numero, n.prestador_complemento,
+                              n.prestador_bairro].filter(Boolean).join(', ')
+                + (n.prestador_cep ? ' — CEP ' + n.prestador_cep : '')
+                + (n.prestador_uf ? ' / ' + n.prestador_uf : '');
             const partes = '<div class="panel-sec">Partes</div><dl class="panel-info">'
-                + _dd('Prestador', `<span style="text-transform:uppercase;">${esc(n.prestador_nome)||'—'}</span><br><small>${esc(n.prestador_doc)||''}</small>`)
-                + _dd('Tomador', `<span style="text-transform:uppercase;">${esc(n.tomador_nome)||'—'}</span><br><small>${esc(n.tomador_doc)||''}</small>`)
+                + _dd('Prestador', `<span style="text-transform:uppercase;">${esc(n.prestador_nome)||'—'}</span><br><small>${esc(n.prestador_doc)||''}${n.prestador_im ? ' · IM ' + esc(n.prestador_im) : ''}</small>`
+                        + (endPrest ? `<br><small>${esc(endPrest)}</small>` : '')
+                        + ((n.prestador_email || n.prestador_fone) ? `<br><small>${esc(n.prestador_email)||''}${n.prestador_fone ? ' · ' + esc(n.prestador_fone) : ''}</small>` : ''))
+                + _dd('Tomador', `<span style="text-transform:uppercase;">${esc(n.tomador_nome)||'—'}</span><br><small>${esc(n.tomador_doc)||''}${n.tomador_im ? ' · IM ' + esc(n.tomador_im) : ''}</small>`
+                        + (n.tomador_email ? `<br><small>${esc(n.tomador_email)}</small>` : ''))
                 + (n.intermediario_doc ? _dd('Intermediário', esc(n.intermediario_doc)) : '')
                 + '</dl>';
 
@@ -1209,14 +1225,21 @@ function openPanel(id) {
                 + _dd('Base de cálculo', fmtBRL(n.base_calculo))
                 + _dd('Alíquota ISS', (n.aliquota_iss || 0).toFixed(2) + '%')
                 + _dd('ISS', fmtBRL(n.valor_iss) + (n.iss_retido ? ' <span class="ns-retido">RETIDO</span>' : ''))
-                + _dd('Retenções', fmtBRL(n.total_retencoes))
+                + _dd('Retenções', fmtBRL(n.total_retencoes)
+                        + ((n.pis_valor || n.cofins_valor)
+                           ? `<br><small>PIS ${fmtBRL(n.pis_valor)} · COFINS ${fmtBRL(n.cofins_valor)}${n.piscofins_cst ? ' · CST ' + esc(n.piscofins_cst) : ''}</small>` : ''))
                 + _dd('Líquido', fmtBRL(n.valor_liquido))
+                + ((n.trib_total_federal || n.trib_total_estadual || n.trib_total_municipal)
+                   ? _dd('Tributos (fed/est/mun)',
+                         `${fmtBRL(n.trib_total_federal)} / ${fmtBRL(n.trib_total_estadual)} / ${fmtBRL(n.trib_total_municipal)}`)
+                   : '')
                 + '</dl>';
 
             const serv = '<div class="panel-sec">Serviço</div><dl class="panel-info">'
                 + _dd('Cód. nacional', esc(n.codigo_servico))
                 + _dd('Cód. municipal', esc(n.codigo_servico_mun))
                 + _dd('NBS', esc(n.codigo_nbs))
+                + (n.servico_descricao_nacional ? _dd('Descrição nacional', esc(n.servico_descricao_nacional)) : '')
                 + '</dl>'
                 + (n.discriminacao ? `<div class="ns-disc">${esc(n.discriminacao)}</div>` : '');
 

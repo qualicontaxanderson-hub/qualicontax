@@ -8276,11 +8276,14 @@ def api_nfse():
     all_rows = execute_query(
         f"""SELECT n.id, n.chave_acesso, n.numero, n.serie, n.papel,
                    n.data_emissao, n.competencia, n.municipio_ibge,
+                   n.municipio_incid_nome, n.municipio_prestacao_nome,
                    n.prestador_doc, n.prestador_nome,
                    n.tomador_doc, n.tomador_nome, n.intermediario_doc,
                    n.codigo_servico, n.codigo_servico_mun, n.discriminacao,
+                   n.servico_descricao_nacional,
                    n.valor_servicos, n.base_calculo, n.aliquota_iss, n.valor_iss,
-                   n.total_retencoes, n.valor_liquido, n.iss_retido,
+                   n.total_retencoes, n.pis_valor, n.cofins_valor,
+                   n.valor_liquido, n.iss_retido,
                    n.situacao, n.cstat, n.restricao_eventos, n.criado_em,
                    n.empresa_id, cl.nome_razao_social AS empresa_nome,
                    COUNT(*) OVER() AS _total,
@@ -8316,7 +8319,7 @@ def api_nfse():
             if row.get(k) and hasattr(row[k], 'isoformat'):
                 row[k] = row[k].isoformat()
         for k in ('valor_servicos', 'base_calculo', 'aliquota_iss', 'valor_iss',
-                  'total_retencoes', 'valor_liquido'):
+                  'total_retencoes', 'pis_valor', 'cofins_valor', 'valor_liquido'):
             row[k] = float(row.get(k) or 0)
         rows.append(row)
 
