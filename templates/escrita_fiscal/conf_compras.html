@@ -497,8 +497,8 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
     <label><i class="fas fa-building"></i> Visualizar por</label>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <div class="cc-empresa-ac" id="empresaAcWrap">
-            <input type="text" id="sel_empresa_input" placeholder="— Todas as Empresas —"
-                   autocomplete="off" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
+            <input type="text" id="sel_empresa_input" name="filtro_escopo" placeholder="— Todas as Empresas —"
+                   autocomplete="new-password" oninput="onEmpresaInput()" onfocus="onEmpresaFocus()" onblur="onEmpresaBlur()" onkeydown="onEmpresaKeydown(event)">
             <button class="cc-ac-clear" id="sel_empresa_clear" onclick="clearEmpresa()" title="Limpar">✕</button>
             <input type="hidden" id="sel_empresa" value="">
             <div class="cc-ac-dropdown" id="empresaAcList" style="display:none;"></div>
