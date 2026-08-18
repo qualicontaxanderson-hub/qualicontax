@@ -914,11 +914,11 @@ def _aprovar_pendente(pid, tipo, perfis, deps, admin_id):
         if cur.fetchone():
             raise AprovacaoErro(f'O login "{login}" já foi tomado. Ajuste o login da '
                                 'candidatura e aprove de novo.')
-        # e-mail e CPF são UNIQUE em usuarios: barra aqui com mensagem decente em
-        # vez de deixar estourar erro de driver no meio do INSERT.
-        cur.execute('SELECT id FROM usuarios WHERE email = %s', (email,))
-        if cur.fetchone():
-            raise AprovacaoErro(f'Já existe um usuário com o e-mail {email}.')
+        # E-MAIL REPETIDO É PERMITIDO desde 18/08/2026 (decisão do Anderson):
+        # setores compartilham endereço (legalizacao@, fiscal@) e a identidade do
+        # sistema é o LOGIN — o e-mail não loga e o link de senha é por usuário.
+        # CPF continua UNIQUE: barra aqui com mensagem decente em vez de deixar
+        # estourar erro de driver no meio do INSERT.
         if cpf:
             cur.execute('SELECT id FROM usuarios WHERE cpf = %s', (cpf,))
             if cur.fetchone():
@@ -1360,15 +1360,7 @@ def usuario_novo():
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
-        # Verifica e-mail duplicado
-        existe = execute_query(
-            "SELECT id FROM usuarios WHERE email = %s", (email,), fetch=True, fetch_one=True
-        )
-        if existe:
-            flash('Já existe um usuário com este e-mail.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
-                                   perfis=perfis, clientes=clientes, usuario=None,
-                                   perfis_usuario=set(), empresas_usuario=set())
+        # E-mail repetido é permitido (18/08/2026) — identidade é o login.
 
         uid = execute_query(
             """INSERT INTO usuarios (nome, login, email, senha_hash, tipo_usuario, situacao, cargo, telefone)
@@ -1467,17 +1459,7 @@ def usuario_editar(uid):
                                    perfis_usuario=perfis_usuario,
                                    empresas_usuario=empresas_usuario)
 
-        # Verifica e-mail duplicado (excluindo o próprio)
-        existe = execute_query(
-            "SELECT id FROM usuarios WHERE email = %s AND id != %s",
-            (email, uid), fetch=True, fetch_one=True,
-        )
-        if existe:
-            flash('Já existe outro usuário com este e-mail.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
-                                   perfis=perfis, clientes=clientes, usuario=usuario,
-                                   perfis_usuario=perfis_usuario,
-                                   empresas_usuario=empresas_usuario)
+        # E-mail repetido é permitido (18/08/2026) — identidade é o login.
 
         if nova_senha:
             execute_query(

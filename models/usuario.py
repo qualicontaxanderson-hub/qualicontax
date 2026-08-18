@@ -154,6 +154,12 @@ class Usuario(UserMixin):
     def get_by_email(email):
         """
         Busca usuário por email.
+
+        ATENÇÃO (18/08/2026): e-mail DEIXOU DE SER ÚNICO — setores compartilham
+        endereço e a identidade é o login. Com duplicados, este fetch_one devolve
+        um usuário QUALQUER dentre os que têm o e-mail. Não use para autenticar
+        nem para decidir nada; hoje NINGUÉM chama este método, e é melhor que
+        continue assim.
         
         Args:
             email (str): Email do usuário
