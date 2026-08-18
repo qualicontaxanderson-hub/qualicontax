@@ -7953,12 +7953,25 @@ def api_ctes():
         where.append('t.origem = %s')
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 't', 'cancelado')
+
+    # O PAPEL entra POR ÚLTIMO e o WHERE sem ele fica guardado: a contagem que
+    # alimenta a barra de botões precisa do mesmo filtro SEM o recorte de papel.
+    # Contando já filtrada, escolher "Emitidos" faria "Tomados" mostrar zero — o
+    # seletor apagaria a informação que existe para ajudar a escolher. Mesma
+    # regra da tela de NFS-e (5327a55).
+    where_sem_papel = list(where)
+    params_sem_papel = list(params)
     if f_papel:
         where.append('t.papel_cliente = %s')
         params.append(f_papel)
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    sql_sem_papel = ('WHERE ' + ' AND '.join(where_sem_papel)) if where_sem_papel else ''
     offset = (page - 1) * per_page
+
+    papeis = {r['papel_cliente']: r['n'] for r in (execute_query(
+        f'SELECT t.papel_cliente, COUNT(*) n FROM cte_documentos t {sql_sem_papel} '
+        f'GROUP BY t.papel_cliente', tuple(params_sem_papel), fetch=True) or [])}
 
     all_rows = execute_query(
         f"""SELECT t.id, t.chave_acesso, t.modelo, t.num_cte, t.serie,
@@ -8021,7 +8034,12 @@ def api_ctes():
         rows.append(row)
 
     return jsonify({'total': total, 'page': page, 'per_page': per_page,
-                    'rows': rows, 'kpi': kpi})
+                    'rows': rows, 'kpi': kpi,
+                    # Contagem por papel do MESMO filtro, sem o recorte de papel.
+                    'papeis': {p: papeis.get(p, 0) for p in (
+                        'emitente', 'tomador', 'remetente', 'destinatario',
+                        'expedidor', 'recebedor', 'outro')} | {
+                        'todos': sum(papeis.values())}})
 
 
 @escrita_fiscal.route('/conf-cte/api/nfes/<int:cte_id>')

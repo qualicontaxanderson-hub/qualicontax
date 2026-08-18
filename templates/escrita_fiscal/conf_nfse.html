@@ -59,6 +59,16 @@
 /* Papel sem nenhuma nota no filtro atual continua CLICÁVEL, só apagado: some o
    botão e o usuário deixa de saber que aquele eixo existe. */
 .ns-papel-btn.vazio { opacity:.45; }
+@media (max-width:820px) {
+    /* No CELULAR rola de lado em vez de quebrar, igual à faixa de abas do fiscal
+       (.nav-fiscal-track) — mesma técnica: overflow-x auto + scroll-snap + barra
+       de rolagem escondida. Pedido do Anderson em 18/08/2026, para as duas telas
+       se comportarem igual. */
+    .ns-papel-bar { flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity;
+        scrollbar-width:none; -ms-overflow-style:none; padding-bottom:2px; }
+    .ns-papel-bar::-webkit-scrollbar { display:none; }
+    .ns-papel-btn { flex:0 0 auto; scroll-snap-align:center; }
+}
 
 /* ---- Filters ---- */
 .cc-filters { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
