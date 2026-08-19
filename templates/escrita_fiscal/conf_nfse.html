@@ -996,9 +996,14 @@ function gerarPdfLote(btn) {
                {...getFilters(), ids: ids}, btn);
 }
 function exportBtns(r) {
+    // O molde é /nfse/0/xml — o id fica no MEIO, não no fim como no CT-e.
+    // O replace(/0$/) copiado de lá nunca casava e o link ia com o 0 cru
+    // ("NFS-e não encontrada", achado pelo Anderson em 19/08/2026 no primeiro
+    // clique). Troca-se o segmento /0/ inteiro, que só existe uma vez.
     const rot = `NFS-e ${r.numero||'—'}/${r.serie||'—'}`;
-    return `<a class="btn-exp" href="${URL_XML_UMA.replace(/0$/, r.id)}" title="Baixar o XML de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`
-         + `<a class="btn-exp" href="${URL_PDF_UMA.replace(/0$/, r.id)}" title="Baixar o DANFSE de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
+    const seg = '/' + r.id + '/';
+    return `<a class="btn-exp" href="${URL_XML_UMA.replace('/0/', seg)}" title="Baixar o XML de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`
+         + `<a class="btn-exp" href="${URL_PDF_UMA.replace('/0/', seg)}" title="Baixar o DANFSE de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
 }
 
 // ---- Formatters ----
