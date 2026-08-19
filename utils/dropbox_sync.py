@@ -435,6 +435,69 @@ class DropboxService:
                 logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
                 return False
 
+    def renomear_pasta_empresa(self, pasta_antiga: str, pasta_nova: str):
+        """Renomeia ``EMPRESAS/{pasta_antiga}`` → ``EMPRESAS/{pasta_nova}`` com
+        TUDO dentro (FISCAL, CERTIFICADO, anos, meses) num movimento só.
+
+        Devolve ``(status, caminho_antigo, caminho_novo)``:
+          * ``'movida'``    — renomeou (ou só mudou maiúscula/minúscula);
+          * ``'sem_pasta'`` — a antiga não existe (empresa ainda sem arquivo);
+          * ``'conflito'``  — a NOVA já existe. Fundir pastas é decisão humana:
+            diferente do ``move_file``, aqui NUNCA se apaga o destino;
+          * ``'erro'``      — Dropbox indisponível. Quem chamou deve RECUSAR a
+            alteração do cadastro — pasta e cadastro não podem desencontrar.
+
+        A existência é consultada direto no metadata (e não via ``_path_exists``,
+        que devolve False também em erro de conexão — aqui isso viraria um falso
+        'sem_pasta' com o Dropbox fora do ar, exatamente o caso que dá 'erro').
+        """
+        de = self._build_path('EMPRESAS', pasta_antiga)
+        para = self._build_path('EMPRESAS', pasta_nova)
+        if de == para:
+            return 'sem_pasta', de, para
+        so_caixa = de.lower() == para.lower()   # o Dropbox não distingue caixa
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return 'erro', de, para
+            try:
+                try:
+                    dbx.files_get_metadata(de)
+                except Exception as _e:
+                    if 'not_found' in str(_e):
+                        return 'sem_pasta', de, para
+                    raise
+                if not so_caixa:
+                    tem_destino = True
+                    try:
+                        dbx.files_get_metadata(para)
+                    except Exception as _e:
+                        if 'not_found' not in str(_e):
+                            raise
+                        tem_destino = False
+                    if tem_destino:
+                        return 'conflito', de, para
+                try:
+                    dbx.files_move_v2(de, para, autorename=False)
+                except Exception as _e:
+                    if so_caixa and 'conflict' in str(_e).lower():
+                        # Só a caixa mudou e este Dropbox recusou o move: os
+                        # caminhos novos continuam válidos (API case-insensitive).
+                        return 'movida', de, para
+                    raise
+                logger.info('Pasta da empresa renomeada: %s → %s', de, para)
+                return 'movida', de, para
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox renomear_pasta_empresa: token expirado, renovando...')
+                        continue
+                logger.error('Erro ao renomear pasta %s → %s: %s', de, para, exc)
+                return 'erro', de, para
+        return 'erro', de, para
+
     def copy_file(self, from_path: str, to_path: str) -> bool:
         """Copia um arquivo de from_path para to_path, sobrescrevendo se já existir."""
         for _attempt in range(2):
@@ -710,6 +773,10 @@ def is_configured() -> bool:
 def list_xml_files(folder: str = None) -> list:
     path = folder or os.getenv('DROPBOX_XML_FOLDER', '/qualicontax/xml-compras')
     return _service.list_xml_files(path)
+
+
+def renomear_pasta_empresa(pasta_antiga: str, pasta_nova: str):
+    return _service.renomear_pasta_empresa(pasta_antiga, pasta_nova)
 
 
 def download_xml(path: str) -> str:

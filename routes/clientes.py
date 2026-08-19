@@ -823,6 +823,35 @@ def editar(id):
             # E1: 'None'/'null'/'' de qualquer caminho viram VAZIO antes de gravar.
             data = limpar_form(data)
 
+            # A pasta da empresa no Dropbox chama "{numero} - {razão}", e os XMLs
+            # já arquivados guardam esse caminho no banco. Número ou razão novos
+            # exigem renomear a pasta JUNTO — e ANTES de gravar: com o Dropbox
+            # fora do ar a edição é recusada, em vez de deixar cadastro e pasta
+            # desencontrados (histórico órfão na pasta velha).
+            pasta_antiga = dropbox_sync._build_empresa_folder(
+                cliente.get('numero_cliente'), cliente.get('nome_razao_social') or '')
+            pasta_nova = dropbox_sync._build_empresa_folder(
+                data.get('numero_cliente'), data.get('nome_razao_social') or '')
+            _pasta_st, _pasta_de, _pasta_para = '', None, None
+            if pasta_nova != pasta_antiga:
+                _pasta_st, _pasta_de, _pasta_para = \
+                    dropbox_sync.renomear_pasta_empresa(pasta_antiga, pasta_nova)
+                if _pasta_st in ('conflito', 'erro'):
+                    if _pasta_st == 'conflito':
+                        flash(f'Já existe uma pasta "{pasta_nova}" no Dropbox. '
+                              'Junte ou renomeie a pasta lá e tente de novo — '
+                              'nada foi alterado.', 'danger')
+                    else:
+                        flash('Não consegui renomear a pasta da empresa no Dropbox '
+                              'agora. Nada foi alterado — tente novamente em '
+                              'instantes.', 'danger')
+                    ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+                    cliente_ramos = RamoAtividade.get_by_cliente(id)
+                    ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
+                    grupos = GrupoCliente.get_all(situacao='ATIVO')
+                    grupos_cliente = Cliente.get_grupos(id)
+                    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
+
             sucesso = Cliente.update(id, data)
 
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
@@ -838,6 +867,32 @@ def editar(id):
                           registro_id=id,
                           antes={k: cliente.get(k) for k in _campos_log},
                           depois={k: data.get(k) for k in _campos_log})
+
+                # A pasta mudou de nome: reaponta os caminhos gravados. O LIKE
+                # escapa % e _ (razões sanitizadas podem conter '_'), e o
+                # SUBSTRING preserva tudo depois do prefixo antigo.
+                if _pasta_de:
+                    _like = (_pasta_de.replace('\\', '\\\\')
+                             .replace('%', '\\%').replace('_', '\\_')) + '/%'
+                    _corte = len(_pasta_de) + 1
+                    _tot = 0
+                    for _t, _c in (('nfse_capturadas', 'xml_path'),
+                                   ('cte_documentos', 'xml_caminho'),
+                                   ('dfe_documentos', 'xml_caminho'),
+                                   ('dfe_eventos', 'xml_caminho'),
+                                   ('nfe_importacoes', 'xml_caminho'),
+                                   ('dfe_certificados', 'dropbox_path'),
+                                   ('documentos', 'caminho_arquivo')):
+                        _n = execute_query(
+                            f'UPDATE {_t} SET {_c} = CONCAT(%s, SUBSTRING({_c}, %s)) '
+                            f'WHERE {_c} LIKE %s', (_pasta_para, _corte, _like))
+                        _tot += _n or 0
+                    registrar('escrita.renomeou_pasta_empresa', 'cadastros',
+                              tabela='clientes', registro_id=id,
+                              antes={'pasta': pasta_antiga},
+                              depois={'pasta': pasta_nova, 'dropbox': _pasta_st,
+                                      'caminhos_atualizados': _tot})
+
                 # Marca de CONTADOR (fora do UPDATE, que tem lista de colunas
                 # explícita). Desmarcar pode ser RECUSADO se o cadastro ainda
                 # for contador de alguém.
@@ -907,6 +962,10 @@ def editar(id):
                 flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
             else:
+                if _pasta_st == 'movida':
+                    # A pasta já tinha ido, mas a gravação falhou: desfaz o
+                    # movimento para pasta e cadastro seguirem casados.
+                    dropbox_sync.renomear_pasta_empresa(pasta_nova, pasta_antiga)
                 flash('Erro ao atualizar cliente. Verifique os dados e tente novamente.', 'danger')
         except Exception as e:
             flash(f'Erro ao atualizar cliente: {str(e)}', 'danger')
