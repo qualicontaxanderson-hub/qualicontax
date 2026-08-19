@@ -254,7 +254,10 @@ def get_saude() -> dict:
     try:
         md = svc.file_metadata(caminho)
     except Exception as exc:
-        escopo = getattr(dropbox_sync.DropboxService, '_is_scope_error')(exc)
+        # O atributo vem da tradução (_erro_auth); o _is_scope_error fica de
+        # fallback para exceção que chegar CRUA por algum caminho não traduzido.
+        escopo = getattr(exc, 'escopo_faltando',
+                         dropbox_sync.DropboxService._is_scope_error(exc))
         logger.warning('[dropbox-saude] leitura de %s falhou (escopo=%s): %s',
                        caminho, escopo, exc)
         return {'ok': False, 'escopo_faltando': bool(escopo),

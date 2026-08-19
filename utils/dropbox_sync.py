@@ -180,16 +180,24 @@ class DropboxService:
         precisaria ser feita nove vezes — e que uma delas ficaria para trás.
         """
         if self._is_scope_error(exc):
-            return DropboxAuthError(
+            err = DropboxAuthError(
                 'O app do Dropbox não tem permissão para esta operação '
                 '(escopo faltando). As credenciais estão válidas — conceda o '
                 'escopo no App Console e gere um refresh token NOVO, porque '
                 'escopo novo não vale para token já emitido.'
             )
-        return DropboxAuthError(
+            # A CAUSA vai como atributo, não só como prosa: quem recebe o erro
+            # traduzido não tem mais o 'missing_scope' cru para testar — foi
+            # por isso que o get_saude() passou meses com escopo_faltando
+            # sempre False, chamando _is_scope_error sobre a mensagem amigável.
+            err.escopo_faltando = True
+            return err
+        err = DropboxAuthError(
             'Credenciais Dropbox inválidas ou expiradas. '
             'Verifique DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'
         )
+        err.escopo_faltando = False
+        return err
 
     def list_folder(self, path: str, recursive: bool = False) -> list:
         """Lista itens de uma pasta (arquivos e sub-pastas).
