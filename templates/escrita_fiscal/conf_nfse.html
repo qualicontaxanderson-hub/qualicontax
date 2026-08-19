@@ -1118,12 +1118,12 @@ function loadNotas() {
                     <td data-l="Papel" class="mc-papel">${papelBadge(r.papel)}</td>
                     <td data-l="Prestador" class="mc-prest" title="${esc(r.prestador_doc)}" style="text-transform:uppercase;">${prest}</td>
                     <td data-l="Tomador" class="mc-toma" title="${esc(r.tomador_doc)}" style="text-transform:uppercase;">${esc(r.tomador_nome||r.tomador_doc)||'—'}</td>
-                    <td data-l="Munic." class="mc-muni" title="IBGE ${esc(r.municipio_ibge)}">${esc(r.municipio_incid_nome || r.municipio_prestacao_nome) || '<span class='ns-muni'>' + (esc(r.municipio_ibge)||'—') + '</span>'}</td>
+                    <td data-l="Munic." class="mc-muni" title="IBGE ${esc(r.municipio_ibge)}">${esc(r.municipio_incid_nome || r.municipio_prestacao_nome) || '<span class="ns-muni">' + (esc(r.municipio_ibge)||'—') + '</span>'}</td>
                     <td data-l="Serviço" class="mc-serv" title="${esc(r.servico_descricao_nacional || r.discriminacao || '')}">
                         <span class="ns-serv">${esc(r.codigo_servico)||'—'}</span>${r.servico_descricao_nacional ? ' <span class="ns-serv-desc">' + esc(r.servico_descricao_nacional) + '</span>' : ''}</td>
                     <td data-l="Serviços" class="mc-valor money"><strong>${fmtBRL(r.valor_servicos)}</strong></td>
                     <td data-l="ISS" class="mc-iss money">${fmtBRL(r.valor_iss)}${retido}</td>
-                    <td data-l="Retenções" class="mc-ret money" title="${(r.pis_valor||r.cofins_valor) ? 'PIS ' + fmtBRL(r.pis_valor) + ' + COFINS ' + fmtBRL(r.cofins_valor) : ''}">${fmtBRL(r.total_retencoes)}${(r.pis_valor||r.cofins_valor) ? '<div class='ns-ret-comp'>PIS ' + fmtBRL(r.pis_valor) + ' · COF ' + fmtBRL(r.cofins_valor) + '</div>' : ''}</td>
+                    <td data-l="Retenções" class="mc-ret money" title="${(r.pis_valor||r.cofins_valor) ? 'PIS ' + fmtBRL(r.pis_valor) + ' + COFINS ' + fmtBRL(r.cofins_valor) : ''}">${fmtBRL(r.total_retencoes)}${(r.pis_valor||r.cofins_valor) ? '<div class="ns-ret-comp">PIS ' + fmtBRL(r.pis_valor) + ' · COF ' + fmtBRL(r.cofins_valor) + '</div>' : ''}</td>
                     <td data-l="Situação" class="mc-sit">${situacaoBadge(r)}</td>
                     <td class="mc-acoes" onclick="event.stopPropagation()">${exportBtns(r)}</td>
                 </tr>`;
