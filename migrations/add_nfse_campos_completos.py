@@ -74,7 +74,7 @@ COLUNAS = [
     ('municipio_prestacao_nome', 'VARCHAR(120) NULL', 'infNFSe/xLocPrestacao'),
 
     # ---- Serviço ----
-    ('servico_descricao_nacional', 'VARCHAR(255) NULL', 'infNFSe/xTribNac'),
+    ('servico_descricao_nacional', 'VARCHAR(500) NULL', 'infNFSe/xTribNac'),
     ('codigo_interno_contrib', 'VARCHAR(60) NULL', 'serv/cServ/cIntContrib'),
 
     # ---- Prestador: inscrição, contato e endereço ----

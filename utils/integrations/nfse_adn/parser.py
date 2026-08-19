@@ -437,7 +437,12 @@ def para_registro(xml_texto: str, envelope: dict, empresa_id: int,
         'municipio_prestacao_ibge': _txt(root, f'{dps}/serv/locPrest/cLocPrestacao'),
         'municipio_prestacao_nome': _txt(root, f'{inf}/xLocPrestacao'),
 
-        'servico_descricao_nacional': _txt(root, f'{inf}/xTribNac'),
+        # VARCHAR(500) desde 18/08/2026 — o primeiro backfill em massa achou
+        # municípios com descrição > 255 e o INSERT travava 13 cursores (erro
+        # 1406). Trunca aqui como cinto: descrição de catálogo cortada é
+        # infinitamente melhor que empresa parada.
+        'servico_descricao_nacional': (_txt(root, f'{inf}/xTribNac') or None)
+                                       and _txt(root, f'{inf}/xTribNac')[:500],
         'codigo_interno_contrib': _txt(root, f'{dps}/serv/cServ/cIntContrib'),
 
         # Prestador: vem de infNFSe/emit, o cadastro da prefeitura — mesmo lugar
