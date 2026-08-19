@@ -1166,25 +1166,66 @@ def excluir_cadastro_adicional(id):
 
 
 # Rotas para Sócios
+@clientes.route('/clientes/<int:cliente_id>/socios/buscar-pf')
+@login_required
+def socios_buscar_pf(cliente_id):
+    """Busca cadastros de Pessoa Física para virarem sócio (por nome ou CPF).
+
+    Só devolve quem pode entrar: PF, não inativo e ainda não sócio DESTA
+    empresa. É a fonte do modal "Adicionar Sócio" — sócio não se digita,
+    escolhe-se do cadastro.
+    """
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    dig = ''.join(ch for ch in q if ch.isdigit())
+    rows = execute_query(
+        """SELECT id, nome_razao_social AS nome, cpf_cnpj AS cpf, email,
+                  COALESCE(NULLIF(celular, ''), telefone) AS telefone
+             FROM clientes
+            WHERE tipo_pessoa = 'PF'
+              AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'
+              AND (nome_razao_social LIKE %s
+                   OR REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', '') LIKE %s)
+              AND id NOT IN (SELECT COALESCE(pf_cliente_id, 0)
+                               FROM socios_clientes WHERE cliente_id = %s)
+            ORDER BY nome_razao_social
+            LIMIT 10""",
+        (f'%{q}%', f'%{dig}%' if dig else q, cliente_id), fetch=True) or []
+    return jsonify(rows)
+
+
 @clientes.route('/clientes/<int:cliente_id>/socios/novo', methods=['POST'])
 @login_required
 def novo_socio(cliente_id):
     """Adicionar novo sócio"""
-    nome = request.form.get('nome', '').strip()
-    cpf = request.form.get('cpf', '').strip()
-    email = request.form.get('email', '').strip() or None
-    telefone = request.form.get('telefone', '').strip() or None
+    # Sócio NÃO se digita: é um cadastro de Pessoa Física escolhido na busca.
+    # Nome/CPF/e-mail/telefone saem do cadastro (fonte única) — decisão do
+    # Anderson em 19/08/2026, no lugar da digitação livre sem vínculo.
+    pf_raw = (request.form.get('pf_cliente_id') or '').strip()
     percentual_raw = (request.form.get('percentual_participacao') or '').strip()
     responsavel = request.form.get('responsavel') == 'on'
 
-    if not nome or not cpf or not percentual_raw:
-        flash('Preencha nome, CPF e percentual do sócio.', 'danger')
+    if not pf_raw.isdigit() or not percentual_raw:
+        flash('Escolha uma pessoa física já cadastrada e informe o percentual.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
 
-    cpf_numeros = ''.join(ch for ch in cpf if ch.isdigit())
-    if len(cpf_numeros) != 11:
-        flash('CPF inválido. Informe um CPF com 11 dígitos.', 'danger')
+    pf = Cliente.get_by_id(int(pf_raw))
+    if not pf or (pf.get('tipo_pessoa') or '').upper() != 'PF':
+        flash('O sócio precisa ser um cadastro de Pessoa Física. '
+              'Cadastre a pessoa primeiro e escolha na busca.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
+    if int(pf_raw) == cliente_id:
+        flash('A própria empresa não pode ser sócia dela mesma.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+    if SocioCliente.existe_pf(cliente_id, int(pf_raw)):
+        flash(f'{pf.get("nome_razao_social")} já é sócio desta empresa.', 'warning')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+    nome = pf.get('nome_razao_social') or ''
+    cpf = pf.get('cpf_cnpj') or ''
+    email = (pf.get('email') or '').strip() or None
+    telefone = (pf.get('celular') or pf.get('telefone') or '').strip() or None
 
     try:
         percentual = _parse_decimal_input(percentual_raw)
@@ -1205,6 +1246,7 @@ def novo_socio(cliente_id):
 
     socio_id = SocioCliente.create(
         cliente_id=cliente_id,
+        pf_cliente_id=int(pf_raw),
         nome=nome,
         cpf=cpf,
         email=email,
@@ -1217,7 +1259,8 @@ def novo_socio(cliente_id):
     if socio_id:
         registrar('escrita.criou_socio', 'cadastros', tabela='socios_clientes',
                   registro_id=socio_id,
-                  depois={'cliente_id': cliente_id, 'nome': nome, 'cpf': cpf,
+                  depois={'cliente_id': cliente_id, 'pf_cliente_id': int(pf_raw),
+                          'nome': nome, 'cpf': cpf,
                           'email': email, 'telefone': telefone,
                           'percentual_participacao': str(percentual), 'responsavel': responsavel,
                           **rotulo_empresa(cliente_id)})

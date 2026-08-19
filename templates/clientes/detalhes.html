@@ -841,7 +841,7 @@
                                     <tbody>
                                         {% for socio in socios %}
                                         <tr>
-                                            <td>{{ socio.nome }}</td>
+                                            <td>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</td>
                                             <td>{{ socio.cpf }}</td>
                                             <td>{{ socio.email or '-' }}</td>
                                             <td>{{ socio.telefone or '-' }}</td>
@@ -1573,6 +1573,17 @@
 </div>
 
 <!-- Modal para Adicionar Sócio -->
+<style>
+/* Buscador de PF do modal de sócio */
+.socio-res-item { display: block; width: 100%; text-align: left; padding: 8px 10px;
+  border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer;
+  margin-top: 4px; font: inherit; }
+.socio-res-item:hover { background: #f0fdf4; border-color: #86efac; }
+.socio-res-vazio { padding: 8px 10px; color: #6b7280; margin-top: 4px; }
+.socio-escolhido { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 10px 12px; border: 1px solid #86efac; background: #f0fdf4;
+  border-radius: 8px; margin-bottom: 12px; }
+</style>
 <div id="addSocioModal" class="modal" style="display: none;">
     <div class="modal-content" style="max-width:620px;">
         <div class="modal-header">
@@ -1581,27 +1592,27 @@
         </div>
         <form action="{{ url_for('clientes.novo_socio', cliente_id=cliente.id) }}" method="POST">
             <div class="modal-body">
-                <div class="form-group">
-                    <label for="socio_nome">Nome *</label>
-                    <input type="text" id="socio_nome" name="nome" class="form-control" required>
+                <div class="form-group" id="socioBuscaBox">
+                    <label for="socio_busca">Pessoa Física já cadastrada *</label>
+                    <input type="text" id="socio_busca" class="form-control" autocomplete="off"
+                           placeholder="Digite o nome ou o CPF para buscar">
+                    <div id="socioResultados"></div>
+                    <small style="color:#6b7280; display:block; margin-top:6px;">
+                        O sócio precisa existir no cadastro como Pessoa Física.
+                        Não achou? <a href="{{ url_for('clientes.novo') }}" target="_blank">Cadastre a pessoa física</a> e busque de novo.
+                    </small>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="socio_cpf">CPF *</label>
-                        <input type="text" id="socio_cpf" name="cpf" class="form-control" required placeholder="000.000.000-00">
+                <div id="socioEscolhido" class="socio-escolhido" style="display:none;">
+                    <div>
+                        <strong id="socioEscNome"></strong><br>
+                        <span id="socioEscInfo" style="color:#6b7280; font-size:.9em;"></span>
                     </div>
-                    <div class="form-group">
-                        <label for="socio_percentual">Participação (%) *</label>
-                        <input type="number" id="socio_percentual" name="percentual_participacao" class="form-control" required min="0.01" max="100" step="0.01" placeholder="Ex.: 50.00">
-                    </div>
+                    <button type="button" class="btn btn-outline" onclick="socioTrocar()">Trocar</button>
                 </div>
+                <input type="hidden" name="pf_cliente_id" id="socio_pf_id">
                 <div class="form-group">
-                    <label for="socio_email">Email</label>
-                    <input type="email" id="socio_email" name="email" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label for="socio_telefone">Telefone de Contato</label>
-                    <input type="text" id="socio_telefone" name="telefone" class="form-control" data-mask="phone" placeholder="(00) 0000-0000 ou (00) 00000-0000">
+                    <label for="socio_percentual">Participação (%) *</label>
+                    <input type="number" id="socio_percentual" name="percentual_participacao" class="form-control" required min="0.01" max="100" step="0.01" placeholder="Ex.: 50.00">
                 </div>
                 <div class="form-group">
                     <label>
@@ -1612,7 +1623,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeAddSocioModal()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Adicionar</button>
+                <button type="submit" class="btn btn-primary" id="socioBtnAdd" disabled>Adicionar</button>
             </div>
         </form>
     </div>
@@ -1716,12 +1727,85 @@ function closeAddCadastroAdicionalModal() {
 }
 
 function showAddSocioModal() {
+    socioTrocar();
+    document.getElementById('socio_percentual').value = '';
+    document.getElementById('socio_responsavel').checked = false;
     document.getElementById('addSocioModal').style.display = 'block';
+    document.getElementById('socio_busca').focus();
 }
 
 function closeAddSocioModal() {
     document.getElementById('addSocioModal').style.display = 'none';
 }
+
+// Sócio não se digita: busca uma Pessoa Física já cadastrada e vincula.
+function socioTrocar() {
+    document.getElementById('socio_pf_id').value = '';
+    document.getElementById('socioEscolhido').style.display = 'none';
+    document.getElementById('socioBuscaBox').style.display = '';
+    document.getElementById('socioBtnAdd').disabled = true;
+    document.getElementById('socio_busca').value = '';
+    document.getElementById('socioResultados').innerHTML = '';
+}
+
+function socioEscolher(p) {
+    document.getElementById('socio_pf_id').value = p.id;
+    document.getElementById('socioEscNome').textContent = p.nome;
+    document.getElementById('socioEscInfo').textContent =
+        [p.cpf, p.email, p.telefone].filter(Boolean).join(' \u00b7 ');
+    document.getElementById('socioBuscaBox').style.display = 'none';
+    document.getElementById('socioEscolhido').style.display = 'flex';
+    document.getElementById('socioBtnAdd').disabled = false;
+    document.getElementById('socio_percentual').focus();
+}
+
+(function () {
+    var busca = document.getElementById('socio_busca');
+    if (!busca) return;
+    var caixa = document.getElementById('socioResultados');
+    var timer = null;
+    busca.addEventListener('input', function () {
+        clearTimeout(timer);
+        var q = busca.value.trim();
+        if (q.length < 2) { caixa.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+            fetch('{{ url_for("clientes.socios_buscar_pf", cliente_id=cliente.id) }}?q=' + encodeURIComponent(q))
+                .then(function (r) { return r.json(); })
+                .then(function (lista) {
+                    caixa.innerHTML = '';
+                    if (!lista.length) {
+                        var v = document.createElement('div');
+                        v.className = 'socio-res-vazio';
+                        v.textContent = 'Nenhuma pessoa f\u00edsica encontrada para "' + q + '".';
+                        caixa.appendChild(v);
+                        return;
+                    }
+                    lista.forEach(function (p) {
+                        var b = document.createElement('button');
+                        b.type = 'button';
+                        b.className = 'socio-res-item';
+                        var n = document.createElement('strong');
+                        n.textContent = p.nome;
+                        b.appendChild(n);
+                        if (p.cpf) {
+                            var d = document.createElement('span');
+                            d.textContent = ' \u2014 ' + p.cpf;
+                            b.appendChild(d);
+                        }
+                        b.addEventListener('click', function () { socioEscolher(p); });
+                        caixa.appendChild(b);
+                    });
+                })
+                .catch(function () {
+                    caixa.innerHTML = '';
+                    var v = document.createElement('div');
+                    v.className = 'socio-res-vazio';
+                    v.textContent = 'Falha na busca — tente de novo.';
+                    caixa.appendChild(v);
+                });
+        }, 250);
+    });
+})();
 
 // CEP search
 document.getElementById('cep')?.addEventListener('blur', function() {
