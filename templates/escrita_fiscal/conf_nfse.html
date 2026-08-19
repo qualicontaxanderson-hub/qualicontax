@@ -137,6 +137,11 @@ table.cc-table tr.cc-row-substituida:hover td { background:#fef3c7; }
 .sel-banner a { color:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
 .btn-exp { background:transparent; border:none; color:#6b7280; padding:4px 6px; border-radius:5px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-flex; }
 .btn-exp:hover { background:#eef2ff; color:#4338ca; }
+.exp-drop { position:relative; display:inline-block; }
+.exp-menu { position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:160px; z-index:50; display:none; overflow:hidden; }
+.exp-menu.open { display:block; }
+.exp-menu a { display:flex; align-items:center; gap:8px; padding:9px 14px; font-size:13px; color:#334155; cursor:pointer; white-space:nowrap; }
+.exp-menu a:hover { background:#f1f5f9; }
 
 /* ---- Tom Select ---- */
 .cc-filter-grid .ts-wrapper { width:100%; }
@@ -467,6 +472,15 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
                 title="Só os marcados, no máximo 10 por vez">
             <i class="fas fa-file-pdf"></i> Gerar PDF (até 10)
         </button>
+        <div class="exp-drop">
+            <button class="btn-lote" onclick="toggleExp(event)" title="Relatório (PDF/Excel) do filtro atual">
+                <i class="fas fa-file-export"></i> Exportar <i class="fas fa-caret-down" style="font-size:11px;"></i>
+            </button>
+            <div class="exp-menu" id="expMenu">
+                <a onclick="exportarRel('xlsx')"><i class="fas fa-file-excel" style="color:#15803d;"></i> Excel (.xlsx)</a>
+                <a onclick="exportarRel('pdf')"><i class="fas fa-file-pdf" style="color:#b91c1c;"></i> PDF</a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1130,6 +1144,19 @@ function loadChaves() {
         .catch(err => { if (!_isAbort(err)) hideLoad(); });
 }
 
+function toggleExp(ev) {
+    ev.stopPropagation();
+    document.getElementById('expMenu').classList.toggle('open');
+}
+document.addEventListener('click', function () {
+    var m = document.getElementById('expMenu');
+    if (m) m.classList.remove('open');
+});
+function exportarRel(formato) {
+    if (!hasSearched) { alert('Faça uma busca primeiro.'); return; }
+    const params = new URLSearchParams({...getFilters(), formato: formato});
+    window.location = '{{ url_for("escrita_fiscal.relatorio_nfse") }}?' + params;
+}
 function copiarChave(chave, btn) {
     navigator.clipboard.writeText(chave).then(() => {
         const html = btn.innerHTML;

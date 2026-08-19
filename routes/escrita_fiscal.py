@@ -2131,7 +2131,7 @@ def _periodo_zip(datas):
     return fmt(lo) if lo == hi else f'{fmt(lo)}_a_{fmt(hi)}'
 
 
-_PREFIXO_LOTE = {'entrada': 'ENTRADAS', 'saida': 'SAIDAS', 'cte': 'CTE'}
+_PREFIXO_LOTE = {'entrada': 'ENTRADAS', 'saida': 'SAIDAS', 'cte': 'CTE', 'nfse': 'NFSE'}
 
 
 def _prefixo_lote(escopo, formato):
@@ -2718,6 +2718,10 @@ def _rel_filtro(escopo):
     cláusulas de api_notas (entrada) / api_notas_saidas (saida) / api_ctes (cte) —
     é o filtro, não a seleção. Isolado de propósito: não toca nos endpoints da
     listagem que estão em produção."""
+    if escopo == 'nfse':
+        # O montador do lote já lê um dict — request.args serve direto.
+        w, p = _where_lote_nfse(request.args)
+        return ('WHERE ' + ' AND '.join(w)) if w else '', p
     a = request.args
     ci, gi = a.get('cliente_id', '').strip(), a.get('grupo_id', '').strip()
 
@@ -2839,6 +2843,33 @@ def _rel_linhas(escopo, formato, where_sql, params, limite):
     """Linhas do relatório (até ``limite``). Colunas 'R' = string BRL no PDF, número
     no Excel (pra somar). Contagens (Itens/NF-e) sempre string (não é moeda)."""
     pdf = (formato == 'pdf')
+    if escopo == 'nfse':
+        rows = execute_query(
+            "SELECT n.data_emissao, n.numero, n.serie, n.papel, "
+            "n.prestador_nome, n.prestador_doc, n.tomador_nome, n.tomador_doc, "
+            "n.municipio_incid_nome, n.municipio_ibge, n.codigo_servico, "
+            "n.valor_servicos, n.valor_iss, n.total_retencoes "
+            f"FROM nfse_capturadas n {where_sql} "
+            "ORDER BY n.data_emissao DESC, n.id DESC LIMIT %s",
+            tuple(params) + (limite,), fetch=True) or []
+        rotulo = {'emitente': 'Prestado', 'tomador': 'Tomado', 'intermediario': 'Interm.'}
+        out = []
+        for r in rows:
+            serv, iss, ret = r['valor_servicos'] or 0, r['valor_iss'] or 0, r['total_retencoes'] or 0
+            out.append([
+                _rel_data(r['data_emissao']),
+                f"{r['numero'] or '—'}/{r['serie'] or '—'}",
+                rotulo.get(r['papel'], r['papel'] or '—'),
+                r['prestador_nome'] or r['prestador_doc'] or '—',
+                r['tomador_nome'] or r['tomador_doc'] or '—',
+                r['municipio_incid_nome'] or r['municipio_ibge'] or '—',
+                r['codigo_servico'] or '—',
+                _rel_brl(serv) if pdf else float(serv),
+                _rel_brl(iss) if pdf else float(iss),
+                _rel_brl(ret) if pdf else float(ret),
+            ])
+        return out
+
     if escopo == 'cte':
         rows = execute_query(
             "SELECT t.data_emissao, t.num_cte, t.serie, t.emit_nome, t.emit_cnpj, "
@@ -2901,13 +2932,29 @@ def _exportar_relatorio(escopo, permissao, titulo):
 
     # AUDITORIA (D2): exportação de RELATÓRIO (PDF/XLSX) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal',
-              tabela=('cte_documentos' if escopo == 'cte' else 'nfe_importacoes'),
+              tabela=('cte_documentos' if escopo == 'cte'
+                      else 'nfse_capturadas' if escopo == 'nfse' else 'nfe_importacoes'),
               depois={'escopo': escopo, 'formato': formato, 'relatorio': titulo,
                       **rotulo_empresa(request.args.get('cliente_id'),
                                        request.args.get('grupo_id'))})
 
     # KPIs + total sobre o FILTRO INTEIRO (independe do teto do PDF).
-    if escopo == 'cte':
+    if escopo == 'nfse':
+        agg = execute_query(
+            "SELECT COUNT(*) AS tot, COALESCE(SUM(n.valor_servicos),0) AS serv, "
+            "COALESCE(SUM(n.valor_iss),0) AS iss, COALESCE(SUM(n.total_retencoes),0) AS ret, "
+            "COALESCE(SUM(n.situacao='cancelada'),0) AS canc "
+            f"FROM nfse_capturadas n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+        total = int(agg.get('tot') or 0)
+        kpis = [('Total de NFS-e', _rel_int(total)), ('Valor dos Serviços', _rel_brl(agg.get('serv'))),
+                ('ISS', _rel_brl(agg.get('iss'))), ('Retenções', _rel_brl(agg.get('ret'))),
+                ('Canceladas', _rel_int(agg.get('canc')))]
+        colunas = [('Data', 'L'), ('Nº/Série', 'L'), ('Papel', 'L'), ('Prestador', 'L'),
+                   ('Tomador', 'L'), ('Município', 'L'), ('Serviço', 'L'),
+                   ('Serviços R$', 'R'), ('ISS', 'R'), ('Retenções', 'R')]
+        totais = ['', '', 'TOTAL', '', '', '', '', _rel_brl(agg.get('serv')),
+                  _rel_brl(agg.get('iss')), _rel_brl(agg.get('ret'))]
+    elif escopo == 'cte':
         agg = execute_query(
             "SELECT COUNT(*) AS tot, COALESCE(SUM(t.valor_frete),0) AS frete, "
             "COALESCE(SUM(t.valor_icms),0) AS icms, COALESCE(SUM(t.cancelado),0) AS canc, "
@@ -2983,6 +3030,12 @@ def relatorio_saidas():
 @login_required
 def relatorio_cte():
     return _exportar_relatorio('cte', 'escrita_fiscal.conf_cte', 'Relatório de CT-e')
+
+
+@escrita_fiscal.route('/conf-nfse/export/relatorio')
+@login_required
+def relatorio_nfse():
+    return _exportar_relatorio('nfse', 'escrita_fiscal.conf_nfse', 'Relatório de NFS-e')
 
 
 # ---------------------------------------------------------------------------
