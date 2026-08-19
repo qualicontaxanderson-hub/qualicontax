@@ -8462,6 +8462,71 @@ def api_nfse_detalhe(nfse_id):
 _LOTE_MAX_XML_NFSE = 200
 
 
+# Palavras que NÃO identificam ninguém — o que sobra é o que distingue.
+# Conservadora de propósito: "CENTRO NORTE COMBUSTIVEIS" tem que virar
+# "Centro Norte", não "Norte".
+_NOME_GENERICAS = {
+    'AUTO', 'POSTO', 'POSTOS', 'COMERCIO', 'COMERCIAL', 'LTDA', 'LTDA.',
+    'LIMITADA', 'SA', 'S.A.', 'S/A', 'ME', 'EPP', 'EIRELI', 'MEI',
+    'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', '&', 'DISTRIBUIDORA', 'PETROLEO',
+    'COMBUSTIVEL', 'COMBUSTIVEIS', 'SERVICO', 'SERVICOS', 'ASSESSORIA',
+    'CONTABIL', 'CONTABILIDADE', 'TRANSPORTE', 'TRANSPORTES', 'LOGISTICA',
+}
+_NOME_SUFIXO_EMPRESA = {'LTDA', 'LTDA.', 'LIMITADA', 'SA', 'S.A.', 'S/A',
+                        'ME', 'EPP', 'EIRELI'}
+
+
+def _nome_resumido(nome, doc=None):
+    """'AUTO POSTO PAVAO CASTELINHO LTDA' -> 'Pavao Castelinho';
+    '61.792.200 ESTER DE ALMEIDA ALVES' -> 'Ester'.
+
+    A regra do quanto pegar: EMPRESA (tem LTDA/ME/...) leva até duas palavras
+    distintivas — 'Moura Mendonca' diz mais que 'Moura'; PESSOA leva uma —
+    'Ester', não 'Ester Almeida'. Pedido do Anderson em 19/08/2026, para o nome
+    do arquivo dizer de quem é a nota sem abrir.
+    """
+    limpo = re.sub(r'^[\d.\s/-]+', '', (nome or '').strip())   # prefixo do MEI
+    palavras = [p for p in re.split(r'\s+', limpo) if p]
+    eh_empresa = any(p.upper().strip('.,') in _NOME_SUFIXO_EMPRESA for p in palavras)
+    dist = [p for p in palavras
+            if p.upper().strip('.,') not in _NOME_GENERICAS and not p.isdigit()]
+    if not dist:
+        dist = palavras or [(doc or 'Empresa')]
+    pega = dist[:2 if eh_empresa else 1]
+    # Sigla continua sigla: HPA nao vira 'Hpa' nem B2T vira 'B2t'. Curta (<=3)
+    # ou com digito, mantem caixa alta; o resto vira Nome Proprio.
+    def caixa(w):
+        return w.upper() if (len(w) <= 3 or any(c.isdigit() for c in w)) else w.capitalize()
+    return ' '.join(caixa(w) for w in pega)
+
+
+def _nome_pdf_nota(n):
+    """'18.08.2026 - Ester x Qualicontax.pdf' — sem caracteres proibidos."""
+    d = n.get('data_emissao')
+    data = d.strftime('%d.%m.%Y') if hasattr(d, 'strftime') else str(d)[:10]
+    prest = _nome_resumido(n.get('prestador_nome'), n.get('prestador_doc'))
+    toma = _nome_resumido(n.get('tomador_nome'), n.get('tomador_doc'))
+    bruto = f'{data} - {prest} x {toma}.pdf'
+    return re.sub(r'[\\/:*?"<>|]', '', bruto)
+
+
+_MES_ABREV = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+              7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+
+
+def _rotulo_meses(datas):
+    """[datas] -> 'Ago.2026' | 'Jul-Ago.2026' | 'Dez.2025-Ago.2026'."""
+    ds = [d for d in datas if d]
+    if not ds:
+        return ''
+    a, b = min(ds), max(ds)
+    if (a.year, a.month) == (b.year, b.month):
+        return f'{_MES_ABREV[a.month]}.{a.year}'
+    if a.year == b.year:
+        return f'{_MES_ABREV[a.month]}-{_MES_ABREV[b.month]}.{a.year}'
+    return f'{_MES_ABREV[a.month]}.{a.year}-{_MES_ABREV[b.month]}.{b.year}'
+
+
 def _carregar_nfse_export(nfse_id):
     """(nfse, xml, None) pronto para exportar, ou (None, None, (msg, status)).
 
@@ -8471,7 +8536,8 @@ def _carregar_nfse_export(nfse_id):
     fiscal vale mais que a cópia do arquivo.
     """
     n = execute_query(
-        'SELECT id, chave_acesso, numero, serie, xml_path '
+        'SELECT id, chave_acesso, numero, serie, xml_path, data_emissao, '
+        '       prestador_nome, prestador_doc, tomador_nome, tomador_doc '
         '  FROM nfse_capturadas WHERE id = %s', (nfse_id,), fetch=True, fetch_one=True)
     if not n:
         return None, None, ('NFS-e não encontrada.', 404)
@@ -8530,8 +8596,11 @@ def nfse_pdf(nfse_id):
         return ('Não foi possível gerar o PDF desta NFS-e (o XML pode estar fora do '
                 'padrão esperado). Baixe o XML por enquanto.', 422)
     inline = request.args.get('inline') in ('1', 'true', 'sim')
+    # 'dd.mm.aaaa - Prestador x Tomador.pdf': o arquivo diz de quem é a nota sem
+    # abrir. O XML segue nomeado pela chave — é o identificador fiscal e é assim
+    # que outros sistemas o procuram; o PDF é para gente.
     return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
-                     download_name=f'{chave or nfse_id}.pdf', mimetype='application/pdf')
+                     download_name=_nome_pdf_nota(n), mimetype='application/pdf')
 
 
 def _where_lote_nfse(data):
@@ -8682,34 +8751,76 @@ def lote_pdf_nfse():
         return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
                                  f'(cada um é gerado na hora).'}), 400
 
+    juntar = bool(data.get('juntar'))
     where, params = _where_lote_nfse_ids(data, ids)
     where.append("COALESCE(n.xml_path,'') <> ''")
     rows = execute_query(
-        f"SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_path "
-        f"FROM nfse_capturadas n WHERE {' AND '.join(where)}",
-        tuple(params), fetch=True) or []
+        f"SELECT n.id, n.chave_acesso, n.numero, n.data_emissao, n.xml_path, "
+        f"n.prestador_nome, n.prestador_doc, n.tomador_nome, n.tomador_doc "
+        f"FROM nfse_capturadas n WHERE {' AND '.join(where)} "
+        f"ORDER BY n.data_emissao, n.id", tuple(params), fetch=True) or []
     if not rows:
         return jsonify({'error': 'Nenhuma das NFS-e marcadas tem XML arquivado.'}), 404
 
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfse_capturadas',
               depois={'escopo': 'nfse', 'formato': 'pdf', 'total': len(rows),
+                      'juntar': juntar,
                       'filtros': rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))})
 
     from brazilfiscalreport.danfse import Danfse
-    arquivos, falhas = [], 0
+    pdfs, falhas = [], 0
     for r, xml in _xmls_nfse(rows):
         try:
-            arquivos.append(((r['chave_acesso'] or str(r['id'])) + '.pdf',
-                             bytes(Danfse(xml=xml).output())))
+            pdfs.append((r, bytes(Danfse(xml=xml).output())))
         except Exception:
             falhas += 1
             logging.getLogger(__name__).warning(
                 '[export-lote] falha ao gerar DANFSE da nfse_id=%s', r['id'])
-    if not arquivos:
+    if not pdfs:
         return jsonify({'error': 'Não foi possível gerar nenhum PDF das NFS-e '
                                  'marcadas (XML fora do padrão ou Dropbox fora).'}), 422
     if falhas:
         logging.getLogger(__name__).info(
-            '[export-lote] %s PDF(s) de NFS-e ficaram de fora do zip', falhas)
+            '[export-lote] %s PDF(s) de NFS-e ficaram de fora', falhas)
+
+    if juntar:
+        # UM PDF com todas, em ordem de emissão. O nome diz a empresa e o(s)
+        # mês(es): 'NFSe - Qualicontax Assessoria Contabil Ltda - Ago.2026.pdf'.
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        for _r, pb in pdfs:
+            w.append(BytesIO(pb))
+        buf = BytesIO()
+        w.write(buf)
+        buf.seek(0)
+        cid = str(data.get('cliente_id', '')).strip()
+        gid = str(data.get('grupo_id', '')).strip()
+        quem = 'NFS-e'
+        if cid.isdigit():
+            c = execute_query('SELECT nome_razao_social r FROM clientes WHERE id=%s',
+                              (int(cid),), fetch=True, fetch_one=True) or {}
+            razao = (c.get('r') or '').strip()
+            # Nome Proprio local (o _nome_proprio vive em configuracoes.py e
+            # importar entre blueprints arrisca import circular).
+            quem = ' '.join(p.lower() if p.lower() in ('da', 'das', 'de', 'do', 'dos', 'e')
+                            else p.capitalize() for p in razao.split()) or quem
+        elif gid.isdigit():
+            g = execute_query('SELECT nome r FROM grupos_clientes WHERE id=%s',
+                              (int(gid),), fetch=True, fetch_one=True) or {}
+            quem = g.get('r') or quem
+        rotulo = _rotulo_meses([r['data_emissao'] for r, _ in pdfs])
+        nome = re.sub(r'[\\/:*?"<>|]', '', f'NFSe - {quem} - {rotulo}.pdf')
+        return send_file(buf, as_attachment=True, download_name=nome,
+                         mimetype='application/pdf')
+
+    # ZIP com um PDF por nota, cada um nomeado como o download individual.
+    # Colisão (mesma dupla no mesmo dia) ganha o número da nota de sufixo.
+    arquivos, vistos = [], set()
+    for r, pb in pdfs:
+        nome = _nome_pdf_nota(r)
+        if nome in vistos:
+            nome = nome[:-4] + f' ({r["numero"] or r["id"]}).pdf'
+        vistos.add(nome)
+        arquivos.append((nome, pb))
     return _zip_download(arquivos, _nome_zip_lote(
-        data, [r['data_emissao'] for r in rows], 'NFSE PDF'))
+        data, [r['data_emissao'] for r, _ in pdfs], 'NFSE PDF'))

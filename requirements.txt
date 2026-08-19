@@ -24,3 +24,5 @@ Pillow==12.2.0
 zipstream-ng==1.9.2
 # Relatório em Excel (utils/relatorio.py) — reportlab/Pillow já pinados acima
 openpyxl==3.1.5
+# Juntar DANFSEs num PDF unico (export da NFS-e)
+pypdf==6.1.1

@@ -468,10 +468,16 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
                 title="Os marcados; se nada estiver marcado, todos do filtro atual">
             <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
         </button>
-        <button class="btn-lote" onclick="gerarPdfLote(this)"
-                title="Só os marcados, no máximo 10 por vez">
-            <i class="fas fa-file-pdf"></i> Gerar PDF (até 10)
-        </button>
+        <div class="exp-drop">
+            <button class="btn-lote" onclick="togglePdfMenu(event)"
+                    title="Só as marcadas, no máximo 10 por vez">
+                <i class="fas fa-file-pdf"></i> Gerar PDF (até 10) <i class="fas fa-caret-down" style="font-size:11px;"></i>
+            </button>
+            <div class="exp-menu" id="pdfMenu">
+                <a onclick="gerarPdfLote(this, true)"><i class="fas fa-file-pdf" style="color:#b91c1c;"></i> Num único PDF (juntas)</a>
+                <a onclick="gerarPdfLote(this, false)"><i class="fas fa-file-archive" style="color:#4338ca;"></i> Separadas (zip)</a>
+            </div>
+        </div>
         <div class="exp-drop">
             <button class="btn-lote" onclick="toggleExp(event)" title="Relatório (PDF/Excel) do filtro atual">
                 <i class="fas fa-file-export"></i> Exportar <i class="fas fa-caret-down" style="font-size:11px;"></i>
@@ -989,11 +995,23 @@ function baixarXmlLote(btn) {
     _baixarZip('{{ url_for("escrita_fiscal.lote_xml_nfse") }}',
                {...getFilters(), ids: ids}, btn);
 }
-function gerarPdfLote(btn) {
+function togglePdfMenu(ev) {
+    ev.stopPropagation();
+    document.getElementById('pdfMenu').classList.toggle('open');
+    const m = document.getElementById('expMenu');
+    if (m) m.classList.remove('open');
+}
+document.addEventListener('click', function () {
+    const m = document.getElementById('pdfMenu');
+    if (m) m.classList.remove('open');
+});
+function gerarPdfLote(el, juntar) {
     const ids = idsMarcados();
     if (!ids.length) { alert('Marque as NFS-e que quer em PDF (máximo 10).'); return; }
+    // juntar=true -> UM PDF com todas, na ordem de emissão
+    // juntar=false -> zip com um PDF por nota, cada um "data - Prestador x Tomador"
     _baixarZip('{{ url_for("escrita_fiscal.lote_pdf_nfse") }}',
-               {...getFilters(), ids: ids}, btn);
+               {...getFilters(), ids: ids, juntar: !!juntar}, el.closest('.exp-drop').querySelector('button'));
 }
 function exportBtns(r) {
     // O molde é /nfse/0/xml — o id fica no MEIO, não no fim como no CT-e.
