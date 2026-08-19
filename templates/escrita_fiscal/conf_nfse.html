@@ -770,6 +770,13 @@ function setPeriodo(tipo, buscar) {
     carregarOpcoesFiltros();
     if (buscar !== false) applyFilters();
 }
+// O "Ver todas" do estado vazio: abre o período exatamente onde o dado existe.
+function verPeriodoCompleto(de, ate) {
+    document.getElementById('f_data_ini').value = de || '';
+    document.getElementById('f_data_fim').value = ate || '';
+    carregarOpcoesFiltros();
+    applyFilters();
+}
 function aoMudarEscopo() {
     if (currentClienteId || currentGrupoId) setPeriodo('45d');
     else carregarOpcoesFiltros();
@@ -1076,7 +1083,23 @@ function loadNotas() {
             }
             const tbody = document.getElementById('tbodyNotas');
             if (!lastRows.length) {
-                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i><br>Nenhuma NFS-e encontrada</td></tr>';
+                // "Nenhuma encontrada" seco esconde o dado quando o problema é só
+                // a janela de datas — foi assim que as 27 canceladas "sumiram" em
+                // 17/08/2026. Se a API contou resultado fora do período, a tela
+                // diz quantos e oferece o pulo direto.
+                const fp = data.fora_periodo;
+                if (fp && fp.n) {
+                    tbody.innerHTML = '<tr><td colspan="13" class="cc-empty">'
+                        + '<i class="fas fa-calendar-times"></i><br>'
+                        + 'Nenhuma NFS-e <strong>no período escolhido</strong>.<br>'
+                        + 'Existem <strong>' + fp.n + '</strong> fora dele (de '
+                        + fmtDate(fp.de) + ' a ' + fmtDate(fp.ate) + '). '
+                        + '<a style="color:#4f46e5;font-weight:700;cursor:pointer;text-decoration:underline;" '
+                        + 'onclick="verPeriodoCompleto(\'' + fp.de + '\', \'' + fp.ate + '\')">Ver todas</a>'
+                        + '</td></tr>';
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-file-invoice-dollar"></i><br>Nenhuma NFS-e encontrada</td></tr>';
+                }
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }

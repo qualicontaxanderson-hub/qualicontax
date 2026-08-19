@@ -8278,14 +8278,6 @@ def api_nfse():
     if f_tomador:
         where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
         params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
-    if f_data_ini:
-        where.append('n.data_emissao >= %s')
-        params.append(f_data_ini)
-    if f_data_fim:
-        # data_emissao é DATETIME: sem o 23:59:59 o último dia do período ficaria
-        # de fora, e o usuário veria "faltou nota" num filtro que ele fez certo.
-        where.append('n.data_emissao <= %s')
-        params.append(f_data_fim + ' 23:59:59')
     if f_chave:
         where.append('n.chave_acesso LIKE %s')
         params.append(f'%{f_chave}%')
@@ -8312,19 +8304,33 @@ def api_nfse():
     # Se contasse já filtrada, "Tomados" mostraria zero sempre que "Prestados"
     # estivesse selecionado — o seletor apagaria a informação que existe para
     # ajudar a escolher.
-    where_sem_papel = list(where)
-    params_sem_papel = list(params)
+    # TRÊS recortes do MESMO filtro, porque três consultas precisam de conjuntos
+    # diferentes: a lista (tudo), a contagem por papel (sem papel) e a contagem
+    # fora do período (sem data — para a tela dizer "nenhuma NO PERÍODO, mas
+    # existem N fora dele" em vez do "nenhuma encontrada" que esconde o dado).
+    d_cl, d_par = [], []
+    if f_data_ini:
+        d_cl.append('n.data_emissao >= %s')
+        d_par.append(f_data_ini)
+    if f_data_fim:
+        # data_emissao é DATETIME: sem o 23:59:59 o último dia ficaria de fora.
+        d_cl.append('n.data_emissao <= %s')
+        d_par.append(f_data_fim + ' 23:59:59')
+    p_cl, p_par = [], []
     if f_papel:
-        where.append('n.papel = %s')
-        params.append(f_papel)
+        p_cl.append('n.papel = %s')
+        p_par.append(f_papel)
 
-    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
-    sql_sem_papel = ('WHERE ' + ' AND '.join(where_sem_papel)) if where_sem_papel else ''
+    def _sql(cl):
+        return ('WHERE ' + ' AND '.join(cl)) if cl else ''
+
+    where_sql = _sql(where + d_cl + p_cl)
+    params_lista = params + d_par + p_par
     offset = (page - 1) * per_page
 
     papeis = {r['papel']: r['n'] for r in (execute_query(
-        f'SELECT n.papel, COUNT(*) n FROM nfse_capturadas n {sql_sem_papel} '
-        f'GROUP BY n.papel', tuple(params_sem_papel), fetch=True) or [])}
+        f'SELECT n.papel, COUNT(*) n FROM nfse_capturadas n {_sql(where + d_cl)} '
+        f'GROUP BY n.papel', tuple(params + d_par), fetch=True) or [])}
 
     all_rows = execute_query(
         f"""SELECT n.id, n.chave_acesso, n.numero, n.serie, n.papel,
@@ -8349,7 +8355,7 @@ def api_nfse():
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
-        tuple(params) + (per_page, offset), fetch=True) or []
+        tuple(params_lista) + (per_page, offset), fetch=True) or []
 
     first = all_rows[0] if all_rows else {}
     kpi = {
@@ -8376,8 +8382,21 @@ def api_nfse():
             row[k] = float(row.get(k) or 0)
         rows.append(row)
 
+    # Zerou COM recorte de data? Conta o mesmo filtro sem a data, para a tela
+    # dizer que existe resultado fora do período — e onde ele começa e termina.
+    fora = None
+    if total == 0 and d_cl:
+        f2 = execute_query(
+            f'SELECT COUNT(*) n, MIN(n.data_emissao) de, MAX(n.data_emissao) ate '
+            f'FROM nfse_capturadas n {_sql(where + p_cl)}',
+            tuple(params + p_par), fetch=True, fetch_one=True) or {}
+        if int(f2.get('n') or 0):
+            fora = {'n': int(f2['n']),
+                    'de': str(f2['de'])[:10] if f2.get('de') else None,
+                    'ate': str(f2['ate'])[:10] if f2.get('ate') else None}
+
     return jsonify({'total': total, 'page': page, 'per_page': per_page,
-                    'rows': rows, 'kpi': kpi,
+                    'rows': rows, 'kpi': kpi, 'fora_periodo': fora,
                     # Contagem por papel do MESMO filtro, sem o recorte de papel.
                     'papeis': {'emitente': papeis.get('emitente', 0),
                                'tomador': papeis.get('tomador', 0),
