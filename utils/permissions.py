@@ -41,6 +41,7 @@ PERMISSION_CATALOG = {
     'Financeiro': {
         'financeiro.index':               'Acessar Financeiro',
         'financeiro.recebimento':         'Recebimentos',
+        'financeiro.titulos':             'Contas a pagar e receber (escritório)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',
