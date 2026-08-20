@@ -943,15 +943,12 @@ function recusarPendente() {
 // página /senha já cumprimenta pelo nome ao abrir; isto cuida do ANTES do clique.
 function msgLinkSenha(nome, login, url) {
     var primeiro = (nome || '').trim().split(/\s+/)[0] || 'colega';
-    return 'Olá, ' + primeiro + '! 👋
-
-'
-         + 'Segue o seu link para definir a sua senha de acesso ao Qualicontax:
-
-'
-         + url + '
-
-'
+    // \n ESCAPADO, nunca quebra de linha literal dentro de aspas: uma quebra
+    // real aqui é SyntaxError e mata o script INTEIRO da página — foi
+    // exatamente o que deixou o botão do Q-Colabore morto em 20/08/2026.
+    return 'Olá, ' + primeiro + '! 👋\n\n'
+         + 'Segue o seu link para definir a sua senha de acesso ao Qualicontax:\n\n'
+         + url + '\n\n'
          + 'O link é pessoal (usuário: ' + (login || '') + '), vale 1 vez e expira em 72 horas.';
 }
 function mostrarSenhaLink(url, prefixo, nome, login) {
