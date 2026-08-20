@@ -47,6 +47,7 @@ PERMISSION_CATALOG = {
         'financeiro.fluxo':               'Fluxo de caixa (escritório)',
         'financeiro.extrato':             'Extrato bancário (escritório)',
         'financeiro.empresas':            'Minhas empresas do financeiro',
+        'financeiro.programacoes':        'Programações (contas do mês)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',

@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block title %}Programações - Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+.pg-wrap { overflow-x: auto; }
+.pg-wrap table { min-width: 980px; }
+.pg-inativa { opacity: .55; }
+.pg-acao { border: none; background: none; cursor: pointer; padding: 6px; }
+.pg-nat { padding: 3px 10px; border-radius: 999px; font-size: .78em; font-weight: 700; }
+.pg-fixa { background: #dbeafe; color: #1e40af; }
+.pg-var { background: #fef3c7; color: #92400e; }
+.pg-tipo-R { color: #166534; font-weight: 700; }
+.pg-tipo-P { color: #b91c1c; font-weight: 700; }
+.pg-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-calendar-check" style="color: var(--primary-green);"></i>
+            Programações
+        </h1>
+        <p class="page-subtitle">Contas que se repetem todo mês — o título nasce sozinho</p>
+    </div>
+    <div class="page-actions">
+        <form method="POST" action="{{ url_for('financeiro.programacoes_gerar') }}"
+              style="display:flex; gap:8px; align-items:center;">
+            <input type="month" name="competencia" class="form-control"
+                   value="{{ hoje.strftime('%Y-%m') }}" style="width:auto;">
+            <button type="submit" class="btn btn-outline"
+                    title="Gera os títulos do mês (rodar de novo não duplica)">
+                <i class="fas fa-wand-magic-sparkles"></i> Gerar títulos do mês
+            </button>
+        </form>
+        <button class="btn btn-primary" onclick="pgAbrirNova()">
+            <i class="fas fa-plus"></i> Nova Programação
+        </button>
+    </div>
+</div>
+
+{% include 'financeiro/_sel_empresas.html' %}
+
+<div class="card">
+    <div class="card-body pg-wrap">
+        {% if programacoes %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Dia</th>
+                    <th>Empresa</th>
+                    <th>Tipo</th>
+                    <th>Descrição</th>
+                    <th>Contraparte</th>
+                    <th>Categoria</th>
+                    <th>Centro</th>
+                    <th style="text-align:right;">Valor esperado</th>
+                    <th>Natureza</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in programacoes %}
+                <tr class="{{ 'pg-inativa' if not p.ativo }}">
+                    <td><strong>{{ p.dia_vencimento }}</strong></td>
+                    <td>{{ emp_mapa.get(p.empresa_id, '?') }}</td>
+                    <td class="pg-tipo-{{ p.tipo }}">{{ 'Receber' if p.tipo == 'R' else 'Pagar' }}</td>
+                    <td>{{ p.descricao }}</td>
+                    <td>{{ p.contraparte_nome }}</td>
+                    <td title="{{ p.categoria_grupo }}">{{ p.categoria_nome }}</td>
+                    <td>{{ p.centro_nome or '—' }}</td>
+                    <td style="text-align:right;">{{ p.valor_esperado | float | round(2) | format_currency }}</td>
+                    <td>
+                        {% if p.variavel %}
+                        <span class="pg-nat pg-var" title="Flutuar é a natureza dela (energia, salário) — divergência não gera pergunta">Variável</span>
+                        {% else %}
+                        <span class="pg-nat pg-fixa" title="Veio diferente do esperado? A baixa pergunta: juros/multa, reajuste ou só este mês">Fixa</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ 'Ativa' if p.ativo else 'Pausada' }}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="pg-acao" title="Editar valor/dia/natureza"
+                                data-id="{{ p.id }}" data-valor="{{ '%.2f'|format(p.valor_esperado) }}"
+                                data-dia="{{ p.dia_vencimento }}" data-variavel="{{ 1 if p.variavel else 0 }}"
+                                data-desc="{{ p.descricao }}"
+                                onclick="pgAbrirEditar(this)">
+                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                        </button>
+                        <form method="POST" style="display:inline;"
+                              action="{{ url_for('financeiro.programacao_atualizar', pid=p.id) }}">
+                            <input type="hidden" name="acao" value="ativo">
+                            <button class="pg-acao"
+                                    title="{{ 'Pausar (para de gerar títulos)' if p.ativo else 'Reativar' }}">
+                                <i class="fas fa-{{ 'toggle-on' if p.ativo else 'toggle-off' }}"
+                                   style="color:{{ '#16a34a' if p.ativo else '#9ca3af' }};"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="pg-vazio">
+            <i class="fas fa-calendar-check" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+            Nenhuma programação{% if sel_empresas %} nessas empresas{% endif %}.
+            Crie no botão acima — ou marque "Repetir todo mês" ao lançar um título.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Modal: nova programação ────────────────────────────────────── -->
+<div id="pgModalNova" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:640px;">
+        <div class="modal-header">
+            <h3>Nova Programação</h3>
+            <button class="modal-close" onclick="pgFechar('pgModalNova')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.programacao_nova') }}">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Empresa *</label>
+                        <select name="empresa_id" class="form-control" required>
+                            {% for e in fin_empresas %}
+                            <option value="{{ e.cliente_id }}"
+                                    {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                                {{ e.apelido }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display:block;">Tipo *</label>
+                        <label style="margin-right:14px;">
+                            <input type="radio" name="tipo" value="P" checked onchange="pgFiltraCategorias()"> A pagar
+                        </label>
+                        <label>
+                            <input type="radio" name="tipo" value="R" onchange="pgFiltraCategorias()"> A receber
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descrição *</label>
+                    <input type="text" name="descricao" class="form-control" required
+                           placeholder="Ex.: Conexa, Aluguel da sala, Energia GO...">
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>Contraparte *</label>
+                        <input type="text" name="contraparte_nome" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>CNPJ/CPF</label>
+                        <input type="text" name="contraparte_doc" class="form-control">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoria *</label>
+                        <select name="categoria_id" id="pgCategoria" class="form-control" required>
+                            {% for c in categorias %}
+                            <option value="{{ c.id }}" data-tipo="{{ c.tipo }}">
+                                {{ c.grupo }} · {{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Centro de custo</label>
+                        <select name="centro_custo_id" class="form-control">
+                            <option value="">— sem centro —</option>
+                            {% for cc in centros %}
+                            <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Valor esperado (R$) *</label>
+                        <input type="number" name="valor_esperado" class="form-control"
+                               required min="0.01" step="0.01" placeholder="499,00">
+                    </div>
+                    <div class="form-group">
+                        <label>Dia do vencimento *</label>
+                        <input type="number" name="dia_vencimento" class="form-control"
+                               required min="1" max="31" placeholder="10">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display:block;">Natureza do valor</label>
+                    <label style="margin-right:14px;">
+                        <input type="radio" name="natureza" value="fixa" checked>
+                        Fixa — veio diferente, a baixa pergunta (juros · reajuste · só este mês)
+                    </label>
+                    <label>
+                        <input type="radio" name="natureza" value="variavel">
+                        Variável — flutuar é normal (energia, salário), sem pergunta
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="pgFechar('pgModalNova')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Criar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── Modal: editar ─────────────────────────────────────────────── -->
+<div id="pgModalEditar" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 id="pgEditarTitulo">Editar Programação</h3>
+            <button class="modal-close" onclick="pgFechar('pgModalEditar')">&times;</button>
+        </div>
+        <form method="POST" id="pgFormEditar" action="">
+            <input type="hidden" name="acao" value="editar">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Valor esperado (R$)</label>
+                        <input type="number" name="valor_esperado" id="pgEdValor"
+                               class="form-control" required min="0.01" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Dia do vencimento</label>
+                        <input type="number" name="dia_vencimento" id="pgEdDia"
+                               class="form-control" required min="1" max="31">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display:block;">Natureza</label>
+                    <label style="margin-right:14px;">
+                        <input type="radio" name="natureza" value="fixa" id="pgEdFixa"> Fixa
+                    </label>
+                    <label>
+                        <input type="radio" name="natureza" value="variavel" id="pgEdVar"> Variável
+                    </label>
+                </div>
+                <small style="color:#6b7280;">A mudança vale para os títulos que ainda
+                    vão nascer — os já gerados não mudam.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="pgFechar('pgModalEditar')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var PG_URL_ATU = "{{ url_for('financeiro.programacao_atualizar', pid=0) }}";
+
+function pgFechar(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+function pgAbrirNova() {
+    document.getElementById('pgModalNova').style.display = 'block';
+    pgFiltraCategorias();
+}
+
+function pgFiltraCategorias() {
+    var tipo = document.querySelector('#pgModalNova input[name="tipo"]:checked').value;
+    var sel = document.getElementById('pgCategoria');
+    var primeiro = null;
+    Array.prototype.forEach.call(sel.options, function (o) {
+        var ok = o.getAttribute('data-tipo') === tipo;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok && primeiro === null) primeiro = o.value;
+    });
+    var atual = sel.options[sel.selectedIndex];
+    if (!atual || atual.disabled) sel.value = primeiro;
+}
+
+function pgAbrirEditar(el) {
+    var form = document.getElementById('pgFormEditar');
+    form.action = PG_URL_ATU.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('pgEditarTitulo').textContent = 'Editar: ' + el.getAttribute('data-desc');
+    document.getElementById('pgEdValor').value = el.getAttribute('data-valor');
+    document.getElementById('pgEdDia').value = el.getAttribute('data-dia');
+    if (el.getAttribute('data-variavel') === '1') {
+        document.getElementById('pgEdVar').checked = true;
+    } else {
+        document.getElementById('pgEdFixa').checked = true;
+    }
+    document.getElementById('pgModalEditar').style.display = 'block';
+}
+</script>
+{% endblock %}

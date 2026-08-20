@@ -140,6 +140,7 @@ from flask_login import current_user
 
 from models.fin_titulo import FinTitulo, FinCategoria
 from utils.atividade import registrar
+from utils.db_helper import execute_query
 from utils.financeiro_core import registrar_baixa, BaixaInvalida
 
 
@@ -259,6 +260,35 @@ def titulo_novo():
         competencia=competencia + '-01', emissao=emissao,
         vencimento=vencimento, valor=valor,
         observacao=(f.get('observacao') or '').strip() or None)
+    # "Repetir todo mês": cria a PROGRAMAÇÃO junto e amarra o título deste mês
+    # nela (com a chave_idem da competência — a geração automática do mês não
+    # vai duplicar o que já foi lançado à mão).
+    if tid and f.get('repetir_mensal') == 'on':
+        from models.fin_titulo import FinProgramacao
+        pid = FinProgramacao.criar(
+            empresa_id=int(empresa_raw), tipo=tipo, descricao=descricao,
+            contraparte_nome=contraparte,
+            contraparte_doc=(f.get('contraparte_doc') or '').strip() or None,
+            categoria_id=int(categoria_id),
+            centro_custo_id=int(centro_raw) if centro_raw.isdigit() else None,
+            valor_esperado=valor,
+            dia_vencimento=int(vencimento[8:10]),
+            variavel=f.get('natureza') == 'variavel',
+            inicio=competencia + '-01')
+        if pid:
+            execute_query(
+                'UPDATE fin_titulos SET programacao_id = %s, chave_idem = %s '
+                'WHERE id = %s',
+                (pid, f'prog:{pid}:comp:{competencia}', tid))
+            registrar('escrita.criou_programacao', 'financeiro',
+                      tabela='fin_programacoes', registro_id=pid,
+                      depois={'descricao': descricao, 'valor': str(valor),
+                              'dia': int(vencimento[8:10]),
+                              'variavel': f.get('natureza') == 'variavel',
+                              'origem': 'novo_titulo'})
+            flash(f'Programação mensal criada — todo mês nasce um título de '
+                  f'"{descricao}".', 'success')
+
     if tid:
         registrar('escrita.criou_titulo', 'financeiro', tabela='fin_titulos',
                   registro_id=tid,
@@ -284,6 +314,30 @@ def titulo_baixar(titulo_id):
     except InvalidOperation:
         flash('Valor inválido na baixa.', 'danger')
         return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
+
+    # A pergunta das três opções (E2.3): 'juros' e 'desconto' já chegam com os
+    # campos divididos pelo JS; 'reajuste' atualiza a mensalidade da programação
+    # daqui pra frente — e o título deste mês, para a baixa fechar exata.
+    decisao = (f.get('decisao') or '').strip()
+    if decisao == 'reajuste':
+        from models.fin_titulo import FinProgramacao
+        t = FinTitulo.get_by_id(titulo_id)
+        if t and t.get('programacao_id') and t['status'] == 'aberto' \
+                and not t['valor_baixado']:
+            antigo = FinProgramacao.reajustar(t['programacao_id'], valor)
+            if antigo is not None:
+                execute_query('UPDATE fin_titulos SET valor = %s '
+                              "WHERE id = %s AND status = 'aberto'",
+                              (valor, titulo_id))
+                registrar('escrita.reajustou_programacao', 'financeiro',
+                          tabela='fin_programacoes',
+                          registro_id=t['programacao_id'],
+                          antes={'valor_esperado': str(antigo)},
+                          depois={'valor_esperado': str(valor),
+                                  'titulo_id': titulo_id})
+                flash(f'Mensalidade reajustada: '
+                      f'R$ {float(antigo):.2f} → R$ {float(valor):.2f} '
+                      'daqui pra frente.', 'success')
 
     try:
         r = registrar_baixa(
@@ -972,6 +1026,133 @@ def api_home_destaques():
     with _FIN_HOME_LOCK:
         _FIN_HOME_CACHE[uid] = (agora, payload)
     return jsonify(payload)
+
+
+# =======================================================================
+# Programações (E2.3) — contas que se repetem todo mês
+# =======================================================================
+@financeiro.route('/financeiro/programacoes')
+@permission_required('financeiro.programacoes')
+def programacoes():
+    from models.fin_titulo import FinProgramacao, FinCentroCusto
+    emps, sel, mapa = _empresas_ctx()
+    return render_template('financeiro/programacoes.html',
+                           programacoes=FinProgramacao.listar(empresa_ids=sel),
+                           categorias=FinCategoria.listar(),
+                           centros=FinCentroCusto.listar(),
+                           fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
+                           hoje=date.today())
+
+
+@financeiro.route('/financeiro/programacoes/nova', methods=['POST'])
+@permission_required('financeiro.programacoes')
+def programacao_nova():
+    from models.fin_titulo import FinProgramacao
+    from models.fin_empresa import FinEmpresa
+    f = request.form
+    empresa_raw = (f.get('empresa_id') or '').strip()
+    dia_raw = (f.get('dia_vencimento') or '').strip()
+    erro = None
+    valor = None
+    if not empresa_raw.isdigit() or int(empresa_raw) not in FinEmpresa.ids_validos():
+        erro = 'Escolha a empresa.'
+    elif f.get('tipo') not in ('R', 'P'):
+        erro = 'Escolha receber ou pagar.'
+    elif not (f.get('descricao') or '').strip() or not (f.get('contraparte_nome') or '').strip():
+        erro = 'Preencha descrição e contraparte.'
+    elif not (f.get('categoria_id') or '').isdigit():
+        erro = 'Escolha a categoria.'
+    elif not dia_raw.isdigit() or not 1 <= int(dia_raw) <= 31:
+        erro = 'Dia de vencimento entre 1 e 31.'
+    else:
+        try:
+            valor = _dec_form(f.get('valor_esperado'))
+            if valor <= 0:
+                erro = 'Valor esperado deve ser maior que zero.'
+        except InvalidOperation:
+            erro = 'Valor esperado inválido.'
+    if erro:
+        flash(erro, 'danger')
+        return redirect(url_for('financeiro.programacoes'))
+    centro_raw = (f.get('centro_custo_id') or '').strip()
+    pid = FinProgramacao.criar(
+        empresa_id=int(empresa_raw), tipo=f.get('tipo'),
+        descricao=f.get('descricao').strip(),
+        contraparte_nome=f.get('contraparte_nome').strip(),
+        contraparte_doc=(f.get('contraparte_doc') or '').strip() or None,
+        categoria_id=int(f.get('categoria_id')),
+        centro_custo_id=int(centro_raw) if centro_raw.isdigit() else None,
+        valor_esperado=valor, dia_vencimento=int(dia_raw),
+        variavel=f.get('natureza') == 'variavel')
+    if pid:
+        registrar('escrita.criou_programacao', 'financeiro',
+                  tabela='fin_programacoes', registro_id=pid,
+                  depois={'descricao': f.get('descricao').strip(),
+                          'valor': str(valor), 'dia': int(dia_raw),
+                          'variavel': f.get('natureza') == 'variavel'})
+        flash('Programação criada — use "Gerar títulos do mês" para lançar.',
+              'success')
+    else:
+        flash('Erro ao criar a programação.', 'danger')
+    return redirect(url_for('financeiro.programacoes'))
+
+
+@financeiro.route('/financeiro/programacoes/<int:pid>/atualizar', methods=['POST'])
+@permission_required('financeiro.programacoes')
+def programacao_atualizar(pid):
+    from models.fin_titulo import FinProgramacao
+    p = FinProgramacao.get(pid)
+    if not p:
+        flash('Programação não encontrada.', 'danger')
+        return redirect(url_for('financeiro.programacoes'))
+    acao = request.form.get('acao')
+    if acao == 'ativo':
+        FinProgramacao.atualizar(pid, ativo=not p['ativo'])
+        flash('Programação reativada.' if not p['ativo']
+              else 'Programação pausada — não gera mais títulos.', 'success')
+    elif acao == 'editar':
+        try:
+            valor = _dec_form(request.form.get('valor_esperado'))
+        except InvalidOperation:
+            flash('Valor inválido.', 'danger')
+            return redirect(url_for('financeiro.programacoes'))
+        dia_raw = (request.form.get('dia_vencimento') or '').strip()
+        if not dia_raw.isdigit() or not 1 <= int(dia_raw) <= 31:
+            flash('Dia de vencimento entre 1 e 31.', 'danger')
+            return redirect(url_for('financeiro.programacoes'))
+        FinProgramacao.atualizar(
+            pid, valor_esperado=valor, dia_vencimento=int(dia_raw),
+            variavel=request.form.get('natureza') == 'variavel')
+        flash('Programação atualizada.', 'success')
+    registrar('escrita.alterou_programacao', 'financeiro',
+              tabela='fin_programacoes', registro_id=pid,
+              antes={'valor_esperado': str(p['valor_esperado']),
+                     'ativo': bool(p['ativo'])},
+              depois={'acao': acao})
+    return redirect(url_for('financeiro.programacoes'))
+
+
+@financeiro.route('/financeiro/programacoes/gerar', methods=['POST'])
+@permission_required('financeiro.programacoes')
+def programacoes_gerar():
+    from models.fin_titulo import FinProgramacao
+    comp = (request.form.get('competencia') or '').strip()   # YYYY-MM
+    if not re.match(r'^\d{4}-\d{2}$', comp):
+        flash('Informe o mês para gerar.', 'danger')
+        return redirect(url_for('financeiro.programacoes'))
+    ano, mes = int(comp[:4]), int(comp[5:7])
+    gerados, ja_existiam, nomes = FinProgramacao.gerar_mes(ano, mes)
+    registrar('escrita.gerou_programacoes', 'financeiro', tabela='fin_titulos',
+              depois={'competencia': comp, 'gerados': gerados,
+                      'ja_existiam': ja_existiam})
+    if gerados:
+        flash(f'{gerados} título(s) de {mes:02d}/{ano} gerados '
+              f'({", ".join(nomes[:6])}{"..." if len(nomes) > 6 else ""}); '
+              f'{ja_existiam} já existiam.', 'success')
+    else:
+        flash(f'Nada novo para {mes:02d}/{ano}: {ja_existiam} título(s) já '
+              'existiam (gerar de novo não duplica).', 'warning')
+    return redirect(url_for('financeiro.programacoes'))
 
 
 # =======================================================================

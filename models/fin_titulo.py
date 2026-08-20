@@ -206,6 +206,131 @@ class FinDre:
         return [r['a'] for r in rows if r['a']]
 
 
+class FinProgramacao:
+    """Contas que se repetem todo mês (E2.3): Conexa, aluguel, energia, salário.
+
+    FIXA: divergência de valor na baixa dispara a pergunta de três opções
+    (juros/multa · reajuste · só deste mês). VARIÁVEL (``variavel=1``):
+    flutuar é a natureza — o esperado é referência, ninguém pergunta.
+    A geração mensal é IDEMPOTENTE por chave_idem "prog:{id}:comp:{YYYY-MM}"
+    (uk_idem em fin_titulos): rodar duas vezes não cria dois títulos.
+    """
+
+    @staticmethod
+    def listar(empresa_ids=None, apenas_ativas=False):
+        cond, params = [], []
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond.append(f'p.empresa_id IN ({marks})')
+            params += list(empresa_ids)
+        if apenas_ativas:
+            cond.append('p.ativo = 1')
+        where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
+        return execute_query(
+            f"""SELECT p.*, c.grupo AS categoria_grupo, c.nome AS categoria_nome,
+                       cc.nome AS centro_nome
+                  FROM fin_programacoes p
+                  JOIN fin_categorias c ON c.id = p.categoria_id
+                  LEFT JOIN fin_centros_custo cc ON cc.id = p.centro_custo_id
+                {where}
+                 ORDER BY p.ativo DESC, p.dia_vencimento, p.descricao""",
+            tuple(params), fetch=True) or []
+
+    @staticmethod
+    def get(pid):
+        return execute_query('SELECT * FROM fin_programacoes WHERE id = %s',
+                             (pid,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def criar(empresa_id, tipo, descricao, contraparte_nome, categoria_id,
+              valor_esperado, dia_vencimento, variavel=False, inicio=None,
+              contraparte_doc=None, centro_custo_id=None, observacao=None):
+        from datetime import date as _d
+        return execute_query(
+            """INSERT INTO fin_programacoes
+               (empresa_id, tipo, descricao, contraparte_nome, contraparte_doc,
+                categoria_id, centro_custo_id, valor_esperado, dia_vencimento,
+                variavel, inicio, observacao)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (empresa_id, tipo, descricao, contraparte_nome, contraparte_doc,
+             categoria_id, centro_custo_id, valor_esperado, dia_vencimento,
+             1 if variavel else 0, inicio or _d.today().replace(day=1),
+             observacao))
+
+    @staticmethod
+    def atualizar(pid, valor_esperado=None, dia_vencimento=None, variavel=None,
+                  ativo=None):
+        sets, params = [], []
+        if valor_esperado is not None:
+            sets.append('valor_esperado = %s')
+            params.append(valor_esperado)
+        if dia_vencimento is not None:
+            sets.append('dia_vencimento = %s')
+            params.append(dia_vencimento)
+        if variavel is not None:
+            sets.append('variavel = %s')
+            params.append(1 if variavel else 0)
+        if ativo is not None:
+            sets.append('ativo = %s')
+            params.append(1 if ativo else 0)
+        if not sets:
+            return
+        params.append(pid)
+        execute_query(f"UPDATE fin_programacoes SET {', '.join(sets)} "
+                      f"WHERE id = %s", tuple(params))
+
+    @staticmethod
+    def reajustar(pid, novo_valor):
+        """Reajuste confirmado pelo usuário na pergunta das três opções.
+        Devolve o valor antigo (para a auditoria contar a história)."""
+        p = FinProgramacao.get(pid)
+        if not p:
+            return None
+        execute_query('UPDATE fin_programacoes SET valor_esperado = %s '
+                      'WHERE id = %s', (novo_valor, pid))
+        return p['valor_esperado']
+
+    @staticmethod
+    def gerar_mes(ano, mes):
+        """Gera os títulos da competência ano/mês. IDEMPOTENTE — devolve
+        (gerados, ja_existiam, nomes_gerados).
+
+        execute_query ENGOLE o 1062 da chave duplicada e devolve None — é
+        exatamente por isso que o retorno é conferido aqui (nota da fase 1).
+        Dia 31 em mês de 30 cai no último dia do mês.
+        """
+        import calendar
+        from datetime import date as _d
+        comp = _d(ano, mes, 1)
+        fim_mes = _d(ano, mes, calendar.monthrange(ano, mes)[1])
+        progs = execute_query(
+            """SELECT * FROM fin_programacoes
+                WHERE ativo = 1 AND inicio <= %s
+                  AND (fim IS NULL OR fim >= %s)""",
+            (fim_mes, comp), fetch=True) or []
+        gerados, ja_existiam, nomes = 0, 0, []
+        for p in progs:
+            venc = _d(ano, mes, min(p['dia_vencimento'],
+                                    calendar.monthrange(ano, mes)[1]))
+            chave = f"prog:{p['id']}:comp:{ano:04d}-{mes:02d}"
+            tid = FinTitulo.criar(
+                empresa_id=p['empresa_id'], tipo=p['tipo'],
+                contraparte_nome=p['contraparte_nome'],
+                contraparte_doc=p['contraparte_doc'],
+                categoria_id=p['categoria_id'],
+                centro_custo_id=p['centro_custo_id'],
+                descricao=p['descricao'], competencia=comp,
+                emissao=comp, vencimento=venc,
+                valor=p['valor_esperado'], origem='programado',
+                chave_idem=chave, programacao_id=p['id'])
+            if tid:
+                gerados += 1
+                nomes.append(p['descricao'])
+            else:
+                ja_existiam += 1
+        return gerados, ja_existiam, nomes
+
+
 class FinFluxo:
     """Fluxo de caixa projetado (Documento E, seção 6).
 
@@ -310,12 +435,13 @@ class FinTitulo:
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         return execute_query(
             f"""SELECT t.*, c.grupo AS categoria_grupo, c.nome AS categoria_nome,
-                       cc.nome AS centro_nome,
+                       cc.nome AS centro_nome, fp.variavel AS prog_variavel,
                        (t.vencimento < CURDATE()
                         AND t.status IN ('aberto', 'parcial')) AS vencido
                   FROM fin_titulos t
                   JOIN fin_categorias c ON c.id = t.categoria_id
                   LEFT JOIN fin_centros_custo cc ON cc.id = t.centro_custo_id
+                  LEFT JOIN fin_programacoes fp ON fp.id = t.programacao_id
                 {where}
                  ORDER BY t.vencimento, t.id""",
             tuple(params), fetch=True) or []
@@ -365,16 +491,16 @@ class FinTitulo:
     def criar(tipo, contraparte_nome, categoria_id, descricao, competencia,
               emissao, vencimento, valor, empresa_id, contraparte_doc=None,
               cliente_id=None, observacao=None, origem='manual', chave_idem=None,
-              centro_custo_id=None):
+              centro_custo_id=None, programacao_id=None):
         return execute_query(
             """INSERT INTO fin_titulos
                (empresa_id, tipo, contraparte_doc, contraparte_nome, cliente_id,
                 categoria_id, centro_custo_id, descricao, competencia, emissao,
-                vencimento, valor, origem, chave_idem, observacao)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                vencimento, valor, origem, chave_idem, observacao, programacao_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, tipo, contraparte_doc, contraparte_nome, cliente_id,
              categoria_id, centro_custo_id, descricao, competencia, emissao,
-             vencimento, valor, origem, chave_idem, observacao))
+             vencimento, valor, origem, chave_idem, observacao, programacao_id))
 
     @staticmethod
     def cancelar(titulo_id):
