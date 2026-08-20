@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS fin_empresas (
 SEMENTE = [
     (2,  'QUALICONTAX', 10),
     (26, 'BRILHO',      20),
-    (29, 'HPA',         30),
+    # HPA (29) esteve na semente por engano meu — Anderson avisou em 20/08/2026
+    # que ela NAO e do grupo; removida do banco no mesmo dia.
     (1,  'ANDERSON PF', 40),
 ]
 

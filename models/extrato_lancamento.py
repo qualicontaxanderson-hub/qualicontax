@@ -11,9 +11,12 @@ from utils.db_helper import execute_query
 
 class ExtratoLancamento:
 
+    # Um lugar só monta o WHERE: a listagem e os cartões contam a MESMA
+    # história (o cartão fala do filtro inteiro, a tabela mostra a página).
     @staticmethod
-    def listar(empresa_ids=None, data_de=None, data_ate=None, conta=None,
-               busca=None, limite=500, classif=None):
+    def _where(empresa_ids=None, data_de=None, data_ate=None, conta=None,
+               busca=None, classif=None, categoria_id=None, centro_id=None,
+               tipo=None, documento=None, vmin=None, vmax=None):
         cond, params = ['1=1'], []
         if empresa_ids:
             marks = ','.join(['%s'] * len(empresa_ids))
@@ -32,11 +35,36 @@ class ExtratoLancamento:
             cond.append('(e.descricao LIKE %s OR e.documento LIKE %s)')
             like = f'%{busca}%'
             params += [like, like]
+        if documento:
+            cond.append('e.documento LIKE %s')
+            params.append(f'%{documento}%')
         if classif == 'sim':
             cond.append('e.categoria_id IS NOT NULL')
         elif classif == 'nao':
             cond.append('e.categoria_id IS NULL')
-        where = ' AND '.join(cond)
+        if categoria_id:
+            cond.append('e.categoria_id = %s')
+            params.append(categoria_id)
+        if centro_id == 'sem':
+            cond.append('e.centro_custo_id IS NULL')
+        elif centro_id:
+            cond.append('e.centro_custo_id = %s')
+            params.append(centro_id)
+        if tipo == 'credito':
+            cond.append('e.valor >= 0')
+        elif tipo == 'debito':
+            cond.append('e.valor < 0')
+        if vmin not in (None, ''):
+            cond.append('ABS(e.valor) >= %s')
+            params.append(vmin)
+        if vmax not in (None, ''):
+            cond.append('ABS(e.valor) <= %s')
+            params.append(vmax)
+        return ' AND '.join(cond), params
+
+    @staticmethod
+    def listar(limite=500, **f):
+        where, params = ExtratoLancamento._where(**f)
         return execute_query(
             f"""SELECT e.id, e.empresa_id, e.banco, e.conta, e.data, e.valor,
                        e.tipo, e.descricao, e.documento, e.fitid, e.origem,
@@ -52,34 +80,27 @@ class ExtratoLancamento:
             tuple(params), fetch=True) or []
 
     @staticmethod
-    def totais(empresa_ids=None, data_de=None, data_ate=None, conta=None,
-               busca=None):
-        """Créditos, débitos e contagem DO FILTRO (não da página)."""
-        cond, params = ['1=1'], []
-        if empresa_ids:
-            marks = ','.join(['%s'] * len(empresa_ids))
-            cond.append(f'empresa_id IN ({marks})')
-            params += list(empresa_ids)
-        if data_de:
-            cond.append('data >= %s')
-            params.append(data_de)
-        if data_ate:
-            cond.append('data <= %s')
-            params.append(data_ate)
-        if conta:
-            cond.append("CONCAT(COALESCE(banco,''), ' · ', COALESCE(conta,'')) = %s")
-            params.append(conta)
-        if busca:
-            cond.append('(descricao LIKE %s OR documento LIKE %s)')
-            like = f'%{busca}%'
-            params += [like, like]
-        where = ' AND '.join(cond)
-        return execute_query(
+    def totais(**f):
+        """Créditos, débitos, contagem e SEM CATEGORIA — do FILTRO inteiro.
+
+        A contagem de sem-categoria ignora o filtro de classificação (senão,
+        estando em "Sem categoria", o cartão repetiria o total da tela).
+        """
+        where, params = ExtratoLancamento._where(**f)
+        base = execute_query(
             f"""SELECT COUNT(*) AS n,
-                       COALESCE(SUM(CASE WHEN valor >= 0 THEN valor END), 0) AS creditos,
-                       COALESCE(SUM(CASE WHEN valor < 0 THEN valor END), 0)  AS debitos
-                  FROM extrato_lancamentos WHERE {where}""",
+                       COALESCE(SUM(CASE WHEN e.valor >= 0 THEN e.valor END), 0) AS creditos,
+                       COALESCE(SUM(CASE WHEN e.valor < 0 THEN e.valor END), 0)  AS debitos
+                  FROM extrato_lancamentos e WHERE {where}""",
             tuple(params), fetch=True, fetch_one=True) or {}
+        f_sem = dict(f)
+        f_sem['classif'] = 'nao'
+        w2, p2 = ExtratoLancamento._where(**f_sem)
+        sem = execute_query(
+            f'SELECT COUNT(*) AS n FROM extrato_lancamentos e WHERE {w2}',
+            tuple(p2), fetch=True, fetch_one=True) or {}
+        base['sem_cat'] = int(sem.get('n') or 0)
+        return base
 
     @staticmethod
     def contas(empresa_ids=None):

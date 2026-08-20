@@ -4,17 +4,143 @@
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+{# Identidade da casa: esta tela fala a MESMA língua da Conferência de Entradas
+   (barra verde de escopo, KPIs em gradiente, filtros que nascem fechados, abas
+   internas). As classes são as do fiscal com prefixo ex- para não colidirem com
+   o CSS global. No celular a linha vira CARTÃO — regra da casa: tabela não rola
+   a página. #}
 <style>
-.ex-wrap { overflow-x: auto; }
-.ex-wrap td, .ex-wrap th { white-space: nowrap; }
-.ex-wrap td:last-child, .ex-wrap th:last-child { text-align: right; }
-.ex-cred { color: #166534; font-weight: 600; }
-.ex-deb { color: #b91c1c; font-weight: 600; }
-.ex-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
-.ex-desc { white-space: normal; min-width: 260px; }
-.ex-auto { background: #dcfce7; color: #166534; border-radius: 999px;
-  padding: 2px 8px; font-size: .72em; font-weight: 700; margin-left: 6px; }
-.ex-acao { border: none; background: none; cursor: pointer; padding: 6px; }
+/* ---- barra de escopo (cc-empresa-bar do fiscal) ---- */
+.ex-escopo { background:linear-gradient(120deg,#0b3b2b,#116a43); border-radius:12px;
+  padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:12px;
+  flex-wrap:wrap; box-shadow:0 2px 10px rgba(0,0,0,.15); }
+.ex-escopo-lbl { font-size:11px; font-weight:700; color:rgba(255,255,255,.75);
+  text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
+.ex-chips-linha { display:flex; gap:6px; flex-wrap:wrap; }
+.ex-chip { padding:6px 15px; border-radius:99px; border:1.5px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.10); color:#eafff3; font-weight:700; font-size:12.5px;
+  text-decoration:none; white-space:nowrap; }
+.ex-chip:hover { background:rgba(255,255,255,.2); color:#fff; }
+.ex-chip.ativo { background:#fff; color:#0f3d2e; border-color:#fff; font-weight:800; }
+.ex-selo-escopo { display:inline-flex; align-items:center; gap:5px; padding:5px 12px;
+  border-radius:99px; font-size:12px; font-weight:700; margin-left:auto;
+  background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+
+/* ---- KPIs (cc-kpi do fiscal) ---- */
+.ex-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:12px; margin-bottom:18px; }
+.ex-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.ex-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
+.ex-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.ex-kpi:nth-child(3) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.ex-kpi:nth-child(4) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.ex-kpi:nth-child(5) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.ex-kpi-lbl { font-size:10px; font-weight:700; color:rgba(255,255,255,.8);
+  text-transform:uppercase; letter-spacing:.5px; }
+.ex-kpi-val { font-size:20px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
+.ex-kpi-pe { font-size:10.5px; color:rgba(255,255,255,.75); margin-top:3px; }
+
+/* ---- faixa de importação ---- */
+.ex-import { background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #86efac;
+  border-radius:12px; padding:12px 18px; margin-bottom:14px; }
+.ex-import form { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0; }
+.ex-import .ex-dica { font-size:12px; color:#166534; flex:1; min-width:220px; }
+
+/* ---- filtros (cc-filters do fiscal) ---- */
+.ex-filtros { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px;
+  padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+.ex-filtros-cab { display:flex; align-items:center; gap:8px; cursor:pointer; }
+.ex-filtros-cab h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
+.ex-selo-filtro { font-size:10px; font-weight:700; background:#dcfce7; color:#15803d;
+  border-radius:99px; padding:2px 9px; }
+.ex-grade { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+.ex-grade label { font-size:10px; font-weight:700; color:#94a3b8; display:block;
+  margin-bottom:3px; text-transform:uppercase; }
+.ex-grade input, .ex-grade select { width:100%; padding:7px 10px; border:1.5px solid #e2e8f0;
+  border-radius:7px; font-size:13px; background:#f8fafc; color:#334155; min-height:33px; }
+.ex-grade input:focus, .ex-grade select:focus { border-color:#22c55e; outline:none; background:#fff; }
+.ex-per { display:flex; gap:6px; }
+.ex-per button { flex:1; border:none; border-radius:7px; padding:7px 6px; font-size:11.5px;
+  font-weight:700; color:#fff; cursor:pointer; }
+.ex-per .v { background:#16a34a; } .ex-per .a { background:#2563eb; } .ex-per .r { background:#7c3aed; }
+.ex-acoes-filtro { display:flex; gap:8px; margin-top:12px; }
+
+/* ---- abas internas (cc-tabs do fiscal) ---- */
+.ex-abas { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px;
+  align-items:center; flex-wrap:wrap; }
+.ex-aba { padding:9px 16px; font-size:12.5px; font-weight:700; color:#64748b;
+  border-bottom:2px solid transparent; margin-bottom:-2px; text-decoration:none;
+  display:inline-flex; align-items:center; gap:7px; }
+.ex-aba:hover { color:#16a34a; }
+.ex-aba.ativa { color:#16a34a; border-bottom-color:#16a34a; }
+.ex-cont { background:#f1f5f9; color:#6b7280; padding:1px 7px; border-radius:99px;
+  font-size:10px; font-weight:800; }
+.ex-cont.alerta { background:#fef3c7; color:#92400e; }
+.ex-abas-dir { margin-left:auto; display:flex; gap:8px; padding-bottom:6px; }
+
+/* ---- tabela ---- */
+.ex-caixa { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+.ex-rolar { overflow-x:auto; }
+table.ex-tab { width:100%; border-collapse:collapse; min-width:880px; }
+table.ex-tab thead th { background:#f8fafc; font-size:10px; font-weight:800; letter-spacing:.5px;
+  text-transform:uppercase; color:#64748b; text-align:left; padding:10px 14px;
+  border-bottom:1.5px solid #e2e8f0; white-space:nowrap; }
+table.ex-tab tbody td { padding:11px 14px; border-bottom:1px solid #f1f5f9; font-size:13px;
+  vertical-align:middle; }
+table.ex-tab tbody tr:last-child td { border-bottom:none; }
+.ex-data { font-variant-numeric:tabular-nums; color:#475569; white-space:nowrap; }
+.ex-conta { font-size:11.5px; color:#64748b; white-space:nowrap; }
+.ex-desc { color:#1e293b; }
+.ex-valor { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ex-cred { color:#15803d; } .ex-deb { color:#b91c1c; }
+.ex-auto { background:#dcfce7; color:#166534; border-radius:99px; padding:1px 7px;
+  font-size:10px; font-weight:800; margin-left:4px; }
+.ex-falta { background:#fef3c7; color:#92400e; border-radius:99px; padding:2px 9px;
+  font-size:11px; font-weight:700; }
+.ex-btn-tag { border:1.5px solid #e2e8f0; background:#fff; border-radius:7px; padding:4px 10px;
+  font-size:11.5px; font-weight:700; color:#475569; cursor:pointer; white-space:nowrap; }
+.ex-btn-tag.destaque { border-color:#fcd34d; background:#fffbeb; color:#92400e; }
+.ex-rodape { font-size:12px; color:#5b7468; padding:10px 14px; border-top:1px solid #f1f5f9; }
+.ex-vazio { text-align:center; color:#6b7280; padding:40px 16px; }
+.ex-mob { display:none; }
+
+/* ================= CELULAR: a linha vira CARTÃO =================
+   Mesma marcação do computador — os <td> só ganharam classe, que não pinta nada
+   no desktop. Aqui a linha vira grade e ninguém arrasta tabela de lado. */
+@media (max-width: 768px) {
+  .ex-escopo { flex-direction:column; align-items:stretch; }
+  .ex-selo-escopo { margin-left:0; align-self:flex-start; }
+  .ex-chips-linha { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; }
+  .ex-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
+  .ex-kpi-val { font-size:16px; }
+  .ex-grade { grid-template-columns:1fr; }
+  .ex-abas { flex-wrap:nowrap; overflow-x:auto; }
+  .ex-abas-dir { margin-left:0; }
+  .ex-caixa { border:0; background:transparent; box-shadow:none; }
+  .ex-rolar { overflow-x:visible; }
+  table.ex-tab { min-width:0; display:block; }
+  table.ex-tab thead { display:none; }
+  table.ex-tab tbody { display:block; }
+  table.ex-tab tbody tr { display:grid; grid-template-columns:1fr auto; gap:7px 10px;
+    align-items:baseline; background:#fff; border:1px solid #e3ece7; border-radius:14px;
+    padding:12px 13px; margin:0 0 9px; }
+  table.ex-tab tbody td { border:0 !important; padding:0 !important; display:block;
+    min-width:0; overflow-wrap:anywhere; }
+  td.ex-td-desc { grid-column:1 / -1; font-size:13px; font-weight:700; color:#0f3d2e;
+    line-height:1.35; order:1; }
+  td.ex-td-data { font-size:11px; color:#94a3b8; font-weight:700; text-transform:uppercase;
+    letter-spacing:.3px; order:2; }
+  td.ex-td-valor { text-align:right; font-size:16px; font-weight:800; order:3; }
+  td.ex-td-cat { grid-column:1 / -1; border-top:1px dashed #eef2f0 !important;
+    padding-top:9px !important; font-size:12.5px; order:4; }
+  td.ex-td-acao { grid-column:1 / -1; order:5; }
+  td.ex-td-acao .ex-btn-tag { display:block; width:100%; text-align:center; padding:10px;
+    font-size:12.5px; }
+  td.ex-td-conta, td.ex-td-centro { display:none; }   /* descem para a data e a categoria */
+  .ex-mob { display:inline; }
+  .ex-import form { flex-direction:column; align-items:stretch; }
+  .ex-import form > * { width:100%; max-width:100% !important; }
+}
 </style>
 
 <div class="page-header">
@@ -23,7 +149,7 @@
             <i class="fas fa-university" style="color: var(--primary-green);"></i>
             Extrato Bancário
         </h1>
-        <p class="page-subtitle">Escritório — importe o OFX de cada conta (EFí, Cora, C6, Sicredi...)</p>
+        <p class="page-subtitle">Lançamentos das contas, classificação e memorização</p>
     </div>
     <div class="page-actions">
         <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
@@ -35,169 +161,296 @@
     </div>
 </div>
 
-{% include 'financeiro/_sel_empresas.html' %}
+<!-- ── Escopo: quais empresas estão na conta ─────────────────────── -->
+{% set _outros = {} %}
+{% for k, v in request.args.items() %}{% if k != 'emp' and v %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
+<div class="ex-escopo">
+    <span class="ex-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
+    <div class="ex-chips-linha">
+        <a class="ex-chip {{ 'ativo' if not sel_empresas }}"
+           href="{{ url_for('financeiro.extrato', **_outros) }}">TODAS</a>
+        {% for e in fin_empresas %}
+        {% if e.cliente_id in sel_empresas %}
+            {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
+        {% else %}
+            {% set _nova = sel_empresas + [e.cliente_id] %}
+        {% endif %}
+        {% set _csv = _nova | join(',') %}
+        <a class="ex-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
+           title="{{ e.nome_razao_social }}"
+           href="{{ url_for('financeiro.extrato', emp=_csv, **_outros) if _csv else url_for('financeiro.extrato', **_outros) }}">{{ e.apelido }}</a>
+        {% endfor %}
+    </div>
+    <span class="ex-selo-escopo">
+        <i class="fas fa-{{ 'check-circle' if sel_empresas else 'globe' }}"></i>
+        {{ (sel_empresas | length ~ ' empresa(s)') if sel_empresas else 'Todas as empresas' }}
+        · {{ contas | length }} conta(s)
+    </span>
+</div>
 
-<div class="card" style="margin-bottom: 20px;">
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
-              enctype="multipart/form-data"
-              style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <select name="empresa_id" class="form-control" required style="max-width:220px;"
-                    title="De qual empresa é a conta deste OFX">
-                <option value="">Conta de qual empresa?</option>
-                {% for e in fin_empresas %}
-                <option value="{{ e.cliente_id }}"
-                        {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
-                    {{ e.apelido }}
-                </option>
-                {% endfor %}
-            </select>
-            <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
-                   class="form-control" style="max-width:420px;">
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-file-import"></i> Importar OFX
-            </button>
-            <small style="color:#6b7280;">
-                Pode mandar vários de uma vez (um por conta). Importar o mesmo arquivo
-                de novo <strong>não duplica nada</strong>. Excel e PDF vêm na sequência.
-            </small>
-        </form>
+<!-- ── Números do filtro ─────────────────────────────────────────── -->
+<div class="ex-kpis">
+    <div class="ex-kpi">
+        <div class="ex-kpi-lbl">Lançamentos</div>
+        <div class="ex-kpi-val">{{ totais.n or 0 }}</div>
+        <div class="ex-kpi-pe">no filtro atual</div>
+    </div>
+    <div class="ex-kpi">
+        <div class="ex-kpi-lbl">Créditos</div>
+        <div class="ex-kpi-val">{{ totais.creditos | float | round(2) | format_currency }}</div>
+        <div class="ex-kpi-pe">o que entrou</div>
+    </div>
+    <div class="ex-kpi">
+        <div class="ex-kpi-lbl">Débitos</div>
+        <div class="ex-kpi-val">{{ (totais.debitos | float | abs) | round(2) | format_currency }}</div>
+        <div class="ex-kpi-pe">o que saiu</div>
+    </div>
+    <div class="ex-kpi">
+        {% set liq = (totais.creditos | float) + (totais.debitos | float) %}
+        <div class="ex-kpi-lbl">Líquido</div>
+        <div class="ex-kpi-val">{{ liq | round(2) | format_currency }}</div>
+        <div class="ex-kpi-pe">entradas − saídas</div>
+    </div>
+    <div class="ex-kpi">
+        <div class="ex-kpi-lbl">Sem categoria</div>
+        <div class="ex-kpi-val">{{ totais.sem_cat or 0 }}</div>
+        <div class="ex-kpi-pe">esperando você</div>
     </div>
 </div>
 
-<div class="stats-grid" style="margin-bottom: 24px;">
-    <div class="stat-card">
-        <div class="stat-icon bg-success"><i class="fas fa-arrow-down"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">{{ totais.creditos | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">Créditos (filtro atual)</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon bg-danger"><i class="fas fa-arrow-up"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">{{ (totais.debitos | float | abs) | round(2) | format_currency }}</h3>
-            <p class="stat-label">Débitos (filtro atual)</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon bg-info"><i class="fas fa-scale-balanced"></i></div>
-        <div class="stat-content">
-            {% set liq = (totais.creditos | float) + (totais.debitos | float) %}
-            <h3 class="stat-value {{ 'ex-deb' if liq < 0 }}">{{ liq | round(2) | format_currency }}</h3>
-            <p class="stat-label">Líquido ({{ totais.n or 0 }} lançamentos)</p>
-        </div>
-    </div>
+<!-- ── Importar (sai quando a leitura pela pasta entrar) ──────────── -->
+<div class="ex-import">
+    <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
+          enctype="multipart/form-data">
+        <select name="empresa_id" class="form-control" required style="max-width:200px;"
+                title="De qual empresa é a conta deste OFX">
+            <option value="">Conta de qual empresa?</option>
+            {% for e in fin_empresas %}
+            <option value="{{ e.cliente_id }}"
+                    {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                {{ e.apelido }}
+            </option>
+            {% endfor %}
+        </select>
+        <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
+               class="form-control" style="max-width:330px;">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-file-import"></i> Importar OFX
+        </button>
+        <span class="ex-dica">
+            Vários de uma vez (um por conta); reimportar o mesmo arquivo
+            <strong>não duplica nada</strong>. Em breve o arquivo chega pela pasta e o
+            sistema lê sozinho.
+        </span>
+    </form>
 </div>
 
-<div class="card" style="margin-bottom: 20px;">
-    <div class="card-body">
-        <form method="GET" action="{{ url_for('financeiro.extrato') }}">
-            <div class="filter-grid">
-                <div class="filter-item">
-                    <label class="filter-label">De</label>
-                    <input type="date" name="data_de" class="form-control" value="{{ filtros.data_de }}">
+<!-- ── Filtros (nascem fechados, como no Fiscal) ─────────────────── -->
+<div class="ex-filtros">
+    <div class="ex-filtros-cab" onclick="exToggleFiltros()">
+        <h3><i class="fas fa-filter" style="color:#22c55e; margin-right:4px;"></i>Filtros</h3>
+        {% if filtros_ativos %}<span class="ex-selo-filtro">{{ filtros_ativos }} ativo(s)</span>{% endif %}
+        <i class="fas fa-chevron-down" id="exChevron"
+           style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
+    </div>
+    <div id="exFiltroCorpo" style="display:{{ '' if filtros_ativos else 'none' }};">
+        <form method="GET" action="{{ url_for('financeiro.extrato') }}" id="exFormFiltro">
+            <input type="hidden" name="emp" value="{{ sel_empresas | join(',') }}">
+            <div class="ex-grade">
+                <div>
+                    <label>Data Início</label>
+                    <input type="date" name="data_de" id="exDataDe" value="{{ filtros.data_de }}">
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Até</label>
-                    <input type="date" name="data_ate" class="form-control" value="{{ filtros.data_ate }}">
+                <div>
+                    <label>Data Fim</label>
+                    <input type="date" name="data_ate" id="exDataAte" value="{{ filtros.data_ate }}">
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Conta</label>
-                    <select name="conta" class="form-control">
+                <div>
+                    <label>Período rápido</label>
+                    <div class="ex-per">
+                        <button type="button" class="v" onclick="exPeriodo('atual')">Atual</button>
+                        <button type="button" class="a" onclick="exPeriodo('anterior')">Mês ant.</button>
+                        <button type="button" class="r" onclick="exPeriodo('ano')">Ano</button>
+                    </div>
+                </div>
+                <div>
+                    <label>Conta</label>
+                    <select name="conta">
                         <option value="">Todas</option>
                         {% for ct in contas %}
                         <option value="{{ ct }}" {% if filtros.conta == ct %}selected{% endif %}>{{ ct }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Classificação</label>
-                    <select name="classif" class="form-control">
+                <div>
+                    <label>Categoria</label>
+                    <select name="categoria_id">
+                        <option value="">Todas</option>
+                        {% for c in categorias %}
+                        <option value="{{ c.id }}" {% if filtros.categoria_id == c.id|string %}selected{% endif %}>
+                            {{ c.grupo }} · {{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>Centro de custo</label>
+                    <select name="centro_id">
+                        <option value="">Todos</option>
+                        <option value="sem" {% if filtros.centro_id == 'sem' %}selected{% endif %}>Sem centro</option>
+                        {% for cc in centros %}
+                        <option value="{{ cc.id }}" {% if filtros.centro_id == cc.id|string %}selected{% endif %}>{{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>Classificação</label>
+                    <select name="classif">
                         <option value="">Todos</option>
                         <option value="nao" {% if filtros.classif == 'nao' %}selected{% endif %}>Sem categoria</option>
                         <option value="sim" {% if filtros.classif == 'sim' %}selected{% endif %}>Classificados</option>
                     </select>
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Buscar</label>
-                    <input type="text" name="busca" class="form-control" value="{{ filtros.busca }}"
-                           placeholder="Descrição ou documento">
+                <div>
+                    <label>Tipo</label>
+                    <select name="tipo">
+                        <option value="">Crédito e débito</option>
+                        <option value="credito" {% if filtros.tipo == 'credito' %}selected{% endif %}>Só créditos</option>
+                        <option value="debito" {% if filtros.tipo == 'debito' %}selected{% endif %}>Só débitos</option>
+                    </select>
                 </div>
-                <div class="filter-item" style="display:flex; align-items:flex-end; gap:8px;">
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
-                    <a href="{{ url_for('financeiro.extrato') }}" class="btn btn-outline">Limpar</a>
+                <div>
+                    <label>Valor Mínimo (R$)</label>
+                    <input type="number" name="vmin" min="0" step="0.01" placeholder="0,00"
+                           value="{{ filtros.vmin }}">
                 </div>
+                <div>
+                    <label>Valor Máximo (R$)</label>
+                    <input type="number" name="vmax" min="0" step="0.01" placeholder="0,00"
+                           value="{{ filtros.vmax }}">
+                </div>
+                <div>
+                    <label>Documento</label>
+                    <input type="text" name="documento" placeholder="Nº do doc. ou PIX"
+                           value="{{ filtros.documento }}">
+                </div>
+                <div>
+                    <label>Descrição</label>
+                    <input type="text" name="busca" placeholder="Parte do texto"
+                           value="{{ filtros.busca }}">
+                </div>
+            </div>
+            <div class="ex-acoes-filtro">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
+                <a href="{{ url_for('financeiro.extrato', emp=(sel_empresas | join(','))) if sel_empresas else url_for('financeiro.extrato') }}"
+                   class="btn btn-outline"><i class="fas fa-times"></i> Limpar</a>
             </div>
         </form>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body ex-wrap">
-        {% if lancamentos %}
-        <table class="table">
+<!-- ── Abas internas ─────────────────────────────────────────────── -->
+{% set _base = {} %}
+{% for k, v in request.args.items() %}{% if k != 'classif' and v %}{% set _ = _base.update({k: v}) %}{% endif %}{% endfor %}
+<div class="ex-abas">
+    <a class="ex-aba {{ 'ativa' if not filtros.classif }}"
+       href="{{ url_for('financeiro.extrato', **_base) }}">
+        <i class="fas fa-list"></i> Lançamentos <span class="ex-cont">{{ totais.n or 0 }}</span>
+    </a>
+    <a class="ex-aba {{ 'ativa' if filtros.classif == 'nao' }}"
+       href="{{ url_for('financeiro.extrato', classif='nao', **_base) }}">
+        <i class="fas fa-tag"></i> Sem categoria
+        <span class="ex-cont {{ 'alerta' if totais.sem_cat }}">{{ totais.sem_cat or 0 }}</span>
+    </a>
+    <a class="ex-aba {{ 'ativa' if filtros.classif == 'sim' }}"
+       href="{{ url_for('financeiro.extrato', classif='sim', **_base) }}">
+        <i class="fas fa-check"></i> Classificados
+    </a>
+    <div class="ex-abas-dir">
+        <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
+            <i class="fas fa-memory"></i> Memorizações
+        </a>
+    </div>
+</div>
+
+<!-- ── Lançamentos ───────────────────────────────────────────────── -->
+<div class="ex-caixa">
+    {% if lancamentos %}
+    <div class="ex-rolar">
+        <table class="ex-tab">
             <thead>
                 <tr>
                     <th>Data</th>
-                    <th>Empresa</th>
-                    <th>Banco · Conta</th>
-                    <th class="ex-desc">Descrição</th>
+                    <th>Empresa · Conta</th>
+                    <th>Descrição</th>
                     <th>Categoria</th>
-                    <th>Documento</th>
-                    <th>Valor</th>
+                    <th>Centro</th>
+                    <th style="text-align:right;">Valor</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for l in lancamentos %}
                 <tr>
-                    <td>{{ l.data.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ emp_mapa.get(l.empresa_id, '?') }}</td>
-                    <td>{{ l.banco or '?' }} · {{ l.conta or '?' }}</td>
-                    <td class="ex-desc">{{ l.descricao }}</td>
-                    <td>
-                        {% if l.categoria_id %}
-                        {{ l.categoria_nome }}{% if l.centro_nome %} <small style="color:#6b7280;">· {{ l.centro_nome }}</small>{% endif %}
-                        {% if l.memorizacao_id %}<span class="ex-auto" title="Classificado sozinho pela memorização">auto</span>{% endif %}
-                        {% else %}<span style="color:#b45309;">—</span>{% endif %}
+                    <td class="ex-data ex-td-data">
+                        {{ l.data.strftime('%d/%m/%Y') }}
+                        <span class="ex-mob">· {{ emp_mapa.get(l.empresa_id, '?') }} · {{ l.banco or '?' }}</span>
                     </td>
-                    <td>{{ l.documento or '—' }}</td>
-                    <td class="{{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
-                        {{ l.valor | float | round(2) | format_currency }}</td>
-                    <td>
-                        <button class="ex-acao" title="{{ 'Reclassificar' if l.categoria_id else 'Classificar (e memorizar, se quiser)' }}"
+                    <td class="ex-conta ex-td-conta">
+                        {{ emp_mapa.get(l.empresa_id, '?') }} · {{ l.banco or '?' }} {{ l.conta or '' }}
+                    </td>
+                    <td class="ex-desc ex-td-desc">{{ l.descricao }}</td>
+                    <td class="ex-td-cat">
+                        {% if l.categoria_id %}
+                            {{ l.categoria_nome }}
+                            {% if l.memorizacao_id %}<span class="ex-auto" title="Classificado sozinho pela memorização">auto</span>{% endif %}
+                            {% if l.centro_nome %}<span class="ex-conta ex-mob"> · {{ l.centro_nome }}</span>{% endif %}
+                        {% else %}
+                            <span class="ex-falta">sem categoria</span>
+                        {% endif %}
+                    </td>
+                    <td class="ex-td-centro">{{ l.centro_nome or '—' }}</td>
+                    <td class="ex-valor ex-td-valor {{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
+                        {{ l.valor | float | round(2) | format_currency }}
+                    </td>
+                    <td class="ex-td-acao">
+                        <button class="ex-btn-tag {{ '' if l.categoria_id else 'destaque' }}"
+                                title="{{ 'Trocar a categoria' if l.categoria_id else 'Classificar (e memorizar, se quiser)' }}"
                                 data-id="{{ l.id }}" data-desc="{{ l.descricao }}"
                                 data-tipo="{{ 'R' if l.valor >= 0 else 'P' }}"
                                 data-valor="{{ l.valor | float | round(2) | format_currency }}"
                                 data-cat="{{ l.categoria_id or '' }}"
                                 data-centro="{{ l.centro_custo_id or '' }}"
                                 onclick="exAbrirClassificar(this)">
-                            <i class="fas fa-tag" style="color:{{ '#9ca3af' if l.categoria_id else '#b45309' }};"></i>
+                            <i class="fas fa-tag"></i>
+                            {{ 'Trocar' if l.categoria_id else 'Classificar' }}
                         </button>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% if lancamentos | length >= limite %}
-        <div style="color:#6b7280; font-size:.9em; padding:10px 4px 0;">
-            <i class="fas fa-circle-info"></i>
-            Mostrando os {{ limite }} mais recentes do filtro — os totais acima
-            consideram TODOS. Aperte o período para ver o restante.
-        </div>
-        {% endif %}
+    </div>
+    {% if lancamentos | length >= limite %}
+    <div class="ex-rodape">
+        <i class="fas fa-circle-info"></i>
+        Mostrando os {{ limite }} mais recentes do filtro — os cartões acima contam
+        TODOS. Aperte o período para ver o restante.
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="ex-vazio">
+        <i class="fas fa-file-import" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+        {% if filtros_ativos %}
+            Nenhum lançamento com esses filtros.
         {% else %}
-        <div class="ex-vazio">
-            <i class="fas fa-file-import" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-            Nenhum lançamento{% if filtros.data_de or filtros.conta or filtros.busca %} com esses
-            filtros{% else %} importado ainda — baixe o OFX no internet banking e importe acima{% endif %}.
-        </div>
+            Nenhum lançamento importado ainda — baixe o OFX no internet banking e
+            importe acima.
         {% endif %}
     </div>
+    {% endif %}
 </div>
 
-<!-- ── Modal: classificar / memorizar (E2.4) ─────────────────────── -->
+<!-- ── Modal: classificar / memorizar ────────────────────────────── -->
 <div id="exModalClassificar" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:600px;">
         <div class="modal-header">
@@ -230,10 +483,12 @@
                     <label>
                         <input type="checkbox" name="memorizar" id="exMemorizar" checked
                                onchange="document.getElementById('exPadraoBox').style.display = this.checked ? '' : 'none'">
-                        <strong>Memorizar</strong> — o que vier igual já chega classificado (e os antigos vão de carona)
+                        <strong>Memorizar</strong> — o que vier igual já chega classificado
+                        (e os antigos vão de carona)
                     </label>
                     <div id="exPadraoBox" style="margin-top:8px; padding-left:22px;">
-                        <label style="font-size:.9em; color:#6b7280;">Padrão (o trecho ESTÁVEL da descrição — encurte se precisar):</label>
+                        <label style="font-size:.9em; color:#6b7280;">
+                            Padrão (o trecho ESTÁVEL da descrição — encurte se precisar):</label>
                         <input type="text" name="padrao" id="exPadrao" class="form-control" maxlength="160">
                     </div>
                 </div>
@@ -253,6 +508,39 @@
 <script>
 var EX_URL_CLAS = "{{ url_for('financeiro.extrato_classificar', lanc_id=0) }}";
 
+function exToggleFiltros() {
+    var corpo = document.getElementById('exFiltroCorpo');
+    var chev = document.getElementById('exChevron');
+    var abrindo = corpo.style.display === 'none';
+    corpo.style.display = abrindo ? '' : 'none';
+    chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+}
+
+// Períodos rápidos: preenchem as datas e JÁ buscam (igual ao Fiscal).
+function exPeriodo(qual) {
+    var hoje = new Date();
+    var ini, fim;
+    if (qual === 'atual') {
+        ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        fim = hoje;
+    } else if (qual === 'anterior') {
+        ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    } else {
+        ini = new Date(hoje.getFullYear(), 0, 1);
+        fim = hoje;
+    }
+    // Data LOCAL, nunca toISOString: à noite o UTC joga o dia para trás.
+    function iso(d) {
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var dia = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + m + '-' + dia;
+    }
+    document.getElementById('exDataDe').value = iso(ini);
+    document.getElementById('exDataAte').value = iso(fim);
+    document.getElementById('exFormFiltro').submit();
+}
+
 function exFecharClassificar() {
     document.getElementById('exModalClassificar').style.display = 'none';
 }
@@ -263,7 +551,7 @@ function exAbrirClassificar(el) {
     document.getElementById('exClasInfo').textContent =
         el.getAttribute('data-desc') + ' — ' + el.getAttribute('data-valor');
 
-    // credito so ve categorias de receita; debito, de despesa
+    // Crédito só vê categorias de receita; débito, de despesa.
     var tipo = el.getAttribute('data-tipo');
     var sel = document.getElementById('exCategoria');
     var primeiro = null;
@@ -274,12 +562,10 @@ function exAbrirClassificar(el) {
         if (ok && primeiro === null) primeiro = o.value;
     });
     var atual = el.getAttribute('data-cat');
-    sel.value = (atual && sel.querySelector('option[value="' + atual + '"]') &&
-                 !sel.querySelector('option[value="' + atual + '"]').disabled)
-        ? atual : primeiro;
+    var opAtual = atual ? sel.querySelector('option[value="' + atual + '"]') : null;
+    sel.value = (opAtual && !opAtual.disabled) ? atual : primeiro;
     document.getElementById('exCentro').value = el.getAttribute('data-centro') || '';
 
-    // padrao sugerido: a descricao inteira, em maiusculas — encurtavel
     document.getElementById('exMemorizar').checked = true;
     document.getElementById('exPadraoBox').style.display = '';
     document.getElementById('exPadrao').value =
@@ -289,4 +575,3 @@ function exAbrirClassificar(el) {
 }
 </script>
 {% endblock %}
-

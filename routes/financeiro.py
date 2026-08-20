@@ -793,25 +793,48 @@ def extrato():
     from models.extrato_lancamento import ExtratoLancamento
     from models.fin_titulo import FinCentroCusto
     emps, sel, mapa = _empresas_ctx()
-    classif = request.args.get('classif') or ''
-    if classif not in ('sim', 'nao'):
-        classif = ''
+
+    def _um(chave, validos=None):
+        v = (request.args.get(chave) or '').strip()
+        return v if (not validos or v in validos) else ''
+
     filtros = dict(
         data_de=request.args.get('data_de') or '',
         data_ate=request.args.get('data_ate') or '',
         conta=request.args.get('conta') or '',
-        busca=(request.args.get('busca') or '').strip())
+        busca=(request.args.get('busca') or '').strip(),
+        documento=(request.args.get('documento') or '').strip(),
+        classif=_um('classif', ('sim', 'nao')),
+        tipo=_um('tipo', ('credito', 'debito')),
+        categoria_id=_um('categoria_id'),
+        centro_id=_um('centro_id'),
+        vmin=(request.args.get('vmin') or '').strip(),
+        vmax=(request.args.get('vmax') or '').strip())
+
+    # O que vai para o SQL: vazio vira None; números viram número.
     args = {k: (v or None) for k, v in filtros.items()}
-    rows = ExtratoLancamento.listar(empresa_ids=sel, classif=classif or None,
-                                    **args)
-    filtros['classif'] = classif
+    for k in ('vmin', 'vmax'):
+        try:
+            args[k] = float(args[k]) if args[k] else None
+        except ValueError:
+            args[k] = None
+    if args.get('categoria_id') and not str(args['categoria_id']).isdigit():
+        args['categoria_id'] = None
+    if args.get('centro_id') and args['centro_id'] != 'sem' \
+            and not str(args['centro_id']).isdigit():
+        args['centro_id'] = None
+    args['empresa_ids'] = sel
+
+    # Quantos filtros o usuário ligou — vira o selo do painel fechado.
+    ativos = sum(1 for k, v in filtros.items() if v)
     return render_template('financeiro/extrato.html',
-                           lancamentos=rows,
-                           totais=ExtratoLancamento.totais(empresa_ids=sel, **args),
+                           lancamentos=ExtratoLancamento.listar(**args),
+                           totais=ExtratoLancamento.totais(**args),
                            contas=ExtratoLancamento.contas(empresa_ids=sel),
                            categorias=FinCategoria.listar(),
                            centros=FinCentroCusto.listar(),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
+                           filtros_ativos=ativos, hoje=date.today(),
                            limite=500, filtros=filtros)
 
 
