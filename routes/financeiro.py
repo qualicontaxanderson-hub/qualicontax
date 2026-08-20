@@ -321,6 +321,170 @@ def titulo_excluir(titulo_id):
     return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
 
 
+# =======================================================================
+# Categorias do plano gerencial (Documento E, fase 3)
+# =======================================================================
+@financeiro.route('/financeiro/categorias')
+@permission_required('financeiro.categorias')
+def categorias():
+    cats = FinCategoria.listar(apenas_ativas=False)
+    return render_template('financeiro/categorias.html',
+                           categorias=cats,
+                           grupos=FinCategoria.grupos(),
+                           usos=FinCategoria.usos())
+
+
+@financeiro.route('/financeiro/categorias/nova', methods=['POST'])
+@permission_required('financeiro.categorias')
+def categoria_nova():
+    tipo = request.form.get('tipo')
+    grupo = (request.form.get('grupo_novo') or '').strip()         or (request.form.get('grupo') or '').strip()
+    nome = (request.form.get('nome') or '').strip()
+    if tipo not in ('R', 'P') or not grupo or not nome:
+        flash('Preencha tipo, grupo e nome da categoria.', 'danger')
+    elif FinCategoria.criar(tipo, grupo, nome):
+        registrar('escrita.criou_categoria_fin', 'financeiro',
+                  tabela='fin_categorias',
+                  depois={'tipo': tipo, 'grupo': grupo, 'nome': nome})
+        flash(f'Categoria "{nome}" criada no grupo {grupo}.', 'success')
+    else:
+        flash('Essa categoria já existe nesse grupo.', 'warning')
+    return redirect(url_for('financeiro.categorias'))
+
+
+@financeiro.route('/financeiro/categorias/<int:cat_id>/renomear', methods=['POST'])
+@permission_required('financeiro.categorias')
+def categoria_renomear(cat_id):
+    nome = (request.form.get('nome') or '').strip()
+    if not nome:
+        flash('Informe o novo nome.', 'danger')
+    elif FinCategoria.renomear(cat_id, nome):
+        registrar('escrita.renomeou_categoria_fin', 'financeiro',
+                  tabela='fin_categorias', registro_id=cat_id,
+                  depois={'nome': nome})
+        flash('Categoria renomeada.', 'success')
+    else:
+        flash('Não consegui renomear (nome repetido no grupo?).', 'warning')
+    return redirect(url_for('financeiro.categorias'))
+
+
+@financeiro.route('/financeiro/categorias/<int:cat_id>/alternar', methods=['POST'])
+@permission_required('financeiro.categorias')
+def categoria_alternar(cat_id):
+    atual = next((c for c in FinCategoria.listar(apenas_ativas=False)
+                  if c['id'] == cat_id), None)
+    if not atual:
+        flash('Categoria não encontrada.', 'danger')
+    else:
+        FinCategoria.set_ativa(cat_id, not atual['ativo'])
+        registrar('escrita.alternou_categoria_fin', 'financeiro',
+                  tabela='fin_categorias', registro_id=cat_id,
+                  antes={'ativo': bool(atual['ativo'])},
+                  depois={'ativo': not atual['ativo']})
+        flash(('Categoria reativada.' if not atual['ativo']
+               else 'Categoria desativada — some dos lançamentos novos; '
+                    'os títulos antigos continuam com ela.'), 'success')
+    return redirect(url_for('financeiro.categorias'))
+
+
+# =======================================================================
+# DRE gerencial (Documento E, seção 7)
+# =======================================================================
+_DRE_IMPOSTOS = 'Impostos sobre serviço'
+_DRE_FINANCEIRAS = 'Financeiras'
+_DRE_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+              'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+
+def _montar_dre(rows):
+    """Linhas de exibição do DRE na ordem da seção 7 do documento.
+
+    Grupos R somam na RECEITA BRUTA; o grupo 'Impostos sobre serviço' desce
+    antes da RECEITA LÍQUIDA; 'Financeiras' desce depois do RESULTADO
+    OPERACIONAL; qualquer outro grupo P (inclusive os criados depois na tela
+    de categorias) entra no bloco operacional, na ordem do plano.
+    """
+    grupos = {}
+    for r in rows:
+        g = grupos.setdefault((r['tipo'], r['grupo']), {
+            'tipo': r['tipo'], 'grupo': r['grupo'], 'ordem': r['ordem'],
+            'meses': [Decimal('0')] * 12, 'total': Decimal('0'), 'cats': {}})
+        g['ordem'] = min(g['ordem'], r['ordem'])
+        c = g['cats'].setdefault(r['nome'], {'nome': r['nome'],
+                                             'meses': [Decimal('0')] * 12,
+                                             'total': Decimal('0')})
+        v = Decimal(str(r['total'] or 0))
+        i = int(r['mes']) - 1
+        g['meses'][i] += v
+        g['total'] += v
+        c['meses'][i] += v
+        c['total'] += v
+    for g in grupos.values():
+        g['cats'] = sorted(g['cats'].values(), key=lambda c: c['nome'])
+
+    def soma(lista):
+        out = [Decimal('0')] * 12
+        for g in lista:
+            for i in range(12):
+                out[i] += g['meses'][i]
+        return out
+
+    receitas = sorted((g for (t, _n), g in grupos.items() if t == 'R'),
+                      key=lambda g: g['ordem'])
+    impostos = [g for (t, n), g in grupos.items()
+                if t == 'P' and n == _DRE_IMPOSTOS]
+    financeiras = [g for (t, n), g in grupos.items()
+                   if t == 'P' and n == _DRE_FINANCEIRAS]
+    operacionais = sorted((g for (t, n), g in grupos.items()
+                           if t == 'P' and n not in (_DRE_IMPOSTOS,
+                                                     _DRE_FINANCEIRAS)),
+                          key=lambda g: g['ordem'])
+
+    rb = soma(receitas)
+    imp = soma(impostos)
+    rl = [rb[i] - imp[i] for i in range(12)]
+    op = soma(operacionais)
+    ro = [rl[i] - op[i] for i in range(12)]
+    fin = soma(financeiras)
+    liq = [ro[i] - fin[i] for i in range(12)]
+
+    linhas = []
+    for g in receitas:
+        linhas.append({'tipo': 'grupo', 'sinal': '+', 'g': g})
+    linhas.append({'tipo': 'subtotal', 'rotulo': 'RECEITA BRUTA', 'meses': rb})
+    for g in impostos:
+        linhas.append({'tipo': 'grupo', 'sinal': '-', 'g': g})
+    linhas.append({'tipo': 'subtotal', 'rotulo': 'RECEITA LÍQUIDA', 'meses': rl})
+    for g in operacionais:
+        linhas.append({'tipo': 'grupo', 'sinal': '-', 'g': g})
+    linhas.append({'tipo': 'subtotal', 'rotulo': 'RESULTADO OPERACIONAL', 'meses': ro})
+    for g in financeiras:
+        linhas.append({'tipo': 'grupo', 'sinal': '-', 'g': g})
+    linhas.append({'tipo': 'subtotal', 'rotulo': 'RESULTADO LÍQUIDO', 'meses': liq})
+    return linhas
+
+
+@financeiro.route('/financeiro/dre')
+@permission_required('financeiro.dre')
+def dre():
+    """DRE gerencial do escritório — competência OU caixa, sempre rotulado."""
+    from models.fin_titulo import FinDre
+    regime = request.args.get('regime', 'competencia')
+    if regime not in ('competencia', 'caixa'):
+        regime = 'competencia'
+    ano_atual = date.today().year
+    anos = FinDre.anos_com_dado()
+    if ano_atual not in anos:
+        anos.insert(0, ano_atual)
+    try:
+        ano = int(request.args.get('ano') or ano_atual)
+    except ValueError:
+        ano = ano_atual
+    linhas = _montar_dre(FinDre.por_ano(ano, regime))
+    return render_template('financeiro/dre.html', linhas=linhas, regime=regime,
+                           ano=ano, anos=anos, meses=_DRE_MESES)
+
+
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------

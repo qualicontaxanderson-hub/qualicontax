@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Categorias do Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+<style>
+.fc-grupo-cab { background: #f9fafb; font-weight: 700; color: #374151; }
+.fc-inativa { opacity: .5; }
+.fc-wrap { overflow-x: auto; }
+.fc-acao { border: none; background: none; cursor: pointer; padding: 6px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-tags" style="color: var(--primary-green);"></i>
+            Categorias do Financeiro
+        </h1>
+        <p class="page-subtitle">Plano gerencial do escritório — o grupo é a linha do DRE</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('financeiro.titulos') }}" class="btn btn-outline">
+            <i class="fas fa-file-invoice-dollar"></i> Títulos
+        </a>
+        <a href="{{ url_for('financeiro.dre') }}" class="btn btn-outline">
+            <i class="fas fa-chart-pie"></i> DRE
+        </a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('financeiro.categoria_nova') }}">
+            <div class="filter-grid">
+                <div class="filter-item">
+                    <label class="filter-label">Tipo</label>
+                    <div style="padding-top:8px;">
+                        <label style="margin-right:14px;">
+                            <input type="radio" name="tipo" value="R" checked onchange="fcFiltraGrupos()"> Receita
+                        </label>
+                        <label>
+                            <input type="radio" name="tipo" value="P" onchange="fcFiltraGrupos()"> Despesa
+                        </label>
+                    </div>
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">Grupo (linha do DRE)</label>
+                    <select name="grupo" id="fcGrupo" class="form-control" onchange="fcGrupoNovo()">
+                        {% for g in grupos %}
+                        <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
+                        {% endfor %}
+                        <option value="">— criar grupo novo —</option>
+                    </select>
+                </div>
+                <div class="filter-item" id="fcGrupoNovoBox" style="display:none;">
+                    <label class="filter-label">Nome do grupo novo</label>
+                    <input type="text" name="grupo_novo" id="fcGrupoNovoInput" class="form-control"
+                           placeholder="Ex.: Marketing">
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">Categoria</label>
+                    <input type="text" name="nome" class="form-control" required
+                           placeholder="Ex.: Anúncios online">
+                </div>
+                <div class="filter-item" style="display:flex; align-items:flex-end;">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Criar</button>
+                </div>
+            </div>
+            <small style="color:#6b7280;">Grupo novo de despesa entra no bloco operacional do DRE,
+                depois dos existentes. "Impostos sobre serviço" e "Financeiras" têm posição fixa.</small>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body fc-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Categoria</th>
+                    <th style="text-align:right;">Títulos usando</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in categorias %}
+                {% set anterior = categorias[loop.index0 - 1] if not loop.first else None %}
+                {% if loop.first or anterior.grupo != c.grupo or anterior.tipo != c.tipo %}
+                <tr class="fc-grupo-cab">
+                    <td colspan="4">
+                        {{ 'Receita' if c.tipo == 'R' else 'Despesa' }} · {{ c.grupo }}
+                    </td>
+                </tr>
+                {% endif %}
+                <tr class="{{ 'fc-inativa' if not c.ativo }}">
+                    <td>{{ c.nome }}</td>
+                    <td style="text-align:right;">{{ usos.get(c.id, 0) }}</td>
+                    <td>{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="fc-acao" title="Renomear"
+                                data-id="{{ c.id }}" data-nome="{{ c.nome }}"
+                                onclick="fcAbrirRenomear(this)">
+                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                        </button>
+                        <form method="POST" style="display:inline;"
+                              action="{{ url_for('financeiro.categoria_alternar', cat_id=c.id) }}">
+                            <button class="fc-acao"
+                                    title="{{ 'Desativar (some dos lançamentos novos)' if c.ativo else 'Reativar' }}">
+                                <i class="fas fa-{{ 'toggle-on' if c.ativo else 'toggle-off' }}"
+                                   style="color:{{ '#16a34a' if c.ativo else '#9ca3af' }};"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── Modal: renomear ────────────────────────────────────────────── -->
+<div id="fcModalRenomear" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:460px;">
+        <div class="modal-header">
+            <h3>Renomear Categoria</h3>
+            <button class="modal-close" onclick="fcFecharRenomear()">&times;</button>
+        </div>
+        <form method="POST" id="fcFormRenomear" action="">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Novo nome</label>
+                    <input type="text" name="nome" id="fcRenomearNome" class="form-control" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="fcFecharRenomear()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Renomear</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var FC_URL_RENOMEAR = "{{ url_for('financeiro.categoria_renomear', cat_id=0) }}";
+
+function fcFiltraGrupos() {
+    var tipo = document.querySelector('input[name="tipo"]:checked').value;
+    var sel = document.getElementById('fcGrupo');
+    var primeiro = null;
+    Array.prototype.forEach.call(sel.options, function (o) {
+        if (o.value === '') return;                    // "criar grupo novo" sempre aparece
+        var ok = o.getAttribute('data-tipo') === tipo;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok && primeiro === null) primeiro = o.value;
+    });
+    var atual = sel.options[sel.selectedIndex];
+    if (!atual || atual.disabled) sel.value = (primeiro !== null) ? primeiro : '';
+    fcGrupoNovo();
+}
+
+function fcGrupoNovo() {
+    var novo = document.getElementById('fcGrupo').value === '';
+    document.getElementById('fcGrupoNovoBox').style.display = novo ? '' : 'none';
+    document.getElementById('fcGrupoNovoInput').required = novo;
+}
+
+function fcAbrirRenomear(el) {
+    var form = document.getElementById('fcFormRenomear');
+    form.action = FC_URL_RENOMEAR.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('fcRenomearNome').value = el.getAttribute('data-nome');
+    document.getElementById('fcModalRenomear').style.display = 'block';
+    document.getElementById('fcRenomearNome').focus();
+}
+
+function fcFecharRenomear() {
+    document.getElementById('fcModalRenomear').style.display = 'none';
+}
+
+fcFiltraGrupos();
+</script>
+{% endblock %}

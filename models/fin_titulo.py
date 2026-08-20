@@ -26,6 +26,106 @@ class FinCategoria:
         sql.append('ORDER BY ordem, nome')
         return execute_query(' '.join(sql), tuple(params), fetch=True) or []
 
+    @staticmethod
+    def grupos(tipo=None):
+        """Grupos existentes (linhas do DRE), na ordem do DRE."""
+        cond, params = '', ()
+        if tipo in ('R', 'P'):
+            cond, params = 'WHERE tipo = %s', (tipo,)
+        return execute_query(
+            f'SELECT tipo, grupo, MIN(ordem) AS ordem FROM fin_categorias '
+            f'{cond} GROUP BY tipo, grupo ORDER BY ordem', params,
+            fetch=True) or []
+
+    @staticmethod
+    def criar(tipo, grupo, nome, ordem=None):
+        """Nova categoria. Grupo novo entra no fim do bloco do seu tipo.
+        Devolve o id, ou None se (tipo, grupo, nome) já existir (uk_cat)."""
+        if ordem is None:
+            r = execute_query(
+                'SELECT MAX(ordem) AS m FROM fin_categorias WHERE tipo = %s '
+                'AND grupo = %s', (tipo, grupo), fetch=True, fetch_one=True)
+            if r and r['m'] is not None:
+                ordem = r['m'] + 1          # dentro do grupo existente
+            else:
+                r = execute_query(
+                    'SELECT MAX(ordem) AS m FROM fin_categorias WHERE tipo = %s',
+                    (tipo,), fetch=True, fetch_one=True)
+                ordem = ((r and r['m']) or 0) + 10   # grupo novo, bloco novo
+        return execute_query(
+            'INSERT INTO fin_categorias (tipo, grupo, nome, ordem) '
+            'VALUES (%s, %s, %s, %s)', (tipo, grupo, nome, ordem))
+
+    @staticmethod
+    def renomear(cat_id, nome):
+        execute_query('UPDATE fin_categorias SET nome = %s WHERE id = %s',
+                      (nome, cat_id))
+        r = execute_query('SELECT nome FROM fin_categorias WHERE id = %s',
+                          (cat_id,), fetch=True, fetch_one=True)
+        return bool(r and r['nome'] == nome)
+
+    @staticmethod
+    def set_ativa(cat_id, ativa):
+        execute_query('UPDATE fin_categorias SET ativo = %s WHERE id = %s',
+                      (1 if ativa else 0, cat_id))
+
+    @staticmethod
+    def usos():
+        """{categoria_id: qtde de títulos} numa consulta só."""
+        rows = execute_query(
+            'SELECT categoria_id, COUNT(*) AS n FROM fin_titulos '
+            'GROUP BY categoria_id', fetch=True) or []
+        return {r['categoria_id']: r['n'] for r in rows}
+
+    @staticmethod
+    def em_uso(cat_id):
+        r = execute_query('SELECT COUNT(*) AS n FROM fin_titulos '
+                          'WHERE categoria_id = %s', (cat_id,),
+                          fetch=True, fetch_one=True)
+        return int((r or {}).get('n') or 0)
+
+
+class FinDre:
+    """DRE gerencial (Documento E, seção 7).
+
+    COMPETÊNCIA soma fin_titulos.valor pelo mês de t.competencia (tudo menos
+    cancelado — o resultado do mês independe de já ter sido pago). CAIXA soma
+    as baixas pelo mês do pagamento, em dinheiro que de fato circulou
+    (valor + juros + multa; desconto não é dinheiro). A tela SEMPRE diz qual
+    regime está mostrando.
+    """
+
+    @staticmethod
+    def por_ano(ano, regime='competencia'):
+        """Linhas (tipo, grupo, nome da categoria, mês 1-12, total)."""
+        if regime == 'caixa':
+            return execute_query(
+                """SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
+                          MONTH(b.data_baixa) AS mes,
+                          SUM(b.valor + b.juros + b.multa) AS total
+                     FROM fin_titulo_baixas b
+                     JOIN fin_titulos t ON t.id = b.titulo_id
+                     JOIN fin_categorias c ON c.id = t.categoria_id
+                    WHERE YEAR(b.data_baixa) = %s
+                    GROUP BY c.tipo, c.grupo, c.nome, MONTH(b.data_baixa)""",
+                (ano,), fetch=True) or []
+        return execute_query(
+            """SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
+                      MONTH(t.competencia) AS mes, SUM(t.valor) AS total
+                 FROM fin_titulos t
+                 JOIN fin_categorias c ON c.id = t.categoria_id
+                WHERE YEAR(t.competencia) = %s AND t.status <> 'cancelado'
+                GROUP BY c.tipo, c.grupo, c.nome, MONTH(t.competencia)""",
+            (ano,), fetch=True) or []
+
+    @staticmethod
+    def anos_com_dado():
+        rows = execute_query(
+            """SELECT YEAR(competencia) AS a FROM fin_titulos
+                UNION SELECT YEAR(data_baixa) FROM fin_titulo_baixas
+                ORDER BY a DESC""", fetch=True) or []
+        return [r['a'] for r in rows if r['a']]
+
 
 class FinTitulo:
 

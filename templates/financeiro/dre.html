@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}DRE Gerencial - Qualicontax{% endblock %}
+
+{% block content %}
+<style>
+.dre-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.dre-chip { padding: 7px 16px; border-radius: 999px; border: 1px solid #d1d5db;
+  background: #fff; color: #374151; font-weight: 600; font-size: .9em; text-decoration: none; }
+.dre-chip.ativo { background: var(--primary-green, #00A85A); color: #fff;
+  border-color: var(--primary-green, #00A85A); }
+.dre-regime { padding: 10px 14px; border-radius: 10px; background: #ecfdf5;
+  border: 1px solid #a7f3d0; color: #065f46; margin-bottom: 16px; font-weight: 600; }
+/* A tabela rola DENTRO do contêiner — a página nunca rola de lado */
+.dre-wrap { overflow-x: auto; }
+.dre-wrap table { min-width: 1100px; font-size: .88em; }
+.dre-wrap td, .dre-wrap th { white-space: nowrap; text-align: right; padding: 7px 10px; }
+.dre-wrap td:first-child, .dre-wrap th:first-child { text-align: left; }
+.dre-grupo { cursor: pointer; }
+.dre-grupo td:first-child { font-weight: 600; }
+.dre-cat td:first-child { padding-left: 30px; color: #6b7280; }
+.dre-sub { background: #f0fdf4; font-weight: 700; border-top: 2px solid #bbf7d0; }
+.dre-neg { color: #b91c1c; }
+.dre-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-chart-pie" style="color: var(--primary-green);"></i>
+            DRE Gerencial
+        </h1>
+        <p class="page-subtitle">Resultado do escritório, mês a mês</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('financeiro.titulos') }}" class="btn btn-outline">
+            <i class="fas fa-file-invoice-dollar"></i> Títulos
+        </a>
+        <a href="{{ url_for('financeiro.categorias') }}" class="btn btn-outline">
+            <i class="fas fa-tags"></i> Categorias
+        </a>
+    </div>
+</div>
+
+<div class="dre-chips">
+    <a class="dre-chip {{ 'ativo' if regime == 'competencia' }}"
+       href="{{ url_for('financeiro.dre', regime='competencia', ano=ano) }}">Competência</a>
+    <a class="dre-chip {{ 'ativo' if regime == 'caixa' }}"
+       href="{{ url_for('financeiro.dre', regime='caixa', ano=ano) }}">Caixa</a>
+    <form method="GET" action="{{ url_for('financeiro.dre') }}" style="margin-left:auto;">
+        <input type="hidden" name="regime" value="{{ regime }}">
+        <select name="ano" class="form-control" onchange="this.form.submit()">
+            {% for a in anos %}
+            <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<div class="dre-regime">
+    {% if regime == 'competencia' %}
+    <i class="fas fa-calendar-check"></i> Regime de COMPETÊNCIA — resultado do mês de referência,
+    pago ou não (títulos cancelados ficam de fora).
+    {% else %}
+    <i class="fas fa-money-bill-wave"></i> Regime de CAIXA — o que efetivamente entrou e saiu,
+    pelo mês do pagamento (com juros e multas).
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-body dre-wrap">
+        {% set tem_dado = linhas | selectattr('tipo', 'equalto', 'grupo') | list %}
+        {% if tem_dado %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{{ ano }}</th>
+                    {% for m in meses %}<th>{{ m }}</th>{% endfor %}
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in linhas %}
+                {% set bloco = loop.index %}
+                {% if l.tipo == 'grupo' %}
+                <tr class="dre-grupo" onclick="dreToggle({{ bloco }})"
+                    title="Clique para abrir as categorias">
+                    <td>
+                        <i class="fas fa-caret-right" id="dre-caret-{{ bloco }}"></i>
+                        ({{ '−' if l.sinal == '-' else '+' }}) {{ l.g.grupo }}
+                    </td>
+                    {% for v in l.g.meses %}
+                    <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
+                    {% endfor %}
+                    <td><strong>{{ l.g.total | float | round(2) | format_currency }}</strong></td>
+                </tr>
+                {% for c in l.g.cats %}
+                <tr class="dre-cat" data-pai="{{ bloco }}" style="display:none;">
+                    <td>{{ c.nome }}</td>
+                    {% for v in c.meses %}
+                    <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
+                    {% endfor %}
+                    <td>{{ c.total | float | round(2) | format_currency }}</td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr class="dre-sub">
+                    <td>{{ l.rotulo }}</td>
+                    {% for v in l.meses %}
+                    <td class="{{ 'dre-neg' if v < 0 }}">{{ v | float | round(2) | format_currency }}</td>
+                    {% endfor %}
+                    {% set tot = l.meses | sum %}
+                    <td class="{{ 'dre-neg' if tot < 0 }}">{{ tot | float | round(2) | format_currency }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="dre-vazio">
+            <i class="fas fa-chart-pie" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+            Nenhum lançamento em {{ ano }} no regime de
+            {{ 'competência' if regime == 'competencia' else 'caixa' }}.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function dreToggle(bloco) {
+    var caret = document.getElementById('dre-caret-' + bloco);
+    var abertas = false;
+    document.querySelectorAll('tr[data-pai="' + bloco + '"]').forEach(function (tr) {
+        abertas = tr.style.display === 'none';
+        tr.style.display = abertas ? '' : 'none';
+    });
+    if (caret) caret.className = abertas ? 'fas fa-caret-down' : 'fas fa-caret-right';
+}
+</script>
+{% endblock %}

@@ -42,6 +42,8 @@ PERMISSION_CATALOG = {
         'financeiro.index':               'Acessar Financeiro',
         'financeiro.recebimento':         'Recebimentos',
         'financeiro.titulos':             'Contas a pagar e receber (escritório)',
+        'financeiro.categorias':          'Categorias do financeiro',
+        'financeiro.dre':                 'DRE gerencial (escritório)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',
