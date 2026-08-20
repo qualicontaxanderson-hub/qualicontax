@@ -530,10 +530,10 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                 <label>UF Destinatário</label>
                 <select id="f_dest_uf" multiple placeholder="Todas"></select>
             </div>
-            <div><label>Nº da Nota</label><input type="text" id="f_num_nota" placeholder="Ex: 000123"></div>
-            <div><label>CFOP</label><input type="text" id="f_cfop" placeholder="Ex: 5102"></div>
-            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
-            <div><label>CNPJ Emitente</label><input type="text" id="f_emit_cnpj" placeholder="Ex: 12.345.678/0001-95"></div>
+            <div><label>Nº da Nota</label><select id="f_num_nota" multiple placeholder="Todos — digite para buscar"></select></div>
+            <div><label>CFOP</label><select id="f_cfop" multiple placeholder="Todos"></select></div>
+            <div><label>Chave de Acesso</label><select id="f_chave" multiple placeholder="Todas — digite parte"></select></div>
+            <div><label>CNPJ Emitente</label><select id="f_emit_cnpj" multiple placeholder="Todos"></select></div>
             <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
             <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
             <div>
@@ -1117,7 +1117,8 @@ function gerarPdfLote(btn) {
 // (o endpoint reusa as funções _empresa_where*, com o fallback por CNPJ) e do
 // mesmo período. São Tom Select: dá para digitar parte do nome e escolher
 // vários. Sem empresa/grupo, ficam vazios.
-let tsDest = null, tsUf = null;   // instâncias do Tom Select
+let tsDest = null, tsUf = null;
+let tsNum = null, tsCfop = null, tsChave = null, tsEmit = null;   // instâncias do Tom Select
 
 // Cada tag adicionada/removida dispara um change; o debounce junta os cliques
 // seguidos numa busca só. O guard evita o alerta de "selecione uma empresa".
@@ -1137,6 +1138,11 @@ function _initFiltrosBusca() {
     };
     tsDest = new TomSelect('#f_dest_cnpj_sel', base);
     tsUf   = new TomSelect('#f_dest_uf', base);
+    const comCriacao = Object.assign({}, base, {create: true});
+    tsNum   = new TomSelect('#f_num_nota', comCriacao);
+    tsCfop  = new TomSelect('#f_cfop', comCriacao);
+    tsChave = new TomSelect('#f_chave', comCriacao);
+    tsEmit  = new TomSelect('#f_emit_cnpj', comCriacao);
 }
 document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
 
@@ -1153,8 +1159,7 @@ function _preencheTS(ts, opcoes) {
 }
 function carregarOpcoesFiltros() {
     if (!currentClienteId && !currentGrupoId) {
-        _preencheTS(tsDest, []);
-        _preencheTS(tsUf, []);
+        [tsDest, tsUf, tsNum, tsCfop, tsChave, tsEmit].forEach(ts => _preencheTS(ts, []));
         return;
     }
     // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
@@ -1170,6 +1175,11 @@ function carregarOpcoesFiltros() {
             _preencheTS(tsDest,
                 (d.cnpjs || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
             _preencheTS(tsUf, (d.ufs || []).map(u => ({valor: u, texto: u})));
+            _preencheTS(tsNum, (d.numeros || []).map(v => ({valor: v, texto: v})));
+            _preencheTS(tsCfop, (d.cfops || []).map(v => ({valor: v, texto: v})));
+            _preencheTS(tsChave, (d.chaves || []).map(v => ({valor: v, texto: v})));
+            _preencheTS(tsEmit,
+                (d.cnpjs_emit || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
         })
         .catch(() => {});  // silencioso: os filtros continuam vazios
 }
@@ -1240,11 +1250,10 @@ const CAMPOS_FILTRO = ["f_data_ini", "f_data_fim", "f_num_nota", "f_cfop", "f_ch
     if (c) { c.className = 'fas fa-chevron-up'; }
 })();
 function clearFilters() {
-    ['f_data_ini','f_data_fim','f_num_nota','f_cfop','f_chave','f_emit_cnpj','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
+    ['f_data_ini','f_data_fim','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
         document.getElementById(id).value = '';
     });
-    if (tsDest) tsDest.clear(true);
-    if (tsUf) tsUf.clear(true);
+    [tsDest, tsUf, tsNum, tsCfop, tsChave, tsEmit].forEach(ts => { if (ts) ts.clear(true); });
     document.getElementById('f_origem').value = '';
     document.getElementById('f_vinc_status').value = '';
     document.getElementById('f_cancelado').value = '';
@@ -1265,10 +1274,10 @@ function getFilters() {
         // string e o corpo JSON do excluir-lote sem virar lista aninhada.
         dest_cnpj:   tsDest ? tsDest.getValue().join(',') : '',
         dest_uf:     tsUf ? tsUf.getValue().join(',') : '',
-        num_nota:    document.getElementById('f_num_nota').value,
-        cfop:        document.getElementById('f_cfop').value,
-        chave:       document.getElementById('f_chave').value,
-        emit_cnpj:   document.getElementById('f_emit_cnpj').value,
+        num_nota:    tsNum ? tsNum.getValue().join(',') : '',
+        cfop:        tsCfop ? tsCfop.getValue().join(',') : '',
+        chave:       tsChave ? tsChave.getValue().join(',') : '',
+        emit_cnpj:   tsEmit ? tsEmit.getValue().join(',') : '',
         vmin:        document.getElementById('f_vmin').value,
         vmax:        document.getElementById('f_vmax').value,
         origem:      document.getElementById('f_origem').value,

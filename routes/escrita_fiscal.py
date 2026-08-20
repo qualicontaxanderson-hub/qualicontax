@@ -153,6 +153,30 @@ def _get_empresas():
 # lista e vira "= %s" (1 valor) ou "IN (%s, %s, ...)" (vários).
 # Valor único continua funcionando — nada quebra para quem manda só um.
 # ---------------------------------------------------------------------------
+def _clausula_multi(coluna, valor_cru, params, um='contem'):
+    """Filtro que aceita UM ou VÁRIOS valores (CSV vindo das caixas novas).
+
+    Um valor preserva o comportamento de sempre — chave e CNPJ parciais por
+    LIKE, CFOP por prefixo, nº da nota exato; VÁRIOS valores viram IN exato.
+    Como _clausula_in, EMPILHA os params no ponto da chamada. Devolve a
+    cláusula ou None quando o filtro está vazio.
+    """
+    lista = _filtro_lista(valor_cru)
+    if not lista:
+        return None
+    if len(lista) > 1:
+        return _clausula_in(coluna, lista, params)
+    v = lista[0]
+    if um == 'contem':
+        params.append(f'%{v}%')
+        return f'{coluna} LIKE %s'
+    if um == 'prefixo':
+        params.append(f'{v}%')
+        return f'{coluna} LIKE %s'
+    params.append(v)
+    return f'{coluna} = %s'
+
+
 def _filtro_lista(valor):
     """'a,b' -> ['a', 'b']; '' -> []. Também aceita lista (corpo JSON)."""
     itens = valor if isinstance(valor, (list, tuple)) else str(valor or '').split(',')
@@ -644,6 +668,27 @@ def _clausulas_data(alias, f_data_ini, f_data_fim):
     return clauses, params
 
 
+def _opcoes_valores(tabela, alias, where_sql, params, col, ordem=None, limite=None):
+    """DISTINCT de uma coluna no MESMO escopo da listagem, com teto opcional.
+
+    O teto protege o navegador (nº de nota e chave podem ser milhares num
+    período grande). Devolve (valores, truncado) — truncado avisa a tela de
+    que a lista não está completa (o campo aceita digitação livre mesmo assim).
+    """
+    ordem = ordem or f'{alias}.{col}'
+    lim = f'LIMIT {int(limite) + 1}' if limite else ''
+    rows = execute_query(
+        f"""SELECT DISTINCT {alias}.{col} AS v
+              FROM {tabela} {alias}
+             {where_sql} AND COALESCE({alias}.{col}, '') <> ''
+             ORDER BY {ordem} {lim}""",
+        tuple(params), fetch=True) or []
+    vals = [str(r['v']) for r in rows]
+    if limite and len(vals) > int(limite):
+        return vals[:int(limite)], True
+    return vals, False
+
+
 def _opcoes_cnpjs_ufs(tabela, alias, where_sql, params, cnpj_col, nome_col, uf_cols):
     """Roda o DISTINCT de CNPJ+nome e o de cada coluna de UF dentro do escopo.
 
@@ -687,7 +732,23 @@ def api_opcoes_filtros():
     params = params + d_params
     cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
                                    'emit_cnpj', 'emit_nome', ['emit_uf'])
-    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['emit_uf']})
+    # Pedido dos usuários (20/08/2026): nº da nota, CFOP, chave e CNPJ do
+    # destinatário também oferecem SÓ o que existe nesta consulta. Nº e chave
+    # têm teto (períodos grandes = milhares) — acima dele a caixa avisa e o
+    # campo segue aceitando digitação livre.
+    numeros, num_trunc = _opcoes_valores(
+        'nfe_importacoes', 'n', where_sql, params, 'num_nota',
+        ordem='CAST(n.num_nota AS UNSIGNED) DESC', limite=3000)
+    cfops, _ = _opcoes_valores('nfe_importacoes', 'n', where_sql, params, 'cfop')
+    chaves, chv_trunc = _opcoes_valores(
+        'nfe_importacoes', 'n', where_sql, params, 'chave_acesso',
+        ordem='n.chave_acesso DESC', limite=3000)
+    cnpjs_dest, _nada = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql,
+                                          params, 'dest_cnpj', 'dest_nome', [])
+    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['emit_uf'],
+                    'numeros': numeros, 'numeros_trunc': num_trunc,
+                    'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
+                    'cnpjs_dest': cnpjs_dest})
 
 
 @escrita_fiscal.route('/conf-saidas/api/opcoes-filtros')
@@ -706,7 +767,19 @@ def api_opcoes_filtros_saidas():
     params = params + d_params
     cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
                                    'dest_cnpj', 'dest_nome', ['dest_uf'])
-    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['dest_uf']})
+    numeros, num_trunc = _opcoes_valores(
+        'nfe_importacoes', 'n', where_sql, params, 'num_nota',
+        ordem='CAST(n.num_nota AS UNSIGNED) DESC', limite=3000)
+    cfops, _ = _opcoes_valores('nfe_importacoes', 'n', where_sql, params, 'cfop')
+    chaves, chv_trunc = _opcoes_valores(
+        'nfe_importacoes', 'n', where_sql, params, 'chave_acesso',
+        ordem='n.chave_acesso DESC', limite=3000)
+    cnpjs_emit, _nada = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql,
+                                          params, 'emit_cnpj', 'emit_nome', [])
+    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['dest_uf'],
+                    'numeros': numeros, 'numeros_trunc': num_trunc,
+                    'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
+                    'cnpjs_emit': cnpjs_emit})
 
 
 @escrita_fiscal.route('/conf-cte/api/opcoes-filtros')
@@ -1643,20 +1716,20 @@ def api_notas():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_nota:
-        where.append('n.num_nota = %s')
-        params.append(f_num_nota)
-    if f_cfop:
-        where.append('n.cfop LIKE %s')
-        params.append(f'{f_cfop}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
+    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
+    if cl_num:
+        where.append(cl_num)
+    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
+    if cl_cfop:
+        where.append(cl_cfop)
     if f_emit_uf:
         where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
-    if f_dest_cnpj:
-        where.append('n.dest_cnpj LIKE %s')
-        params.append(f'%{f_dest_cnpj}%')
+    cl_dest = _clausula_multi('n.dest_cnpj', f_dest_cnpj, params)
+    if cl_dest:
+        where.append(cl_dest)
     if f_vmin:
         where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
@@ -2205,20 +2278,20 @@ def _where_lote_entradas(data):
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_nota:
-        where.append('n.num_nota = %s')
-        params.append(f_num_nota)
-    if f_cfop:
-        where.append('n.cfop LIKE %s')
-        params.append(f'{f_cfop}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
+    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
+    if cl_num:
+        where.append(cl_num)
+    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
+    if cl_cfop:
+        where.append(cl_cfop)
     if f_emit_uf:
         where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
-    if f_dest_cnpj:
-        where.append('n.dest_cnpj LIKE %s')
-        params.append(f'%{f_dest_cnpj}%')
+    cl_dest = _clausula_multi('n.dest_cnpj', f_dest_cnpj, params)
+    if cl_dest:
+        where.append(cl_dest)
     if f_vmin:
         where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
@@ -2260,20 +2333,20 @@ def _where_lote_saidas(data):
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_nota:
-        where.append('n.num_nota = %s')
-        params.append(f_num_nota)
-    if f_cfop:
-        where.append('n.cfop LIKE %s')
-        params.append(f'{f_cfop}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
+    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
+    if cl_num:
+        where.append(cl_num)
+    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
+    if cl_cfop:
+        where.append(cl_cfop)
     if f_dest_uf:
         where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
-    if f_emit_cnpj:
-        where.append('n.emit_cnpj LIKE %s')
-        params.append(f'%{f_emit_cnpj}%')
+    cl_emit = _clausula_multi('n.emit_cnpj', f_emit_cnpj, params)
+    if cl_emit:
+        where.append(cl_emit)
     if f_vmin:
         where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
@@ -2776,12 +2849,16 @@ def _rel_filtro(escopo):
         dest = _filtro_lista(a.get('dest_cnpj', ''))
         if dest: w.append(_clausula_in('n.dest_cnpj', dest, p))
         dt(w, p, 'n')
-        if a.get('chave', '').strip(): w.append('n.chave_acesso LIKE %s'); p.append('%' + a.get('chave').strip() + '%')
-        if a.get('num_nota', '').strip(): w.append('n.num_nota = %s'); p.append(a.get('num_nota').strip())
-        if a.get('cfop', '').strip(): w.append('n.cfop LIKE %s'); p.append(a.get('cfop').strip() + '%')
+        cl = _clausula_multi('n.chave_acesso', a.get('chave', ''), p)
+        if cl: w.append(cl)
+        cl = _clausula_multi('n.num_nota', a.get('num_nota', ''), p, um='igual')
+        if cl: w.append(cl)
+        cl = _clausula_multi('n.cfop', a.get('cfop', ''), p, um='prefixo')
+        if cl: w.append(cl)
         du = _filtro_lista(a.get('dest_uf', ''))
         if du: w.append(_clausula_in('n.dest_uf', du, p))
-        if a.get('emit_cnpj', '').strip(): w.append('n.emit_cnpj LIKE %s'); p.append('%' + a.get('emit_cnpj').strip() + '%')
+        cl = _clausula_multi('n.emit_cnpj', a.get('emit_cnpj', ''), p)
+        if cl: w.append(cl)
         vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
         _aplica_cancelada(w, a.get('cancelado'), 'n')
         return 'WHERE ' + ' AND '.join(w), p
@@ -2792,12 +2869,16 @@ def _rel_filtro(escopo):
     emit = _filtro_lista(a.get('emit_cnpj', ''))
     if emit: w.append(_clausula_in('n.emit_cnpj', emit, p))
     dt(w, p, 'n')
-    if a.get('chave', '').strip(): w.append('n.chave_acesso LIKE %s'); p.append('%' + a.get('chave').strip() + '%')
-    if a.get('num_nota', '').strip(): w.append('n.num_nota = %s'); p.append(a.get('num_nota').strip())
-    if a.get('cfop', '').strip(): w.append('n.cfop LIKE %s'); p.append(a.get('cfop').strip() + '%')
+    cl = _clausula_multi('n.chave_acesso', a.get('chave', ''), p)
+    if cl: w.append(cl)
+    cl = _clausula_multi('n.num_nota', a.get('num_nota', ''), p, um='igual')
+    if cl: w.append(cl)
+    cl = _clausula_multi('n.cfop', a.get('cfop', ''), p, um='prefixo')
+    if cl: w.append(cl)
     eu = _filtro_lista(a.get('emit_uf', ''))
     if eu: w.append(_clausula_in('n.emit_uf', eu, p))
-    if a.get('dest_cnpj', '').strip(): w.append('n.dest_cnpj LIKE %s'); p.append('%' + a.get('dest_cnpj').strip() + '%')
+    cl = _clausula_multi('n.dest_cnpj', a.get('dest_cnpj', ''), p)
+    if cl: w.append(cl)
     vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
     _aplica_cancelada(w, a.get('cancelado'), 'n')
     return 'WHERE ' + ' AND '.join(w), p
@@ -5334,20 +5415,20 @@ def excluir_lote():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_nota:
-        where.append('n.num_nota = %s')
-        params.append(f_num_nota)
-    if f_cfop:
-        where.append('n.cfop LIKE %s')
-        params.append(f'{f_cfop}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
+    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
+    if cl_num:
+        where.append(cl_num)
+    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
+    if cl_cfop:
+        where.append(cl_cfop)
     if f_emit_uf:
         where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
-    if f_dest_cnpj:
-        where.append('n.dest_cnpj LIKE %s')
-        params.append(f'%{f_dest_cnpj}%')
+    cl_dest = _clausula_multi('n.dest_cnpj', f_dest_cnpj, params)
+    if cl_dest:
+        where.append(cl_dest)
     if f_vmin:
         where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
@@ -7593,20 +7674,20 @@ def api_notas_saidas():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_nota:
-        where.append('n.num_nota = %s')
-        params.append(f_num_nota)
-    if f_cfop:
-        where.append('n.cfop LIKE %s')
-        params.append(f'{f_cfop}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
+    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
+    if cl_num:
+        where.append(cl_num)
+    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
+    if cl_cfop:
+        where.append(cl_cfop)
     if f_dest_uf:
         where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
-    if f_emit_cnpj:
-        where.append('n.emit_cnpj LIKE %s')
-        params.append(f'%{f_emit_cnpj}%')
+    cl_emit = _clausula_multi('n.emit_cnpj', f_emit_cnpj, params)
+    if cl_emit:
+        where.append(cl_emit)
     if f_vmin:
         where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
@@ -7860,20 +7941,20 @@ def excluir_lote_saidas():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_nota:
-        where.append('n.num_nota = %s')
-        params.append(f_num_nota)
-    if f_cfop:
-        where.append('n.cfop LIKE %s')
-        params.append(f'{f_cfop}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
+    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
+    if cl_num:
+        where.append(cl_num)
+    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
+    if cl_cfop:
+        where.append(cl_cfop)
     if f_dest_uf:
         where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
-    if f_emit_cnpj:
-        where.append('n.emit_cnpj LIKE %s')
-        params.append(f'%{f_emit_cnpj}%')
+    cl_emit = _clausula_multi('n.emit_cnpj', f_emit_cnpj, params)
+    if cl_emit:
+        where.append(cl_emit)
     if f_vmin:
         where.append('n.valor_total >= %s')
         params.append(float(f_vmin))
@@ -8278,9 +8359,9 @@ def api_nfse():
     if f_tomador:
         where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
         params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
-    if f_chave:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
+    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
+    if cl_chave:
+        where.append(cl_chave)
     if f_numero:
         where.append('n.numero = %s')
         params.append(f_numero)

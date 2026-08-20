@@ -592,10 +592,10 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                 <label>UF Emitente</label>
                 <select id="f_emit_uf" multiple placeholder="Todas"></select>
             </div>
-            <div><label>Nº da Nota</label><input type="text" id="f_num_nota" placeholder="Ex: 000123"></div>
-            <div><label>CFOP</label><input type="text" id="f_cfop" placeholder="Ex: 1102"></div>
-            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
-            <div><label>CNPJ Destinatário</label><input type="text" id="f_dest_cnpj" placeholder="Ex: 12.345.678/0001-95"></div>
+            <div><label>Nº da Nota</label><select id="f_num_nota" multiple placeholder="Todos — digite para buscar"></select></div>
+            <div><label>CFOP</label><select id="f_cfop" multiple placeholder="Todos"></select></div>
+            <div><label>Chave de Acesso</label><select id="f_chave" multiple placeholder="Todas — digite parte"></select></div>
+            <div><label>CNPJ Destinatário</label><select id="f_dest_cnpj" multiple placeholder="Todos"></select></div>
             <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
             <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
             <div>
@@ -1378,7 +1378,8 @@ function gerarPdfLote(btn) {
 // (o endpoint reusa as funções _empresa_where*, com o fallback por CNPJ) e do
 // mesmo período. São Tom Select: dá para digitar parte do nome e escolher
 // vários. Sem empresa/grupo, ficam vazios.
-let tsEmit = null, tsUf = null;   // instâncias do Tom Select
+let tsEmit = null, tsUf = null;                       // instâncias do Tom Select
+let tsNum = null, tsCfop = null, tsChave = null, tsDest = null;
 
 // Cada tag adicionada/removida dispara um change; o debounce junta os cliques
 // seguidos numa busca só. O guard evita o alerta de "selecione uma empresa".
@@ -1398,6 +1399,13 @@ function _initFiltrosBusca() {
     };
     tsEmit = new TomSelect('#f_emit_cnpj', base);
     tsUf   = new TomSelect('#f_emit_uf', base);
+    // create:true — digitar um valor que não está na lista continua valendo
+    // (período grande truncado, nota antiga, chave parcial).
+    const comCriacao = Object.assign({}, base, {create: true});
+    tsNum   = new TomSelect('#f_num_nota', comCriacao);
+    tsCfop  = new TomSelect('#f_cfop', comCriacao);
+    tsChave = new TomSelect('#f_chave', comCriacao);
+    tsDest  = new TomSelect('#f_dest_cnpj', comCriacao);
 }
 document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
 
@@ -1414,8 +1422,7 @@ function _preencheTS(ts, opcoes) {
 }
 function carregarOpcoesFiltros() {
     if (!currentClienteId && !currentGrupoId) {
-        _preencheTS(tsEmit, []);
-        _preencheTS(tsUf, []);
+        [tsEmit, tsUf, tsNum, tsCfop, tsChave, tsDest].forEach(ts => _preencheTS(ts, []));
         return;
     }
     // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
@@ -1431,6 +1438,11 @@ function carregarOpcoesFiltros() {
             _preencheTS(tsEmit,
                 (d.cnpjs || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
             _preencheTS(tsUf, (d.ufs || []).map(u => ({valor: u, texto: u})));
+            _preencheTS(tsNum, (d.numeros || []).map(v => ({valor: v, texto: v})));
+            _preencheTS(tsCfop, (d.cfops || []).map(v => ({valor: v, texto: v})));
+            _preencheTS(tsChave, (d.chaves || []).map(v => ({valor: v, texto: v})));
+            _preencheTS(tsDest,
+                (d.cnpjs_dest || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
         })
         .catch(() => {});  // silencioso: os filtros continuam vazios
 }
@@ -1502,11 +1514,10 @@ const CAMPOS_FILTRO = ["f_data_ini", "f_data_fim", "f_num_nota", "f_cfop", "f_ch
     if (c) { c.className = 'fas fa-chevron-up'; }
 })();
 function clearFilters() {
-    ['f_data_ini','f_data_fim','f_num_nota','f_cfop','f_chave','f_dest_cnpj','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
+    ['f_data_ini','f_data_fim','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
         document.getElementById(id).value = '';
     });
-    if (tsEmit) tsEmit.clear(true);
-    if (tsUf) tsUf.clear(true);
+    [tsEmit, tsUf, tsNum, tsCfop, tsChave, tsDest].forEach(ts => { if (ts) ts.clear(true); });
     document.getElementById('f_origem').value = '';
     document.getElementById('f_vinc_status').value = '';
     document.getElementById('f_cancelado').value = '';
@@ -1526,10 +1537,10 @@ function getFilters() {
         // string e o corpo JSON do excluir-lote sem virar lista aninhada.
         emit_cnpj: tsEmit ? tsEmit.getValue().join(',') : '',
         emit_uf: tsUf ? tsUf.getValue().join(',') : '',
-        num_nota: document.getElementById('f_num_nota').value,
-        cfop: document.getElementById('f_cfop').value,
-        chave: document.getElementById('f_chave').value,
-        dest_cnpj: document.getElementById('f_dest_cnpj').value,
+        num_nota: tsNum ? tsNum.getValue().join(',') : '',
+        cfop: tsCfop ? tsCfop.getValue().join(',') : '',
+        chave: tsChave ? tsChave.getValue().join(',') : '',
+        dest_cnpj: tsDest ? tsDest.getValue().join(',') : '',
         vmin: document.getElementById('f_vmin').value,
         vmax: document.getElementById('f_vmax').value,
         origem: document.getElementById('f_origem').value,
