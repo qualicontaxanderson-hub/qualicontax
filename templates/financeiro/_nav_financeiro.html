@@ -1,0 +1,38 @@
+{# ---------------------------------------------------------------------------
+   Barra de navegação do FINANCEIRO — mesmo padrão do Fiscal (_nav_fiscal.html):
+   sticky, abas-pílula, estilos de static/css/identidade.css (compartilhados).
+   NOVA TELA NO FUTURO: acrescente UMA linha em _abas (endpoint, prefixo, rótulo).
+   Aba ativa por request.path, PREFIXO MAIS LONGO vence.
+--------------------------------------------------------------------------- #}
+{% set _abas = [
+    ('financeiro.index',             '/financeiro/',             'INÍCIO'),
+    ('financeiro.titulos',           '/financeiro/titulos',      'TÍTULOS'),
+    ('financeiro.extrato',           '/financeiro/extrato',      'EXTRATO'),
+    ('financeiro.fluxo',             '/financeiro/fluxo',        'FLUXO DE CAIXA'),
+    ('financeiro.dre',               '/financeiro/dre',          'DRE'),
+    ('financeiro.categorias',        '/financeiro/categorias',   'CATEGORIAS'),
+    ('financeiro.recebimento_index', '/financeiro/recebimento/', 'RECEBIMENTOS'),
+] %}
+{% set _ativa = namespace(pref='') %}
+{% for _ep, _pref, _label in _abas %}
+    {% if request.path.startswith(_pref) and _pref|length > _ativa.pref|length %}
+        {% set _ativa.pref = _pref %}
+    {% endif %}
+{% endfor %}
+
+<nav class="nav-fiscal" aria-label="Navegação do Financeiro">
+    <div class="nav-fiscal-track">
+        {% for _ep, _pref, _label in _abas %}
+        <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
+           href="{{ url_for(_ep) }}"
+           {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>
+        {% endfor %}
+    </div>
+</nav>
+
+<script>
+(function () {
+    var t = document.querySelector('.nav-fiscal .nff-tab.active');
+    if (t && t.scrollIntoView) t.scrollIntoView({ inline: 'center', block: 'nearest' });
+})();
+</script>

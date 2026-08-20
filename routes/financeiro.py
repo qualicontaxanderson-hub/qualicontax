@@ -567,6 +567,246 @@ def fluxo_saldo():
     return redirect(url_for('financeiro.fluxo'))
 
 
+# =======================================================================
+# Extrato bancário — importação OFX (Documento E, fase 4)
+#
+# Ordem combinada com o Anderson (20/08/2026): OFX -> Excel -> PDF sólidos
+# primeiro; Pluggy (API agregadora) por último, como aposta com retaguarda.
+# =======================================================================
+@financeiro.route('/financeiro/extrato')
+@permission_required('financeiro.extrato')
+def extrato():
+    from models.extrato_lancamento import ExtratoLancamento
+    filtros = dict(
+        data_de=request.args.get('data_de') or '',
+        data_ate=request.args.get('data_ate') or '',
+        conta=request.args.get('conta') or '',
+        busca=(request.args.get('busca') or '').strip())
+    args = {k: (v or None) for k, v in filtros.items()}
+    rows = ExtratoLancamento.listar(**args)
+    return render_template('financeiro/extrato.html',
+                           lancamentos=rows,
+                           totais=ExtratoLancamento.totais(**args),
+                           contas=ExtratoLancamento.contas(),
+                           limite=500, filtros=filtros)
+
+
+@financeiro.route('/financeiro/extrato/importar', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_importar():
+    from models.extrato_lancamento import ExtratoLancamento
+    from utils.ofx_parser import parse_ofx, chave_dedup, OfxInvalido
+    arquivos = [a for a in request.files.getlist('arquivos') if a and a.filename]
+    if not arquivos:
+        flash('Escolha ao menos um arquivo OFX.', 'warning')
+        return redirect(url_for('financeiro.extrato'))
+
+    for arq in arquivos:
+        try:
+            dados = parse_ofx(arq.read())
+        except OfxInvalido as e:
+            flash(f'{arq.filename}: {e}', 'danger')
+            continue
+        except Exception:
+            flash(f'{arq.filename}: não consegui ler este arquivo — me mande '
+                  'ele que eu ajusto o leitor.', 'danger')
+            continue
+
+        # chave de idempotência por lançamento; sem FITID, conta a repetição
+        # do mesmo (data, valor, descrição, documento) DENTRO do arquivo.
+        repeticoes, candidatos = {}, []
+        for l in dados['lancamentos']:
+            k = (l['data'], str(l['valor']), l['descricao'], l['documento'])
+            n = repeticoes.get(k, 0)
+            repeticoes[k] = n + 1
+            h = chave_dedup(None, dados['banco'], dados['conta'], l, n)
+            candidatos.append((h, l))
+
+        vistos, unicos = set(), []
+        for h, l in candidatos:               # FITID repetido no mesmo arquivo
+            if h in vistos:
+                continue
+            vistos.add(h)
+            unicos.append((h, l))
+        ja_existiam = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
+        novos = [(h, l) for h, l in unicos if h not in ja_existiam]
+        if novos:
+            ExtratoLancamento.inserir_lote(
+                novos, dados['banco'], dados['conta'], arq.filename,
+                current_user.id)
+
+        msg = (f"{arq.filename}: {len(novos)} lançamento(s) novo(s), "
+               f"{len(unicos) - len(novos)} já estavam (ignorados)")
+        if dados.get('saldo'):
+            sd = dados['saldo']
+            quando = f" em {sd['data'][8:10]}/{sd['data'][5:7]}" if sd.get('data') else ''
+            msg += (f". Saldo do arquivo: R$ {sd['valor']:,.2f}{quando} — "
+                    "confira no Fluxo de Caixa se vale atualizar o saldo real.")
+        flash(msg, 'success' if novos else 'warning')
+        registrar('escrita.importou_extrato', 'financeiro',
+                  tabela='extrato_lancamentos',
+                  depois={'arquivo': arq.filename, 'banco': dados['banco'],
+                          'conta': dados['conta'], 'novos': len(novos),
+                          'repetidos': len(unicos) - len(novos)})
+    return redirect(url_for('financeiro.extrato'))
+
+
+# =======================================================================
+# Destaques da HOME do Financeiro — mesmo padrão da home do Fiscal:
+# a página abre instantânea e busca isto por fetch (home_destaques.js);
+# cache de 60s; card que falhar é OMITIDO (melhor faltar que mentir).
+# =======================================================================
+import threading
+import time as _time
+from datetime import datetime as _dt, timezone as _tz
+
+_FIN_HOME_CACHE: dict = {}
+_FIN_HOME_LOCK = threading.Lock()
+_FIN_HOME_TTL_S = 60
+
+
+def _fin_brl(v):
+    s = f'{float(v or 0):,.2f}'
+    return 'R$ ' + s.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _fin_home_payload():
+    from models.fin_titulo import FinTitulo, FinCategoria, FinFluxo
+    from utils.db_helper import execute_query
+    import logging
+    log = logging.getLogger(__name__)
+    cards, counters = [], {}
+
+    def card(fn):
+        try:
+            c = fn()
+            if c:
+                cards.append(c)
+        except Exception:
+            log.exception('[fin-home] card falhou')
+
+    resumo = None
+    try:
+        resumo = FinTitulo.resumo()
+    except Exception:
+        log.exception('[fin-home] resumo falhou')
+
+    def _c_receber():
+        if resumo is None:
+            return None
+        r = resumo['R']
+        return {'icone': 'fa-hand-holding-dollar', 'titulo': 'A receber (R$)',
+                'valor': int(round(float(r['em_aberto'] or 0))),
+                'apoio': f"{r['qtd'] or 0} título(s) em aberto · "
+                         f"{_fin_brl(r['vencido'])} vencidos",
+                'trend': {'tipo': 'neutro', 'rotulo': 'aberto'}}
+
+    def _c_pagar():
+        if resumo is None:
+            return None
+        p = resumo['P']
+        return {'icone': 'fa-money-bill-transfer', 'titulo': 'A pagar (R$)',
+                'valor': int(round(float(p['em_aberto'] or 0))),
+                'apoio': f"{p['qtd'] or 0} título(s) em aberto · "
+                         f"{_fin_brl(p['vencido'])} vencidos",
+                'trend': {'tipo': 'neutro', 'rotulo': 'aberto'}}
+
+    def _c_saldo():
+        sd = FinFluxo.saldo_vigente()
+        if not sd:
+            return None                      # sem saldo, sem card — não inventa
+        return {'icone': 'fa-vault', 'titulo': 'Saldo real (R$)',
+                'valor': int(round(float(sd['valor'] or 0))),
+                'apoio': ('informado ' + ('à mão' if sd['origem'] == 'manual'
+                          else 'pelo extrato') +
+                          f" em {sd['data'].strftime('%d/%m')}"),
+                'trend': {'tipo': 'neutro', 'rotulo': 'caixa'}}
+
+    def _c_extrato():
+        row = execute_query(
+            """SELECT COUNT(*) AS n FROM extrato_lancamentos
+                WHERE empresa_id IS NULL
+                  AND data >= CURDATE() - INTERVAL 30 DAY""",
+            fetch=True, fetch_one=True) or {}
+        dias = execute_query(
+            """SELECT data, COUNT(*) AS n FROM extrato_lancamentos
+                WHERE empresa_id IS NULL
+                  AND data >= CURDATE() - INTERVAL 13 DAY
+                GROUP BY data""", fetch=True) or []
+        mapa = {r['data'].isoformat(): int(r['n']) for r in dias}
+        serie = []
+        for i in range(13, -1, -1):
+            d = (date.today() - __import__('datetime').timedelta(days=i)).isoformat()
+            serie.append(mapa.get(d, 0))
+        c = {'icone': 'fa-university', 'titulo': 'Extrato: 30 dias',
+             'valor': int(row.get('n') or 0),
+             'apoio': 'lançamentos importados do banco',
+             'trend': {'tipo': 'neutro', 'rotulo': '30d'}}
+        if any(serie):                       # sparkline só com série real
+            c['spark'] = serie
+            c['spark_tipo'] = 'barra'
+        return c
+
+    def _c_resultado():
+        row = execute_query(
+            """SELECT COUNT(*) AS n,
+                      COALESCE(SUM(CASE WHEN c.tipo = 'R' THEN t.valor
+                                        ELSE -t.valor END), 0) AS res
+                 FROM fin_titulos t
+                 JOIN fin_categorias c ON c.id = t.categoria_id
+                WHERE t.status <> 'cancelado'
+                  AND t.competencia >= (CURDATE() - INTERVAL (DAY(CURDATE())-1) DAY)""",
+            fetch=True, fetch_one=True) or {}
+        if not row.get('n'):
+            return None                      # mês sem lançamento não vira card
+        return {'icone': 'fa-chart-pie', 'titulo': 'Resultado do mês (R$)',
+                'valor': int(round(float(row.get('res') or 0))),
+                'apoio': f"competência {date.today().strftime('%m/%Y')} · "
+                         f"{row['n']} título(s) — ver DRE",
+                'trend': {'tipo': 'neutro', 'rotulo': 'competência'}}
+
+    card(_c_receber)
+    card(_c_pagar)
+    card(_c_saldo)
+    card(_c_extrato)
+    card(_c_resultado)
+
+    def conta(chave, sql):
+        try:
+            r = execute_query(sql, fetch=True, fetch_one=True) or {}
+            counters[chave] = int(r.get('n') or 0)
+        except Exception:
+            log.exception('[fin-home] contador %s falhou', chave)
+
+    conta('titulos', "SELECT COUNT(*) n FROM fin_titulos WHERE status IN ('aberto','parcial')")
+    conta('extrato', 'SELECT COUNT(*) n FROM extrato_lancamentos WHERE empresa_id IS NULL')
+    conta('fluxo', "SELECT COUNT(*) n FROM fin_titulos WHERE status IN ('aberto','parcial') "
+                   'AND vencimento <= CURDATE() + INTERVAL 7 DAY')
+    conta('dre', "SELECT COUNT(DISTINCT MONTH(competencia)) n FROM fin_titulos "
+                 "WHERE status <> 'cancelado' AND YEAR(competencia) = YEAR(CURDATE())")
+    conta('categorias', 'SELECT COUNT(*) n FROM fin_categorias WHERE ativo = 1')
+    conta('recebimentos', 'SELECT COUNT(*) n FROM lancamentos_recebimento')
+
+    return {'cards': cards, 'counters': counters,
+            'gerado_em_ms': int(_time.time() * 1000)}
+
+
+@financeiro.route('/financeiro/api/home-destaques')
+@permission_required('financeiro.index')
+def api_home_destaques():
+    """Números da home (carrossel + contadores). Cache de 60s por usuário."""
+    uid = getattr(current_user, 'id', None)
+    agora = _dt.now(_tz.utc).timestamp()
+    with _FIN_HOME_LOCK:
+        hit = _FIN_HOME_CACHE.get(uid)
+        if hit and (agora - hit[0]) < _FIN_HOME_TTL_S:
+            return jsonify(hit[1])
+    payload = _fin_home_payload()
+    with _FIN_HOME_LOCK:
+        _FIN_HOME_CACHE[uid] = (agora, payload)
+    return jsonify(payload)
+
+
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------

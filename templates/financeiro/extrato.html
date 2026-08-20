@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Extrato Bancário - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+.ex-wrap { overflow-x: auto; }
+.ex-wrap td, .ex-wrap th { white-space: nowrap; }
+.ex-wrap td:last-child, .ex-wrap th:last-child { text-align: right; }
+.ex-cred { color: #166534; font-weight: 600; }
+.ex-deb { color: #b91c1c; font-weight: 600; }
+.ex-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+.ex-desc { white-space: normal; min-width: 260px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-university" style="color: var(--primary-green);"></i>
+            Extrato Bancário
+        </h1>
+        <p class="page-subtitle">Escritório — importe o OFX de cada conta (EFí, Cora, C6, Sicredi...)</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('financeiro.fluxo') }}" class="btn btn-outline">
+            <i class="fas fa-chart-area"></i> Fluxo de Caixa
+        </a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
+              enctype="multipart/form-data"
+              style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
+                   class="form-control" style="max-width:420px;">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-file-import"></i> Importar OFX
+            </button>
+            <small style="color:#6b7280;">
+                Pode mandar vários de uma vez (um por conta). Importar o mesmo arquivo
+                de novo <strong>não duplica nada</strong>. Excel e PDF vêm na sequência.
+            </small>
+        </form>
+    </div>
+</div>
+
+<div class="stats-grid" style="margin-bottom: 24px;">
+    <div class="stat-card">
+        <div class="stat-icon bg-success"><i class="fas fa-arrow-down"></i></div>
+        <div class="stat-content">
+            <h3 class="stat-value">{{ totais.creditos | float | round(2) | format_currency }}</h3>
+            <p class="stat-label">Créditos (filtro atual)</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-danger"><i class="fas fa-arrow-up"></i></div>
+        <div class="stat-content">
+            <h3 class="stat-value">{{ (totais.debitos | float | abs) | round(2) | format_currency }}</h3>
+            <p class="stat-label">Débitos (filtro atual)</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-info"><i class="fas fa-scale-balanced"></i></div>
+        <div class="stat-content">
+            {% set liq = (totais.creditos | float) + (totais.debitos | float) %}
+            <h3 class="stat-value {{ 'ex-deb' if liq < 0 }}">{{ liq | round(2) | format_currency }}</h3>
+            <p class="stat-label">Líquido ({{ totais.n or 0 }} lançamentos)</p>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('financeiro.extrato') }}">
+            <div class="filter-grid">
+                <div class="filter-item">
+                    <label class="filter-label">De</label>
+                    <input type="date" name="data_de" class="form-control" value="{{ filtros.data_de }}">
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">Até</label>
+                    <input type="date" name="data_ate" class="form-control" value="{{ filtros.data_ate }}">
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">Conta</label>
+                    <select name="conta" class="form-control">
+                        <option value="">Todas</option>
+                        {% for ct in contas %}
+                        <option value="{{ ct }}" {% if filtros.conta == ct %}selected{% endif %}>{{ ct }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">Buscar</label>
+                    <input type="text" name="busca" class="form-control" value="{{ filtros.busca }}"
+                           placeholder="Descrição ou documento">
+                </div>
+                <div class="filter-item" style="display:flex; align-items:flex-end; gap:8px;">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
+                    <a href="{{ url_for('financeiro.extrato') }}" class="btn btn-outline">Limpar</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body ex-wrap">
+        {% if lancamentos %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Banco · Conta</th>
+                    <th class="ex-desc">Descrição</th>
+                    <th>Documento</th>
+                    <th>Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in lancamentos %}
+                <tr>
+                    <td>{{ l.data.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ l.banco or '?' }} · {{ l.conta or '?' }}</td>
+                    <td class="ex-desc">{{ l.descricao }}</td>
+                    <td>{{ l.documento or '—' }}</td>
+                    <td class="{{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
+                        {{ l.valor | float | round(2) | format_currency }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if lancamentos | length >= limite %}
+        <div style="color:#6b7280; font-size:.9em; padding:10px 4px 0;">
+            <i class="fas fa-circle-info"></i>
+            Mostrando os {{ limite }} mais recentes do filtro — os totais acima
+            consideram TODOS. Aperte o período para ver o restante.
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="ex-vazio">
+            <i class="fas fa-file-import" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+            Nenhum lançamento{% if filtros.data_de or filtros.conta or filtros.busca %} com esses
+            filtros{% else %} importado ainda — baixe o OFX no internet banking e importe acima{% endif %}.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

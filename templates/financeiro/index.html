@@ -1,64 +1,107 @@
 {% extends "base.html" %}
 {% block title %}Financeiro - Qualicontax{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Financeiro</h1>
-        <p class="page-subtitle">Controle de recebimentos, pagamentos e fluxo de caixa</p>
+{% include 'financeiro/_nav_financeiro.html' %}
+{# Mesmo padrão da home do Fiscal/Cadastros: hero, carrossel e tiles vêm de
+   static/css/identidade.css; carrossel+contadores de static/js/home_destaques.js
+   (compartilhados). Aqui só muda o endpoint e as telas. #}
+
+<!-- ===== HERO verde ===== -->
+<div class="ef-hero">
+    <div class="ef-hero-inner">
+        <div class="ef-hero-head">
+            <div>
+                <h1 class="ef-hero-title">Financeiro</h1>
+                <p class="ef-hero-sub">Caixa do escritório: títulos, extrato, DRE e fluxo</p>
+            </div>
+            <div class="ef-hero-actions">
+                <a href="{{ url_for('financeiro.titulos') }}" class="ef-btn ef-btn-primary">
+                    <i class="fas fa-plus-circle"></i> Novo Título
+                </a>
+            </div>
+        </div>
+        <div class="ef-car-skel" id="efCarSkel" aria-hidden="true">
+            <div class="ef-skel-card"></div><div class="ef-skel-card"></div><div class="ef-skel-card"></div>
+        </div>
+        <div class="ef-carousel" id="efCarousel" hidden
+             data-endpoint="{{ url_for('financeiro.api_home_destaques') }}"></div>
     </div>
 </div>
 
-<div class="module-tiles">
+<!-- ===== CORPO branco ===== -->
+<div class="ef-body">
 
-    <a href="{{ url_for('financeiro.recebimento_index') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
-            <i class="fas fa-hand-holding-dollar"></i>
-        </div>
-        <h3 class="module-tile-title">Recebimentos</h3>
-        <p class="module-tile-desc">Lançamentos de recebimentos e honorários dos clientes</p>
-        <span class="module-tile-action"><i class="fas fa-plus-circle"></i> Novo Recebimento</span>
-    </a>
+    <div class="ef-section-label">Dia a dia</div>
+    <div class="ef-grid">
+        <a href="{{ url_for('financeiro.titulos') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-file-invoice-dollar"></i></div>
+            <h3 class="ef-card-title">Contas a Pagar e Receber</h3>
+            <div class="ef-card-num" data-counter="titulos"></div>
+            <p class="ef-card-desc">Títulos em aberto, baixas e vencimentos</p>
+        </a>
+        <a href="{{ url_for('financeiro.extrato') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-university"></i></div>
+            <h3 class="ef-card-title">Extrato Bancário</h3>
+            <div class="ef-card-num" data-counter="extrato"></div>
+            <p class="ef-card-desc">Importe o OFX de cada conta (EFí, Cora, C6, Sicredi)</p>
+        </a>
+        <a href="{{ url_for('financeiro.fluxo') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-chart-area"></i></div>
+            <h3 class="ef-card-title">Fluxo de Caixa</h3>
+            <div class="ef-card-num" data-counter="fluxo"></div>
+            <p class="ef-card-desc">Saldo real e projeção diária — vencendo em 7 dias</p>
+        </a>
+        <a href="{{ url_for('financeiro.dre') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-chart-pie"></i></div>
+            <h3 class="ef-card-title">DRE Gerencial</h3>
+            <div class="ef-card-num" data-counter="dre"></div>
+            <p class="ef-card-desc">Resultado por competência ou por caixa — meses com dado</p>
+        </a>
+        <a href="{{ url_for('financeiro.categorias') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-tags"></i></div>
+            <h3 class="ef-card-title">Categorias</h3>
+            <div class="ef-card-num" data-counter="categorias"></div>
+            <p class="ef-card-desc">Plano gerencial: os grupos são as linhas do DRE</p>
+        </a>
+        <a href="{{ url_for('financeiro.recebimento_index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-hand-holding-dollar"></i></div>
+            <h3 class="ef-card-title">Recebimentos</h3>
+            <div class="ef-card-num" data-counter="recebimentos"></div>
+            <p class="ef-card-desc">Lançamentos de recebimento (módulo anterior)</p>
+        </a>
+    </div>
 
-    <a href="{{ url_for('financeiro.titulos') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
-            <i class="fas fa-file-invoice-dollar"></i>
+    <div class="ef-section-label">Em breve</div>
+    <div class="ef-grid">
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-file-signature"></i></div>
+            <h3 class="ef-card-title">Contratos de Honorários</h3>
+            <p class="ef-card-desc">Geração mensal automática de título, nota e boleto</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Contas a Pagar e Receber</h3>
-        <p class="module-tile-desc">Títulos do escritório: honorários a receber e despesas a pagar</p>
-        <span class="module-tile-action"><i class="fas fa-plus-circle"></i> Novo Título</span>
-    </a>
-
-    <a href="#" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-            <i class="fas fa-university"></i>
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-barcode"></i></div>
+            <h3 class="ef-card-title">Boletos</h3>
+            <p class="ef-card-desc">Emissão EFí e Bradesco com baixa automática</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Contas Bancárias</h3>
-        <p class="module-tile-desc">Saldos e movimentações das contas bancárias do escritório</p>
-    </a>
-
-    <a href="{{ url_for('financeiro.dre') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-            <i class="fas fa-chart-pie"></i>
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-link"></i></div>
+            <h3 class="ef-card-title">Conciliação</h3>
+            <p class="ef-card-desc">Extrato encontra o título sozinho; dúvida vira fila</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">DRE Gerencial</h3>
-        <p class="module-tile-desc">Resultado do escritório por competência ou por caixa</p>
-    </a>
-
-    <a href="{{ url_for('financeiro.categorias') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #14b8a6, #0d9488);">
-            <i class="fas fa-tags"></i>
+        <div class="ef-card ef-card-soon">
+            <div class="ef-card-ico" style="background:#eef2f0;color:#94a3b8;"><i class="fas fa-plug"></i></div>
+            <h3 class="ef-card-title">Conexão Bancária</h3>
+            <p class="ef-card-desc">Excel, PDF e API agregadora (Pluggy) — após o OFX rodar redondo</p>
+            <span class="ef-soon-badge">Em breve</span>
         </div>
-        <h3 class="module-tile-title">Categorias</h3>
-        <p class="module-tile-desc">Plano gerencial: grupos do DRE e categorias de lançamento</p>
-    </a>
-
-    <a href="{{ url_for('financeiro.fluxo') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <i class="fas fa-chart-area"></i>
-        </div>
-        <h3 class="module-tile-title">Fluxo de Caixa</h3>
-        <p class="module-tile-desc">Saldo real e projeção diária pelos vencimentos em aberto</p>
-    </a>
+    </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/home_destaques.js') }}" defer></script>
 {% endblock %}
