@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Memorizações do Extrato - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+.em-wrap { overflow-x: auto; }
+.em-inativa { opacity: .55; }
+.em-acao { border: none; background: none; cursor: pointer; padding: 6px; }
+.em-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+.em-padrao { font-family: monospace; font-size: .92em; background: #f9fafb;
+  padding: 2px 8px; border-radius: 6px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-memory" style="color: var(--primary-green);"></i>
+            Memorizações do Extrato
+        </h1>
+        <p class="page-subtitle">Classificou uma vez, o sistema repete sozinho — o padrão mais específico vence</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('financeiro.extrato') }}" class="btn btn-outline">
+            <i class="fas fa-university"></i> Voltar ao Extrato
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body em-wrap">
+        {% if memorizacoes %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Padrão (contém)</th>
+                    <th>Classifica como</th>
+                    <th>Centro</th>
+                    <th style="text-align:right;">Usos</th>
+                    <th>Último uso</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in memorizacoes %}
+                <tr class="{{ 'em-inativa' if not m.ativo }}">
+                    <td><span class="em-padrao">{{ m.padrao }}</span></td>
+                    <td title="{{ m.categoria_grupo }}">
+                        {{ 'R' if m.categoria_tipo == 'R' else 'P' }} · {{ m.categoria_nome }}</td>
+                    <td>{{ m.centro_nome or '—' }}</td>
+                    <td style="text-align:right;"><strong>{{ m.usos }}</strong></td>
+                    <td>{{ m.ultimo_uso.strftime('%d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca' }}</td>
+                    <td>{{ 'Ativa' if m.ativo else 'Desativada' }}</td>
+                    <td>
+                        <form method="POST" style="display:inline;"
+                              action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
+                            <button class="em-acao"
+                                    title="{{ 'Desativar (para de classificar; o que já foi fica)' if m.ativo else 'Reativar' }}">
+                                <i class="fas fa-{{ 'toggle-on' if m.ativo else 'toggle-off' }}"
+                                   style="color:{{ '#16a34a' if m.ativo else '#9ca3af' }};"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="em-vazio">
+            <i class="fas fa-memory" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+            Nenhuma memorização ainda. No Extrato, classifique um lançamento e
+            deixe o "Memorizar" marcado — a primeira decisão vira regra.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

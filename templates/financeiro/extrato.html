@@ -12,6 +12,9 @@
 .ex-deb { color: #b91c1c; font-weight: 600; }
 .ex-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
 .ex-desc { white-space: normal; min-width: 260px; }
+.ex-auto { background: #dcfce7; color: #166534; border-radius: 999px;
+  padding: 2px 8px; font-size: .72em; font-weight: 700; margin-left: 6px; }
+.ex-acao { border: none; background: none; cursor: pointer; padding: 6px; }
 </style>
 
 <div class="page-header">
@@ -23,6 +26,9 @@
         <p class="page-subtitle">Escritório — importe o OFX de cada conta (EFí, Cora, C6, Sicredi...)</p>
     </div>
     <div class="page-actions">
+        <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
+            <i class="fas fa-memory"></i> Memorizações
+        </a>
         <a href="{{ url_for('financeiro.fluxo') }}" class="btn btn-outline">
             <i class="fas fa-chart-area"></i> Fluxo de Caixa
         </a>
@@ -106,6 +112,14 @@
                     </select>
                 </div>
                 <div class="filter-item">
+                    <label class="filter-label">Classificação</label>
+                    <select name="classif" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="nao" {% if filtros.classif == 'nao' %}selected{% endif %}>Sem categoria</option>
+                        <option value="sim" {% if filtros.classif == 'sim' %}selected{% endif %}>Classificados</option>
+                    </select>
+                </div>
+                <div class="filter-item">
                     <label class="filter-label">Buscar</label>
                     <input type="text" name="busca" class="form-control" value="{{ filtros.busca }}"
                            placeholder="Descrição ou documento">
@@ -129,8 +143,10 @@
                     <th>Empresa</th>
                     <th>Banco · Conta</th>
                     <th class="ex-desc">Descrição</th>
+                    <th>Categoria</th>
                     <th>Documento</th>
                     <th>Valor</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -140,9 +156,26 @@
                     <td>{{ emp_mapa.get(l.empresa_id, '?') }}</td>
                     <td>{{ l.banco or '?' }} · {{ l.conta or '?' }}</td>
                     <td class="ex-desc">{{ l.descricao }}</td>
+                    <td>
+                        {% if l.categoria_id %}
+                        {{ l.categoria_nome }}{% if l.centro_nome %} <small style="color:#6b7280;">· {{ l.centro_nome }}</small>{% endif %}
+                        {% if l.memorizacao_id %}<span class="ex-auto" title="Classificado sozinho pela memorização">auto</span>{% endif %}
+                        {% else %}<span style="color:#b45309;">—</span>{% endif %}
+                    </td>
                     <td>{{ l.documento or '—' }}</td>
                     <td class="{{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
                         {{ l.valor | float | round(2) | format_currency }}</td>
+                    <td>
+                        <button class="ex-acao" title="{{ 'Reclassificar' if l.categoria_id else 'Classificar (e memorizar, se quiser)' }}"
+                                data-id="{{ l.id }}" data-desc="{{ l.descricao }}"
+                                data-tipo="{{ 'R' if l.valor >= 0 else 'P' }}"
+                                data-valor="{{ l.valor | float | round(2) | format_currency }}"
+                                data-cat="{{ l.categoria_id or '' }}"
+                                data-centro="{{ l.centro_custo_id or '' }}"
+                                onclick="exAbrirClassificar(this)">
+                            <i class="fas fa-tag" style="color:{{ '#9ca3af' if l.categoria_id else '#b45309' }};"></i>
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -163,4 +196,97 @@
         {% endif %}
     </div>
 </div>
+
+<!-- ── Modal: classificar / memorizar (E2.4) ─────────────────────── -->
+<div id="exModalClassificar" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:600px;">
+        <div class="modal-header">
+            <h3>Classificar Lançamento</h3>
+            <button class="modal-close" onclick="exFecharClassificar()">&times;</button>
+        </div>
+        <form method="POST" id="exFormClassificar" action="">
+            <div class="modal-body">
+                <p id="exClasInfo" style="margin-bottom:14px; color:#374151;"></p>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>Categoria *</label>
+                        <select name="categoria_id" id="exCategoria" class="form-control" required>
+                            {% for c in categorias %}
+                            <option value="{{ c.id }}" data-tipo="{{ c.tipo }}">{{ c.grupo }} · {{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Centro de custo</label>
+                        <select name="centro_custo_id" id="exCentro" class="form-control">
+                            <option value="">— sem centro —</option>
+                            {% for cc in centros %}
+                            <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" style="border-top:1px solid #e5e7eb; padding-top:12px;">
+                    <label>
+                        <input type="checkbox" name="memorizar" id="exMemorizar" checked
+                               onchange="document.getElementById('exPadraoBox').style.display = this.checked ? '' : 'none'">
+                        <strong>Memorizar</strong> — o que vier igual já chega classificado (e os antigos vão de carona)
+                    </label>
+                    <div id="exPadraoBox" style="margin-top:8px; padding-left:22px;">
+                        <label style="font-size:.9em; color:#6b7280;">Padrão (o trecho ESTÁVEL da descrição — encurte se precisar):</label>
+                        <input type="text" name="padrao" id="exPadrao" class="form-control" maxlength="160">
+                    </div>
+                </div>
+                <small style="color:#6b7280;">Desmarque "Memorizar" para classificar só este
+                    lançamento (único, sem regra).</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="exFecharClassificar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Classificar</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+var EX_URL_CLAS = "{{ url_for('financeiro.extrato_classificar', lanc_id=0) }}";
+
+function exFecharClassificar() {
+    document.getElementById('exModalClassificar').style.display = 'none';
+}
+
+function exAbrirClassificar(el) {
+    var form = document.getElementById('exFormClassificar');
+    form.action = EX_URL_CLAS.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('exClasInfo').textContent =
+        el.getAttribute('data-desc') + ' — ' + el.getAttribute('data-valor');
+
+    // credito so ve categorias de receita; debito, de despesa
+    var tipo = el.getAttribute('data-tipo');
+    var sel = document.getElementById('exCategoria');
+    var primeiro = null;
+    Array.prototype.forEach.call(sel.options, function (o) {
+        var ok = o.getAttribute('data-tipo') === tipo;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok && primeiro === null) primeiro = o.value;
+    });
+    var atual = el.getAttribute('data-cat');
+    sel.value = (atual && sel.querySelector('option[value="' + atual + '"]') &&
+                 !sel.querySelector('option[value="' + atual + '"]').disabled)
+        ? atual : primeiro;
+    document.getElementById('exCentro').value = el.getAttribute('data-centro') || '';
+
+    // padrao sugerido: a descricao inteira, em maiusculas — encurtavel
+    document.getElementById('exMemorizar').checked = true;
+    document.getElementById('exPadraoBox').style.display = '';
+    document.getElementById('exPadrao').value =
+        (el.getAttribute('data-desc') || '').toUpperCase().slice(0, 160);
+
+    document.getElementById('exModalClassificar').style.display = 'block';
+}
+</script>
+{% endblock %}
+

@@ -13,32 +13,41 @@ class ExtratoLancamento:
 
     @staticmethod
     def listar(empresa_ids=None, data_de=None, data_ate=None, conta=None,
-               busca=None, limite=500):
+               busca=None, limite=500, classif=None):
         cond, params = ['1=1'], []
         if empresa_ids:
             marks = ','.join(['%s'] * len(empresa_ids))
-            cond.append(f'empresa_id IN ({marks})')
+            cond.append(f'e.empresa_id IN ({marks})')
             params += list(empresa_ids)
         if data_de:
-            cond.append('data >= %s')
+            cond.append('e.data >= %s')
             params.append(data_de)
         if data_ate:
-            cond.append('data <= %s')
+            cond.append('e.data <= %s')
             params.append(data_ate)
         if conta:
-            cond.append("CONCAT(COALESCE(banco,''), ' · ', COALESCE(conta,'')) = %s")
+            cond.append("CONCAT(COALESCE(e.banco,''), ' · ', COALESCE(e.conta,'')) = %s")
             params.append(conta)
         if busca:
-            cond.append('(descricao LIKE %s OR documento LIKE %s)')
+            cond.append('(e.descricao LIKE %s OR e.documento LIKE %s)')
             like = f'%{busca}%'
             params += [like, like]
+        if classif == 'sim':
+            cond.append('e.categoria_id IS NOT NULL')
+        elif classif == 'nao':
+            cond.append('e.categoria_id IS NULL')
         where = ' AND '.join(cond)
         return execute_query(
-            f"""SELECT id, empresa_id, banco, conta, data, valor, tipo, descricao,
-                       documento, fitid, origem, arquivo, criado_em
-                  FROM extrato_lancamentos
+            f"""SELECT e.id, e.empresa_id, e.banco, e.conta, e.data, e.valor,
+                       e.tipo, e.descricao, e.documento, e.fitid, e.origem,
+                       e.arquivo, e.criado_em, e.categoria_id, e.centro_custo_id,
+                       e.memorizacao_id, c.nome AS categoria_nome,
+                       c.grupo AS categoria_grupo, cc.nome AS centro_nome
+                  FROM extrato_lancamentos e
+                  LEFT JOIN fin_categorias c ON c.id = e.categoria_id
+                  LEFT JOIN fin_centros_custo cc ON cc.id = e.centro_custo_id
                  WHERE {where}
-                 ORDER BY data DESC, id DESC
+                 ORDER BY e.data DESC, e.id DESC
                  LIMIT {int(limite)}""",
             tuple(params), fetch=True) or []
 
@@ -86,6 +95,22 @@ class ExtratoLancamento:
         return [r['rotulo'] for r in rows]
 
     @staticmethod
+    def classificar(lanc_id, categoria_id, centro_custo_id=None,
+                    memorizacao_id=None):
+        execute_query(
+            'UPDATE extrato_lancamentos SET categoria_id = %s, '
+            'centro_custo_id = %s, memorizacao_id = %s WHERE id = %s',
+            (categoria_id, centro_custo_id, memorizacao_id, lanc_id))
+        r = execute_query('SELECT categoria_id FROM extrato_lancamentos '
+                          'WHERE id = %s', (lanc_id,), fetch=True, fetch_one=True)
+        return bool(r and r['categoria_id'] == categoria_id)
+
+    @staticmethod
+    def get(lanc_id):
+        return execute_query('SELECT * FROM extrato_lancamentos WHERE id = %s',
+                             (lanc_id,), fetch=True, fetch_one=True)
+
+    @staticmethod
     def hashes_existentes(hashes):
         """Quais dessas chaves já estão gravadas (para contar repetido certo)."""
         achados = set()
@@ -129,3 +154,128 @@ class ExtratoLancamento:
                     f'WHERE hash_dedup IN ({marks}) AND usuario_id IS NULL',
                     (usuario_id, *fatia))
         return total
+
+
+class ExtratoMemorizacao:
+    """Memorizações do extrato (E2.4): a primeira decisão humana vira regra.
+
+    O ``padrao`` é um trecho da descrição (casamento por CONTÉM, sem caixa).
+    Quando mais de um casa, vence o MAIS LONGO — "CONEXA ASSINATURA" ganha de
+    "CONEXA". empresa_id NULL = vale para todas as minhas empresas.
+    """
+
+    @staticmethod
+    def listar(apenas_ativas=False):
+        cond = 'WHERE m.ativo = 1' if apenas_ativas else ''
+        return execute_query(
+            f"""SELECT m.*, c.nome AS categoria_nome, c.grupo AS categoria_grupo,
+                       c.tipo AS categoria_tipo, cc.nome AS centro_nome
+                  FROM fin_extrato_memorizacoes m
+                  JOIN fin_categorias c ON c.id = m.categoria_id
+                  LEFT JOIN fin_centros_custo cc ON cc.id = m.centro_custo_id
+                {cond}
+                 ORDER BY m.ativo DESC, m.usos DESC, m.padrao""",
+            fetch=True) or []
+
+    @staticmethod
+    def criar(padrao, categoria_id, centro_custo_id=None, empresa_id=None,
+              criado_por=None):
+        """None se já existir memorização ATIVA com o mesmo padrão."""
+        padrao = (padrao or '').strip().upper()[:160]
+        if not padrao:
+            return None
+        dup = execute_query(
+            'SELECT id FROM fin_extrato_memorizacoes '
+            'WHERE ativo = 1 AND padrao = %s', (padrao,),
+            fetch=True, fetch_one=True)
+        if dup:
+            return None
+        return execute_query(
+            'INSERT INTO fin_extrato_memorizacoes '
+            '(empresa_id, padrao, categoria_id, centro_custo_id, criado_por) '
+            'VALUES (%s, %s, %s, %s, %s)',
+            (empresa_id, padrao, categoria_id, centro_custo_id, criado_por))
+
+    @staticmethod
+    def get(mem_id):
+        return execute_query('SELECT * FROM fin_extrato_memorizacoes '
+                             'WHERE id = %s', (mem_id,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def set_ativa(mem_id, ativa):
+        execute_query('UPDATE fin_extrato_memorizacoes SET ativo = %s '
+                      'WHERE id = %s', (1 if ativa else 0, mem_id))
+
+    @staticmethod
+    def _casa(descricao, memorizacoes, empresa_id=None):
+        """A memorização vencedora para esta descrição (mais longa ganha)."""
+        alvo = (descricao or '').upper()
+        melhor = None
+        for m in memorizacoes:
+            if not m['ativo']:
+                continue
+            if m['empresa_id'] and empresa_id and m['empresa_id'] != empresa_id:
+                continue
+            if m['padrao'] in alvo:
+                if melhor is None or len(m['padrao']) > len(melhor['padrao']):
+                    melhor = m
+        return melhor
+
+    @staticmethod
+    def aplicar_em_ids(ids):
+        """Classifica os lançamentos (ainda sem categoria) dessa lista de ids.
+        Devolve quantos classificou — roda logo depois do import."""
+        if not ids:
+            return 0
+        mems = ExtratoMemorizacao.listar(apenas_ativas=True)
+        if not mems:
+            return 0
+        marks = ','.join(['%s'] * len(ids))
+        rows = execute_query(
+            f'SELECT id, empresa_id, descricao FROM extrato_lancamentos '
+            f'WHERE id IN ({marks}) AND categoria_id IS NULL',
+            tuple(ids), fetch=True) or []
+        aplicados, usos = 0, {}
+        for r in rows:
+            m = ExtratoMemorizacao._casa(r['descricao'], mems, r['empresa_id'])
+            if not m:
+                continue
+            execute_query(
+                'UPDATE extrato_lancamentos SET categoria_id = %s, '
+                'centro_custo_id = %s, memorizacao_id = %s WHERE id = %s',
+                (m['categoria_id'], m['centro_custo_id'], m['id'], r['id']))
+            usos[m['id']] = usos.get(m['id'], 0) + 1
+            aplicados += 1
+        for mid, n in usos.items():
+            execute_query('UPDATE fin_extrato_memorizacoes SET usos = usos + %s, '
+                          'ultimo_uso = NOW() WHERE id = %s', (n, mid))
+        return aplicados
+
+    @staticmethod
+    def aplicar_retroativa(mem_id):
+        """Varre TODO lançamento antigo sem categoria que casa com o padrão —
+        memorizou, o passado também se resolve. Devolve quantos pegou."""
+        m = ExtratoMemorizacao.get(mem_id)
+        if not m or not m['ativo']:
+            return 0
+        like = ('%' + m['padrao'].replace(chr(92), chr(92) * 2)
+                .replace('%', chr(92) + '%').replace('_', chr(92) + '_') + '%')
+        params_where = [like]
+        cond_emp = ''
+        if m['empresa_id']:
+            cond_emp = 'AND empresa_id = %s'
+            params_where.append(m['empresa_id'])
+        antes = execute_query(
+            f"SELECT COUNT(*) AS n FROM extrato_lancamentos "
+            f"WHERE categoria_id IS NULL AND UPPER(descricao) LIKE %s {cond_emp}",
+            tuple(params_where), fetch=True, fetch_one=True)
+        n = int((antes or {}).get('n') or 0)
+        if n:
+            execute_query(
+                f"UPDATE extrato_lancamentos SET categoria_id = %s, "
+                f"centro_custo_id = %s, memorizacao_id = %s "
+                f"WHERE categoria_id IS NULL AND UPPER(descricao) LIKE %s {cond_emp}",
+                tuple([m['categoria_id'], m['centro_custo_id'], m['id']] + params_where))
+            execute_query('UPDATE fin_extrato_memorizacoes SET usos = usos + %s, '
+                          'ultimo_uso = NOW() WHERE id = %s', (n, m['id']))
+        return n

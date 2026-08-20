@@ -791,18 +791,26 @@ def fluxo_saldo():
 @permission_required('financeiro.extrato')
 def extrato():
     from models.extrato_lancamento import ExtratoLancamento
+    from models.fin_titulo import FinCentroCusto
     emps, sel, mapa = _empresas_ctx()
+    classif = request.args.get('classif') or ''
+    if classif not in ('sim', 'nao'):
+        classif = ''
     filtros = dict(
         data_de=request.args.get('data_de') or '',
         data_ate=request.args.get('data_ate') or '',
         conta=request.args.get('conta') or '',
         busca=(request.args.get('busca') or '').strip())
     args = {k: (v or None) for k, v in filtros.items()}
-    rows = ExtratoLancamento.listar(empresa_ids=sel, **args)
+    rows = ExtratoLancamento.listar(empresa_ids=sel, classif=classif or None,
+                                    **args)
+    filtros['classif'] = classif
     return render_template('financeiro/extrato.html',
                            lancamentos=rows,
                            totais=ExtratoLancamento.totais(empresa_ids=sel, **args),
                            contas=ExtratoLancamento.contas(empresa_ids=sel),
+                           categorias=FinCategoria.listar(),
+                           centros=FinCentroCusto.listar(),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            limite=500, filtros=filtros)
 
@@ -852,13 +860,25 @@ def extrato_importar():
             unicos.append((h, l))
         ja_existiam = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
         novos = [(h, l) for h, l in unicos if h not in ja_existiam]
+        auto = 0
         if novos:
             ExtratoLancamento.inserir_lote(
                 novos, dados['banco'], dados['conta'], arq.filename,
                 current_user.id, empresa_id=empresa_id)
+            # E2.4: os que casam com memorização já chegam classificados —
+            # "nem precisa ter trabalho de encontrar".
+            from models.extrato_lancamento import ExtratoMemorizacao
+            from utils.db_helper import execute_query as _q
+            marks = ','.join(['%s'] * len(novos))
+            ids_rows = _q(f'SELECT id FROM extrato_lancamentos '
+                          f'WHERE hash_dedup IN ({marks})',
+                          tuple(h for h, _ in novos), fetch=True) or []
+            auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids_rows])
 
         msg = (f"{arq.filename}: {len(novos)} lançamento(s) novo(s), "
                f"{len(unicos) - len(novos)} já estavam (ignorados)")
+        if auto:
+            msg += f'; {auto} já chegaram CLASSIFICADOS pela memorização'
         if dados.get('saldo'):
             sd = dados['saldo']
             quando = f" em {sd['data'][8:10]}/{sd['data'][5:7]}" if sd.get('data') else ''
@@ -872,6 +892,101 @@ def extrato_importar():
                           'conta': dados['conta'], 'novos': len(novos),
                           'repetidos': len(unicos) - len(novos)})
     return redirect(url_for('financeiro.extrato'))
+
+
+# =======================================================================
+# Classificação + memorização do extrato (E2.4)
+# =======================================================================
+@financeiro.route('/financeiro/extrato/<int:lanc_id>/classificar', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_classificar(lanc_id):
+    from models.extrato_lancamento import ExtratoLancamento, ExtratoMemorizacao
+    f = request.form
+    lanc = ExtratoLancamento.get(lanc_id)
+    if not lanc:
+        flash('Lançamento não encontrado.', 'danger')
+        return redirect(url_for('financeiro.extrato'))
+    cat_raw = (f.get('categoria_id') or '').strip()
+    cat = next((c for c in FinCategoria.listar() if str(c['id']) == cat_raw), None)
+    if not cat:
+        flash('Escolha a categoria.', 'danger')
+        return redirect(url_for('financeiro.extrato'))
+    # Crédito é receita, débito é despesa — categoria do tipo errado é engano.
+    esperado = 'R' if lanc['valor'] >= 0 else 'P'
+    if cat['tipo'] != esperado:
+        flash(('Este lançamento é um CRÉDITO — escolha uma categoria de receita.'
+               if esperado == 'R' else
+               'Este lançamento é um DÉBITO — escolha uma categoria de despesa.'),
+              'danger')
+        return redirect(url_for('financeiro.extrato'))
+    centro_raw = (f.get('centro_custo_id') or '').strip()
+    centro = int(centro_raw) if centro_raw.isdigit() else None
+
+    memorizar = f.get('memorizar') == 'on'
+    mem_id = None
+    varridos = 0
+    if memorizar:
+        padrao = (f.get('padrao') or '').strip()
+        if len(padrao) < 4:
+            flash('O padrão da memorização precisa de pelo menos 4 letras '
+                  '(um trecho estável da descrição).', 'danger')
+            return redirect(url_for('financeiro.extrato'))
+        mem_id = ExtratoMemorizacao.criar(padrao, cat['id'], centro,
+                                          criado_por=current_user.id)
+        if mem_id:
+            registrar('escrita.criou_memorizacao_extrato', 'financeiro',
+                      tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+                      depois={'padrao': padrao.upper(), 'categoria': cat['nome'],
+                              'centro_custo_id': centro})
+            varridos = ExtratoMemorizacao.aplicar_retroativa(mem_id)
+        else:
+            flash('Já existe memorização ativa com esse padrão — este '
+                  'lançamento foi classificado, mas nada novo foi memorizado.',
+                  'warning')
+
+    ok = ExtratoLancamento.classificar(lanc_id, cat['id'], centro, mem_id)
+    if ok:
+        registrar('escrita.classificou_extrato', 'financeiro',
+                  tabela='extrato_lancamentos', registro_id=lanc_id,
+                  depois={'categoria': cat['nome'], 'centro_custo_id': centro,
+                          'memorizou': bool(mem_id)})
+        msg = f'Classificado em "{cat["nome"]}".'
+        if mem_id:
+            extra_varridos = max(0, varridos - 1)
+            msg += (f' Memorizado — {extra_varridos} lançamento(s) antigo(s) '
+                    'também foram classificados de carona.'
+                    if extra_varridos else ' Memorizado para as próximas.')
+        flash(msg, 'success')
+    else:
+        flash('Erro ao classificar.', 'danger')
+    return redirect(url_for('financeiro.extrato'))
+
+
+@financeiro.route('/financeiro/extrato/memorizacoes')
+@permission_required('financeiro.extrato')
+def extrato_memorizacoes():
+    from models.extrato_lancamento import ExtratoMemorizacao
+    return render_template('financeiro/extrato_memorizacoes.html',
+                           memorizacoes=ExtratoMemorizacao.listar())
+
+
+@financeiro.route('/financeiro/extrato/memorizacoes/<int:mem_id>/alternar',
+                  methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_memorizacao_alternar(mem_id):
+    from models.extrato_lancamento import ExtratoMemorizacao
+    m = ExtratoMemorizacao.get(mem_id)
+    if not m:
+        flash('Memorização não encontrada.', 'danger')
+    else:
+        ExtratoMemorizacao.set_ativa(mem_id, not m['ativo'])
+        registrar('escrita.alternou_memorizacao_extrato', 'financeiro',
+                  tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+                  depois={'ativo': not m['ativo']})
+        flash('Memorização reativada.' if not m['ativo'] else
+              'Memorização desativada — os já classificados ficam como estão.',
+              'success')
+    return redirect(url_for('financeiro.extrato_memorizacoes'))
 
 
 # =======================================================================
