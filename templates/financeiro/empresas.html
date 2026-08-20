@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Empresas - Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+.me-inativa { opacity: .55; }
+.me-acao { border: none; background: none; cursor: pointer; padding: 6px; }
+.me-wrap { overflow-x: auto; }
+.me-badge { padding: 3px 10px; border-radius: 999px; font-size: .78em; font-weight: 700; }
+.me-sim { background: #dcfce7; color: #166534; }
+.me-nao { background: #f3f4f6; color: #6b7280; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-building" style="color: var(--primary-green);"></i>
+            Minhas Empresas
+        </h1>
+        <p class="page-subtitle">Quem participa do financeiro — cada uma vira um chip em todas as telas</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('financeiro.empresa_marcar') }}" id="meForm">
+            <div class="filter-grid">
+                <div class="filter-item" style="flex:2;" id="meBuscaBox">
+                    <label class="filter-label">Adicionar empresa (busque no cadastro de clientes)</label>
+                    <input type="text" id="meBusca" class="form-control" autocomplete="off"
+                           placeholder="Nome, CNPJ/CPF ou número do cliente">
+                    <div id="meResultados"></div>
+                </div>
+                <div class="filter-item" id="meEscolhida" style="display:none;">
+                    <label class="filter-label">Escolhida</label>
+                    <div style="padding-top:8px; font-weight:700;" id="meEscNome"></div>
+                </div>
+                <div class="filter-item">
+                    <label class="filter-label">Apelido (nome do chip)</label>
+                    <input type="text" name="apelido" id="meApelido" class="form-control"
+                           maxlength="40" placeholder="Ex.: BRILHO">
+                </div>
+                <div class="filter-item" style="display:flex; align-items:flex-end;">
+                    <input type="hidden" name="cliente_id" id="meClienteId">
+                    <button type="submit" class="btn btn-primary" id="meBtnAdd" disabled>
+                        <i class="fas fa-plus"></i> Adicionar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body me-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Apelido (chip)</th>
+                    <th>Cadastro</th>
+                    <th>Tipo</th>
+                    <th>No consolidado</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in empresas %}
+                <tr class="{{ 'me-inativa' if not e.ativo }}">
+                    <td><strong>{{ e.apelido }}</strong></td>
+                    <td>{{ e.numero_cliente or '—' }} · {{ e.nome_razao_social }}</td>
+                    <td>{{ e.tipo_pessoa }}</td>
+                    <td>
+                        <form method="POST" style="display:inline;"
+                              action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
+                            <input type="hidden" name="acao" value="consolidado">
+                            <button class="me-acao" title="Alternar participação no consolidado padrão">
+                                <span class="me-badge {{ 'me-sim' if e.no_consolidado else 'me-nao' }}">
+                                    {{ 'Entra' if e.no_consolidado else 'Fora' }}</span>
+                            </button>
+                        </form>
+                    </td>
+                    <td>{{ 'Ativa' if e.ativo else 'Desativada' }}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="me-acao" title="Trocar apelido"
+                                data-id="{{ e.id }}" data-apelido="{{ e.apelido }}"
+                                onclick="meRenomear(this)">
+                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                        </button>
+                        <form method="POST" style="display:inline;"
+                              action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
+                            <input type="hidden" name="acao" value="ativo">
+                            <button class="me-acao"
+                                    title="{{ 'Desativar (some dos chips; histórico fica)' if e.ativo else 'Reativar' }}">
+                                <i class="fas fa-{{ 'toggle-on' if e.ativo else 'toggle-off' }}"
+                                   style="color:{{ '#16a34a' if e.ativo else '#9ca3af' }};"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <small style="color:#6b7280; display:block; margin-top:8px;">
+            "No consolidado" define quem entra por padrão na visão TODAS —
+            e em qualquer tela dá para juntar só algumas clicando nos chips.
+        </small>
+    </div>
+</div>
+
+<!-- ── Modal: trocar apelido ─────────────────────────────────────── -->
+<div id="meModalApelido" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+            <h3>Trocar Apelido</h3>
+            <button class="modal-close" onclick="meFechar()">&times;</button>
+        </div>
+        <form method="POST" id="meFormApelido" action="">
+            <input type="hidden" name="acao" value="apelido">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Apelido (aparece nos chips)</label>
+                    <input type="text" name="apelido" id="meNovoApelido" class="form-control"
+                           maxlength="40" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="meFechar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var ME_URL_ATU = "{{ url_for('financeiro.empresa_atualizar', emp_id=0) }}";
+
+function meRenomear(el) {
+    var form = document.getElementById('meFormApelido');
+    form.action = ME_URL_ATU.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('meNovoApelido').value = el.getAttribute('data-apelido');
+    document.getElementById('meModalApelido').style.display = 'block';
+    document.getElementById('meNovoApelido').focus();
+}
+function meFechar() {
+    document.getElementById('meModalApelido').style.display = 'none';
+}
+
+(function () {
+    var busca = document.getElementById('meBusca');
+    if (!busca) return;
+    var caixa = document.getElementById('meResultados');
+    var timer = null;
+    busca.addEventListener('input', function () {
+        clearTimeout(timer);
+        var q = busca.value.trim();
+        if (q.length < 2) { caixa.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+            fetch('{{ url_for("financeiro.empresas_buscar") }}?q=' + encodeURIComponent(q))
+                .then(function (r) { return r.json(); })
+                .then(function (lista) {
+                    caixa.innerHTML = '';
+                    if (!lista.length) {
+                        var v = document.createElement('div');
+                        v.className = 'socio-res-vazio';
+                        v.textContent = 'Nenhum cadastro livre com "' + q + '".';
+                        caixa.appendChild(v);
+                        return;
+                    }
+                    lista.forEach(function (p) {
+                        var b = document.createElement('button');
+                        b.type = 'button';
+                        b.className = 'socio-res-item';
+                        var n = document.createElement('strong');
+                        n.textContent = (p.numero_cliente ? p.numero_cliente + ' · ' : '') + p.nome;
+                        b.appendChild(n);
+                        b.addEventListener('click', function () {
+                            document.getElementById('meClienteId').value = p.id;
+                            document.getElementById('meEscNome').textContent = p.nome;
+                            document.getElementById('meEscolhida').style.display = '';
+                            document.getElementById('meBtnAdd').disabled = false;
+                            var sugestao = String(p.nome || '').split(' ')[0].toUpperCase();
+                            var ap = document.getElementById('meApelido');
+                            if (!ap.value) ap.value = sugestao;
+                            caixa.innerHTML = '';
+                            busca.value = '';
+                            ap.focus();
+                        });
+                        caixa.appendChild(b);
+                    });
+                });
+        }, 250);
+    });
+})();
+</script>
+<style>
+.socio-res-item { display: block; width: 100%; text-align: left; padding: 8px 10px;
+  border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer;
+  margin-top: 4px; font: inherit; }
+.socio-res-item:hover { background: #f0fdf4; border-color: #86efac; }
+.socio-res-vazio { padding: 8px 10px; color: #6b7280; margin-top: 4px; }
+</style>
+{% endblock %}

@@ -96,27 +96,32 @@ class FinDre:
     """
 
     @staticmethod
-    def por_ano(ano, regime='competencia'):
+    def por_ano(ano, regime='competencia', empresa_ids=None):
         """Linhas (tipo, grupo, nome da categoria, mês 1-12, total)."""
+        cond, extra = '', ()
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond = f'AND t.empresa_id IN ({marks})'
+            extra = tuple(empresa_ids)
         if regime == 'caixa':
             return execute_query(
-                """SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
+                f"""SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
                           MONTH(b.data_baixa) AS mes,
                           SUM(b.valor + b.juros + b.multa) AS total
                      FROM fin_titulo_baixas b
                      JOIN fin_titulos t ON t.id = b.titulo_id
                      JOIN fin_categorias c ON c.id = t.categoria_id
-                    WHERE YEAR(b.data_baixa) = %s
+                    WHERE YEAR(b.data_baixa) = %s {cond}
                     GROUP BY c.tipo, c.grupo, c.nome, MONTH(b.data_baixa)""",
-                (ano,), fetch=True) or []
+                (ano,) + extra, fetch=True) or []
         return execute_query(
-            """SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
+            f"""SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
                       MONTH(t.competencia) AS mes, SUM(t.valor) AS total
                  FROM fin_titulos t
                  JOIN fin_categorias c ON c.id = t.categoria_id
-                WHERE YEAR(t.competencia) = %s AND t.status <> 'cancelado'
+                WHERE YEAR(t.competencia) = %s AND t.status <> 'cancelado' {cond}
                 GROUP BY c.tipo, c.grupo, c.nome, MONTH(t.competencia)""",
-            (ano,), fetch=True) or []
+            (ano,) + extra, fetch=True) or []
 
     @staticmethod
     def anos_com_dado():
@@ -136,42 +141,71 @@ class FinFluxo:
     """
 
     @staticmethod
-    def saldo_vigente():
-        """O último saldo informado (ou None se nunca houve)."""
+    def saldos_vigentes(empresa_ids=None):
+        """O último saldo informado de CADA empresa (lista, pode ser vazia).
+
+        Multiempresa (E2.1): o saldo real é POR EMPRESA; a tela soma os
+        vigentes das empresas selecionadas.
+        """
+        cond, params = '', ()
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond = f'WHERE s.empresa_id IN ({marks})'
+            params = tuple(empresa_ids)
         return execute_query(
-            'SELECT id, data, valor, origem, usuario_id, criado_em '
-            '  FROM fin_saldos ORDER BY criado_em DESC, id DESC LIMIT 1',
-            fetch=True, fetch_one=True)
+            f"""SELECT s.id, s.empresa_id, s.data, s.valor, s.origem
+                  FROM fin_saldos s
+                  JOIN (SELECT empresa_id, MAX(id) AS mid
+                          FROM fin_saldos GROUP BY empresa_id) u
+                    ON u.mid = s.id
+                {cond}
+                 ORDER BY s.empresa_id""", params, fetch=True) or []
 
     @staticmethod
-    def registrar_saldo(data, valor, usuario_id, origem='manual'):
+    def saldo_vigente():
+        """Compatibilidade: o vigente mais recente entre todas (ou None)."""
+        vs = FinFluxo.saldos_vigentes()
+        return vs[-1] if vs else None
+
+    @staticmethod
+    def registrar_saldo(data, valor, usuario_id, empresa_id, origem='manual'):
         """Informe novo = linha nova (histórico completo, nunca sobrescreve)."""
         return execute_query(
-            'INSERT INTO fin_saldos (data, valor, origem, usuario_id) '
-            'VALUES (%s, %s, %s, %s)', (data, valor, origem, usuario_id))
+            'INSERT INTO fin_saldos (empresa_id, data, valor, origem, usuario_id) '
+            'VALUES (%s, %s, %s, %s, %s)',
+            (empresa_id, data, valor, origem, usuario_id))
 
     @staticmethod
-    def abertos_por_vencimento():
+    def abertos_por_vencimento(empresa_ids=None):
         """Saldo devedor dos títulos em aberto, agrupado por dia e tipo."""
+        cond, params = '', ()
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond = f'AND empresa_id IN ({marks})'
+            params = tuple(empresa_ids)
         return execute_query(
-            """SELECT vencimento, tipo, SUM(valor - valor_baixado) AS total
+            f"""SELECT vencimento, tipo, SUM(valor - valor_baixado) AS total
                  FROM fin_titulos
-                WHERE status IN ('aberto', 'parcial')
+                WHERE status IN ('aberto', 'parcial') {cond}
                 GROUP BY vencimento, tipo
-                ORDER BY vencimento""", fetch=True) or []
+                ORDER BY vencimento""", params, fetch=True) or []
 
 
 class FinTitulo:
 
     @staticmethod
     def listar(tipo=None, status='abertos', venc_de=None, venc_ate=None,
-               categoria_id=None, busca=None):
+               categoria_id=None, busca=None, empresa_ids=None):
         """Lista títulos com a categoria junto, em ordem de vencimento.
 
         status: 'abertos' (aberto+parcial, o dia a dia da tela) | 'todos' |
         um status exato (aberto|parcial|liquidado|cancelado).
         """
         cond, params = [], []
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond.append(f't.empresa_id IN ({marks})')
+            params += list(empresa_ids)
         if tipo in ('R', 'P'):
             cond.append('t.tipo = %s')
             params.append(tipo)
@@ -206,14 +240,19 @@ class FinTitulo:
             tuple(params), fetch=True) or []
 
     @staticmethod
-    def resumo():
-        """Números dos cartões — só dado real, por tipo.
+    def resumo(empresa_ids=None):
+        """Números dos cartões — só dado real, por tipo (e por empresa).
 
         Devolve {'R': {...}, 'P': {...}} com aberto (valor - baixado dos em
         aberto), vencido e a vencer nos próximos 7 dias.
         """
+        filtro, params = '', ()
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            filtro = f'AND empresa_id IN ({marks})'
+            params = tuple(empresa_ids)
         rows = execute_query(
-            """SELECT tipo,
+            f"""SELECT tipo,
                       COALESCE(SUM(valor - valor_baixado), 0)                  AS em_aberto,
                       SUM(1)                                                    AS qtd,
                       COALESCE(SUM(CASE WHEN vencimento < CURDATE()
@@ -224,9 +263,9 @@ class FinTitulo:
                                         AND CURDATE() + INTERVAL 7 DAY
                                         THEN valor - valor_baixado END), 0)     AS vence_7d
                  FROM fin_titulos
-                WHERE status IN ('aberto', 'parcial')
+                WHERE status IN ('aberto', 'parcial') {filtro}
                 GROUP BY tipo""",
-            fetch=True) or []
+            params, fetch=True) or []
         base = {'em_aberto': 0, 'qtd': 0, 'vencido': 0, 'qtd_vencida': 0, 'vence_7d': 0}
         out = {'R': dict(base), 'P': dict(base)}
         for r in rows:
@@ -243,17 +282,17 @@ class FinTitulo:
 
     @staticmethod
     def criar(tipo, contraparte_nome, categoria_id, descricao, competencia,
-              emissao, vencimento, valor, contraparte_doc=None, cliente_id=None,
-              observacao=None, origem='manual', chave_idem=None):
+              emissao, vencimento, valor, empresa_id, contraparte_doc=None,
+              cliente_id=None, observacao=None, origem='manual', chave_idem=None):
         return execute_query(
             """INSERT INTO fin_titulos
-               (tipo, contraparte_doc, contraparte_nome, cliente_id, categoria_id,
-                descricao, competencia, emissao, vencimento, valor, origem,
-                chave_idem, observacao)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (tipo, contraparte_doc, contraparte_nome, cliente_id, categoria_id,
-             descricao, competencia, emissao, vencimento, valor, origem,
-             chave_idem, observacao))
+               (empresa_id, tipo, contraparte_doc, contraparte_nome, cliente_id,
+                categoria_id, descricao, competencia, emissao, vencimento, valor,
+                origem, chave_idem, observacao)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (empresa_id, tipo, contraparte_doc, contraparte_nome, cliente_id,
+             categoria_id, descricao, competencia, emissao, vencimento, valor,
+             origem, chave_idem, observacao))
 
     @staticmethod
     def cancelar(titulo_id):

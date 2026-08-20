@@ -154,8 +154,23 @@ def _dec_form(raw):
 
 
 def _filtros_titulos():
-    keys = ('tipo', 'status', 'venc_de', 'venc_ate', 'categoria_id', 'busca')
+    keys = ('tipo', 'status', 'venc_de', 'venc_ate', 'categoria_id', 'busca', 'emp')
     return {k: request.form.get(k) or request.args.get(k) or '' for k in keys}
+
+
+def _empresas_ctx():
+    """(empresas ativas, ids selecionados no ?emp=, mapa id->apelido).
+
+    ``emp`` é CSV de cliente_ids; vazio = todas. Ids fora das minhas empresas
+    são descartados — ninguém enxerga empresa que não está marcada.
+    """
+    from models.fin_empresa import FinEmpresa
+    emps = FinEmpresa.listar()
+    validos = {e['cliente_id'] for e in emps}
+    raw = (request.args.get('emp') or request.form.get('emp') or '').strip()
+    sel = [int(x) for x in raw.split(',') if x.isdigit() and int(x) in validos]
+    mapa = {e['cliente_id']: e['apelido'] for e in emps}
+    return emps, sel, mapa
 
 
 @financeiro.route('/financeiro/titulos')
@@ -171,18 +186,21 @@ def titulos():
     categoria_id = request.args.get('categoria_id') or None
     busca = (request.args.get('busca') or '').strip() or None
 
+    emps, sel, mapa = _empresas_ctx()
     lista = FinTitulo.listar(tipo=None if tipo == 'todos' else tipo,
                              status=status, venc_de=venc_de, venc_ate=venc_ate,
-                             categoria_id=categoria_id, busca=busca)
+                             categoria_id=categoria_id, busca=busca,
+                             empresa_ids=sel)
     return render_template(
         'financeiro/titulos.html',
         titulos=lista,
-        resumo=FinTitulo.resumo(),
+        resumo=FinTitulo.resumo(empresa_ids=sel),
         categorias=FinCategoria.listar(),
         hoje=date.today(),
+        fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
         filtros=dict(tipo=tipo, status=status, venc_de=venc_de or '',
                      venc_ate=venc_ate or '', categoria_id=categoria_id or '',
-                     busca=busca or ''))
+                     busca=busca or '', emp=','.join(map(str, sel))))
 
 
 @financeiro.route('/financeiro/titulos/novo', methods=['POST'])
@@ -197,9 +215,14 @@ def titulo_novo():
     vencimento = (f.get('vencimento') or '').strip()
     emissao = (f.get('emissao') or '').strip() or date.today().isoformat()
 
+    from models.fin_empresa import FinEmpresa
+    empresa_raw = (f.get('empresa_id') or '').strip()
+
     valor = None
     erro = None
-    if tipo not in ('R', 'P'):
+    if not empresa_raw.isdigit() or int(empresa_raw) not in FinEmpresa.ids_validos():
+        erro = 'Escolha a empresa do lançamento.'
+    elif tipo not in ('R', 'P'):
         erro = 'Escolha o tipo: a receber ou a pagar.'
     elif not contraparte:
         erro = 'Informe de quem é o título (contraparte).'
@@ -223,6 +246,7 @@ def titulo_novo():
         return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
 
     tid = FinTitulo.criar(
+        empresa_id=int(empresa_raw),
         tipo=tipo, contraparte_nome=contraparte,
         contraparte_doc=(f.get('contraparte_doc') or '').strip() or None,
         categoria_id=int(categoria_id), descricao=descricao,
@@ -232,7 +256,8 @@ def titulo_novo():
     if tid:
         registrar('escrita.criou_titulo', 'financeiro', tabela='fin_titulos',
                   registro_id=tid,
-                  depois={'tipo': tipo, 'contraparte': contraparte,
+                  depois={'empresa_id': int(empresa_raw), 'tipo': tipo,
+                          'contraparte': contraparte,
                           'descricao': descricao, 'valor': str(valor),
                           'competencia': competencia, 'vencimento': vencimento})
         flash('Título lançado!', 'success')
@@ -480,8 +505,10 @@ def dre():
         ano = int(request.args.get('ano') or ano_atual)
     except ValueError:
         ano = ano_atual
-    linhas = _montar_dre(FinDre.por_ano(ano, regime))
+    emps, sel, mapa = _empresas_ctx()
+    linhas = _montar_dre(FinDre.por_ano(ano, regime, empresa_ids=sel))
     return render_template('financeiro/dre.html', linhas=linhas, regime=regime,
+                           fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            ano=ano, anos=anos, meses=_DRE_MESES)
 
 
@@ -542,27 +569,38 @@ def fluxo():
     if dias not in (30, 60, 90):
         dias = 30
     hoje = date.today()
-    saldo = FinFluxo.saldo_vigente()
-    saldo_valor = Decimal(str(saldo['valor'])) if saldo else Decimal('0')
-    linhas, resumo = _montar_fluxo(saldo_valor, FinFluxo.abertos_por_vencimento(),
+    emps, sel, mapa = _empresas_ctx()
+    saldos = FinFluxo.saldos_vigentes(sel)
+    saldo_total = sum((Decimal(str(x['valor'])) for x in saldos), Decimal('0'))
+    linhas, resumo = _montar_fluxo(saldo_total,
+                                   FinFluxo.abertos_por_vencimento(sel),
                                    hoje, dias)
     return render_template('financeiro/fluxo.html', linhas=linhas,
-                           resumo=resumo, saldo=saldo, dias=dias, hoje=hoje)
+                           resumo=resumo, saldos=saldos,
+                           saldo_total=saldo_total,
+                           fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
+                           dias=dias, hoje=hoje)
 
 
 @financeiro.route('/financeiro/fluxo/saldo', methods=['POST'])
 @permission_required('financeiro.fluxo')
 def fluxo_saldo():
     from models.fin_titulo import FinFluxo
+    from models.fin_empresa import FinEmpresa
+    empresa_raw = (request.form.get('empresa_id') or '').strip()
+    if not empresa_raw.isdigit() or int(empresa_raw) not in FinEmpresa.ids_validos():
+        flash('Escolha de qual empresa é o saldo.', 'danger')
+        return redirect(url_for('financeiro.fluxo'))
     try:
         valor = _dec_form(request.form.get('valor'))
     except InvalidOperation:
         flash('Valor de saldo inválido.', 'danger')
         return redirect(url_for('financeiro.fluxo'))
     data = request.form.get('data') or date.today().isoformat()
-    FinFluxo.registrar_saldo(data, valor, current_user.id)
+    FinFluxo.registrar_saldo(data, valor, current_user.id, int(empresa_raw))
     registrar('escrita.informou_saldo', 'financeiro', tabela='fin_saldos',
-              depois={'data': data, 'valor': str(valor)})
+              depois={'empresa_id': int(empresa_raw), 'data': data,
+                      'valor': str(valor)})
     flash('Saldo registrado — a projeção parte dele agora.', 'success')
     return redirect(url_for('financeiro.fluxo'))
 
@@ -577,17 +615,19 @@ def fluxo_saldo():
 @permission_required('financeiro.extrato')
 def extrato():
     from models.extrato_lancamento import ExtratoLancamento
+    emps, sel, mapa = _empresas_ctx()
     filtros = dict(
         data_de=request.args.get('data_de') or '',
         data_ate=request.args.get('data_ate') or '',
         conta=request.args.get('conta') or '',
         busca=(request.args.get('busca') or '').strip())
     args = {k: (v or None) for k, v in filtros.items()}
-    rows = ExtratoLancamento.listar(**args)
+    rows = ExtratoLancamento.listar(empresa_ids=sel, **args)
     return render_template('financeiro/extrato.html',
                            lancamentos=rows,
-                           totais=ExtratoLancamento.totais(**args),
-                           contas=ExtratoLancamento.contas(),
+                           totais=ExtratoLancamento.totais(empresa_ids=sel, **args),
+                           contas=ExtratoLancamento.contas(empresa_ids=sel),
+                           fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            limite=500, filtros=filtros)
 
 
@@ -595,7 +635,13 @@ def extrato():
 @permission_required('financeiro.extrato')
 def extrato_importar():
     from models.extrato_lancamento import ExtratoLancamento
+    from models.fin_empresa import FinEmpresa
     from utils.ofx_parser import parse_ofx, chave_dedup, OfxInvalido
+    empresa_raw = (request.form.get('empresa_id') or '').strip()
+    if not empresa_raw.isdigit() or int(empresa_raw) not in FinEmpresa.ids_validos():
+        flash('Escolha de qual empresa é a conta antes de importar.', 'warning')
+        return redirect(url_for('financeiro.extrato'))
+    empresa_id = int(empresa_raw)
     arquivos = [a for a in request.files.getlist('arquivos') if a and a.filename]
     if not arquivos:
         flash('Escolha ao menos um arquivo OFX.', 'warning')
@@ -619,7 +665,7 @@ def extrato_importar():
             k = (l['data'], str(l['valor']), l['descricao'], l['documento'])
             n = repeticoes.get(k, 0)
             repeticoes[k] = n + 1
-            h = chave_dedup(None, dados['banco'], dados['conta'], l, n)
+            h = chave_dedup(empresa_id, dados['banco'], dados['conta'], l, n)
             candidatos.append((h, l))
 
         vistos, unicos = set(), []
@@ -633,7 +679,7 @@ def extrato_importar():
         if novos:
             ExtratoLancamento.inserir_lote(
                 novos, dados['banco'], dados['conta'], arq.filename,
-                current_user.id)
+                current_user.id, empresa_id=empresa_id)
 
         msg = (f"{arq.filename}: {len(novos)} lançamento(s) novo(s), "
                f"{len(unicos) - len(novos)} já estavam (ignorados)")
@@ -645,7 +691,8 @@ def extrato_importar():
         flash(msg, 'success' if novos else 'warning')
         registrar('escrita.importou_extrato', 'financeiro',
                   tabela='extrato_lancamentos',
-                  depois={'arquivo': arq.filename, 'banco': dados['banco'],
+                  depois={'empresa_id': empresa_id, 'arquivo': arq.filename,
+                          'banco': dados['banco'],
                           'conta': dados['conta'], 'novos': len(novos),
                           'repetidos': len(unicos) - len(novos)})
     return redirect(url_for('financeiro.extrato'))
@@ -725,13 +772,11 @@ def _fin_home_payload():
     def _c_extrato():
         row = execute_query(
             """SELECT COUNT(*) AS n FROM extrato_lancamentos
-                WHERE empresa_id IS NULL
-                  AND data >= CURDATE() - INTERVAL 30 DAY""",
+                WHERE data >= CURDATE() - INTERVAL 30 DAY""",
             fetch=True, fetch_one=True) or {}
         dias = execute_query(
             """SELECT data, COUNT(*) AS n FROM extrato_lancamentos
-                WHERE empresa_id IS NULL
-                  AND data >= CURDATE() - INTERVAL 13 DAY
+                WHERE data >= CURDATE() - INTERVAL 13 DAY
                 GROUP BY data""", fetch=True) or []
         mapa = {r['data'].isoformat(): int(r['n']) for r in dias}
         serie = []
@@ -779,7 +824,7 @@ def _fin_home_payload():
             log.exception('[fin-home] contador %s falhou', chave)
 
     conta('titulos', "SELECT COUNT(*) n FROM fin_titulos WHERE status IN ('aberto','parcial')")
-    conta('extrato', 'SELECT COUNT(*) n FROM extrato_lancamentos WHERE empresa_id IS NULL')
+    conta('extrato', 'SELECT COUNT(*) n FROM extrato_lancamentos')
     conta('fluxo', "SELECT COUNT(*) n FROM fin_titulos WHERE status IN ('aberto','parcial') "
                    'AND vencimento <= CURDATE() + INTERVAL 7 DAY')
     conta('dre', "SELECT COUNT(DISTINCT MONTH(competencia)) n FROM fin_titulos "
@@ -805,6 +850,93 @@ def api_home_destaques():
     with _FIN_HOME_LOCK:
         _FIN_HOME_CACHE[uid] = (agora, payload)
     return jsonify(payload)
+
+
+# =======================================================================
+# Minhas Empresas (E2.1) — quem participa do financeiro multiempresa
+# =======================================================================
+@financeiro.route('/financeiro/empresas')
+@permission_required('financeiro.empresas')
+def empresas():
+    from models.fin_empresa import FinEmpresa
+    return render_template('financeiro/empresas.html',
+                           empresas=FinEmpresa.listar(apenas_ativas=False))
+
+
+@financeiro.route('/financeiro/empresas/buscar')
+@permission_required('financeiro.empresas')
+def empresas_buscar():
+    from models.fin_empresa import FinEmpresa
+    from utils.db_helper import execute_query as _q
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    dig = ''.join(ch for ch in q if ch.isdigit())
+    ja = FinEmpresa.ids_validos() | {e['cliente_id'] for e in
+                                     FinEmpresa.listar(apenas_ativas=False)}
+    rows = _q(
+        """SELECT id, numero_cliente, nome_razao_social AS nome, cpf_cnpj AS doc
+             FROM clientes
+            WHERE nome_razao_social LIKE %s
+               OR REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s
+               OR numero_cliente = %s
+            ORDER BY nome_razao_social LIMIT 10""",
+        (f'%{q}%', f'%{dig}%' if dig else q, q), fetch=True) or []
+    return jsonify([r for r in rows if r['id'] not in ja])
+
+
+@financeiro.route('/financeiro/empresas/marcar', methods=['POST'])
+@permission_required('financeiro.empresas')
+def empresa_marcar():
+    from models.fin_empresa import FinEmpresa
+    from models.cliente import Cliente
+    raw = (request.form.get('cliente_id') or '').strip()
+    apelido = (request.form.get('apelido') or '').strip().upper()
+    cli = Cliente.get_by_id(int(raw)) if raw.isdigit() else None
+    if not cli:
+        flash('Escolha um cadastro para marcar como empresa do financeiro.', 'danger')
+    else:
+        if not apelido:
+            apelido = (cli.get('nome_razao_social') or '').split()[0][:40].upper()
+        if FinEmpresa.marcar(int(raw), apelido):
+            registrar('escrita.marcou_empresa_fin', 'financeiro',
+                      tabela='fin_empresas',
+                      depois={'cliente_id': int(raw), 'apelido': apelido})
+            flash(f'{apelido} agora participa do financeiro.', 'success')
+        else:
+            flash('Esse cadastro já está marcado.', 'warning')
+    return redirect(url_for('financeiro.empresas'))
+
+
+@financeiro.route('/financeiro/empresas/<int:emp_id>/atualizar', methods=['POST'])
+@permission_required('financeiro.empresas')
+def empresa_atualizar(emp_id):
+    from models.fin_empresa import FinEmpresa
+    e = FinEmpresa.get(emp_id)
+    if not e:
+        flash('Empresa não encontrada.', 'danger')
+        return redirect(url_for('financeiro.empresas'))
+    acao = request.form.get('acao')
+    if acao == 'apelido':
+        novo_ap = (request.form.get('apelido') or '').strip().upper()
+        if novo_ap:
+            FinEmpresa.atualizar(emp_id, apelido=novo_ap)
+            flash('Apelido atualizado.', 'success')
+    elif acao == 'consolidado':
+        FinEmpresa.atualizar(emp_id, no_consolidado=not e['no_consolidado'])
+        flash('Regra do consolidado atualizada.', 'success')
+    elif acao == 'ativo':
+        if e['ativo'] and FinEmpresa.tem_movimento(e['cliente_id']):
+            # some dos chips e dos lançamentos NOVOS; o histórico continua
+            FinEmpresa.atualizar(emp_id, ativo=False)
+            flash('Empresa desativada — o histórico dela continua guardado.', 'success')
+        else:
+            FinEmpresa.atualizar(emp_id, ativo=not e['ativo'])
+            flash('Empresa reativada.' if not e['ativo'] else 'Empresa desativada.',
+                  'success')
+    registrar('escrita.alterou_empresa_fin', 'financeiro', tabela='fin_empresas',
+              registro_id=emp_id, depois={'acao': acao})
+    return redirect(url_for('financeiro.empresas'))
 
 
 # -----------------------------------------------------------------------

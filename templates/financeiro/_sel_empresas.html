@@ -1,0 +1,39 @@
+{# ---------------------------------------------------------------------------
+   Chips de EMPRESA (E2.1) — seleção múltipla por toggle.
+   Nenhum selecionado = TODAS. Clicar numa empresa liga/desliga ela na soma —
+   é o "junta todas ou algumas juntas" do consolidado.
+   Requer no contexto: fin_empresas (FinEmpresa.listar) e sel_empresas (ids).
+--------------------------------------------------------------------------- #}
+<style>
+.fe-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; align-items: center; }
+.fe-chip { padding: 6px 14px; border-radius: 999px; border: 1px solid #d1d5db;
+  background: #fff; color: #374151; font-weight: 700; font-size: .85em;
+  text-decoration: none; }
+.fe-chip.ativo { background: #065f46; color: #fff; border-color: #065f46; }
+.fe-rotulo { font-size: .78em; color: #6b7280; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; }
+</style>
+{% set _outros = {} %}
+{% for k, v in request.args.items() %}{% if k != 'emp' %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
+<div class="fe-chips">
+    <span class="fe-rotulo">Empresa:</span>
+    <a class="fe-chip {{ 'ativo' if not sel_empresas }}"
+       href="{{ url_for(request.endpoint, **_outros) }}">TODAS</a>
+    {% for e in fin_empresas %}
+    {% if e.cliente_id in sel_empresas %}
+        {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
+    {% else %}
+        {% set _nova = sel_empresas + [e.cliente_id] %}
+    {% endif %}
+    {% set _csv = _nova | join(',') %}
+    {% if _csv %}
+    <a class="fe-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
+       href="{{ url_for(request.endpoint, emp=_csv, **_outros) }}"
+       title="{{ e.nome_razao_social }}">{{ e.apelido }}</a>
+    {% else %}
+    <a class="fe-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
+       href="{{ url_for(request.endpoint, **_outros) }}"
+       title="{{ e.nome_razao_social }}">{{ e.apelido }}</a>
+    {% endif %}
+    {% endfor %}
+</div>

@@ -12,14 +12,13 @@ from utils.db_helper import execute_query
 class ExtratoLancamento:
 
     @staticmethod
-    def listar(empresa_id=None, data_de=None, data_ate=None, conta=None,
+    def listar(empresa_ids=None, data_de=None, data_ate=None, conta=None,
                busca=None, limite=500):
-        cond, params = [], []
-        if empresa_id is None:
-            cond.append('empresa_id IS NULL')
-        else:
-            cond.append('empresa_id = %s')
-            params.append(empresa_id)
+        cond, params = ['1=1'], []
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond.append(f'empresa_id IN ({marks})')
+            params += list(empresa_ids)
         if data_de:
             cond.append('data >= %s')
             params.append(data_de)
@@ -35,7 +34,7 @@ class ExtratoLancamento:
             params += [like, like]
         where = ' AND '.join(cond)
         return execute_query(
-            f"""SELECT id, banco, conta, data, valor, tipo, descricao,
+            f"""SELECT id, empresa_id, banco, conta, data, valor, tipo, descricao,
                        documento, fitid, origem, arquivo, criado_em
                   FROM extrato_lancamentos
                  WHERE {where}
@@ -44,15 +43,14 @@ class ExtratoLancamento:
             tuple(params), fetch=True) or []
 
     @staticmethod
-    def totais(empresa_id=None, data_de=None, data_ate=None, conta=None,
+    def totais(empresa_ids=None, data_de=None, data_ate=None, conta=None,
                busca=None):
         """Créditos, débitos e contagem DO FILTRO (não da página)."""
-        cond, params = [], []
-        if empresa_id is None:
-            cond.append('empresa_id IS NULL')
-        else:
-            cond.append('empresa_id = %s')
-            params.append(empresa_id)
+        cond, params = ['1=1'], []
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond.append(f'empresa_id IN ({marks})')
+            params += list(empresa_ids)
         if data_de:
             cond.append('data >= %s')
             params.append(data_de)
@@ -75,9 +73,11 @@ class ExtratoLancamento:
             tuple(params), fetch=True, fetch_one=True) or {}
 
     @staticmethod
-    def contas(empresa_id=None):
-        cond, params = ('empresa_id IS NULL', ()) if empresa_id is None \
-            else ('empresa_id = %s', (empresa_id,))
+    def contas(empresa_ids=None):
+        cond, params = '1=1', ()
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond, params = f'empresa_id IN ({marks})', tuple(empresa_ids)
         rows = execute_query(
             f"""SELECT DISTINCT CONCAT(COALESCE(banco,''), ' · ',
                        COALESCE(conta,'')) AS rotulo

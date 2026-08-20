@@ -43,13 +43,17 @@
     </div>
 </div>
 
+{% include 'financeiro/_sel_empresas.html' %}
+
 <div class="dre-chips">
+    {% set _emp = sel_empresas | join(',') %}
     <a class="dre-chip {{ 'ativo' if regime == 'competencia' }}"
-       href="{{ url_for('financeiro.dre', regime='competencia', ano=ano) }}">Competência</a>
+       href="{{ url_for('financeiro.dre', regime='competencia', ano=ano, emp=_emp) if _emp else url_for('financeiro.dre', regime='competencia', ano=ano) }}">Competência</a>
     <a class="dre-chip {{ 'ativo' if regime == 'caixa' }}"
-       href="{{ url_for('financeiro.dre', regime='caixa', ano=ano) }}">Caixa</a>
+       href="{{ url_for('financeiro.dre', regime='caixa', ano=ano, emp=_emp) if _emp else url_for('financeiro.dre', regime='caixa', ano=ano) }}">Caixa</a>
     <form method="GET" action="{{ url_for('financeiro.dre') }}" style="margin-left:auto;">
         <input type="hidden" name="regime" value="{{ regime }}">
+        <input type="hidden" name="emp" value="{{ _emp }}">
         <select name="ano" class="form-control" onchange="this.form.submit()">
             {% for a in anos %}
             <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>

@@ -46,6 +46,7 @@ PERMISSION_CATALOG = {
         'financeiro.dre':                 'DRE gerencial (escritório)',
         'financeiro.fluxo':               'Fluxo de caixa (escritório)',
         'financeiro.extrato':             'Extrato bancário (escritório)',
+        'financeiro.empresas':            'Minhas empresas do financeiro',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',

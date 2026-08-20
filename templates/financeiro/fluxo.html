@@ -43,28 +43,41 @@
     </div>
 </div>
 
+{% include 'financeiro/_sel_empresas.html' %}
+
 <!-- ── Linha do REAL: saldo informado ─────────────────────────────── -->
-<div class="fx-real {{ 'fx-sem-saldo' if not saldo }}">
+<div class="fx-real {{ 'fx-sem-saldo' if not saldos }}">
     <div>
-        {% if saldo %}
+        {% if saldos %}
         <span style="color:#065f46; font-weight:600;">SALDO REAL:</span>
-        <strong>{{ saldo.valor | float | round(2) | format_currency }}</strong>
-        <span style="color:#6b7280;">
-            informado {{ 'à mão' if saldo.origem == 'manual' else 'pelo extrato' }}
-            em {{ saldo.data.strftime('%d/%m/%Y') }}
-            {% if saldo.data < hoje %}— atualize para ancorar a projeção em hoje{% endif %}
+        <strong>{{ saldo_total | float | round(2) | format_currency }}</strong>
+        <span style="color:#6b7280; display:block; margin-top:4px;">
+            {% for sd in saldos %}
+            {{ emp_mapa.get(sd.empresa_id, '?') }}:
+            {{ sd.valor | float | round(2) | format_currency }}
+            ({{ sd.data.strftime('%d/%m') }}{{ '' if sd.origem == 'manual' else ' · extrato' }}){{ ' · ' if not loop.last }}
+            {% endfor %}
         </span>
         {% else %}
         <span style="color:#92400e;"><i class="fas fa-triangle-exclamation"></i>
             <strong>Nenhum saldo informado.</strong> A projeção abaixo parte de R$ 0,00 —
-            informe o saldo das contas para ela valer alguma coisa.</span>
+            informe o saldo de cada empresa para ela valer alguma coisa.</span>
         {% endif %}
     </div>
     <form method="POST" action="{{ url_for('financeiro.fluxo_saldo') }}"
           style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <select name="empresa_id" class="form-control" required style="width:auto;">
+            <option value="">Empresa</option>
+            {% for e in fin_empresas %}
+            <option value="{{ e.cliente_id }}"
+                    {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                {{ e.apelido }}
+            </option>
+            {% endfor %}
+        </select>
         <input type="date" name="data" class="form-control" value="{{ hoje.isoformat() }}" style="width:auto;">
         <input type="number" name="valor" class="form-control" required step="0.01"
-               placeholder="Saldo total das contas" style="width:190px;">
+               placeholder="Saldo da conta" style="width:170px;">
         <button type="submit" class="btn btn-primary">Atualizar saldo</button>
     </form>
 </div>
@@ -72,7 +85,7 @@
 <div class="fx-chips">
     {% for d in (30, 60, 90) %}
     <a class="fx-chip {{ 'ativo' if dias == d }}"
-       href="{{ url_for('financeiro.fluxo', dias=d) }}">{{ d }} dias</a>
+       href="{{ url_for('financeiro.fluxo', dias=d, emp=(sel_empresas | join(','))) if sel_empresas else url_for('financeiro.fluxo', dias=d) }}">{{ d }} dias</a>
     {% endfor %}
 </div>
 

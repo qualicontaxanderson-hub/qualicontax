@@ -44,6 +44,8 @@
     </div>
 </div>
 
+{% include 'financeiro/_sel_empresas.html' %}
+
 <div class="stats-grid" style="margin-bottom: 24px;">
     <div class="stat-card">
         <div class="stat-icon bg-success"><i class="fas fa-hand-holding-dollar"></i></div>
@@ -80,7 +82,8 @@
     <a class="ft-chip {{ 'ativo' if filtros.tipo == val }}"
        href="{{ url_for('financeiro.titulos', tipo=val, status=filtros.status,
                         venc_de=filtros.venc_de, venc_ate=filtros.venc_ate,
-                        categoria_id=filtros.categoria_id, busca=filtros.busca) }}">{{ rotulo }}</a>
+                        categoria_id=filtros.categoria_id, busca=filtros.busca,
+                        emp=filtros.emp) }}">{{ rotulo }}</a>
     {% endfor %}
 </div>
 
@@ -88,6 +91,7 @@
     <div class="card-body">
         <form method="GET" action="{{ url_for('financeiro.titulos') }}">
             <input type="hidden" name="tipo" value="{{ filtros.tipo }}">
+            <input type="hidden" name="emp" value="{{ filtros.emp }}">
             <div class="filter-grid">
                 <div class="filter-item">
                     <label class="filter-label">Situação</label>
@@ -140,6 +144,7 @@
             <thead>
                 <tr>
                     <th>Vencimento</th>
+                    <th>Empresa</th>
                     <th>Tipo</th>
                     <th>Contraparte</th>
                     <th>Descrição</th>
@@ -159,6 +164,7 @@
                         {{ t.vencimento.strftime('%d/%m/%Y') }}
                         {% if t.vencido %}<i class="fas fa-triangle-exclamation" title="Vencido"></i>{% endif %}
                     </td>
+                    <td>{{ emp_mapa.get(t.empresa_id, '?') }}</td>
                     <td class="ft-tipo-{{ t.tipo }}">{{ 'Receber' if t.tipo == 'R' else 'Pagar' }}</td>
                     <td>{{ t.contraparte_nome }}</td>
                     <td>{{ t.descricao }}</td>
@@ -226,6 +232,17 @@
         <form method="POST" action="{{ url_for('financeiro.titulo_novo') }}">
             {% for k, v in filtros.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
             <div class="modal-body">
+                <div class="form-group">
+                    <label>Empresa *</label>
+                    <select name="empresa_id" class="form-control" required>
+                        {% for e in fin_empresas %}
+                        <option value="{{ e.cliente_id }}"
+                                {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                            {{ e.apelido }} — {{ e.nome_razao_social }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="form-group">
                     <label style="margin-right:18px;">
                         <input type="radio" name="tipo" value="R"

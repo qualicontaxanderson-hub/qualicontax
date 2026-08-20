@@ -29,11 +29,23 @@
     </div>
 </div>
 
+{% include 'financeiro/_sel_empresas.html' %}
+
 <div class="card" style="margin-bottom: 20px;">
     <div class="card-body">
         <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
               enctype="multipart/form-data"
               style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <select name="empresa_id" class="form-control" required style="max-width:220px;"
+                    title="De qual empresa é a conta deste OFX">
+                <option value="">Conta de qual empresa?</option>
+                {% for e in fin_empresas %}
+                <option value="{{ e.cliente_id }}"
+                        {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                    {{ e.apelido }}
+                </option>
+                {% endfor %}
+            </select>
             <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
                    class="form-control" style="max-width:420px;">
             <button type="submit" class="btn btn-primary">
@@ -114,6 +126,7 @@
             <thead>
                 <tr>
                     <th>Data</th>
+                    <th>Empresa</th>
                     <th>Banco · Conta</th>
                     <th class="ex-desc">Descrição</th>
                     <th>Documento</th>
@@ -124,6 +137,7 @@
                 {% for l in lancamentos %}
                 <tr>
                     <td>{{ l.data.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ emp_mapa.get(l.empresa_id, '?') }}</td>
                     <td>{{ l.banco or '?' }} · {{ l.conta or '?' }}</td>
                     <td class="ex-desc">{{ l.descricao }}</td>
                     <td>{{ l.documento or '—' }}</td>
