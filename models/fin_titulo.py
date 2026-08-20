@@ -9,12 +9,58 @@ combinada no documento: ato humano, não derivado — e só em título sem baixa
 from utils.db_helper import execute_query
 
 
+class FinCentroCusto:
+    """Centros de custo por estado (E2.2): GO, SP e GERAL.
+
+    ``rateia=1`` (GERAL) divide em PARTES IGUAIS entre os centros normais
+    ativos NA LEITURA do DRE — o título guarda o centro cru. Regra do
+    Anderson: não há receita na GERAL, o rateio fica meio a meio.
+    """
+
+    @staticmethod
+    def listar(apenas_ativos=True):
+        cond = 'WHERE ativo = 1' if apenas_ativos else ''
+        return execute_query(
+            f'SELECT id, nome, rateia, ordem, ativo FROM fin_centros_custo '
+            f'{cond} ORDER BY ordem, nome', fetch=True) or []
+
+    @staticmethod
+    def criar(nome, rateia=False):
+        r = execute_query('SELECT COALESCE(MAX(ordem), 0) + 10 AS o '
+                          'FROM fin_centros_custo', fetch=True, fetch_one=True)
+        return execute_query(
+            'INSERT INTO fin_centros_custo (nome, rateia, ordem) '
+            'VALUES (%s, %s, %s)',
+            (nome, 1 if rateia else 0, (r or {}).get('o') or 10))
+
+    @staticmethod
+    def renomear(cc_id, nome):
+        execute_query('UPDATE fin_centros_custo SET nome = %s WHERE id = %s',
+                      (nome, cc_id))
+        r = execute_query('SELECT nome FROM fin_centros_custo WHERE id = %s',
+                          (cc_id,), fetch=True, fetch_one=True)
+        return bool(r and r['nome'] == nome)
+
+    @staticmethod
+    def set_ativo(cc_id, ativo):
+        execute_query('UPDATE fin_centros_custo SET ativo = %s WHERE id = %s',
+                      (1 if ativo else 0, cc_id))
+
+    @staticmethod
+    def usos():
+        rows = execute_query(
+            'SELECT centro_custo_id, COUNT(*) AS n FROM fin_titulos '
+            'WHERE centro_custo_id IS NOT NULL GROUP BY centro_custo_id',
+            fetch=True) or []
+        return {r['centro_custo_id']: r['n'] for r in rows}
+
+
 class FinCategoria:
     """Plano gerencial (grupo = linha do DRE)."""
 
     @staticmethod
     def listar(tipo=None, apenas_ativas=True):
-        sql = ['SELECT id, tipo, grupo, nome, ordem, ativo FROM fin_categorias']
+        sql = ['SELECT id, pai_id, tipo, grupo, nome, ordem, ativo FROM fin_categorias']
         cond, params = [], []
         if tipo in ('R', 'P'):
             cond.append('tipo = %s')
@@ -23,8 +69,14 @@ class FinCategoria:
             cond.append('ativo = 1')
         if cond:
             sql.append('WHERE ' + ' AND '.join(cond))
-        sql.append('ORDER BY ordem, nome')
+        # Subcategoria herda a ordem do pai; o desempate cola a sub no pai.
+        sql.append('ORDER BY ordem, COALESCE(pai_id, id), (pai_id IS NOT NULL), nome')
         return execute_query(' '.join(sql), tuple(params), fetch=True) or []
+
+    @staticmethod
+    def pais(tipo=None):
+        """Só categorias de PRIMEIRO nível (candidatas a pai de sub)."""
+        return [c for c in FinCategoria.listar(tipo=tipo) if not c['pai_id']]
 
     @staticmethod
     def grupos(tipo=None):
@@ -38,9 +90,22 @@ class FinCategoria:
             fetch=True) or []
 
     @staticmethod
-    def criar(tipo, grupo, nome, ordem=None):
-        """Nova categoria. Grupo novo entra no fim do bloco do seu tipo.
-        Devolve o id, ou None se (tipo, grupo, nome) já existir (uk_cat)."""
+    def criar(tipo, grupo, nome, ordem=None, pai_id=None):
+        """Nova categoria (ou SUBcategoria, se pai_id). Devolve o id, ou None
+        se (tipo, grupo, nome) já existir (uk_cat).
+
+        Sub herda tipo, grupo e ordem do pai — um nível só (sub de sub não).
+        """
+        if pai_id:
+            pai = execute_query(
+                'SELECT tipo, grupo, ordem, pai_id FROM fin_categorias '
+                'WHERE id = %s', (pai_id,), fetch=True, fetch_one=True)
+            if not pai or pai['pai_id']:
+                return None                  # pai inexistente ou já é sub
+            return execute_query(
+                'INSERT INTO fin_categorias (pai_id, tipo, grupo, nome, ordem) '
+                'VALUES (%s, %s, %s, %s, %s)',
+                (pai_id, pai['tipo'], pai['grupo'], nome, pai['ordem']))
         if ordem is None:
             r = execute_query(
                 'SELECT MAX(ordem) AS m FROM fin_categorias WHERE tipo = %s '
@@ -103,24 +168,33 @@ class FinDre:
             marks = ','.join(['%s'] * len(empresa_ids))
             cond = f'AND t.empresa_id IN ({marks})'
             extra = tuple(empresa_ids)
+        # A subcategoria aparece como "Pai · Sub"; o centro sai CRU em cada
+        # linha — o rateio da GERAL é aplicado depois, na leitura.
+        rotulo = "COALESCE(CONCAT(p.nome, ' · ', c.nome), c.nome)"
         if regime == 'caixa':
             return execute_query(
-                f"""SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
+                f"""SELECT c.tipo, c.grupo, {rotulo} AS nome,
+                          MIN(c.ordem) AS ordem, t.centro_custo_id AS centro,
                           MONTH(b.data_baixa) AS mes,
                           SUM(b.valor + b.juros + b.multa) AS total
                      FROM fin_titulo_baixas b
                      JOIN fin_titulos t ON t.id = b.titulo_id
                      JOIN fin_categorias c ON c.id = t.categoria_id
+                     LEFT JOIN fin_categorias p ON p.id = c.pai_id
                     WHERE YEAR(b.data_baixa) = %s {cond}
-                    GROUP BY c.tipo, c.grupo, c.nome, MONTH(b.data_baixa)""",
+                    GROUP BY c.tipo, c.grupo, {rotulo}, t.centro_custo_id,
+                             MONTH(b.data_baixa)""",
                 (ano,) + extra, fetch=True) or []
         return execute_query(
-            f"""SELECT c.tipo, c.grupo, c.nome, MIN(c.ordem) AS ordem,
+            f"""SELECT c.tipo, c.grupo, {rotulo} AS nome,
+                      MIN(c.ordem) AS ordem, t.centro_custo_id AS centro,
                       MONTH(t.competencia) AS mes, SUM(t.valor) AS total
                  FROM fin_titulos t
                  JOIN fin_categorias c ON c.id = t.categoria_id
+                 LEFT JOIN fin_categorias p ON p.id = c.pai_id
                 WHERE YEAR(t.competencia) = %s AND t.status <> 'cancelado' {cond}
-                GROUP BY c.tipo, c.grupo, c.nome, MONTH(t.competencia)""",
+                GROUP BY c.tipo, c.grupo, {rotulo}, t.centro_custo_id,
+                         MONTH(t.competencia)""",
             (ano,) + extra, fetch=True) or []
 
     @staticmethod
@@ -195,7 +269,7 @@ class FinTitulo:
 
     @staticmethod
     def listar(tipo=None, status='abertos', venc_de=None, venc_ate=None,
-               categoria_id=None, busca=None, empresa_ids=None):
+               categoria_id=None, busca=None, empresa_ids=None, centro_id=None):
         """Lista títulos com a categoria junto, em ordem de vencimento.
 
         status: 'abertos' (aberto+parcial, o dia a dia da tela) | 'todos' |
@@ -223,6 +297,11 @@ class FinTitulo:
         if categoria_id:
             cond.append('t.categoria_id = %s')
             params.append(categoria_id)
+        if centro_id == 'sem':
+            cond.append('t.centro_custo_id IS NULL')
+        elif centro_id:
+            cond.append('t.centro_custo_id = %s')
+            params.append(centro_id)
         if busca:
             cond.append('(t.contraparte_nome LIKE %s OR t.descricao LIKE %s '
                         'OR t.contraparte_doc LIKE %s)')
@@ -231,10 +310,12 @@ class FinTitulo:
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         return execute_query(
             f"""SELECT t.*, c.grupo AS categoria_grupo, c.nome AS categoria_nome,
+                       cc.nome AS centro_nome,
                        (t.vencimento < CURDATE()
                         AND t.status IN ('aberto', 'parcial')) AS vencido
                   FROM fin_titulos t
                   JOIN fin_categorias c ON c.id = t.categoria_id
+                  LEFT JOIN fin_centros_custo cc ON cc.id = t.centro_custo_id
                 {where}
                  ORDER BY t.vencimento, t.id""",
             tuple(params), fetch=True) or []
@@ -283,16 +364,17 @@ class FinTitulo:
     @staticmethod
     def criar(tipo, contraparte_nome, categoria_id, descricao, competencia,
               emissao, vencimento, valor, empresa_id, contraparte_doc=None,
-              cliente_id=None, observacao=None, origem='manual', chave_idem=None):
+              cliente_id=None, observacao=None, origem='manual', chave_idem=None,
+              centro_custo_id=None):
         return execute_query(
             """INSERT INTO fin_titulos
                (empresa_id, tipo, contraparte_doc, contraparte_nome, cliente_id,
-                categoria_id, descricao, competencia, emissao, vencimento, valor,
-                origem, chave_idem, observacao)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                categoria_id, centro_custo_id, descricao, competencia, emissao,
+                vencimento, valor, origem, chave_idem, observacao)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, tipo, contraparte_doc, contraparte_nome, cliente_id,
-             categoria_id, descricao, competencia, emissao, vencimento, valor,
-             origem, chave_idem, observacao))
+             categoria_id, centro_custo_id, descricao, competencia, emissao,
+             vencimento, valor, origem, chave_idem, observacao))
 
     @staticmethod
     def cancelar(titulo_id):

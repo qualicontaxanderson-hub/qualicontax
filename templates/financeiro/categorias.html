@@ -45,6 +45,15 @@
                     </div>
                 </div>
                 <div class="filter-item">
+                    <label class="filter-label">Subcategoria de</label>
+                    <select name="pai_id" id="fcPai" class="form-control" onchange="fcModoSub()">
+                        <option value="">— nenhuma (categoria nova) —</option>
+                        {% for p in pais %}
+                        <option value="{{ p.id }}" data-tipo="{{ p.tipo }}">{{ p.grupo }} · {{ p.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-item" id="fcGrupoBox">
                     <label class="filter-label">Grupo (linha do DRE)</label>
                     <select name="grupo" id="fcGrupo" class="form-control" onchange="fcGrupoNovo()">
                         {% for g in grupos %}
@@ -95,7 +104,7 @@
                 </tr>
                 {% endif %}
                 <tr class="{{ 'fc-inativa' if not c.ativo }}">
-                    <td>{{ c.nome }}</td>
+                    <td>{% if c.pai_id %}<span style="color:#9ca3af; margin-left:16px;">↳</span> {% endif %}{{ c.nome }}</td>
                     <td style="text-align:right;">{{ usos.get(c.id, 0) }}</td>
                     <td>{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
                     <td style="white-space:nowrap;">
@@ -117,6 +126,90 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+    <div class="card-body">
+        <h3 style="margin:0 0 6px; font-size:1.05em;">
+            <i class="fas fa-map-location-dot" style="color: var(--primary-green);"></i>
+            Centros de custo
+        </h3>
+        <p style="color:#6b7280; font-size:.9em; margin:0 0 14px;">
+            Por estado, como você organiza o negócio. O centro marcado
+            <strong>rateia</strong> (GERAL) divide meio a meio entre os demais
+            nos relatórios — o lançamento guarda o centro cru.
+        </p>
+        <form method="POST" action="{{ url_for('financeiro.centro_novo') }}"
+              style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+            <input type="text" name="nome" class="form-control" required maxlength="40"
+                   placeholder="Novo centro (ex.: MG)" style="max-width:220px;">
+            <label style="white-space:nowrap;">
+                <input type="checkbox" name="rateia"> rateia entre os demais
+            </label>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Criar</button>
+        </form>
+        <div class="fc-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Centro</th>
+                    <th>Rateio</th>
+                    <th style="text-align:right;">Títulos usando</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cc in centros %}
+                <tr class="{{ 'fc-inativa' if not cc.ativo }}">
+                    <td><strong>{{ cc.nome }}</strong></td>
+                    <td>{{ 'Rateia meio a meio' if cc.rateia else '—' }}</td>
+                    <td style="text-align:right;">{{ usos_centros.get(cc.id, 0) }}</td>
+                    <td>{{ 'Ativo' if cc.ativo else 'Desativado' }}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="fc-acao" title="Renomear"
+                                data-id="{{ cc.id }}" data-nome="{{ cc.nome }}"
+                                onclick="ccAbrirRenomear(this)">
+                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                        </button>
+                        <form method="POST" style="display:inline;"
+                              action="{{ url_for('financeiro.centro_alternar', cc_id=cc.id) }}">
+                            <button class="fc-acao"
+                                    title="{{ 'Desativar' if cc.ativo else 'Reativar' }}">
+                                <i class="fas fa-{{ 'toggle-on' if cc.ativo else 'toggle-off' }}"
+                                   style="color:{{ '#16a34a' if cc.ativo else '#9ca3af' }};"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: renomear centro ─────────────────────────────────────── -->
+<div id="ccModalRenomear" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+            <h3>Renomear Centro de Custo</h3>
+            <button class="modal-close" onclick="ccFecharRenomear()">&times;</button>
+        </div>
+        <form method="POST" id="ccFormRenomear" action="">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Novo nome</label>
+                    <input type="text" name="nome" id="ccRenomearNome" class="form-control"
+                           maxlength="40" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="ccFecharRenomear()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Renomear</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -147,8 +240,28 @@
 <script>
 var FC_URL_RENOMEAR = "{{ url_for('financeiro.categoria_renomear', cat_id=0) }}";
 
+function fcModoSub() {
+    // Escolheu um pai: vira SUBcategoria — tipo e grupo herdam do pai, então somem.
+    var pai = document.getElementById('fcPai');
+    var sub = pai.value !== '';
+    document.getElementById('fcGrupoBox').style.display = sub ? 'none' : '';
+    document.getElementById('fcGrupoNovoBox').style.display = 'none';
+    if (!sub) fcGrupoNovo();
+}
+
 function fcFiltraGrupos() {
     var tipo = document.querySelector('input[name="tipo"]:checked').value;
+    // pais tambem filtram pelo tipo
+    var selPai = document.getElementById('fcPai');
+    Array.prototype.forEach.call(selPai.options, function (o) {
+        if (o.value === '') return;
+        var ok = o.getAttribute('data-tipo') === tipo;
+        o.hidden = !ok;
+        o.disabled = !ok;
+    });
+    if (selPai.options[selPai.selectedIndex] &&
+        selPai.options[selPai.selectedIndex].disabled) selPai.value = '';
+    fcModoSub();
     var sel = document.getElementById('fcGrupo');
     var primeiro = null;
     Array.prototype.forEach.call(sel.options, function (o) {
@@ -179,6 +292,20 @@ function fcAbrirRenomear(el) {
 
 function fcFecharRenomear() {
     document.getElementById('fcModalRenomear').style.display = 'none';
+}
+
+var CC_URL_RENOMEAR = "{{ url_for('financeiro.centro_renomear', cc_id=0) }}";
+
+function ccAbrirRenomear(el) {
+    var form = document.getElementById('ccFormRenomear');
+    form.action = CC_URL_RENOMEAR.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('ccRenomearNome').value = el.getAttribute('data-nome');
+    document.getElementById('ccModalRenomear').style.display = 'block';
+    document.getElementById('ccRenomearNome').focus();
+}
+
+function ccFecharRenomear() {
+    document.getElementById('ccModalRenomear').style.display = 'none';
 }
 
 fcFiltraGrupos();

@@ -186,21 +186,25 @@ def titulos():
     categoria_id = request.args.get('categoria_id') or None
     busca = (request.args.get('busca') or '').strip() or None
 
+    from models.fin_titulo import FinCentroCusto
+    centro_id = request.args.get('centro') or None
     emps, sel, mapa = _empresas_ctx()
     lista = FinTitulo.listar(tipo=None if tipo == 'todos' else tipo,
                              status=status, venc_de=venc_de, venc_ate=venc_ate,
                              categoria_id=categoria_id, busca=busca,
-                             empresa_ids=sel)
+                             empresa_ids=sel, centro_id=centro_id)
     return render_template(
         'financeiro/titulos.html',
         titulos=lista,
         resumo=FinTitulo.resumo(empresa_ids=sel),
         categorias=FinCategoria.listar(),
+        centros=FinCentroCusto.listar(),
         hoje=date.today(),
         fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
         filtros=dict(tipo=tipo, status=status, venc_de=venc_de or '',
                      venc_ate=venc_ate or '', categoria_id=categoria_id or '',
-                     busca=busca or '', emp=','.join(map(str, sel))))
+                     busca=busca or '', emp=','.join(map(str, sel)),
+                     centro=centro_id or ''))
 
 
 @financeiro.route('/financeiro/titulos/novo', methods=['POST'])
@@ -245,8 +249,10 @@ def titulo_novo():
         flash(erro, 'danger')
         return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
 
+    centro_raw = (f.get('centro_custo_id') or '').strip()
     tid = FinTitulo.criar(
         empresa_id=int(empresa_raw),
+        centro_custo_id=int(centro_raw) if centro_raw.isdigit() else None,
         tipo=tipo, contraparte_nome=contraparte,
         contraparte_doc=(f.get('contraparte_doc') or '').strip() or None,
         categoria_id=int(categoria_id), descricao=descricao,
@@ -352,10 +358,14 @@ def titulo_excluir(titulo_id):
 @financeiro.route('/financeiro/categorias')
 @permission_required('financeiro.categorias')
 def categorias():
+    from models.fin_titulo import FinCentroCusto
     cats = FinCategoria.listar(apenas_ativas=False)
     return render_template('financeiro/categorias.html',
                            categorias=cats,
                            grupos=FinCategoria.grupos(),
+                           pais=FinCategoria.pais(),
+                           centros=FinCentroCusto.listar(apenas_ativos=False),
+                           usos_centros=FinCentroCusto.usos(),
                            usos=FinCategoria.usos())
 
 
@@ -363,8 +373,23 @@ def categorias():
 @permission_required('financeiro.categorias')
 def categoria_nova():
     tipo = request.form.get('tipo')
-    grupo = (request.form.get('grupo_novo') or '').strip()         or (request.form.get('grupo') or '').strip()
+    grupo = (request.form.get('grupo_novo') or '').strip() \
+        or (request.form.get('grupo') or '').strip()
     nome = (request.form.get('nome') or '').strip()
+    pai_raw = (request.form.get('pai_id') or '').strip()
+    if pai_raw.isdigit():
+        # SUBcategoria: herda tipo, grupo e ordem do pai — só o nome importa.
+        if not nome:
+            flash('Informe o nome da subcategoria.', 'danger')
+        elif FinCategoria.criar(None, None, nome, pai_id=int(pai_raw)):
+            registrar('escrita.criou_categoria_fin', 'financeiro',
+                      tabela='fin_categorias',
+                      depois={'pai_id': int(pai_raw), 'nome': nome, 'sub': True})
+            flash(f'Subcategoria "{nome}" criada.', 'success')
+        else:
+            flash('Não deu: pai inválido (sub de sub não existe) ou nome '
+                  'repetido no grupo.', 'warning')
+        return redirect(url_for('financeiro.categorias'))
     if tipo not in ('R', 'P') or not grupo or not nome:
         flash('Preencha tipo, grupo e nome da categoria.', 'danger')
     elif FinCategoria.criar(tipo, grupo, nome):
@@ -413,12 +438,100 @@ def categoria_alternar(cat_id):
 
 
 # =======================================================================
+# Centros de custo (E2.2) — GO, SP e GERAL (rateia meio a meio na leitura)
+# =======================================================================
+@financeiro.route('/financeiro/centros/novo', methods=['POST'])
+@permission_required('financeiro.categorias')
+def centro_novo():
+    from models.fin_titulo import FinCentroCusto
+    nome = (request.form.get('nome') or '').strip().upper()
+    rateia = request.form.get('rateia') == 'on'
+    if not nome:
+        flash('Informe o nome do centro de custo.', 'danger')
+    elif FinCentroCusto.criar(nome, rateia):
+        registrar('escrita.criou_centro_custo', 'financeiro',
+                  tabela='fin_centros_custo',
+                  depois={'nome': nome, 'rateia': rateia})
+        flash(f'Centro de custo "{nome}" criado.', 'success')
+    else:
+        flash('Esse centro de custo já existe.', 'warning')
+    return redirect(url_for('financeiro.categorias'))
+
+
+@financeiro.route('/financeiro/centros/<int:cc_id>/renomear', methods=['POST'])
+@permission_required('financeiro.categorias')
+def centro_renomear(cc_id):
+    from models.fin_titulo import FinCentroCusto
+    nome = (request.form.get('nome') or '').strip().upper()
+    if nome and FinCentroCusto.renomear(cc_id, nome):
+        registrar('escrita.renomeou_centro_custo', 'financeiro',
+                  tabela='fin_centros_custo', registro_id=cc_id,
+                  depois={'nome': nome})
+        flash('Centro de custo renomeado.', 'success')
+    else:
+        flash('Não consegui renomear (nome vazio ou repetido).', 'warning')
+    return redirect(url_for('financeiro.categorias'))
+
+
+@financeiro.route('/financeiro/centros/<int:cc_id>/alternar', methods=['POST'])
+@permission_required('financeiro.categorias')
+def centro_alternar(cc_id):
+    from models.fin_titulo import FinCentroCusto
+    atual = next((x for x in FinCentroCusto.listar(apenas_ativos=False)
+                  if x['id'] == cc_id), None)
+    if not atual:
+        flash('Centro de custo não encontrado.', 'danger')
+    else:
+        FinCentroCusto.set_ativo(cc_id, not atual['ativo'])
+        registrar('escrita.alternou_centro_custo', 'financeiro',
+                  tabela='fin_centros_custo', registro_id=cc_id,
+                  depois={'ativo': not atual['ativo']})
+        flash('Centro de custo atualizado.', 'success')
+    return redirect(url_for('financeiro.categorias'))
+
+
+# =======================================================================
 # DRE gerencial (Documento E, seção 7)
 # =======================================================================
 _DRE_IMPOSTOS = 'Impostos sobre serviço'
 _DRE_FINANCEIRAS = 'Financeiras'
 _DRE_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
               'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+
+def _aplicar_centro(rows, centro_sel, centros):
+    """Peneira do centro de custo COM o rateio (E2.2).
+
+    centro_sel None → devolve tudo (visão TODOS). Centro normal (GO/SP) →
+    linhas dele + fração IGUAL das linhas dos centros que rateiam (GERAL
+    com GO e SP = meio a meio). Centro que rateia (GERAL) → só as linhas
+    cruas dele, sem rateio (a tela avisa). Linhas SEM centro ficam de fora
+    das visões filtradas — a nota diz quanto ficou de fora, para o buraco
+    aparecer em vez de sumir.
+    """
+    if not centro_sel:
+        return rows, None
+    ativos = [c for c in centros if c['ativo']]
+    base = [c for c in ativos if not c['rateia']]
+    rateiam = {c['id'] for c in ativos if c['rateia']}
+    alvo_rateia = centro_sel in rateiam
+    n = len(base) or 1
+    out = []
+    fora_sem = Decimal('0')
+    for r in rows:
+        cid = r.get('centro')
+        v = Decimal(str(r['total'] or 0))
+        if cid == centro_sel:
+            out.append(r)
+        elif cid is None:
+            fora_sem += abs(v)
+        elif (not alvo_rateia) and cid in rateiam:
+            r2 = dict(r)
+            r2['total'] = v / n
+            out.append(r2)
+    nota = {'sem_centro': fora_sem, 'rateio': not alvo_rateia and bool(rateiam),
+            'partes': n, 'cru': alvo_rateia}
+    return out, nota
 
 
 def _montar_dre(rows):
@@ -505,10 +618,19 @@ def dre():
         ano = int(request.args.get('ano') or ano_atual)
     except ValueError:
         ano = ano_atual
+    from models.fin_titulo import FinCentroCusto
     emps, sel, mapa = _empresas_ctx()
-    linhas = _montar_dre(FinDre.por_ano(ano, regime, empresa_ids=sel))
-    return render_template('financeiro/dre.html', linhas=linhas, regime=regime,
+    centros = FinCentroCusto.listar()
+    centro_raw = (request.args.get('centro') or '').strip()
+    centro_sel = int(centro_raw) if centro_raw.isdigit() and \
+        any(c['id'] == int(centro_raw) for c in centros) else None
+    rows, nota_centro = _aplicar_centro(
+        FinDre.por_ano(ano, regime, empresa_ids=sel), centro_sel, centros)
+    return render_template('financeiro/dre.html', linhas=_montar_dre(rows),
+                           regime=regime,
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
+                           centros=centros, centro_sel=centro_sel,
+                           nota_centro=nota_centro,
                            ano=ano, anos=anos, meses=_DRE_MESES)
 
 

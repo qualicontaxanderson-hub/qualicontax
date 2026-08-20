@@ -83,7 +83,7 @@
        href="{{ url_for('financeiro.titulos', tipo=val, status=filtros.status,
                         venc_de=filtros.venc_de, venc_ate=filtros.venc_ate,
                         categoria_id=filtros.categoria_id, busca=filtros.busca,
-                        emp=filtros.emp) }}">{{ rotulo }}</a>
+                        emp=filtros.emp, centro=filtros.centro) }}">{{ rotulo }}</a>
     {% endfor %}
 </div>
 
@@ -124,6 +124,16 @@
                     </select>
                 </div>
                 <div class="filter-item">
+                    <label class="filter-label">Centro de custo</label>
+                    <select name="centro" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="sem" {% if filtros.centro == 'sem' %}selected{% endif %}>Sem centro</option>
+                        {% for cc in centros %}
+                        <option value="{{ cc.id }}" {% if filtros.centro == cc.id|string %}selected{% endif %}>{{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-item">
                     <label class="filter-label">Buscar</label>
                     <input type="text" name="busca" class="form-control" value="{{ filtros.busca }}"
                            placeholder="Contraparte, descrição ou CNPJ/CPF">
@@ -149,6 +159,7 @@
                     <th>Contraparte</th>
                     <th>Descrição</th>
                     <th>Categoria</th>
+                    <th>Centro</th>
                     <th>Compet.</th>
                     <th style="text-align:right;">Valor</th>
                     <th style="text-align:right;">Em aberto</th>
@@ -169,6 +180,7 @@
                     <td>{{ t.contraparte_nome }}</td>
                     <td>{{ t.descricao }}</td>
                     <td title="{{ t.categoria_grupo }}">{{ t.categoria_nome }}</td>
+                    <td>{{ t.centro_nome or '—' }}</td>
                     <td>{{ t.competencia.strftime('%m/%Y') }}</td>
                     <td style="text-align:right;">{{ t.valor | float | round(2) | format_currency }}</td>
                     <td style="text-align:right;">
@@ -273,6 +285,15 @@
                     <select name="categoria_id" id="ftCategoria" class="form-control" required>
                         {% for c in categorias %}
                         <option value="{{ c.id }}" data-tipo="{{ c.tipo }}">{{ c.grupo }} · {{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Centro de custo</label>
+                    <select name="centro_custo_id" class="form-control">
+                        <option value="">— sem centro —</option>
+                        {% for cc in centros %}
+                        <option value="{{ cc.id }}">{{ cc.nome }}{{ ' (rateia)' if cc.rateia }}</option>
                         {% endfor %}
                     </select>
                 </div>
