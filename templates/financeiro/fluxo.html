@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Fluxo de Caixa - Qualicontax{% endblock %}
+
+{% block content %}
+<style>
+.fx-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.fx-chip { padding: 7px 16px; border-radius: 999px; border: 1px solid #d1d5db;
+  background: #fff; color: #374151; font-weight: 600; font-size: .9em; text-decoration: none; }
+.fx-chip.ativo { background: var(--primary-green, #00A85A); color: #fff;
+  border-color: var(--primary-green, #00A85A); }
+.fx-real { padding: 12px 16px; border-radius: 10px; background: #ecfdf5;
+  border: 1px solid #a7f3d0; margin-bottom: 16px; display: flex;
+  flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+.fx-real strong { font-size: 1.25em; color: #065f46; }
+.fx-sem-saldo { background: #fffbeb; border-color: #fde68a; }
+.fx-neg { color: #b91c1c; font-weight: 700; }
+.fx-wrap { overflow-x: auto; }
+.fx-wrap td, .fx-wrap th { white-space: nowrap; }
+.fx-wrap td:not(:first-child), .fx-wrap th:not(:first-child) { text-align: right; }
+.fx-atraso { display: block; font-size: .78em; color: #b45309; }
+.fx-linha-neg { background: #fef2f2; }
+.fx-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+.fx-fora { color: #6b7280; font-size: .9em; padding: 10px 4px 0; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-chart-area" style="color: var(--primary-green);"></i>
+            Fluxo de Caixa
+        </h1>
+        <p class="page-subtitle">Saldo real numa linha, projeção na outra — nunca misturados</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('financeiro.titulos') }}" class="btn btn-outline">
+            <i class="fas fa-file-invoice-dollar"></i> Títulos
+        </a>
+        <a href="{{ url_for('financeiro.dre') }}" class="btn btn-outline">
+            <i class="fas fa-chart-pie"></i> DRE
+        </a>
+    </div>
+</div>
+
+<!-- ── Linha do REAL: saldo informado ─────────────────────────────── -->
+<div class="fx-real {{ 'fx-sem-saldo' if not saldo }}">
+    <div>
+        {% if saldo %}
+        <span style="color:#065f46; font-weight:600;">SALDO REAL:</span>
+        <strong>{{ saldo.valor | float | round(2) | format_currency }}</strong>
+        <span style="color:#6b7280;">
+            informado {{ 'à mão' if saldo.origem == 'manual' else 'pelo extrato' }}
+            em {{ saldo.data.strftime('%d/%m/%Y') }}
+            {% if saldo.data < hoje %}— atualize para ancorar a projeção em hoje{% endif %}
+        </span>
+        {% else %}
+        <span style="color:#92400e;"><i class="fas fa-triangle-exclamation"></i>
+            <strong>Nenhum saldo informado.</strong> A projeção abaixo parte de R$ 0,00 —
+            informe o saldo das contas para ela valer alguma coisa.</span>
+        {% endif %}
+    </div>
+    <form method="POST" action="{{ url_for('financeiro.fluxo_saldo') }}"
+          style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="date" name="data" class="form-control" value="{{ hoje.isoformat() }}" style="width:auto;">
+        <input type="number" name="valor" class="form-control" required step="0.01"
+               placeholder="Saldo total das contas" style="width:190px;">
+        <button type="submit" class="btn btn-primary">Atualizar saldo</button>
+    </form>
+</div>
+
+<div class="fx-chips">
+    {% for d in (30, 60, 90) %}
+    <a class="fx-chip {{ 'ativo' if dias == d }}"
+       href="{{ url_for('financeiro.fluxo', dias=d) }}">{{ d }} dias</a>
+    {% endfor %}
+</div>
+
+<div class="stats-grid" style="margin-bottom: 24px;">
+    <div class="stat-card">
+        <div class="stat-icon bg-info"><i class="fas fa-flag-checkered"></i></div>
+        <div class="stat-content">
+            <h3 class="stat-value {{ 'fx-neg' if resumo.saldo_final < 0 }}">
+                {{ resumo.saldo_final | float | round(2) | format_currency }}</h3>
+            <p class="stat-label">Saldo projetado ao fim de {{ dias }} dias</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon bg-warning"><i class="fas fa-arrow-trend-down"></i></div>
+        <div class="stat-content">
+            <h3 class="stat-value {{ 'fx-neg' if resumo.menor.saldo < 0 }}">
+                {{ resumo.menor.saldo | float | round(2) | format_currency }}</h3>
+            <p class="stat-label">Menor saldo projetado ({{ resumo.menor.data.strftime('%d/%m') }})</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        {% if resumo.primeiro_negativo %}
+        <div class="stat-icon bg-danger"><i class="fas fa-circle-exclamation"></i></div>
+        <div class="stat-content">
+            <h3 class="stat-value fx-neg">{{ resumo.primeiro_negativo.strftime('%d/%m/%Y') }}</h3>
+            <p class="stat-label">Dia em que a projeção fica NEGATIVA</p>
+        </div>
+        {% else %}
+        <div class="stat-icon bg-success"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-content">
+            <h3 class="stat-value">Não negativa</h3>
+            <p class="stat-label">A projeção não fura no período</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body fx-wrap">
+        {% if linhas %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Entradas previstas</th>
+                    <th>Saídas previstas</th>
+                    <th>Saldo projetado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in linhas %}
+                <tr class="{{ 'fx-linha-neg' if l.saldo < 0 }}">
+                    <td>{{ l.data.strftime('%d/%m/%Y') }}{{ ' (hoje)' if l.data == hoje }}</td>
+                    <td>
+                        {{ l.entrada | float | round(2) | format_currency if l.entrada else '—' }}
+                        {% if l.atrasado_e %}<span class="fx-atraso">
+                            {{ l.atrasado_e | float | round(2) | format_currency }} já vencido</span>{% endif %}
+                    </td>
+                    <td>
+                        {{ l.saida | float | round(2) | format_currency if l.saida else '—' }}
+                        {% if l.atrasado_s %}<span class="fx-atraso">
+                            {{ l.atrasado_s | float | round(2) | format_currency }} já vencido</span>{% endif %}
+                    </td>
+                    <td class="{{ 'fx-neg' if l.saldo < 0 }}">
+                        {{ l.saldo | float | round(2) | format_currency }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="fx-vazio">
+            <i class="fas fa-chart-area" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+            Nenhum título em aberto vencendo nos próximos {{ dias }} dias —
+            a projeção é o saldo parado.
+        </div>
+        {% endif %}
+        {% if resumo.fora.entrada or resumo.fora.saida %}
+        <div class="fx-fora">
+            <i class="fas fa-circle-info"></i>
+            Fora do horizonte de {{ dias }} dias:
+            {% if resumo.fora.entrada %}{{ resumo.fora.entrada | float | round(2) | format_currency }} a receber{% endif %}
+            {%- if resumo.fora.entrada and resumo.fora.saida %} · {% endif %}
+            {% if resumo.fora.saida %}{{ resumo.fora.saida | float | round(2) | format_currency }} a pagar{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

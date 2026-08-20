@@ -485,6 +485,88 @@ def dre():
                            ano=ano, anos=anos, meses=_DRE_MESES)
 
 
+# =======================================================================
+# Fluxo de caixa projetado (Documento E, seção 6 / fase 9)
+# =======================================================================
+def _montar_fluxo(saldo_inicial, rows, hoje, dias):
+    """Projeção diária a partir de hoje.
+
+    Vencidos em aberto entram no PRIMEIRO dia (a cobrança deles é para já);
+    a tela avisa quanto do primeiro dia é atraso. O que vence depois do
+    horizonte não some: vira o rodapé "fora do horizonte".
+    Devolve (linhas, resumo). Cada linha: data, entrada, saida, saldo,
+    atrasado_e, atrasado_s. Só dias com movimento viram linha.
+    """
+    from collections import defaultdict
+    limite = hoje + __import__('datetime').timedelta(days=dias)
+    pordia = defaultdict(lambda: {'entrada': Decimal('0'), 'saida': Decimal('0'),
+                                  'atrasado_e': Decimal('0'), 'atrasado_s': Decimal('0')})
+    fora = {'entrada': Decimal('0'), 'saida': Decimal('0')}
+    for r in rows:
+        v = Decimal(str(r['total'] or 0))
+        venc = r['vencimento']
+        campo = 'entrada' if r['tipo'] == 'R' else 'saida'
+        if venc > limite:
+            fora[campo] += v
+            continue
+        dia = max(venc, hoje)              # vencido cai no primeiro dia
+        pordia[dia][campo] += v
+        if venc < hoje:
+            pordia[dia]['atrasado_' + ('e' if r['tipo'] == 'R' else 's')] += v
+
+    linhas = []
+    saldo = saldo_inicial
+    menor = {'saldo': saldo, 'data': hoje}
+    primeiro_negativo = None
+    for dia in sorted(pordia):
+        m = pordia[dia]
+        saldo = saldo + m['entrada'] - m['saida']
+        linhas.append({'data': dia, 'saldo': saldo, **m})
+        if saldo < menor['saldo']:
+            menor = {'saldo': saldo, 'data': dia}
+        if saldo < 0 and primeiro_negativo is None:
+            primeiro_negativo = dia
+    resumo = {'saldo_final': saldo, 'menor': menor,
+              'primeiro_negativo': primeiro_negativo, 'fora': fora}
+    return linhas, resumo
+
+
+@financeiro.route('/financeiro/fluxo')
+@permission_required('financeiro.fluxo')
+def fluxo():
+    from models.fin_titulo import FinFluxo
+    try:
+        dias = int(request.args.get('dias') or 30)
+    except ValueError:
+        dias = 30
+    if dias not in (30, 60, 90):
+        dias = 30
+    hoje = date.today()
+    saldo = FinFluxo.saldo_vigente()
+    saldo_valor = Decimal(str(saldo['valor'])) if saldo else Decimal('0')
+    linhas, resumo = _montar_fluxo(saldo_valor, FinFluxo.abertos_por_vencimento(),
+                                   hoje, dias)
+    return render_template('financeiro/fluxo.html', linhas=linhas,
+                           resumo=resumo, saldo=saldo, dias=dias, hoje=hoje)
+
+
+@financeiro.route('/financeiro/fluxo/saldo', methods=['POST'])
+@permission_required('financeiro.fluxo')
+def fluxo_saldo():
+    from models.fin_titulo import FinFluxo
+    try:
+        valor = _dec_form(request.form.get('valor'))
+    except InvalidOperation:
+        flash('Valor de saldo inválido.', 'danger')
+        return redirect(url_for('financeiro.fluxo'))
+    data = request.form.get('data') or date.today().isoformat()
+    FinFluxo.registrar_saldo(data, valor, current_user.id)
+    registrar('escrita.informou_saldo', 'financeiro', tabela='fin_saldos',
+              depois={'data': data, 'valor': str(valor)})
+    flash('Saldo registrado — a projeção parte dele agora.', 'success')
+    return redirect(url_for('financeiro.fluxo'))
+
+
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------

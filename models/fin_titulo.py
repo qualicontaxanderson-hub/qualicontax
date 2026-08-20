@@ -127,6 +127,40 @@ class FinDre:
         return [r['a'] for r in rows if r['a']]
 
 
+class FinFluxo:
+    """Fluxo de caixa projetado (Documento E, seção 6).
+
+    Saldo REAL (informado à mão até a fase 4 ligar o extrato) numa linha;
+    PROJEÇÃO (títulos em aberto por vencimento) na outra — o documento manda
+    nunca misturar os dois num número só.
+    """
+
+    @staticmethod
+    def saldo_vigente():
+        """O último saldo informado (ou None se nunca houve)."""
+        return execute_query(
+            'SELECT id, data, valor, origem, usuario_id, criado_em '
+            '  FROM fin_saldos ORDER BY criado_em DESC, id DESC LIMIT 1',
+            fetch=True, fetch_one=True)
+
+    @staticmethod
+    def registrar_saldo(data, valor, usuario_id, origem='manual'):
+        """Informe novo = linha nova (histórico completo, nunca sobrescreve)."""
+        return execute_query(
+            'INSERT INTO fin_saldos (data, valor, origem, usuario_id) '
+            'VALUES (%s, %s, %s, %s)', (data, valor, origem, usuario_id))
+
+    @staticmethod
+    def abertos_por_vencimento():
+        """Saldo devedor dos títulos em aberto, agrupado por dia e tipo."""
+        return execute_query(
+            """SELECT vencimento, tipo, SUM(valor - valor_baixado) AS total
+                 FROM fin_titulos
+                WHERE status IN ('aberto', 'parcial')
+                GROUP BY vencimento, tipo
+                ORDER BY vencimento""", fetch=True) or []
+
+
 class FinTitulo:
 
     @staticmethod
