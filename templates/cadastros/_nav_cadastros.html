@@ -6,12 +6,16 @@
    NOVA TELA: acrescente UMA linha em _abas (endpoint, prefixo p/ aba ativa, rótulo).
    Aba ativa = prefixo mais longo que casa com request.path.
 --------------------------------------------------------------------------- #}
+{# CONTRATOS saiu daqui em 21/08/2026. A tabela `contratos` nunca teve uma
+   linha e o modulo nunca funcionou; alem disso, contrato de honorario nao e
+   assunto de Cadastros: nasce no COMERCIAL (proposta) e vive no FINANCEIRO
+   (fin_contratos), que ja cobra, gera nota e reajusta. As rotas seguem de pe
+   para links antigos; so saiu da frente de quem trabalha. #}
 {% set _abas = [
     ('modulos.cadastros',           '/cadastros',             'INÍCIO'),
     ('clientes.index',              '/clientes',              'CLIENTES'),
     ('grupos.index',                '/grupos',                'GRUPOS'),
     ('ramos_atividade.index',       '/ramodeatividade',       'RAMO DE ATIVIDADE'),
-    ('contratos.list_contratos',    '/contratos',             'CONTRATOS'),
     ('municipios.index',            '/municipios',            'MUNICÍPIO'),
     ('adicionais.index',            '/cadastros/adicionais',  'ADICIONAIS'),
 ] %}

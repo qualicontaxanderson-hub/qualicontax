@@ -12,13 +12,10 @@
         <div class="ef-hero-head">
             <div>
                 <h1 class="ef-hero-title">Cadastros</h1>
-                <p class="ef-hero-sub">Gestão de clientes, grupos, contratos e tabelas auxiliares</p>
+                <p class="ef-hero-sub">Gestão de clientes, grupos e tabelas auxiliares</p>
             </div>
             <div class="ef-hero-actions">
                 {# Os dois atalhos que a tela já tinha, preservados #}
-                <a href="{{ url_for('contratos.create') }}" class="ef-btn">
-                    <i class="fas fa-plus"></i> Novo Contrato
-                </a>
                 <a href="{{ url_for('clientes.novo') }}" class="ef-btn ef-btn-primary">
                     <i class="fas fa-plus"></i> Novo Cliente
                 </a>
@@ -56,12 +53,6 @@
             <h3 class="ef-card-title">Ramo de Atividade</h3>
             <div class="ef-card-num" data-counter="ramos"></div>
             <p class="ef-card-desc">Tabela de ramos para classificar clientes</p>
-        </a>
-        <a href="{{ url_for('contratos.list_contratos') }}" class="ef-card">
-            <div class="ef-card-ico" style="background:#d1fae5;color:#059669;"><i class="fas fa-file-contract"></i></div>
-            <h3 class="ef-card-title">Contratos</h3>
-            <div class="ef-card-num" data-counter="contratos"></div>
-            <p class="ef-card-desc">Prestação de serviço com controle de vigência</p>
         </a>
         <a href="{{ url_for('municipios.index') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#e7f6ec;color:#166534;"><i class="fas fa-map-marked-alt"></i></div>

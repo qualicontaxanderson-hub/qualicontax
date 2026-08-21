@@ -26,7 +26,7 @@
             
             <!-- Cadastros (com submenu) -->
             <li class="nav-item has-submenu">
-                <a href="{{ url_for('modulos.cadastros') }}" class="nav-link {% if request.endpoint in ('modulos.cadastros', 'clientes.index', 'clientes.create', 'clientes.detalhes', 'clientes.edit', 'contratos.list_contratos', 'contratos.create_contrato', 'grupos.index', 'ramos_atividade.index', 'municipios.index') %}active{% endif %}" onclick="toggleSubmenu(this); return false;">
+                <a href="{{ url_for('modulos.cadastros') }}" class="nav-link {% if request.endpoint in ('modulos.cadastros', 'clientes.index', 'clientes.create', 'clientes.detalhes', 'clientes.edit', 'grupos.index', 'ramos_atividade.index', 'municipios.index') %}active{% endif %}" onclick="toggleSubmenu(this); return false;">
                     <i class="fas fa-folder-open"></i>
                     <span>Cadastros</span>
                     <i class="fas fa-chevron-down submenu-arrow"></i>
@@ -39,10 +39,6 @@
                         </a>
                     </li>
                     <li class="submenu-item">
-                        <a href="{{ url_for('contratos.list_contratos') }}" class="submenu-link {% if 'contratos' in request.endpoint %}active{% endif %}">
-                            <i class="fas fa-file-contract"></i>
-                            <span>Contratos</span>
-                        </a>
                     </li>
                 </ul>
             </li>
