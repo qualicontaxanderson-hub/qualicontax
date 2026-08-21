@@ -222,7 +222,13 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
     .cc-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
     /* UMA coluna. Com duas, os campos ficam espremidos e as datas quebram. */
     .cc-filter-grid { grid-template-columns:1fr; }
+    /* A faixa de abas termina num <div style="margin-left:auto"> com os botoes
+       de acao (Exportar/Gerar PDF). Ele nao quebrava e sozinho jogava a PAGINA
+       para 454px numa tela de 390 — medido no Chromium em 20/08/2026. Mesma
+       correcao que o CT-e ja tinha: no celular ele vira uma linha inteira. */
     .cc-tabs { flex-wrap:wrap; row-gap:8px; }
+    .cc-tabs > div:last-child { margin-left:0 !important; width:100%; flex-wrap:wrap; }
+    .cc-tabs > div:last-child > * { flex:1 1 auto; }
 
     .cc-table-wrap { border:0; background:transparent; box-shadow:none; overflow-x:visible; }
     table.cc-table { min-width:0; display:block; }
