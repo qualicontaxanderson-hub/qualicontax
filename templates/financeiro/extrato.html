@@ -40,12 +40,6 @@
 .ex-kpi-val { font-size:20px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
 .ex-kpi-pe { font-size:10.5px; color:rgba(255,255,255,.75); margin-top:3px; }
 
-/* ---- faixa de importação ---- */
-.ex-import { background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #86efac;
-  border-radius:12px; padding:12px 18px; margin-bottom:14px; }
-.ex-import form { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0; }
-.ex-import .ex-dica { font-size:12px; color:#166534; flex:1; min-width:220px; }
-
 /* ---- filtros (cc-filters do fiscal) ---- */
 .ex-filtros { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px;
   padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
@@ -108,13 +102,23 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
    Mesma marcação do computador — os <td> só ganharam classe, que não pinta nada
    no desktop. Aqui a linha vira grade e ninguém arrasta tabela de lado. */
 @media (max-width: 768px) {
-  .ex-escopo { flex-direction:column; align-items:stretch; }
-  .ex-selo-escopo { margin-left:0; align-self:flex-start; }
-  .ex-chips-linha { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; }
-  .ex-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
-  .ex-kpi-val { font-size:16px; }
+  /* min-width:0 é OBRIGATÓRIO aqui: um filho flex com overflow-x:auto se recusa
+     a encolher abaixo do conteúdo (min-width:auto) e empurra a PÁGINA INTEIRA
+     para o lado — foi o que aconteceu em 20/08/2026. */
+  .ex-escopo { flex-direction:column; align-items:stretch; padding:12px 14px; gap:9px; }
+  .ex-escopo > * { min-width:0; max-width:100%; }
+  .ex-selo-escopo { margin-left:0; align-self:flex-start; font-size:11px; }
+  .ex-chips-linha { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; min-width:0; }
+  .ex-chip { padding:5px 13px; font-size:12px; }
+  /* KPI compacto: no celular o cartão é para bater o olho, não para ler ficha */
+  .ex-kpis { grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
+  .ex-kpi { padding:9px 11px; border-radius:10px; }
+  .ex-kpi-lbl { font-size:9px; }
+  .ex-kpi-val { font-size:15px; margin-top:2px; }
+  .ex-kpi-pe { display:none; }
   .ex-grade { grid-template-columns:1fr; }
   .ex-abas { flex-wrap:nowrap; overflow-x:auto; }
+  .ex-aba { white-space:nowrap; padding:9px 13px; }
   .ex-abas-dir { margin-left:0; }
   .ex-caixa { border:0; background:transparent; box-shadow:none; }
   .ex-rolar { overflow-x:visible; }
@@ -128,18 +132,25 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
     min-width:0; overflow-wrap:anywhere; }
   td.ex-td-desc { grid-column:1 / -1; font-size:13px; font-weight:700; color:#0f3d2e;
     line-height:1.35; order:1; }
+  /* a linha de baixo divide espaco com o valor: quando a conta e comprida ela
+     ganha reticencias em vez de escalar por cima do numero (medido: colidiam). */
   td.ex-td-data { font-size:11px; color:#94a3b8; font-weight:700; text-transform:uppercase;
-    letter-spacing:.3px; order:2; }
-  td.ex-td-valor { text-align:right; font-size:16px; font-weight:800; order:3; }
+    letter-spacing:.3px; order:2; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; padding-right:10px !important; }
+  td.ex-td-valor { text-align:right; font-size:16px; font-weight:800; order:3;
+    white-space:nowrap; }
   td.ex-td-cat { grid-column:1 / -1; border-top:1px dashed #eef2f0 !important;
     padding-top:9px !important; font-size:12.5px; order:4; }
   td.ex-td-acao { grid-column:1 / -1; order:5; }
   td.ex-td-acao .ex-btn-tag { display:block; width:100%; text-align:center; padding:10px;
     font-size:12.5px; }
-  td.ex-td-conta, td.ex-td-centro { display:none; }   /* descem para a data e a categoria */
+  /* ESPECIFICIDADE: a regra generica acima (table.ex-tab tbody td) tem peso
+     maior que 'td.classe' e vencia o display:none — some a conta/centro do
+     cartao exigia o mesmo prefixo. Colisao medida no Chromium em 20/08/2026. */
+  table.ex-tab tbody td.ex-td-conta,
+  table.ex-tab tbody td.ex-td-centro { display:none; }
+  .ex-abas-dir { display:none; }   /* ja existe no topo da tela */
   .ex-mob { display:inline; }
-  .ex-import form { flex-direction:column; align-items:stretch; }
-  .ex-import form > * { width:100%; max-width:100% !important; }
 }
 </style>
 
@@ -152,11 +163,13 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
         <p class="page-subtitle">Lançamentos das contas, classificação e memorização</p>
     </div>
     <div class="page-actions">
+        {# Importar é MODAL, como a "Importação Manual" do Fiscal: um bloco verde
+           fixo comia meia tela no celular sem ser usado todo dia. #}
+        <button class="btn btn-primary" onclick="exAbrirImport()">
+            <i class="fas fa-file-import"></i> Importar OFX
+        </button>
         <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
             <i class="fas fa-memory"></i> Memorizações
-        </a>
-        <a href="{{ url_for('financeiro.fluxo') }}" class="btn btn-outline">
-            <i class="fas fa-chart-area"></i> Fluxo de Caixa
         </a>
     </div>
 </div>
@@ -216,33 +229,6 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
         <div class="ex-kpi-val">{{ totais.sem_cat or 0 }}</div>
         <div class="ex-kpi-pe">esperando você</div>
     </div>
-</div>
-
-<!-- ── Importar (sai quando a leitura pela pasta entrar) ──────────── -->
-<div class="ex-import">
-    <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
-          enctype="multipart/form-data">
-        <select name="empresa_id" class="form-control" required style="max-width:200px;"
-                title="De qual empresa é a conta deste OFX">
-            <option value="">Conta de qual empresa?</option>
-            {% for e in fin_empresas %}
-            <option value="{{ e.cliente_id }}"
-                    {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
-                {{ e.apelido }}
-            </option>
-            {% endfor %}
-        </select>
-        <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
-               class="form-control" style="max-width:330px;">
-        <button type="submit" class="btn btn-primary">
-            <i class="fas fa-file-import"></i> Importar OFX
-        </button>
-        <span class="ex-dica">
-            Vários de uma vez (um por conta); reimportar o mesmo arquivo
-            <strong>não duplica nada</strong>. Em breve o arquivo chega pela pasta e o
-            sistema lê sozinho.
-        </span>
-    </form>
 </div>
 
 <!-- ── Filtros (nascem fechados, como no Fiscal) ─────────────────── -->
@@ -450,6 +436,47 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
     {% endif %}
 </div>
 
+<!-- ── Modal: importar OFX (sai quando a leitura pela pasta entrar) ── -->
+<div id="exModalImport" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+            <h3>Importar OFX</h3>
+            <button class="modal-close" onclick="exFecharImport()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
+              enctype="multipart/form-data">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Conta de qual empresa? *</label>
+                    <select name="empresa_id" class="form-control" required>
+                        <option value="">Escolha a empresa</option>
+                        {% for e in fin_empresas %}
+                        <option value="{{ e.cliente_id }}"
+                                {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                            {{ e.apelido }} — {{ e.nome_razao_social }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Arquivos (.ofx) *</label>
+                    <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
+                           class="form-control">
+                </div>
+                <small style="color:#6b7280;">
+                    Pode mandar vários de uma vez (um por conta). Reimportar o mesmo
+                    arquivo <strong>não duplica nada</strong>. Em breve o arquivo chega
+                    pela pasta e o sistema lê sozinho — sem este botão.
+                </small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="exFecharImport()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Importar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- ── Modal: classificar / memorizar ────────────────────────────── -->
 <div id="exModalClassificar" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:600px;">
@@ -507,6 +534,13 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
 {% block extra_js %}
 <script>
 var EX_URL_CLAS = "{{ url_for('financeiro.extrato_classificar', lanc_id=0) }}";
+
+function exAbrirImport() {
+    document.getElementById('exModalImport').style.display = 'block';
+}
+function exFecharImport() {
+    document.getElementById('exModalImport').style.display = 'none';
+}
 
 function exToggleFiltros() {
     var corpo = document.getElementById('exFiltroCorpo');
