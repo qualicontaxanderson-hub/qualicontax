@@ -1,6 +1,7 @@
 """Rotas de Clientes - CRUD completo"""
 import re
 import logging
+from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
@@ -1008,7 +1009,26 @@ def avulsos():
     """
     busca = (request.args.get('busca') or '').strip()
     lista = Cliente.listar_avulsos(busca or None)
-    return render_template('clientes/avulsos.html', avulsos=lista, busca=busca)
+
+    # Mesmo tratamento de certificado da lista de clientes — a tela é a mesma
+    # tela, então a bolinha tem que significar a mesma coisa nas duas.
+    for a in lista:
+        a['cert_nivel'] = DfeCertificado.classificar_validade(
+            a.get('cert_validade')).get('nivel', 'sem_data')
+
+    # Indicadores contados da própria lista, sem consulta extra e sem
+    # inventar número: total, quantos já têm arquivo guardado e há quantos
+    # dias espera o mais antigo.
+    hoje = date.today()
+    idades = [(hoje - a['avulso_em'].date()).days
+              for a in lista if a.get('avulso_em')]
+    stats = {
+        'total': len(lista),
+        'com_arquivo': sum(1 for a in lista if (a.get('docs') or 0) > 0),
+        'espera_max': max(idades) if idades else 0,
+    }
+    return render_template('clientes/avulsos.html', avulsos=lista,
+                           busca=busca, stats=stats)
 
 
 @clientes.route('/clientes/<int:id>/converter', methods=['POST'])

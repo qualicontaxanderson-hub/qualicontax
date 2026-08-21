@@ -46,7 +46,13 @@ class Cliente:
 
     @staticmethod
     def listar_avulsos(busca=None):
-        """Os avulsos — a única lista onde eles aparecem."""
+        """Os avulsos — a única lista onde eles aparecem.
+
+        Traz os MESMOS campos que a lista de clientes (cidade/UF, ramo,
+        certificado) porque a tela é a mesma tela: um avulso lido lado a lado
+        com um cliente tem que se ler igual. O que muda é o que ainda falta
+        nele — número —, não o formato.
+        """
         cond, params = ['c.avulso = 1'], []
         if busca:
             like = f"%{busca.strip()}%"
@@ -57,11 +63,29 @@ class Cliente:
             f"""SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
                        c.email, c.telefone, c.celular, c.situacao, c.avulso_em,
                        u.nome AS criado_por_nome,
+                       cert.cert_validade,
+                       MAX(ender.cidade) AS end_cidade,
+                       MAX(ender.estado) AS end_uf,
+                       GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome
+                                    SEPARATOR ', ') AS ramo_atividade_nome,
                        (SELECT COUNT(*) FROM documentos d
                          WHERE d.cliente_id = c.id) AS docs
                   FROM clientes c
                   LEFT JOIN usuarios u ON u.id = c.criado_por
+                  LEFT JOIN enderecos_clientes ender
+                         ON ender.cliente_id = c.id AND ender.principal = 1
+                  LEFT JOIN cliente_ramo_atividade_relacao crar
+                         ON crar.cliente_id = c.id
+                  LEFT JOIN ramos_atividade ra
+                         ON ra.id = crar.ramo_atividade_id
+                  LEFT JOIN (SELECT cliente_id, MAX(validade) AS cert_validade
+                               FROM dfe_certificados WHERE ativo = 1
+                              GROUP BY cliente_id) cert
+                         ON cert.cliente_id = c.id
                  WHERE {' AND '.join(cond)}
+                 GROUP BY c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
+                          c.email, c.telefone, c.celular, c.situacao,
+                          c.avulso_em, u.nome, cert.cert_validade
                  ORDER BY c.avulso_em DESC, c.nome_razao_social""",
             tuple(params), fetch=True) or []
 
