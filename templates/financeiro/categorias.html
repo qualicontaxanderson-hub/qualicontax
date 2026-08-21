@@ -158,7 +158,17 @@
             <i class="fas fa-tags" style="color: var(--primary-green);"></i>
             Categorias do Financeiro
         </h1>
-        <p class="page-subtitle">Plano gerencial do escritório — o grupo é a linha do DRE</p>
+        <p class="page-subtitle">
+            Plano gerencial do escritório — o grupo é a linha do DRE
+            {% if qtd_inativas %}
+                ·
+                {% if ver_todas %}
+                <a href="{{ url_for('financeiro.categorias') }}">esconder as {{ qtd_inativas }} desativadas</a>
+                {% else %}
+                <a href="{{ url_for('financeiro.categorias', ver='todas') }}">ver {{ qtd_inativas }} desativada{{ '' if qtd_inativas == 1 else 's' }}</a>
+                {% endif %}
+            {% endif %}
+        </p>
     </div>
     <div class="page-actions">
         <button class="btn btn-primary" onclick="fcAbrirNova()">

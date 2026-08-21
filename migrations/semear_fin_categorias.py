@@ -59,8 +59,11 @@ ARVORE = [
     ('R', 'Receita de honorários', 'Décimo terceiro',
      ['1ª parcela', '2ª parcela', 'Parcela única']),
 
-    # 2) AVULSAS — o que se cobra fora da mensalidade.
-    ('R', 'Receitas avulsas', 'Serviços avulsos', [
+    # 2) AVULSAS — o que se cobra fora da mensalidade. SEM linha-mae: cada
+    #    servico e uma categoria do grupo, nao subcategoria de um guarda-chuva.
+    #    "Servicos avulsos" dentro de "Receitas avulsas" so repetia o nome do
+    #    grupo e criava um nivel que nao significa nada.
+] + [('R', 'Receitas avulsas', _n, []) for _n in [
         'Abertura de Empresa', 'Alteração Contratual', 'Baixa de Empresa',
         'Declaração de Imposto de Renda', 'Constituição - Posto de Combustível',
         'Alteração Contratual - Posto de Combustível', 'Cadastro ANP',
@@ -70,11 +73,9 @@ ARVORE = [
         'Ata de Distribuição de Lucro', 'Taxas de Cartórios', 'Correios',
         'Placa de Preços ANP / ICMS', 'Fita Adesiva Dupla Face',
         'Folha de Pagamento', 'Complemento de Mensalidade',
-        '13º Salário (Diferença)']),
-    ('R', 'Receitas avulsas', 'Sistemas e serviços', [
-        'LMC', 'Mensalidade Loja de Conveniência', 'Sistema de Emissão de CT-e',
-        'Sistema de Envio de Recibos Trabalhistas',
-        'Arquivo Remessa - Folha de Pagamento']),
+        '13º Salário (Diferença)', 'LMC', 'Mensalidade Loja de Conveniência',
+        'Sistema de Emissão de CT-e', 'Sistema de Envio de Recibos Trabalhistas',
+        'Arquivo Remessa - Folha de Pagamento']] + [
 
     # 3) DEDUÇÕES — nao e receita, e o que se abate dela. Ficam em grupo
     #    proprio porque no DRE a linha e "receita bruta menos deducoes": posto

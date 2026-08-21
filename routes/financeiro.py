@@ -414,10 +414,17 @@ def titulo_excluir(titulo_id):
 @permission_required('financeiro.categorias')
 def categorias():
     from models.fin_titulo import FinCentroCusto
+    # Por padrão a tela mostra só o que está EM USO. As desativadas continuam
+    # alcançáveis por ?ver=todas — sem isso não haveria como reativar —, mas
+    # não poluem a leitura: depois da migração do plano elas eram 40 e
+    # apareciam no meio das vivas, cinzas, dando a impressão de sujeira.
+    ver_todas = request.args.get('ver') == 'todas'
     cats = FinCategoria.listar(apenas_ativas=False)
     return render_template('financeiro/categorias.html',
                            categorias=cats,
-                           blocos=FinCategoria.blocos(),
+                           ver_todas=ver_todas,
+                           qtd_inativas=sum(1 for c in cats if not c['ativo']),
+                           blocos=FinCategoria.blocos(apenas_ativas=not ver_todas),
                            grupos=FinCategoria.grupos(),
                            pais=FinCategoria.pais(),
                            centros=FinCentroCusto.listar(apenas_ativos=False),
