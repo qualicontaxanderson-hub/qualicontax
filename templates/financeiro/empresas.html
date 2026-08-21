@@ -5,12 +5,15 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-.me-inativa { opacity: .55; }
-.me-acao { border: none; background: none; cursor: pointer; padding: 6px; }
-.me-wrap { overflow-x: auto; }
-.me-badge { padding: 3px 10px; border-radius: 999px; font-size: .78em; font-weight: 700; }
-.me-sim { background: #dcfce7; color: #166534; }
-.me-nao { background: #f3f4f6; color: #6b7280; }
+.me-inativa { opacity:.55; }
+.me-badge { padding:3px 10px; border-radius:99px; font-size:.78em; font-weight:700; }
+.me-sim { background:#dcfce7; color:#166534; }
+.me-nao { background:#f3f4f6; color:#6b7280; }
+.socio-res-item { display:block; width:100%; text-align:left; padding:8px 10px;
+  border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer;
+  margin-top:4px; font:inherit; }
+.socio-res-item:hover { background:#f0fdf4; border-color:#86efac; }
+.socio-res-vazio { padding:8px 10px; color:#6b7280; margin-top:4px; }
 </style>
 
 <div class="page-header">
@@ -53,9 +56,9 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body me-wrap">
-        <table class="table">
+<div class="fin-caixa">
+    <div class="fin-rolar">
+        <table class="fin-tab">
             <thead>
                 <tr>
                     <th>Apelido (chip)</th>
@@ -69,22 +72,23 @@
             <tbody>
                 {% for e in empresas %}
                 <tr class="{{ 'me-inativa' if not e.ativo }}">
-                    <td><strong>{{ e.apelido }}</strong></td>
-                    <td>{{ e.numero_cliente or '—' }} · {{ e.nome_razao_social }}</td>
-                    <td>{{ e.tipo_pessoa }}</td>
+                    <td class="fin-td-titulo"><strong>{{ e.apelido }}</strong>
+                        <span class="fin-mob fin-fraco"><br>{{ e.nome_razao_social }}</span></td>
+                    <td class="fin-td-oculta">{{ e.numero_cliente or '—' }} · {{ e.nome_razao_social }}</td>
+                    <td class="fin-td-meta">{{ e.tipo_pessoa }}</td>
                     <td>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
                             <input type="hidden" name="acao" value="consolidado">
-                            <button class="me-acao" title="Alternar participação no consolidado padrão">
+                            <button class="fin-btn-tag" title="Alternar participação no consolidado padrão">
                                 <span class="me-badge {{ 'me-sim' if e.no_consolidado else 'me-nao' }}">
                                     {{ 'Entra' if e.no_consolidado else 'Fora' }}</span>
                             </button>
                         </form>
                     </td>
-                    <td>{{ 'Ativa' if e.ativo else 'Desativada' }}</td>
-                    <td style="white-space:nowrap;">
-                        <button class="me-acao" title="Trocar apelido"
+                    <td class="fin-td-extra">{{ 'Ativa' if e.ativo else 'Desativada' }}</td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
+                        <button class="fin-btn-tag" title="Trocar apelido"
                                 data-id="{{ e.id }}" data-apelido="{{ e.apelido }}"
                                 onclick="meRenomear(this)">
                             <i class="fas fa-pen" style="color:#2563eb;"></i>
@@ -92,7 +96,7 @@
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
                             <input type="hidden" name="acao" value="ativo">
-                            <button class="me-acao"
+                            <button class="fin-btn-tag"
                                     title="{{ 'Desativar (some dos chips; histórico fica)' if e.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if e.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if e.ativo else '#9ca3af' }};"></i>

@@ -445,3 +445,154 @@
                     border-top:1px dashed #eef2f0 !important; }
     .tbl .acoes .lst-c-act { justify-content:flex-start; }
 }
+
+
+/* ===========================================================================
+   PADRÃO DO FINANCEIRO (.fin-*) — 21/08/2026
+   Os mesmos componentes da Conferência de Entradas do Fiscal, definidos UMA
+   vez aqui e consumidos por todas as telas do módulo (antes cada tela levava
+   a sua cópia inline). Quem mexer aqui mexe em todas — é o objetivo.
+
+   Regras de celular que estas classes já carregam, medidas no Chromium:
+   * filho flex com overflow-x PRECISA de min-width:0, senão empurra a PÁGINA;
+   * "td.classe{display:none}" perde para "table tbody td{display:block}" —
+     por isso os esconde-no-celular vêm com o seletor completo;
+   * tabela vira CARTÃO; a página nunca rola de lado.
+   =========================================================================== */
+
+/* ---- barra de escopo (empresa/grupo) ---- */
+.fin-escopo { background:linear-gradient(120deg,#0b3b2b,#116a43); border-radius:12px;
+  padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:12px;
+  flex-wrap:wrap; box-shadow:0 2px 10px rgba(0,0,0,.15); }
+.fin-escopo-lbl { font-size:11px; font-weight:700; color:rgba(255,255,255,.75);
+  text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
+.fin-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.fin-chip { padding:6px 15px; border-radius:99px; border:1.5px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.10); color:#eafff3; font-weight:700; font-size:12.5px;
+  text-decoration:none; white-space:nowrap; }
+.fin-chip:hover { background:rgba(255,255,255,.2); color:#fff; }
+.fin-chip.ativo { background:#fff; color:#0f3d2e; border-color:#fff; font-weight:800; }
+.fin-selo { display:inline-flex; align-items:center; gap:5px; padding:5px 12px;
+  border-radius:99px; font-size:12px; font-weight:700; margin-left:auto;
+  background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+
+/* ---- KPIs coloridos ---- */
+.fin-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:12px; margin-bottom:18px; }
+.fin-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
+.fin-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
+.fin-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
+.fin-kpi:nth-child(3) { background:linear-gradient(135deg,#991b1b,#ef4444); }
+.fin-kpi:nth-child(4) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+.fin-kpi:nth-child(5) { background:linear-gradient(135deg,#92400e,#f59e0b); }
+.fin-kpi-lbl { font-size:10px; font-weight:700; color:rgba(255,255,255,.8);
+  text-transform:uppercase; letter-spacing:.5px; }
+.fin-kpi-val { font-size:20px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
+.fin-kpi-pe { font-size:10.5px; color:rgba(255,255,255,.75); margin-top:3px; }
+
+/* ---- filtros que nascem fechados ---- */
+.fin-filtros { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px;
+  padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+.fin-filtros-cab { display:flex; align-items:center; gap:8px; cursor:pointer; }
+.fin-filtros-cab h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
+.fin-selo-filtro { font-size:10px; font-weight:700; background:#dcfce7; color:#15803d;
+  border-radius:99px; padding:2px 9px; }
+.fin-grade { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+.fin-grade label { font-size:10px; font-weight:700; color:#94a3b8; display:block;
+  margin-bottom:3px; text-transform:uppercase; }
+.fin-grade input, .fin-grade select { width:100%; padding:7px 10px; border:1.5px solid #e2e8f0;
+  border-radius:7px; font-size:13px; background:#f8fafc; color:#334155; min-height:33px; }
+.fin-grade input:focus, .fin-grade select:focus { border-color:#22c55e; outline:none; background:#fff; }
+.fin-per { display:flex; gap:6px; }
+.fin-per button { flex:1; border:none; border-radius:7px; padding:7px 6px; font-size:11.5px;
+  font-weight:700; color:#fff; cursor:pointer; }
+.fin-per .v { background:#16a34a; } .fin-per .a { background:#2563eb; } .fin-per .r { background:#7c3aed; }
+.fin-acoes-filtro { display:flex; gap:8px; margin-top:12px; }
+
+/* ---- abas internas ---- */
+.fin-abas { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px;
+  align-items:center; flex-wrap:wrap; }
+.fin-aba { padding:9px 16px; font-size:12.5px; font-weight:700; color:#64748b;
+  border-bottom:2px solid transparent; margin-bottom:-2px; text-decoration:none;
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
+.fin-aba:hover { color:#16a34a; }
+.fin-aba.ativa { color:#16a34a; border-bottom-color:#16a34a; }
+.fin-cont { background:#f1f5f9; color:#6b7280; padding:1px 7px; border-radius:99px;
+  font-size:10px; font-weight:800; }
+.fin-cont.alerta { background:#fef3c7; color:#92400e; }
+.fin-abas-dir { margin-left:auto; display:flex; gap:8px; padding-bottom:6px; }
+
+/* ---- tabela ---- */
+.fin-caixa { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+.fin-rolar { overflow-x:auto; }
+table.fin-tab { width:100%; border-collapse:collapse; min-width:880px; }
+table.fin-tab thead th { background:#f8fafc; font-size:10px; font-weight:800; letter-spacing:.5px;
+  text-transform:uppercase; color:#64748b; text-align:left; padding:10px 14px;
+  border-bottom:1.5px solid #e2e8f0; white-space:nowrap; }
+table.fin-tab tbody td { padding:11px 14px; border-bottom:1px solid #f1f5f9; font-size:13px;
+  vertical-align:middle; }
+table.fin-tab tbody tr:last-child td { border-bottom:none; }
+.fin-num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.fin-fraco { font-size:11.5px; color:#64748b; }
+.fin-valor { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.fin-cred { color:#15803d; } .fin-deb { color:#b91c1c; }
+.fin-btn-tag { border:1.5px solid #e2e8f0; background:#fff; border-radius:7px; padding:4px 10px;
+  font-size:11.5px; font-weight:700; color:#475569; cursor:pointer; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:5px; text-decoration:none; }
+.fin-btn-tag.destaque { border-color:#fcd34d; background:#fffbeb; color:#92400e; }
+.fin-btn-tag:hover { border-color:#86efac; background:#f0fdf4; color:#15803d; }
+.fin-rodape { font-size:12px; color:#5b7468; padding:10px 14px; border-top:1px solid #f1f5f9; }
+.fin-vazio { text-align:center; color:#6b7280; padding:40px 16px; }
+.fin-pilula { border-radius:99px; padding:2px 9px; font-size:11px; font-weight:700; }
+.fin-pilula.aberto { background:#e0f2fe; color:#075985; }
+.fin-pilula.parcial { background:#fef3c7; color:#92400e; }
+.fin-pilula.liquidado { background:#dcfce7; color:#166534; }
+.fin-pilula.cancelado { background:#f3f4f6; color:#6b7280; text-decoration:line-through; }
+.fin-pilula.alerta { background:#fef3c7; color:#92400e; }
+.fin-mob { display:none; }
+
+/* ================= CELULAR: a linha vira CARTÃO ================= */
+@media (max-width: 768px) {
+  .fin-escopo { flex-direction:column; align-items:stretch; padding:12px 14px; gap:9px; }
+  .fin-escopo > * { min-width:0; max-width:100%; }
+  .fin-selo { margin-left:0; align-self:flex-start; font-size:11px; }
+  .fin-chips { flex-wrap:wrap; min-width:0; }
+  .fin-chip { flex:1 1 auto; text-align:center; padding:7px 12px; font-size:12px; }
+  .fin-kpis { grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
+  .fin-kpi { padding:9px 11px; border-radius:10px; }
+  .fin-kpi-lbl { font-size:9px; }
+  .fin-kpi-val { font-size:15px; margin-top:2px; }
+  .fin-kpi-pe { display:none; }
+  .fin-grade { grid-template-columns:1fr; }
+  .fin-abas { flex-wrap:nowrap; overflow-x:auto; }
+  .fin-aba { white-space:nowrap; padding:9px 13px; }
+  .fin-abas-dir { display:none; }
+  .fin-caixa { border:0; background:transparent; box-shadow:none; }
+  .fin-rolar { overflow-x:visible; }
+  table.fin-tab { min-width:0; display:block; }
+  table.fin-tab thead { display:none; }
+  table.fin-tab tbody { display:block; }
+  table.fin-tab tbody tr { display:grid; grid-template-columns:1fr auto; gap:7px 10px;
+    align-items:baseline; background:#fff; border:1px solid #e3ece7; border-radius:14px;
+    padding:12px 13px; margin:0 0 9px; }
+  table.fin-tab tbody td { border:0 !important; padding:0 !important; display:block;
+    min-width:0; overflow-wrap:anywhere; }
+  /* seletor COMPLETO de propósito: "td.classe" perde para "table tbody td" */
+  table.fin-tab tbody td.fin-td-titulo { grid-column:1 / -1; font-size:13px; font-weight:700;
+    color:#0f3d2e; line-height:1.35; order:1; }
+  table.fin-tab tbody td.fin-td-meta { font-size:11px; color:#94a3b8; font-weight:700;
+    text-transform:uppercase; letter-spacing:.3px; order:2; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; padding-right:10px !important; }
+  table.fin-tab tbody td.fin-td-valor { text-align:right; font-size:16px; font-weight:800;
+    order:3; white-space:nowrap; }
+  table.fin-tab tbody td.fin-td-extra { grid-column:1 / -1; border-top:1px dashed #eef2f0 !important;
+    padding-top:9px !important; font-size:12.5px; order:4; }
+  table.fin-tab tbody td.fin-td-acao { grid-column:1 / -1; order:5; display:flex; gap:8px; }
+  table.fin-tab tbody td.fin-td-acao > * { flex:1 1 auto; }
+  table.fin-tab tbody td.fin-td-acao .fin-btn-tag { justify-content:center; padding:10px;
+    font-size:12.5px; }
+  table.fin-tab tbody td.fin-td-acao form { display:flex; flex:1 1 auto; }
+  table.fin-tab tbody td.fin-td-acao form .fin-btn-tag { width:100%; }
+  table.fin-tab tbody td.fin-td-oculta { display:none; }
+  .fin-mob { display:inline; }
+}

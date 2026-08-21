@@ -5,12 +5,9 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-.em-wrap { overflow-x: auto; }
-.em-inativa { opacity: .55; }
-.em-acao { border: none; background: none; cursor: pointer; padding: 6px; }
-.em-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
-.em-padrao { font-family: monospace; font-size: .92em; background: #f9fafb;
-  padding: 2px 8px; border-radius: 6px; }
+.em-inativa { opacity:.55; }
+.em-padrao { font-family:monospace; font-size:.92em; background:#f9fafb;
+  padding:2px 8px; border-radius:6px; }
 </style>
 
 <div class="page-header">
@@ -28,10 +25,10 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body em-wrap">
+<div class="fin-caixa">
+    <div class="fin-rolar">
         {% if memorizacoes %}
-        <table class="table">
+        <table class="fin-tab">
             <thead>
                 <tr>
                     <th>Padrão (contém)</th>
@@ -46,20 +43,25 @@
             <tbody>
                 {% for m in memorizacoes %}
                 <tr class="{{ 'em-inativa' if not m.ativo }}">
-                    <td><span class="em-padrao">{{ m.padrao }}</span></td>
-                    <td title="{{ m.categoria_grupo }}">
+                    <td class="fin-td-titulo"><span class="em-padrao">{{ m.padrao }}</span></td>
+                    <td class="fin-td-oculta" title="{{ m.categoria_grupo }}">
                         {{ 'R' if m.categoria_tipo == 'R' else 'P' }} · {{ m.categoria_nome }}</td>
-                    <td>{{ m.centro_nome or '—' }}</td>
-                    <td style="text-align:right;"><strong>{{ m.usos }}</strong></td>
-                    <td>{{ m.ultimo_uso.strftime('%d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca' }}</td>
-                    <td>{{ 'Ativa' if m.ativo else 'Desativada' }}</td>
-                    <td>
+                    <td class="fin-td-oculta">{{ m.centro_nome or '—' }}</td>
+                    <td class="fin-valor fin-td-valor"><strong>{{ m.usos }}</strong></td>
+                    <td class="fin-td-meta">{{ m.ultimo_uso.strftime('%d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca usada' }}</td>
+                    <td class="fin-td-extra">
+                        <span class="fin-pilula {{ 'liquidado' if m.ativo else 'cancelado' }}">
+                            {{ 'Ativa' if m.ativo else 'Desativada' }}</span>
+                        <span class="fin-mob fin-fraco">· {{ m.categoria_nome }}{{ ' · ' ~ m.centro_nome if m.centro_nome }}</span>
+                    </td>
+                    <td class="fin-td-acao">
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
-                            <button class="em-acao"
+                            <button class="fin-btn-tag"
                                     title="{{ 'Desativar (para de classificar; o que já foi fica)' if m.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if m.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if m.ativo else '#9ca3af' }};"></i>
+                                {{ 'Desativar' if m.ativo else 'Reativar' }}
                             </button>
                         </form>
                     </td>
@@ -68,7 +70,7 @@
             </tbody>
         </table>
         {% else %}
-        <div class="em-vazio">
+        <div class="fin-vazio">
             <i class="fas fa-memory" style="font-size:2em; display:block; margin-bottom:10px;"></i>
             Nenhuma memorização ainda. No Extrato, classifique um lançamento e
             deixe o "Memorizar" marcado — a primeira decisão vira regra.

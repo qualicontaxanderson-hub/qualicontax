@@ -5,10 +5,15 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-.fc-grupo-cab { background: #f9fafb; font-weight: 700; color: #374151; }
-.fc-inativa { opacity: .5; }
-.fc-wrap { overflow-x: auto; }
-.fc-acao { border: none; background: none; cursor: pointer; padding: 6px; }
+/* So o que e proprio desta tela; o resto vem de .fin-* na identidade. */
+.fc-grupo-cab { background:#f9fafb; font-weight:700; color:#374151; }
+.fc-inativa { opacity:.5; }
+@media (max-width: 768px) {
+    table.fin-tab tbody tr.fc-grupo-cab { display:block; background:#eef2f0;
+        border:0; border-radius:8px; padding:7px 12px; margin:14px 0 6px;
+        font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+    table.fin-tab tbody tr.fc-grupo-cab td { font-weight:800; color:#0f3d2e; }
+}
 </style>
 
 <div class="page-header">
@@ -82,9 +87,9 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body fc-wrap">
-        <table class="table">
+<div class="fin-caixa">
+    <div class="fin-rolar">
+        <table class="fin-tab">
             <thead>
                 <tr>
                     <th>Categoria</th>
@@ -104,18 +109,18 @@
                 </tr>
                 {% endif %}
                 <tr class="{{ 'fc-inativa' if not c.ativo }}">
-                    <td>{% if c.pai_id %}<span style="color:#9ca3af; margin-left:16px;">↳</span> {% endif %}{{ c.nome }}</td>
-                    <td style="text-align:right;">{{ usos.get(c.id, 0) }}</td>
-                    <td>{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
-                    <td style="white-space:nowrap;">
-                        <button class="fc-acao" title="Renomear"
+                    <td class="fin-td-titulo">{% if c.pai_id %}<span style="color:#9ca3af; margin-left:16px;">↳</span> {% endif %}{{ c.nome }}</td>
+                    <td class="fin-valor fin-td-valor">{{ usos.get(c.id, 0) }}</td>
+                    <td class="fin-td-extra">{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
+                        <button class="fin-btn-tag" title="Renomear"
                                 data-id="{{ c.id }}" data-nome="{{ c.nome }}"
                                 onclick="fcAbrirRenomear(this)">
                             <i class="fas fa-pen" style="color:#2563eb;"></i>
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.categoria_alternar', cat_id=c.id) }}">
-                            <button class="fc-acao"
+                            <button class="fin-btn-tag"
                                     title="{{ 'Desativar (some dos lançamentos novos)' if c.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if c.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if c.ativo else '#9ca3af' }};"></i>
@@ -150,7 +155,7 @@
             <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Criar</button>
         </form>
         <div class="fc-wrap">
-        <table class="table">
+        <table class="fin-tab">
             <thead>
                 <tr>
                     <th>Centro</th>
@@ -168,14 +173,14 @@
                     <td style="text-align:right;">{{ usos_centros.get(cc.id, 0) }}</td>
                     <td>{{ 'Ativo' if cc.ativo else 'Desativado' }}</td>
                     <td style="white-space:nowrap;">
-                        <button class="fc-acao" title="Renomear"
+                        <button class="fin-btn-tag" title="Renomear"
                                 data-id="{{ cc.id }}" data-nome="{{ cc.nome }}"
                                 onclick="ccAbrirRenomear(this)">
                             <i class="fas fa-pen" style="color:#2563eb;"></i>
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.centro_alternar', cc_id=cc.id) }}">
-                            <button class="fc-acao"
+                            <button class="fin-btn-tag"
                                     title="{{ 'Desativar' if cc.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if cc.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if cc.ativo else '#9ca3af' }};"></i>

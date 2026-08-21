@@ -4,30 +4,9 @@
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
-<style>
-/* Chips de tipo (mesma linguagem dos filtros de papel do fiscal) */
-.ft-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-.ft-chip { padding: 7px 16px; border-radius: 999px; border: 1px solid #d1d5db;
-  background: #fff; color: #374151; font-weight: 600; font-size: .9em;
-  text-decoration: none; }
-.ft-chip.ativo { background: var(--primary-green, #00A85A); color: #fff;
-  border-color: var(--primary-green, #00A85A); }
-/* Status */
-.ft-st { padding: 3px 10px; border-radius: 999px; font-size: .78em; font-weight: 700; }
-.ft-st-aberto    { background: #e0f2fe; color: #075985; }
-.ft-st-parcial   { background: #fef3c7; color: #92400e; }
-.ft-st-liquidado { background: #dcfce7; color: #166534; }
-.ft-st-cancelado { background: #f3f4f6; color: #6b7280; text-decoration: line-through; }
-.ft-tipo-R { color: #166534; font-weight: 700; }
-.ft-tipo-P { color: #b91c1c; font-weight: 700; }
-.ft-vencido { color: #b91c1c; font-weight: 700; }
-/* Tabela rola DENTRO do contêiner no celular — a página nunca rola de lado */
-.ft-wrap { overflow-x: auto; }
-.ft-wrap table { min-width: 900px; }
-.ft-acao { border: none; background: none; cursor: pointer; padding: 6px;
-  font-size: 1em; }
-.ft-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
-</style>
+{# Sem <style> aqui: escopo, KPIs, filtros, abas e o cartao do celular vem de
+   static/css/identidade.css (.fin-*), compartilhados com as demais telas do
+   Financeiro. Mexer la mexe em todas — e o objetivo. #}
 
 <div class="page-header">
     <div>
@@ -44,58 +23,79 @@
     </div>
 </div>
 
-{% include 'financeiro/_sel_empresas.html' %}
 
-<div class="stats-grid" style="margin-bottom: 24px;">
-    <div class="stat-card">
-        <div class="stat-icon bg-success"><i class="fas fa-hand-holding-dollar"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">{{ resumo.R.em_aberto | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">A receber em aberto ({{ resumo.R.qtd or 0 }})</p>
-        </div>
+{% set _outros = {} %}
+{% for k, v in request.args.items() %}{% if k != 'emp' and v %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
+<div class="fin-escopo">
+    <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
+    <div class="fin-chips">
+        <a class="fin-chip {{ 'ativo' if not sel_empresas }}"
+           href="{{ url_for('financeiro.titulos', **_outros) }}">TODAS</a>
+        {% for e in fin_empresas %}
+        {% if e.cliente_id in sel_empresas %}
+            {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
+        {% else %}
+            {% set _nova = sel_empresas + [e.cliente_id] %}
+        {% endif %}
+        {% set _csv = _nova | join(',') %}
+        <a class="fin-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
+           title="{{ e.nome_razao_social }}"
+           href="{{ url_for('financeiro.titulos', emp=_csv, **_outros) if _csv else url_for('financeiro.titulos', **_outros) }}">{{ e.apelido }}</a>
+        {% endfor %}
     </div>
-    <div class="stat-card">
-        <div class="stat-icon bg-danger"><i class="fas fa-money-bill-transfer"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">{{ resumo.P.em_aberto | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">A pagar em aberto ({{ resumo.P.qtd or 0 }})</p>
-        </div>
+    <span class="fin-selo">
+        <i class="fas fa-{{ 'check-circle' if sel_empresas else 'globe' }}"></i>
+        {{ (sel_empresas | length ~ ' empresa(s)') if sel_empresas else 'Todas as empresas' }}
+    </span>
+</div>
+
+<div class="fin-kpis">
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">Títulos em aberto</div>
+        <div class="fin-kpi-val">{{ (resumo.R.qtd or 0) + (resumo.P.qtd or 0) }}</div>
+        <div class="fin-kpi-pe">a receber e a pagar</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon bg-warning"><i class="fas fa-triangle-exclamation"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">{{ resumo.R.vencido | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">Recebimentos vencidos ({{ resumo.R.qtd_vencida or 0 }})</p>
-        </div>
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">A receber</div>
+        <div class="fin-kpi-val">{{ resumo.R.em_aberto | float | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">{{ resumo.R.qtd or 0 }} título(s)</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon bg-warning"><i class="fas fa-clock"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">{{ resumo.P.vencido | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">Pagamentos vencidos ({{ resumo.P.qtd_vencida or 0 }})</p>
-        </div>
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">A pagar</div>
+        <div class="fin-kpi-val">{{ resumo.P.em_aberto | float | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">{{ resumo.P.qtd or 0 }} título(s)</div>
+    </div>
+    <div class="fin-kpi">
+        {% set saldo_prev = (resumo.R.em_aberto | float) - (resumo.P.em_aberto | float) %}
+        <div class="fin-kpi-lbl">Saldo previsto</div>
+        <div class="fin-kpi-val">{{ saldo_prev | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">receber − pagar</div>
+    </div>
+    <div class="fin-kpi">
+        {% set venc = (resumo.R.vencido | float) + (resumo.P.vencido | float) %}
+        <div class="fin-kpi-lbl">Vencidos</div>
+        <div class="fin-kpi-val">{{ venc | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">{{ (resumo.R.qtd_vencida or 0) + (resumo.P.qtd_vencida or 0) }} título(s)</div>
     </div>
 </div>
 
-<div class="ft-chips">
-    {% for val, rotulo in [('R', 'A Receber'), ('P', 'A Pagar'), ('todos', 'Todos')] %}
-    <a class="ft-chip {{ 'ativo' if filtros.tipo == val }}"
-       href="{{ url_for('financeiro.titulos', tipo=val, status=filtros.status,
-                        venc_de=filtros.venc_de, venc_ate=filtros.venc_ate,
-                        categoria_id=filtros.categoria_id, busca=filtros.busca,
-                        emp=filtros.emp, centro=filtros.centro) }}">{{ rotulo }}</a>
-    {% endfor %}
-</div>
-
-<div class="card" style="margin-bottom: 20px;">
-    <div class="card-body">
+<div class="fin-filtros">
+    <div class="fin-filtros-cab" onclick="ftToggleFiltros()">
+        <h3><i class="fas fa-filter" style="color:#22c55e; margin-right:4px;"></i>Filtros</h3>
+        {% set _ativos = [filtros.venc_de, filtros.venc_ate, filtros.categoria_id,
+                          filtros.busca, filtros.centro] | select | list | length %}
+        {% if _ativos %}<span class="fin-selo-filtro">{{ _ativos }} ativo(s)</span>{% endif %}
+        <i class="fas fa-chevron-down" id="ftChevron"
+           style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
+    </div>
+    <div id="ftFiltroCorpo" style="display:{{ '' if _ativos else 'none' }};">
         <form method="GET" action="{{ url_for('financeiro.titulos') }}">
             <input type="hidden" name="tipo" value="{{ filtros.tipo }}">
             <input type="hidden" name="emp" value="{{ filtros.emp }}">
-            <div class="filter-grid">
-                <div class="filter-item">
-                    <label class="filter-label">Situação</label>
-                    <select name="status" class="form-control">
+            <div class="fin-grade">
+                <div>
+                    <label>Situação</label>
+                    <select name="status">
                         {% for val, rotulo in [('abertos', 'Em aberto (aberto + parcial)'),
                                                ('liquidado', 'Liquidados'),
                                                ('cancelado', 'Cancelados'),
@@ -104,17 +104,17 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Vencimento de</label>
-                    <input type="date" name="venc_de" class="form-control" value="{{ filtros.venc_de }}">
+                <div>
+                    <label>Vencimento de</label>
+                    <input type="date" name="venc_de" value="{{ filtros.venc_de }}">
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">até</label>
-                    <input type="date" name="venc_ate" class="form-control" value="{{ filtros.venc_ate }}">
+                <div>
+                    <label>até</label>
+                    <input type="date" name="venc_ate" value="{{ filtros.venc_ate }}">
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Categoria</label>
-                    <select name="categoria_id" class="form-control">
+                <div>
+                    <label>Categoria</label>
+                    <select name="categoria_id">
                         <option value="">Todas</option>
                         {% for c in categorias %}
                         <option value="{{ c.id }}" {% if filtros.categoria_id|string == c.id|string %}selected{% endif %}>
@@ -123,9 +123,9 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Centro de custo</label>
-                    <select name="centro" class="form-control">
+                <div>
+                    <label>Centro de custo</label>
+                    <select name="centro">
                         <option value="">Todos</option>
                         <option value="sem" {% if filtros.centro == 'sem' %}selected{% endif %}>Sem centro</option>
                         {% for cc in centros %}
@@ -133,24 +133,45 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="filter-item">
-                    <label class="filter-label">Buscar</label>
-                    <input type="text" name="busca" class="form-control" value="{{ filtros.busca }}"
+                <div>
+                    <label>Buscar</label>
+                    <input type="text" name="busca" value="{{ filtros.busca }}"
                            placeholder="Contraparte, descrição ou CNPJ/CPF">
                 </div>
-                <div class="filter-item" style="display:flex; align-items:flex-end; gap:8px;">
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
-                    <a href="{{ url_for('financeiro.titulos', tipo=filtros.tipo) }}" class="btn btn-outline">Limpar</a>
-                </div>
+            </div>
+            <div class="fin-acoes-filtro">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filtrar</button>
+                <a href="{{ url_for('financeiro.titulos', tipo=filtros.tipo, emp=filtros.emp) }}"
+                   class="btn btn-outline"><i class="fas fa-times"></i> Limpar</a>
             </div>
         </form>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body ft-wrap">
-        {% if titulos %}
-        <table class="table">
+{# Abas internas: o tipo do titulo (era a fileira de chips ft-chip) #}
+{% set _b = {} %}
+{% for k, v in request.args.items() %}{% if k != 'tipo' and v %}{% set _ = _b.update({k: v}) %}{% endif %}{% endfor %}
+<div class="fin-abas">
+    <a class="fin-aba {{ 'ativa' if filtros.tipo == 'R' }}"
+       href="{{ url_for('financeiro.titulos', tipo='R', **_b) }}">
+        <i class="fas fa-hand-holding-dollar"></i> A Receber
+        <span class="fin-cont">{{ resumo.R.qtd or 0 }}</span>
+    </a>
+    <a class="fin-aba {{ 'ativa' if filtros.tipo == 'P' }}"
+       href="{{ url_for('financeiro.titulos', tipo='P', **_b) }}">
+        <i class="fas fa-money-bill-transfer"></i> A Pagar
+        <span class="fin-cont">{{ resumo.P.qtd or 0 }}</span>
+    </a>
+    <a class="fin-aba {{ 'ativa' if filtros.tipo == 'todos' }}"
+       href="{{ url_for('financeiro.titulos', tipo='todos', **_b) }}">
+        <i class="fas fa-list"></i> Todos
+    </a>
+</div>
+
+<div class="fin-caixa">
+    {% if titulos %}
+    <div class="fin-rolar">
+        <table class="fin-tab">
             <thead>
                 <tr>
                     <th>Vencimento</th>
@@ -171,52 +192,69 @@
                 {% for t in titulos %}
                 {% set saldo = t.valor - t.valor_baixado %}
                 <tr>
-                    <td class="{{ 'ft-vencido' if t.vencido }}">
+                    <td class="fin-num fin-td-meta {{ 'fin-deb' if t.vencido }}">
                         {{ t.vencimento.strftime('%d/%m/%Y') }}
                         {% if t.vencido %}<i class="fas fa-triangle-exclamation" title="Vencido"></i>{% endif %}
+                        <span class="fin-mob">· {{ emp_mapa.get(t.empresa_id, '?') }}
+                            · {{ 'Receber' if t.tipo == 'R' else 'Pagar' }}</span>
                     </td>
-                    <td>{{ emp_mapa.get(t.empresa_id, '?') }}</td>
-                    <td class="ft-tipo-{{ t.tipo }}">{{ 'Receber' if t.tipo == 'R' else 'Pagar' }}</td>
-                    <td>{{ t.contraparte_nome }}</td>
-                    <td>{{ t.descricao }}</td>
-                    <td title="{{ t.categoria_grupo }}">{{ t.categoria_nome }}</td>
-                    <td>{{ t.centro_nome or '—' }}</td>
-                    <td>{{ t.competencia.strftime('%m/%Y') }}</td>
-                    <td style="text-align:right;">{{ t.valor | float | round(2) | format_currency }}</td>
-                    <td style="text-align:right;">
+                    <td class="fin-td-oculta">{{ emp_mapa.get(t.empresa_id, '?') }}</td>
+                    <td class="fin-td-oculta {{ 'fin-cred' if t.tipo == 'R' else 'fin-deb' }}"
+                        style="font-weight:700;">{{ 'Receber' if t.tipo == 'R' else 'Pagar' }}</td>
+                    <td class="fin-td-oculta">{{ t.contraparte_nome }}</td>
+                    <td class="fin-td-titulo">
+                        {{ t.descricao }}
+                        <span class="fin-mob fin-fraco"><br>{{ t.contraparte_nome }}</span>
+                    </td>
+                    <td class="fin-td-oculta" title="{{ t.categoria_grupo }}">{{ t.categoria_nome }}</td>
+                    <td class="fin-td-oculta">{{ t.centro_nome or '—' }}</td>
+                    <td class="fin-num fin-td-oculta">{{ t.competencia.strftime('%m/%Y') }}</td>
+                    <td class="fin-valor fin-td-valor {{ 'fin-cred' if t.tipo == 'R' else 'fin-deb' }}">
+                        {{ t.valor | float | round(2) | format_currency }}
+                    </td>
+                    <td class="fin-valor fin-td-oculta">
                         {% if t.status in ('aberto', 'parcial') %}
                             {{ saldo | float | round(2) | format_currency }}
                         {% else %}—{% endif %}
                     </td>
-                    <td><span class="ft-st ft-st-{{ t.status }}">{{ t.status }}</span></td>
-                    <td style="white-space:nowrap;">
+                    <td class="fin-td-extra">
+                        <span class="fin-pilula {{ t.status }}">{{ t.status }}</span>
+                        <span class="fin-mob fin-fraco">
+                            · {{ t.categoria_nome }}{{ ' · ' ~ t.centro_nome if t.centro_nome }}
+                            · compet. {{ t.competencia.strftime('%m/%Y') }}
+                            {% if t.status in ('aberto', 'parcial') %}
+                            · em aberto {{ saldo | float | round(2) | format_currency }}
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
                         {% if t.status in ('aberto', 'parcial') %}
-                        <button class="ft-acao" title="Registrar baixa (recebi/paguei)"
+                        <button class="fin-btn-tag destaque" title="Registrar baixa (recebi/paguei)"
                                 data-id="{{ t.id }}" data-desc="{{ t.descricao }}"
                                 data-contra="{{ t.contraparte_nome }}"
                                 data-saldo="{{ '%.2f'|format(saldo) }}"
                                 data-venc="{{ t.vencimento.isoformat() }}"
                                 data-prog="{{ 'v' if t.prog_variavel else ('f' if t.programacao_id else '') }}"
                                 onclick="ftAbrirBaixa(this)">
-                            <i class="fas fa-hand-holding-dollar" style="color:#166534;"></i>
+                            <i class="fas fa-hand-holding-dollar"></i> Baixar
                         </button>
                         {% endif %}
                         {% if t.status == 'aberto' and not t.valor_baixado %}
-                        <form method="POST" style="display:inline;"
+                        <form method="POST"
                               action="{{ url_for('financeiro.titulo_cancelar', titulo_id=t.id) }}"
                               onsubmit="return confirm('Cancelar este título?');">
                             {% for k, v in filtros.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-                            <button class="ft-acao" title="Cancelar título">
-                                <i class="fas fa-ban" style="color:#92400e;"></i>
+                            <button class="fin-btn-tag" title="Cancelar título">
+                                <i class="fas fa-ban"></i> <span class="fin-mob">Cancelar</span>
                             </button>
                         </form>
                         {% if t.origem == 'manual' %}
-                        <form method="POST" style="display:inline;"
+                        <form method="POST"
                               action="{{ url_for('financeiro.titulo_excluir', titulo_id=t.id) }}"
                               onsubmit="return confirm('Excluir este título? Só use para erro de lançamento.');">
                             {% for k, v in filtros.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-                            <button class="ft-acao" title="Excluir (erro de lançamento)">
-                                <i class="fas fa-trash" style="color:#b91c1c;"></i>
+                            <button class="fin-btn-tag" title="Excluir (erro de lançamento)">
+                                <i class="fas fa-trash"></i> <span class="fin-mob">Excluir</span>
                             </button>
                         </form>
                         {% endif %}
@@ -226,14 +264,14 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="ft-vazio">
-            <i class="fas fa-inbox" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-            Nenhum título com esses filtros.
-            {% if filtros.status == 'abertos' %}Lance o primeiro no botão <strong>Novo Título</strong>.{% endif %}
-        </div>
-        {% endif %}
     </div>
+    {% else %}
+    <div class="fin-vazio">
+        <i class="fas fa-inbox" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+        Nenhum título com esses filtros.
+        {% if filtros.status == 'abertos' %}Lance o primeiro no botão <strong>Novo Título</strong>.{% endif %}
+    </div>
+    {% endif %}
 </div>
 
 <!-- ── Modal: novo título ─────────────────────────────────────────── -->
@@ -428,6 +466,14 @@
 {% block extra_js %}
 <script>
 var FT_URL_BAIXA = "{{ url_for('financeiro.titulo_baixar', titulo_id=0) }}";
+
+function ftToggleFiltros() {
+    var corpo = document.getElementById('ftFiltroCorpo');
+    var chev = document.getElementById('ftChevron');
+    var abrindo = corpo.style.display === 'none';
+    corpo.style.display = abrindo ? '' : 'none';
+    chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+}
 
 function ftFechar(id) {
     document.getElementById(id).style.display = 'none';

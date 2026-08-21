@@ -43,7 +43,30 @@
     </div>
 </div>
 
-{% include 'financeiro/_sel_empresas.html' %}
+{% set _outros = {} %}
+{% for k, v in request.args.items() %}{% if k != 'emp' and v %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
+<div class="fin-escopo">
+    <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
+    <div class="fin-chips">
+        <a class="fin-chip {{ 'ativo' if not sel_empresas }}"
+           href="{{ url_for('financeiro.fluxo', **_outros) }}">TODAS</a>
+        {% for e in fin_empresas %}
+        {% if e.cliente_id in sel_empresas %}
+            {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
+        {% else %}
+            {% set _nova = sel_empresas + [e.cliente_id] %}
+        {% endif %}
+        {% set _csv = _nova | join(',') %}
+        <a class="fin-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
+           title="{{ e.nome_razao_social }}"
+           href="{{ url_for('financeiro.fluxo', emp=_csv, **_outros) if _csv else url_for('financeiro.fluxo', **_outros) }}">{{ e.apelido }}</a>
+        {% endfor %}
+    </div>
+    <span class="fin-selo">
+        <i class="fas fa-{{ 'check-circle' if sel_empresas else 'globe' }}"></i>
+        {{ (sel_empresas | length ~ ' empresa(s)') if sel_empresas else 'Todas as empresas' }}
+    </span>
+</div>
 
 <!-- ── Linha do REAL: saldo informado ─────────────────────────────── -->
 <div class="fx-real {{ 'fx-sem-saldo' if not saldos }}">
@@ -89,37 +112,33 @@
     {% endfor %}
 </div>
 
-<div class="stats-grid" style="margin-bottom: 24px;">
-    <div class="stat-card">
-        <div class="stat-icon bg-info"><i class="fas fa-flag-checkered"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value {{ 'fx-neg' if resumo.saldo_final < 0 }}">
-                {{ resumo.saldo_final | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">Saldo projetado ao fim de {{ dias }} dias</p>
-        </div>
+<div class="fin-kpis">
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">Saldo real</div>
+        <div class="fin-kpi-val">{{ saldo_total | float | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">{{ saldos | length }} conta(s) informada(s)</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon bg-warning"><i class="fas fa-arrow-trend-down"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value {{ 'fx-neg' if resumo.menor.saldo < 0 }}">
-                {{ resumo.menor.saldo | float | round(2) | format_currency }}</h3>
-            <p class="stat-label">Menor saldo projetado ({{ resumo.menor.data.strftime('%d/%m') }})</p>
-        </div>
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">Saldo em {{ dias }} dias</div>
+        <div class="fin-kpi-val">{{ resumo.saldo_final | float | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">fim do horizonte</div>
     </div>
-    <div class="stat-card">
-        {% if resumo.primeiro_negativo %}
-        <div class="stat-icon bg-danger"><i class="fas fa-circle-exclamation"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value fx-neg">{{ resumo.primeiro_negativo.strftime('%d/%m/%Y') }}</h3>
-            <p class="stat-label">Dia em que a projeção fica NEGATIVA</p>
-        </div>
-        {% else %}
-        <div class="stat-icon bg-success"><i class="fas fa-shield-halved"></i></div>
-        <div class="stat-content">
-            <h3 class="stat-value">Não negativa</h3>
-            <p class="stat-label">A projeção não fura no período</p>
-        </div>
-        {% endif %}
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">Menor saldo</div>
+        <div class="fin-kpi-val">{{ resumo.menor.saldo | float | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">em {{ resumo.menor.data.strftime('%d/%m') }}</div>
+    </div>
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">A receber no período</div>
+        {% set ent = linhas | sum(attribute='entrada') %}
+        <div class="fin-kpi-val">{{ ent | float | round(2) | format_currency }}</div>
+        <div class="fin-kpi-pe">entradas previstas</div>
+    </div>
+    <div class="fin-kpi">
+        <div class="fin-kpi-lbl">{{ 'Fica negativo em' if resumo.primeiro_negativo else 'Não fura' }}</div>
+        <div class="fin-kpi-val">
+            {{ resumo.primeiro_negativo.strftime('%d/%m/%Y') if resumo.primeiro_negativo else 'OK' }}</div>
+        <div class="fin-kpi-pe">{{ 'atenção ao caixa' if resumo.primeiro_negativo else 'no período' }}</div>
     </div>
 </div>
 
