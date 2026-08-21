@@ -153,9 +153,25 @@ def novo():
         numero_cliente = request.form.get('numero_cliente', '').strip()
         
         if Cliente.existe_cpf_cnpj(cpf_cnpj):
+            # REDE DE SEGURANÇA: se o duplicado for um AVULSO, "já cadastrado"
+            # manda o usuário procurar na lista de clientes uma empresa que ele
+            # NUNCA vai achar (avulso não aparece lá). Diz onde ela está.
+            av = Cliente.avulso_por_documento(cpf_cnpj)
+            if av:
+                flash(f'Esta empresa já existe como AVULSA: '
+                      f'{av["nome_razao_social"]}. Abra a aba Avulsos e clique '
+                      f'em "Converter em cliente" — assim ela mantém tudo o que '
+                      f'já foi guardado.', 'warning')
+                return redirect(url_for('clientes.avulsos', busca=cpf_cnpj))
             flash('CPF/CNPJ já cadastrado!', 'danger')
             return redirect(url_for('clientes.novo'))
         
+        # AVULSO: ato explícito (botão com confirmação na tela). Não é "número
+        # em branco" — em branco significa "usa o ID automático".
+        eh_avulso = request.form.get('avulso') == '1'
+        if eh_avulso:
+            numero_cliente = ''
+
         # Validar número do cliente se fornecido
         if numero_cliente and Cliente.existe_numero_cliente(numero_cliente):
             flash(f'Número do cliente "{numero_cliente}" já está em uso!', 'danger')
@@ -189,6 +205,7 @@ def novo():
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
             'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
+            'avulso': eh_avulso,
             'criado_por': current_user.id
         }
         # E1: 'None'/'null'/'' de qualquer caminho viram VAZIO antes de gravar.
@@ -978,6 +995,96 @@ def editar(id):
     grupos = GrupoCliente.get_all(situacao='ATIVO')
     grupos_cliente = Cliente.get_grupos(id)
     return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
+
+
+@clientes.route('/clientes/avulsos')
+@permission_required('clientes.index')
+def avulsos():
+    """A ÚNICA tela onde o avulso aparece.
+
+    Cadastro de empresa que ainda não é cliente (serviço pontual, orçamento do
+    Comercial, legalização). Todo mundo do escritório vê — a regra de "cada um
+    vê o que trouxe" é do Comercial, não daqui.
+    """
+    busca = (request.args.get('busca') or '').strip()
+    lista = Cliente.listar_avulsos(busca or None)
+    return render_template('clientes/avulsos.html', avulsos=lista, busca=busca)
+
+
+@clientes.route('/clientes/<int:id>/converter', methods=['POST'])
+@permission_required('clientes.edit')
+def converter_avulso(id):
+    """Avulso vira cliente: ganha número e a PASTA VAI JUNTO.
+
+    Ordem de propósito: renomeia a pasta ANTES de gravar. Com o Dropbox fora
+    do ar a conversão é recusada, em vez de deixar cliente novo com o
+    histórico preso na pasta AVULSO — mesma regra da troca de número.
+    """
+    from utils import dropbox_sync
+    c = Cliente.get_by_id(id)
+    if not c:
+        flash('Cadastro não encontrado.', 'danger')
+        return redirect(url_for('clientes.avulsos'))
+    if not c.get('avulso'):
+        flash('Este cadastro já é um cliente.', 'warning')
+        return redirect(url_for('clientes.detalhes', id=id))
+
+    numero = (request.form.get('numero_cliente') or '').strip()
+    if not numero:
+        flash('Informe o número que este cliente vai receber.', 'danger')
+        return redirect(url_for('clientes.avulsos'))
+    if Cliente.existe_numero_cliente(numero, id):
+        flash(f'O número {numero} já está em uso por outro cliente.', 'danger')
+        return redirect(url_for('clientes.avulsos'))
+
+    # 1) a pasta primeiro: AVULSO/{cnpj} -> EMPRESAS/{nº - razão}
+    import re as _re
+    dig = _re.sub(r'\D', '', c.get('cpf_cnpj') or '') or 'SEM_CNPJ'
+    de = f'AVULSO/{dig}'
+    para = dropbox_sync._build_empresa_folder(numero, c.get('nome_razao_social') or '')
+    st, cam_de, cam_para = dropbox_sync.renomear_pasta_avulso(de, para)
+    if st in ('conflito', 'erro'):
+        flash(('Já existe uma pasta com esse número no Dropbox — junte ou '
+               'renomeie lá e tente de novo. Nada foi alterado.'
+               if st == 'conflito' else
+               'Não consegui mover a pasta do Dropbox agora. Nada foi alterado '
+               '— tente novamente em instantes.'), 'danger')
+        return redirect(url_for('clientes.avulsos'))
+
+    # 2) agora sim o cadastro
+    if not Cliente.converter_em_cliente(id, numero):
+        # desfaz o movimento: pasta e cadastro não podem desencontrar
+        if st == 'movida':
+            dropbox_sync.renomear_pasta_avulso(para, de)
+        flash('Erro ao converter o cadastro. Nada foi alterado.', 'danger')
+        return redirect(url_for('clientes.avulsos'))
+
+    # 3) reaponta os caminhos gravados (mesmas 7 tabelas da troca de número)
+    if cam_de:
+        _like = (cam_de.replace('\\', '\\\\')
+                 .replace('%', '\\%').replace('_', '\\_')) + '/%'
+        _corte = len(cam_de) + 1
+        _tot = 0
+        for _t, _c in (('nfse_capturadas', 'xml_path'),
+                       ('cte_documentos', 'xml_caminho'),
+                       ('dfe_documentos', 'xml_caminho'),
+                       ('dfe_eventos', 'xml_caminho'),
+                       ('nfe_importacoes', 'xml_caminho'),
+                       ('dfe_certificados', 'dropbox_path'),
+                       ('documentos', 'caminho_arquivo')):
+            _n = execute_query(
+                f'UPDATE {_t} SET {_c} = CONCAT(%s, SUBSTRING({_c}, %s)) '
+                f'WHERE {_c} LIKE %s', (cam_para, _corte, _like))
+            _tot += _n or 0
+
+    registrar('escrita.converteu_avulso', 'cadastros', tabela='clientes',
+              registro_id=id,
+              antes={'avulso': True, 'pasta': de},
+              depois={'numero_cliente': numero, 'pasta': para,
+                      'dropbox': st, 'nome': c.get('nome_razao_social')})
+    flash(f'{c.get("nome_razao_social")} agora é o cliente {numero} — e tudo o '
+          f'que já estava guardado foi junto.', 'success')
+    return redirect(url_for('clientes.detalhes', id=id))
 
 
 @clientes.route('/clientes/<int:id>/inativar', methods=['POST'])

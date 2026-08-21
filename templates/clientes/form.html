@@ -92,13 +92,37 @@
             <p class="cf-seclabel">Identificação</p>
 
             <div class="cf-grid2">
-                <div class="cf-fg">
+                <div class="cf-fg" id="boxNumero">
                     <label class="cf-lbl" for="numero_cliente">Número do cliente <span class="cf-opt">(opcional)</span></label>
                     <input type="text" id="numero_cliente" name="numero_cliente" class="cf-ctrl"
                            placeholder="ex: 102" maxlength="20" value="{{ cliente.numero_cliente if cliente else '' }}">
                     <p class="cf-hint">Em branco usa o ID automático; ou digite um número personalizado.</p>
                 </div>
+                {# CLIENTE AVULSO: empresa que ainda NÃO é da carteira (serviço
+                   pontual, orçamento do Comercial, legalização). Ato explícito
+                   com confirmação — nunca deduzido de "número em branco". #}
+                {% if not cliente %}
+                <div class="cf-fg" style="display:flex; align-items:flex-end;">
+                    <input type="hidden" name="avulso" id="campoAvulso" value="">
+                    <button type="button" class="btn btn-outline" id="btnAvulso"
+                            onclick="marcarAvulso()" style="width:100%;">
+                        <i class="fas fa-user-clock"></i> Cliente Avulso
+                    </button>
+                </div>
+                {% endif %}
             </div>
+            {% if not cliente %}
+            <div id="avisoAvulso" style="display:none; margin-top:10px; padding:12px 16px;
+                 border-radius:10px; background:#fffbeb; border:1.5px solid #fde68a; color:#92400e;">
+                <strong><i class="fas fa-user-clock"></i> Cadastro AVULSO.</strong>
+                Esta empresa <strong>não entra na carteira de clientes</strong> — não aparece
+                nas listas, nos relatórios nem no Fiscal. Os arquivos dela ficam guardados
+                pelo CNPJ. Quando virar cliente, é só converter na aba
+                <strong>Avulsos</strong> e tudo vai junto.
+                <button type="button" class="btn btn-sm btn-outline" onclick="desmarcarAvulso()"
+                        style="margin-left:10px;">Cancelar avulso</button>
+            </div>
+            {% endif %}
 
             <div class="pj-only">
                 <div class="cf-grid2">
@@ -972,6 +996,34 @@ function consultarSintegra() {
     alert(mensagem);
     const sintegraWindow = window.open('https://www.sintegra.gov.br/', '_blank');
     if (!sintegraWindow) { alert('⚠️ O site foi bloqueado pelo navegador.\n\nPor favor, permita pop-ups para este site.'); }
+}
+</script>
+<script>
+function marcarAvulso() {
+    // A mensagem é montada com CRASE (template literal), onde a quebra de
+    // linha de verdade é válida. Entre aspas simples ela seria erro de
+    // sintaxe e mataria o bloco <script> inteiro — foi assim que os botões
+    // da tela de Usuários ficaram mortos em agosto.
+    if (!confirm(`Tem certeza que esta empresa é AVULSA?
+
+Ela NÃO entra na carteira de clientes: não aparece nas listas, nos relatórios nem no Fiscal.
+
+Use para serviço pontual, orçamento ou legalização.`)) return;
+    document.getElementById('campoAvulso').value = '1';
+    document.getElementById('boxNumero').style.display = 'none';
+    document.getElementById('numero_cliente').value = '';
+    document.getElementById('avisoAvulso').style.display = '';
+    var b = document.getElementById('btnAvulso');
+    b.classList.add('btn-primary');
+    b.innerHTML = '<i class="fas fa-check"></i> É avulso';
+}
+function desmarcarAvulso() {
+    document.getElementById('campoAvulso').value = '';
+    document.getElementById('boxNumero').style.display = '';
+    document.getElementById('avisoAvulso').style.display = 'none';
+    var b = document.getElementById('btnAvulso');
+    b.classList.remove('btn-primary');
+    b.innerHTML = '<i class="fas fa-user-clock"></i> Cliente Avulso';
 }
 </script>
 {% endblock %}

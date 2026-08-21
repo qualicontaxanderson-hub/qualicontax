@@ -45,6 +45,56 @@ class Cliente:
         return {r['d']: r['id'] for r in rows if r.get('d') and len(r['d']) >= 11}
 
     @staticmethod
+    def listar_avulsos(busca=None):
+        """Os avulsos — a única lista onde eles aparecem."""
+        cond, params = ['c.avulso = 1'], []
+        if busca:
+            like = f"%{busca.strip()}%"
+            cond.append('(c.nome_razao_social LIKE %s OR c.cpf_cnpj LIKE %s '
+                        'OR c.email LIKE %s)')
+            params += [like, like, like]
+        return execute_query(
+            f"""SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
+                       c.email, c.telefone, c.celular, c.situacao, c.avulso_em,
+                       u.nome AS criado_por_nome,
+                       (SELECT COUNT(*) FROM documentos d
+                         WHERE d.cliente_id = c.id) AS docs
+                  FROM clientes c
+                  LEFT JOIN usuarios u ON u.id = c.criado_por
+                 WHERE {' AND '.join(cond)}
+                 ORDER BY c.avulso_em DESC, c.nome_razao_social""",
+            tuple(params), fetch=True) or []
+
+    @staticmethod
+    def avulso_por_documento(cpf_cnpj):
+        """O avulso com este CNPJ/CPF, se existir — a rede de segurança do
+        cadastro novo: sem isto o usuário levaria "já cadastrado!" e ficaria
+        procurando na lista de clientes uma empresa que nunca vai achar."""
+        dig = ''.join(ch for ch in str(cpf_cnpj or '') if ch.isdigit())
+        if not dig:
+            return None
+        return execute_query(
+            "SELECT id, nome_razao_social, cpf_cnpj, avulso_em FROM clientes "
+            " WHERE avulso = 1 "
+            "   AND REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s "
+            " LIMIT 1", (dig,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def converter_em_cliente(cliente_id, numero_cliente):
+        """Avulso vira cliente: ganha número e deixa de ser avulso.
+
+        Devolve True se converteu. NÃO mexe no Dropbox — quem chama cuida da
+        pasta, e só depois de a gravação dar certo.
+        """
+        execute_query(
+            "UPDATE clientes SET avulso = 0, numero_cliente = %s, "
+            "virou_cliente_em = NOW() WHERE id = %s AND avulso = 1",
+            (numero_cliente, cliente_id))
+        r = execute_query('SELECT avulso, numero_cliente FROM clientes '
+                          'WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
+        return bool(r and not r['avulso'] and str(r['numero_cliente']) == str(numero_cliente))
+
+    @staticmethod
     def get_by_id(cliente_id):
         """
         Busca cliente por ID.
@@ -59,7 +109,8 @@ class Cliente:
             SELECT id, numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
                    porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade, data_inicio_contrato,
-                   situacao, observacoes, is_contador, aberta_pela_casa
+                   situacao, observacoes, is_contador, aberta_pela_casa,
+                   avulso, avulso_em, virou_cliente_em
             FROM clientes
             WHERE id = %s
         """
@@ -280,9 +331,11 @@ class Cliente:
                 numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                 inscricao_municipal, email, telefone, celular, regime_tributario,
                 porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade,
-                data_inicio_contrato, situacao, observacoes, aberta_pela_casa, criado_por
+                data_inicio_contrato, situacao, observacoes, aberta_pela_casa, criado_por,
+                avulso, avulso_em
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, CASE WHEN %s = 1 THEN NOW() ELSE NULL END)
         """
         params = (
             data.get('numero_cliente') or None,
@@ -303,7 +356,9 @@ class Cliente:
             data.get('situacao', 'ATIVO'),
             data.get('observacoes') or None,
             1 if data.get('aberta_pela_casa') else 0,
-            data.get('criado_por') or None      # AUTORIA (D2): quem criou
+            data.get('criado_por') or None,     # AUTORIA (D2): quem criou
+            1 if data.get('avulso') else 0,     # AVULSO: ato explícito da tela
+            1 if data.get('avulso') else 0,     # (o mesmo valor decide o carimbo)
         )
         return execute_query(query, params)
     

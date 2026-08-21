@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Avulsos - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'cadastros/_nav_cadastros.html' %}
+<style>
+.av-aviso { background:#fffbeb; border:1.5px solid #fde68a; border-radius:12px;
+  padding:12px 18px; margin-bottom:16px; color:#92400e; font-size:13px; }
+.av-row { display:grid; grid-template-columns:1fr auto; gap:10px 16px;
+  align-items:center; background:#fff; border:1px solid #e3ece7; border-radius:14px;
+  padding:14px 16px; margin-bottom:9px; }
+.av-nome { font-size:14px; font-weight:700; color:#0f3d2e; }
+.av-meta { font-size:11.5px; color:#7d968a; margin-top:3px; }
+.av-mono { font-family:ui-monospace, Consolas, monospace; }
+.av-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+.av-vazio { text-align:center; color:#6b7280; padding:44px 16px; }
+@media (max-width: 768px) {
+  .av-row { grid-template-columns:1fr; }
+  .av-acoes { width:100%; }
+  .av-acoes > * { flex:1 1 auto; }
+}
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-user-clock" style="color: var(--primary-green);"></i>
+            Avulsos
+        </h1>
+        <p class="page-subtitle">
+            Empresas que ainda não são clientes — serviço pontual, orçamento ou legalização
+        </p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('clientes.novo') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Cadastro
+        </a>
+        <a href="{{ url_for('clientes.index') }}" class="btn btn-outline">
+            <i class="fas fa-users"></i> Clientes
+        </a>
+    </div>
+</div>
+
+<div class="av-aviso">
+    <i class="fas fa-circle-info"></i>
+    Estes cadastros <strong>não aparecem em lugar nenhum além desta aba</strong> — nem na
+    lista de clientes, nem no Fiscal, nem nos relatórios. Os arquivos deles ficam
+    guardados no Dropbox pelo <strong>CNPJ</strong>. Quando um virar cliente, use
+    <strong>Converter em cliente</strong>: ele ganha o número e tudo o que já foi
+    guardado vai junto.
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('clientes.avulsos') }}"
+              style="display:flex; gap:10px; flex-wrap:wrap;">
+            <input type="text" name="busca" class="form-control" value="{{ busca }}"
+                   placeholder="Nome, CNPJ/CPF ou e-mail" style="max-width:360px;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
+            {% if busca %}
+            <a href="{{ url_for('clientes.avulsos') }}" class="btn btn-outline">Limpar</a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if avulsos %}
+<p style="color:#5b7468; font-size:12.5px; margin:0 0 10px;">
+    {{ avulsos | length }} cadastro(s) avulso(s)
+</p>
+{% for a in avulsos %}
+<div class="av-row">
+    <div>
+        <div class="av-nome">
+            <a href="{{ url_for('clientes.detalhes', id=a.id) }}">{{ a.nome_razao_social }}</a>
+        </div>
+        <div class="av-meta">
+            <span class="av-mono">{{ a.cpf_cnpj }}</span>
+            · {{ a.tipo_pessoa }}
+            {% if a.email %}· {{ a.email }}{% endif %}
+            {% if a.celular or a.telefone %}· {{ a.celular or a.telefone }}{% endif %}
+            {% if a.avulso_em %}<br>avulso desde {{ a.avulso_em.strftime('%d/%m/%Y') }}{% endif %}
+            {% if a.criado_por_nome %}· por {{ a.criado_por_nome }}{% endif %}
+            {% if a.docs %}· {{ a.docs }} documento(s){% endif %}
+        </div>
+    </div>
+    <div class="av-acoes">
+        <a href="{{ url_for('clientes.detalhes', id=a.id) }}" class="btn btn-outline">
+            <i class="fas fa-eye"></i> Abrir
+        </a>
+        <button class="btn btn-primary"
+                data-id="{{ a.id }}" data-nome="{{ a.nome_razao_social }}"
+                data-doc="{{ a.cpf_cnpj }}"
+                onclick="avConverter(this)">
+            <i class="fas fa-arrow-right-arrow-left"></i> Converter em cliente
+        </button>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="av-vazio">
+    <i class="fas fa-user-clock" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+    {% if busca %}
+        Nenhum avulso com "{{ busca }}".
+    {% else %}
+        Nenhum cadastro avulso. Ao criar um cadastro novo, use o botão
+        <strong>Cliente Avulso</strong> para a empresa que ainda não é da carteira.
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- ── Modal: converter em cliente ───────────────────────────────── -->
+<div id="avModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+            <h3>Converter em Cliente</h3>
+            <button class="modal-close" onclick="avFechar()">&times;</button>
+        </div>
+        <form method="POST" id="avForm" action="">
+            <div class="modal-body">
+                <p style="margin-bottom:14px;">
+                    <strong id="avNome"></strong><br>
+                    <span class="av-mono" id="avDoc" style="color:#6b7280;"></span>
+                </p>
+                <div class="form-group">
+                    <label>Número do cliente *</label>
+                    <input type="text" name="numero_cliente" id="avNumero"
+                           class="form-control" required maxlength="20"
+                           placeholder="ex: 102">
+                </div>
+                <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px;
+                            padding:12px 14px; font-size:12.5px; color:#166534;">
+                    <i class="fas fa-box-archive"></i>
+                    Ao converter, a pasta do Dropbox migra de
+                    <span class="av-mono">AVULSO/{CNPJ}</span> para
+                    <span class="av-mono">EMPRESAS/{nº - razão}</span> com
+                    <strong>tudo dentro</strong> — documentos, certificado, XMLs — e os
+                    caminhos guardados são reapontados. Nada é redigitado.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="avFechar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Converter</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var AV_URL = "{{ url_for('clientes.converter_avulso', id=0) }}";
+
+function avConverter(el) {
+    var form = document.getElementById('avForm');
+    form.action = AV_URL.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('avNome').textContent = el.getAttribute('data-nome');
+    document.getElementById('avDoc').textContent = el.getAttribute('data-doc');
+    document.getElementById('avNumero').value = '';
+    document.getElementById('avModal').style.display = 'block';
+    document.getElementById('avNumero').focus();
+}
+
+function avFechar() {
+    document.getElementById('avModal').style.display = 'none';
+}
+</script>
+{% endblock %}
