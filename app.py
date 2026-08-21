@@ -34,6 +34,37 @@ from models.usuario import Usuario
 _startup_time = time.time()
 logger = logging.getLogger(__name__)
 
+
+def _versao_em_execucao() -> str:
+    """Etiqueta curta do commit que está rodando AGORA.
+
+    Existe para tornar um deploy verificável de fora, sem login: o /health
+    já dizia que a aplicação tinha reiniciado, mas não QUAL versão subiu, e
+    dois deploys seguidos ficavam indistinguíveis. Com a etiqueta, basta
+    comparar com o commit que se acabou de enviar.
+
+    O Railway entrega o SHA em variável de ambiente. Fora dele (máquina do
+    desenvolvedor) pergunta ao próprio git. Se as duas falharem devolve
+    'desconhecida' — informação de diagnóstico nunca derruba a aplicação.
+    """
+    sha = (os.environ.get('RAILWAY_GIT_COMMIT_SHA')
+           or os.environ.get('GIT_COMMIT_SHA') or '').strip()
+    if not sha:
+        try:
+            import subprocess
+            sha = subprocess.run(
+                ['git', 'rev-parse', 'HEAD'],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                capture_output=True, text=True, timeout=3).stdout.strip()
+        except Exception:                                     # noqa: BLE001
+            sha = ''
+    return sha[:7] if sha else 'desconhecida'
+
+
+# Calculado UMA vez, na subida: o /health é consultado com frequência pelo
+# monitor do Railway e não pode disparar um subprocesso a cada chamada.
+_VERSAO = _versao_em_execucao()
+
 _INSECURE_KEY = 'dev-secret-key-change-in-production'
 if Config.FLASK_ENV == 'production' and Config.SECRET_KEY == _INSECURE_KEY:
     raise RuntimeError(
@@ -228,7 +259,8 @@ def health():
     uptime = round(time.time() - _startup_time, 1)
     status = 'ok' if db_ok else 'degraded'
     code   = 200  if db_ok else 503
-    return jsonify({'status': status, 'db': db_msg, 'uptime_s': uptime}), code
+    return jsonify({'status': status, 'db': db_msg, 'uptime_s': uptime,
+                    'versao': _VERSAO}), code
 
 
 # Error handlers
