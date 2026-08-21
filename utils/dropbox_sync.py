@@ -21,6 +21,14 @@ class DropboxAuthError(Exception):
     """Raised when Dropbox returns an authentication/authorization error."""
 
 
+_TXT_PANE = (
+    'O Dropbox está fora do ar do lado deles — não é problema de credencial '
+    'nem de configuração daqui, e nada precisa ser feito: volta sozinho '
+    'quando eles normalizarem. Enquanto durar, listar e baixar arquivos '
+    'falha; o que já está guardado continua guardado.'
+)
+
+
 class DropboxError(Exception):
     """Raised when a Dropbox operation fails for reasons other than auth (network, API error, etc.)."""
 
@@ -61,6 +69,17 @@ _DEPARTAMENTO_TO_CANONICAL = {
 def _sanitize_folder_name(name: str) -> str:
     """Remove caracteres inválidos para nome de pasta no Dropbox."""
     return re.sub(r'[/\\:*?"<>|]', '_', name).strip() or 'SEM_NOME'
+
+
+def pasta_avulso(cpf_cnpj: str) -> str:
+    """Pasta do AVULSO: ``AVULSO/{CNPJ}`` (só dígitos).
+
+    O avulso não tem número de cliente — o CNPJ é o que ele tem de único, e é
+    o que sobrevive quando ele virar cliente (aí a pasta migra inteira para
+    ``EMPRESAS/{nº - razão}``).
+    """
+    dig = re.sub(r'\D', '', str(cpf_cnpj or '')) or 'SEM_CNPJ'
+    return _service._build_path('AVULSO', dig)
 
 
 def _build_empresa_folder(numero: Optional[str], nome: str) -> str:
@@ -171,6 +190,47 @@ class DropboxService:
         """
         s = str(exc)
         return 'missing_scope' in s or 'insufficient_scope' in s
+
+    @staticmethod
+    def _is_outage_error(exc: Exception) -> bool:
+        """True quando o Dropbox está em pane — não há nada a corrigir aqui.
+
+        Merece classificação própria porque a AÇÃO é oposta à dos outros erros:
+        escopo pede mexer no App Console, credencial pede token novo, e pane
+        pede ESPERAR. Sem separar, o painel manda o operador trocar credencial
+        que está perfeita — o mesmo tipo de acusação do inocente que o
+        ``_is_scope_error`` já tinha corrigido uma vez.
+
+        Reconhece as duas caras que a pane de 21/08/2026 mostrou:
+
+        * ``403 {".tag": "other"}`` nas leituras — a borda do Dropbox barrada
+          pelo serviço interno de metadados deles. O SDK não sabe ler esse
+          corpo e levanta ``ValidationError: unknown tag 'other'``, mensagem
+          que não diz nada a quem lê a tela.
+        * ``501 unexpected error occurred`` em upload e download.
+        """
+        s = str(exc).lower()
+        if "tag 'other'" in s or 'tag "other"' in s:
+            return True
+        if 'unexpected error occurred' in s:
+            return True
+        return any(c in s for c in ('http 500', 'http 501', 'http 502',
+                                    'http 503', 'internalservererror'))
+
+    @staticmethod
+    def _erro_pane(exc: Exception) -> 'DropboxError':
+        """Erro de pane CARIMBADO com ``instabilidade = True``.
+
+        O carimbo existe porque quem recebe este erro vê a mensagem amigável,
+        não o texto cru do Dropbox — e reclassificar lendo a frase amigável
+        devolveria False, pintando a pane de vermelho como se fosse falha
+        nossa. Mesma armadilha que o ``escopo_faltando`` já resolve por
+        atributo.
+        """
+        err = DropboxError(_TXT_PANE)
+        err.instabilidade = True
+        err.causa = str(exc)
+        return err
 
     def _erro_auth(self, exc: Exception) -> 'DropboxAuthError':
         """Constrói o erro de auth com a mensagem CERTA para a causa.
@@ -284,6 +344,8 @@ class DropboxService:
                     raise self._erro_auth(exc) from exc
                 if 'not_found' in str(exc):
                     return None
+                if self._is_outage_error(exc):
+                    raise self._erro_pane(exc) from exc
                 raise DropboxError(f'Erro ao ler metadados de {path!r}: {exc}') from exc
 
     def _path_exists(self, path: str) -> bool:
@@ -435,9 +497,64 @@ class DropboxService:
                 logger.error('Erro ao mover %s → %s: %s', from_path, to_path, exc)
                 return False
 
+    def renomear_pasta(self, rel_de: str, rel_para: str):
+        """Renomeia/move uma pasta pelo caminho RELATIVO à raiz configurada.
+
+        É o motor por trás de ``renomear_pasta_empresa`` (troca de número) e
+        de ``renomear_pasta_avulso`` (avulso virando cliente): mesmo cuidado —
+        nunca sobrescreve destino existente e devolve 'erro' quando o Dropbox
+        está fora, para quem chamou RECUSAR a operação em vez de desencontrar
+        pasta e cadastro.
+        """
+        de = self._build_path(rel_de)
+        para = self._build_path(rel_para)
+        if de == para:
+            return 'sem_pasta', de, para
+        so_caixa = de.lower() == para.lower()
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return 'erro', de, para
+            try:
+                # TENTA MOVER e interpreta o erro, em vez de perguntar antes se
+                # a pasta existe. Duas vantagens: metade das chamadas e imunidade
+                # a defeito de leitura de metadados — em 21/08/2026 o Dropbox
+                # passou a devolver um tipo que o SDK não sabe ler ("unknown tag
+                # 'other'") e a conferência prévia derrubava a operação inteira,
+                # mesmo com o move funcionando perfeitamente.
+                try:
+                    dbx.files_move_v2(de, para, autorename=False)
+                except Exception as _e:
+                    txt = str(_e).lower()
+                    if 'not_found' in txt:
+                        return 'sem_pasta', de, para
+                    if 'conflict' in txt:
+                        # Só a caixa mudou? O Dropbox é indiferente a
+                        # maiúsculas: os caminhos novos já valem.
+                        return ('movida' if so_caixa else 'conflito'), de, para
+                    raise
+                logger.info('Pasta renomeada: %s → %s', de, para)
+                return 'movida', de, para
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox renomear_pasta: token expirado, renovando...')
+                        continue
+                logger.error('Erro ao renomear %s → %s: %s', de, para, exc)
+                return 'erro', de, para
+        return 'erro', de, para
+
     def renomear_pasta_empresa(self, pasta_antiga: str, pasta_nova: str):
         """Renomeia ``EMPRESAS/{pasta_antiga}`` → ``EMPRESAS/{pasta_nova}`` com
         TUDO dentro (FISCAL, CERTIFICADO, anos, meses) num movimento só.
+
+        Caso particular de :meth:`renomear_pasta` — as duas pastas moram em
+        EMPRESAS. Era uma cópia do mesmo algoritmo e as duas cópias
+        divergiram: a genérica aprendeu a sobreviver à pane do Dropbox de
+        21/08/2026 e esta continuou caindo, de modo que converter avulso
+        funcionava e trocar o número da empresa não. Uma implementação só.
 
         Devolve ``(status, caminho_antigo, caminho_novo)``:
           * ``'movida'``    — renomeou (ou só mudou maiúscula/minúscula);
@@ -446,57 +563,9 @@ class DropboxService:
             diferente do ``move_file``, aqui NUNCA se apaga o destino;
           * ``'erro'``      — Dropbox indisponível. Quem chamou deve RECUSAR a
             alteração do cadastro — pasta e cadastro não podem desencontrar.
-
-        A existência é consultada direto no metadata (e não via ``_path_exists``,
-        que devolve False também em erro de conexão — aqui isso viraria um falso
-        'sem_pasta' com o Dropbox fora do ar, exatamente o caso que dá 'erro').
         """
-        de = self._build_path('EMPRESAS', pasta_antiga)
-        para = self._build_path('EMPRESAS', pasta_nova)
-        if de == para:
-            return 'sem_pasta', de, para
-        so_caixa = de.lower() == para.lower()   # o Dropbox não distingue caixa
-        for _attempt in range(2):
-            dbx = self._client()
-            if not dbx:
-                return 'erro', de, para
-            try:
-                try:
-                    dbx.files_get_metadata(de)
-                except Exception as _e:
-                    if 'not_found' in str(_e):
-                        return 'sem_pasta', de, para
-                    raise
-                if not so_caixa:
-                    tem_destino = True
-                    try:
-                        dbx.files_get_metadata(para)
-                    except Exception as _e:
-                        if 'not_found' not in str(_e):
-                            raise
-                        tem_destino = False
-                    if tem_destino:
-                        return 'conflito', de, para
-                try:
-                    dbx.files_move_v2(de, para, autorename=False)
-                except Exception as _e:
-                    if so_caixa and 'conflict' in str(_e).lower():
-                        # Só a caixa mudou e este Dropbox recusou o move: os
-                        # caminhos novos continuam válidos (API case-insensitive).
-                        return 'movida', de, para
-                    raise
-                logger.info('Pasta da empresa renomeada: %s → %s', de, para)
-                return 'movida', de, para
-            except Exception as exc:
-                if self._is_auth_error(exc):
-                    with self._client_lock:
-                        self._dbx = None
-                    if _attempt == 0:
-                        logger.info('Dropbox renomear_pasta_empresa: token expirado, renovando...')
-                        continue
-                logger.error('Erro ao renomear pasta %s → %s: %s', de, para, exc)
-                return 'erro', de, para
-        return 'erro', de, para
+        return self.renomear_pasta('EMPRESAS/' + pasta_antiga,
+                                   'EMPRESAS/' + pasta_nova)
 
     def copy_file(self, from_path: str, to_path: str) -> bool:
         """Copia um arquivo de from_path para to_path, sobrescrevendo se já existir."""
@@ -777,6 +846,17 @@ def list_xml_files(folder: str = None) -> list:
 
 def renomear_pasta_empresa(pasta_antiga: str, pasta_nova: str):
     return _service.renomear_pasta_empresa(pasta_antiga, pasta_nova)
+
+
+def renomear_pasta_avulso(de: str, para: str):
+    """Move ``AVULSO/{cnpj}`` para ``EMPRESAS/{nº - razão}`` — o avulso virou
+    cliente. Devolve (status, caminho_de, caminho_para), igual ao de empresa.
+
+    Existe separado porque a origem NÃO está em EMPRESAS: o ``de`` já vem com
+    a pasta-mãe embutida ('AVULSO/123...') e o ``para`` é o nome da pasta
+    dentro de EMPRESAS.
+    """
+    return _service.renomear_pasta(de, 'EMPRESAS/' + para)
 
 
 def download_xml(path: str) -> str:

@@ -239,7 +239,8 @@ def get_saude() -> dict:
     from utils import dropbox_sync
 
     if not dropbox_sync.is_configured():
-        return {'ok': False, 'escopo_faltando': False, 'caminho': None,
+        return {'ok': False, 'escopo_faltando': False, 'instabilidade': False,
+                'caminho': None,
                 'erro': 'Dropbox não configurado (DROPBOX_REFRESH_TOKEN, '
                         'DROPBOX_APP_KEY e DROPBOX_APP_SECRET).'}
 
@@ -248,7 +249,8 @@ def get_saude() -> dict:
         caminho = svc.pasta_cert_novo()
     except Exception as exc:
         logger.warning('[dropbox-saude] falha ao montar o caminho: %s', exc)
-        return {'ok': False, 'escopo_faltando': False, 'caminho': None,
+        return {'ok': False, 'escopo_faltando': False, 'instabilidade': False,
+                'caminho': None,
                 'erro': 'Não consegui montar o caminho da _ENTRADA: %s' % exc}
 
     try:
@@ -258,15 +260,23 @@ def get_saude() -> dict:
         # fallback para exceção que chegar CRUA por algum caminho não traduzido.
         escopo = getattr(exc, 'escopo_faltando',
                          dropbox_sync.DropboxService._is_scope_error(exc))
-        logger.warning('[dropbox-saude] leitura de %s falhou (escopo=%s): %s',
-                       caminho, escopo, exc)
-        return {'ok': False, 'escopo_faltando': bool(escopo),
-                'caminho': caminho, 'erro': str(exc)}
+        # atributo primeiro: a exceção chega TRADUZIDA e reler a frase
+        # amigável devolveria False. O _is_outage_error fica de fallback
+        # para exceção que chegue crua por caminho não traduzido.
+        pane = getattr(exc, 'instabilidade',
+                       dropbox_sync.DropboxService._is_outage_error(exc))
+        logger.warning('[dropbox-saude] leitura de %s falhou (escopo=%s pane=%s): %s',
+                       caminho, escopo, pane, exc)
+        return {'ok': False, 'escopo_faltando': bool(escopo) and not pane,
+                'instabilidade': bool(pane), 'caminho': caminho,
+                'erro': dropbox_sync._TXT_PANE if pane else str(exc)}
 
     if md is None:
         # Autenticou e leu — a pasta é que não está lá.
-        return {'ok': False, 'escopo_faltando': False, 'caminho': caminho,
+        return {'ok': False, 'escopo_faltando': False, 'instabilidade': False,
+                'caminho': caminho,
                 'erro': 'A pasta %s não existe no Dropbox. As credenciais estão '
                         'válidas — o que falta é a pasta.' % caminho}
 
-    return {'ok': True, 'escopo_faltando': False, 'caminho': caminho, 'erro': None}
+    return {'ok': True, 'escopo_faltando': False, 'instabilidade': False,
+            'caminho': caminho, 'erro': None}
