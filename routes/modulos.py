@@ -19,7 +19,8 @@ PRODUTO_CARDS_AUTO_OPEN_DEFAULT = 2
 
 def _get_empresas_analise():
     return execute_query(
-        "SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        "SELECT id, numero_cliente, nome_razao_social FROM clientes "
+        "WHERE avulso = 0 AND situacao='ATIVO' ORDER BY nome_razao_social",
         fetch=True,
     ) or []
 
@@ -130,7 +131,7 @@ def _cadastros_home_payload():
     #     números baterem entre as duas telas) ---
     c = _cad_q1(
         "SELECT "
-        " (SELECT COUNT(*) FROM clientes WHERE situacao='ATIVO')                    ativos,"
+        " (SELECT COUNT(*) FROM clientes WHERE avulso = 0 AND situacao='ATIVO')     ativos,"
         " (SELECT COUNT(*) FROM clientes)                                           total_cli,"
         " (SELECT COUNT(DISTINCT cliente_id) FROM dfe_certificados WHERE ativo=1)   com_cert,"
         " (SELECT COUNT(DISTINCT cliente_id) FROM dfe_certificados"

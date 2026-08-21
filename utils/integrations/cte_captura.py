@@ -207,7 +207,8 @@ def _index_clientes():
     rows = execute_query(
         "SELECT id, numero_cliente, nome_razao_social, "
         "  REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-',''),' ','') AS d "
-        "FROM clientes WHERE cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
+        "FROM clientes WHERE avulso = 0 "          # avulso nao e cliente fiscal
+        "  AND cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
         fetch=True) or []
     return {r['d']: {'cliente_id': r['id'], 'numero': r['numero_cliente'],
                      'razao': r['nome_razao_social'], 'cnpj': r['d']}

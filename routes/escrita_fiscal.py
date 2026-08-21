@@ -136,8 +136,9 @@ def _get_empresas():
     # numero_cliente é varchar, então o CAST evita 10 vir antes de 9; o nome
     # entra como desempate para o caso de número vazio/repetido.
     return execute_query(
+        # avulso NAO entra no seletor de empresa do Fiscal
         "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
-        "WHERE situacao='ATIVO' "
+        "WHERE avulso = 0 AND situacao='ATIVO' "
         "ORDER BY CAST(numero_cliente AS UNSIGNED), nome_razao_social",
         fetch=True,
     ) or []
@@ -562,7 +563,7 @@ def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
             f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
             f"             FROM clientes c"
             f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
-            f"             WHERE cgr.grupo_id = %s)))"
+            f"             WHERE c.avulso = 0 AND cgr.grupo_id = %s)))"
         )
         params.append(gid)
         params.append(gid)
@@ -600,7 +601,7 @@ def _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=None):
             f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
             f"             FROM clientes c"
             f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
-            f"             WHERE cgr.grupo_id = %s)))"
+            f"             WHERE c.avulso = 0 AND cgr.grupo_id = %s)))"
         )
         params.append(gid)
         params.append(gid)
@@ -632,7 +633,7 @@ def _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=None):
             f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
             f"             FROM clientes c"
             f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
-            f"             WHERE cgr.grupo_id = %s)))"
+            f"             WHERE c.avulso = 0 AND cgr.grupo_id = %s)))"
         )
         params.append(gid)
         params.append(gid)

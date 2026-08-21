@@ -74,7 +74,8 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
         dest_digits = re.sub(r'\D', '', dest_cnpj_raw)
         if len(dest_digits) >= 11:
             found = execute_query(
-                "SELECT id FROM clientes WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
+                "SELECT id FROM clientes WHERE avulso = 0 "
+                "  AND REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s LIMIT 1",
                 (dest_digits,), fetch=True, fetch_one=True,
             )
             if found:

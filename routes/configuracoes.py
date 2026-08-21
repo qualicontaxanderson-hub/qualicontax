@@ -1351,7 +1351,8 @@ def usuario_novo():
         fetch=True,
     ) or []
     clientes = execute_query(
-        "SELECT id, nome_razao_social FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        "SELECT id, nome_razao_social FROM clientes "
+        "WHERE avulso = 0 AND situacao='ATIVO' ORDER BY nome_razao_social",
         fetch=True,
     ) or []
 
@@ -1433,7 +1434,8 @@ def usuario_editar(uid):
         fetch=True,
     ) or []
     clientes = execute_query(
-        "SELECT id, nome_razao_social FROM clientes WHERE situacao='ATIVO' ORDER BY nome_razao_social",
+        "SELECT id, nome_razao_social FROM clientes "
+        "WHERE avulso = 0 AND situacao='ATIVO' ORDER BY nome_razao_social",
         fetch=True,
     ) or []
     perfis_usuario = {

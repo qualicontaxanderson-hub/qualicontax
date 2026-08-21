@@ -80,7 +80,9 @@ ORIGEM_ROTEADOR = 'Q-COLABORE'
 def _build_cliente_doc_cache() -> dict:
     """Indexa clientes por documento numérico para matching robusto de CNPJ/CPF."""
     rows = execute_query(
-        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes",
+        # avulso NÃO é cliente fiscal: XML dele não vira lançamento
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
+        "WHERE avulso = 0",
         fetch=True,
     ) or []
     cache: dict = {}

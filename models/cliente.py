@@ -38,7 +38,8 @@ class Cliente:
         rows = execute_query(
             "SELECT id, "
             "  REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-',''),' ','') AS d "
-            "FROM clientes WHERE cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
+            "FROM clientes WHERE avulso = 0 "
+            "  AND cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
             fetch=True,
         ) or []
         return {r['d']: r['id'] for r in rows if r.get('d') and len(r['d']) >= 11}
@@ -78,7 +79,10 @@ class Cliente:
             dict: Dicionário com 'clientes', 'total', 'page', 'per_page', 'total_pages'
         """
         filters = filters or {}
-        conditions = []
+        # AVULSO NUNCA aparece na carteira (regra do Anderson, 21/08/2026):
+        # a condicao nasce aqui, no unico lugar por onde a listagem e a
+        # contagem passam — nao ha como uma tela nova esquecer.
+        conditions = ['c.avulso = 0']
         params = []
         need_ramo_join = False  # only True when filtering by ramo de atividade
 
@@ -150,11 +154,11 @@ class Cliente:
         count_query = f"""
             SELECT
                 COUNT(DISTINCT c.id)                                                AS total,
-                (SELECT COUNT(*) FROM clientes)                                     AS global_total,
-                (SELECT COUNT(*) FROM clientes WHERE situacao = 'ATIVO')            AS global_ativos,
-                (SELECT COUNT(*) FROM clientes WHERE situacao = 'INATIVO')          AS global_inativos,
-                (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PF')            AS global_pf,
-                (SELECT COUNT(*) FROM clientes WHERE tipo_pessoa = 'PJ')            AS global_pj,
+                (SELECT COUNT(*) FROM clientes WHERE avulso = 0)                    AS global_total,
+                (SELECT COUNT(*) FROM clientes WHERE avulso = 0 AND situacao = 'ATIVO')   AS global_ativos,
+                (SELECT COUNT(*) FROM clientes WHERE avulso = 0 AND situacao = 'INATIVO') AS global_inativos,
+                (SELECT COUNT(*) FROM clientes WHERE avulso = 0 AND tipo_pessoa = 'PF')   AS global_pf,
+                (SELECT COUNT(*) FROM clientes WHERE avulso = 0 AND tipo_pessoa = 'PJ')   AS global_pj,
                 (SELECT COUNT(DISTINCT cliente_id) FROM dfe_certificados
                    WHERE ativo = 1)                                                 AS global_com_cert,
                 (SELECT COUNT(DISTINCT cliente_id) FROM dfe_certificados
@@ -400,9 +404,10 @@ class Cliente:
                    inscricao_municipal, email, telefone, celular, regime_tributario,
                    porte_empresa, data_inicio_contrato, situacao, observacoes
             FROM clientes
-            WHERE nome_razao_social LIKE %s
+            WHERE avulso = 0
+              AND (nome_razao_social LIKE %s
                OR cpf_cnpj LIKE %s
-               OR email LIKE %s
+               OR email LIKE %s)
             ORDER BY nome_razao_social
             LIMIT 50
         """
@@ -424,7 +429,7 @@ class Cliente:
                 SUM(CASE WHEN situacao = 'INATIVO' THEN 1 ELSE 0 END) as inativos,
                 SUM(CASE WHEN tipo_pessoa = 'PF' THEN 1 ELSE 0 END) as pf,
                 SUM(CASE WHEN tipo_pessoa = 'PJ' THEN 1 ELSE 0 END) as pj
-            FROM clientes
+            FROM clientes WHERE avulso = 0
         """
         result = execute_query(query, fetch=True, fetch_one=True)
         return result if result else {

@@ -20,7 +20,7 @@ def get_stats():
     row = execute_query(
         """SELECT
                (SELECT COUNT(*) FROM clientes)                                            AS cli_total,
-               (SELECT COUNT(*) FROM clientes WHERE situacao = 'Ativo')                  AS cli_ativos,
+               (SELECT COUNT(*) FROM clientes WHERE avulso = 0 AND situacao = 'Ativo')                  AS cli_ativos,
                (SELECT COUNT(*) FROM contratos WHERE situacao = 'Ativo')                 AS con_total
         """,
         fetch=True, fetch_one=True,
