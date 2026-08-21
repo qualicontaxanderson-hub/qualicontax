@@ -108,8 +108,11 @@ table.ex-tab tbody tr:last-child td { border-bottom:none; }
   .ex-escopo { flex-direction:column; align-items:stretch; padding:12px 14px; gap:9px; }
   .ex-escopo > * { min-width:0; max-width:100%; }
   .ex-selo-escopo { margin-left:0; align-self:flex-start; font-size:11px; }
-  .ex-chips-linha { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; min-width:0; }
-  .ex-chip { padding:5px 13px; font-size:12px; }
+  /* QUEBRAR linha, nao rolar: com poucas empresas o rolo so cortava o ultimo
+     chip e dava cara de inacabado (Anderson, 20/08/2026). */
+  .ex-chips-linha { flex-wrap:wrap; min-width:0; }
+  .ex-chip { flex:1 1 auto; text-align:center; }
+  .ex-chip { padding:7px 12px; font-size:12px; }
   /* KPI compacto: no celular o cartão é para bater o olho, não para ler ficha */
   .ex-kpis { grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
   .ex-kpi { padding:9px 11px; border-radius:10px; }
