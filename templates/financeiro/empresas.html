@@ -1,6 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}Minhas Empresas - Financeiro - Qualicontax{% endblock %}
+{% block title %}Minhas Empresas - Financeiro - Qualicontax
+<!-- ── Modal: adicionar empresa ──────────────────────────────────── -->
+<div id="meModalNova" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+            <h3>Adicionar Empresa ao Financeiro</h3>
+            <button class="modal-close" onclick="meFecharNova()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.empresa_marcar') }}" id="meForm">
+            <div class="modal-body">
+                <div class="form-group" id="meBuscaBox">
+                    <label >Adicionar empresa (busque no cadastro de clientes)</label>
+                    <input type="text" id="meBusca" class="form-control" autocomplete="off"
+                           placeholder="Nome, CNPJ/CPF ou número do cliente">
+                    <div id="meResultados"></div>
+                </div>
+                <div class="form-group" id="meEscolhida" style="display:none;">
+                    <label >Escolhida</label>
+                    <div style="padding-top:8px; font-weight:700;" id="meEscNome"></div>
+                </div>
+                <div class="form-group">
+                    <label >Apelido (nome do chip)</label>
+                    <input type="text" name="apelido" id="meApelido" class="form-control"
+                           maxlength="40" placeholder="Ex.: BRILHO">
+                </div>
+                <div class="modal-footer">
+                    <input type="hidden" name="cliente_id" id="meClienteId">
+                    <button type="button" class="btn btn-outline" onclick="meFecharNova()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="meBtnAdd" disabled>Adicionar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
@@ -24,35 +59,10 @@
         </h1>
         <p class="page-subtitle">Quem participa do financeiro — cada uma vira um chip em todas as telas</p>
     </div>
-</div>
-
-<div class="card" style="margin-bottom: 20px;">
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('financeiro.empresa_marcar') }}" id="meForm">
-            <div class="filter-grid">
-                <div class="filter-item" style="flex:2;" id="meBuscaBox">
-                    <label class="filter-label">Adicionar empresa (busque no cadastro de clientes)</label>
-                    <input type="text" id="meBusca" class="form-control" autocomplete="off"
-                           placeholder="Nome, CNPJ/CPF ou número do cliente">
-                    <div id="meResultados"></div>
-                </div>
-                <div class="filter-item" id="meEscolhida" style="display:none;">
-                    <label class="filter-label">Escolhida</label>
-                    <div style="padding-top:8px; font-weight:700;" id="meEscNome"></div>
-                </div>
-                <div class="filter-item">
-                    <label class="filter-label">Apelido (nome do chip)</label>
-                    <input type="text" name="apelido" id="meApelido" class="form-control"
-                           maxlength="40" placeholder="Ex.: BRILHO">
-                </div>
-                <div class="filter-item" style="display:flex; align-items:flex-end;">
-                    <input type="hidden" name="cliente_id" id="meClienteId">
-                    <button type="submit" class="btn btn-primary" id="meBtnAdd" disabled>
-                        <i class="fas fa-plus"></i> Adicionar
-                    </button>
-                </div>
-            </div>
-        </form>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="meAbrirNova()">
+            <i class="fas fa-plus"></i> Adicionar Empresa
+        </button>
     </div>
 </div>
 
@@ -91,7 +101,7 @@
                         <button class="fin-btn-tag" title="Trocar apelido"
                                 data-id="{{ e.id }}" data-apelido="{{ e.apelido }}"
                                 onclick="meRenomear(this)">
-                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                            <i class="fas fa-pen"></i> Apelido
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
@@ -100,6 +110,7 @@
                                     title="{{ 'Desativar (some dos chips; histórico fica)' if e.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if e.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if e.ativo else '#9ca3af' }};"></i>
+                                {{ 'Desativar' if e.ativo else 'Reativar' }}
                             </button>
                         </form>
                     </td>
@@ -142,6 +153,14 @@
 {% block extra_js %}
 <script>
 var ME_URL_ATU = "{{ url_for('financeiro.empresa_atualizar', emp_id=0) }}";
+
+function meAbrirNova() {
+    document.getElementById('meModalNova').style.display = 'block';
+    document.getElementById('meBusca').focus();
+}
+function meFecharNova() {
+    document.getElementById('meModalNova').style.display = 'none';
+}
 
 function meRenomear(el) {
     var form = document.getElementById('meFormApelido');

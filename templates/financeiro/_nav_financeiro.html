@@ -4,6 +4,9 @@
    NOVA TELA NO FUTURO: acrescente UMA linha em _abas (endpoint, prefixo, rótulo).
    Aba ativa por request.path, PREFIXO MAIS LONGO vence.
 --------------------------------------------------------------------------- #}
+{# RECEBIMENTOS saiu daqui em 21/08/2026: tabela vazia (0 lançamentos), a
+   consulta de empresas quebrada, e o que ele fazia virou TÍTULOS +
+   PROGRAMAÇÕES. A rota continua de pé para links antigos. #}
 {% set _abas = [
     ('financeiro.index',             '/financeiro/',             'INÍCIO'),
     ('financeiro.titulos',           '/financeiro/titulos',      'TÍTULOS'),
@@ -12,7 +15,6 @@
     ('financeiro.fluxo',             '/financeiro/fluxo',        'FLUXO DE CAIXA'),
     ('financeiro.dre',               '/financeiro/dre',          'DRE'),
     ('financeiro.categorias',        '/financeiro/categorias',   'CATEGORIAS'),
-    ('financeiro.recebimento_index', '/financeiro/recebimento/', 'RECEBIMENTOS'),
     ('financeiro.empresas',          '/financeiro/empresas',     'EMPRESAS'),
 ] %}
 {% set _ativa = namespace(pref='') %}

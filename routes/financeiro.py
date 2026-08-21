@@ -1144,7 +1144,7 @@ def _fin_home_payload():
     conta('dre', "SELECT COUNT(DISTINCT MONTH(competencia)) n FROM fin_titulos "
                  "WHERE status <> 'cancelado' AND YEAR(competencia) = YEAR(CURDATE())")
     conta('categorias', 'SELECT COUNT(*) n FROM fin_categorias WHERE ativo = 1')
-    conta('recebimentos', 'SELECT COUNT(*) n FROM lancamentos_recebimento')
+    conta('programacoes', 'SELECT COUNT(*) n FROM fin_programacoes WHERE ativo = 1')
 
     return {'cards': cards, 'counters': counters,
             'gerado_em_ms': int(_time.time() * 1000)}

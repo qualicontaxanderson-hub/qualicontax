@@ -1,18 +1,126 @@
 {% extends "base.html" %}
 
-{% block title %}Categorias do Financeiro - Qualicontax{% endblock %}
+{% block title %}Categorias do Financeiro - Qualicontax
+<!-- ── Modal: nova categoria ─────────────────────────────────────── -->
+<div id="fcModalNova" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+            <h3>Nova Categoria</h3>
+            <button class="modal-close" onclick="fcFecharNova()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.categoria_nova') }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label >Tipo</label>
+                    <div style="padding-top:8px;">
+                        <label style="margin-right:14px;">
+                            <input type="radio" name="tipo" value="R" checked onchange="fcFiltraGrupos()"> Receita
+                        </label>
+                        <label>
+                            <input type="radio" name="tipo" value="P" onchange="fcFiltraGrupos()"> Despesa
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label >Subcategoria de</label>
+                    <select name="pai_id" id="fcPai" class="form-control" onchange="fcModoSub()">
+                        <option value="">— nenhuma (categoria nova) —</option>
+                        {% for p in pais %}
+                        <option value="{{ p.id }}" data-tipo="{{ p.tipo }}">{{ p.grupo }} · {{ p.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" id="fcGrupoBox">
+                    <label >Grupo (linha do DRE)</label>
+                    <select name="grupo" id="fcGrupo" class="form-control" onchange="fcGrupoNovo()">
+                        {% for g in grupos %}
+                        <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
+                        {% endfor %}
+                        <option value="">— criar grupo novo —</option>
+                    </select>
+                </div>
+                <div class="form-group" id="fcGrupoNovoBox" style="display:none;">
+                    <label >Nome do grupo novo</label>
+                    <input type="text" name="grupo_novo" id="fcGrupoNovoInput" class="form-control"
+                           placeholder="Ex.: Marketing">
+                </div>
+                <div class="form-group">
+                    <label >Categoria</label>
+                    <input type="text" name="nome" class="form-control" required
+                           placeholder="Ex.: Anúncios online">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="fcFecharNova()">Cancelar</button><button type="submit" class="btn btn-primary">Criar</button>
+                </div>
+            </div>
+            <small style="color:#6b7280;">Grupo novo de despesa entra no bloco operacional do DRE,
+                depois dos existentes. "Impostos sobre serviço" e "Financeiras" têm posição fixa.</small>
+        </form>
+    </div>
+</div>
+
+<!-- ── Modal: novo centro de custo ───────────────────────────────── -->
+<div id="ccModalNovo" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:460px;">
+        <div class="modal-header">
+            <h3>Novo Centro de Custo</h3>
+            <button class="modal-close" onclick="ccFecharNovo()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.centro_novo') }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nome *</label>
+                    <input type="text" name="nome" class="form-control" required maxlength="40"
+                           placeholder="Ex.: MG">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="rateia">
+                        <strong>Rateia</strong> entre os demais centros
+                    </label>
+                    <small style="color:#6b7280; display:block; margin-top:4px;">
+                        O centro que rateia (GERAL) divide em partes iguais entre os
+                        outros nos relatórios — o lançamento guarda o centro cru.
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="ccFecharNovo()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Criar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
 /* So o que e proprio desta tela; o resto vem de .fin-* na identidade. */
-.fc-grupo-cab { background:#f9fafb; font-weight:700; color:#374151; }
 .fc-inativa { opacity:.5; }
+.fc-grupo-cab { background:#f9fafb; cursor:pointer; }
+.fc-grupo-cab td { font-weight:800; color:#0f3d2e; font-size:12px;
+    letter-spacing:.4px; text-transform:uppercase; }
+.fc-grupo-cab:hover td { background:#f0faf4; }
+.fc-seta { display:inline-block; transition:transform .2s; color:#7d968a; margin-right:6px; }
+.fc-seta.aberta { transform:rotate(90deg); }
+.fc-qtd { background:#eef2f0; color:#5b7468; border-radius:99px; padding:1px 8px;
+    font-size:10px; font-weight:800; margin-left:8px; }
 @media (max-width: 768px) {
-    table.fin-tab tbody tr.fc-grupo-cab { display:block; background:#eef2f0;
-        border:0; border-radius:8px; padding:7px 12px; margin:14px 0 6px;
-        font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
-    table.fin-tab tbody tr.fc-grupo-cab td { font-weight:800; color:#0f3d2e; }
+    /* cabecalho do grupo: uma barra, nao um cartao */
+    table.fin-tab tbody tr.fc-grupo-cab { display:block; background:#eef2f0; border:0;
+        border-radius:9px; padding:9px 12px; margin:14px 0 6px; }
+    /* a CATEGORIA e item de lista, nao ficha: uma linha so, compacta */
+    table.fin-tab tbody tr.fc-item { grid-template-columns:1fr auto; padding:10px 12px;
+        gap:6px 10px; margin-bottom:6px; }
+    table.fin-tab tbody tr.fc-item td.fin-td-titulo { font-size:13px; order:1; grid-column:1; }
+    table.fin-tab tbody tr.fc-item td.fin-td-valor { order:2; grid-column:2; font-size:12px;
+        color:#94a3b8; font-weight:700; }
+    table.fin-tab tbody tr.fc-item td.fin-td-extra { display:none; }
+    table.fin-tab tbody tr.fc-item td.fin-td-acao { order:3; grid-column:1 / -1;
+        border-top:1px dashed #eef2f0; padding-top:8px !important; }
+    table.fin-tab tbody tr.fc-item td.fin-td-acao .fin-btn-tag { padding:7px; font-size:12px; }
 }
 </style>
 
@@ -25,65 +133,12 @@
         <p class="page-subtitle">Plano gerencial do escritório — o grupo é a linha do DRE</p>
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('financeiro.titulos') }}" class="btn btn-outline">
-            <i class="fas fa-file-invoice-dollar"></i> Títulos
-        </a>
-        <a href="{{ url_for('financeiro.dre') }}" class="btn btn-outline">
-            <i class="fas fa-chart-pie"></i> DRE
-        </a>
-    </div>
-</div>
-
-<div class="card" style="margin-bottom: 20px;">
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('financeiro.categoria_nova') }}">
-            <div class="filter-grid">
-                <div class="filter-item">
-                    <label class="filter-label">Tipo</label>
-                    <div style="padding-top:8px;">
-                        <label style="margin-right:14px;">
-                            <input type="radio" name="tipo" value="R" checked onchange="fcFiltraGrupos()"> Receita
-                        </label>
-                        <label>
-                            <input type="radio" name="tipo" value="P" onchange="fcFiltraGrupos()"> Despesa
-                        </label>
-                    </div>
-                </div>
-                <div class="filter-item">
-                    <label class="filter-label">Subcategoria de</label>
-                    <select name="pai_id" id="fcPai" class="form-control" onchange="fcModoSub()">
-                        <option value="">— nenhuma (categoria nova) —</option>
-                        {% for p in pais %}
-                        <option value="{{ p.id }}" data-tipo="{{ p.tipo }}">{{ p.grupo }} · {{ p.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="filter-item" id="fcGrupoBox">
-                    <label class="filter-label">Grupo (linha do DRE)</label>
-                    <select name="grupo" id="fcGrupo" class="form-control" onchange="fcGrupoNovo()">
-                        {% for g in grupos %}
-                        <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
-                        {% endfor %}
-                        <option value="">— criar grupo novo —</option>
-                    </select>
-                </div>
-                <div class="filter-item" id="fcGrupoNovoBox" style="display:none;">
-                    <label class="filter-label">Nome do grupo novo</label>
-                    <input type="text" name="grupo_novo" id="fcGrupoNovoInput" class="form-control"
-                           placeholder="Ex.: Marketing">
-                </div>
-                <div class="filter-item">
-                    <label class="filter-label">Categoria</label>
-                    <input type="text" name="nome" class="form-control" required
-                           placeholder="Ex.: Anúncios online">
-                </div>
-                <div class="filter-item" style="display:flex; align-items:flex-end;">
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Criar</button>
-                </div>
-            </div>
-            <small style="color:#6b7280;">Grupo novo de despesa entra no bloco operacional do DRE,
-                depois dos existentes. "Impostos sobre serviço" e "Financeiras" têm posição fixa.</small>
-        </form>
+        <button class="btn btn-primary" onclick="fcAbrirNova()">
+            <i class="fas fa-plus"></i> Nova Categoria
+        </button>
+        <button class="btn btn-outline" onclick="ccAbrirNovo()">
+            <i class="fas fa-map-location-dot"></i> Novo Centro
+        </button>
     </div>
 </div>
 
@@ -99,16 +154,21 @@
                 </tr>
             </thead>
             <tbody>
+                {% set _g = {'n': 0} %}
                 {% for c in categorias %}
                 {% set anterior = categorias[loop.index0 - 1] if not loop.first else None %}
                 {% if loop.first or anterior.grupo != c.grupo or anterior.tipo != c.tipo %}
-                <tr class="fc-grupo-cab">
+                {% set _ = _g.update({'n': _g.n + 1}) %}
+                <tr class="fc-grupo-cab" onclick="fcGrupo({{ _g.n }})">
                     <td colspan="4">
+                        <span class="fc-seta" id="seta-{{ _g.n }}">▶</span>
                         {{ 'Receita' if c.tipo == 'R' else 'Despesa' }} · {{ c.grupo }}
+                        <span class="fc-qtd">{{ categorias | selectattr('grupo', 'equalto', c.grupo)
+                            | selectattr('tipo', 'equalto', c.tipo) | list | length }}</span>
                     </td>
                 </tr>
                 {% endif %}
-                <tr class="{{ 'fc-inativa' if not c.ativo }}">
+                <tr class="fc-item g-{{ _g.n }} {{ 'fc-inativa' if not c.ativo }}">
                     <td class="fin-td-titulo">{% if c.pai_id %}<span style="color:#9ca3af; margin-left:16px;">↳</span> {% endif %}{{ c.nome }}</td>
                     <td class="fin-valor fin-td-valor">{{ usos.get(c.id, 0) }}</td>
                     <td class="fin-td-extra">{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
@@ -116,7 +176,7 @@
                         <button class="fin-btn-tag" title="Renomear"
                                 data-id="{{ c.id }}" data-nome="{{ c.nome }}"
                                 onclick="fcAbrirRenomear(this)">
-                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                            <i class="fas fa-pen"></i> Renomear
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.categoria_alternar', cat_id=c.id) }}">
@@ -124,6 +184,7 @@
                                     title="{{ 'Desativar (some dos lançamentos novos)' if c.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if c.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if c.ativo else '#9ca3af' }};"></i>
+                                {{ 'Desativar' if c.ativo else 'Reativar' }}
                             </button>
                         </form>
                     </td>
@@ -134,28 +195,16 @@
     </div>
 </div>
 
-<div class="card" style="margin-top:20px;">
-    <div class="card-body">
-        <h3 style="margin:0 0 6px; font-size:1.05em;">
-            <i class="fas fa-map-location-dot" style="color: var(--primary-green);"></i>
-            Centros de custo
-        </h3>
-        <p style="color:#6b7280; font-size:.9em; margin:0 0 14px;">
-            Por estado, como você organiza o negócio. O centro marcado
-            <strong>rateia</strong> (GERAL) divide meio a meio entre os demais
-            nos relatórios — o lançamento guarda o centro cru.
-        </p>
-        <form method="POST" action="{{ url_for('financeiro.centro_novo') }}"
-              style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
-            <input type="text" name="nome" class="form-control" required maxlength="40"
-                   placeholder="Novo centro (ex.: MG)" style="max-width:220px;">
-            <label style="white-space:nowrap;">
-                <input type="checkbox" name="rateia"> rateia entre os demais
-            </label>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Criar</button>
-        </form>
-        <div class="fc-wrap">
-        <table class="fin-tab">
+<div class="fin-abas" style="margin-top:26px;">
+    <span class="fin-aba ativa"><i class="fas fa-map-location-dot"></i> Centros de custo</span>
+</div>
+<p style="color:#5b7468; font-size:.92em; margin:-6px 0 12px;">
+    Por estado, como você organiza o negócio. O centro marcado <strong>rateia</strong>
+    (GERAL) divide meio a meio entre os demais nos relatórios.
+</p>
+<div class="fin-caixa">
+    <div class="fin-rolar">
+<table class="fin-tab">
             <thead>
                 <tr>
                     <th>Centro</th>
@@ -168,15 +217,15 @@
             <tbody>
                 {% for cc in centros %}
                 <tr class="{{ 'fc-inativa' if not cc.ativo }}">
-                    <td><strong>{{ cc.nome }}</strong></td>
-                    <td>{{ 'Rateia meio a meio' if cc.rateia else '—' }}</td>
-                    <td style="text-align:right;">{{ usos_centros.get(cc.id, 0) }}</td>
-                    <td>{{ 'Ativo' if cc.ativo else 'Desativado' }}</td>
-                    <td style="white-space:nowrap;">
+                    <td class="fin-td-titulo"><strong>{{ cc.nome }}</strong></td>
+                    <td class="fin-td-meta">{{ 'rateia meio a meio' if cc.rateia else '—' }}</td>
+                    <td class="fin-valor fin-td-valor">{{ usos_centros.get(cc.id, 0) }}</td>
+                    <td class="fin-td-extra">{{ 'Ativo' if cc.ativo else 'Desativado' }}</td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
                         <button class="fin-btn-tag" title="Renomear"
                                 data-id="{{ cc.id }}" data-nome="{{ cc.nome }}"
                                 onclick="ccAbrirRenomear(this)">
-                            <i class="fas fa-pen" style="color:#2563eb;"></i>
+                            <i class="fas fa-pen"></i> Renomear
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.centro_alternar', cc_id=cc.id) }}">
@@ -184,6 +233,7 @@
                                     title="{{ 'Desativar' if cc.ativo else 'Reativar' }}">
                                 <i class="fas fa-{{ 'toggle-on' if cc.ativo else 'toggle-off' }}"
                                    style="color:{{ '#16a34a' if cc.ativo else '#9ca3af' }};"></i>
+                                {{ 'Desativar' if cc.ativo else 'Reativar' }}
                             </button>
                         </form>
                     </td>
@@ -192,6 +242,7 @@
             </tbody>
         </table>
         </div>
+    
     </div>
 </div>
 
@@ -244,6 +295,49 @@
 {% block extra_js %}
 <script>
 var FC_URL_RENOMEAR = "{{ url_for('financeiro.categoria_renomear', cat_id=0) }}";
+
+// Os grupos do plano abrem e fecham: 20 categorias em lista corrida davam
+// 5,4 telas de rolagem no celular. No computador nascem ABERTOS (a tela cabe);
+// no celular, FECHADOS — o usuário abre o grupo que interessa.
+function fcGrupo(n) {
+    var chave = String(n);
+    var linhas = document.querySelectorAll('tr.g-' + chave);
+    var seta = document.getElementById('seta-' + chave);
+    var abrindo = linhas.length && linhas[0].style.display === 'none';
+    linhas.forEach(function (l) { l.style.display = abrindo ? '' : 'none'; });
+    if (seta) seta.className = 'fc-seta' + (abrindo ? ' aberta' : '');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var estreito = window.innerWidth <= 768;
+    document.querySelectorAll('.fc-grupo-cab').forEach(function (cab) {
+        var m = /fcGrupo\((\d+)\)/.exec(cab.getAttribute('onclick') || '');
+        if (!m) return;
+        var seta = document.getElementById('seta-' + m[1]);
+        if (estreito) {
+            document.querySelectorAll('tr.g-' + m[1]).forEach(function (l) {
+                l.style.display = 'none';
+            });
+            if (seta) seta.className = 'fc-seta';
+        } else if (seta) {
+            seta.className = 'fc-seta aberta';
+        }
+    });
+});
+
+function fcAbrirNova() {
+    document.getElementById('fcModalNova').style.display = 'block';
+    fcFiltraGrupos();
+}
+function fcFecharNova() {
+    document.getElementById('fcModalNova').style.display = 'none';
+}
+function ccAbrirNovo() {
+    document.getElementById('ccModalNovo').style.display = 'block';
+}
+function ccFecharNovo() {
+    document.getElementById('ccModalNovo').style.display = 'none';
+}
 
 function fcModoSub() {
     // Escolheu um pai: vira SUBcategoria — tipo e grupo herdam do pai, então somem.
