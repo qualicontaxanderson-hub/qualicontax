@@ -52,11 +52,15 @@ NAT_VEIC = ['Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
 
 # (tipo, grupo, categoria, [subcategorias])
 ARVORE = [
-    # ---------------- RECEITAS ----------------
-    ('R', 'Receita de honorários', 'Mensalidade', []),
+    # ---------------- RECEITAS: os 4 grupos que o Anderson definiu ---------
+    # 1) HONORÁRIOS — o recorrente. "Honorarios contabeis" e a mensalidade de
+    #    todo mundo: a rede vem do grupo do cliente, nao daqui.
+    ('R', 'Receita de honorários', 'Honorários contábeis', []),
     ('R', 'Receita de honorários', 'Décimo terceiro',
      ['1ª parcela', '2ª parcela', 'Parcela única']),
-    ('R', 'Receita de honorários', 'Serviços avulsos', [
+
+    # 2) AVULSAS — o que se cobra fora da mensalidade.
+    ('R', 'Receitas avulsas', 'Serviços avulsos', [
         'Abertura de Empresa', 'Alteração Contratual', 'Baixa de Empresa',
         'Declaração de Imposto de Renda', 'Constituição - Posto de Combustível',
         'Alteração Contratual - Posto de Combustível', 'Cadastro ANP',
@@ -66,11 +70,22 @@ ARVORE = [
         'Ata de Distribuição de Lucro', 'Taxas de Cartórios', 'Correios',
         'Placa de Preços ANP / ICMS', 'Fita Adesiva Dupla Face',
         'Folha de Pagamento', 'Complemento de Mensalidade',
-        '13º Salário (Diferença)', 'Juros e Multa', 'Descontos']),
-    ('R', 'Receita de honorários', 'Sistemas e serviços', [
-        'Honorário Contábil Mensal', 'LMC', 'Mensalidade Loja de Conveniência',
-        'Sistema de Emissão de CT-e', 'Sistema de Envio de Recibos Trabalhistas',
+        '13º Salário (Diferença)']),
+    ('R', 'Receitas avulsas', 'Sistemas e serviços', [
+        'LMC', 'Mensalidade Loja de Conveniência', 'Sistema de Emissão de CT-e',
+        'Sistema de Envio de Recibos Trabalhistas',
         'Arquivo Remessa - Folha de Pagamento']),
+
+    # 3) DEDUÇÕES — nao e receita, e o que se abate dela. Ficam em grupo
+    #    proprio porque no DRE a linha e "receita bruta menos deducoes": posto
+    #    junto das avulsas, um desconto concedido apareceria somando.
+    ('R', 'Deduções', 'Deduções da receita', ['Descontos', 'Juros e Multa']),
+
+    # 4) FINANCEIRAS e OUTRAS.
+    ('R', 'Receitas financeiras', 'Rendimentos', []),
+    ('R', 'Outras receitas', 'Aluguel', []),
+    ('R', 'Outras receitas', 'Sub-locações', []),
+    ('R', 'Outras receitas', 'Serviços', []),
 
     # ---------------- PESSOAL ----------------
     ('P', 'Pessoal', 'Remuneração', ['Salários', 'Seguro de vida']),
