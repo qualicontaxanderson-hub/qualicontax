@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}Contas Bancárias - Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+.ct-inativa { opacity:.55; }
+.ct-pend { background:#fffbeb; border:1.5px solid #fde68a; border-radius:12px;
+  padding:14px 18px; margin-bottom:14px; }
+.ct-pend h3 { margin:0 0 4px; font-size:14px; font-weight:800; color:#92400e; }
+.ct-pend-item { background:#fff; border:1px solid #fde68a; border-radius:10px;
+  padding:12px 14px; margin-top:10px; }
+.ct-pend-arq { font-weight:700; color:#0f3d2e; }
+.ct-pend-info { font-size:12.5px; color:#92400e; margin:3px 0 10px; }
+.ct-linha { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+.ct-linha > div { flex:1; min-width:130px; }
+.ct-linha label { font-size:10px; font-weight:700; color:#94a3b8; display:block;
+  margin-bottom:3px; text-transform:uppercase; }
+.ct-linha input, .ct-linha select { width:100%; padding:7px 10px;
+  border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; min-height:33px; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-landmark" style="color: var(--primary-green);"></i>
+            Contas Bancárias
+        </h1>
+        <p class="page-subtitle">
+            A conta é a impressão digital da empresa: cadastrada aqui, o extrato dela
+            entra sozinho — não importa o nome do arquivo
+        </p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="ctAbrirNova()">
+            <i class="fas fa-plus"></i> Nova Conta
+        </button>
+        <a href="{{ url_for('financeiro.extrato') }}" class="btn btn-outline">
+            <i class="fas fa-university"></i> Extrato
+        </a>
+    </div>
+</div>
+
+{% set _outros = {} %}
+{% for k, v in request.args.items() %}{% if k != 'emp' and v %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
+<div class="fin-escopo">
+    <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
+    <div class="fin-chips">
+        <a class="fin-chip {{ 'ativo' if not sel_empresas }}"
+           href="{{ url_for('financeiro.contas', **_outros) }}">TODAS</a>
+        {% for e in fin_empresas %}
+        {% if e.cliente_id in sel_empresas %}
+            {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
+        {% else %}
+            {% set _nova = sel_empresas + [e.cliente_id] %}
+        {% endif %}
+        {% set _csv = _nova | join(',') %}
+        <a class="fin-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
+           title="{{ e.nome_razao_social }}"
+           href="{{ url_for('financeiro.contas', emp=_csv, **_outros) if _csv else url_for('financeiro.contas', **_outros) }}">{{ e.apelido }}</a>
+        {% endfor %}
+    </div>
+    <span class="fin-selo">
+        <i class="fas fa-landmark"></i> {{ contas | length }} conta(s)
+    </span>
+</div>
+
+{# ── A fila: arquivo que chegou e não se identificou ───────────────── #}
+{% if pendencias %}
+<div class="ct-pend">
+    <h3><i class="fas fa-triangle-exclamation"></i>
+        {{ pendencias | length }} arquivo(s) esperando você dizer de quem é a conta</h3>
+    <div style="font-size:12.5px; color:#92400e;">
+        Eles estão parados na pasta — nada foi lançado. Responda uma vez e os
+        próximos meses entram sozinhos.
+        {% if eh_admin %}
+        <br><strong>Você é admin:</strong> os marcados como
+        <span class="fin-pilula alerta">sem identificação</span> chegaram sem o
+        número da empresa no nome <em>e</em> com conta desconhecida — quem mandou
+        não seguiu o combinado.
+        {% endif %}
+    </div>
+    {% for p in pendencias %}
+    <div class="ct-pend-item">
+        <div class="ct-pend-arq">
+            {{ p.arquivo }}
+            {% if not p.empresa_id %}
+            <span class="fin-pilula alerta" title="Sem número da empresa no nome e conta desconhecida">
+                sem identificação</span>
+            {% endif %}
+        </div>
+        <div class="ct-pend-info">
+            {{ p.banco_nome or 'banco não identificado' }}
+            {% if p.conta %}· conta <strong>{{ p.conta }}</strong>{% endif %}
+            {% if p.qtd_lancamentos %}· {{ p.qtd_lancamentos }} lançamento(s){% endif %}
+            {% if p.periodo %}· {{ p.periodo }}{% endif %}
+            {% if p.numero_no_nome %}
+            <br>O nome do arquivo diz empresa <strong>{{ p.numero_no_nome }}</strong>
+                {%- if p.nome_razao_social %} ({{ p.nome_razao_social }}){% endif %}.
+            {% endif %}
+            <br><em>{{ p.motivo }}</em>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.pendencia_resolver', pid=p.id) }}"
+              class="ct-linha">
+            <div>
+                <label>De qual empresa é esta conta? *</label>
+                <select name="empresa_id" required>
+                    <option value="">Escolha</option>
+                    {% for e in fin_empresas %}
+                    <option value="{{ e.cliente_id }}"
+                            {% if p.empresa_id == e.cliente_id %}selected{% endif %}>
+                        {{ e.apelido }} — {{ e.nome_razao_social }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Conta</label>
+                <input type="text" name="conta" value="{{ p.conta or '' }}"
+                       placeholder="número da conta" required>
+            </div>
+            <div>
+                <label>Agência</label>
+                <input type="text" name="agencia" value="{{ p.agencia or '' }}"
+                       placeholder="opcional">
+            </div>
+            <div style="flex:0 0 auto;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-check"></i> Vincular e ler
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="fin-caixa">
+    {% if contas %}
+    <div class="fin-rolar">
+        <table class="fin-tab">
+            <thead>
+                <tr>
+                    <th>Empresa</th>
+                    <th>Banco</th>
+                    <th>Agência</th>
+                    <th>Conta</th>
+                    <th>Apelido</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in contas %}
+                <tr class="{{ 'ct-inativa' if not c.ativo }}">
+                    <td class="fin-td-meta">{{ c.numero_cliente }} · {{ emp_mapa.get(c.empresa_id, c.nome_razao_social) }}</td>
+                    <td class="fin-td-oculta">{{ c.banco_nome or c.banco_id or '—' }}</td>
+                    <td class="fin-td-oculta">{{ c.agencia or '—' }}</td>
+                    <td class="fin-td-titulo">
+                        {{ c.banco_nome or c.banco_id }} · {{ c.conta }}
+                    </td>
+                    <td class="fin-td-oculta">{{ c.apelido or '—' }}</td>
+                    <td class="fin-td-extra">
+                        <span class="fin-pilula {{ 'liquidado' if c.ativo else 'cancelado' }}">
+                            {{ 'Ativa' if c.ativo else 'Desativada' }}</span>
+                    </td>
+                    <td class="fin-td-acao">
+                        <form method="POST"
+                              action="{{ url_for('financeiro.conta_alternar', conta_id=c.id) }}">
+                            <button class="fin-btn-tag"
+                                    title="{{ 'Desativar (extratos dela voltam a ficar pendentes)' if c.ativo else 'Reativar' }}">
+                                <i class="fas fa-{{ 'toggle-on' if c.ativo else 'toggle-off' }}"
+                                   style="color:{{ '#16a34a' if c.ativo else '#9ca3af' }};"></i>
+                                {{ 'Desativar' if c.ativo else 'Reativar' }}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="fin-vazio">
+        <i class="fas fa-landmark" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+        Nenhuma conta cadastrada{% if sel_empresas %} nessas empresas{% endif %}.
+        Cadastre no botão acima — ou deixe o primeiro extrato chegar e responda
+        aqui de quem é a conta.
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── Modal: nova conta ─────────────────────────────────────────── -->
+<div id="ctModalNova" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+            <h3>Nova Conta Bancária</h3>
+            <button class="modal-close" onclick="ctFecharNova()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.conta_nova') }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Empresa *</label>
+                    <select name="empresa_id" class="form-control" required>
+                        {% for e in fin_empresas %}
+                        <option value="{{ e.cliente_id }}"
+                                {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                            {{ e.apelido }} — {{ e.nome_razao_social }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Banco (código) *</label>
+                        <select name="banco_id" class="form-control" required>
+                            <option value="237">237 — Bradesco</option>
+                            <option value="336">336 — C6</option>
+                            <option value="341">341 — Itaú</option>
+                            <option value="033">033 — Santander</option>
+                            <option value="001">001 — Banco do Brasil</option>
+                            <option value="104">104 — Caixa</option>
+                            <option value="748">748 — Sicredi</option>
+                            <option value="756">756 — Sicoob</option>
+                            <option value="403">403 — Cora</option>
+                            <option value="364">364 — EFí</option>
+                            <option value="077">077 — Inter</option>
+                            <option value="260">260 — Nubank</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Agência</label>
+                        <input type="text" name="agencia" class="form-control"
+                               placeholder="opcional">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Conta *</label>
+                        <input type="text" name="conta" class="form-control" required
+                               placeholder="como aparece no extrato">
+                    </div>
+                    <div class="form-group">
+                        <label>Apelido</label>
+                        <input type="text" name="apelido" class="form-control"
+                               placeholder="Ex.: Conta movimento">
+                    </div>
+                </div>
+                <small style="color:#6b7280;">
+                    Com a conta cadastrada, o extrato dela entra sozinho — o nome do
+                    arquivo deixa de importar. Se o nome trouxer um número de empresa
+                    que <strong>discorde</strong> desta conta, o sistema recusa e avisa.
+                </small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="ctFecharNova()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Cadastrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function ctAbrirNova() {
+    document.getElementById('ctModalNova').style.display = 'block';
+}
+function ctFecharNova() {
+    document.getElementById('ctModalNova').style.display = 'none';
+}
+</script>
+{% endblock %}

@@ -116,6 +116,10 @@ def parse_ofx(raw: bytes) -> dict:
     m = re.search(r'<FI>(.*?)</FI>', texto, re.IGNORECASE | re.DOTALL)
     if m:
         org = _campo(m.group(1), 'ORG')
+    # O CODIGO (BANKID) e o identificador confiavel: o Sicredi manda o nome da
+    # COOPERATIVA no ORG ('CCPI DO CERRADO DE GO'), que muda de praca para
+    # praca. Guardamos os dois — nome para ler, codigo para reconhecer.
+    banco_id = re.sub(r'\D', '', banco or '').lstrip('0') or None
     banco = org or banco                     # nome do banco vale mais que número
 
     lancamentos = []
@@ -153,5 +157,5 @@ def parse_ofx(raw: bytes) -> dict:
 
     if not lancamentos and saldo is None:
         raise OfxInvalido('OFX sem nenhum lançamento legível.')
-    return {'banco': banco, 'conta': conta, 'saldo': saldo,
-            'lancamentos': lancamentos}
+    return {'banco': banco, 'banco_id': banco_id, 'conta': conta,
+            'saldo': saldo, 'lancamentos': lancamentos}

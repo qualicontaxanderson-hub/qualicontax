@@ -1,4 +1,5 @@
 """Rotas do módulo Financeiro — Recebimentos"""
+import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from utils.auth_helper import login_required, permission_required
 
@@ -914,6 +915,172 @@ def extrato_importar():
                           'banco': dados['banco'],
                           'conta': dados['conta'], 'novos': len(novos),
                           'repetidos': len(unicos) - len(novos)})
+    return redirect(url_for('financeiro.extrato'))
+
+
+# =======================================================================
+# Contas bancárias e a fila de "de quem é esta conta?" (21/08/2026)
+#
+# A CONTA é a impressão digital da empresa: o roteador não pergunta nada a
+# ninguém, lê a conta do arquivo e sabe de quem é. Aqui só se cadastra, se
+# responde a pendência e se apaga um período para refazer.
+# =======================================================================
+@financeiro.route('/financeiro/contas')
+@permission_required('financeiro.extrato')
+def contas():
+    from models.extrato_lancamento import FinContaBancaria, FinExtratoPendencia
+    emps, sel, mapa = _empresas_ctx()
+    # Órfã (chegou sem número no nome e com conta desconhecida) é sinal de
+    # funcionário que não seguiu o combinado: só ADMIN vê, para cobrar.
+    admin = bool(getattr(current_user, 'is_admin', None) and current_user.is_admin())
+    return render_template(
+        'financeiro/contas.html',
+        contas=FinContaBancaria.listar(empresa_ids=sel, apenas_ativas=False),
+        pendencias=FinExtratoPendencia.listar(empresa_ids=sel, ver_orfas=admin),
+        eh_admin=admin,
+        fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
+
+
+@financeiro.route('/financeiro/contas/nova', methods=['POST'])
+@permission_required('financeiro.extrato')
+def conta_nova():
+    from models.fin_empresa import FinEmpresa
+    from utils.extrato_ingest import registrar_conta, BANCOS
+    f = request.form
+    emp = (f.get('empresa_id') or '').strip()
+    conta = (f.get('conta') or '').strip()
+    banco_id = (f.get('banco_id') or '').strip()
+    if not emp.isdigit() or int(emp) not in FinEmpresa.ids_validos():
+        flash('Escolha a empresa dona da conta.', 'danger')
+    elif not conta:
+        flash('Informe o número da conta.', 'danger')
+    else:
+        nome_banco = BANCOS.get(banco_id.lstrip('0'), f.get('banco_nome') or '')
+        novo = registrar_conta(
+            int(emp), banco_id, nome_banco or None, conta,
+            agencia=(f.get('agencia') or '').strip() or None,
+            apelido=(f.get('apelido') or '').strip() or None,
+            usuario_id=current_user.id)
+        if novo:
+            registrar('escrita.criou_conta_bancaria', 'financeiro',
+                      tabela='fin_contas', registro_id=novo,
+                      depois={'empresa_id': int(emp), 'banco': nome_banco,
+                              'conta': conta})
+            flash(f'Conta {conta} cadastrada — os extratos dela passam a entrar '
+                  'sozinhos, com qualquer nome de arquivo.', 'success')
+        else:
+            flash('Essa conta já está cadastrada (talvez em outra empresa).',
+                  'warning')
+    return redirect(url_for('financeiro.contas'))
+
+
+@financeiro.route('/financeiro/contas/<int:conta_id>/alternar', methods=['POST'])
+@permission_required('financeiro.extrato')
+def conta_alternar(conta_id):
+    from models.extrato_lancamento import FinContaBancaria
+    c = FinContaBancaria.get(conta_id)
+    if not c:
+        flash('Conta não encontrada.', 'danger')
+    else:
+        FinContaBancaria.set_ativa(conta_id, not c['ativo'])
+        registrar('escrita.alternou_conta_bancaria', 'financeiro',
+                  tabela='fin_contas', registro_id=conta_id,
+                  depois={'ativo': not c['ativo']})
+        flash('Conta reativada.' if not c['ativo'] else
+              'Conta desativada — extratos dela voltam a ficar pendentes.',
+              'success')
+    return redirect(url_for('financeiro.contas'))
+
+
+@financeiro.route('/financeiro/pendencias/<int:pid>/resolver', methods=['POST'])
+@permission_required('financeiro.extrato')
+def pendencia_resolver(pid):
+    """Alguém disse de quem é a conta: cadastra e RELÊ o arquivo na hora."""
+    from models.extrato_lancamento import FinExtratoPendencia
+    from models.fin_empresa import FinEmpresa
+    from utils.extrato_ingest import registrar_conta, BANCOS
+    p = FinExtratoPendencia.get(pid)
+    if not p:
+        flash('Pendência não encontrada.', 'danger')
+        return redirect(url_for('financeiro.contas'))
+    emp = (request.form.get('empresa_id') or '').strip()
+    if not emp.isdigit() or int(emp) not in FinEmpresa.ids_validos():
+        flash('Escolha a empresa dona desta conta.', 'danger')
+        return redirect(url_for('financeiro.contas'))
+
+    conta = (request.form.get('conta') or p.get('conta') or '').strip()
+    if not conta:
+        flash('Informe o número da conta (o arquivo não trouxe).', 'danger')
+        return redirect(url_for('financeiro.contas'))
+
+    novo = registrar_conta(
+        int(emp), p.get('banco_id'),
+        BANCOS.get(str(p.get('banco_id') or '').lstrip('0'), p.get('banco_nome')),
+        conta, agencia=(request.form.get('agencia') or p.get('agencia') or '').strip() or None,
+        usuario_id=current_user.id)
+    registrar('escrita.resolveu_pendencia_extrato', 'financeiro',
+              tabela='fin_extrato_pendencias', registro_id=pid,
+              depois={'empresa_id': int(emp), 'conta': conta,
+                      'arquivo': p['arquivo']})
+
+    # relê SÓ o arquivo desta pendência — nunca a pasta inteira. Quem responde
+    # uma pergunta não pode mexer no que não foi perguntado.
+    import cron_extrato
+    try:
+        r = cron_extrato.processar_um(p['caminho'], usuario_id=current_user.id)
+    except Exception:
+        logging.getLogger(__name__).exception('[extrato] falha ao reler %s',
+                                              p['caminho'])
+        r = {'ok': False, 'motivo': 'não consegui reler o arquivo agora'}
+    FinExtratoPendencia.resolver(pid)
+    if r.get('ok'):
+        flash(f'Conta {conta} cadastrada e o arquivo entrou: {r["novos"]} '
+              f'lançamento(s) de {r["empresa"]}. Os próximos meses entram '
+              'sozinhos, com qualquer nome de arquivo.', 'success')
+    else:
+        flash(f'Conta {conta} cadastrada. O arquivo não entrou agora '
+              f'({r.get("motivo")}) — ele entra no próximo ciclo.', 'warning')
+    return redirect(url_for('financeiro.contas'))
+
+
+@financeiro.route('/financeiro/extrato/apagar-periodo', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_apagar_periodo():
+    """Errou? Apaga o período daquela conta e manda o arquivo de novo.
+
+    É a alternativa combinada ao "desfazer" — a idempotência garante que
+    reenviar o mesmo arquivo recria exatamente o que foi apagado.
+    """
+    from utils.db_helper import execute_query as _q
+    f = request.form
+    emp = (f.get('empresa_id') or '').strip()
+    de, ate = (f.get('de') or '').strip(), (f.get('ate') or '').strip()
+    conta = (f.get('conta') or '').strip()
+    if not emp.isdigit() or not de or not ate:
+        flash('Escolha a empresa e o período a apagar.', 'danger')
+        return redirect(url_for('financeiro.extrato'))
+
+    cond = ['empresa_id = %s', 'data BETWEEN %s AND %s']
+    params = [int(emp), de, ate]
+    if conta:
+        cond.append("CONCAT(COALESCE(banco,''), ' · ', COALESCE(conta,'')) = %s")
+        params.append(conta)
+    where = ' AND '.join(cond)
+
+    quantos = (_q(f'SELECT COUNT(*) AS n FROM extrato_lancamentos WHERE {where}',
+                  tuple(params), fetch=True, fetch_one=True) or {}).get('n', 0)
+    if not quantos:
+        flash('Nenhum lançamento nesse período/conta — nada foi apagado.',
+              'warning')
+        return redirect(url_for('financeiro.extrato'))
+
+    _q(f'DELETE FROM extrato_lancamentos WHERE {where}', tuple(params))
+    registrar('escrita.apagou_periodo_extrato', 'financeiro',
+              tabela='extrato_lancamentos',
+              antes={'empresa_id': int(emp), 'de': de, 'ate': ate,
+                     'conta': conta or 'todas', 'apagados': quantos})
+    flash(f'{quantos} lançamento(s) apagados de {de} a {ate}. Mande o arquivo '
+          'para a pasta de novo — ele entra limpo.', 'success')
     return redirect(url_for('financeiro.extrato'))
 
 
