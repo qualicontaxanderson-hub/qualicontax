@@ -13,11 +13,22 @@
                 <div class="form-group">
                     <label >Tipo</label>
                     <div style="padding-top:8px;">
+                        {# Quatro tipos, nao dois: investimento sai do caixa sem
+                           ser despesa do periodo, e transferencia e dinheiro
+                           andando entre contas proprias — entra no saldo e fica
+                           fora do DRE. Sem eles aqui, so a migracao conseguia
+                           criar categoria desses tipos. #}
                         <label style="margin-right:14px;">
                             <input type="radio" name="tipo" value="R" checked onchange="fcFiltraGrupos()"> Receita
                         </label>
-                        <label>
+                        <label style="margin-right:14px;">
                             <input type="radio" name="tipo" value="P" onchange="fcFiltraGrupos()"> Despesa
+                        </label>
+                        <label style="margin-right:14px;">
+                            <input type="radio" name="tipo" value="I" onchange="fcFiltraGrupos()"> Investimento
+                        </label>
+                        <label>
+                            <input type="radio" name="tipo" value="T" onchange="fcFiltraGrupos()"> Transferência
                         </label>
                     </div>
                 </div>
@@ -99,6 +110,23 @@
 <style>
 /* So o que e proprio desta tela; o resto vem de .fin-* na identidade. */
 .fc-inativa { opacity:.5; }
+/* Bloco: RECEITAS / DESPESAS / INVESTIMENTOS / TRANSFERÊNCIAS. A cor separa
+   o que soma do que subtrai antes de a pessoa ler o nome. */
+.fc-bloco-cab td { font-weight:800; font-size:11px; letter-spacing:1.4px;
+    text-transform:uppercase; padding:14px 14px 8px; border:0;
+    border-bottom:2px solid currentColor; }
+.fc-bloco-R td { color:#15803d; }
+.fc-bloco-P td { color:#b91c1c; }
+.fc-bloco-I td { color:#0369a1; }
+.fc-bloco-T td { color:#6b7280; }
+.fc-bloco-qtd { float:right; font-weight:600; letter-spacing:0;
+    text-transform:none; font-size:11.5px; opacity:.75; }
+
+.fc-grupo-morto td { opacity:.5; }
+.fc-morto-tag { font-size:9.5px; font-weight:700; letter-spacing:.4px;
+    text-transform:uppercase; background:#f3f4f6; color:#9ca3af;
+    border-radius:6px; padding:2px 7px; margin-left:8px; }
+
 .fc-grupo-cab { background:#f9fafb; cursor:pointer; }
 .fc-grupo-cab td { font-weight:800; color:#0f3d2e; font-size:12px;
     letter-spacing:.4px; text-transform:uppercase; }
@@ -154,20 +182,29 @@
                 </tr>
             </thead>
             <tbody>
+                {# Os blocos vem prontos da rota. Decidir bloco aqui exigia
+                   comparar cada linha com a anterior, e era isso que fazia o
+                   mesmo grupo aparecer duas vezes quando a ordem vinha torta. #}
                 {% set _g = {'n': 0} %}
-                {% for c in categorias %}
-                {% set anterior = categorias[loop.index0 - 1] if not loop.first else None %}
-                {% if loop.first or anterior.grupo != c.grupo or anterior.tipo != c.tipo %}
-                {% set _ = _g.update({'n': _g.n + 1}) %}
-                <tr class="fc-grupo-cab" onclick="fcGrupo({{ _g.n }})">
+                {% for b in blocos %}
+                <tr class="fc-bloco-cab fc-bloco-{{ b.tipo }}">
                     <td colspan="4">
-                        <span class="fc-seta" id="seta-{{ _g.n }}">▶</span>
-                        {{ 'Receita' if c.tipo == 'R' else 'Despesa' }} · {{ c.grupo }}
-                        <span class="fc-qtd">{{ categorias | selectattr('grupo', 'equalto', c.grupo)
-                            | selectattr('tipo', 'equalto', c.tipo) | list | length }}</span>
+                        {{ b.rotulo }}
+                        <span class="fc-bloco-qtd">{{ b.ativas }} ativa{{ '' if b.ativas == 1 else 's' }}</span>
                     </td>
                 </tr>
-                {% endif %}
+                {% for gr in b.grupos %}
+                {% set _ = _g.update({'n': _g.n + 1}) %}
+                <tr class="fc-grupo-cab {{ 'fc-grupo-morto' if gr.morto }}"
+                    onclick="fcGrupo({{ _g.n }})">
+                    <td colspan="4">
+                        <span class="fc-seta" id="seta-{{ _g.n }}">▶</span>
+                        {{ gr.nome }}
+                        <span class="fc-qtd">{{ gr.itens | length }}</span>
+                        {% if gr.morto %}<span class="fc-morto-tag">desativado</span>{% endif %}
+                    </td>
+                </tr>
+                {% for c in gr.itens %}
                 <tr class="fc-item g-{{ _g.n }} {{ 'fc-inativa' if not c.ativo }}">
                     <td class="fin-td-titulo">{% if c.pai_id %}<span style="color:#9ca3af; margin-left:16px;">↳</span> {% endif %}{{ c.nome }}</td>
                     <td class="fin-valor fin-td-valor">{{ usos.get(c.id, 0) }}</td>
@@ -189,6 +226,8 @@
                         </form>
                     </td>
                 </tr>
+                {% endfor %}
+                {% endfor %}
                 {% endfor %}
             </tbody>
         </table>
@@ -296,9 +335,10 @@
 <script>
 var FC_URL_RENOMEAR = "{{ url_for('financeiro.categoria_renomear', cat_id=0) }}";
 
-// Os grupos do plano abrem e fecham: 20 categorias em lista corrida davam
-// 5,4 telas de rolagem no celular. No computador nascem ABERTOS (a tela cabe);
-// no celular, FECHADOS — o usuário abre o grupo que interessa.
+// Os grupos do plano abrem e fecham. Nascem FECHADOS em qualquer tamanho de
+// tela: o plano passou de 20 para 181 categorias, e abertos davam 2,6 telas
+// de rolagem no computador — o oposto de organizar. Fechados, os 4 blocos e
+// os 21 grupos cabem de uma vez e a pessoa abre o que interessa.
 function fcGrupo(n) {
     var chave = String(n);
     var linhas = document.querySelectorAll('tr.g-' + chave);
@@ -309,19 +349,14 @@ function fcGrupo(n) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    var estreito = window.innerWidth <= 768;
     document.querySelectorAll('.fc-grupo-cab').forEach(function (cab) {
         var m = /fcGrupo\((\d+)\)/.exec(cab.getAttribute('onclick') || '');
         if (!m) return;
+        document.querySelectorAll('tr.g-' + m[1]).forEach(function (l) {
+            l.style.display = 'none';
+        });
         var seta = document.getElementById('seta-' + m[1]);
-        if (estreito) {
-            document.querySelectorAll('tr.g-' + m[1]).forEach(function (l) {
-                l.style.display = 'none';
-            });
-            if (seta) seta.className = 'fc-seta';
-        } else if (seta) {
-            seta.className = 'fc-seta aberta';
-        }
+        if (seta) seta.className = 'fc-seta';
     });
 });
 

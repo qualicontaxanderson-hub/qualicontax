@@ -58,20 +58,82 @@ class FinCentroCusto:
 class FinCategoria:
     """Plano gerencial (grupo = linha do DRE)."""
 
+    #: Ordem dos blocos na tela e no DRE. Receita, despesa, investimento e,
+    #: por último, transferência — que não é resultado, é dinheiro andando.
+    TIPOS = ('R', 'P', 'I', 'T')
+
     @staticmethod
     def listar(tipo=None, apenas_ativas=True):
-        sql = ['SELECT id, pai_id, tipo, grupo, nome, ordem, ativo FROM fin_categorias']
+        """O plano inteiro, já na ordem de leitura.
+
+        A ordenação NÃO confia na coluna ``ordem`` para agrupar: ela ordena
+        pelo menor ``ordem`` do grupo e pela ordem do PAI, de modo que um
+        valor de ordem torto embaralhe no máximo duas irmãs, e nunca separe
+        um grupo em dois pedaços. Foi o que aconteceu em 21/08: a semeadura
+        deu às 24 subcategorias de "Serviços avulsos" ordens 31 a 54, que
+        invadiram a faixa das categorias seguintes, e a tela passou a
+        repetir o mesmo cabeçalho de grupo várias vezes.
+        """
+        sql = ['SELECT c.id, c.pai_id, c.tipo, c.grupo, c.nome, c.ordem, c.ativo',
+               '  FROM fin_categorias c',
+               '  LEFT JOIN fin_categorias p ON p.id = c.pai_id']
         cond, params = [], []
-        if tipo in ('R', 'P'):
-            cond.append('tipo = %s')
+        if tipo in FinCategoria.TIPOS:
+            cond.append('c.tipo = %s')
             params.append(tipo)
         if apenas_ativas:
-            cond.append('ativo = 1')
+            cond.append('c.ativo = 1')
         if cond:
             sql.append('WHERE ' + ' AND '.join(cond))
-        # Subcategoria herda a ordem do pai; o desempate cola a sub no pai.
-        sql.append('ORDER BY ordem, COALESCE(pai_id, id), (pai_id IS NOT NULL), nome')
+        sql.append("""
+        ORDER BY FIELD(c.tipo, 'R', 'P', 'I', 'T'),
+                 (SELECT MIN(x.ordem) FROM fin_categorias x
+                   WHERE x.tipo = c.tipo AND x.grupo = c.grupo),
+                 c.grupo,
+                 COALESCE(p.ordem, c.ordem),
+                 COALESCE(p.id, c.id),
+                 (c.pai_id IS NOT NULL),
+                 c.ordem, c.nome""")
         return execute_query(' '.join(sql), tuple(params), fetch=True) or []
+
+    @staticmethod
+    def blocos(apenas_ativas=False):
+        """O plano em BLOCOS: receitas, despesas, investimentos, transferências.
+
+        Cada bloco traz seus grupos e cada grupo suas categorias, já na ordem.
+        Montado aqui e não no template porque decidir bloco no Jinja exigia
+        comparar a linha com a anterior — que é exatamente o que quebrava
+        quando a ordem vinha torta.
+        """
+        rotulos = {'R': 'Receitas', 'P': 'Despesas',
+                   'I': 'Investimentos', 'T': 'Transferências'}
+        cats = FinCategoria.listar(apenas_ativas=apenas_ativas)
+        blocos = []
+        for t in FinCategoria.TIPOS:
+            doTipo = [c for c in cats if c['tipo'] == t]
+            if not doTipo:
+                continue
+            grupos, atual = [], None
+            for c in doTipo:
+                if atual is None or atual['nome'] != c['grupo']:
+                    atual = {'nome': c['grupo'], 'itens': []}
+                    grupos.append(atual)
+                atual['itens'].append(c)
+            # Grupo inteiro desativado (sobra do plano antigo) vai para o fim
+            # do bloco e sai marcado. Some seria pior: sem ele nao ha como
+            # reativar pela tela. No meio dos vivos, atrapalha a leitura.
+            for g in grupos:
+                g['ativas'] = sum(1 for c in g['itens'] if c['ativo'])
+                g['morto'] = g['ativas'] == 0
+            grupos.sort(key=lambda g: g['morto'])
+            blocos.append({
+                'tipo': t,
+                'rotulo': rotulos.get(t, t),
+                'grupos': grupos,
+                'qtd': len(doTipo),
+                'ativas': sum(1 for c in doTipo if c['ativo']),
+            })
+        return blocos
 
     @staticmethod
     def pais(tipo=None):

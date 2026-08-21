@@ -417,6 +417,7 @@ def categorias():
     cats = FinCategoria.listar(apenas_ativas=False)
     return render_template('financeiro/categorias.html',
                            categorias=cats,
+                           blocos=FinCategoria.blocos(),
                            grupos=FinCategoria.grupos(),
                            pais=FinCategoria.pais(),
                            centros=FinCentroCusto.listar(apenas_ativos=False),

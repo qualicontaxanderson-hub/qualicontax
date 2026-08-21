@@ -250,14 +250,22 @@ def main():
             return None
         return r['id']
 
-    for ordem, (t, g, c, subs) in enumerate(ARVORE, start=1):
+    # PASSO de 1000 entre categorias. Com passo 10, as 24 subcategorias de
+    # "Serviços avulsos" receberam ordem 31..54 e invadiram a faixa das
+    # categorias seguintes — a tela passou a repetir o mesmo cabeçalho de
+    # grupo. O passo precisa ser maior que a maior lista de subcategorias.
+    PASSO = 1000
+    assert PASSO > max((len(s) for _, _, _, s in ARVORE), default=0)
+
+    for i, (t, g, c, subs) in enumerate(ARVORE, start=1):
+        ordem = i * PASSO
         k = (t, g, c, None)
         if k in antes:
             pai = antes[k]['id']
             execute_query('UPDATE fin_categorias SET ativo = 1, ordem = %s '
-                          'WHERE id = %s', (ordem * 10, pai))
+                          'WHERE id = %s', (ordem, pai))
         else:
-            pai = inserir(None, t, g, c, ordem * 10)
+            pai = inserir(None, t, g, c, ordem)
             if pai:
                 criadas += 1
         if not pai:
@@ -265,9 +273,9 @@ def main():
         for j, s in enumerate(subs, start=1):
             ks = (t, g, s, pai)
             if ks in antes:
-                execute_query('UPDATE fin_categorias SET ativo = 1 WHERE id = %s',
-                              (antes[ks]['id'],))
-            elif inserir(pai, t, g, s, ordem * 10 + j):
+                execute_query('UPDATE fin_categorias SET ativo = 1, ordem = %s '
+                              'WHERE id = %s', (ordem + j, antes[ks]['id']))
+            elif inserir(pai, t, g, s, ordem + j):
                 criadas += 1
 
     # Desativar a categoria e deixar os filhos ativos cria subcategoria pendurada
