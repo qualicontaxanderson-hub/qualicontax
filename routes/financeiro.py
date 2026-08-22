@@ -454,7 +454,11 @@ def categoria_nova():
             flash('Não deu: pai inválido (sub de sub não existe) ou nome '
                   'repetido no grupo.', 'warning')
         return redirect(url_for('financeiro.categorias'))
-    if tipo not in ('R', 'P') or not grupo or not nome:
+    # Os quatro tipos, nao dois. O modal sempre ofereceu Investimento e
+    # Transferencia, e esta linha recusava os dois calada: a pessoa escolhia,
+    # clicava em Criar e recebia "preencha tipo, grupo e nome" com tudo
+    # preenchido. So a migracao criava categoria desses tipos.
+    if tipo not in FinCategoria.TIPOS or not grupo or not nome:
         flash('Preencha tipo, grupo e nome da categoria.', 'danger')
     elif FinCategoria.criar(tipo, grupo, nome):
         registrar('escrita.criou_categoria_fin', 'financeiro',

@@ -173,10 +173,20 @@ class FinCategoria:
 
     @staticmethod
     def grupos(tipo=None):
-        """Grupos existentes (linhas do DRE), na ordem do DRE."""
-        cond, params = '', ()
-        if tipo in ('R', 'P'):
-            cond, params = 'WHERE tipo = %s', (tipo,)
+        """Grupos VIVOS (linhas do DRE), na ordem do DRE.
+
+        Vivo = tem ao menos uma categoria ativa. Sem esse filtro a lista
+        trazia tambem os grupos mortos do plano antigo, e eles apareciam no
+        modal de criar lado a lado com os de hoje: "Pessoal" junto de
+        "Despesa com pessoal", "Tecnologia" junto de "Informatica". Escolher
+        o morto criava uma categoria num grupo que a tela nao mostra.
+
+        Ressuscitar um grupo morto continua possivel — por "criar grupo
+        novo" com o mesmo nome, que cai no mesmo grupo.
+        """
+        cond, params = 'WHERE ativo = 1', ()
+        if tipo in FinCategoria.TIPOS:          # os QUATRO, nao so R e P
+            cond, params = 'WHERE ativo = 1 AND tipo = %s', (tipo,)
         return execute_query(
             f'SELECT tipo, grupo, MIN(ordem) AS ordem FROM fin_categorias '
             f'{cond} GROUP BY tipo, grupo ORDER BY ordem', params,

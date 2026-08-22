@@ -17,62 +17,87 @@
         </div>
         <form method="POST" action="{{ url_for('financeiro.categoria_nova') }}">
             <div class="modal-body">
-                <div class="form-group">
-                    <label >Tipo</label>
-                    <div style="padding-top:8px;">
-                        {# Quatro tipos, nao dois: investimento sai do caixa sem
-                           ser despesa do periodo, e transferencia e dinheiro
-                           andando entre contas proprias — entra no saldo e fica
-                           fora do DRE. Sem eles aqui, so a migracao conseguia
-                           criar categoria desses tipos. #}
-                        <label style="margin-right:14px;">
-                            <input type="radio" name="tipo" value="R" checked onchange="fcFiltraGrupos()"> Receita
-                        </label>
-                        <label style="margin-right:14px;">
-                            <input type="radio" name="tipo" value="P" onchange="fcFiltraGrupos()"> Despesa
-                        </label>
-                        <label style="margin-right:14px;">
-                            <input type="radio" name="tipo" value="I" onchange="fcFiltraGrupos()"> Investimento
-                        </label>
-                        <label>
-                            <input type="radio" name="tipo" value="T" onchange="fcFiltraGrupos()"> Transferência
-                        </label>
+                {# EM CASCATA. A versao anterior mostrava, num unico select, TODAS
+                   as 142 categorias de todos os grupos como candidatas a mae —
+                   inclusive as de outro tipo. Escolher ali era adivinhar. Agora
+                   cada passo so oferece o que o passo anterior permite: o tipo
+                   filtra os grupos, e o grupo filtra as maes. #}
+                <div class="fc-passo">
+                    <span class="fc-passo-n">1</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Tipo</label>
+                        <div class="fc-radios" id="fcTipoBox">
+                            <label class="fc-radio"><input type="radio" name="tipo" value="R" checked
+                                onchange="fcNovaTipo()"> Receita</label>
+                            <label class="fc-radio"><input type="radio" name="tipo" value="P"
+                                onchange="fcNovaTipo()"> Despesa</label>
+                            <label class="fc-radio"><input type="radio" name="tipo" value="I"
+                                onchange="fcNovaTipo()"> Investimento</label>
+                            <label class="fc-radio"><input type="radio" name="tipo" value="T"
+                                onchange="fcNovaTipo()"> Transferência</label>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label >Subcategoria de</label>
-                    <select name="pai_id" id="fcPai" class="form-control" onchange="fcModoSub()">
-                        <option value="">— nenhuma (categoria nova) —</option>
-                        {% for p in pais %}
-                        <option value="{{ p.id }}" data-tipo="{{ p.tipo }}">{{ p.grupo }} · {{ p.nome }}</option>
-                        {% endfor %}
-                    </select>
+
+                <div class="fc-passo">
+                    <span class="fc-passo-n">2</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Grupo <small>— a linha do DRE</small></label>
+                        <select name="grupo" id="fcGrupo" class="form-control" onchange="fcNovaGrupo()">
+                            {% for g in grupos %}
+                            <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
+                            {% endfor %}
+                            <option value="">— criar grupo novo —</option>
+                        </select>
+                        <div id="fcGrupoNovoBox" style="display:none; margin-top:8px;">
+                            <input type="text" name="grupo_novo" id="fcGrupoNovoInput" class="form-control"
+                                   placeholder="Nome do grupo novo. Ex.: Marketing">
+                            <small class="fc-dica">Grupo novo de despesa entra no bloco operacional
+                                do DRE, depois dos existentes. "Impostos sobre serviço" e
+                                "Financeiras" têm posição fixa.</small>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group" id="fcGrupoBox">
-                    <label >Grupo (linha do DRE)</label>
-                    <select name="grupo" id="fcGrupo" class="form-control" onchange="fcGrupoNovo()">
-                        {% for g in grupos %}
-                        <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
-                        {% endfor %}
-                        <option value="">— criar grupo novo —</option>
-                    </select>
+
+                <div class="fc-passo">
+                    <span class="fc-passo-n">3</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Onde ela entra</label>
+                        <label class="fc-nivel">
+                            <input type="radio" name="nivel" value="cat" checked onchange="fcNovaNivel()">
+                            <span>Categoria nova em <b id="fcAlvoGrupo">—</b></span>
+                        </label>
+                        <label class="fc-nivel" id="fcNivelSubBox">
+                            <input type="radio" name="nivel" value="sub" id="fcNivelSub" onchange="fcNovaNivel()">
+                            <span>Subcategoria de uma categoria desse grupo</span>
+                        </label>
+                        <select name="pai_id" id="fcPai" class="form-control"
+                                style="display:none; margin-top:7px;" disabled>
+                            {% for pp in pais %}
+                            <option value="{{ pp.id }}" data-tipo="{{ pp.tipo }}"
+                                    data-grupo="{{ pp.grupo }}">{{ pp.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="fc-dica" id="fcSemMae" style="display:none;">
+                            Esse grupo ainda não tem nenhuma categoria — crie a primeira
+                            antes de pendurar uma subcategoria nela.
+                        </small>
+                    </div>
                 </div>
-                <div class="form-group" id="fcGrupoNovoBox" style="display:none;">
-                    <label >Nome do grupo novo</label>
-                    <input type="text" name="grupo_novo" id="fcGrupoNovoInput" class="form-control"
-                           placeholder="Ex.: Marketing">
-                </div>
-                <div class="form-group">
-                    <label >Categoria</label>
-                    <input type="text" name="nome" class="form-control" required
-                           placeholder="Ex.: Anúncios online">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="fcFecharNova()">Cancelar</button><button type="submit" class="btn btn-primary">Criar</button>
+
+                <div class="fc-passo">
+                    <span class="fc-passo-n">4</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Nome</label>
+                        <input type="text" name="nome" class="form-control" required
+                               placeholder="Ex.: Anúncios online">
+                    </div>
                 </div>
             </div>
-            <small style="color:#6b7280;">Grupo novo de despesa entra no bloco operacional do DRE,
-                depois dos existentes. "Impostos sobre serviço" e "Financeiras" têm posição fixa.</small>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="fcFecharNova()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Criar</button>
+            </div>
         </form>
     </div>
 </div>
@@ -136,6 +161,41 @@
 .fc-chip:hover { background:#dcfce7; border-color:#86efac; color:#15803d; }
 .fc-dica { display:block; margin-top:5px; font-size:11px; color:#7d968a;
     line-height:1.4; }
+
+/* ---- modal em cascata: cada passo numerado ---- */
+.fc-passo { display:flex; gap:11px; padding:11px 0; border-top:1px solid #f1f5f9; }
+.fc-passo:first-child { border-top:0; padding-top:2px; }
+.fc-passo-n { flex:0 0 22px; height:22px; border-radius:99px; background:#eef2f0;
+    color:#5b7468; font-size:11px; font-weight:800; display:flex;
+    align-items:center; justify-content:center; margin-top:2px; }
+.fc-passo-corpo { flex:1 1 auto; min-width:0; }
+.fc-passo-lbl { display:block; font-size:10px; font-weight:800; letter-spacing:.5px;
+    text-transform:uppercase; color:#94a3b8; margin-bottom:6px; }
+.fc-passo-lbl small { font-weight:700; text-transform:none; letter-spacing:0; }
+.fc-radios { display:flex; flex-wrap:wrap; gap:6px; }
+.fc-radio { display:inline-flex; align-items:center; gap:6px; padding:6px 12px;
+    border:1.5px solid #e2e8f0; border-radius:99px; font-size:12.5px;
+    font-weight:700; color:#475569; cursor:pointer; }
+.fc-radio:has(input:checked) { border-color:#86efac; background:#f0fdf4; color:#15803d; }
+.fc-nivel { display:flex; align-items:flex-start; gap:8px; font-size:13px;
+    color:#334155; cursor:pointer; padding:4px 0; }
+.fc-nivel input { margin-top:3px; }
+.fc-nivel.fc-morta { opacity:.45; cursor:not-allowed; }
+
+/* ---- barra de filtro: a mesma .fin-escopo das outras telas ---- */
+.fc-chip-bt { font-family:inherit; cursor:pointer; }
+.fc-chip-n { font-size:10px; font-weight:800; opacity:.7; margin-left:5px; }
+.fc-busca { margin-left:auto; display:flex; align-items:center; gap:7px;
+    background:rgba(255,255,255,.12); border:1.5px solid rgba(255,255,255,.28);
+    border-radius:99px; padding:5px 14px; }
+.fc-busca i { color:rgba(255,255,255,.7); font-size:12px; }
+.fc-busca input { background:transparent; border:0; outline:0; color:#fff;
+    font-size:12.5px; font-weight:600; width:190px; font-family:inherit; }
+.fc-busca input::placeholder { color:rgba(255,255,255,.6); font-weight:500; }
+@media (max-width: 768px) {
+    .fc-busca { margin-left:0; width:100%; }
+    .fc-busca input { width:100%; }
+}
 /* Bloco: RECEITAS / DESPESAS / INVESTIMENTOS / TRANSFERÊNCIAS. A cor separa
    o que soma do que subtrai antes de a pessoa ler o nome. */
 .fc-bloco-cab td { font-weight:800; font-size:11px; letter-spacing:1.4px;
@@ -188,16 +248,7 @@
             <i class="fas fa-tags" style="color: var(--primary-green);"></i>
             Categorias do Financeiro
         </h1>
-        <p class="page-subtitle fc-sub">
-            <span>{{ total_ativas }} categorias · o grupo é a linha do DRE</span>
-            {% if qtd_inativas %}
-            <a class="fc-chip" href="{{ url_for('financeiro.categorias') if ver_todas
-                    else url_for('financeiro.categorias', ver='todas') }}">
-                <i class="fas fa-{{ 'eye-slash' if ver_todas else 'eye' }}"></i>
-                {{ 'esconder' if ver_todas else 'ver' }} {{ qtd_inativas }} desativadas
-            </a>
-            {% endif %}
-        </p>
+        <p class="page-subtitle">{{ total_ativas }} categorias · o grupo é a linha do DRE</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-primary" onclick="fcAbrirNova()">
@@ -208,6 +259,36 @@
         </button>
     </div>
 </div>
+
+{# A barra de escopo das outras telas do Financeiro. Aqui o escopo nao e
+   empresa (categoria e uma so para todas): e o TIPO. Com 295 categorias em
+   21 grupos, achar uma rolando era o trabalho — por isso a busca. #}
+<div class="fin-escopo">
+    <span class="fin-escopo-lbl"><i class="fas fa-filter"></i> Mostrar</span>
+    <div class="fin-chips" id="fcTipos">
+        <button type="button" class="fin-chip fc-chip-bt ativo" data-tipo=""
+                onclick="fcTipo(this)">TODAS</button>
+        {% for b in blocos %}
+        <button type="button" class="fin-chip fc-chip-bt" data-tipo="{{ b.tipo }}"
+                onclick="fcTipo(this)">{{ b.rotulo | upper }}<span class="fc-chip-n">{{ b.ativas }}</span></button>
+        {% endfor %}
+    </div>
+    <div class="fc-busca">
+        <i class="fas fa-search"></i>
+        <input type="text" id="fcBusca" placeholder="buscar categoria..."
+               oninput="fcAplica()" autocomplete="off">
+    </div>
+</div>
+
+{% if qtd_inativas %}
+<p class="fc-sub" style="margin:-8px 0 12px;">
+    <a class="fc-chip" href="{{ url_for('financeiro.categorias') if ver_todas
+            else url_for('financeiro.categorias', ver='todas') }}">
+        <i class="fas fa-{{ 'eye-slash' if ver_todas else 'eye' }}"></i>
+        {{ 'esconder' if ver_todas else 'ver' }} {{ qtd_inativas }} desativadas
+    </a>
+</p>
+{% endif %}
 
 <div class="fin-caixa">
     <div class="fin-rolar">
@@ -226,7 +307,7 @@
                    mesmo grupo aparecer duas vezes quando a ordem vinha torta. #}
                 {% set _g = {'n': 0} %}
                 {% for b in blocos %}
-                <tr class="fc-bloco-cab fc-bloco-{{ b.tipo }}">
+                <tr class="fc-bloco-cab fc-bloco-{{ b.tipo }}" data-tipo="{{ b.tipo }}">
                     <td colspan="4">
                         {{ b.rotulo }}
                         {# Receita e despesa se explicam sozinhas. Investimento e
@@ -244,23 +325,28 @@
                 {% for gr in b.grupos %}
                 {% set _ = _g.update({'n': _g.n + 1}) %}
                 <tr class="fc-grupo-cab {{ 'fc-grupo-morto' if gr.morto }}"
+                    data-tipo="{{ b.tipo }}" data-g="{{ _g.n }}"
+                    data-busca="{{ gr.nome | lower }}"
                     onclick="fcGrupo({{ _g.n }})">
                     <td colspan="4">
                         <span class="fc-seta" id="seta-{{ _g.n }}">▶</span>
                         {{ gr.nome }}
-                        <span class="fc-qtd">{{ gr.itens | length }}</span>
+                        <span class="fc-qtd" data-total="{{ gr.itens | length }}">{{ gr.itens | length }}</span>
                         {% if gr.morto %}<span class="fc-morto-tag">desativado</span>{% endif %}
                     </td>
                 </tr>
                 {% for c in gr.itens %}
-                <tr class="fc-item g-{{ _g.n }} {{ 'fc-inativa' if not c.ativo }}">
+                <tr class="fc-item g-{{ _g.n }} {{ 'fc-inativa' if not c.ativo }}"
+                    data-tipo="{{ b.tipo }}" data-g="{{ _g.n }}"
+                    data-busca="{{ (c.nome ~ ' ' ~ gr.nome) | lower }}">
                     <td class="fin-td-titulo">{% if c.pai_id %}<span style="color:#9ca3af; margin-left:16px;">↳</span> {% endif %}{{ c.nome }}</td>
                     <td class="fin-valor fin-td-valor">{{ usos.get(c.id, 0) }}</td>
                     <td class="fin-td-extra">{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
                     <td class="fin-td-acao" style="white-space:nowrap;">
                         <button class="fin-btn-tag" title="Editar nome, grupo ou mãe"
                                 data-id="{{ c.id }}" data-nome="{{ c.nome }}"
-                                data-grupo="{{ c.grupo }}" data-pai="{{ c.pai_id or '' }}"
+                                data-tipo="{{ c.tipo }}" data-grupo="{{ c.grupo }}"
+                                data-pai="{{ c.pai_id or '' }}"
                                 onclick="fcAbrirRenomear(this)">
                             <i class="fas fa-pen"></i> Editar
                         </button>
@@ -278,6 +364,11 @@
                 {% endfor %}
                 {% endfor %}
                 {% endfor %}
+                <tr id="fcNada" style="display:none;">
+                    <td colspan="4" class="fin-vazio">
+                        Nenhuma categoria com esse nome.
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -379,29 +470,54 @@
         </div>
         <form method="POST" id="fcFormRenomear" action="">
             <div class="modal-body">
-                <div class="form-group">
-                    <label>Nome</label>
-                    <input type="text" name="nome" id="fcRenomearNome" class="form-control" required>
+                {# A MESMA cascata do modal de criar: o grupo filtra as maes.
+                   Ter duas gramaticas para a mesma ideia obriga a pessoa a
+                   aprender a tela duas vezes. #}
+                <div class="fc-passo">
+                    <span class="fc-passo-n">1</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Nome</label>
+                        <input type="text" name="nome" id="fcRenomearNome"
+                               class="form-control" required>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Subcategoria de</label>
-                    <select name="pai_id" id="fcEditarPai" class="form-control"
-                            onchange="fcEditarModo()">
-                        <option value="">— nenhuma (é uma categoria) —</option>
-                        {% for p in pais %}
-                        <option value="{{ p.id }}" data-grupo="{{ p.grupo }}">{{ p.grupo }} · {{ p.nome }}</option>
-                        {% endfor %}
-                    </select>
-                    <small class="fc-dica">Escolhendo uma mãe, ela vira subcategoria e
-                        herda o grupo — só existe um nível.</small>
+                <div class="fc-passo">
+                    <span class="fc-passo-n">2</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Grupo <small>— a linha do DRE</small></label>
+                        <select name="grupo" id="fcEditarGrupo" class="form-control"
+                                onchange="fcEditarGrupoMudou()">
+                            {% for g in grupos %}
+                            <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group" id="fcEditarBoxGrupo">
-                    <label>Grupo</label>
-                    <select name="grupo" id="fcEditarGrupo" class="form-control">
-                        {% for g in grupos %}
-                        <option value="{{ g.grupo }}">{{ g.grupo }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="fc-passo">
+                    <span class="fc-passo-n">3</span>
+                    <div class="fc-passo-corpo">
+                        <label class="fc-passo-lbl">Onde ela fica</label>
+                        <label class="fc-nivel">
+                            <input type="radio" name="nivel_ed" value="cat" checked
+                                   onchange="fcEditarModo()">
+                            <span>Categoria de <b id="fcEdAlvoGrupo">—</b></span>
+                        </label>
+                        <label class="fc-nivel" id="fcEdNivelSubBox">
+                            <input type="radio" name="nivel_ed" value="sub" id="fcEdNivelSub"
+                                   onchange="fcEditarModo()">
+                            <span>Subcategoria de uma categoria desse grupo</span>
+                        </label>
+                        <select name="pai_id" id="fcEditarPai" class="form-control"
+                                style="display:none; margin-top:7px;" disabled>
+                            {% for pp in pais %}
+                            <option value="{{ pp.id }}" data-tipo="{{ pp.tipo }}"
+                                    data-grupo="{{ pp.grupo }}">{{ pp.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="fc-dica" id="fcEdSemMae" style="display:none;">
+                            Esse grupo não tem nenhuma outra categoria para ser a mãe.
+                        </small>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -417,34 +533,82 @@
 <script>
 var FC_URL_EDITAR = "{{ url_for('financeiro.categoria_editar', cat_id=0) }}";
 
-// Os grupos do plano abrem e fecham. Nascem FECHADOS em qualquer tamanho de
-// tela: o plano passou de 20 para 181 categorias, e abertos davam 2,6 telas
-// de rolagem no computador — o oposto de organizar. Fechados, os 4 blocos e
-// os 21 grupos cabem de uma vez e a pessoa abre o que interessa.
-function fcGrupo(n) {
-    var chave = String(n);
-    var linhas = document.querySelectorAll('tr.g-' + chave);
-    var seta = document.getElementById('seta-' + chave);
-    var abrindo = linhas.length && linhas[0].style.display === 'none';
-    linhas.forEach(function (l) { l.style.display = abrindo ? '' : 'none'; });
-    if (seta) seta.className = 'fc-seta' + (abrindo ? ' aberta' : '');
+// =====================================================================
+// FILTROS DA TELA. Tres coisas decidem o que aparece: o tipo escolhido na
+// barra, o texto da busca e quais grupos estao abertos. Elas se cruzam, e
+// por isso NAO ha tres funcoes mexendo em style.display: ha um estado e uma
+// funcao que redesenha tudo a partir dele. Na versao anterior o clique
+// escondia linha na hora, e qualquer segundo filtro brigava com o primeiro.
+// =====================================================================
+var FC_TIPO = '';          // '' = todos os blocos
+var FC_ABERTOS = {};       // grupos que o usuario abriu
+
+function fcAplica() {
+    var termo = (document.getElementById('fcBusca').value || '').trim().toLowerCase();
+    var buscando = termo.length >= 2;   // uma letra casaria com quase tudo
+
+    var achouNoGrupo = {};
+    document.querySelectorAll('tr.fc-item').forEach(function (tr) {
+        var g = tr.getAttribute('data-g');
+        var okTipo = !FC_TIPO || tr.getAttribute('data-tipo') === FC_TIPO;
+        var okTexto = !buscando || tr.getAttribute('data-busca').indexOf(termo) >= 0;
+        var casa = okTipo && okTexto;
+        if (casa) achouNoGrupo[g] = (achouNoGrupo[g] || 0) + 1;
+        // Buscando, o grupo abre sozinho: procurar e ter de abrir 21 grupos
+        // para ver o resultado nao e procurar.
+        tr.style.display = (casa && (buscando || FC_ABERTOS[g])) ? '' : 'none';
+    });
+
+    var vivosNoBloco = {}, total = 0;
+    document.querySelectorAll('tr.fc-grupo-cab').forEach(function (tr) {
+        var g = tr.getAttribute('data-g'), t = tr.getAttribute('data-tipo');
+        var n = achouNoGrupo[g] || 0;
+        var proprioCasa = buscando && tr.getAttribute('data-busca').indexOf(termo) >= 0;
+        var mostra = (!FC_TIPO || t === FC_TIPO) && (!buscando || n > 0 || proprioCasa);
+        tr.style.display = mostra ? '' : 'none';
+        if (mostra) { vivosNoBloco[t] = (vivosNoBloco[t] || 0) + 1; total += n; }
+        var seta = tr.querySelector('.fc-seta');
+        if (seta) seta.className = 'fc-seta' + ((buscando || FC_ABERTOS[g]) ? ' aberta' : '');
+        // O contador do grupo passa a contar o que a busca achou; senao
+        // mentiria: "13" ao lado de duas linhas visiveis.
+        var q = tr.querySelector('.fc-qtd');
+        if (q) q.textContent = buscando ? n : q.getAttribute('data-total');
+    });
+
+    document.querySelectorAll('tr.fc-bloco-cab').forEach(function (tr) {
+        var t = tr.getAttribute('data-tipo');
+        tr.style.display = ((!FC_TIPO || t === FC_TIPO) && vivosNoBloco[t]) ? '' : 'none';
+    });
+
+    document.getElementById('fcNada').style.display =
+        (buscando && total === 0) ? '' : 'none';
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.fc-grupo-cab').forEach(function (cab) {
-        var m = /fcGrupo\((\d+)\)/.exec(cab.getAttribute('onclick') || '');
-        if (!m) return;
-        document.querySelectorAll('tr.g-' + m[1]).forEach(function (l) {
-            l.style.display = 'none';
-        });
-        var seta = document.getElementById('seta-' + m[1]);
-        if (seta) seta.className = 'fc-seta';
+function fcTipo(bt) {
+    FC_TIPO = bt.getAttribute('data-tipo');
+    document.querySelectorAll('#fcTipos .fin-chip').forEach(function (b) {
+        b.classList.toggle('ativo', b === bt);
     });
-});
+    fcAplica();
+}
 
+// Os grupos nascem FECHADOS: o plano passou de 20 para 295 categorias, e
+// abertos davam 13 telas de rolagem — o oposto de organizar.
+function fcGrupo(n) {
+    FC_ABERTOS[n] = !FC_ABERTOS[n];
+    fcAplica();
+}
+
+document.addEventListener('DOMContentLoaded', fcAplica);
+
+// =====================================================================
+// MODAL EM CASCATA. Cada passo so oferece o que o passo anterior permite.
+// A versao anterior mostrava, num unico select, TODAS as categorias de
+// todos os grupos como candidatas a mae — escolher ali era adivinhar.
+// =====================================================================
 function fcAbrirNova() {
     document.getElementById('fcModalNova').style.display = 'block';
-    fcFiltraGrupos();
+    fcNovaTipo();
 }
 function fcFecharNova() {
     document.getElementById('fcModalNova').style.display = 'none';
@@ -456,32 +620,18 @@ function ccFecharNovo() {
     document.getElementById('ccModalNovo').style.display = 'none';
 }
 
-function fcModoSub() {
-    // Escolheu um pai: vira SUBcategoria — tipo e grupo herdam do pai, então somem.
-    var pai = document.getElementById('fcPai');
-    var sub = pai.value !== '';
-    document.getElementById('fcGrupoBox').style.display = sub ? 'none' : '';
-    document.getElementById('fcGrupoNovoBox').style.display = 'none';
-    if (!sub) fcGrupoNovo();
+function fcTipoEscolhido() {
+    var r = document.querySelector('#fcTipoBox input[name="tipo"]:checked');
+    return r ? r.value : 'R';
 }
 
-function fcFiltraGrupos() {
-    var tipo = document.querySelector('input[name="tipo"]:checked').value;
-    // pais tambem filtram pelo tipo
-    var selPai = document.getElementById('fcPai');
-    Array.prototype.forEach.call(selPai.options, function (o) {
-        if (o.value === '') return;
-        var ok = o.getAttribute('data-tipo') === tipo;
-        o.hidden = !ok;
-        o.disabled = !ok;
-    });
-    if (selPai.options[selPai.selectedIndex] &&
-        selPai.options[selPai.selectedIndex].disabled) selPai.value = '';
-    fcModoSub();
+// PASSO 1 -> 2: o tipo decide QUAIS GRUPOS existem.
+function fcNovaTipo() {
+    var tipo = fcTipoEscolhido();
     var sel = document.getElementById('fcGrupo');
     var primeiro = null;
     Array.prototype.forEach.call(sel.options, function (o) {
-        if (o.value === '') return;                    // "criar grupo novo" sempre aparece
+        if (o.value === '') return;                 // "criar grupo novo" sempre fica
         var ok = o.getAttribute('data-tipo') === tipo;
         o.hidden = !ok;
         o.disabled = !ok;
@@ -489,44 +639,123 @@ function fcFiltraGrupos() {
     });
     var atual = sel.options[sel.selectedIndex];
     if (!atual || atual.disabled) sel.value = (primeiro !== null) ? primeiro : '';
-    fcGrupoNovo();
+    fcNovaGrupo();
 }
 
-function fcGrupoNovo() {
-    var novo = document.getElementById('fcGrupo').value === '';
-    document.getElementById('fcGrupoNovoBox').style.display = novo ? '' : 'none';
-    document.getElementById('fcGrupoNovoInput').required = novo;
+// PASSO 2 -> 3: o grupo decide QUAIS MAES existem.
+function fcNovaGrupo() {
+    var tipo = fcTipoEscolhido();
+    var grupo = document.getElementById('fcGrupo').value;
+    var grupoNovo = (grupo === '');
+
+    document.getElementById('fcGrupoNovoBox').style.display = grupoNovo ? '' : 'none';
+    document.getElementById('fcGrupoNovoInput').required = grupoNovo;
+
+    var pai = document.getElementById('fcPai');
+    var candidatas = 0;
+    Array.prototype.forEach.call(pai.options, function (o) {
+        var ok = !grupoNovo && o.getAttribute('data-tipo') === tipo &&
+                 o.getAttribute('data-grupo') === grupo;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok) { if (!candidatas) pai.value = o.value; candidatas++; }
+    });
+
+    document.getElementById('fcAlvoGrupo').textContent =
+        grupoNovo ? 'um grupo novo' : grupo;
+
+    // Grupo sem nenhuma categoria — ou grupo que ainda nem existe — nao pode
+    // receber subcategoria: nao ha em que pendura-la.
+    var caixaSub = document.getElementById('fcNivelSubBox');
+    var radioSub = document.getElementById('fcNivelSub');
+    radioSub.disabled = (candidatas === 0);
+    caixaSub.classList.toggle('fc-morta', candidatas === 0);
+    document.getElementById('fcSemMae').style.display =
+        (candidatas === 0 && !grupoNovo) ? '' : 'none';
+    if (candidatas === 0) {
+        document.querySelector('input[name="nivel"][value="cat"]').checked = true;
+    }
+    fcNovaNivel();
 }
+
+// PASSO 3: categoria ou subcategoria. O select da mae fica DESABILITADO
+// quando e categoria — campo desabilitado nao e enviado, entao a rota nunca
+// recebe um pai_id que o usuario nao escolheu.
+function fcNovaNivel() {
+    var sub = document.querySelector('input[name="nivel"]:checked').value === 'sub';
+    var pai = document.getElementById('fcPai');
+    pai.style.display = sub ? '' : 'none';
+    pai.disabled = !sub;
+}
+
+var FC_ED_ID = '';      // quem esta sendo editado: nao pode ser mae de si mesma
 
 function fcAbrirRenomear(el) {
     var form = document.getElementById('fcFormRenomear');
-    var id = el.getAttribute('data-id');
-    form.action = FC_URL_EDITAR.replace('/0/', '/' + id + '/');
+    FC_ED_ID = el.getAttribute('data-id');
+    form.action = FC_URL_EDITAR.replace('/0/', '/' + FC_ED_ID + '/');
     document.getElementById('fcRenomearNome').value = el.getAttribute('data-nome');
 
-    var pai = document.getElementById('fcEditarPai');
-    // A propria categoria nao pode ser mae de si mesma.
-    Array.prototype.forEach.call(pai.options, function (o) {
-        o.hidden = (o.value === id);
+    // O grupo so pode mudar DENTRO do tipo: categoria de despesa nao vira
+    // receita mudando de grupo, e o modelo herdaria o tipo errado.
+    var tipo = el.getAttribute('data-tipo');
+    var sel = document.getElementById('fcEditarGrupo');
+    Array.prototype.forEach.call(sel.options, function (o) {
+        var ok = o.getAttribute('data-tipo') === tipo;
+        o.hidden = !ok;
+        o.disabled = !ok;
     });
-    pai.value = el.getAttribute('data-pai') || '';
+    sel.value = el.getAttribute('data-grupo') || '';
 
-    var grupo = document.getElementById('fcEditarGrupo');
-    var g = el.getAttribute('data-grupo') || '';
-    Array.prototype.forEach.call(grupo.options, function (o) {
-        if (o.value === g) { grupo.value = g; }
-    });
-
-    fcEditarModo();
+    var pai = el.getAttribute('data-pai') || '';
+    document.querySelector('input[name="nivel_ed"][value="' + (pai ? 'sub' : 'cat') + '"]')
+        .checked = true;
+    fcEditarGrupoMudou(pai);
     document.getElementById('fcModalRenomear').style.display = 'block';
     document.getElementById('fcRenomearNome').focus();
 }
 
-// Subcategoria herda o grupo da mae, entao escolher grupo ali seria mentira:
-// o campo some em vez de ficar aceitando um valor que sera ignorado.
+// O grupo escolhido decide quais maes existem — as DESSE grupo, menos ela
+// mesma. Um select com as 142 categorias de todos os grupos era adivinhacao.
+function fcEditarGrupoMudou(paiDesejado) {
+    var sel = document.getElementById('fcEditarGrupo');
+    var grupo = sel.value;
+    var opt = sel.options[sel.selectedIndex];
+    var tipo = opt ? opt.getAttribute('data-tipo') : '';
+    var pai = document.getElementById('fcEditarPai');
+    var candidatas = 0, primeira = null;
+    Array.prototype.forEach.call(pai.options, function (o) {
+        var ok = o.getAttribute('data-grupo') === grupo &&
+                 o.getAttribute('data-tipo') === tipo &&
+                 o.value !== FC_ED_ID;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok) { candidatas++; if (primeira === null) primeira = o.value; }
+    });
+    if (paiDesejado && !pai.querySelector('option[value="' + paiDesejado + '"][hidden]')) {
+        pai.value = paiDesejado;
+    } else if (primeira !== null) {
+        pai.value = primeira;
+    }
+
+    document.getElementById('fcEdAlvoGrupo').textContent = grupo || '\u2014';
+    var radioSub = document.getElementById('fcEdNivelSub');
+    radioSub.disabled = (candidatas === 0);
+    document.getElementById('fcEdNivelSubBox').classList.toggle('fc-morta', candidatas === 0);
+    document.getElementById('fcEdSemMae').style.display = candidatas === 0 ? '' : 'none';
+    if (candidatas === 0) {
+        document.querySelector('input[name="nivel_ed"][value="cat"]').checked = true;
+    }
+    fcEditarModo();
+}
+
+// Subcategoria herda o grupo da mae; o select da mae so e enviado quando a
+// pessoa realmente escolheu "subcategoria".
 function fcEditarModo() {
-    var sub = document.getElementById('fcEditarPai').value !== '';
-    document.getElementById('fcEditarBoxGrupo').style.display = sub ? 'none' : '';
+    var sub = document.querySelector('input[name="nivel_ed"]:checked').value === 'sub';
+    var pai = document.getElementById('fcEditarPai');
+    pai.style.display = sub ? '' : 'none';
+    pai.disabled = !sub;
 }
 
 function fcFecharRenomear() {
@@ -549,6 +778,5 @@ function ccFecharEditar() {
     document.getElementById('ccModalEditar').style.display = 'none';
 }
 
-fcFiltraGrupos();
 </script>
 {% endblock %}
