@@ -113,6 +113,17 @@
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
 /* So o que e proprio desta tela; o resto vem de .fin-* na identidade. */
+
+/* LINHAS MAIS JUNTAS. O respiro de 11px por linha da identidade foi
+   desenhado para tabela de titulos, que tem dezenas de linhas. Aqui sao
+   295 categorias em 21 grupos e 3 centros: o mesmo respiro vira meia tela
+   de rolagem a mais e afasta o nome da acao. Vale so nesta pagina — este
+   <style> nao sai daqui. No celular a identidade zera o padding e vira
+   cartao, entao nao ha o que apertar. */
+@media (min-width: 769px) {
+    table.fin-tab thead th { padding:7px 14px; }
+    table.fin-tab tbody td { padding:6px 14px; }
+}
 .fc-inativa { opacity:.5; }
 /* Subtitulo em uma linha so: o texto explicativo virou contagem, e a acao
    virou etiqueta clicavel em vez de link solto no meio da frase. */
@@ -128,8 +139,12 @@
 /* Bloco: RECEITAS / DESPESAS / INVESTIMENTOS / TRANSFERÊNCIAS. A cor separa
    o que soma do que subtrai antes de a pessoa ler o nome. */
 .fc-bloco-cab td { font-weight:800; font-size:11px; letter-spacing:1.4px;
-    text-transform:uppercase; padding:14px 14px 8px; border:0;
+    text-transform:uppercase; padding:13px 14px 6px !important; border:0;
     border-bottom:2px solid currentColor; }
+/* A frase que diz PARA QUE serve o bloco anda junto com o rotulo, na mesma
+   linha: explica sem custar altura. */
+.fc-bloco-nota { font-weight:600; font-size:11px; letter-spacing:0;
+    text-transform:none; opacity:.85; margin-left:9px; }
 .fc-bloco-R td { color:#15803d; }
 .fc-bloco-P td { color:#b91c1c; }
 .fc-bloco-I td { color:#0369a1; }
@@ -214,6 +229,15 @@
                 <tr class="fc-bloco-cab fc-bloco-{{ b.tipo }}">
                     <td colspan="4">
                         {{ b.rotulo }}
+                        {# Receita e despesa se explicam sozinhas. Investimento e
+                           transferencia nao: as duas saem ou entram no caixa sem
+                           ser resultado, e sem a frase a pessoa lanca no lugar
+                           errado — foi a duvida que apareceu no uso real. #}
+                        {% if b.tipo == 'I' %}
+                        <span class="fc-bloco-nota">sai do caixa mas não é despesa do mês: vira bem, não resultado</span>
+                        {% elif b.tipo == 'T' %}
+                        <span class="fc-bloco-nota">dinheiro seu andando de uma conta para outra: mexe no saldo, fica fora do DRE</span>
+                        {% endif %}
                         <span class="fc-bloco-qtd">{{ b.ativas }} ativa{{ '' if b.ativas == 1 else 's' }}</span>
                     </td>
                 </tr>
@@ -259,12 +283,14 @@
     </div>
 </div>
 
-<div class="fin-abas" style="margin-top:26px;">
+<div class="fin-abas" style="margin-top:20px;">
     <span class="fin-aba ativa"><i class="fas fa-map-location-dot"></i> Centros de custo</span>
 </div>
-<p style="color:#5b7468; font-size:.92em; margin:-6px 0 12px;">
-    Por estado, como você organiza o negócio. O centro marcado <strong>rateia</strong>
-    (GERAL) divide meio a meio entre os demais nos relatórios.
+{# Era um paragrafo de duas linhas repetindo o que a coluna Rateio ja diz.
+   O detalhe do rateio mudou de lugar: agora mora no modal de editar, onde
+   a pessoa precisa dele. #}
+<p class="fc-sub" style="margin:-2px 0 10px;">
+    <span>Por estado, como você organiza o negócio</span>
 </p>
 <div class="fin-caixa">
     <div class="fin-rolar">
@@ -286,10 +312,11 @@
                     <td class="fin-valor fin-td-valor">{{ usos_centros.get(cc.id, 0) }}</td>
                     <td class="fin-td-extra">{{ 'Ativo' if cc.ativo else 'Desativado' }}</td>
                     <td class="fin-td-acao" style="white-space:nowrap;">
-                        <button class="fin-btn-tag" title="Renomear"
+                        <button class="fin-btn-tag" title="Editar nome e rateio"
                                 data-id="{{ cc.id }}" data-nome="{{ cc.nome }}"
-                                onclick="ccAbrirRenomear(this)">
-                            <i class="fas fa-pen"></i> Renomear
+                                data-rateia="{{ 1 if cc.rateia else 0 }}"
+                                onclick="ccAbrirEditar(this)">
+                            <i class="fas fa-pen"></i> Editar
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.centro_alternar', cc_id=cc.id) }}">
@@ -310,24 +337,34 @@
     </div>
 </div>
 
-<!-- ── Modal: renomear centro ─────────────────────────────────────── -->
-<div id="ccModalRenomear" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:420px;">
+<!-- ── Modal: editar centro ──────────────────────────────────── -->
+<div id="ccModalEditar" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:440px;">
         <div class="modal-header">
-            <h3>Renomear Centro de Custo</h3>
-            <button class="modal-close" onclick="ccFecharRenomear()">&times;</button>
+            <h3>Editar Centro de Custo</h3>
+            <button class="modal-close" onclick="ccFecharEditar()">&times;</button>
         </div>
-        <form method="POST" id="ccFormRenomear" action="">
+        <form method="POST" id="ccFormEditar" action="">
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Novo nome</label>
-                    <input type="text" name="nome" id="ccRenomearNome" class="form-control"
+                    <label>Nome</label>
+                    <input type="text" name="nome" id="ccEditarNome" class="form-control"
                            maxlength="40" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="rateia" id="ccEditarRateia">
+                        <strong>Rateia</strong> entre os demais centros
+                    </label>
+                    <small class="fc-dica">Marcado, o que for lançado neste centro
+                        aparece dividido em partes iguais entre os outros. O
+                        lançamento guarda o centro cru — a divisão é só na
+                        leitura, então desmarcar volta tudo ao normal.</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="ccFecharRenomear()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Renomear</button>
+                <button type="button" class="btn btn-outline" onclick="ccFecharEditar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
             </div>
         </form>
     </div>
@@ -496,18 +533,20 @@ function fcFecharRenomear() {
     document.getElementById('fcModalRenomear').style.display = 'none';
 }
 
-var CC_URL_RENOMEAR = "{{ url_for('financeiro.centro_renomear', cc_id=0) }}";
+var CC_URL_EDITAR = "{{ url_for('financeiro.centro_editar', cc_id=0) }}";
 
-function ccAbrirRenomear(el) {
-    var form = document.getElementById('ccFormRenomear');
-    form.action = CC_URL_RENOMEAR.replace('/0/', '/' + el.getAttribute('data-id') + '/');
-    document.getElementById('ccRenomearNome').value = el.getAttribute('data-nome');
-    document.getElementById('ccModalRenomear').style.display = 'block';
-    document.getElementById('ccRenomearNome').focus();
+function ccAbrirEditar(el) {
+    var form = document.getElementById('ccFormEditar');
+    form.action = CC_URL_EDITAR.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    document.getElementById('ccEditarNome').value = el.getAttribute('data-nome');
+    document.getElementById('ccEditarRateia').checked =
+        el.getAttribute('data-rateia') === '1';
+    document.getElementById('ccModalEditar').style.display = 'block';
+    document.getElementById('ccEditarNome').focus();
 }
 
-function ccFecharRenomear() {
-    document.getElementById('ccModalRenomear').style.display = 'none';
+function ccFecharEditar() {
+    document.getElementById('ccModalEditar').style.display = 'none';
 }
 
 fcFiltraGrupos();

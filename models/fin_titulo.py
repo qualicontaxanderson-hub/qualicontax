@@ -34,12 +34,43 @@ class FinCentroCusto:
             (nome, 1 if rateia else 0, (r or {}).get('o') or 10))
 
     @staticmethod
-    def renomear(cc_id, nome):
-        execute_query('UPDATE fin_centros_custo SET nome = %s WHERE id = %s',
-                      (nome, cc_id))
-        r = execute_query('SELECT nome FROM fin_centros_custo WHERE id = %s',
-                          (cc_id,), fetch=True, fetch_one=True)
-        return bool(r and r['nome'] == nome)
+    def editar(cc_id, nome, rateia):
+        """Nome E rateio de uma vez. Devolve (ok, motivo).
+
+        Renomear so trocava o nome, e o nome nao e o que importa aqui: o que
+        muda o numero do relatorio e o RATEIO. Um centro criado sem a marca
+        so tinha conserto por SQL.
+
+        Trava unica, mas essencial: o rateio precisa de para onde ir. Se
+        todos os centros ativos ratearem, a divisao "em partes iguais entre
+        os demais" nao tem demais — a despesa GERAL sumiria do relatorio em
+        vez de aparecer dividida.
+        """
+        atual = execute_query(
+            'SELECT id, nome, rateia FROM fin_centros_custo WHERE id = %s',
+            (cc_id,), fetch=True, fetch_one=True)
+        if not atual:
+            return False, 'Centro de custo não encontrado.'
+
+        if rateia and not atual['rateia']:
+            destinos = execute_query(
+                'SELECT COUNT(*) AS n FROM fin_centros_custo '
+                ' WHERE ativo = 1 AND rateia = 0 AND id <> %s',
+                (cc_id,), fetch=True, fetch_one=True)['n']
+            if not destinos:
+                return False, ('Não dá para marcar "rateia": não sobraria '
+                               'nenhum centro para receber a divisão.')
+
+        execute_query(
+            'UPDATE fin_centros_custo SET nome = %s, rateia = %s WHERE id = %s',
+            (nome, 1 if rateia else 0, cc_id))
+        r = execute_query(
+            'SELECT nome, rateia FROM fin_centros_custo WHERE id = %s',
+            (cc_id,), fetch=True, fetch_one=True)
+        if not r or r['nome'] != nome:
+            return False, ('Não consegui gravar — provavelmente já existe um '
+                           'centro de custo com esse nome.')
+        return True, ''
 
     @staticmethod
     def set_ativo(cc_id, ativo):

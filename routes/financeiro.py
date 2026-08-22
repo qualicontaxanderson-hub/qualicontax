@@ -552,18 +552,30 @@ def centro_novo():
     return redirect(url_for('financeiro.categorias'))
 
 
-@financeiro.route('/financeiro/centros/<int:cc_id>/renomear', methods=['POST'])
+@financeiro.route('/financeiro/centros/<int:cc_id>/editar', methods=['POST'])
 @permission_required('financeiro.categorias')
-def centro_renomear(cc_id):
+def centro_editar(cc_id):
+    """Nome e rateio — o renomear só mexia no nome, e o rateio é o que
+    muda o número do relatório."""
     from models.fin_titulo import FinCentroCusto
     nome = (request.form.get('nome') or '').strip().upper()
-    if nome and FinCentroCusto.renomear(cc_id, nome):
-        registrar('escrita.renomeou_centro_custo', 'financeiro',
+    rateia = request.form.get('rateia') == 'on'
+    if not nome:
+        flash('Informe o nome do centro de custo.', 'danger')
+        return redirect(url_for('financeiro.categorias'))
+
+    antes = next((x for x in FinCentroCusto.listar(apenas_ativos=False)
+                  if x['id'] == cc_id), None)
+    ok, motivo = FinCentroCusto.editar(cc_id, nome, rateia)
+    if ok:
+        registrar('escrita.editou_centro_custo', 'financeiro',
                   tabela='fin_centros_custo', registro_id=cc_id,
-                  depois={'nome': nome})
-        flash('Centro de custo renomeado.', 'success')
+                  antes={'nome': (antes or {}).get('nome'),
+                         'rateia': (antes or {}).get('rateia')},
+                  depois={'nome': nome, 'rateia': rateia})
+        flash(f'Centro de custo "{nome}" atualizado.', 'success')
     else:
-        flash('Não consegui renomear (nome vazio ou repetido).', 'warning')
+        flash(motivo, 'warning')
     return redirect(url_for('financeiro.categorias'))
 
 
