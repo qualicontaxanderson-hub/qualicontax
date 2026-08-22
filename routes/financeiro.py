@@ -424,6 +424,7 @@ def categorias():
                            categorias=cats,
                            ver_todas=ver_todas,
                            qtd_inativas=sum(1 for c in cats if not c['ativo']),
+                           total_ativas=sum(1 for c in cats if c['ativo']),
                            blocos=FinCategoria.blocos(apenas_ativas=not ver_todas),
                            grupos=FinCategoria.grupos(),
                            pais=FinCategoria.pais(),
@@ -478,6 +479,36 @@ def categoria_renomear(cat_id):
         flash('Categoria renomeada.', 'success')
     else:
         flash('Não consegui renomear (nome repetido no grupo?).', 'warning')
+    return redirect(url_for('financeiro.categorias'))
+
+
+@financeiro.route('/financeiro/categorias/<int:cat_id>/editar', methods=['POST'])
+@permission_required('financeiro.categorias')
+def categoria_editar(cat_id):
+    """Nome, grupo e pai numa tacada — o renomear so mexia no nome."""
+    nome = (request.form.get('nome') or '').strip()
+    grupo = (request.form.get('grupo_novo') or '').strip() \
+        or (request.form.get('grupo') or '').strip()
+    pai_raw = (request.form.get('pai_id') or '').strip()
+    pai_id = int(pai_raw) if pai_raw.isdigit() else None
+
+    if not nome:
+        flash('Informe o nome.', 'danger')
+        return redirect(url_for('financeiro.categorias'))
+
+    antes = next((c for c in FinCategoria.listar(apenas_ativas=False)
+                  if c['id'] == cat_id), None)
+    ok, motivo = FinCategoria.editar(cat_id, nome, grupo, pai_id)
+    if ok:
+        registrar('escrita.editou_categoria_fin', 'financeiro',
+                  tabela='fin_categorias', registro_id=cat_id,
+                  antes={'nome': (antes or {}).get('nome'),
+                         'grupo': (antes or {}).get('grupo'),
+                         'pai_id': (antes or {}).get('pai_id')},
+                  depois={'nome': nome, 'grupo': grupo, 'pai_id': pai_id})
+        flash(f'"{nome}" atualizada.', 'success')
+    else:
+        flash(motivo, 'warning')
     return redirect(url_for('financeiro.categorias'))
 
 

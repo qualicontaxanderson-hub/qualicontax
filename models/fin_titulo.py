@@ -192,6 +192,67 @@ class FinCategoria:
         return bool(r and r['nome'] == nome)
 
     @staticmethod
+    def editar(cat_id, nome, grupo=None, pai_id='manter'):
+        """Muda nome, grupo e pai de uma vez. Devolve (ok, motivo).
+
+        Renomear resolvia so metade dos casos: quando uma categoria esta no
+        grupo errado — ou deveria ser subcategoria de outra — nao havia como
+        arrumar pela tela, so por migracao.
+
+        Regras que a tela nao deve conseguir furar:
+        * um nivel so. Subcategoria de subcategoria nao existe, entao o pai
+          escolhido tem que ser categoria de primeiro nivel;
+        * quem TEM filhos nao pode virar filho, senao os netos ficariam
+          pendurados num nivel que nao existe;
+        * subcategoria herda tipo e grupo do pai — sao dele, nao dela.
+        """
+        atual = execute_query(
+            'SELECT id, tipo, grupo, nome, pai_id FROM fin_categorias '
+            ' WHERE id = %s', (cat_id,), fetch=True, fetch_one=True)
+        if not atual:
+            return False, 'Categoria não encontrada.'
+
+        novo_pai = atual['pai_id'] if pai_id == 'manter' else pai_id
+        if novo_pai:
+            if int(novo_pai) == int(cat_id):
+                return False, 'Uma categoria não pode ser subcategoria de si mesma.'
+            pai = execute_query(
+                'SELECT id, tipo, grupo, pai_id FROM fin_categorias WHERE id = %s',
+                (novo_pai,), fetch=True, fetch_one=True)
+            if not pai:
+                return False, 'A categoria-mãe escolhida não existe.'
+            if pai['pai_id']:
+                return False, ('A categoria-mãe escolhida já é uma subcategoria — '
+                               'só existe um nível.')
+            filhos = execute_query(
+                'SELECT COUNT(*) n FROM fin_categorias WHERE pai_id = %s',
+                (cat_id,), fetch=True, fetch_one=True)['n']
+            if filhos:
+                return False, (f'"{atual["nome"]}" tem {filhos} subcategoria(s): '
+                               'mova ou apague elas antes de transformá-la em '
+                               'subcategoria.')
+            tipo, grupo_final = pai['tipo'], pai['grupo']
+        else:
+            tipo = atual['tipo']
+            grupo_final = (grupo or '').strip() or atual['grupo']
+
+        execute_query(
+            'UPDATE fin_categorias SET nome = %s, grupo = %s, tipo = %s, '
+            '       pai_id = %s WHERE id = %s',
+            (nome, grupo_final, tipo, novo_pai or None, cat_id))
+        # Os filhos acompanham: grupo e tipo sao do pai.
+        execute_query(
+            'UPDATE fin_categorias SET grupo = %s, tipo = %s WHERE pai_id = %s',
+            (grupo_final, tipo, cat_id))
+
+        r = execute_query('SELECT nome, grupo FROM fin_categorias WHERE id = %s',
+                          (cat_id,), fetch=True, fetch_one=True)
+        if not r or r['nome'] != nome or r['grupo'] != grupo_final:
+            return False, ('Não consegui gravar — provavelmente já existe uma '
+                           'categoria com esse nome nesse grupo.')
+        return True, ''
+
+    @staticmethod
     def set_ativa(cat_id, ativa):
         execute_query('UPDATE fin_categorias SET ativo = %s WHERE id = %s',
                       (1 if ativa else 0, cat_id))

@@ -83,7 +83,8 @@ ARVORE = [
     # 3) DEDUÇÕES — nao e receita, e o que se abate dela. Ficam em grupo
     #    proprio porque no DRE a linha e "receita bruta menos deducoes": posto
     #    junto das avulsas, um desconto concedido apareceria somando.
-    ('R', 'Deduções', 'Deduções da receita', ['Descontos', 'Juros e Multa']),
+    ('R', 'Deduções', 'Descontos', []),
+    ('R', 'Deduções', 'Juros e Multa', []),
 
     # 4) FINANCEIRAS e OUTRAS.
     ('R', 'Receitas financeiras', 'Rendimentos', []),

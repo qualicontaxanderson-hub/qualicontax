@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Categorias do Financeiro - Qualicontax
+{% block title %}Categorias do Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{# Os dois modais viviam DENTRO do bloco `title`, porque faltava o
+   {% endblock %} depois do nome da pagina. Renderizavam dentro de <title>,
+   ou seja, nao existiam como elemento: "Nova Categoria" e "Novo Centro"
+   chamavam funcoes que procuravam getElementById de algo inexistente e
+   morriam com TypeError. Os dois botoes nunca funcionaram. #}
 <!-- ── Modal: nova categoria ─────────────────────────────────────── -->
 <div id="fcModalNova" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:560px;">
@@ -103,13 +110,21 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
 /* So o que e proprio desta tela; o resto vem de .fin-* na identidade. */
 .fc-inativa { opacity:.5; }
+/* Subtitulo em uma linha so: o texto explicativo virou contagem, e a acao
+   virou etiqueta clicavel em vez de link solto no meio da frase. */
+.fc-sub { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    font-size:12.5px; }
+.fc-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px;
+    font-weight:700; letter-spacing:.2px; background:#eef2f0; color:#5b7468;
+    border:1px solid #e3ece7; border-radius:99px; padding:3px 11px;
+    text-decoration:none; }
+.fc-chip:hover { background:#dcfce7; border-color:#86efac; color:#15803d; }
+.fc-dica { display:block; margin-top:5px; font-size:11px; color:#7d968a;
+    line-height:1.4; }
 /* Bloco: RECEITAS / DESPESAS / INVESTIMENTOS / TRANSFERÊNCIAS. A cor separa
    o que soma do que subtrai antes de a pessoa ler o nome. */
 .fc-bloco-cab td { font-weight:800; font-size:11px; letter-spacing:1.4px;
@@ -158,15 +173,14 @@
             <i class="fas fa-tags" style="color: var(--primary-green);"></i>
             Categorias do Financeiro
         </h1>
-        <p class="page-subtitle">
-            Plano gerencial do escritório — o grupo é a linha do DRE
+        <p class="page-subtitle fc-sub">
+            <span>{{ total_ativas }} categorias · o grupo é a linha do DRE</span>
             {% if qtd_inativas %}
-                ·
-                {% if ver_todas %}
-                <a href="{{ url_for('financeiro.categorias') }}">esconder as {{ qtd_inativas }} desativadas</a>
-                {% else %}
-                <a href="{{ url_for('financeiro.categorias', ver='todas') }}">ver {{ qtd_inativas }} desativada{{ '' if qtd_inativas == 1 else 's' }}</a>
-                {% endif %}
+            <a class="fc-chip" href="{{ url_for('financeiro.categorias') if ver_todas
+                    else url_for('financeiro.categorias', ver='todas') }}">
+                <i class="fas fa-{{ 'eye-slash' if ver_todas else 'eye' }}"></i>
+                {{ 'esconder' if ver_todas else 'ver' }} {{ qtd_inativas }} desativadas
+            </a>
             {% endif %}
         </p>
     </div>
@@ -220,10 +234,11 @@
                     <td class="fin-valor fin-td-valor">{{ usos.get(c.id, 0) }}</td>
                     <td class="fin-td-extra">{{ 'Ativa' if c.ativo else 'Desativada' }}</td>
                     <td class="fin-td-acao" style="white-space:nowrap;">
-                        <button class="fin-btn-tag" title="Renomear"
+                        <button class="fin-btn-tag" title="Editar nome, grupo ou mãe"
                                 data-id="{{ c.id }}" data-nome="{{ c.nome }}"
+                                data-grupo="{{ c.grupo }}" data-pai="{{ c.pai_id or '' }}"
                                 onclick="fcAbrirRenomear(this)">
-                            <i class="fas fa-pen"></i> Renomear
+                            <i class="fas fa-pen"></i> Editar
                         </button>
                         <form method="POST" style="display:inline;"
                               action="{{ url_for('financeiro.categoria_alternar', cat_id=c.id) }}">
@@ -322,19 +337,39 @@
 <div id="fcModalRenomear" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:460px;">
         <div class="modal-header">
-            <h3>Renomear Categoria</h3>
+            <h3>Editar Categoria</h3>
             <button class="modal-close" onclick="fcFecharRenomear()">&times;</button>
         </div>
         <form method="POST" id="fcFormRenomear" action="">
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Novo nome</label>
+                    <label>Nome</label>
                     <input type="text" name="nome" id="fcRenomearNome" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Subcategoria de</label>
+                    <select name="pai_id" id="fcEditarPai" class="form-control"
+                            onchange="fcEditarModo()">
+                        <option value="">— nenhuma (é uma categoria) —</option>
+                        {% for p in pais %}
+                        <option value="{{ p.id }}" data-grupo="{{ p.grupo }}">{{ p.grupo }} · {{ p.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="fc-dica">Escolhendo uma mãe, ela vira subcategoria e
+                        herda o grupo — só existe um nível.</small>
+                </div>
+                <div class="form-group" id="fcEditarBoxGrupo">
+                    <label>Grupo</label>
+                    <select name="grupo" id="fcEditarGrupo" class="form-control">
+                        {% for g in grupos %}
+                        <option value="{{ g.grupo }}">{{ g.grupo }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="fcFecharRenomear()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Renomear</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
             </div>
         </form>
     </div>
@@ -343,7 +378,7 @@
 
 {% block extra_js %}
 <script>
-var FC_URL_RENOMEAR = "{{ url_for('financeiro.categoria_renomear', cat_id=0) }}";
+var FC_URL_EDITAR = "{{ url_for('financeiro.categoria_editar', cat_id=0) }}";
 
 // Os grupos do plano abrem e fecham. Nascem FECHADOS em qualquer tamanho de
 // tela: o plano passou de 20 para 181 categorias, e abertos davam 2,6 telas
@@ -428,10 +463,33 @@ function fcGrupoNovo() {
 
 function fcAbrirRenomear(el) {
     var form = document.getElementById('fcFormRenomear');
-    form.action = FC_URL_RENOMEAR.replace('/0/', '/' + el.getAttribute('data-id') + '/');
+    var id = el.getAttribute('data-id');
+    form.action = FC_URL_EDITAR.replace('/0/', '/' + id + '/');
     document.getElementById('fcRenomearNome').value = el.getAttribute('data-nome');
+
+    var pai = document.getElementById('fcEditarPai');
+    // A propria categoria nao pode ser mae de si mesma.
+    Array.prototype.forEach.call(pai.options, function (o) {
+        o.hidden = (o.value === id);
+    });
+    pai.value = el.getAttribute('data-pai') || '';
+
+    var grupo = document.getElementById('fcEditarGrupo');
+    var g = el.getAttribute('data-grupo') || '';
+    Array.prototype.forEach.call(grupo.options, function (o) {
+        if (o.value === g) { grupo.value = g; }
+    });
+
+    fcEditarModo();
     document.getElementById('fcModalRenomear').style.display = 'block';
     document.getElementById('fcRenomearNome').focus();
+}
+
+// Subcategoria herda o grupo da mae, entao escolher grupo ali seria mentira:
+// o campo some em vez de ficar aceitando um valor que sera ignorado.
+function fcEditarModo() {
+    var sub = document.getElementById('fcEditarPai').value !== '';
+    document.getElementById('fcEditarBoxGrupo').style.display = sub ? 'none' : '';
 }
 
 function fcFecharRenomear() {
