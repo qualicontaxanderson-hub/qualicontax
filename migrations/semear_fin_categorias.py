@@ -11,17 +11,25 @@ Exemplo dele, que virou a regra dos veiculos:
 
     Veiculos > SPIN > {Documentos, Manutencao, Abastecimento, Multas, ...}
 
-Duas decisoes que moldam o resto e ficam registradas aqui:
+As DESPESAS sao a planilha que ele devolveu em 22/08, transcrita literalmente
+— mesmos nomes, mesma ordem, mesmo agrupamento. A versao anterior deste
+arquivo reorganizava aquilo em grupos meus (Ocupacao, Sistemas, Marketing,
+Impostos...) e ele avisou: "mandei como queremos mas nao adiantou de nada".
+Nao reinterpretar.
+
+Uma decisao que moldou as RECEITAS e fica registrada:
 
 * MENSALIDADE E UMA SO. O fluxo de caixa antigo tinha ~37 linhas
   "Mensalidade Rede X" somando R$ 2,75 mi. Rede e de QUEM paga, nao O QUE e:
   ela vem do grupo do cliente e o relatorio separa depois. Como categoria,
   cada rede nova mexeria no plano de contas e um posto trocando de rede
   obrigaria a reclassificar o passado.
-* PESSOA VAI EM CONTRAPARTE. Os ~23 "Func. Fulano" e os 13 nomes de comissao
-  viram duas categorias (Remuneracao e Comissao) com o nome no titulo. Assim
-  o DRE mostra uma linha em vez de trinta e seis, quem sai do escritorio nao
-  deixa categoria morta, e o custo por pessoa continua consultavel.
+
+Nas despesas ele escolheu o contrario e a escolha e dele: cada funcionario
+e cada comissionado e uma categoria propria ("Func. Fulano"), em vez de uma
+categoria unica com o nome na contraparte. Da custo por pessoa direto no
+plano, ao preco de o DRE ter 25 linhas de pessoal e de quem sai deixar
+categoria para desativar.
 
 O tipo ganhou dois valores alem de R e P:
 
@@ -44,11 +52,6 @@ from dotenv import load_dotenv                                # noqa: E402
 load_dotenv()
 
 from utils.db_helper import execute_query                     # noqa: E402
-
-VEICULOS = ['SPIN', 'Classic', 'Zafira', 'Fiorino', 'F250', 'Commander',
-            'Carretinha', 'Caminhão Scania']
-NAT_VEIC = ['Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
-            'Multas', 'Lavagem', 'Seguro / proteção']
 
 # (tipo, grupo, categoria, [subcategorias])
 ARVORE = [
@@ -88,98 +91,216 @@ ARVORE = [
     ('R', 'Outras receitas', 'Sub-locações', []),
     ('R', 'Outras receitas', 'Serviços', []),
 
-    # ---------------- PESSOAL ----------------
-    ('P', 'Pessoal', 'Remuneração', ['Salários', 'Seguro de vida']),
-    ('P', 'Pessoal', 'Benefícios',
-     ['Unimed', 'Alimentação e refeição', 'Café', 'Uniformes']),
-    # FGTS, INSS e pro-labore NAO aparecem em lugar nenhum do fluxo de caixa
-    # de 08/2025 a 08/2026 — devem estar embutidos dentro de cada "Func.
-    # Fulano". Ficam aqui porque um escritorio com 23 funcionarios paga os
-    # dois, e sem a categoria o primeiro DARF de FGTS a ser conciliado nao
-    # teria onde cair.
-    ('P', 'Pessoal', 'Encargos', ['FGTS', 'INSS']),
-    ('P', 'Pessoal', 'Pró-labore', []),
-    ('P', 'Comissões', 'Comissão', []),
+    # ============ DESPESAS E INVESTIMENTOS ============
+    # Este bloco e a planilha que o Anderson devolveu em 22/08, LITERAL:
+    # mesmos nomes, mesma ordem, mesmo agrupamento. A versao anterior era
+    # uma reorganizacao minha por cima do que ele tinha descrito, e ele
+    # avisou que nao servia. Nao reinterpretar de novo.
 
-    # ---------------- OCUPAÇÃO ----------------
-    ('P', 'Ocupação', 'Aluguel', ['Escritório', 'Canedo', 'Delma', 'MA']),
-    ('P', 'Ocupação', 'Energia elétrica', []),
-    ('P', 'Ocupação', 'Água', []),
-
-    # ---------------- ADMINISTRATIVAS ----------------
+    # ---- Administrativas ----
+    ('P', 'Administrativas', 'ACEO', []),
     ('P', 'Administrativas', 'Advogado', []),
-    ('P', 'Administrativas', 'Cartório', ['Goiatuba']),
+    ('P', 'Administrativas', 'Água', []),
+    ('P', 'Administrativas', 'Aluguel - Delma', []),
+    ('P', 'Administrativas', 'Aluguel - Escritório SP', []),
+    ('P', 'Administrativas', 'Aluguel - Escrtiório Senador Canedo', []),
+    ('P', 'Administrativas', 'Aluguel - MA', []),
+    ('P', 'Administrativas', 'Cartório - Goiatuba', []),
     ('P', 'Administrativas', 'Certificado digital', []),
     ('P', 'Administrativas', 'Compras on-line', []),
     ('P', 'Administrativas', 'Correios', []),
+    ('P', 'Administrativas', 'CRC - Albert Antunes', []),
+    ('P', 'Administrativas', 'CRC - Carlos', []),
+    ('P', 'Administrativas', 'CRC - Qualicontax', []),
+    ('P', 'Administrativas', 'Energia elétrica', []),
+    ('P', 'Administrativas', 'Hospedagem', []),
+    ('P', 'Administrativas', 'IOB', []),
     ('P', 'Administrativas', 'Material de escritório', []),
     ('P', 'Administrativas', 'Móveis e utensílios', []),
     ('P', 'Administrativas', 'Segurança / alarme', []),
-    ('P', 'Administrativas', 'Viagens e estadias', []),
-    ('P', 'Administrativas', 'Telefonia e internet',
-     ['Vivo Fixo', 'Vivo Móvel', 'Starlink', 'Hospedagem']),
-    ('P', 'Administrativas', 'Taxas de órgãos', ['CRC', 'Jucesp']),
+    ('P', 'Administrativas', 'Starlink', []),
+    ('P', 'Administrativas', 'Vivo Fixo', []),
+    ('P', 'Administrativas', 'Vivo Móvel', []),
+    ('P', 'Administrativas', 'Unimed', []),
+    ('P', 'Administrativas', 'Ração para o Animais', []),
 
-    # ---------------- SISTEMAS ----------------
-    ('P', 'Sistemas', 'Sistemas e assinaturas', [
-        'ACEO', 'IOB', 'LMC', 'LMC Katia', 'Alterdata', 'Conexa', 'Questor',
-        'Veri', 'Sysconv', '55PBX', 'Acessórias e Komunic', 'Captura',
-        'HTEC', 'SPA', 'Luciano']),
+    # ---- Cartão de Crédito ----
+    ('P', 'Cartão de Crédito', 'Cartão Bradesco', []),
+    ('P', 'Cartão de Crédito', 'Cartão BRB', []),
+    ('P', 'Cartão de Crédito', 'Cartão C6', [
+        'Anderson Antunes', 'Emily Lavinia', 'Livia Maria',
+        'Beatriz Cunha', 'Qualicontax', 'Rodrigo Silva']),
+    ('P', 'Cartão de Crédito', 'Cartão Carrefour', []),
+    ('P', 'Cartão de Crédito', 'Cartão Cora', []),
+    ('P', 'Cartão de Crédito', 'Cartão EFI', []),
+    ('P', 'Cartão de Crédito', 'Cartão Mercado Pago', []),
+    ('P', 'Cartão de Crédito', 'Cartão Neon', []),
+    ('P', 'Cartão de Crédito', 'Cartão Nubank', []),
+    ('P', 'Cartão de Crédito', 'Cartão Poupaki', []),
+    ('P', 'Cartão de Crédito', 'Cartão Reis', []),
+    ('P', 'Cartão de Crédito', 'Cartão Renner', []),
+    ('P', 'Cartão de Crédito', 'Cartão Santander', []),
+    ('P', 'Cartão de Crédito', 'Cartão XP', []),
 
-    # ---------------- IMPOSTOS ----------------
-    ('P', 'Impostos e taxas', 'Simples Nacional', []),
-    ('P', 'Impostos e taxas', 'DCTFWEB', []),
-    ('P', 'Impostos e taxas', 'ITR', []),
-    ('P', 'Impostos e taxas', 'Taxa municipal', []),
-    ('P', 'Impostos e taxas', 'Multas fiscais', []),
-    ('P', 'Impostos e taxas', 'INMETRO', []),
-    ('P', 'Impostos e taxas', 'Parcelamentos',
-     ['PGFN', 'Simples Nacional', 'ICMS GTBA']),
+    # ---- Despesa com Pessoal ----
+    ('P', 'Despesa com Pessoal', 'Func. Alessandra Pereira', []),
+    ('P', 'Despesa com Pessoal', 'Func. Bruna Lopes', []),
+    ('P', 'Despesa com Pessoal', 'Func. Bruna Schumann', []),
+    ('P', 'Despesa com Pessoal', 'Func. Carolina Damião', []),
+    ('P', 'Despesa com Pessoal', 'Func. Eduarda Simões', []),
+    ('P', 'Despesa com Pessoal', 'Func. Ester de Almeida', []),
+    ('P', 'Despesa com Pessoal', 'Func. Gabriel Mendes', []),
+    ('P', 'Despesa com Pessoal', 'Func. Graziella Almeida', []),
+    ('P', 'Despesa com Pessoal', 'Func. Guilherme Rocha', []),
+    ('P', 'Despesa com Pessoal', 'Func. Guylhermmy', []),
+    ('P', 'Despesa com Pessoal', 'Func. Henrique Vicentini', []),
+    ('P', 'Despesa com Pessoal', 'Func. Isabella Tomia', []),
+    ('P', 'Despesa com Pessoal', 'Func. Jabes', []),
+    ('P', 'Despesa com Pessoal', 'Func. José Querobino', []),
+    ('P', 'Despesa com Pessoal', 'Func. Julian Amaral', []),
+    ('P', 'Despesa com Pessoal', 'Func. Karina de Sousa', []),
+    ('P', 'Despesa com Pessoal', 'Func. Lais Fernanda', []),
+    ('P', 'Despesa com Pessoal', 'Func. Melchesedech', []),
+    ('P', 'Despesa com Pessoal', 'Func. Miguel Sousa', []),
+    ('P', 'Despesa com Pessoal', 'Func. Rodrigo Cunha', []),
+    ('P', 'Despesa com Pessoal', 'Func. Rodrigo Silva', []),
+    ('P', 'Despesa com Pessoal', 'Func. Selma Pereira', []),
+    ('P', 'Despesa com Pessoal', 'Func. Sergio Camara', []),
+    ('P', 'Despesa com Pessoal', 'Func. Talita Miyazaki', []),
+    ('P', 'Despesa com Pessoal', 'Seguro de Vida - Rodrigo Silva', []),
 
-    # ---------------- FINANCEIRAS ----------------
-    ('P', 'Financeiras', 'Tarifas bancárias', []),
-    ('P', 'Financeiras', 'Juros e encargos', []),
-    ('P', 'Financeiras', 'Seguros', []),
-    # Empréstimo: só o juro é despesa. O principal devolve o que foi tomado —
-    # lançado inteiro como despesa, o resultado do escritório fica pior do
-    # que é. Duas categorias para que a separação seja obrigatória.
-    ('P', 'Financeiras', 'Empréstimos - juros', []),
-    ('P', 'Financeiras', 'Empréstimos - principal', []),
+    # ---- Devoluções ----
+    ('P', 'Devoluções', 'Complemento - Nico', []),
 
-    # ---------------- MARKETING ----------------
-    ('P', 'Marketing', 'Gráfica', []),
-    ('P', 'Marketing', 'Marketing digital', []),
-    ('P', 'Marketing', 'Brindes e eventos', []),
-    ('P', 'Marketing', 'Fretes', []),
-
-    # ---------------- OUTROS ----------------
+    # ---- Erro do escritório ----
     ('P', 'Erro do escritório', 'Erro do escritório', []),
-    ('P', 'Devoluções', 'Devolução a cliente', []),
-    ('P', 'Cartões de crédito', 'Cartão Bradesco', []),
-    ('P', 'Cartões de crédito', 'Cartão C6', []),
-    ('P', 'Cartões de crédito', 'Cartão EFI', []),
-    ('P', 'Pessoais do sócio', 'Despesas pessoais', []),
-    # Vala comum, de proposito. Na conciliacao sempre aparece um movimento que
-    # ninguem sabe classificar na hora; sem um lugar para ele, ou o lancamento
-    # fica sem categoria (e some dos relatorios) ou alguem o enfia numa
-    # categoria errada — o segundo caso e pior, porque mente calado.
-    ('R', 'Outras receitas', 'Outras receitas', []),
-    ('P', 'Outras despesas', 'Outras despesas', []),
 
-    # ---------------- TRANSFERÊNCIA (fora do DRE) ----------------
+    # ---- Financeiras ----
+    ('P', 'Financeiras', 'Bradesco - Capital de Giro 04/2028', []),
+    ('P', 'Financeiras', 'Bradesco - Cheque Especial', []),
+    ('P', 'Financeiras', 'Bradesco - Encargos s/Limite', []),
+    ('P', 'Financeiras', 'Bradesco - IOF S/Limite', []),
+    ('P', 'Financeiras', 'Bradesco - Seguros', []),
+    ('P', 'Financeiras', 'Empréstimos - juros', []),
+    ('P', 'Financeiras', 'Juros e encargos', []),
+    ('P', 'Financeiras', 'Tarifa Pix - Bradesco', []),
+    ('P', 'Financeiras', 'Tarifas bancárias - Bradesco', []),
+    ('P', 'Financeiras', 'Tarifas bancárias - Sicredi', []),
+    ('P', 'Financeiras', 'Tarifas Boleto - Bradesco', []),
+    ('P', 'Financeiras', 'Tarifas Boleto - EFI', []),
+    ('P', 'Financeiras', 'Tarifas Boleto - Sicredi', []),
+
+    # ---- Impostos e taxas ----
+    ('P', 'Impostos e taxas', 'DCTFWEB', []),
+    ('P', 'Impostos e taxas', 'INMETRO', []),
+    ('P', 'Impostos e taxas', 'ITR', []),
+    ('P', 'Impostos e taxas', 'Parcelamentos - PGFN', []),
+    ('P', 'Impostos e taxas', 'Parcelamentos - Simples Nacional', []),
+    ('P', 'Impostos e taxas', 'Simples Nacional', []),
+    ('P', 'Impostos e taxas', 'Taxa municipal', []),
+
+    # ---- Informática ----
+    ('P', 'Informática', '55PBX', []),
+    ('P', 'Informática', 'Acessórias e Komunic', []),
+    ('P', 'Informática', 'Alterdata', []),
+    ('P', 'Informática', 'Captura', []),
+    ('P', 'Informática', 'Conexa', []),
+    ('P', 'Informática', 'HTEC', []),
+    ('P', 'Informática', 'LMC', []),
+    ('P', 'Informática', 'LMC Katia', []),
+    ('P', 'Informática', 'Luciano', []),
+    ('P', 'Informática', 'Questor', []),
+    ('P', 'Informática', 'SPA', []),
+    ('P', 'Informática', 'Sysconv', []),
+    ('P', 'Informática', 'Veri', []),
+
+    # ---- Marketing ----
+    ('P', 'Marketing', 'Fretes', []),
+    ('P', 'Marketing', 'Gráfica', [
+        'Boião', 'Adesiva', 'Ideias', 'Business', 'Alcalima']),
+    ('P', 'Marketing', 'Marketing digital', ['Lorraine']),
+
+    # ---- Veículos ----
+    ('P', 'Veículos', 'Asproauto', []),
+    ('P', 'Veículos', 'Caminhão Scania - R540', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'Caminhão Scania - R500', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'Carretinha', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'Classic', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'Commander', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'F250', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'Fiorino', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'SPIN', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+    ('P', 'Veículos', 'Zafira', [
+        'Documentos (IPVA/licenciamento)', 'Manutenção', 'Abastecimento',
+        'Multas', 'Lavagem', 'Seguro / proteção']),
+
+    # ---- Comissões ----
+    ('P', 'Comissões', 'Alessandra Vassalo', []),
+    ('P', 'Comissões', 'Barros Advocacia', []),
+    ('P', 'Comissões', 'Bruna Schumann', []),
+    ('P', 'Comissões', 'Celso Ricardo', []),
+    ('P', 'Comissões', 'Diego (Integração)', []),
+    ('P', 'Comissões', 'Gabriel Mendes', []),
+    ('P', 'Comissões', 'Guilherme Rocha', []),
+    ('P', 'Comissões', 'Julian Amaral', []),
+    ('P', 'Comissões', 'Lais Fernanda', []),
+    ('P', 'Comissões', 'Nildson - Indicações', []),
+    ('P', 'Comissões', 'Paulo - Sinal Verde', []),
+    ('P', 'Comissões', 'Rodrigo Silva', []),
+    ('P', 'Comissões', 'Vinicius Varela', []),
+
+    # ---- Sócios ----
+    ('P', 'Sócios', 'Albert Antunes Vieira', ['Pro-Labore']),
+    ('P', 'Sócios', 'Anderson Antunes Vieira', [
+        'Pro-Labore', 'Alimentação', 'Banho Bitu', 'Cinema',
+        'Vestimentas', 'Julierme', 'Joveci', 'Faculdade', 'Manicure']),
+
+    # ---- Investimentos ----
+    ('I', 'Investimentos', 'Apto Cohab II', []),
+    ('I', 'Investimentos', 'Apto Oggi Penha', []),
+    ('I', 'Investimentos', 'BR-153', ['Manutenção', 'Licenciamento', 'ITR']),
+    ('I', 'Investimentos', 'Lote - Morrinhos', ['IPTU', 'Manutenção', 'Parcelas']),
+    ('I', 'Investimentos', 'Lote - PB 23', ['IPTU', 'Manutenção', 'Parcelas']),
+    ('I', 'Investimentos', 'Lote - São Simão', ['IPTU', 'Manutenção', 'Parcelas']),
+    ('I', 'Investimentos', 'Tesouro Direto', ['Selic', 'IPCA', 'Prefixada']),
+    ('I', 'Investimentos', 'Renda Fixa', [
+        'XP', 'C6', 'Ágora', 'Sicredi', 'Sicoob']),
+    ('I', 'Investimentos', 'Ações', ['Ágora']),
+    ('I', 'Investimentos', 'Fundos Imóbiliarios', ['Ágora']),
+
+    # ---- Ocupação ----
+    ('P', 'Ocupação', 'Apto Oggi Penha', [
+        'Condominio', 'Energia', 'Internet', 'Demais', 'Manutenção']),
+    ('P', 'Ocupação', 'Aluguel Goiatuba', [
+        'Energia', 'Internet', 'Agua', 'Piscinero', 'Manutenção', 'IPTU']),
+    ('P', 'Ocupação', 'Apto Unique Tower', [
+        'Condominio', 'Energia', 'Internet', 'Agua', 'Manutenção']),
+
+    # ============ TRANSFERENCIA (fora do DRE) ============
+    # Nao veio na planilha porque a planilha era so de despesas — e
+    # transferencia nao e despesa. Sao os R$ 1,6 mi que andam entre o EFI e o
+    # Sicredi: lancados como receita dobrariam o faturamento, e ignorados
+    # quebrariam o saldo da conta. Entram no saldo e ficam fora do resultado.
     ('T', 'Transferência', 'Entre contas do grupo', []),
     ('T', 'Transferência', 'Aporte do sócio', []),
     ('T', 'Transferência', 'Retirada do sócio', []),
-
-    # ---------------- INVESTIMENTO (sai do caixa, não é despesa) ----------
-    ('I', 'Investimentos', 'Imóveis e obras', []),
-    ('I', 'Investimentos', 'Consórcio', []),
-    ('I', 'Investimentos', 'Conta capital', []),
 ]
-
-for _v in VEICULOS:
-    ARVORE.append(('P', 'Veículos', _v, list(NAT_VEIC)))
-ARVORE.append(('P', 'Veículos', 'Asproauto', []))
 
 
 def existentes():
