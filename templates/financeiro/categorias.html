@@ -9,94 +9,131 @@
    chamavam funcoes que procuravam getElementById de algo inexistente e
    morriam com TypeError. Os dois botoes nunca funcionaram. #}
 <!-- ── Modal: nova categoria ─────────────────────────────────────── -->
-<div id="fcModalNova" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:560px;">
+<!-- ── Assistente: nova categoria / editar categoria ────────── -->
+{# UM assistente serve aos dois: criar percorre 4 passos, editar percorre 3
+   (o tipo de uma categoria nao muda). Dois modais para a mesma ideia
+   obrigavam a pessoa a aprender a tela duas vezes. #}
+<div id="fcWiz" class="modal">
+    <div class="modal-content fc-wiz">
         <div class="modal-header">
-            <h3>Nova Categoria</h3>
-            <button class="modal-close" onclick="fcFecharNova()">&times;</button>
+            <h3 id="fcWizTitulo">Nova Categoria</h3>
+            <button class="modal-close" onclick="fcWizFechar()">&times;</button>
         </div>
-        <form method="POST" action="{{ url_for('financeiro.categoria_nova') }}">
-            <div class="modal-body">
-                {# EM CASCATA. A versao anterior mostrava, num unico select, TODAS
-                   as 142 categorias de todos os grupos como candidatas a mae —
-                   inclusive as de outro tipo. Escolher ali era adivinhar. Agora
-                   cada passo so oferece o que o passo anterior permite: o tipo
-                   filtra os grupos, e o grupo filtra as maes. #}
-                <div class="fc-passo">
-                    <span class="fc-passo-n">1</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Tipo</label>
-                        <div class="fc-radios" id="fcTipoBox">
-                            <label class="fc-radio"><input type="radio" name="tipo" value="R" checked
-                                onchange="fcNovaTipo()"> Receita</label>
-                            <label class="fc-radio"><input type="radio" name="tipo" value="P"
-                                onchange="fcNovaTipo()"> Despesa</label>
-                            <label class="fc-radio"><input type="radio" name="tipo" value="I"
-                                onchange="fcNovaTipo()"> Investimento</label>
-                            <label class="fc-radio"><input type="radio" name="tipo" value="T"
-                                onchange="fcNovaTipo()"> Transferência</label>
+
+        <div class="fc-wiz-abas" id="fcWizAbas"></div>
+
+        <form method="POST" id="fcWizForm" action="{{ url_for('financeiro.categoria_nova') }}">
+            <input type="hidden" name="tipo"       id="wTipo">
+            <input type="hidden" name="grupo"      id="wGrupo">
+            <input type="hidden" name="grupo_novo" id="wGrupoNovo">
+            <input type="hidden" name="pai_id"     id="wPai">
+
+            <div class="modal-body fc-wiz-corpo">
+                <p class="fc-wiz-passo" id="fcWizPasso"></p>
+
+                <!-- PASSO tipo -->
+                <div class="fc-wiz-tela" data-passo="tipo">
+                    <div class="fc-cartoes">
+                        <button type="button" class="fc-cartao" data-valor="R" onclick="fcWizTipo('R')">
+                            <span class="fc-cartao-bolha" style="background:#dcfce7; color:#15803d;">
+                                <i class="fas fa-arrow-trend-up"></i></span>
+                            <span class="fc-cartao-txt"><b>Receita</b>
+                                <small>dinheiro que entra pelo serviço</small></span>
+                            <i class="fas fa-check fc-cartao-ok"></i>
+                        </button>
+                        <button type="button" class="fc-cartao" data-valor="P" onclick="fcWizTipo('P')">
+                            <span class="fc-cartao-bolha" style="background:#fee2e2; color:#b91c1c;">
+                                <i class="fas fa-arrow-trend-down"></i></span>
+                            <span class="fc-cartao-txt"><b>Despesa</b>
+                                <small>custo do mês, entra no resultado</small></span>
+                            <i class="fas fa-check fc-cartao-ok"></i>
+                        </button>
+                        <button type="button" class="fc-cartao" data-valor="I" onclick="fcWizTipo('I')">
+                            <span class="fc-cartao-bolha" style="background:#e0f2fe; color:#0369a1;">
+                                <i class="fas fa-box-archive"></i></span>
+                            <span class="fc-cartao-txt"><b>Investimento</b>
+                                <small>sai do caixa e vira bem, não despesa</small></span>
+                            <i class="fas fa-check fc-cartao-ok"></i>
+                        </button>
+                        <button type="button" class="fc-cartao" data-valor="T" onclick="fcWizTipo('T')">
+                            <span class="fc-cartao-bolha" style="background:#f1f5f9; color:#475569;">
+                                <i class="fas fa-right-left"></i></span>
+                            <span class="fc-cartao-txt"><b>Transferência</b>
+                                <small>dinheiro seu mudando de conta</small></span>
+                            <i class="fas fa-check fc-cartao-ok"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PASSO grupo -->
+                <div class="fc-wiz-tela" data-passo="grupo">
+                    <div class="fc-wiz-busca">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="fcWizBuscaGrupo" placeholder="PROCURAR GRUPO"
+                               oninput="fcWizPintaGrupos()" autocomplete="off">
+                    </div>
+                    <div class="fc-cartoes" id="fcWizGrupos"></div>
+                    <div id="fcWizGrupoNovoBox" style="display:none; margin-top:10px;">
+                        <label class="fc-passo-lbl">Nome do grupo novo</label>
+                        <input type="text" id="fcWizGrupoNovoInput" class="form-control"
+                               placeholder="Ex.: Marketing" oninput="fcWizPassos()">
+                        <small class="fc-dica">Grupo novo de despesa entra no bloco
+                            operacional do DRE, depois dos existentes. "Impostos sobre
+                            serviço" e "Financeiras" têm posição fixa.</small>
+                    </div>
+                </div>
+
+                <!-- PASSO nivel -->
+                <div class="fc-wiz-tela" data-passo="nivel">
+                    <div class="fc-cartoes">
+                        <button type="button" class="fc-cartao" data-valor="cat" onclick="fcWizNivel('cat')">
+                            <span class="fc-cartao-bolha" style="background:#eef2f0; color:#0f3d2e;">
+                                <i class="fas fa-folder"></i></span>
+                            <span class="fc-cartao-txt"><b>Categoria de <span id="fcWizAlvo">—</span></b>
+                                <small>a coisa: um veículo, um fornecedor, um serviço</small></span>
+                            <i class="fas fa-check fc-cartao-ok"></i>
+                        </button>
+                        <button type="button" class="fc-cartao" data-valor="sub" id="fcWizCartaoSub"
+                                onclick="fcWizNivel('sub')">
+                            <span class="fc-cartao-bolha" style="background:#eef2f0; color:#0f3d2e;">
+                                <i class="fas fa-turn-up fa-rotate-90"></i></span>
+                            <span class="fc-cartao-txt"><b>Subcategoria</b>
+                                <small>o tipo de gasto de uma categoria: abastecimento, documentos</small></span>
+                            <i class="fas fa-check fc-cartao-ok"></i>
+                        </button>
+                    </div>
+                    <div id="fcWizMaeBox" style="display:none; margin-top:12px;">
+                        <label class="fc-passo-lbl">Dentro de qual categoria</label>
+                        <div class="fc-wiz-busca">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="fcWizBuscaMae" placeholder="PROCURAR CATEGORIA"
+                                   oninput="fcWizPintaMaes()" autocomplete="off">
                         </div>
+                        <div class="fc-cartoes" id="fcWizMaes"></div>
                     </div>
+                    <small class="fc-dica" id="fcWizSemMae" style="display:none;">
+                        Esse grupo ainda não tem nenhuma categoria — crie a primeira
+                        antes de pendurar uma subcategoria nela.
+                    </small>
                 </div>
 
-                <div class="fc-passo">
-                    <span class="fc-passo-n">2</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Grupo <small>— a linha do DRE</small></label>
-                        <select name="grupo" id="fcGrupo" class="form-control" onchange="fcNovaGrupo()">
-                            {% for g in grupos %}
-                            <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
-                            {% endfor %}
-                            <option value="">— criar grupo novo —</option>
-                        </select>
-                        <div id="fcGrupoNovoBox" style="display:none; margin-top:8px;">
-                            <input type="text" name="grupo_novo" id="fcGrupoNovoInput" class="form-control"
-                                   placeholder="Nome do grupo novo. Ex.: Marketing">
-                            <small class="fc-dica">Grupo novo de despesa entra no bloco operacional
-                                do DRE, depois dos existentes. "Impostos sobre serviço" e
-                                "Financeiras" têm posição fixa.</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="fc-passo">
-                    <span class="fc-passo-n">3</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Onde ela entra</label>
-                        <label class="fc-nivel">
-                            <input type="radio" name="nivel" value="cat" checked onchange="fcNovaNivel()">
-                            <span>Categoria nova em <b id="fcAlvoGrupo">—</b></span>
-                        </label>
-                        <label class="fc-nivel" id="fcNivelSubBox">
-                            <input type="radio" name="nivel" value="sub" id="fcNivelSub" onchange="fcNovaNivel()">
-                            <span>Subcategoria de uma categoria desse grupo</span>
-                        </label>
-                        <select name="pai_id" id="fcPai" class="form-control"
-                                style="display:none; margin-top:7px;" disabled>
-                            {% for pp in pais %}
-                            <option value="{{ pp.id }}" data-tipo="{{ pp.tipo }}"
-                                    data-grupo="{{ pp.grupo }}">{{ pp.nome }}</option>
-                            {% endfor %}
-                        </select>
-                        <small class="fc-dica" id="fcSemMae" style="display:none;">
-                            Esse grupo ainda não tem nenhuma categoria — crie a primeira
-                            antes de pendurar uma subcategoria nela.
-                        </small>
-                    </div>
-                </div>
-
-                <div class="fc-passo">
-                    <span class="fc-passo-n">4</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Nome</label>
-                        <input type="text" name="nome" class="form-control" required
-                               placeholder="Ex.: Anúncios online">
-                    </div>
+                <!-- PASSO nome -->
+                <div class="fc-wiz-tela" data-passo="nome">
+                    <div class="fc-wiz-resumo" id="fcWizResumo"></div>
+                    <label class="fc-passo-lbl">Nome</label>
+                    <input type="text" name="nome" id="fcWizNome" class="form-control"
+                           placeholder="Ex.: Anúncios online" oninput="fcWizPassos()"
+                           autocomplete="off">
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="fcFecharNova()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Criar</button>
+
+            <div class="modal-footer fc-wiz-pe">
+                <button type="button" class="btn btn-outline" id="fcWizVoltar"
+                        onclick="fcWizAndar(-1)">Voltar</button>
+                <button type="button" class="btn btn-primary" id="fcWizSeguir"
+                        onclick="fcWizAndar(1)">Continuar</button>
+                <button type="submit" class="btn btn-primary" id="fcWizGravar"
+                        style="display:none;">Criar</button>
             </div>
         </form>
     </div>
@@ -162,25 +199,98 @@
 .fc-dica { display:block; margin-top:5px; font-size:11px; color:#7d968a;
     line-height:1.4; }
 
-/* ---- modal em cascata: cada passo numerado ---- */
-.fc-passo { display:flex; gap:11px; padding:11px 0; border-top:1px solid #f1f5f9; }
-.fc-passo:first-child { border-top:0; padding-top:2px; }
-.fc-passo-n { flex:0 0 22px; height:22px; border-radius:99px; background:#eef2f0;
-    color:#5b7468; font-size:11px; font-weight:800; display:flex;
-    align-items:center; justify-content:center; margin-top:2px; }
-.fc-passo-corpo { flex:1 1 auto; min-width:0; }
+/* ================= ASSISTENTE DE PASSOS =================
+   Um passo por tela, como o app de fretes que o Anderson usa. A lista de
+   escolhas e montada em JS, NAO com <option> escondida: o Safari do iPhone
+   ignora `hidden` e `disabled` em <option>, e a lista de maes de "Veiculos"
+   chegava no telefone dele com categorias de "Despesa com Pessoal" junto.
+   Cartao que nao pertence ao passo nao existe no DOM. */
+#fcWiz { display:none; }
+#fcWiz.aberto { display:block; }
+.fc-wiz { max-width:560px; display:flex; flex-direction:column;
+    max-height:calc(100vh - 10%); }
+/* O corpo e o rodape moram DENTRO do <form>. Sem o form ser tambem uma
+   coluna de flex, a altura da folha parava nele e nao chegava neles: o
+   corpo crescia com o conteudo e empurrava Voltar/Continuar para fora da
+   tela, justo no passo com mais cartoes. */
+#fcWizForm { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.fc-wiz-abas { display:flex; gap:6px; padding:0 22px 12px; }
+.fc-wiz-aba { flex:1 1 0; min-width:0; }
+.fc-wiz-aba i { display:block; height:3px; border-radius:99px; background:#e2e8f0; }
+.fc-wiz-aba span { display:block; font-size:10.5px; font-weight:700; color:#b6c2bb;
+    margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fc-wiz-aba.feita i, .fc-wiz-aba.agora i { background:var(--primary-green,#00A85A); }
+.fc-wiz-aba.feita span { color:#5b7468; cursor:pointer; }
+.fc-wiz-aba.agora span { color:#0f3d2e; font-weight:800; }
+.fc-wiz-passo { font-size:12px; color:#7d968a; margin:0 0 12px; }
+.fc-wiz-passo b { display:block; font-size:17px; font-weight:800; color:#0f3d2e;
+    margin-top:1px; }
+.fc-wiz-corpo { flex:1 1 auto; min-height:0; max-height:min(56vh, 460px);
+    overflow-y:auto; }
+.fc-wiz-tela { display:none; }
+.fc-wiz-tela.agora { display:block; }
+
+.fc-cartoes { display:flex; flex-direction:column; gap:8px; }
+.fc-cartao { display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+    padding:12px 14px; border:1.5px solid #e2e8f0; border-radius:12px;
+    background:#fff; cursor:pointer; font-family:inherit; }
+.fc-cartao:hover { border-color:#86efac; background:#f8fdfa; }
+.fc-cartao.escolhido { border-color:var(--primary-green,#00A85A); background:#f0fdf4;
+    box-shadow:0 0 0 1px var(--primary-green,#00A85A) inset; }
+.fc-cartao-bolha { flex:0 0 34px; height:34px; border-radius:10px; display:flex;
+    align-items:center; justify-content:center; font-size:14px; }
+.fc-cartao-txt { flex:1 1 auto; min-width:0; }
+.fc-cartao-txt b { display:block; font-size:14px; font-weight:700; color:#1f2937; }
+.fc-cartao-txt small { display:block; font-size:11.5px; color:#8a9a91; margin-top:2px;
+    line-height:1.35; }
+.fc-cartao-ok { color:var(--primary-green,#00A85A); opacity:0; font-size:14px; }
+.fc-cartao.escolhido .fc-cartao-ok { opacity:1; }
+
+.fc-wiz-busca { display:flex; align-items:center; gap:8px; border:1.5px solid #e2e8f0;
+    border-radius:10px; padding:9px 13px; margin-bottom:10px; background:#f8fafc; }
+.fc-wiz-busca i { color:#94a3b8; font-size:12px; }
+.fc-wiz-busca input { flex:1 1 auto; min-width:0; border:0; outline:0; background:transparent;
+    font-family:inherit; font-size:12.5px; font-weight:700; color:#334155;
+    letter-spacing:.3px; }
+.fc-wiz-busca input::placeholder { color:#a8b5ad; font-weight:700; }
+
+.fc-wiz-resumo { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px;
+    padding:11px 13px; font-size:12.5px; color:#166534; margin-bottom:14px;
+    line-height:1.5; }
+.fc-wiz-resumo b { font-weight:800; }
+.fc-wiz-vazio { text-align:center; color:#9ca3af; font-size:12.5px; padding:22px 10px; }
+.fc-wiz-pe { display:flex; gap:9px; }
+.fc-wiz-pe .btn { flex:1 1 auto; justify-content:center; }
 .fc-passo-lbl { display:block; font-size:10px; font-weight:800; letter-spacing:.5px;
     text-transform:uppercase; color:#94a3b8; margin-bottom:6px; }
-.fc-passo-lbl small { font-weight:700; text-transform:none; letter-spacing:0; }
-.fc-radios { display:flex; flex-wrap:wrap; gap:6px; }
-.fc-radio { display:inline-flex; align-items:center; gap:6px; padding:6px 12px;
-    border:1.5px solid #e2e8f0; border-radius:99px; font-size:12.5px;
-    font-weight:700; color:#475569; cursor:pointer; }
-.fc-radio:has(input:checked) { border-color:#86efac; background:#f0fdf4; color:#15803d; }
-.fc-nivel { display:flex; align-items:flex-start; gap:8px; font-size:13px;
-    color:#334155; cursor:pointer; padding:4px 0; }
-.fc-nivel input { margin-top:3px; }
-.fc-nivel.fc-morta { opacity:.45; cursor:not-allowed; }
+
+/* No celular vira FOLHA que sobe de baixo, como no app de fretes: o
+   assistente ocupa a tela, o corpo rola por dentro e o rodape fica colado.
+   Sem isso o Voltar/Continuar caia abaixo da dobra no passo das maes — o
+   passo com mais cartoes e justamente o que precisa do botao. */
+@media (max-width: 768px) {
+    /* a folha e posicionada, nao alinhada por flex no pai: mexer no
+       display do #fcWiz brigaria com o style inline que abre e fecha. */
+    /* a folha sobe de baixo. Quem abre e fecha e a CLASSE, nao o style
+       inline: com o display no CSS, o `align-items:flex-end` do pai pode
+       existir sem brigar com o JS. */
+    #fcWiz.aberto { display:flex; align-items:flex-end; }
+    .fc-wiz { margin:0; width:100%; max-width:none; max-height:92vh;
+        border-radius:18px 18px 0 0; display:flex; flex-direction:column;
+        animation:none; }
+    .fc-wiz .modal-header { padding:16px 18px 12px; flex:0 0 auto; }
+    .fc-wiz-abas { padding:0 18px 12px; flex:0 0 auto; }
+    /* min-height:0 e obrigatorio: item de flex nao encolhe abaixo do
+       proprio conteudo sem isso, e o corpo empurrava o rodape para fora da
+       tela — Voltar e Continuar sumiam justo no passo com mais cartoes. */
+    .fc-wiz-corpo { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto;
+        padding:0 18px 18px; -webkit-overflow-scrolling:touch; }
+    .fc-wiz-pe { flex:0 0 auto; padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+        background:#fff; }
+    .fc-wiz-pe .btn { padding:13px 16px; font-size:15px; }
+    .fc-cartao { padding:14px; }
+    .fc-cartao-txt b { font-size:15px; }
+}
 
 /* ---- barra de filtro: a mesma .fin-escopo das outras telas ---- */
 .fc-chip-bt { font-family:inherit; cursor:pointer; }
@@ -251,7 +361,7 @@
         <p class="page-subtitle">{{ total_ativas }} categorias · o grupo é a linha do DRE</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-primary" onclick="fcAbrirNova()">
+        <button class="btn btn-primary" onclick="fcWizNovo()">
             <i class="fas fa-plus"></i> Nova Categoria
         </button>
         <button class="btn btn-outline" onclick="ccAbrirNovo()">
@@ -347,7 +457,7 @@
                                 data-id="{{ c.id }}" data-nome="{{ c.nome }}"
                                 data-tipo="{{ c.tipo }}" data-grupo="{{ c.grupo }}"
                                 data-pai="{{ c.pai_id or '' }}"
-                                onclick="fcAbrirRenomear(this)">
+                                onclick="fcWizEditar(this)">
                             <i class="fas fa-pen"></i> Editar
                         </button>
                         <form method="POST" style="display:inline;"
@@ -461,77 +571,12 @@
     </div>
 </div>
 
-<!-- ── Modal: renomear ────────────────────────────────────────────── -->
-<div id="fcModalRenomear" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:460px;">
-        <div class="modal-header">
-            <h3>Editar Categoria</h3>
-            <button class="modal-close" onclick="fcFecharRenomear()">&times;</button>
-        </div>
-        <form method="POST" id="fcFormRenomear" action="">
-            <div class="modal-body">
-                {# A MESMA cascata do modal de criar: o grupo filtra as maes.
-                   Ter duas gramaticas para a mesma ideia obriga a pessoa a
-                   aprender a tela duas vezes. #}
-                <div class="fc-passo">
-                    <span class="fc-passo-n">1</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Nome</label>
-                        <input type="text" name="nome" id="fcRenomearNome"
-                               class="form-control" required>
-                    </div>
-                </div>
-                <div class="fc-passo">
-                    <span class="fc-passo-n">2</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Grupo <small>— a linha do DRE</small></label>
-                        <select name="grupo" id="fcEditarGrupo" class="form-control"
-                                onchange="fcEditarGrupoMudou()">
-                            {% for g in grupos %}
-                            <option value="{{ g.grupo }}" data-tipo="{{ g.tipo }}">{{ g.grupo }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="fc-passo">
-                    <span class="fc-passo-n">3</span>
-                    <div class="fc-passo-corpo">
-                        <label class="fc-passo-lbl">Onde ela fica</label>
-                        <label class="fc-nivel">
-                            <input type="radio" name="nivel_ed" value="cat" checked
-                                   onchange="fcEditarModo()">
-                            <span>Categoria de <b id="fcEdAlvoGrupo">—</b></span>
-                        </label>
-                        <label class="fc-nivel" id="fcEdNivelSubBox">
-                            <input type="radio" name="nivel_ed" value="sub" id="fcEdNivelSub"
-                                   onchange="fcEditarModo()">
-                            <span>Subcategoria de uma categoria desse grupo</span>
-                        </label>
-                        <select name="pai_id" id="fcEditarPai" class="form-control"
-                                style="display:none; margin-top:7px;" disabled>
-                            {% for pp in pais %}
-                            <option value="{{ pp.id }}" data-tipo="{{ pp.tipo }}"
-                                    data-grupo="{{ pp.grupo }}">{{ pp.nome }}</option>
-                            {% endfor %}
-                        </select>
-                        <small class="fc-dica" id="fcEdSemMae" style="display:none;">
-                            Esse grupo não tem nenhuma outra categoria para ser a mãe.
-                        </small>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="fcFecharRenomear()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Salvar</button>
-            </div>
-        </form>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 var FC_URL_EDITAR = "{{ url_for('financeiro.categoria_editar', cat_id=0) }}";
+var FC_URL_NOVA   = "{{ url_for('financeiro.categoria_nova') }}";
 
 // =====================================================================
 // FILTROS DA TELA. Tres coisas decidem o que aparece: o tipo escolhido na
@@ -602,17 +647,64 @@ function fcGrupo(n) {
 document.addEventListener('DOMContentLoaded', fcAplica);
 
 // =====================================================================
-// MODAL EM CASCATA. Cada passo so oferece o que o passo anterior permite.
-// A versao anterior mostrava, num unico select, TODAS as categorias de
-// todos os grupos como candidatas a mae — escolher ali era adivinhar.
+// ASSISTENTE DE CATEGORIA. Um passo por tela, para criar e para editar.
+//
+// O plano vem do servidor como DADO, nao como <option>: o Safari do iPhone
+// nao esconde <option hidden> nem <option disabled>, e a lista de maes de
+// "Veiculos" chegava no telefone com categorias de "Despesa com Pessoal"
+// junto. Montando os cartoes em JS, o que nao pertence ao passo nao existe
+// no DOM — nao ha o que o navegador deixar de esconder.
 // =====================================================================
-function fcAbrirNova() {
-    document.getElementById('fcModalNova').style.display = 'block';
-    fcNovaTipo();
+var FC_GRUPOS = {{ grupos | tojson }};   // [{tipo, grupo, ordem, qtd}]
+var FC_MAES   = {{ pais | tojson }};     // categorias de 1o nivel
+
+var W = {
+    modo: 'novo', id: null, passos: [], i: 0,
+    tipo: null, grupo: null, grupoNovo: '', nivel: 'cat', mae: null,
+};
+
+var W_ROTULO = { tipo: 'Tipo', grupo: 'Grupo', nivel: 'N\u00edvel', nome: 'Nome' };
+var W_TIPO_NOME = { R: 'Receita', P: 'Despesa', I: 'Investimento', T: 'Transfer\u00eancia' };
+
+// ---------- abrir ----------------------------------------------------
+function fcWizNovo() {
+    W = { modo: 'novo', id: null, passos: ['tipo', 'grupo', 'nivel', 'nome'], i: 0,
+          tipo: 'P', grupo: null, grupoNovo: '', nivel: 'cat', mae: null };
+    document.getElementById('fcWizTitulo').textContent = 'Nova Categoria';
+    document.getElementById('fcWizForm').action = FC_URL_NOVA;
+    document.getElementById('fcWizGravar').textContent = 'Criar';
+    document.getElementById('fcWizNome').value = '';
+    fcWizLimpaBuscas();
+    fcWizPintaGrupos();
+    fcWizDesenha();
+    document.getElementById('fcWiz').classList.add('aberto');
 }
-function fcFecharNova() {
-    document.getElementById('fcModalNova').style.display = 'none';
+
+// Editar comeca no passo 2: o tipo de uma categoria nao muda. Despesa nao
+// vira receita mudando de grupo — o grupo e do tipo, nao o contrario.
+function fcWizEditar(el) {
+    W = { modo: 'editar', id: el.getAttribute('data-id'),
+          passos: ['grupo', 'nivel', 'nome'], i: 0,
+          tipo: el.getAttribute('data-tipo'),
+          grupo: el.getAttribute('data-grupo'),
+          grupoNovo: '',
+          nivel: el.getAttribute('data-pai') ? 'sub' : 'cat',
+          mae: el.getAttribute('data-pai') || null };
+    document.getElementById('fcWizTitulo').textContent = 'Editar Categoria';
+    document.getElementById('fcWizForm').action =
+        FC_URL_EDITAR.replace('/0/', '/' + W.id + '/');
+    document.getElementById('fcWizGravar').textContent = 'Salvar';
+    document.getElementById('fcWizNome').value = el.getAttribute('data-nome');
+    fcWizLimpaBuscas();
+    fcWizPintaGrupos();
+    fcWizDesenha();
+    document.getElementById('fcWiz').classList.add('aberto');
 }
+
+function fcWizFechar() { document.getElementById('fcWiz').classList.remove('aberto'); }
+
+// O modal de CENTRO DE CUSTO nao virou assistente: sao dois campos, e um
+// assistente de dois passos seria cerimonia sem motivo.
 function ccAbrirNovo() {
     document.getElementById('ccModalNovo').style.display = 'block';
 }
@@ -620,146 +712,203 @@ function ccFecharNovo() {
     document.getElementById('ccModalNovo').style.display = 'none';
 }
 
-function fcTipoEscolhido() {
-    var r = document.querySelector('#fcTipoBox input[name="tipo"]:checked');
-    return r ? r.value : 'R';
+function fcWizLimpaBuscas() {
+    document.getElementById('fcWizBuscaGrupo').value = '';
+    document.getElementById('fcWizBuscaMae').value = '';
+    document.getElementById('fcWizGrupoNovoInput').value = '';
+    document.getElementById('fcWizGrupoNovoBox').style.display = 'none';
 }
 
-// PASSO 1 -> 2: o tipo decide QUAIS GRUPOS existem.
-function fcNovaTipo() {
-    var tipo = fcTipoEscolhido();
-    var sel = document.getElementById('fcGrupo');
-    var primeiro = null;
-    Array.prototype.forEach.call(sel.options, function (o) {
-        if (o.value === '') return;                 // "criar grupo novo" sempre fica
-        var ok = o.getAttribute('data-tipo') === tipo;
-        o.hidden = !ok;
-        o.disabled = !ok;
-        if (ok && primeiro === null) primeiro = o.value;
+// ---------- desenhar o passo atual -----------------------------------
+function fcWizDesenha() {
+    var passo = W.passos[W.i];
+
+    var abas = W.passos.map(function (nome, k) {
+        var cls = k < W.i ? 'feita' : (k === W.i ? 'agora' : '');
+        return '<div class="fc-wiz-aba ' + cls + '" ' +
+               (k < W.i ? 'onclick="fcWizIr(' + k + ')"' : '') + '>' +
+               '<i></i><span>' + W_ROTULO[nome] + '</span></div>';
+    }).join('');
+    document.getElementById('fcWizAbas').innerHTML = abas;
+
+    document.getElementById('fcWizPasso').innerHTML =
+        'Passo ' + (W.i + 1) + ' de ' + W.passos.length + ' \u2014 <b>' +
+        W_ROTULO[passo] + '</b>';
+
+    document.querySelectorAll('.fc-wiz-tela').forEach(function (t) {
+        t.classList.toggle('agora', t.getAttribute('data-passo') === passo);
     });
-    var atual = sel.options[sel.selectedIndex];
-    if (!atual || atual.disabled) sel.value = (primeiro !== null) ? primeiro : '';
-    fcNovaGrupo();
+
+    if (passo === 'tipo') fcWizPintaTipos();
+    if (passo === 'grupo') fcWizPintaGrupos();
+    if (passo === 'nivel') fcWizPintaNivel();
+    if (passo === 'nome') fcWizPintaResumo();
+
+    document.getElementById('fcWizVoltar').style.display = W.i === 0 ? 'none' : '';
+    var ultimo = W.i === W.passos.length - 1;
+    document.getElementById('fcWizSeguir').style.display = ultimo ? 'none' : '';
+    document.getElementById('fcWizGravar').style.display = ultimo ? '' : 'none';
+    fcWizPassos();
 }
 
-// PASSO 2 -> 3: o grupo decide QUAIS MAES existem.
-function fcNovaGrupo() {
-    var tipo = fcTipoEscolhido();
-    var grupo = document.getElementById('fcGrupo').value;
-    var grupoNovo = (grupo === '');
+// Continuar so acende quando o passo esta respondido: avancar sem escolha
+// levaria a pessoa a um passo montado a partir de nada.
+function fcWizPassos() {
+    var passo = W.passos[W.i], ok = true;
+    if (passo === 'tipo') ok = !!W.tipo;
+    if (passo === 'grupo') ok = W.grupo === '' ?
+        !!document.getElementById('fcWizGrupoNovoInput').value.trim() : !!W.grupo;
+    if (passo === 'nivel') ok = W.nivel === 'cat' || !!W.mae;
+    if (passo === 'nome') ok = !!document.getElementById('fcWizNome').value.trim();
+    var bt = document.getElementById(W.i === W.passos.length - 1 ? 'fcWizGravar' : 'fcWizSeguir');
+    bt.disabled = !ok;
+    bt.style.opacity = ok ? '' : '.45';
+}
 
-    document.getElementById('fcGrupoNovoBox').style.display = grupoNovo ? '' : 'none';
-    document.getElementById('fcGrupoNovoInput').required = grupoNovo;
+function fcWizAndar(d) {
+    if (d > 0 && document.getElementById('fcWizSeguir').disabled) return;
+    W.i = Math.max(0, Math.min(W.passos.length - 1, W.i + d));
+    fcWizDesenha();
+}
+function fcWizIr(k) { W.i = k; fcWizDesenha(); }
 
-    var pai = document.getElementById('fcPai');
-    var candidatas = 0;
-    Array.prototype.forEach.call(pai.options, function (o) {
-        var ok = !grupoNovo && o.getAttribute('data-tipo') === tipo &&
-                 o.getAttribute('data-grupo') === grupo;
-        o.hidden = !ok;
-        o.disabled = !ok;
-        if (ok) { if (!candidatas) pai.value = o.value; candidatas++; }
+// ---------- passo 1: tipo --------------------------------------------
+function fcWizPintaTipos() {
+    document.querySelectorAll('[data-passo="tipo"] .fc-cartao').forEach(function (c) {
+        c.classList.toggle('escolhido', c.getAttribute('data-valor') === W.tipo);
     });
+}
+function fcWizTipo(t) {
+    if (W.tipo !== t) { W.grupo = null; W.mae = null; W.nivel = 'cat'; }
+    W.tipo = t;
+    fcWizPintaTipos();
+    fcWizPintaGrupos();
+    fcWizPassos();
+}
 
-    document.getElementById('fcAlvoGrupo').textContent =
-        grupoNovo ? 'um grupo novo' : grupo;
+// ---------- passo 2: grupo -------------------------------------------
+function fcWizPintaGrupos() {
+    var termo = (document.getElementById('fcWizBuscaGrupo').value || '')
+        .trim().toLowerCase();
+    var lista = FC_GRUPOS.filter(function (g) {
+        return g.tipo === W.tipo &&
+               (!termo || g.grupo.toLowerCase().indexOf(termo) >= 0);
+    });
+    var html = lista.map(function (g) {
+        var sel = (g.grupo === W.grupo) ? ' escolhido' : '';
+        return '<button type="button" class="fc-cartao' + sel + '" ' +
+            'onclick="fcWizGrupo(' + JSON.stringify(g.grupo).replace(/"/g, '&quot;') + ')">' +
+            '<span class="fc-cartao-bolha" style="background:#eef2f0; color:#0f3d2e;">' +
+            '<i class="fas fa-layer-group"></i></span>' +
+            '<span class="fc-cartao-txt"><b>' + fcEsc(g.grupo) + '</b>' +
+            '<small>' + g.qtd + ' categoria' + (g.qtd === 1 ? '' : 's') + '</small></span>' +
+            '<i class="fas fa-check fc-cartao-ok"></i></button>';
+    }).join('');
 
-    // Grupo sem nenhuma categoria — ou grupo que ainda nem existe — nao pode
-    // receber subcategoria: nao ha em que pendura-la.
-    var caixaSub = document.getElementById('fcNivelSubBox');
-    var radioSub = document.getElementById('fcNivelSub');
-    radioSub.disabled = (candidatas === 0);
-    caixaSub.classList.toggle('fc-morta', candidatas === 0);
-    document.getElementById('fcSemMae').style.display =
-        (candidatas === 0 && !grupoNovo) ? '' : 'none';
-    if (candidatas === 0) {
-        document.querySelector('input[name="nivel"][value="cat"]').checked = true;
+    // criar grupo novo so faz sentido criando: mover categoria para um grupo
+    // que ainda nao existe e outra conversa, e nao e a desta tela.
+    if (W.modo === 'novo' && !termo) {
+        html += '<button type="button" class="fc-cartao' +
+            (W.grupo === '' ? ' escolhido' : '') + '" onclick="fcWizGrupo(\'\')">' +
+            '<span class="fc-cartao-bolha" style="background:#fef3c7; color:#92400e;">' +
+            '<i class="fas fa-plus"></i></span>' +
+            '<span class="fc-cartao-txt"><b>Criar um grupo novo</b>' +
+            '<small>uma linha nova no DRE</small></span>' +
+            '<i class="fas fa-check fc-cartao-ok"></i></button>';
     }
-    fcNovaNivel();
+    if (!html) html = '<p class="fc-wiz-vazio">Nenhum grupo com esse nome.</p>';
+    document.getElementById('fcWizGrupos').innerHTML = html;
 }
 
-// PASSO 3: categoria ou subcategoria. O select da mae fica DESABILITADO
-// quando e categoria — campo desabilitado nao e enviado, entao a rota nunca
-// recebe um pai_id que o usuario nao escolheu.
-function fcNovaNivel() {
-    var sub = document.querySelector('input[name="nivel"]:checked').value === 'sub';
-    var pai = document.getElementById('fcPai');
-    pai.style.display = sub ? '' : 'none';
-    pai.disabled = !sub;
+function fcWizGrupo(g) {
+    if (W.grupo !== g) { W.mae = null; W.nivel = 'cat'; }
+    W.grupo = g;
+    document.getElementById('fcWizGrupoNovoBox').style.display = (g === '') ? '' : 'none';
+    fcWizPintaGrupos();
+    fcWizPassos();
 }
 
-var FC_ED_ID = '';      // quem esta sendo editado: nao pode ser mae de si mesma
-
-function fcAbrirRenomear(el) {
-    var form = document.getElementById('fcFormRenomear');
-    FC_ED_ID = el.getAttribute('data-id');
-    form.action = FC_URL_EDITAR.replace('/0/', '/' + FC_ED_ID + '/');
-    document.getElementById('fcRenomearNome').value = el.getAttribute('data-nome');
-
-    // O grupo so pode mudar DENTRO do tipo: categoria de despesa nao vira
-    // receita mudando de grupo, e o modelo herdaria o tipo errado.
-    var tipo = el.getAttribute('data-tipo');
-    var sel = document.getElementById('fcEditarGrupo');
-    Array.prototype.forEach.call(sel.options, function (o) {
-        var ok = o.getAttribute('data-tipo') === tipo;
-        o.hidden = !ok;
-        o.disabled = !ok;
+// ---------- passo 3: categoria ou subcategoria ------------------------
+function fcWizMaesDoGrupo() {
+    return FC_MAES.filter(function (m) {
+        return m.tipo === W.tipo && m.grupo === W.grupo &&
+               String(m.id) !== String(W.id);      // nao pode ser mae de si mesma
     });
-    sel.value = el.getAttribute('data-grupo') || '';
-
-    var pai = el.getAttribute('data-pai') || '';
-    document.querySelector('input[name="nivel_ed"][value="' + (pai ? 'sub' : 'cat') + '"]')
-        .checked = true;
-    fcEditarGrupoMudou(pai);
-    document.getElementById('fcModalRenomear').style.display = 'block';
-    document.getElementById('fcRenomearNome').focus();
 }
 
-// O grupo escolhido decide quais maes existem — as DESSE grupo, menos ela
-// mesma. Um select com as 142 categorias de todos os grupos era adivinhacao.
-function fcEditarGrupoMudou(paiDesejado) {
-    var sel = document.getElementById('fcEditarGrupo');
-    var grupo = sel.value;
-    var opt = sel.options[sel.selectedIndex];
-    var tipo = opt ? opt.getAttribute('data-tipo') : '';
-    var pai = document.getElementById('fcEditarPai');
-    var candidatas = 0, primeira = null;
-    Array.prototype.forEach.call(pai.options, function (o) {
-        var ok = o.getAttribute('data-grupo') === grupo &&
-                 o.getAttribute('data-tipo') === tipo &&
-                 o.value !== FC_ED_ID;
-        o.hidden = !ok;
-        o.disabled = !ok;
-        if (ok) { candidatas++; if (primeira === null) primeira = o.value; }
+function fcWizPintaNivel() {
+    document.getElementById('fcWizAlvo').textContent =
+        (W.grupo === '' ? document.getElementById('fcWizGrupoNovoInput').value.trim()
+                        : W.grupo) || '\u2014';
+    var podeSub = fcWizMaesDoGrupo().length > 0;
+    var cartaoSub = document.getElementById('fcWizCartaoSub');
+    cartaoSub.disabled = !podeSub;
+    cartaoSub.style.opacity = podeSub ? '' : '.4';
+    document.getElementById('fcWizSemMae').style.display = podeSub ? 'none' : '';
+    if (!podeSub) W.nivel = 'cat';
+
+    document.querySelectorAll('[data-passo="nivel"] > .fc-cartoes .fc-cartao')
+        .forEach(function (c) {
+            c.classList.toggle('escolhido', c.getAttribute('data-valor') === W.nivel);
+        });
+    document.getElementById('fcWizMaeBox').style.display =
+        (W.nivel === 'sub' && podeSub) ? '' : 'none';
+    fcWizPintaMaes();
+}
+
+function fcWizNivel(n) {
+    if (n === 'sub' && document.getElementById('fcWizCartaoSub').disabled) return;
+    W.nivel = n;
+    if (n === 'cat') W.mae = null;
+    fcWizPintaNivel();
+    fcWizPassos();
+}
+
+function fcWizPintaMaes() {
+    var termo = (document.getElementById('fcWizBuscaMae').value || '')
+        .trim().toLowerCase();
+    var lista = fcWizMaesDoGrupo().filter(function (m) {
+        return !termo || m.nome.toLowerCase().indexOf(termo) >= 0;
     });
-    if (paiDesejado && !pai.querySelector('option[value="' + paiDesejado + '"][hidden]')) {
-        pai.value = paiDesejado;
-    } else if (primeira !== null) {
-        pai.value = primeira;
-    }
-
-    document.getElementById('fcEdAlvoGrupo').textContent = grupo || '\u2014';
-    var radioSub = document.getElementById('fcEdNivelSub');
-    radioSub.disabled = (candidatas === 0);
-    document.getElementById('fcEdNivelSubBox').classList.toggle('fc-morta', candidatas === 0);
-    document.getElementById('fcEdSemMae').style.display = candidatas === 0 ? '' : 'none';
-    if (candidatas === 0) {
-        document.querySelector('input[name="nivel_ed"][value="cat"]').checked = true;
-    }
-    fcEditarModo();
+    var html = lista.map(function (m) {
+        var sel = (String(m.id) === String(W.mae)) ? ' escolhido' : '';
+        return '<button type="button" class="fc-cartao' + sel + '" ' +
+            'onclick="fcWizMae(\'' + m.id + '\')">' +
+            '<span class="fc-cartao-txt"><b>' + fcEsc(m.nome) + '</b></span>' +
+            '<i class="fas fa-check fc-cartao-ok"></i></button>';
+    }).join('');
+    if (!html) html = '<p class="fc-wiz-vazio">Nenhuma categoria com esse nome.</p>';
+    document.getElementById('fcWizMaes').innerHTML = html;
 }
 
-// Subcategoria herda o grupo da mae; o select da mae so e enviado quando a
-// pessoa realmente escolheu "subcategoria".
-function fcEditarModo() {
-    var sub = document.querySelector('input[name="nivel_ed"]:checked').value === 'sub';
-    var pai = document.getElementById('fcEditarPai');
-    pai.style.display = sub ? '' : 'none';
-    pai.disabled = !sub;
+function fcWizMae(id) { W.mae = id; fcWizPintaMaes(); fcWizPassos(); }
+
+// ---------- passo 4: nome, com o resumo do que vai ser gravado --------
+function fcWizPintaResumo() {
+    var grupo = W.grupo === ''
+        ? document.getElementById('fcWizGrupoNovoInput').value.trim() + ' (grupo novo)'
+        : W.grupo;
+    var txt = '<b>' + W_TIPO_NOME[W.tipo] + '</b> \u00b7 grupo <b>' + fcEsc(grupo) + '</b>';
+    if (W.nivel === 'sub') {
+        var m = FC_MAES.filter(function (x) { return String(x.id) === String(W.mae); })[0];
+        txt += '<br>subcategoria de <b>' + fcEsc(m ? m.nome : '?') + '</b>';
+    } else {
+        txt += '<br>categoria nova nesse grupo';
+    }
+    document.getElementById('fcWizResumo').innerHTML = txt;
+
+    // Os campos que a rota le sao preenchidos aqui, no ultimo passo — antes
+    // disso a escolha ainda pode mudar.
+    document.getElementById('wTipo').value = W.tipo;
+    document.getElementById('wGrupo').value = (W.grupo === '') ? '' : W.grupo;
+    document.getElementById('wGrupoNovo').value = (W.grupo === '')
+        ? document.getElementById('fcWizGrupoNovoInput').value.trim() : '';
+    document.getElementById('wPai').value = (W.nivel === 'sub' && W.mae) ? W.mae : '';
 }
 
-function fcFecharRenomear() {
-    document.getElementById('fcModalRenomear').style.display = 'none';
+function fcEsc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 var CC_URL_EDITAR = "{{ url_for('financeiro.centro_editar', cc_id=0) }}";

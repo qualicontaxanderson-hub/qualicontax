@@ -188,8 +188,9 @@ class FinCategoria:
         if tipo in FinCategoria.TIPOS:          # os QUATRO, nao so R e P
             cond, params = 'WHERE ativo = 1 AND tipo = %s', (tipo,)
         return execute_query(
-            f'SELECT tipo, grupo, MIN(ordem) AS ordem FROM fin_categorias '
-            f'{cond} GROUP BY tipo, grupo ORDER BY ordem', params,
+            f'SELECT tipo, grupo, MIN(ordem) AS ordem, COUNT(*) AS qtd '
+            f'  FROM fin_categorias {cond} '
+            f' GROUP BY tipo, grupo ORDER BY ordem', params,
             fetch=True) or []
 
     @staticmethod
