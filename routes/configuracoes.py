@@ -820,6 +820,11 @@ def usuario_link_gerar():
     # Log com o ID e o prefixo. O token inteiro não entra em log nenhum.
     logger.info('[qcolabore] link de cadastro id=%s prefixo=%s gerado por %s.',
                 link_id, token[:8], current_user.id)
+    # Um link de cadastro e uma porta de entrada: quem abriu tem de ficar
+    # registrado. O TOKEN nao entra no log — so o id e o prefixo.
+    registrar('escrita.gerou_link_cadastro', 'configuracoes',
+              tabela='usuarios_links_cadastro', registro_id=link_id,
+              depois={'prefixo': token[:8], 'validade_horas': VALIDADE_LINK_HORAS})
     return jsonify(ok=True, url=url, prefixo=token[:8],
                    validade_horas=VALIDADE_LINK_HORAS)
 
@@ -832,6 +837,9 @@ def usuario_link_revogar(link_id):
         return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
     if cadastro_token.revogar(link_id, current_user.id):
         logger.info('[qcolabore] link id=%s revogado por %s.', link_id, current_user.id)
+        registrar('escrita.revogou_link_cadastro', 'configuracoes',
+                  tabela='usuarios_links_cadastro', registro_id=link_id,
+                  depois={'revogado': True})
         return jsonify(ok=True)
     # rowcount 0: já usado, já revogado, ou inexistente — nenhum deles é erro
     # de servidor, e a tela precisa recarregar para mostrar o estado real.
@@ -1085,6 +1093,12 @@ def usuario_senha_link(uid):
 
     logger.info('[qcolabore] link de senha para usuário %s por %s (bloquear=%s).',
                 uid, current_user.id, int(bloquear))
+    # Link de senha abre uma porta para a conta de OUTRA pessoa: quem gerou e
+    # se bloqueou o acesso antigo tem de ficar registrado. O token nao entra.
+    registrar('escrita.gerou_link_senha', 'configuracoes',
+              tabela='usuarios', registro_id=uid,
+              depois={'prefixo': prefixo, 'bloqueou_acesso': bool(bloquear),
+                      'usuario': u.get('login') or ''})
     # nome/login vão junto para o modal montar a MENSAGEM PRONTA de WhatsApp —
     # o link cru no chat não diz de quem é (pedido do Anderson, 18/08/2026).
     return jsonify(ok=True, url=url, prefixo=prefixo, bloqueado=bool(bloquear),
@@ -1411,6 +1425,12 @@ def usuario_novo():
                 (uid, cid), fetch=False,
             )
 
+        registrar('escrita.criou_usuario', 'configuracoes',
+                  tabela='usuarios', registro_id=uid,
+                  depois={'nome': nome, 'login': login, 'email': email,
+                          'tipo': tipo, 'situacao': situacao, 'cargo': cargo,
+                          'perfis': sorted(int(p) for p in perfis_sel),
+                          'empresas': sorted(int(c) for c in empresas_sel)})
         flash(f'Usuário "{nome}" criado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
@@ -1520,6 +1540,23 @@ def usuario_editar(uid):
                 (uid, cid), fetch=False,
             )
 
+        # Quem mexeu em acesso tem de ficar registrado. Perfis e empresas
+        # entram como lista ordenada de ids: o diff do registrar mostra
+        # exatamente quais entraram e quais sairam. A SENHA nunca vai para o
+        # log — so o fato de ter sido trocada.
+        registrar('escrita.alterou_usuario', 'configuracoes',
+                  tabela='usuarios', registro_id=uid,
+                  antes={'nome': usuario.get('nome'), 'login': usuario.get('login'),
+                         'email': usuario.get('email'), 'tipo': usuario.get('tipo_usuario'),
+                         'situacao': usuario.get('situacao'), 'cargo': usuario.get('cargo'),
+                         'perfis': sorted(perfis_usuario),
+                         'empresas': sorted(empresas_usuario),
+                         'senha_trocada': False},
+                  depois={'nome': nome, 'login': login, 'email': email, 'tipo': tipo,
+                          'situacao': situacao, 'cargo': cargo,
+                          'perfis': sorted(int(p) for p in perfis_sel),
+                          'empresas': sorted(int(c) for c in empresas_sel),
+                          'senha_trocada': bool(nova_senha)})
         flash(f'Usuário "{nome}" atualizado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
@@ -1538,6 +1575,10 @@ def usuario_toggle(uid):
         return jsonify(ok=False, msg='Usuário não encontrado.'), 404
     nova = 'INATIVO' if u['situacao'] == 'ATIVO' else 'ATIVO'
     execute_query("UPDATE usuarios SET situacao=%s WHERE id=%s", (nova, uid), fetch=False)
+    # Tirar alguem do sistema e um ato de acesso tao serio quanto por.
+    registrar('escrita.alternou_usuario', 'configuracoes',
+              tabela='usuarios', registro_id=uid,
+              antes={'situacao': u['situacao']}, depois={'situacao': nova})
     return jsonify(ok=True, situacao=nova)
 
 
@@ -1585,6 +1626,10 @@ def perfil_novo():
                 (pid, cod), fetch=False,
             )
 
+        registrar('escrita.criou_perfil', 'configuracoes',
+                  tabela='perfis_acesso', registro_id=pid,
+                  depois={'nome': nome, 'descricao': descricao,
+                          'permissoes': sorted(perms_sel)})
         flash(f'Perfil "{nome}" criado com sucesso.', 'success')
         return redirect(url_for('configuracoes.perfis'))
 
@@ -1635,6 +1680,17 @@ def perfil_editar(pid):
                 (pid, cod), fetch=False,
             )
 
+        # A lista de permissoes vai inteira nos dois lados: o diff do
+        # registrar mostra quais entraram e quais sairam, que e a pergunta
+        # que se faz depois ("quem deu acesso ao financeiro para fulano?").
+        registrar('escrita.alterou_perfil', 'configuracoes',
+                  tabela='perfis_acesso', registro_id=pid,
+                  antes={'nome': perfil.get('nome'),
+                         'descricao': perfil.get('descricao'),
+                         'situacao': perfil.get('situacao'),
+                         'permissoes': sorted(perms_perfil)},
+                  depois={'nome': nome, 'descricao': descricao,
+                          'situacao': situacao, 'permissoes': sorted(perms_sel)})
         flash(f'Perfil "{nome}" atualizado com sucesso.', 'success')
         return redirect(url_for('configuracoes.perfis'))
 
@@ -1649,6 +1705,15 @@ def perfil_excluir(pid):
     if not p:
         flash('Perfil não encontrado.', 'danger')
         return redirect(url_for('configuracoes.perfis'))
+    # As permissoes do perfil vao para o log ANTES do DELETE: depois dele
+    # nao ha mais onde ler o que o perfil dava.
+    perms = [r['permissao_codigo'] for r in (execute_query(
+        "SELECT permissao_codigo FROM perfil_permissoes WHERE perfil_id = %s",
+        (pid,), fetch=True) or [])]
     execute_query("DELETE FROM perfis_acesso WHERE id=%s", (pid,), fetch=False)
+    registrar('escrita.excluiu_perfil', 'configuracoes',
+              tabela='perfis_acesso', registro_id=pid,
+              antes={'nome': p['nome'], 'permissoes': sorted(perms)},
+              depois={'nome': None})
     flash(f'Perfil "{p["nome"]}" excluído.', 'success')
     return redirect(url_for('configuracoes.perfis'))
