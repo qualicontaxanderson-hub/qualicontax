@@ -75,11 +75,19 @@
 .ex-abas-dir { margin-left:auto; display:flex; gap:8px; padding-bottom:6px; }
 
 /* ---- tabela ---- */
-.ex-caixa { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+/* SEM overflow:hidden. Ele fazia esta caixa virar o container de rolagem, e
+   o cabecalho do dia grudava no topo DELA em vez do topo da tela — parecia
+   fixo e mostrava o dia errado. O canto arredondado volta pelos filhos. */
+.ex-caixa { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; }
 .ex-lista { display:flex; flex-direction:column; }
+.ex-lista > :first-child { border-radius:11px 11px 0 0; }
+.ex-lista > :last-child { border-radius:0 0 11px 11px; }
 
-/* O DIA aparece uma vez, no alto, e gruda no topo enquanto o dia rola. */
-.ex-dia { position:sticky; top:0; z-index:2; background:#e6ede9;
+/* O DIA aparece uma vez, no alto, e gruda ENQUANTO o dia rola — abaixo das
+   duas barras que ja sao sticky: .top-bar (60px) e .nav-fiscal (49px).
+   Medido no Chromium; com top:0 o cabecalho sumia atras do verde. */
+.ex-dia { position:sticky; top:calc(var(--top-bar-height, 60px) + 49px); z-index:3;
+  background:#e6ede9;
   border-top:1px solid #dde5e0; border-bottom:1px solid #dde5e0;
   padding:8px 15px; display:flex; align-items:baseline; gap:10px; }
 .ex-dia:first-child { border-top:0; }
@@ -142,6 +150,20 @@
 .ex-rodape { font-size:12px; color:#5b7468; padding:10px 14px; border-top:1px solid #f1f5f9; }
 .ex-vazio { text-align:center; color:#6b7280; padding:40px 16px; }
 .ex-mob { display:none; }
+
+/* NO COMPUTADOR os campos deitam: 2, 3 e 4-5 lado a lado, com a descricao
+   por cima ocupando a linha toda. A ordem que era de cima para baixo vira da
+   esquerda para a direita — o bloco deixa de ocupar meia tela. */
+@media (min-width: 1024px) {
+  .ex-corpo { max-width:none; display:grid; gap:9px 26px;
+    grid-template-columns:minmax(190px,0.9fr) minmax(210px,1.2fr) minmax(240px,1.1fr);
+    grid-template-areas:'desc desc desc' 'emp quem conta'; align-items:start; }
+  .ex-desc { grid-area:desc; }
+  .ex-emp  { grid-area:emp;  margin-top:0; align-self:center; }
+  .ex-quem { grid-area:quem; margin-top:0; }
+  .ex-par  { grid-area:conta; margin-top:0; }
+  .ex-reg { padding:14px 16px; }
+}
 
 /* No CELULAR o valor desce para baixo do bloco, em vez de disputar a largura. */
 @media (max-width: 768px) {
