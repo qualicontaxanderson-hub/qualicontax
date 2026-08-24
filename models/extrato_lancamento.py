@@ -6,6 +6,7 @@ Tabela compartilhada com o futuro A2: ``empresa_id`` NULL = escritório
 import mora no ``hash_dedup`` (UNIQUE) — quem monta a chave é
 utils.ofx_parser.chave_dedup, a mesma para parser e gravação.
 """
+import json
 import re
 
 from utils.db_helper import execute_query
@@ -286,260 +287,344 @@ class ExtratoLancamento:
         return total
 
 
-class ExtratoMemorizacao:
-    """Memorizações do extrato (E2.4): a primeira decisão humana vira regra.
+class RegraExtrato:
+    """Regra de classificacao do extrato — a antiga "memorizacao", crescida.
 
-    O ``padrao`` é um trecho da descrição (casamento por CONTÉM, sem caixa).
-    Quando mais de um casa, vence o MAIS LONGO — "CONEXA ASSINATURA" ganha de
-    "CONEXA". empresa_id NULL = vale para todas as minhas empresas.
+    Uma regra responde tres perguntas, e as tres vieram do uso real:
+
+    QUANDO ela vale
+        ``termos``: uma LISTA de trechos que TODOS precisam aparecer na
+        descricao. E o que resolve o numero que muda no meio::
+
+            TARIFA COM R LIQUIDACAO-COB000001  262005312  DISTRIBUIDORA...
+                                               ^^^^^^^^^ muda todo mes
+
+        Com os dois trechos e o numero de fora, a regra pega as 4 tarifas do
+        ano em vez de 1. Mais ``conta``, ``sinal`` e ``valor_exato`` como
+        condicoes opcionais. O sinal nao e luxo: sem "so saidas", a regra do
+        fornecedor pega tambem os recebimentos DELE, e receita cairia dentro
+        de despesa.
+
+    PARA QUEM ela vale
+        ``escopo``: 'empresa' (uma), 'lista' (as escolhidas, em
+        fin_regra_empresas) ou 'grupo' (todas as do grupo, resolvido na hora
+        — empresa que entrar no grupo amanha ja herda a regra).
+
+    COMO ela roda
+        ``aplicar``: 'direto' classifica sozinha; 'aprovar' preenche e marca
+        o lancamento como A CONFERIR. E a diferenca entre o salario que nunca
+        e outra coisa e o deposito que pode ser salario ou comissao.
+
+    Quando duas regras casam, vence a MAIS ESPECIFICA, nesta ordem:
+    escopo mais estreito (empresa > lista > grupo), depois mais condicoes,
+    depois o termo mais longo. E o que faz o conserto numa empresa valer sem
+    precisar apagar a regra do grupo.
     """
+
+    ESCOPOS = ('empresa', 'lista', 'grupo')
+    APLICACOES = ('direto', 'aprovar')
+    #: quanto mais baixo, mais especifico — decide quem vence o empate
+    _PESO_ESCOPO = {'empresa': 0, 'lista': 1, 'grupo': 2}
+
+    # ------------------------------------------------------------------ ler
+    @staticmethod
+    def _hidrata(r):
+        """Deixa a linha do banco pronta para uso: termos como lista."""
+        if not r:
+            return r
+        t = r.get('termos')
+        if isinstance(t, str):
+            try:
+                t = json.loads(t)
+            except ValueError:
+                t = None
+        if not t:
+            t = [r['padrao']] if r.get('padrao') else []
+        r['termos'] = [str(x) for x in t if str(x).strip()]
+        return r
 
     @staticmethod
     def listar(apenas_ativas=False):
         cond = 'WHERE m.ativo = 1' if apenas_ativas else ''
-        return execute_query(
+        rows = execute_query(
             f"""SELECT m.*, c.nome AS categoria_nome, c.grupo AS categoria_grupo,
-                       c.tipo AS categoria_tipo, cc.nome AS centro_nome
+                       c.tipo AS categoria_tipo, cc.nome AS centro_nome,
+                       g.nome AS grupo_nome
                   FROM fin_extrato_memorizacoes m
                   JOIN fin_categorias c ON c.id = m.categoria_id
                   LEFT JOIN fin_centros_custo cc ON cc.id = m.centro_custo_id
+                  LEFT JOIN grupos_clientes g ON g.id = m.grupo_id
                 {cond}
                  ORDER BY m.ativo DESC, m.usos DESC, m.padrao""",
             fetch=True) or []
+        return [RegraExtrato._hidrata(r) for r in rows]
 
     @staticmethod
-    def criar(padrao, categoria_id, centro_custo_id=None, empresa_id=None,
-              criado_por=None):
-        """None se já existir memorização ATIVA com o mesmo padrão."""
-        padrao = (padrao or '').strip().upper()[:160]
-        if not padrao:
+    def get(regra_id):
+        return RegraExtrato._hidrata(execute_query(
+            'SELECT * FROM fin_extrato_memorizacoes WHERE id = %s',
+            (regra_id,), fetch=True, fetch_one=True))
+
+    @staticmethod
+    def empresas_da(regra):
+        """De quais empresas esta regra cuida. None = de todas.
+
+        No escopo 'grupo' a lista e resolvida NA HORA, e nao guardada: e por
+        isso que a empresa que entrar no grupo amanha ja nasce com a regra.
+        """
+        escopo = regra.get('escopo') or 'empresa'
+        if escopo == 'grupo' and regra.get('grupo_id'):
+            rows = execute_query(
+                'SELECT cliente_id FROM cliente_grupo_relacao WHERE grupo_id = %s',
+                (regra['grupo_id'],), fetch=True) or []
+            return {r['cliente_id'] for r in rows}
+        if escopo == 'lista':
+            rows = execute_query(
+                'SELECT empresa_id FROM fin_regra_empresas WHERE regra_id = %s',
+                (regra['id'],), fetch=True) or []
+            return {r['empresa_id'] for r in rows}
+        if regra.get('empresa_id'):
+            return {regra['empresa_id']}
+        return None                      # vale para todas
+
+    # --------------------------------------------------------------- casar
+    @staticmethod
+    def _norma(t):
+        """MAIUSCULA e espaco unico. O extrato vem com espaco duplo
+        ("PIX_DEB   00394460005887"); comparar sem normalizar fazia o mesmo
+        texto nao casar consigo mesmo."""
+        return re.sub(r'\s+', ' ', (t or '').upper()).strip()
+
+    @staticmethod
+    def condicoes(regra):
+        """Quantas condicoes a regra impoe alem do texto — o desempate."""
+        return sum(1 for c in ('conta', 'sinal', 'valor_exato') if regra.get(c))
+
+    @staticmethod
+    def casa(regra, lanc, empresas=None):
+        """A regra vale para ESTE lancamento?
+
+        ``empresas`` entra pronto para nao consultar o banco por lancamento
+        quando se varre uma lista inteira.
+        """
+        if not regra.get('ativo', 1):
+            return False
+
+        alvo = empresas if empresas is not None else RegraExtrato.empresas_da(regra)
+        if alvo is not None and lanc.get('empresa_id') not in alvo:
+            return False
+
+        desc = RegraExtrato._norma(lanc.get('descricao'))
+        termos = regra.get('termos') or []
+        if not termos:
+            return False
+        for t in termos:
+            if RegraExtrato._norma(t) not in desc:
+                return False
+
+        if regra.get('conta') and str(lanc.get('conta') or '') != str(regra['conta']):
+            return False
+
+        valor = float(lanc.get('valor') or 0)
+        if regra.get('sinal'):
+            saiu = valor < 0
+            if (regra['sinal'].upper() == 'D') != saiu:
+                return False
+
+        if regra.get('valor_exato') is not None:
+            if abs(abs(valor) - abs(float(regra['valor_exato']))) > 0.005:
+                return False
+        return True
+
+    @staticmethod
+    def melhor(lanc, regras, empresas_por_regra=None):
+        """A regra vencedora para este lancamento, ou None.
+
+        Vence a MAIS ESPECIFICA: escopo mais estreito, depois mais condicoes,
+        depois o termo mais longo. Sem essa ordem, a regra do grupo inteiro
+        atropelaria o conserto feito numa empresa so.
+        """
+        candidatas = []
+        for r in regras:
+            emp = (empresas_por_regra or {}).get(r['id'])
+            if emp is None and empresas_por_regra is not None:
+                emp = RegraExtrato.empresas_da(r)
+                empresas_por_regra[r['id']] = emp
+            if RegraExtrato.casa(r, lanc, emp):
+                candidatas.append(r)
+        if not candidatas:
             return None
-        dup = execute_query(
-            'SELECT id FROM fin_extrato_memorizacoes '
-            'WHERE ativo = 1 AND padrao = %s', (padrao,),
-            fetch=True, fetch_one=True)
-        if dup:
+        return sorted(candidatas, key=lambda r: (
+            RegraExtrato._PESO_ESCOPO.get(r.get('escopo') or 'empresa', 9),
+            -RegraExtrato.condicoes(r),
+            -max((len(t) for t in r['termos']), default=0),
+        ))[0]
+
+    # -------------------------------------------------------------- gravar
+    @staticmethod
+    def criar(termos, categoria_id, centro_custo_id=None, empresa_id=None,
+              conta=None, sinal=None, valor_exato=None,
+              escopo='empresa', grupo_id=None, empresas=None,
+              aplicar='direto', criado_por=None):
+        """Cria a regra. Devolve o id, ou None quando nao da.
+
+        ``termos`` pode vir como texto (um trecho so) ou lista.
+        """
+        if isinstance(termos, str):
+            termos = [termos]
+        termos = [t.strip() for t in (termos or []) if t and t.strip()]
+        if not termos or not categoria_id:
             return None
-        return execute_query(
+        if escopo not in RegraExtrato.ESCOPOS:
+            escopo = 'empresa'
+        if aplicar not in RegraExtrato.APLICACOES:
+            aplicar = 'direto'
+        if escopo == 'grupo' and not grupo_id:
+            return None
+        if escopo == 'lista' and not empresas:
+            return None
+
+        # padrao continua sendo o PRIMEIRO termo: a tela antiga de
+        # memorizacoes le essa coluna, e uma regra sem padrao apareceria em
+        # branco la ate ela ser refeita.
+        regra_id = execute_query(
             'INSERT INTO fin_extrato_memorizacoes '
-            '(empresa_id, padrao, categoria_id, centro_custo_id, criado_por) '
-            'VALUES (%s, %s, %s, %s, %s)',
-            (empresa_id, padrao, categoria_id, centro_custo_id, criado_por))
+            '(empresa_id, padrao, termos, conta, sinal, valor_exato, escopo, '
+            ' grupo_id, aplicar, categoria_id, centro_custo_id, criado_por) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            (empresa_id if escopo == 'empresa' else None,
+             termos[0][:160], json.dumps(termos, ensure_ascii=False),
+             conta or None, (sinal or '').upper()[:1] or None, valor_exato,
+             escopo, grupo_id if escopo == 'grupo' else None, aplicar,
+             categoria_id, centro_custo_id, criado_por))
+        if not regra_id or regra_id is True:
+            return None
+
+        if escopo == 'lista':
+            for eid in sorted(set(int(e) for e in empresas)):
+                execute_query(
+                    'INSERT IGNORE INTO fin_regra_empresas (regra_id, empresa_id) '
+                    'VALUES (%s, %s)', (regra_id, eid))
+        return regra_id
 
     @staticmethod
-    def get(mem_id):
-        return execute_query('SELECT * FROM fin_extrato_memorizacoes '
-                             'WHERE id = %s', (mem_id,), fetch=True, fetch_one=True)
+    def set_ativa(regra_id, ativa):
+        execute_query('UPDATE fin_extrato_memorizacoes SET ativo = %s WHERE id = %s',
+                      (1 if ativa else 0, regra_id))
 
     @staticmethod
-    def set_ativa(mem_id, ativa):
-        execute_query('UPDATE fin_extrato_memorizacoes SET ativo = %s '
-                      'WHERE id = %s', (1 if ativa else 0, mem_id))
+    def desfazer(regra_id):
+        """Devolve para "sem categoria" SO o que esta regra classificou.
+
+        O que foi classificado a mao tem memorizacao_id NULL e nao e tocado —
+        e por isso que a coluna existe.
+        """
+        r = execute_query(
+            'SELECT COUNT(*) n FROM extrato_lancamentos WHERE memorizacao_id = %s',
+            (regra_id,), fetch=True, fetch_one=True)
+        n = int((r or {}).get('n') or 0)
+        if n:
+            execute_query(
+                'UPDATE extrato_lancamentos SET categoria_id = NULL, '
+                '       centro_custo_id = NULL, memorizacao_id = NULL, conferir = 0 '
+                ' WHERE memorizacao_id = %s', (regra_id,))
+        return n
+
+    # -------------------------------------------------------------- aplicar
+    @staticmethod
+    def _grava_no_lancamento(regra, lanc_id):
+        execute_query(
+            'UPDATE extrato_lancamentos SET categoria_id = %s, centro_custo_id = %s, '
+            '       memorizacao_id = %s, conferir = %s WHERE id = %s',
+            (regra['categoria_id'], regra['centro_custo_id'], regra['id'],
+             1 if (regra.get('aplicar') or 'direto') == 'aprovar' else 0,
+             lanc_id))
 
     @staticmethod
-    def _casa(descricao, memorizacoes, empresa_id=None):
-        """A memorização vencedora para esta descrição (mais longa ganha)."""
-        alvo = (descricao or '').upper()
-        melhor = None
-        for m in memorizacoes:
-            if not m['ativo']:
+    def _contabiliza(usos):
+        for rid, n in usos.items():
+            execute_query('UPDATE fin_extrato_memorizacoes SET usos = usos + %s, '
+                          'ultimo_uso = NOW() WHERE id = %s', (n, rid))
+
+    @staticmethod
+    def aplicar_em(lancamentos):
+        """Passa as regras por estes lancamentos (dicts ja lidos).
+
+        Devolve (classificados, a_conferir). So mexe em quem esta sem
+        categoria: decisao humana nao e sobrescrita por regra.
+        """
+        regras = RegraExtrato.listar(apenas_ativas=True)
+        if not regras:
+            return 0, 0
+        cache = {}
+        usos, direto, conferir = {}, 0, 0
+        for l in lancamentos:
+            if l.get('categoria_id'):
                 continue
-            if m['empresa_id'] and empresa_id and m['empresa_id'] != empresa_id:
+            r = RegraExtrato.melhor(l, regras, cache)
+            if not r:
                 continue
-            if m['padrao'] in alvo:
-                if melhor is None or len(m['padrao']) > len(melhor['padrao']):
-                    melhor = m
-        return melhor
+            RegraExtrato._grava_no_lancamento(r, l['id'])
+            usos[r['id']] = usos.get(r['id'], 0) + 1
+            if (r.get('aplicar') or 'direto') == 'aprovar':
+                conferir += 1
+            else:
+                direto += 1
+        RegraExtrato._contabiliza(usos)
+        return direto, conferir
 
     @staticmethod
     def aplicar_em_ids(ids):
-        """Classifica os lançamentos (ainda sem categoria) dessa lista de ids.
-        Devolve quantos classificou — roda logo depois do import."""
+        """Compatibilidade: roda logo depois do import do OFX."""
         if not ids:
-            return 0
-        mems = ExtratoMemorizacao.listar(apenas_ativas=True)
-        if not mems:
             return 0
         marks = ','.join(['%s'] * len(ids))
         rows = execute_query(
-            f'SELECT id, empresa_id, descricao FROM extrato_lancamentos '
-            f'WHERE id IN ({marks}) AND categoria_id IS NULL',
-            tuple(ids), fetch=True) or []
-        aplicados, usos = 0, {}
-        for r in rows:
-            m = ExtratoMemorizacao._casa(r['descricao'], mems, r['empresa_id'])
-            if not m:
-                continue
-            execute_query(
-                'UPDATE extrato_lancamentos SET categoria_id = %s, '
-                'centro_custo_id = %s, memorizacao_id = %s WHERE id = %s',
-                (m['categoria_id'], m['centro_custo_id'], m['id'], r['id']))
-            usos[m['id']] = usos.get(m['id'], 0) + 1
-            aplicados += 1
-        for mid, n in usos.items():
-            execute_query('UPDATE fin_extrato_memorizacoes SET usos = usos + %s, '
-                          'ultimo_uso = NOW() WHERE id = %s', (n, mid))
-        return aplicados
+            f'SELECT id, empresa_id, conta, valor, descricao, categoria_id '
+            f'  FROM extrato_lancamentos WHERE id IN ({marks}) '
+            f'   AND categoria_id IS NULL', tuple(ids), fetch=True) or []
+        direto, conferir = RegraExtrato.aplicar_em(rows)
+        return direto + conferir
 
     @staticmethod
-    def aplicar_retroativa(mem_id):
-        """Varre TODO lançamento antigo sem categoria que casa com o padrão —
-        memorizou, o passado também se resolve. Devolve quantos pegou."""
-        m = ExtratoMemorizacao.get(mem_id)
-        if not m or not m['ativo']:
-            return 0
-        like = ('%' + m['padrao'].replace(chr(92), chr(92) * 2)
-                .replace('%', chr(92) + '%').replace('_', chr(92) + '_') + '%')
-        params_where = [like]
-        cond_emp = ''
-        if m['empresa_id']:
-            cond_emp = 'AND empresa_id = %s'
-            params_where.append(m['empresa_id'])
-        antes = execute_query(
-            f"SELECT COUNT(*) AS n FROM extrato_lancamentos "
-            f"WHERE categoria_id IS NULL AND UPPER(descricao) LIKE %s {cond_emp}",
-            tuple(params_where), fetch=True, fetch_one=True)
-        n = int((antes or {}).get('n') or 0)
-        if n:
-            execute_query(
-                f"UPDATE extrato_lancamentos SET categoria_id = %s, "
-                f"centro_custo_id = %s, memorizacao_id = %s "
-                f"WHERE categoria_id IS NULL AND UPPER(descricao) LIKE %s {cond_emp}",
-                tuple([m['categoria_id'], m['centro_custo_id'], m['id']] + params_where))
-            execute_query('UPDATE fin_extrato_memorizacoes SET usos = usos + %s, '
-                          'ultimo_uso = NOW() WHERE id = %s', (n, m['id']))
-        return n
+    def preve(regra, so_sem_categoria=True, limite=None):
+        """Quais lancamentos ESTA regra pegaria — antes de gravar nada.
 
-
-class FinContaBancaria:
-    """Contas cadastradas — a impressão digital de cada empresa."""
-
-    @staticmethod
-    def listar(empresa_ids=None, apenas_ativas=True):
-        cond, params = [], []
-        if empresa_ids:
-            marks = ','.join(['%s'] * len(empresa_ids))
-            cond.append(f'c.empresa_id IN ({marks})')
-            params += list(empresa_ids)
-        if apenas_ativas:
-            cond.append('c.ativo = 1')
-        where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
-        return execute_query(
-            f"""SELECT c.*, cl.numero_cliente, cl.nome_razao_social
-                  FROM fin_contas c
-                  JOIN clientes cl ON cl.id = c.empresa_id
-                {where}
-                 ORDER BY cl.numero_cliente + 0, c.banco_nome, c.conta""",
-            tuple(params), fetch=True) or []
-
-    @staticmethod
-    def get(conta_id):
-        return execute_query('SELECT * FROM fin_contas WHERE id = %s',
-                             (conta_id,), fetch=True, fetch_one=True)
-
-    @staticmethod
-    def set_ativa(conta_id, ativa):
-        execute_query('UPDATE fin_contas SET ativo = %s WHERE id = %s',
-                      (1 if ativa else 0, conta_id))
-
-    @staticmethod
-    def em_uso(conta_id):
-        """Quantos lançamentos já entraram por esta conta."""
-        c = FinContaBancaria.get(conta_id)
-        if not c:
-            return 0
-        r = execute_query(
-            'SELECT COUNT(*) AS n FROM extrato_lancamentos '
-            'WHERE empresa_id = %s AND conta LIKE %s',
-            (c['empresa_id'], f"%{c['conta']}%"), fetch=True, fetch_one=True)
-        return int((r or {}).get('n') or 0)
-
-
-class FinExtratoPendencia:
-    """Arquivo que chegou e não se identificou — espera alguém dizer de quem é.
-
-    Com número da empresa no nome, a pendência nasce AMARRADA a ela (aparece
-    quando alguém abrir aquela empresa); sem número, nasce órfã.
-    """
-
-    @staticmethod
-    def listar(empresa_ids=None, status='aberta', ver_orfas=False):
-        """``ver_orfas`` só para ADMIN.
-
-        Arquivo que chegou SEM número da empresa no nome e com conta
-        desconhecida é sinal de funcionário que não seguiu o combinado — quem
-        vê é quem cobra (decisão do Anderson em 21/08/2026). Para o resto da
-        equipe a fila mostra só o que está amarrado a uma empresa: o que eles
-        podem, de fato, resolver.
+        E o numero que a tela mostra ("pega 4") e a lista que ela exibe. Sem
+        isso a pessoa cria a regra no escuro.
         """
-        cond, params = [], []
-        if status:
-            cond.append('p.status = %s')
-            params.append(status)
-        if empresa_ids:
-            marks = ','.join(['%s'] * len(empresa_ids))
-            if ver_orfas:
-                cond.append(f'(p.empresa_id IN ({marks}) OR p.empresa_id IS NULL)')
-            else:
-                cond.append(f'p.empresa_id IN ({marks})')
-            params += list(empresa_ids)
-        elif not ver_orfas:
-            cond.append('p.empresa_id IS NOT NULL')
-        where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
-        return execute_query(
-            f"""SELECT p.*, cl.numero_cliente, cl.nome_razao_social
-                  FROM fin_extrato_pendencias p
-                  LEFT JOIN clientes cl ON cl.id = p.empresa_id
-                {where}
-                 ORDER BY p.empresa_id IS NULL, p.visto_em DESC""",
-            tuple(params), fetch=True) or []
+        empresas = RegraExtrato.empresas_da(regra)
+        cond = ['1=1']
+        params = []
+        if so_sem_categoria:
+            cond.append('categoria_id IS NULL')
+        if empresas is not None:
+            if not empresas:
+                return []
+            cond.append('empresa_id IN (%s)' % ','.join(['%s'] * len(empresas)))
+            params += sorted(empresas)
+        rows = execute_query(
+            'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id '
+            '  FROM extrato_lancamentos WHERE ' + ' AND '.join(cond) +
+            ' ORDER BY data DESC, id DESC', tuple(params), fetch=True) or []
+        achados = [l for l in rows if RegraExtrato.casa(regra, l, empresas)]
+        return achados[:limite] if limite else achados
 
     @staticmethod
-    def quantas(empresa_ids=None, ver_orfas=False):
-        return len(FinExtratoPendencia.listar(empresa_ids, ver_orfas=ver_orfas))
+    def aplicar_retroativa(regra_id):
+        """Volta no tempo: pega os antigos ainda sem categoria."""
+        r = RegraExtrato.get(regra_id)
+        if not r or not r['ativo']:
+            return 0
+        alvos = RegraExtrato.preve(r, so_sem_categoria=True)
+        for l in alvos:
+            RegraExtrato._grava_no_lancamento(r, l['id'])
+        if alvos:
+            RegraExtrato._contabiliza({regra_id: len(alvos)})
+        return len(alvos)
 
-    @staticmethod
-    def get(pid):
-        return execute_query('SELECT * FROM fin_extrato_pendencias WHERE id = %s',
-                             (pid,), fetch=True, fetch_one=True)
 
-    @staticmethod
-    def anotar(caminho, arquivo, motivo, empresa_id=None, numero_no_nome=None,
-               banco_id=None, banco_nome=None, agencia=None, conta=None,
-               qtd=0, periodo=None):
-        """Cria ou atualiza (o mesmo arquivo pode ser visto em várias rodadas)."""
-        execute_query(
-            """INSERT INTO fin_extrato_pendencias
-               (arquivo, caminho, empresa_id, numero_no_nome, banco_id,
-                banco_nome, agencia, conta, qtd_lancamentos, periodo, motivo)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-               ON DUPLICATE KEY UPDATE
-                 motivo = VALUES(motivo), visto_em = NOW(), status = 'aberta',
-                 empresa_id = VALUES(empresa_id), conta = VALUES(conta),
-                 banco_id = VALUES(banco_id), banco_nome = VALUES(banco_nome),
-                 qtd_lancamentos = VALUES(qtd_lancamentos),
-                 periodo = VALUES(periodo)""",
-            (arquivo, caminho, empresa_id, numero_no_nome, banco_id, banco_nome,
-             agencia, conta, qtd, periodo, motivo))
-
-    @staticmethod
-    def get_por_caminho(caminho):
-        return execute_query(
-            'SELECT * FROM fin_extrato_pendencias WHERE caminho = %s',
-            (caminho,), fetch=True, fetch_one=True)
-
-    @staticmethod
-    def resolver(pid):
-        execute_query("UPDATE fin_extrato_pendencias SET status = 'resolvida' "
-                      "WHERE id = %s", (pid,))
-
-    @staticmethod
-    def limpar_resolvidas(caminhos):
-        """O arquivo saiu da _ENTRADA (foi lançado): a pendência morre."""
-        if not caminhos:
-            return
-        marks = ','.join(['%s'] * len(caminhos))
-        execute_query(
-            f"UPDATE fin_extrato_pendencias SET status = 'resolvida' "
-            f"WHERE caminho IN ({marks}) AND status = 'aberta'",
-            tuple(caminhos))
+#: A tela e as rotas ainda chamam pelo nome antigo. O apelido evita um
+#: rename espalhado num commit que ja e grande — e o nome novo e o que
+#: vale daqui para a frente.
+ExtratoMemorizacao = RegraExtrato
