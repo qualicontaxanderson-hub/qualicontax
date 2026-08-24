@@ -6,6 +6,8 @@ Tabela compartilhada com o futuro A2: ``empresa_id`` NULL = escritório
 import mora no ``hash_dedup`` (UNIQUE) — quem monta a chave é
 utils.ofx_parser.chave_dedup, a mesma para parser e gravação.
 """
+import re
+
 from utils.db_helper import execute_query
 
 
@@ -114,6 +116,113 @@ class ExtratoLancamento:
                   FROM extrato_lancamentos WHERE {cond} ORDER BY rotulo""",
             params, fetch=True) or []
         return [r['rotulo'] for r in rows]
+
+    #: CPF (11) ou CNPJ (14) soltos no meio da descricao.
+    _DOC = re.compile(r'\b(\d{11}|\d{14})\b')
+
+    @staticmethod
+    def ler_descricao(desc):
+        """Quebra a descricao do banco em (documento, nome, antes).
+
+        O extrato do Sicredi tem forma fixa — ``TIPO-CANAL  DOC  NOME`` — e e
+        isso que permite mostrar o nome de quem esta do outro lado sem trocar a
+        descricao por um resumo: a tela imprime ``antes`` em letra de maquina e
+        ``nome`` em negrito, e o texto continua literal.
+
+        Devolve dict com doc/nome/antes; todos '' quando nao ha documento
+        (``CESTA DE RELACIONAMENTO-``, ``PAGAMENTO SEFAZ GO-IB0004``).
+
+        O espaco e normalizado porque o extrato vem com espaco duplo
+        (``PIX_DEB   00394460005887``): comparar sem normalizar fazia o mesmo
+        texto nao casar consigo mesmo.
+        """
+        d = ExtratoLancamento.corrigir_acento(desc)
+        d = re.sub(r'\s+', ' ', d or '').strip()
+        m = ExtratoLancamento._DOC.search(d)
+        if m:
+            return {'doc': m.group(1),
+                    'nome': d[m.end():].strip(),
+                    'antes': d[:m.end()].strip()}
+
+        # Sem CPF/CNPJ ainda pode haver nome: na tarifa de cobranca o codigo
+        # do banco tem 9 digitos ("...COB000001 262005312 DISTRIBUIDORA DE
+        # COMBUSTIVEIS SAARA"). Cai no ULTIMO bloco so-numeros; o que vem
+        # depois dele e o nome.
+        ult = None
+        for n in re.finditer(r'\b\d{4,}\b', d):
+            ult = n
+        if ult and d[ult.end():].strip():
+            return {'doc': '', 'nome': d[ult.end():].strip(),
+                    'antes': d[:ult.end()].strip()}
+        return {'doc': '', 'nome': '', 'antes': d}
+
+    @staticmethod
+    def corrigir_acento(texto):
+        """Desfaz UTF-8 lido como Latin-1 (``RogÃ©rio`` -> ``Rogério``).
+
+        Dois dos 511 lancamentos importados vieram assim. O conserto de raiz e
+        na leitura do OFX; aqui e so para a tela nao mostrar lixo enquanto os
+        antigos nao forem corrigidos, e e inofensivo em quem esta certo.
+        """
+        t = texto or ''
+        if 'Ã' not in t and 'Â' not in t:
+            return t
+        try:
+            return t.encode('latin-1').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return t
+
+    @staticmethod
+    def formatar_doc(doc):
+        """CPF/CNPJ pontuado. Devolve o proprio texto se nao for nenhum dos dois."""
+        d = (doc or '').strip()
+        if len(d) == 14:
+            return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+        if len(d) == 11:
+            return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+        return d
+
+    @staticmethod
+    def contas_mapa():
+        """conta_norm -> {apelido, agencia} do CADASTRO de contas.
+
+        O extrato guarda o nome cru do OFX, e para o Sicredi ele vem como
+        'CCPI DO CERRADO DE GO' — o nome da cooperativa, que ninguem no
+        escritorio usa. Quem sabe o nome que a pessoa reconhece e fin_contas.
+        """
+        rows = execute_query(
+            'SELECT conta_norm, conta, apelido, banco_nome, agencia '
+            '  FROM fin_contas', fetch=True) or []
+        mapa = {}
+        for r in rows:
+            dado = {'apelido': r['apelido'] or r['banco_nome'] or '',
+                    'agencia': r['agencia'] or ''}
+            for chave in (r['conta_norm'], r['conta']):
+                if chave:
+                    mapa[str(chave)] = dado
+        return mapa
+
+    @staticmethod
+    def por_dia(lancamentos):
+        """Agrupa a lista em dias, com o resumo do dia.
+
+        A data aparece UMA vez, no alto do grupo — nunca dentro do lancamento.
+        Montado aqui e nao no Jinja porque decidir 'mudou o dia?' no template
+        exige comparar a linha com a anterior, e foi exatamente isso que
+        quebrou a tela de categorias quando a ordem veio torta.
+        """
+        dias, atual = [], None
+        for l in lancamentos:
+            if atual is None or atual['data'] != l['data']:
+                atual = {'data': l['data'], 'itens': [], 'entradas': 0, 'saidas': 0}
+                dias.append(atual)
+            atual['itens'].append(l)
+            v = float(l['valor'] or 0)
+            if v < 0:
+                atual['saidas'] += v
+            else:
+                atual['entradas'] += v
+        return dias
 
     @staticmethod
     def classificar(lanc_id, categoria_id, centro_custo_id=None,

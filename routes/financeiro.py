@@ -883,10 +883,22 @@ def extrato():
 
     # Quantos filtros o usuário ligou — vira o selo do painel fechado.
     ativos = sum(1 for k, v in filtros.items() if v)
+
+    # A lista sai UMA vez e é agrupada por dia aqui: decidir "mudou o dia?"
+    # no Jinja exigiria comparar a linha com a anterior, que foi o que
+    # duplicou cabeçalho na tela de categorias quando a ordem veio torta.
+    lancs = ExtratoLancamento.listar(**args)
     return render_template('financeiro/extrato.html',
-                           lancamentos=ExtratoLancamento.listar(**args),
+                           lancamentos=lancs,
+                           dias=ExtratoLancamento.por_dia(lancs),
                            totais=ExtratoLancamento.totais(**args),
                            contas=ExtratoLancamento.contas(empresa_ids=sel),
+                           # apelido e agência vêm do CADASTRO de contas: o
+                           # extrato guarda o nome cru do OFX, e o do Sicredi
+                           # chega como "CCPI DO CERRADO DE GO".
+                           contas_cad=ExtratoLancamento.contas_mapa(),
+                           ler=ExtratoLancamento.ler_descricao,
+                           doc_fmt=ExtratoLancamento.formatar_doc,
                            categorias=FinCategoria.listar(),
                            centros=FinCentroCusto.listar(),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
