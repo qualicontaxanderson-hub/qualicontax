@@ -396,6 +396,20 @@ class RegraExtrato:
         return re.sub(r'\s+', ' ', (t or '').upper()).strip()
 
     @staticmethod
+    def _chave(termos, conta, sinal, valor_exato, escopo, grupo_id, empresa_id):
+        """O que faz duas regras serem A MESMA. Termos ordenados e
+        normalizados: trocar a ordem dos trechos nao cria regra nova."""
+        return (
+            tuple(sorted(RegraExtrato._norma(t) for t in (termos or []))),
+            str(conta or ''),
+            (sinal or '').upper()[:1],
+            None if valor_exato is None else round(float(valor_exato), 2),
+            escopo or 'empresa',
+            grupo_id or None,
+            empresa_id or None,
+        )
+
+    @staticmethod
     def condicoes(regra):
         """Quantas condicoes a regra impoe alem do texto — o desempate."""
         return sum(1 for c in ('conta', 'sinal', 'valor_exato') if regra.get(c))
@@ -483,6 +497,18 @@ class RegraExtrato:
             return None
         if escopo == 'lista' and not empresas:
             return None
+
+        # REPETIDA? Duas regras so sao a mesma coisa quando tem os mesmos
+        # termos, as mesmas condicoes E o mesmo escopo. Mesmo texto com conta
+        # diferente e OUTRA regra — e e o caso do salario no Bradesco contra
+        # a comissao no Sicredi, que precisa das duas coexistindo.
+        chave = RegraExtrato._chave(termos, conta, sinal, valor_exato,
+                                    escopo, grupo_id, empresa_id)
+        for r in RegraExtrato.listar(apenas_ativas=True):
+            if RegraExtrato._chave(r['termos'], r.get('conta'), r.get('sinal'),
+                                   r.get('valor_exato'), r.get('escopo'),
+                                   r.get('grupo_id'), r.get('empresa_id')) == chave:
+                return None
 
         # padrao continua sendo o PRIMEIRO termo: a tela antiga de
         # memorizacoes le essa coluna, e uma regra sem padrao apareceria em
