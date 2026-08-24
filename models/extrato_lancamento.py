@@ -637,6 +637,103 @@ class RegraExtrato:
         return achados[:limite] if limite else achados
 
     @staticmethod
+    def editar(regra_id, termos=None, categoria_id=None, centro_custo_id='manter',
+               conta='manter', sinal='manter', valor_exato='manter',
+               escopo=None, grupo_id='manter', empresas=None,
+               aplicar=None, retroagir=False):
+        """Muda a regra. ``retroagir`` decide o que fazer com o passado.
+
+        retroagir=False  a mudanca vale so daqui para frente; o que a regra
+                         ja classificou fica como esta.
+        retroagir=True   devolve o que ela tinha classificado e reclassifica
+                         com o criterio novo — o que sair do alcance da regra
+                         nova volta para "sem categoria", e e isso mesmo que
+                         se quer quando o criterio estava errado.
+
+        O default e False de proposito: mexer no passado tem de ser um SIM
+        explicito, nunca o silencio.
+
+        Devolve (ok, motivo, mexidos).
+        """
+        atual = RegraExtrato.get(regra_id)
+        if not atual:
+            return False, 'Regra não encontrada.', 0
+
+        if isinstance(termos, str):
+            termos = [termos]
+        if termos is not None:
+            termos = [t.strip() for t in termos if t and t.strip()]
+            if not termos:
+                return False, 'A regra precisa de pelo menos um trecho.', 0
+
+        novo = {
+            'termos': termos if termos is not None else atual['termos'],
+            'categoria_id': categoria_id or atual['categoria_id'],
+            'centro_custo_id': (atual['centro_custo_id'] if centro_custo_id == 'manter'
+                                else centro_custo_id),
+            'conta': atual['conta'] if conta == 'manter' else (conta or None),
+            'sinal': atual['sinal'] if sinal == 'manter' else ((sinal or '').upper()[:1] or None),
+            'valor_exato': (atual['valor_exato'] if valor_exato == 'manter'
+                            else valor_exato),
+            'escopo': escopo or atual['escopo'] or 'empresa',
+            'grupo_id': atual['grupo_id'] if grupo_id == 'manter' else grupo_id,
+            'aplicar': aplicar or atual['aplicar'] or 'direto',
+        }
+        if novo['escopo'] not in RegraExtrato.ESCOPOS:
+            return False, 'Escopo inválido.', 0
+        if novo['aplicar'] not in RegraExtrato.APLICACOES:
+            return False, 'Modo de aplicação inválido.', 0
+        if novo['escopo'] == 'grupo' and not novo['grupo_id']:
+            return False, 'Escopo de grupo exige o grupo.', 0
+        if novo['escopo'] == 'lista' and empresas is None:
+            empresas = sorted(RegraExtrato.empresas_da(atual) or [])
+        if novo['escopo'] == 'lista' and not empresas:
+            return False, 'Escolha ao menos uma empresa.', 0
+
+        # O passado sai ANTES da troca: depois dela o criterio novo nao
+        # reconheceria mais o que o criterio velho pegou.
+        mexidos = RegraExtrato.desfazer(regra_id) if retroagir else 0
+
+        execute_query(
+            'UPDATE fin_extrato_memorizacoes SET padrao = %s, termos = %s, '
+            '       conta = %s, sinal = %s, valor_exato = %s, escopo = %s, '
+            '       grupo_id = %s, aplicar = %s, categoria_id = %s, '
+            '       centro_custo_id = %s, empresa_id = %s WHERE id = %s',
+            (novo['termos'][0][:160],
+             json.dumps(novo['termos'], ensure_ascii=False),
+             novo['conta'], novo['sinal'], novo['valor_exato'], novo['escopo'],
+             novo['grupo_id'] if novo['escopo'] == 'grupo' else None,
+             novo['aplicar'], novo['categoria_id'], novo['centro_custo_id'],
+             atual['empresa_id'] if novo['escopo'] == 'empresa' else None,
+             regra_id))
+
+        execute_query('DELETE FROM fin_regra_empresas WHERE regra_id = %s', (regra_id,))
+        if novo['escopo'] == 'lista':
+            for eid in sorted(set(int(e) for e in empresas)):
+                execute_query(
+                    'INSERT IGNORE INTO fin_regra_empresas (regra_id, empresa_id) '
+                    'VALUES (%s, %s)', (regra_id, eid))
+
+        if retroagir:
+            mexidos = RegraExtrato.aplicar_retroativa(regra_id)
+        return True, '', mexidos
+
+    @staticmethod
+    def desativar(regra_id, devolver=False):
+        """Tira a regra de circulação. ``devolver`` decide o passado.
+
+        devolver=False  ela para de valer daqui para frente; o que ja
+                        classificou continua classificado.
+        devolver=True   o que ELA classificou volta para "sem categoria" —
+                        o que foi feito a mao nunca e tocado, porque so o
+                        que veio de regra tem memorizacao_id.
+
+        Devolve quantos lancamentos voltaram.
+        """
+        RegraExtrato.set_ativa(regra_id, False)
+        return RegraExtrato.desfazer(regra_id) if devolver else 0
+
+    @staticmethod
     def aplicar_retroativa(regra_id):
         """Volta no tempo: pega os antigos ainda sem categoria."""
         r = RegraExtrato.get(regra_id)
