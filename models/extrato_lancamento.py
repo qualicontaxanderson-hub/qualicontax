@@ -878,3 +878,137 @@ class RegraExtrato:
 #: rename espalhado num commit que ja e grande — e o nome novo e o que
 #: vale daqui para a frente.
 ExtratoMemorizacao = RegraExtrato
+
+
+class FinContaBancaria:
+    """Contas cadastradas — a impressão digital de cada empresa."""
+
+    @staticmethod
+    def listar(empresa_ids=None, apenas_ativas=True):
+        cond, params = [], []
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond.append(f'c.empresa_id IN ({marks})')
+            params += list(empresa_ids)
+        if apenas_ativas:
+            cond.append('c.ativo = 1')
+        where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
+        return execute_query(
+            f"""SELECT c.*, cl.numero_cliente, cl.nome_razao_social
+                  FROM fin_contas c
+                  JOIN clientes cl ON cl.id = c.empresa_id
+                {where}
+                 ORDER BY cl.numero_cliente + 0, c.banco_nome, c.conta""",
+            tuple(params), fetch=True) or []
+
+    @staticmethod
+    def get(conta_id):
+        return execute_query('SELECT * FROM fin_contas WHERE id = %s',
+                             (conta_id,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def set_ativa(conta_id, ativa):
+        execute_query('UPDATE fin_contas SET ativo = %s WHERE id = %s',
+                      (1 if ativa else 0, conta_id))
+
+    @staticmethod
+    def em_uso(conta_id):
+        """Quantos lançamentos já entraram por esta conta."""
+        c = FinContaBancaria.get(conta_id)
+        if not c:
+            return 0
+        r = execute_query(
+            'SELECT COUNT(*) AS n FROM extrato_lancamentos '
+            'WHERE empresa_id = %s AND conta LIKE %s',
+            (c['empresa_id'], f"%{c['conta']}%"), fetch=True, fetch_one=True)
+        return int((r or {}).get('n') or 0)
+
+
+class FinExtratoPendencia:
+    """Arquivo que chegou e não se identificou — espera alguém dizer de quem é.
+
+    Com número da empresa no nome, a pendência nasce AMARRADA a ela (aparece
+    quando alguém abrir aquela empresa); sem número, nasce órfã.
+    """
+
+    @staticmethod
+    def listar(empresa_ids=None, status='aberta', ver_orfas=False):
+        """``ver_orfas`` só para ADMIN.
+
+        Arquivo que chegou SEM número da empresa no nome e com conta
+        desconhecida é sinal de funcionário que não seguiu o combinado — quem
+        vê é quem cobra (decisão do Anderson em 21/08/2026). Para o resto da
+        equipe a fila mostra só o que está amarrado a uma empresa: o que eles
+        podem, de fato, resolver.
+        """
+        cond, params = [], []
+        if status:
+            cond.append('p.status = %s')
+            params.append(status)
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            if ver_orfas:
+                cond.append(f'(p.empresa_id IN ({marks}) OR p.empresa_id IS NULL)')
+            else:
+                cond.append(f'p.empresa_id IN ({marks})')
+            params += list(empresa_ids)
+        elif not ver_orfas:
+            cond.append('p.empresa_id IS NOT NULL')
+        where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
+        return execute_query(
+            f"""SELECT p.*, cl.numero_cliente, cl.nome_razao_social
+                  FROM fin_extrato_pendencias p
+                  LEFT JOIN clientes cl ON cl.id = p.empresa_id
+                {where}
+                 ORDER BY p.empresa_id IS NULL, p.visto_em DESC""",
+            tuple(params), fetch=True) or []
+
+    @staticmethod
+    def quantas(empresa_ids=None, ver_orfas=False):
+        return len(FinExtratoPendencia.listar(empresa_ids, ver_orfas=ver_orfas))
+
+    @staticmethod
+    def get(pid):
+        return execute_query('SELECT * FROM fin_extrato_pendencias WHERE id = %s',
+                             (pid,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def anotar(caminho, arquivo, motivo, empresa_id=None, numero_no_nome=None,
+               banco_id=None, banco_nome=None, agencia=None, conta=None,
+               qtd=0, periodo=None):
+        """Cria ou atualiza (o mesmo arquivo pode ser visto em várias rodadas)."""
+        execute_query(
+            """INSERT INTO fin_extrato_pendencias
+               (arquivo, caminho, empresa_id, numero_no_nome, banco_id,
+                banco_nome, agencia, conta, qtd_lancamentos, periodo, motivo)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE
+                 motivo = VALUES(motivo), visto_em = NOW(), status = 'aberta',
+                 empresa_id = VALUES(empresa_id), conta = VALUES(conta),
+                 banco_id = VALUES(banco_id), banco_nome = VALUES(banco_nome),
+                 qtd_lancamentos = VALUES(qtd_lancamentos),
+                 periodo = VALUES(periodo)""",
+            (arquivo, caminho, empresa_id, numero_no_nome, banco_id, banco_nome,
+             agencia, conta, qtd, periodo, motivo))
+
+    @staticmethod
+    def get_por_caminho(caminho):
+        return execute_query(
+            'SELECT * FROM fin_extrato_pendencias WHERE caminho = %s',
+            (caminho,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def resolver(pid):
+        execute_query("UPDATE fin_extrato_pendencias SET status = 'resolvida' "
+                      "WHERE id = %s", (pid,))
+
+    @staticmethod
+    def limpar_resolvidas(caminhos):
+        """O arquivo saiu da _ENTRADA (foi lançado): a pendência morre."""
+        if not caminhos:
+            return
+        marks = ','.join(['%s'] * len(caminhos))
+        execute_query(
+            f"UPDATE fin_extrato_pendencias SET status = 'resolvida' "
+            f"WHERE caminho IN ({marks}) AND status = 'aberta'",
+            tuple(caminhos))
