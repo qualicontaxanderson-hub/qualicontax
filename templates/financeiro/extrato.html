@@ -812,7 +812,7 @@ function exAbrirClassificar(el) {
     lanc: null, sugestoes: [], pedacos: [], sugEscolhida: null, manual: false,
     cond: { conta: false, sinal: false, valor: false },
     escopo: 'empresa', empresas: [], grupo: null,
-    aplicar: 'direto', retroagir: false,
+    aplicar: 'direto', retroagir: null,   // null = ainda nao escolheu
     grupoCat: null, previa: null, buscando: false
   };
   document.getElementById('exWizForm').action =
@@ -1016,7 +1016,9 @@ function exWizDesenha() {
 
   } else {
     html = exTelaConfirmar();
-    pronto = true;
+    // Mexer no passado nao pode ser o silencio: enquanto a pessoa nao
+    // escolher, o botao de gravar fica apagado.
+    pronto = (W.modo === 'unico') || (W.retroagir !== null);
   }
 
   tela.innerHTML = html;
@@ -1113,7 +1115,9 @@ function exTelaConfirmar() {
       }).join('') + '</div>';
 
     var quantos = (W.previa && W.previa.n) ? W.previa.n : 0;
-    html += '<span class="ex-rot">e os lançamentos antigos?</span>' +
+    html += '<span class="ex-rot">e os lançamentos antigos?' +
+      (W.retroagir === null ? ' <b style="color:#b45309">— escolha um</b>' : '') +
+      '</span>' +
       '<div class="ex-cartoes">' + [
         [false, '⏭', 'Só daqui para frente',
          'os ' + quantos + ' antigos que casam continuam sem categoria'],

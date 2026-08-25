@@ -632,6 +632,18 @@ class RegraExtrato:
         return regra_id
 
     @staticmethod
+    def contar_uso(regra_id, n=1):
+        """Soma no contador da regra e marca a hora.
+
+        Existe separado porque a PRIMEIRA classificacao — a que deu origem a
+        regra — acontece fora do aplicar_em, na propria rota. Sem isto a
+        regra nascia dizendo "nunca usada" logo depois de ser usada.
+        """
+        if n:
+            execute_query('UPDATE fin_extrato_memorizacoes SET usos = usos + %s, '
+                          'ultimo_uso = NOW() WHERE id = %s', (n, regra_id))
+
+    @staticmethod
     def set_ativa(regra_id, ativa):
         execute_query('UPDATE fin_extrato_memorizacoes SET ativo = %s WHERE id = %s',
                       (1 if ativa else 0, regra_id))
@@ -721,7 +733,8 @@ class RegraExtrato:
         """
         cond = ' WHERE categoria_id IS NULL' if so_sem_categoria else ''
         return execute_query(
-            'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id '
+            'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id, '
+            '       memorizacao_id, conferir '
             '  FROM extrato_lancamentos' + cond +
             ' ORDER BY data DESC, id DESC', fetch=True) or []
 

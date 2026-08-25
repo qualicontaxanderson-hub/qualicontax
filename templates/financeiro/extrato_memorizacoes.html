@@ -1,22 +1,81 @@
 {% extends "base.html" %}
 
-{% block title %}Memorizações do Extrato - Qualicontax{% endblock %}
+{% block title %}Regras do Extrato - Qualicontax{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-.em-inativa { opacity:.55; }
-.em-padrao { font-family:monospace; font-size:.92em; background:#f9fafb;
-  padding:2px 8px; border-radius:6px; }
+/* A regra deixou de ser um padrão de texto e virou um conjunto de decisões:
+   trechos, condições, para quem vale e como roda. A tabela de 7 colunas não
+   dava conta — cada regra vira uma FICHA, e cada decisão dela aparece com o
+   rótulo dizendo o que é. */
+.rg-lista { display:flex; flex-direction:column; gap:14px; }
+.rg { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:15px 17px; }
+.rg.morta { opacity:.6; }
+.rg-topo { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.rg-alvo { flex:1 1 240px; min-width:0; }
+.rg-alvo b { display:block; font-size:16px; font-weight:800; color:#0f3d2e;
+  line-height:1.25; overflow-wrap:anywhere; }
+.rg-alvo span { display:block; font-size:11.5px; color:#64748b; font-weight:600;
+  margin-top:2px; }
+.rg-selos { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.rg-selo { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800;
+  letter-spacing:.04em; border-radius:99px; padding:3px 10px; white-space:nowrap; }
+.rg-selo.viva { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+.rg-selo.morta { background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; }
+.rg-selo.direto { background:#e0f2fe; color:#075985; border:1px solid #7dd3fc; }
+.rg-selo.aprovar { background:#fef6e3; color:#b45309; border:1px solid #fcd9a0; }
+
+.rg-quando { margin-top:13px; }
+.rg-rot { display:block; font-size:9px; font-weight:800; letter-spacing:.09em;
+  text-transform:uppercase; color:#94a3b8; margin-bottom:5px; }
+.rg-termos { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.rg-termo { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px; font-weight:700; background:#f0fdf4; color:#0f3d2e;
+  border:1px solid #86efac; border-radius:8px; padding:4px 10px;
+  overflow-wrap:anywhere; }
+.rg-e { font-size:10.5px; font-weight:800; color:#94a3b8; }
+.rg-cond { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.rg-cond span { font-size:11px; font-weight:700; background:#f8fafc; color:#475569;
+  border:1px solid #e2e8f0; border-radius:7px; padding:3px 9px; }
+.rg-cond span.nenhuma { color:#94a3b8; font-weight:600; font-style:italic; }
+
+.rg-grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:11px 18px; margin-top:13px; padding-top:12px; border-top:1px dashed #e2e8f0; }
+.rg-campo b { display:block; font-size:13px; font-weight:700; color:#1e293b;
+  overflow-wrap:anywhere; }
+.rg-campo small { display:block; font-size:11px; color:#94a3b8; margin-top:1px; }
+
+.rg-pe { display:flex; gap:8px; flex-wrap:wrap; margin-top:13px; padding-top:12px;
+  border-top:1px solid #f1f5f9; }
+.rg-pe form { display:inline-flex; }
+.rg-bt { border:1.5px solid #e2e8f0; background:#fff; border-radius:8px; padding:7px 13px;
+  font-size:12px; font-weight:700; color:#475569; cursor:pointer; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:6px; font-family:inherit; }
+.rg-bt:hover { border-color:#86efac; background:#f0fdf4; color:#15803d; }
+.rg-bt.forte { border-color:#86efac; background:#f0fdf4; color:#15803d; }
+.rg-bt.perigo:hover { border-color:#fca5a5; background:#fef2f2; color:#b91c1c; }
+.rg-aviso { margin-top:11px; background:#fef6e3; border:1px solid #fcd9a0;
+  border-radius:9px; padding:9px 12px; font-size:12px; color:#b45309; line-height:1.5; }
+.rg-aviso b { font-weight:800; }
+
+@media (max-width: 768px) {
+  .rg-pe .rg-bt { flex:1 1 auto; justify-content:center; padding:10px; font-size:13px; }
+  .rg-pe form { flex:1 1 auto; }
+  .rg-pe form .rg-bt { width:100%; }
+}
 </style>
 
 <div class="page-header">
     <div>
         <h1 class="page-title">
             <i class="fas fa-memory" style="color: var(--primary-green);"></i>
-            Memorizações do Extrato
+            Regras do Extrato
         </h1>
-        <p class="page-subtitle">Classificou uma vez, o sistema repete sozinho — o padrão mais específico vence</p>
+        <p class="page-subtitle">
+            {{ memorizacoes | selectattr('ativo') | list | length }} ativa(s) ·
+            quando duas casam, vence a mais específica
+        </p>
     </div>
     <div class="page-actions">
         <a href="{{ url_for('financeiro.extrato') }}" class="btn btn-outline">
@@ -25,57 +84,135 @@
     </div>
 </div>
 
-<div class="fin-caixa">
-    <div class="fin-rolar">
-        {% if memorizacoes %}
-        <table class="fin-tab">
-            <thead>
-                <tr>
-                    <th>Padrão (contém)</th>
-                    <th>Classifica como</th>
-                    <th>Centro</th>
-                    <th style="text-align:right;">Usos</th>
-                    <th>Último uso</th>
-                    <th>Situação</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for m in memorizacoes %}
-                <tr class="{{ 'em-inativa' if not m.ativo }}">
-                    <td class="fin-td-titulo"><span class="em-padrao">{{ m.padrao }}</span></td>
-                    <td class="fin-td-oculta" title="{{ m.categoria_grupo }}">
-                        {{ 'R' if m.categoria_tipo == 'R' else 'P' }} · {{ m.categoria_nome }}</td>
-                    <td class="fin-td-oculta">{{ m.centro_nome or '—' }}</td>
-                    <td class="fin-valor fin-td-valor"><strong>{{ m.usos }}</strong></td>
-                    <td class="fin-td-meta">{{ m.ultimo_uso.strftime('%d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca usada' }}</td>
-                    <td class="fin-td-extra">
-                        <span class="fin-pilula {{ 'liquidado' if m.ativo else 'cancelado' }}">
-                            {{ 'Ativa' if m.ativo else 'Desativada' }}</span>
-                        <span class="fin-mob fin-fraco">· {{ m.categoria_nome }}{{ ' · ' ~ m.centro_nome if m.centro_nome }}</span>
-                    </td>
-                    <td class="fin-td-acao">
-                        <form method="POST" style="display:inline;"
-                              action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
-                            <button class="fin-btn-tag"
-                                    title="{{ 'Desativar (para de classificar; o que já foi fica)' if m.ativo else 'Reativar' }}">
-                                <i class="fas fa-{{ 'toggle-on' if m.ativo else 'toggle-off' }}"
-                                   style="color:{{ '#16a34a' if m.ativo else '#9ca3af' }};"></i>
-                                {{ 'Desativar' if m.ativo else 'Reativar' }}
-                            </button>
-                        </form>
-                    </td>
-                </tr>
+{% if memorizacoes %}
+<div class="rg-lista">
+    {% for m in memorizacoes %}
+    <div class="rg {{ 'morta' if not m.ativo }}">
+        <div class="rg-topo">
+            <div class="rg-alvo">
+                <b>{{ m.categoria_nome }}</b>
+                <span>{{ m.categoria_grupo }}{% if m.centro_nome %} · centro {{ m.centro_nome }}{% endif %}</span>
+            </div>
+            <div class="rg-selos">
+                <span class="rg-selo {{ 'viva' if m.ativo else 'morta' }}">
+                    {{ 'ATIVA' if m.ativo else 'DESATIVADA' }}</span>
+                <span class="rg-selo {{ 'direto' if m.aplicar != 'aprovar' else 'aprovar' }}">
+                    {{ '⚡ EXECUTA DIRETO' if m.aplicar != 'aprovar' else '👁 PEDE APROVAÇÃO' }}</span>
+            </div>
+        </div>
+
+        {# OS TRECHOS INTEIROS. A tela antiga mostrava so a coluna `padrao`, que
+           guarda apenas o PRIMEIRO termo — a regra parecia metade do que e. #}
+        <div class="rg-quando">
+            <span class="rg-rot">Quando a descrição tiver</span>
+            <div class="rg-termos">
+                {% for t in m.termos %}
+                <span class="rg-termo">{{ t }}</span>
+                {% if not loop.last %}<span class="rg-e">E</span>{% endif %}
                 {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="fin-vazio">
-            <i class="fas fa-memory" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-            Nenhuma memorização ainda. No Extrato, classifique um lançamento e
-            deixe o "Memorizar" marcado — a primeira decisão vira regra.
+            </div>
+            <div class="rg-cond">
+                {% if m.conta %}<span>só na conta {{ m.conta }}</span>{% endif %}
+                {% if m.sinal %}<span>só {{ 'saídas' if m.sinal == 'D' else 'entradas' }}</span>{% endif %}
+                {% if m.valor_exato is not none %}
+                <span>só no valor {{ m.valor_exato | float | round(2) | format_currency }}</span>{% endif %}
+                {% if not m.conta and not m.sinal and m.valor_exato is none %}
+                <span class="nenhuma">sem condição — vale para qualquer conta, valor e sentido</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="rg-grade">
+            <div class="rg-campo">
+                <span class="rg-rot">Vale para</span>
+                {% if m.escopo == 'grupo' %}
+                <b>Grupo {{ m.grupo_nome or '?' }}</b>
+                <small>e quem entrar no grupo depois</small>
+                {% elif m.escopo == 'lista' %}
+                <b>{{ (regra_empresas.get(m.id) or []) | map('string') | join(', ') or 'nenhuma' }}</b>
+                <small>empresas escolhidas</small>
+                {% elif m.empresa_id %}
+                <b>{{ emp_mapa.get(m.empresa_id) or ('empresa ' ~ m.empresa_id) }}</b>
+                <small>só esta empresa</small>
+                {% else %}
+                <b>Todas as empresas</b>
+                <small>nenhuma foi fixada</small>
+                {% endif %}
+            </div>
+            <div class="rg-campo">
+                <span class="rg-rot">Conta</span>
+                <b>{{ m.conta or 'qualquer uma' }}</b>
+                {% if m.conta %}<small>{{ contas_cad.get(m.conta | string, {}).get('apelido') or '' }}</small>{% endif %}
+            </div>
+            <div class="rg-campo">
+                <span class="rg-rot">Já classificou</span>
+                <b>{{ presos.get(m.id, 0) }} lançamento(s)</b>
+                <small>{{ m.ultimo_uso.strftime('último em %d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca rodou sozinha' }}</small>
+            </div>
+            <div class="rg-campo">
+                <span class="rg-rot">Esperando</span>
+                <b>{{ pendentes.get(m.id, 0) }} sem categoria</b>
+                <small>casam com ela e ainda não entraram</small>
+            </div>
+        </div>
+
+        {% if m.ativo and pendentes.get(m.id, 0) %}
+        <div class="rg-aviso">
+            <b>{{ pendentes.get(m.id) }} lançamento(s) antigo(s)</b> casam com esta regra e
+            continuam sem categoria — eles ficaram de fora porque a regra foi criada
+            valendo só daqui para frente.
         </div>
         {% endif %}
+
+        <div class="rg-pe">
+            {% if m.ativo and pendentes.get(m.id, 0) %}
+            <form method="POST"
+                  action="{{ url_for('financeiro.extrato_regra_retroagir', mem_id=m.id) }}"
+                  onsubmit="return confirm('Classificar os {{ pendentes.get(m.id) }} lançamento(s) antigos que casam com esta regra?');">
+                <button class="rg-bt forte">
+                    <i class="fas fa-backward"></i>
+                    Classificar os {{ pendentes.get(m.id) }} antigos
+                </button>
+            </form>
+            {% endif %}
+
+            {% if m.ativo %}
+            <form method="POST"
+                  action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
+                <button class="rg-bt" name="devolver" value="">
+                    <i class="fas fa-toggle-on" style="color:#16a34a;"></i>
+                    Desativar — o que já classificou fica
+                </button>
+            </form>
+            {% if presos.get(m.id, 0) %}
+            <form method="POST"
+                  action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}"
+                  onsubmit="return confirm('Desativar e devolver os {{ presos.get(m.id) }} lançamento(s) para SEM CATEGORIA? O que foi classificado à mão não é tocado.');">
+                <button class="rg-bt perigo" name="devolver" value="on">
+                    <i class="fas fa-rotate-left"></i>
+                    Desativar e devolver os {{ presos.get(m.id) }}
+                </button>
+            </form>
+            {% endif %}
+            {% else %}
+            <form method="POST"
+                  action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
+                <button class="rg-bt forte">
+                    <i class="fas fa-toggle-off" style="color:#9ca3af;"></i> Reativar
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="fin-caixa">
+    <div class="fin-vazio">
+        <i class="fas fa-memory" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+        Nenhuma regra ainda. No Extrato, classifique um lançamento escolhendo
+        "Memorizar" ou "Regra com condições" — a primeira decisão vira regra.
     </div>
 </div>
+{% endif %}
 {% endblock %}

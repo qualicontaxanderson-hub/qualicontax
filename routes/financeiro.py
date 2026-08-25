@@ -1232,6 +1232,10 @@ def extrato_classificar(lanc_id):
                      'nasceu.')
 
     ok = ExtratoLancamento.classificar(lanc_id, cat['id'], centro, mem_id)
+    if ok and mem_id:
+        # A regra acabou de classificar este lancamento: conta como uso. Sem
+        # isto ela aparece como "nunca usada" na tela logo depois de nascer.
+        ExtratoMemorizacao.contar_uso(mem_id)
     if ok:
         registrar('escrita.classificou_extrato', 'financeiro',
                   tabela='extrato_lancamentos', registro_id=lanc_id,
@@ -1347,9 +1351,65 @@ def extrato_regra_previa():
 @financeiro.route('/financeiro/extrato/memorizacoes')
 @permission_required('financeiro.extrato')
 def extrato_memorizacoes():
-    from models.extrato_lancamento import ExtratoMemorizacao
+    from models.extrato_lancamento import ExtratoLancamento, RegraExtrato
+    regras = RegraExtrato.listar()
+    _emps, _sel, mapa = _empresas_ctx()
+
+    # Duas contagens por regra, e elas contam historias diferentes:
+    #   presos    o que ELA classificou — e o que volta se for desfeita
+    #   pendentes o que casa e AINDA nao entrou — o que o botao de retroagir
+    #             vai pegar, escrito no proprio botao
+    presos, pendentes, regra_empresas = {}, {}, {}
+    universo = RegraExtrato.universo(so_sem_categoria=False) if regras else []
+    for r in regras:
+        presos[r['id']] = sum(1 for l in universo
+                              if l.get('memorizacao_id') == r['id'])
+        pendentes[r['id']] = len(RegraExtrato.preve(
+            r, so_sem_categoria=True, universo=universo))
+        if r.get('escopo') == 'lista':
+            regra_empresas[r['id']] = [
+                mapa.get(e) or ('empresa %s' % e)
+                for e in sorted(RegraExtrato.empresas_da(r) or [])]
+
     return render_template('financeiro/extrato_memorizacoes.html',
-                           memorizacoes=ExtratoMemorizacao.listar())
+                           memorizacoes=regras,
+                           presos=presos, pendentes=pendentes,
+                           regra_empresas=regra_empresas,
+                           emp_mapa=mapa,
+                           contas_cad=ExtratoLancamento.contas_mapa())
+
+
+@financeiro.route('/financeiro/extrato/memorizacoes/<int:mem_id>/retroagir',
+                  methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_regra_retroagir(mem_id):
+    """Aplica a regra nos lancamentos antigos que ainda estao sem categoria.
+
+    Existe porque criar a regra "so daqui para frente" e o caminho seguro, e
+    depois a pessoa quer os antigos tambem. Sem este botao ela teria de
+    apagar a regra e refazer.
+    """
+    from models.extrato_lancamento import RegraExtrato
+    r = RegraExtrato.get(mem_id)
+    if not r:
+        flash('Regra não encontrada.', 'danger')
+        return redirect(url_for('financeiro.extrato_memorizacoes'))
+    if not r['ativo']:
+        flash('Regra desativada — reative antes de aplicar nos antigos.', 'warning')
+        return redirect(url_for('financeiro.extrato_memorizacoes'))
+
+    n = RegraExtrato.aplicar_retroativa(mem_id)
+    registrar('escrita.aplicou_regra_retroativa', 'financeiro',
+              tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+              depois={'lancamentos_classificados': n,
+                      'termos': r['termos'], 'aplicar': r['aplicar']})
+    if n:
+        flash(f'{n} lançamento(s) antigo(s) classificado(s)' +
+              (' e marcados para conferência.' if r['aplicar'] == 'aprovar' else '.'),
+              'success')
+    else:
+        flash('Nenhum lançamento antigo se encaixou nesta regra.', 'warning')
+    return redirect(url_for('financeiro.extrato_memorizacoes'))
 
 
 @financeiro.route('/financeiro/extrato/memorizacoes/<int:mem_id>/alternar',
