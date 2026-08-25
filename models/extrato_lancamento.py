@@ -474,6 +474,101 @@ class RegraExtrato:
             -max((len(t) for t in r['termos']), default=0),
         ))[0]
 
+    # ----------------------------------------------------------- sugerir
+    #: bloco so-numeros com 4+ digitos: e o que costuma mudar de um mes para
+    #: o outro (nosso numero do boleto, sequencia da guia, id da operacao)
+    _SO_NUMERO = re.compile(r'^[0-9][0-9./-]{3,}$')
+
+    @staticmethod
+    def sugestoes(lanc, escopo='empresa', grupo_id=None, empresas=None):
+        """Trechos propostos para virar regra, do mais util para o menos.
+
+        Devolve lista de dicts com rotulo, termos, porque, n, saidas,
+        entradas. A contagem vem de ``preve``, o MESMO caminho que aplica.
+
+        As quatro leituras da descricao, e o que cada uma serve:
+
+        sem o que muda   tira os blocos so-numeros. E a resposta do caso da
+                         tarifa, onde o numero do boleto muda todo mes;
+        so quem esta     o rabo em letras — o nome de quem recebeu ou pagou,
+        do outro lado    sem o tipo da operacao. Amplo e util, mas e a que
+                         costuma misturar entrada com saida do mesmo cliente;
+        toda a familia   a cabeca em letras — todo lancamento desse tipo,
+                         seja de quem for;
+        esta descricao   tudo, numero incluido. Pega 1, e serve para o
+                         lancamento que nao se repete.
+        """
+        desc = RegraExtrato._norma(lanc.get('descricao'))
+        toks = desc.split(' ') if desc else []
+        numeros = [t for t in toks if RegraExtrato._SO_NUMERO.match(t)]
+        props, vistos = [], set()
+
+        def poe(rotulo, termos, porque, posto):
+            termos = [t.strip() for t in termos if t and t.strip()]
+            if not termos:
+                return
+            chave = tuple(sorted(RegraExtrato._norma(t) for t in termos))
+            if chave in vistos:
+                return
+            vistos.add(chave)
+            falso = {'id': 0, 'termos': termos, 'ativo': 1,
+                     'escopo': escopo, 'grupo_id': grupo_id,
+                     'empresa_id': lanc.get('empresa_id'),
+                     'conta': None, 'sinal': None, 'valor_exato': None}
+            achados = RegraExtrato.preve(falso, so_sem_categoria=False)
+            saidas = sum(1 for a in achados if float(a['valor'] or 0) < 0)
+            props.append({
+                'rotulo': rotulo, 'termos': termos, 'porque': porque,
+                'posto': posto, 'n': len(achados),
+                'saidas': saidas, 'entradas': len(achados) - saidas,
+                'exemplos': [a['descricao'][:60] for a in achados[:4]],
+            })
+
+        # 1. sem os numeros que mudam
+        if numeros:
+            corridos, atual = [], []
+            for t in toks:
+                if RegraExtrato._SO_NUMERO.match(t):
+                    if atual:
+                        corridos.append(' '.join(atual))
+                        atual = []
+                else:
+                    atual.append(t)
+            if atual:
+                corridos.append(' '.join(atual))
+            poe('Sem o que muda', corridos,
+                'ignora ' + ', '.join(numeros) + ' — é o que muda de um mês '
+                'para o outro', 0)
+
+        # 2. so o nome de quem esta do outro lado (o rabo em letras)
+        cauda = []
+        for t in reversed(toks):
+            if RegraExtrato._SO_NUMERO.match(t):
+                break
+            cauda.insert(0, t)
+        if cauda and len(cauda) < len(toks):
+            poe('Só quem está do outro lado', [' '.join(cauda)],
+                'o nome de quem recebeu ou pagou, sem o tipo da operação', 2)
+
+        # 3. so o tipo da operacao (a cabeca em letras)
+        cabeca = []
+        for t in toks:
+            if RegraExtrato._SO_NUMERO.match(t):
+                break
+            cabeca.append(t)
+        if cabeca and len(cabeca) < len(toks):
+            poe('Toda a família', [' '.join(cabeca)],
+                'todo lançamento desse tipo, seja de quem for — bem amplo', 3)
+
+        # 4. a descricao inteira
+        poe('Exatamente esta descrição', [desc],
+            'pega só o que for idêntico, número incluído', 4)
+
+        # A recomendada primeiro. Ordenar por quantidade poria "exatamente
+        # esta descricao" (1) no topo — justo a que nao serve para memorizar.
+        props.sort(key=lambda p: (p['posto'], p['n']))
+        return [p for p in props if p['n'] > 0]
+
     # -------------------------------------------------------------- gravar
     @staticmethod
     def criar(termos, categoria_id, centro_custo_id=None, empresa_id=None,

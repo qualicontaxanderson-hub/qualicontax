@@ -1179,44 +1179,155 @@ def extrato_classificar(lanc_id):
     centro_raw = (f.get('centro_custo_id') or '').strip()
     centro = int(centro_raw) if centro_raw.isdigit() else None
 
-    memorizar = f.get('memorizar') == 'on'
+    virar_regra = f.get('memorizar') == 'on'
+    retroagir = f.get('retroagir') == 'on'
     mem_id = None
     varridos = 0
-    if memorizar:
-        padrao = (f.get('padrao') or '').strip()
-        if len(padrao) < 4:
-            flash('O padrão da memorização precisa de pelo menos 4 letras '
-                  '(um trecho estável da descrição).', 'danger')
+    aviso = None
+
+    if virar_regra:
+        d = _regra_do_form(f, lanc)
+        if not d['termos'] or len(' '.join(d['termos'])) < 4:
+            flash('A regra precisa de pelo menos um trecho com 4 letras.', 'danger')
             return redirect(url_for('financeiro.extrato'))
-        mem_id = ExtratoMemorizacao.criar(padrao, cat['id'], centro,
-                                          criado_por=current_user.id)
+        if d['escopo'] == 'lista' and not d['empresas']:
+            flash('Escolha ao menos uma empresa para a regra.', 'danger')
+            return redirect(url_for('financeiro.extrato'))
+        if d['escopo'] == 'grupo' and not d['grupo_id']:
+            flash('Escolha o grupo de empresas.', 'danger')
+            return redirect(url_for('financeiro.extrato'))
+
+        mem_id = ExtratoMemorizacao.criar(
+            d['termos'], cat['id'], centro,
+            empresa_id=lanc.get('empresa_id'),
+            conta=d['conta'], sinal=d['sinal'], valor_exato=d['valor_exato'],
+            escopo=d['escopo'], grupo_id=d['grupo_id'], empresas=d['empresas'],
+            aplicar=d['aplicar'], criado_por=current_user.id)
+
         if mem_id:
-            registrar('escrita.criou_memorizacao_extrato', 'financeiro',
+            registrar('escrita.criou_regra_extrato', 'financeiro',
                       tabela='fin_extrato_memorizacoes', registro_id=mem_id,
-                      depois={'padrao': padrao.upper(), 'categoria': cat['nome'],
-                              'centro_custo_id': centro})
-            varridos = ExtratoMemorizacao.aplicar_retroativa(mem_id)
+                      depois={'termos': d['termos'], 'categoria': cat['nome'],
+                              'centro_custo_id': centro, 'conta': d['conta'],
+                              'sinal': d['sinal'], 'valor_exato': d['valor_exato'],
+                              'escopo': d['escopo'], 'grupo_id': d['grupo_id'],
+                              'empresas': sorted(d['empresas']),
+                              'aplicar': d['aplicar'], 'retroagiu': retroagir})
+            # O passado so e tocado quando a pessoa pediu.
+            if retroagir:
+                varridos = ExtratoMemorizacao.aplicar_retroativa(mem_id)
         else:
-            flash('Já existe memorização ativa com esse padrão — este '
-                  'lançamento foi classificado, mas nada novo foi memorizado.',
-                  'warning')
+            aviso = ('Já existe uma regra ativa idêntica — com os mesmos '
+                     'trechos, as mesmas condições e o mesmo alcance. Este '
+                     'lançamento foi classificado, mas nenhuma regra nova '
+                     'nasceu.')
 
     ok = ExtratoLancamento.classificar(lanc_id, cat['id'], centro, mem_id)
     if ok:
         registrar('escrita.classificou_extrato', 'financeiro',
                   tabela='extrato_lancamentos', registro_id=lanc_id,
                   depois={'categoria': cat['nome'], 'centro_custo_id': centro,
-                          'memorizou': bool(mem_id)})
+                          'regra_id': mem_id})
         msg = f'Classificado em "{cat["nome"]}".'
         if mem_id:
-            extra_varridos = max(0, varridos - 1)
-            msg += (f' Memorizado — {extra_varridos} lançamento(s) antigo(s) '
-                    'também foram classificados de carona.'
-                    if extra_varridos else ' Memorizado para as próximas.')
+            modo = ('Regra criada — os próximos vão pedir sua conferência.'
+                    if f.get('aplicar') == 'aprovar'
+                    else 'Regra criada — os próximos entram sozinhos.')
+            msg += ' ' + modo
+            if retroagir:
+                extra = max(0, varridos - 1)
+                msg += (f' {extra} lançamento(s) antigo(s) também '
+                        'foram classificados.' if extra
+                        else ' Nenhum lançamento antigo se encaixou.')
         flash(msg, 'success')
+        if aviso:
+            flash(aviso, 'warning')
     else:
         flash('Erro ao classificar.', 'danger')
     return redirect(url_for('financeiro.extrato'))
+
+
+def _regra_do_form(f, lanc):
+    """Le do formulario o desenho da regra. Um lugar so, porque a previa e a
+    gravacao TEM de ler igual — senao a tela mostra um numero e grava outro."""
+    termos = [t.strip() for t in f.getlist('termo') if t and t.strip()]
+    if not termos:
+        um = (f.get('termos') or '').strip()
+        termos = [um] if um else []
+
+    escopo = (f.get('escopo') or 'empresa').strip()
+    grupo_raw = (f.get('grupo_id') or '').strip()
+    empresas = [int(e) for e in f.getlist('empresa') if str(e).isdigit()]
+
+    valor_raw = (f.get('valor_exato') or '').strip()
+    try:
+        valor = abs(float(valor_raw.replace('.', '').replace(',', '.'))) if valor_raw else None
+    except ValueError:
+        valor = None
+
+    return {
+        'termos': termos,
+        'conta': (f.get('conta') or '').strip() or None,
+        'sinal': (f.get('sinal') or '').strip().upper()[:1] or None,
+        'valor_exato': valor,
+        'escopo': escopo if escopo in ('empresa', 'lista', 'grupo') else 'empresa',
+        'grupo_id': int(grupo_raw) if grupo_raw.isdigit() else None,
+        'empresas': empresas,
+        'aplicar': 'aprovar' if (f.get('aplicar') or '') == 'aprovar' else 'direto',
+        'empresa_id': lanc.get('empresa_id') if lanc else None,
+    }
+
+
+@financeiro.route('/financeiro/extrato/<int:lanc_id>/sugestoes')
+@permission_required('financeiro.extrato')
+def extrato_sugestoes(lanc_id):
+    """O que o sistema propoe para este lancamento, com a contagem real."""
+    from models.extrato_lancamento import ExtratoLancamento, RegraExtrato
+    lanc = ExtratoLancamento.get(lanc_id)
+    if not lanc:
+        return jsonify(ok=False, msg='Lançamento não encontrado.'), 404
+    leitura = ExtratoLancamento.ler_descricao(lanc['descricao'])
+    return jsonify(
+        ok=True,
+        lancamento={
+            'id': lanc['id'],
+            'descricao': ExtratoLancamento.corrigir_acento(lanc['descricao']),
+            'nome': leitura['nome'], 'doc': leitura['doc'],
+            'valor': float(lanc['valor']), 'conta': lanc['conta'] or '',
+            'banco': lanc['banco'] or '',
+            'data': lanc['data'].strftime('%d/%m/%Y') if lanc.get('data') else '',
+        },
+        sugestoes=RegraExtrato.sugestoes(lanc))
+
+
+@financeiro.route('/financeiro/extrato/regra/previa', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_regra_previa():
+    """Quantos lancamentos ESTA regra pegaria — antes de gravar nada.
+
+    Devolve tambem quantos ja tem categoria: sao os que a regra NAO vai
+    mexer, e some-los ao total seria prometer o que nao vai acontecer.
+    """
+    from models.extrato_lancamento import ExtratoLancamento, RegraExtrato
+    lanc_raw = (request.form.get('lancamento_id') or '').strip()
+    lanc = ExtratoLancamento.get(int(lanc_raw)) if lanc_raw.isdigit() else None
+    d = _regra_do_form(request.form, lanc)
+    if not d['termos']:
+        return jsonify(ok=True, n=0, livres=0, ocupados=0, saidas=0,
+                       entradas=0, exemplos=[])
+
+    falsa = dict(d, id=0, ativo=1)
+    todos = RegraExtrato.preve(falsa, so_sem_categoria=False)
+    livres = [a for a in todos if not a['categoria_id']]
+    saidas = sum(1 for a in livres if float(a['valor'] or 0) < 0)
+    return jsonify(
+        ok=True, n=len(livres), livres=len(livres),
+        ocupados=len(todos) - len(livres),
+        saidas=saidas, entradas=len(livres) - saidas,
+        exemplos=[{'descricao': ExtratoLancamento.corrigir_acento(a['descricao'])[:70],
+                   'valor': float(a['valor']),
+                   'data': a['data'].strftime('%d/%m/%Y') if a.get('data') else ''}
+                  for a in livres[:6]])
 
 
 @financeiro.route('/financeiro/extrato/memorizacoes')
@@ -1236,13 +1347,30 @@ def extrato_memorizacao_alternar(mem_id):
     if not m:
         flash('Memorização não encontrada.', 'danger')
     else:
-        ExtratoMemorizacao.set_ativa(mem_id, not m['ativo'])
-        registrar('escrita.alternou_memorizacao_extrato', 'financeiro',
+        ligar = not m['ativo']
+        # Ao DESLIGAR, a pessoa escolhe o que acontece com o passado. Ao
+        # religar nao ha o que perguntar: a regra volta a valer para o que
+        # vier, e o retroativo e um gesto proprio.
+        devolver = (not ligar) and request.form.get('devolver') == 'on'
+        if ligar:
+            ExtratoMemorizacao.set_ativa(mem_id, True)
+            devolvidos = 0
+        else:
+            devolvidos = ExtratoMemorizacao.desativar(mem_id, devolver=devolver)
+        registrar('escrita.alternou_regra_extrato', 'financeiro',
                   tabela='fin_extrato_memorizacoes', registro_id=mem_id,
-                  depois={'ativo': not m['ativo']})
-        flash('Memorização reativada.' if not m['ativo'] else
-              'Memorização desativada — os já classificados ficam como estão.',
-              'success')
+                  antes={'ativo': bool(m['ativo'])},
+                  depois={'ativo': ligar, 'devolveu': devolver,
+                          'lancamentos_devolvidos': devolvidos})
+        if ligar:
+            flash('Regra reativada — ela volta a valer para o que vier.', 'success')
+        elif devolver:
+            flash(f'Regra desativada e {devolvidos} lançamento(s) voltaram para '
+                  '"sem categoria". O que foi classificado à mão não foi tocado.',
+                  'success')
+        else:
+            flash('Regra desativada — ela para de valer daqui para frente, e o '
+                  'que já classificou continua como está.', 'success')
     return redirect(url_for('financeiro.extrato_memorizacoes'))
 
 

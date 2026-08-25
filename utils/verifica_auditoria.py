@@ -37,6 +37,9 @@ DISPENSADAS = {
     # Sem sessão: quem chama é o agente com chave própria, e ele usa
     # registrar_agente no lugar certo.
     ('robo_saidas.py', 'receber_saida'): 'ator de máquina; registra em outra camada',
+    # POST que so LE: a previa da regra recebe o desenho no corpo (nao cabe
+    # em querystring) e devolve a contagem. Nao escreve nada.
+    ('financeiro.py', 'extrato_regra_previa'): 'POST que so le — a previa nao grava',
     # Tela aposentada em 21/08/2026 (tabela vazia, consulta quebrada).
     ('financeiro.py', 'recebimento_excluir'): 'tela aposentada',
     ('financeiro.py', 'recebimento_excluir_lote'): 'tela aposentada',
