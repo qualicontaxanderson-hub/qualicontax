@@ -901,6 +901,15 @@ def extrato():
                            doc_fmt=ExtratoLancamento.formatar_doc,
                            categorias=FinCategoria.listar(),
                            centros=FinCentroCusto.listar(),
+                           # os grupos de empresa que ja existem no cadastro:
+                           # a regra pode valer para o grupo inteiro, e quem
+                           # entrar nele depois herda
+                           grupos_emp=execute_query(
+                               'SELECT g.id, g.nome, COUNT(r.cliente_id) AS n '
+                               '  FROM grupos_clientes g '
+                               '  LEFT JOIN cliente_grupo_relacao r ON r.grupo_id = g.id '
+                               ' GROUP BY g.id, g.nome ORDER BY g.nome',
+                               fetch=True) or [],
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            filtros_ativos=ativos, hoje=date.today(),
                            limite=500, filtros=filtros)
@@ -1294,7 +1303,12 @@ def extrato_sugestoes(lanc_id):
             'descricao': ExtratoLancamento.corrigir_acento(lanc['descricao']),
             'nome': leitura['nome'], 'doc': leitura['doc'],
             'valor': float(lanc['valor']), 'conta': lanc['conta'] or '',
-            'banco': lanc['banco'] or '',
+            # o apelido do CADASTRO, nao o nome cru do OFX: a lista ja mostra
+            # "Sicredi", e o assistente mostrando "CCPI DO CERRADO DE GO"
+            # pareceria outra conta
+            'banco': (ExtratoLancamento.contas_mapa()
+                      .get(str(lanc['conta'] or ''), {})
+                      .get('apelido') or lanc['banco'] or ''),
             'data': lanc['data'].strftime('%d/%m/%Y') if lanc.get('data') else '',
         },
         sugestoes=RegraExtrato.sugestoes(lanc))

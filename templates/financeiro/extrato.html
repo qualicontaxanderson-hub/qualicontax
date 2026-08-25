@@ -165,6 +165,111 @@
   .ex-reg { padding:14px 16px; }
 }
 
+/* ================= ASSISTENTE DE CLASSIFICAR =================
+   Um passo por tela. O corpo e o rodape moram DENTRO do <form>, entao o form
+   TAMBEM e coluna de flex — sem isso a altura para nele e o rodape cai para
+   fora da tela no passo com mais cartoes (medido em 24/08). */
+#exWiz { display:none; }
+#exWiz.aberto { display:block; }
+.ex-wiz { max-width:580px; display:flex; flex-direction:column;
+  max-height:calc(100vh - 10%); }
+#exWizForm { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.ex-wiz-corpo { flex:1 1 auto; min-height:0; overflow-y:auto;
+  max-height:min(58vh, 470px); }
+.ex-wiz-abas { display:flex; gap:6px; padding:0 22px 12px; }
+.ex-wiz-aba { flex:1 1 0; min-width:0; }
+.ex-wiz-aba i { display:block; height:3px; border-radius:99px; background:#e2e8f0; }
+.ex-wiz-aba span { display:block; font-size:10px; font-weight:700; color:#b6c2bb;
+  margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ex-wiz-aba.feita i, .ex-wiz-aba.agora i { background:#00a85a; }
+.ex-wiz-aba.feita span { color:#5b7468; cursor:pointer; }
+.ex-wiz-aba.agora span { color:#0f3d2e; font-weight:800; }
+.ex-wiz-passo { font-size:12px; color:#7d968a; margin:0 0 12px; }
+.ex-wiz-passo b { display:block; font-size:17px; font-weight:800; color:#0f3d2e;
+  margin-top:1px; }
+.ex-wiz-lanc { background:#f7faf8; border-radius:11px; padding:10px 12px;
+  margin-bottom:13px; font-size:11.5px; }
+.ex-wiz-lanc .d { font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:10.5px; color:#94a3b8; overflow-wrap:anywhere; line-height:1.45; }
+.ex-wiz-lanc .n { font-size:13.5px; font-weight:700; color:#1e293b; margin-top:3px; }
+.ex-wiz-lanc .m { color:#64748b; font-weight:600; margin-top:2px; }
+
+.ex-cartoes { display:flex; flex-direction:column; gap:7px; }
+.ex-cartao { display:flex; align-items:flex-start; gap:11px; width:100%; text-align:left;
+  padding:12px 13px; border:1.5px solid #e2e8f0; border-radius:12px; background:#fff;
+  cursor:pointer; font-family:inherit; color:#1e293b; }
+.ex-cartao:hover { border-color:#86efac; background:#f8fdfa; }
+.ex-cartao.on { border-color:#00a85a; background:#f0fdf4;
+  box-shadow:0 0 0 1px #00a85a inset; }
+.ex-cartao:disabled { opacity:.45; cursor:not-allowed; }
+.ex-cartao .b { flex:0 0 30px; height:30px; border-radius:9px; display:grid;
+  place-items:center; font-size:14px; background:#f1f5f9; margin-top:1px; }
+.ex-cartao .t { flex:1 1 auto; min-width:0; }
+.ex-cartao .t b { display:block; font-size:14px; font-weight:700; }
+.ex-cartao .t small { display:block; font-size:11.5px; color:#8a9a91; margin-top:2px;
+  line-height:1.35; }
+.ex-cartao .t code { display:block; font-size:10.5px; margin-top:3px;
+  overflow-wrap:anywhere; color:#475569; }
+.ex-cartao .ok { color:#00a85a; font-weight:900; opacity:0; margin-top:4px; }
+.ex-cartao.on .ok { opacity:1; }
+.ex-cartao .n { flex:0 0 44px; text-align:center; }
+.ex-cartao .n b { display:block; font-size:19px; font-weight:800; color:#00a85a;
+  line-height:1.1; font-variant-numeric:tabular-nums; }
+.ex-cartao .n span { display:block; font-size:9px; font-weight:700; color:#94a3b8;
+  text-transform:uppercase; letter-spacing:.05em; }
+
+.ex-rot { display:block; font-size:10px; font-weight:800; letter-spacing:.07em;
+  text-transform:uppercase; color:#94a3b8; margin:14px 0 7px; }
+.ex-pedacos { display:flex; flex-wrap:wrap; gap:5px; }
+.ex-pedaco { border:1.5px dashed #e2e8f0; background:#fff; color:#94a3b8;
+  border-radius:8px; padding:6px 9px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px; font-weight:600; cursor:pointer; text-decoration:line-through; }
+.ex-pedaco.on { border-style:solid; border-color:#00a85a; background:#f0fdf4;
+  color:#0f3d2e; text-decoration:none; font-weight:700; }
+.ex-conta-box { background:#fff; border:1.5px solid #e2e8f0; border-radius:11px;
+  padding:11px 13px; display:flex; align-items:center; gap:11px; margin-top:11px; }
+.ex-conta-box b { font-size:25px; font-weight:800; color:#00a85a; line-height:1;
+  font-variant-numeric:tabular-nums; }
+.ex-conta-box span { font-size:12px; color:#64748b; line-height:1.35; }
+.ex-conta-box.zero b { color:#b45309; }
+.ex-alerta { margin-top:9px; background:#fef6e3; border:1px solid #fcd9a0;
+  border-radius:9px; padding:8px 11px; font-size:11.5px; color:#b45309; line-height:1.45; }
+.ex-previa { margin-top:9px; border:1px solid #e2e8f0; border-radius:11px;
+  overflow:hidden; }
+.ex-previa div { padding:7px 11px; font-size:11px; border-bottom:1px solid #f1f5f9;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#64748b;
+  display:flex; gap:9px; justify-content:space-between; }
+.ex-previa div:last-child { border-bottom:0; }
+.ex-previa s { text-decoration:none; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; }
+.ex-previa em { font-style:normal; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.ex-cond { display:flex; align-items:flex-start; gap:9px; padding:9px 2px;
+  border-bottom:1px solid #f1f5f9; font-size:13px; cursor:pointer; }
+.ex-cond:last-child { border-bottom:0; }
+.ex-cond input { margin-top:3px; width:17px; height:17px; accent-color:#00a85a; }
+.ex-cond div { flex:1 1 auto; min-width:0; }
+.ex-cond b { display:block; font-size:13px; font-weight:600; }
+.ex-cond small { display:block; font-size:11.5px; color:#94a3b8; margin-top:1px; }
+.ex-resumo { background:#f0fdf4; border:1px solid #86efac; border-radius:11px;
+  padding:12px 13px; font-size:12.5px; color:#166534; line-height:1.55; }
+.ex-resumo b { font-weight:800; }
+.ex-wiz-pe { display:flex; gap:9px; }
+.ex-wiz-pe .btn { flex:1 1 auto; justify-content:center; }
+.ex-busca-in { width:100%; border:1.5px solid #e2e8f0; border-radius:10px;
+  padding:9px 12px; font-size:12.5px; font-family:inherit; background:#f8fafc; }
+.ex-vazio-lista { text-align:center; color:#94a3b8; font-size:12.5px; padding:18px 8px; }
+
+@media (max-width: 768px) {
+  #exWiz.aberto { display:block; }
+  .ex-wiz { position:fixed; left:0; right:0; bottom:0; top:auto; margin:0; width:100%;
+    max-width:none; max-height:92vh; border-radius:18px 18px 0 0; animation:none; }
+  .ex-wiz .modal-header { padding:16px 18px 12px; flex:0 0 auto; }
+  .ex-wiz-abas { padding:0 18px 12px; }
+  .ex-wiz-corpo { max-height:none; padding:0 18px 18px; -webkit-overflow-scrolling:touch; }
+  .ex-wiz-pe { padding:12px 18px calc(12px + env(safe-area-inset-bottom)); background:#fff; }
+  .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
+}
+
 /* No CELULAR o valor desce para baixo do bloco, em vez de disputar a largura. */
 @media (max-width: 768px) {
   .ex-reg { flex-direction:column; gap:0; padding:12px 14px; }
@@ -552,54 +657,66 @@
     </div>
 </div>
 
-<!-- ── Modal: classificar / memorizar ────────────────────────────── -->
-<div id="exModalClassificar" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:600px;">
+<!-- ── Assistente: classificar o lançamento ───────────────── -->
+{# Um passo por tela. Quantos passos depende do que a pessoa escolhe no
+   primeiro: classificar so este lancamento pede tres, criar regra com
+   condicoes pede seis. O numero de "quantos essa regra pega" vem do
+   SERVIDOR a cada mudanca — contar aqui seria uma segunda implementacao da
+   regra, e as duas divergiriam justo na hora de confiar no numero. #}
+<div id="exWiz" class="modal">
+    <div class="modal-content ex-wiz">
         <div class="modal-header">
-            <h3>Classificar Lançamento</h3>
-            <button class="modal-close" onclick="exFecharClassificar()">&times;</button>
+            <h3 id="exWizTitulo">Classificar Lançamento</h3>
+            <button class="modal-close" onclick="exWizFechar()">&times;</button>
         </div>
-        <form method="POST" id="exFormClassificar" action="">
-            <div class="modal-body">
-                <p id="exClasInfo" style="margin-bottom:14px; color:#374151;"></p>
-                <div class="form-row">
-                    <div class="form-group" style="flex:2;">
-                        <label>Categoria *</label>
-                        <select name="categoria_id" id="exCategoria" class="form-control" required>
-                            {% for c in categorias %}
-                            <option value="{{ c.id }}" data-tipo="{{ c.tipo }}">{{ c.grupo }} · {{ c.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Centro de custo</label>
-                        <select name="centro_custo_id" id="exCentro" class="form-control">
-                            <option value="">— sem centro —</option>
-                            {% for cc in centros %}
-                            <option value="{{ cc.id }}">{{ cc.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group" style="border-top:1px solid #e5e7eb; padding-top:12px;">
-                    <label>
-                        <input type="checkbox" name="memorizar" id="exMemorizar" checked
-                               onchange="document.getElementById('exPadraoBox').style.display = this.checked ? '' : 'none'">
-                        <strong>Memorizar</strong> — o que vier igual já chega classificado
-                        (e os antigos vão de carona)
-                    </label>
-                    <div id="exPadraoBox" style="margin-top:8px; padding-left:22px;">
-                        <label style="font-size:.9em; color:#6b7280;">
-                            Padrão (o trecho ESTÁVEL da descrição — encurte se precisar):</label>
-                        <input type="text" name="padrao" id="exPadrao" class="form-control" maxlength="160">
-                    </div>
-                </div>
-                <small style="color:#6b7280;">Desmarque "Memorizar" para classificar só este
-                    lançamento (único, sem regra).</small>
+
+        <div class="ex-wiz-abas" id="exWizAbas"></div>
+
+        <form method="POST" id="exWizForm" action="">
+            <input type="hidden" name="memorizar"  id="exwMemorizar">
+            <input type="hidden" name="conta"      id="exwConta">
+            <input type="hidden" name="sinal"      id="exwSinal">
+            <input type="hidden" name="valor_exato" id="exwValor">
+            <input type="hidden" name="escopo"     id="exwEscopo">
+            <input type="hidden" name="grupo_id"   id="exwGrupo">
+            <input type="hidden" name="aplicar"    id="exwAplicar">
+            <input type="hidden" name="retroagir"  id="exwRetroagir">
+            <input type="hidden" name="categoria_id"    id="exCategoriaOculta">
+            <input type="hidden" name="centro_custo_id" id="exCentroOculto">
+            <div id="exwTermos"></div>
+            <div id="exwEmpresas"></div>
+
+            {# O catalogo mora no HTML e nao num JSON no script: o Jinja ja
+               tem a lista, e duplicar em JS seria um segundo lugar para
+               ficar desatualizado. O <select> fica escondido; o assistente
+               le as <option> dele. #}
+            <select id="exCatalogo" style="display:none" aria-hidden="true" tabindex="-1">
+                {% for c in categorias %}
+                <option value="{{ c.id }}" data-tipo="{{ c.tipo }}"
+                        data-grupo="{{ c.grupo }}" data-nome="{{ c.nome }}">{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+            <select id="exCentrosCat" style="display:none" aria-hidden="true" tabindex="-1">
+                {% for cc in centros %}
+                <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                {% endfor %}
+            </select>
+
+            <div class="modal-body ex-wiz-corpo">
+                <div class="ex-wiz-lanc" id="exWizLanc"></div>
+                <p class="ex-wiz-passo" id="exWizPasso"></p>
+                <div id="exWizTela"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="exFecharClassificar()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Classificar</button>
+
+            <div class="modal-footer ex-wiz-pe">
+                <button type="button" class="btn btn-outline" id="exWizVoltar"
+                        onclick="exWizAndar(-1)">Voltar</button>
+                {# nasce APAGADO: entre abrir e a leitura do lancamento chegar
+                   ha um instante em que dava para clicar sem ter escolhido nada. #}
+                <button type="button" class="btn btn-primary" id="exWizSeguir"
+                        onclick="exWizAndar(1)" disabled style="opacity:.45">Continuar</button>
+                <button type="submit" class="btn btn-primary" id="exWizGravar"
+                        style="display:none;">Classificar</button>
             </div>
         </form>
     </div>
@@ -650,37 +767,469 @@ function exPeriodo(qual) {
     document.getElementById('exFormFiltro').submit();
 }
 
-function exFecharClassificar() {
-    document.getElementById('exModalClassificar').style.display = 'none';
+// =====================================================================
+// ASSISTENTE DE CLASSIFICAR. Um passo por tela.
+//
+// A CONTAGEM ("pega 4") vem do SERVIDOR a cada mudanca. Contar aqui seria
+// uma segunda implementacao da regra, e as duas divergiriam no primeiro
+// detalhe — justo na hora em que a pessoa esta confiando no numero para
+// decidir se cria a regra ou nao.
+// =====================================================================
+var EX_URL_SUG = "{{ url_for('financeiro.extrato_sugestoes', lanc_id=0) }}";
+var EX_URL_PREVIA = "{{ url_for('financeiro.extrato_regra_previa') }}";
+
+var EX_EMPRESAS = [
+{% for e in fin_empresas %}  { id: {{ e.cliente_id }}, nome: {{ (emp_mapa.get(e.cliente_id) or '?') | tojson }} }{{ ',' if not loop.last }}
+{% endfor %}];
+var EX_GRUPOS = [
+{% for g in grupos_emp %}  { id: {{ g.id }}, nome: {{ g.nome | tojson }}, n: {{ g.n }} }{{ ',' if not loop.last }}
+{% endfor %}];
+
+var W = null;
+
+var PASSOS = {
+  unico:  ['Como', 'Categoria', 'Confirmar'],
+  memo:   ['Como', 'Trecho', 'Empresas', 'Categoria', 'Confirmar'],
+  regra:  ['Como', 'Trecho', 'Condições', 'Empresas', 'Categoria', 'Confirmar']
+};
+
+function exEsc(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function exMoeda(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function exAbrirClassificar(el) {
-    var form = document.getElementById('exFormClassificar');
-    form.action = EX_URL_CLAS.replace('/0/', '/' + el.getAttribute('data-id') + '/');
-    document.getElementById('exClasInfo').textContent =
-        el.getAttribute('data-desc') + ' — ' + el.getAttribute('data-valor');
+  W = {
+    id: el.getAttribute('data-id'),
+    tipo: el.getAttribute('data-tipo'),
+    cat: el.getAttribute('data-cat') || '',
+    centro: el.getAttribute('data-centro') || '',
+    modo: null, i: 0,
+    lanc: null, sugestoes: [], pedacos: [], sugEscolhida: null, manual: false,
+    cond: { conta: false, sinal: false, valor: false },
+    escopo: 'empresa', empresas: [], grupo: null,
+    aplicar: 'direto', retroagir: false,
+    grupoCat: null, previa: null, buscando: false
+  };
+  document.getElementById('exWizForm').action =
+    EX_URL_CLAS.replace('/0/', '/' + W.id + '/');
+  document.getElementById('exWiz').classList.add('aberto');
+  document.getElementById('exWizTela').innerHTML =
+    '<p class="ex-vazio-lista">lendo o lançamento…</p>';
 
-    // Crédito só vê categorias de receita; débito, de despesa.
-    var tipo = el.getAttribute('data-tipo');
-    var sel = document.getElementById('exCategoria');
-    var primeiro = null;
-    Array.prototype.forEach.call(sel.options, function (o) {
-        var ok = o.getAttribute('data-tipo') === tipo;
-        o.hidden = !ok;
-        o.disabled = !ok;
-        if (ok && primeiro === null) primeiro = o.value;
+  fetch(EX_URL_SUG.replace('/0/', '/' + W.id + '/'))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.ok) throw new Error(d.msg || 'falhou');
+      W.lanc = d.lancamento;
+      W.sugestoes = d.sugestoes || [];
+      // Cada palavra vira um pedaco que liga e desliga. O que e so numero
+      // ja nasce DESLIGADO: e sempre ele que muda de um mes para o outro.
+      W.pedacos = String(d.lancamento.descricao).replace(/\s+/g, ' ').trim()
+        .split(' ').map(function (p) {
+          return { txt: p, on: !/^[0-9][0-9.\/-]{3,}$/.test(p) };
+        });
+      exWizDesenha();
+    })
+    .catch(function () {
+      document.getElementById('exWizTela').innerHTML =
+        '<p class="ex-vazio-lista">Não consegui ler o lançamento. Feche e tente de novo.</p>';
     });
-    var atual = el.getAttribute('data-cat');
-    var opAtual = atual ? sel.querySelector('option[value="' + atual + '"]') : null;
-    sel.value = (opAtual && !opAtual.disabled) ? atual : primeiro;
-    document.getElementById('exCentro').value = el.getAttribute('data-centro') || '';
-
-    document.getElementById('exMemorizar').checked = true;
-    document.getElementById('exPadraoBox').style.display = '';
-    document.getElementById('exPadrao').value =
-        (el.getAttribute('data-desc') || '').toUpperCase().slice(0, 160);
-
-    document.getElementById('exModalClassificar').style.display = 'block';
 }
+
+function exWizFechar() {
+  document.getElementById('exWiz').classList.remove('aberto');
+}
+
+function exTermos() {
+  // Pedacos ligados e colados viram UM trecho. Trechos separados por um
+  // pedaco desligado viram trechos diferentes, e TODOS precisam aparecer —
+  // e assim que "o numero do meio muda" deixa de atrapalhar.
+  var termos = [], atual = [];
+  W.pedacos.forEach(function (p) {
+    if (p.on) atual.push(p.txt);
+    else if (atual.length) { termos.push(atual.join(' ')); atual = []; }
+  });
+  if (atual.length) termos.push(atual.join(' '));
+  return termos;
+}
+
+function exCorpoDaRegra() {
+  var d = new URLSearchParams();
+  d.append('lancamento_id', W.id);
+  exTermos().forEach(function (t) { d.append('termo', t); });
+  if (W.cond.conta) d.append('conta', W.lanc.conta || '');
+  if (W.cond.sinal) d.append('sinal', W.lanc.valor < 0 ? 'D' : 'C');
+  if (W.cond.valor) d.append('valor_exato', String(Math.abs(W.lanc.valor)));
+  d.append('escopo', W.escopo);
+  if (W.escopo === 'grupo' && W.grupo) d.append('grupo_id', W.grupo);
+  if (W.escopo === 'lista') W.empresas.forEach(function (e) { d.append('empresa', e); });
+  return d;
+}
+
+function exPedePrevia(aoTerminar) {
+  W.buscando = true;
+  fetch(EX_URL_PREVIA, { method: 'POST', body: exCorpoDaRegra() })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { W.buscando = false; W.previa = d; aoTerminar(); })
+    .catch(function () { W.buscando = false; W.previa = null; aoTerminar(); });
+}
+
+function exWizAndar(d) {
+  if (d > 0 && document.getElementById('exWizSeguir').disabled) return;
+  var passos = PASSOS[W.modo] || PASSOS.unico;
+  if (d < 0 && W.i === 0) return exWizFechar();
+  if (d < 0 && passos[W.i] === 'Trecho' && W.manual) { W.manual = false; return exWizDesenha(); }
+  if (d < 0 && passos[W.i] === 'Categoria' && W.grupoCat) { W.grupoCat = null; return exWizDesenha(); }
+  W.i = Math.max(0, Math.min(passos.length - 1, W.i + d));
+  exWizDesenha();
+}
+
+function exWizIr(k) { W.i = k; exWizDesenha(); }
+
+function exWizDesenha() {
+  var passos = W.modo ? PASSOS[W.modo] : ['Como', '…', '…'];
+  var passo = W.modo ? passos[W.i] : 'Como';
+  var tela = document.getElementById('exWizTela');
+  var html = '', pronto = false;
+
+  document.getElementById('exWizAbas').innerHTML = passos.map(function (n, k) {
+    var cls = k < W.i ? 'feita' : (k === W.i ? 'agora' : '');
+    return '<div class="ex-wiz-aba ' + cls + '"' +
+      (k < W.i ? ' onclick="exWizIr(' + k + ')"' : '') +
+      '><i></i><span>' + n + '</span></div>';
+  }).join('');
+
+  document.getElementById('exWizPasso').innerHTML =
+    'Passo ' + (W.i + 1) + ' de ' + passos.length + ' — <b>' + passo + '</b>';
+
+  if (W.lanc) {
+    document.getElementById('exWizLanc').innerHTML =
+      '<div class="d">' + exEsc(W.lanc.descricao) + '</div>' +
+      (W.lanc.nome ? '<div class="n">' + exEsc(W.lanc.nome) + '</div>' : '') +
+      '<div class="m">' + W.lanc.data + ' · ' + exEsc(W.lanc.banco) + ' · ' +
+      exMoeda(W.lanc.valor) + '</div>';
+  }
+
+  if (passo === 'Como') {
+    html = '<div class="ex-cartoes">' + [
+      ['unico', '🎯', 'Só este lançamento',
+       'nada é memorizado. Para o que não se repete — um serviço avulso, uma compra única'],
+      ['memo', '🔁', 'Memorizar este trecho',
+       'sempre que vier uma descrição com este trecho, vai para a mesma categoria'],
+      ['regra', '⚙️', 'Regra com condições',
+       'quando o texto varia: exige também conta, débito ou crédito, valor']
+    ].map(function (o) {
+      return '<button type="button" class="ex-cartao' + (W.modo === o[0] ? ' on' : '') +
+        '" onclick="exWizModo(\'' + o[0] + '\')"><span class="b">' + o[1] +
+        '</span><span class="t"><b>' + o[2] + '</b><small>' + o[3] +
+        '</small></span><span class="ok">✓</span></button>';
+    }).join('') + '</div>';
+    pronto = !!W.modo;
+
+  } else if (passo === 'Trecho') {
+    if (!W.manual) {
+      html = '<span class="ex-rot" style="margin-top:0">o sistema sugere — o número é quantos pega</span>' +
+        '<div class="ex-cartoes">' + W.sugestoes.map(function (sg, k) {
+          var mistura = sg.saidas > 0 && sg.entradas > 0;
+          return '<button type="button" class="ex-cartao' +
+            (W.sugEscolhida === k ? ' on' : '') + '" onclick="exWizSugestao(' + k + ')">' +
+            '<span class="n"><b>' + sg.n + '</b><span>pega</span></span>' +
+            '<span class="t"><b>' + exEsc(sg.rotulo) +
+            (k === 0 ? ' <span style="font-size:9px;background:#00a85a;color:#fff;border-radius:99px;padding:2px 8px;vertical-align:middle">SUGERIDA</span>' : '') +
+            '</b><code>' + sg.termos.map(exEsc).join(' <b>+</b> ') + '</code>' +
+            '<small>' + exEsc(sg.porque) + '</small>' +
+            (mistura ? '<small style="color:#b45309;background:#fef6e3;border:1px solid #fcd9a0;border-radius:8px;padding:6px 8px;margin-top:6px">⚠ mistura ' +
+              sg.saidas + ' saída(s) e ' + sg.entradas + ' entrada(s) — a mesma categoria para as duas poria receita dentro de despesa. Marque "só saídas" no passo seguinte.</small>' : '') +
+            '</span><span class="ok">✓</span></button>';
+        }).join('') + '</div>' +
+        '<button type="button" class="btn btn-outline" style="width:100%;margin-top:8px"' +
+        ' onclick="W.manual=true; exWizDesenha()">Montar à mão</button>';
+      pronto = W.sugEscolhida !== null;
+    } else {
+      html = '<span class="ex-rot" style="margin-top:0">toque para ligar e desligar cada pedaço</span>' +
+        '<div class="ex-pedacos">' + W.pedacos.map(function (p, k) {
+          return '<button type="button" class="ex-pedaco' + (p.on ? ' on' : '') +
+            '" onclick="exWizPedaco(' + k + ')">' + exEsc(p.txt) + '</button>';
+        }).join('') + '</div>' + exCaixaContagem();
+      pronto = !!(W.previa && W.previa.n > 0);
+    }
+
+  } else if (passo === 'Condições') {
+    var neg = W.lanc.valor < 0;
+    html = [
+      ['conta', 'Só nesta conta', exEsc(W.lanc.banco) + ' · ' + exEsc(W.lanc.conta)],
+      ['sinal', 'Só ' + (neg ? 'saídas (débito)' : 'entradas (crédito)'),
+       'ignora o sentido contrário — evita pegar um estorno ou o recebimento do mesmo cliente'],
+      ['valor', 'Só neste valor exato', exMoeda(Math.abs(W.lanc.valor)) + ' — para tarifa fixa']
+    ].map(function (o) {
+      return '<label class="ex-cond"><input type="checkbox"' +
+        (W.cond[o[0]] ? ' checked' : '') + ' onchange="exWizCond(\'' + o[0] + '\', this.checked)">' +
+        '<div><b>' + o[1] + '</b><small>' + o[2] + '</small></div></label>';
+    }).join('') + exCaixaContagem();
+    pronto = !!(W.previa && W.previa.n > 0);
+
+  } else if (passo === 'Empresas') {
+    var g = EX_GRUPOS.filter(function (x) { return x.n > 0; });
+    html = '<div class="ex-cartoes">' + [
+      ['empresa', '🏢', 'Só esta empresa', 'a regra não encosta nas outras'],
+      ['lista', '🏘️', 'Empresas escolhidas', 'marque quais — para 2 de 6 que dividem o fornecedor'],
+      ['grupo', '🏛️', 'Todo um grupo',
+       g.length ? 'e empresa que entrar no grupo depois já nasce com a regra'
+                : 'nenhum grupo tem empresa cadastrada ainda']
+    ].map(function (o) {
+      return '<button type="button" class="ex-cartao' + (W.escopo === o[0] ? ' on' : '') +
+        '"' + (o[0] === 'grupo' && !g.length ? ' disabled' : '') +
+        ' onclick="exWizEscopo(\'' + o[0] + '\')"><span class="b">' + o[1] +
+        '</span><span class="t"><b>' + o[2] + '</b><small>' + o[3] +
+        '</small></span><span class="ok">✓</span></button>';
+    }).join('') + '</div>';
+    if (W.escopo === 'lista') {
+      html += '<span class="ex-rot">quais empresas</span><div class="ex-pedacos">' +
+        EX_EMPRESAS.map(function (e) {
+          return '<button type="button" class="ex-pedaco' +
+            (W.empresas.indexOf(e.id) >= 0 ? ' on' : '') +
+            '" onclick="exWizEmpresa(' + e.id + ')">' + exEsc(e.nome) + '</button>';
+        }).join('') + '</div>';
+    }
+    if (W.escopo === 'grupo') {
+      html += '<span class="ex-rot">qual grupo</span><div class="ex-pedacos">' +
+        g.map(function (x) {
+          return '<button type="button" class="ex-pedaco' +
+            (String(W.grupo) === String(x.id) ? ' on' : '') +
+            '" onclick="exWizGrupo(' + x.id + ')">' + exEsc(x.nome) +
+            ' (' + x.n + ')</button>';
+        }).join('') + '</div>';
+    }
+    html += exCaixaContagem();
+    pronto = !!(W.previa && W.previa.n > 0) &&
+      (W.escopo !== 'lista' || W.empresas.length > 0) &&
+      (W.escopo !== 'grupo' || !!W.grupo);
+
+  } else if (passo === 'Categoria') {
+    html = exTelaCategoria();
+    pronto = !!W.cat;
+
+  } else {
+    html = exTelaConfirmar();
+    pronto = true;
+  }
+
+  tela.innerHTML = html;
+
+  document.getElementById('exWizVoltar').textContent = W.i === 0 ? 'Cancelar' : 'Voltar';
+  var ultimo = W.i === passos.length - 1 && W.modo;
+  document.getElementById('exWizSeguir').style.display = ultimo ? 'none' : '';
+  document.getElementById('exWizGravar').style.display = ultimo ? '' : 'none';
+  var bt = document.getElementById(ultimo ? 'exWizGravar' : 'exWizSeguir');
+  bt.disabled = !pronto;
+  bt.style.opacity = pronto ? '' : '.45';
+  exSincronizaForm();
+}
+
+function exCaixaContagem() {
+  if (W.buscando) return '<div class="ex-conta-box"><span>contando…</span></div>';
+  var p = W.previa;
+  if (!p) return '';
+  var caixa = '<div class="ex-conta-box' + (p.n ? '' : ' zero') + '"><b>' + p.n +
+    '</b><span>' + (p.n === 1 ? 'lançamento sem categoria casa' :
+      'lançamentos sem categoria casam') + ' com esta regra' +
+    (p.ocupados ? '<br><small style="color:#94a3b8">e ' + p.ocupados +
+      ' já classificado(s), que ela não vai tocar</small>' : '') + '</span></div>';
+  if (p.saidas > 0 && p.entradas > 0) {
+    caixa += '<div class="ex-alerta">⚠ mistura ' + p.saidas + ' saída(s) e ' +
+      p.entradas + ' entrada(s). A mesma categoria para as duas poria receita ' +
+      'dentro de despesa — considere marcar o sentido nas condições.</div>';
+  }
+  if (p.exemplos && p.exemplos.length) {
+    caixa += '<div class="ex-previa">' + p.exemplos.map(function (e) {
+      return '<div><s>' + exEsc(e.descricao) + '</s><em>' + exMoeda(e.valor) + '</em></div>';
+    }).join('') + (p.n > p.exemplos.length ?
+      '<div><s>e mais ' + (p.n - p.exemplos.length) + '…</s></div>' : '') + '</div>';
+  }
+  return caixa;
+}
+
+function exTelaCategoria() {
+  var opts = Array.prototype.slice.call(
+    document.querySelectorAll('#exCatalogo option'))
+    .filter(function (o) { return o.getAttribute('data-tipo') === W.tipo; });
+  if (!W.grupoCat) {
+    var grupos = {};
+    opts.forEach(function (o) {
+      var g = o.getAttribute('data-grupo');
+      grupos[g] = (grupos[g] || 0) + 1;
+    });
+    return '<span class="ex-rot" style="margin-top:0">grupo — a linha do DRE</span>' +
+      '<div class="ex-cartoes">' + Object.keys(grupos).map(function (g) {
+        return '<button type="button" class="ex-cartao" onclick="exWizGrupoCat(' +
+          JSON.stringify(g).replace(/"/g, '&quot;') + ')"><span class="b">≣</span>' +
+          '<span class="t"><b>' + exEsc(g) + '</b><small>' + grupos[g] +
+          ' categorias</small></span><span class="ok">✓</span></button>';
+      }).join('') + '</div>';
+  }
+  var doGrupo = opts.filter(function (o) {
+    return o.getAttribute('data-grupo') === W.grupoCat; });
+  return '<span class="ex-rot" style="margin-top:0">categoria de ' + exEsc(W.grupoCat) +
+    '</span><div class="ex-cartoes">' + doGrupo.map(function (o) {
+      return '<button type="button" class="ex-cartao' +
+        (String(W.cat) === o.value ? ' on' : '') + '" onclick="exWizCat(\'' + o.value +
+        '\')"><span class="t"><b>' + exEsc(o.getAttribute('data-nome')) +
+        '</b></span><span class="ok">✓</span></button>';
+    }).join('') + '</div>' +
+    '<span class="ex-rot">centro de custo</span><div class="ex-pedacos">' +
+    '<button type="button" class="ex-pedaco' + (W.centro ? '' : ' on') +
+    '" onclick="exWizCentro(\'\')">— sem centro —</button>' +
+    Array.prototype.slice.call(document.querySelectorAll('#exCentrosCat option'))
+      .map(function (o) {
+        return '<button type="button" class="ex-pedaco' +
+          (String(W.centro) === o.value ? ' on' : '') + '" onclick="exWizCentro(\'' +
+          o.value + '\')">' + exEsc(o.textContent) + '</button>';
+      }).join('') + '</div>';
+}
+
+function exTelaConfirmar() {
+  var nomeCat = '';
+  var o = document.querySelector('#exCatalogo option[value="' + W.cat + '"]');
+  if (o) nomeCat = o.getAttribute('data-grupo') + ' · ' + o.getAttribute('data-nome');
+  var html = '';
+
+  if (W.modo !== 'unico') {
+    html += '<span class="ex-rot" style="margin-top:0">quando vier de novo</span>' +
+      '<div class="ex-cartoes">' + [
+        ['direto', '⚡', 'Executa direto',
+         'classifica sozinha e some da lista. Para o que nunca muda'],
+        ['aprovar', '👁', 'Pede aprovação',
+         'já vem preenchida, mas fica marcada "a conferir". Para o que pode ser uma coisa ou outra']
+      ].map(function (x) {
+        return '<button type="button" class="ex-cartao' + (W.aplicar === x[0] ? ' on' : '') +
+          '" onclick="exWizAplicar(\'' + x[0] + '\')"><span class="b">' + x[1] +
+          '</span><span class="t"><b>' + x[2] + '</b><small>' + x[3] +
+          '</small></span><span class="ok">✓</span></button>';
+      }).join('') + '</div>';
+
+    var quantos = (W.previa && W.previa.n) ? W.previa.n : 0;
+    html += '<span class="ex-rot">e os lançamentos antigos?</span>' +
+      '<div class="ex-cartoes">' + [
+        [false, '⏭', 'Só daqui para frente',
+         'os ' + quantos + ' antigos que casam continuam sem categoria'],
+        [true, '⏮', 'Classificar os antigos também',
+         'os ' + quantos + ' que casam e estão sem categoria entram agora']
+      ].map(function (x) {
+        return '<button type="button" class="ex-cartao' +
+          (W.retroagir === x[0] ? ' on' : '') + '" onclick="exWizRetro(' + x[0] +
+          ')"><span class="b">' + x[1] + '</span><span class="t"><b>' + x[2] +
+          '</b><small>' + x[3] + '</small></span><span class="ok">✓</span></button>';
+      }).join('') + '</div><span class="ex-rot">resumo</span>';
+  }
+
+  var alvo = '<b>' + exEsc(nomeCat) + '</b>';
+  if (W.modo === 'unico') {
+    html += '<div class="ex-resumo">Classifica <b>só este lançamento</b> como ' + alvo +
+      '.<br>Nenhuma regra é criada — o próximo parecido pergunta de novo.</div>';
+  } else {
+    var quem = W.escopo === 'grupo'
+      ? 'todo o grupo ' + exEsc((EX_GRUPOS.filter(function (x) {
+          return String(x.id) === String(W.grupo); })[0] || {}).nome || '')
+      : (W.escopo === 'lista'
+        ? W.empresas.map(function (id) {
+            return exEsc((EX_EMPRESAS.filter(function (e) { return e.id === id; })[0] || {}).nome || id);
+          }).join(', ')
+        : 'esta empresa');
+    html += '<div class="ex-resumo">Classifica este lançamento como ' + alvo + '.' +
+      '<br><br><b>Regra criada:</b> quando a descrição tiver ' +
+      exTermos().map(function (t) { return '<code>' + exEsc(t) + '</code>'; }).join(' <b>e</b> ') +
+      (W.cond.conta ? '<br>e for da conta <b>' + exEsc(W.lanc.conta) + '</b>' : '') +
+      (W.cond.sinal ? '<br>e for <b>' + (W.lanc.valor < 0 ? 'saída' : 'entrada') + '</b>' : '') +
+      (W.cond.valor ? '<br>e o valor for <b>' + exMoeda(Math.abs(W.lanc.valor)) + '</b>' : '') +
+      '<br><br><b>Vale para:</b> ' + quem +
+      '<br><b>' + (W.aplicar === 'direto' ? '⚡ Executa direto' : '👁 Pede aprovação') +
+      '</b> — ' + (W.aplicar === 'direto'
+        ? 'o próximo já nasce classificado.'
+        : 'o próximo nasce preenchido e marcado a conferir.') +
+      '<br><b>' + (W.retroagir ? '⏮ Os antigos entram agora' : '⏭ Só daqui para frente') +
+      '</b></div>';
+  }
+  return html;
+}
+
+// ---------------------------------------------------------------- acoes
+function exWizModo(m) {
+  W.modo = m; W.i = 0;
+  if (m === 'unico') { W.sugEscolhida = null; W.previa = null; }
+  exWizDesenha();
+}
+function exWizSugestao(k) {
+  W.sugEscolhida = k;
+  var alvo = W.sugestoes[k].termos.join(' ').toUpperCase().split(/\s+/);
+  W.pedacos.forEach(function (p) { p.on = alvo.indexOf(p.txt.toUpperCase()) >= 0; });
+  exPedePrevia(exWizDesenha);
+  exWizDesenha();
+}
+function exWizPedaco(k) {
+  W.pedacos[k].on = !W.pedacos[k].on;
+  exPedePrevia(exWizDesenha);
+  exWizDesenha();
+}
+function exWizCond(qual, valor) {
+  W.cond[qual] = valor;
+  exPedePrevia(exWizDesenha);
+  exWizDesenha();
+}
+function exWizEscopo(e) {
+  W.escopo = e;
+  if (e === 'empresa') { W.empresas = []; W.grupo = null; }
+  if (e === 'grupo' && !W.grupo && EX_GRUPOS.length) W.grupo = EX_GRUPOS[0].id;
+  exPedePrevia(exWizDesenha);
+  exWizDesenha();
+}
+function exWizEmpresa(id) {
+  var k = W.empresas.indexOf(id);
+  if (k >= 0) W.empresas.splice(k, 1); else W.empresas.push(id);
+  exPedePrevia(exWizDesenha);
+  exWizDesenha();
+}
+function exWizGrupo(id) { W.grupo = id; exPedePrevia(exWizDesenha); exWizDesenha(); }
+function exWizGrupoCat(g) { W.grupoCat = g; exWizDesenha(); }
+function exWizCat(id) { W.cat = id; exWizDesenha(); }
+function exWizCentro(id) { W.centro = id; exWizDesenha(); }
+function exWizAplicar(a) { W.aplicar = a; exWizDesenha(); }
+function exWizRetro(v) { W.retroagir = v; exWizDesenha(); }
+
+// Os campos que a rota le sao preenchidos a cada desenho: o formulario e a
+// unica coisa que sai daqui, e ele tem de dizer exatamente o que a tela
+// mostrou no resumo.
+function exSincronizaForm() {
+  document.getElementById('exwMemorizar').value = (W.modo === 'unico') ? '' : 'on';
+  document.getElementById('exwConta').value = W.cond.conta ? (W.lanc.conta || '') : '';
+  document.getElementById('exwSinal').value =
+    W.cond.sinal ? (W.lanc.valor < 0 ? 'D' : 'C') : '';
+  document.getElementById('exwValor').value =
+    W.cond.valor ? String(Math.abs(W.lanc.valor)) : '';
+  document.getElementById('exwEscopo').value = W.escopo;
+  document.getElementById('exwGrupo').value =
+    (W.escopo === 'grupo' && W.grupo) ? W.grupo : '';
+  document.getElementById('exwAplicar').value = W.aplicar;
+  document.getElementById('exwRetroagir').value = W.retroagir ? 'on' : '';
+
+  document.getElementById('exwTermos').innerHTML = (W.modo === 'unico') ? '' :
+    exTermos().map(function (t) {
+      return '<input type="hidden" name="termo" value="' + exEsc(t) + '">';
+    }).join('');
+  document.getElementById('exwEmpresas').innerHTML =
+    (W.escopo === 'lista') ? W.empresas.map(function (e) {
+      return '<input type="hidden" name="empresa" value="' + e + '">';
+    }).join('') : '';
+
+  var cat = document.getElementById('exCategoriaOculta');
+  var cen = document.getElementById('exCentroOculto');
+  if (cat) cat.value = W.cat || '';
+  if (cen) cen.value = W.centro || '';
+}
+
 </script>
 {% endblock %}

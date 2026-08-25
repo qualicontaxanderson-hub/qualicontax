@@ -502,6 +502,8 @@ class RegraExtrato:
         toks = desc.split(' ') if desc else []
         numeros = [t for t in toks if RegraExtrato._SO_NUMERO.match(t)]
         props, vistos = [], set()
+        # UMA leitura para as quatro propostas.
+        todos = RegraExtrato.universo(so_sem_categoria=False)
 
         def poe(rotulo, termos, porque, posto):
             termos = [t.strip() for t in termos if t and t.strip()]
@@ -515,7 +517,8 @@ class RegraExtrato:
                      'escopo': escopo, 'grupo_id': grupo_id,
                      'empresa_id': lanc.get('empresa_id'),
                      'conta': None, 'sinal': None, 'valor_exato': None}
-            achados = RegraExtrato.preve(falso, so_sem_categoria=False)
+            achados = RegraExtrato.preve(falso, so_sem_categoria=False,
+                                         universo=todos)
             saidas = sum(1 for a in achados if float(a['valor'] or 0) < 0)
             props.append({
                 'rotulo': rotulo, 'termos': termos, 'porque': porque,
@@ -708,27 +711,43 @@ class RegraExtrato:
         return direto + conferir
 
     @staticmethod
-    def preve(regra, so_sem_categoria=True, limite=None):
+    def universo(so_sem_categoria=False):
+        """Os lancamentos candidatos, lidos UMA vez.
+
+        Existe para quem vai testar VARIAS regras contra o mesmo conjunto —
+        as quatro sugestoes, por exemplo. Sem isto o assistente fazia quatro
+        varreduras completas por abertura, e como o banco e remoto cada uma
+        custa a ida e a volta: media de 5,5s so para abrir.
+        """
+        cond = ' WHERE categoria_id IS NULL' if so_sem_categoria else ''
+        return execute_query(
+            'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id '
+            '  FROM extrato_lancamentos' + cond +
+            ' ORDER BY data DESC, id DESC', fetch=True) or []
+
+    @staticmethod
+    def preve(regra, so_sem_categoria=True, limite=None, universo=None):
         """Quais lancamentos ESTA regra pegaria — antes de gravar nada.
 
         E o numero que a tela mostra ("pega 4") e a lista que ela exibe. Sem
         isso a pessoa cria a regra no escuro.
+
+        ``universo`` evita reler a tabela quando varias regras sao testadas
+        contra o mesmo conjunto.
         """
         empresas = RegraExtrato.empresas_da(regra)
-        cond = ['1=1']
-        params = []
-        if so_sem_categoria:
-            cond.append('categoria_id IS NULL')
-        if empresas is not None:
-            if not empresas:
-                return []
-            cond.append('empresa_id IN (%s)' % ','.join(['%s'] * len(empresas)))
-            params += sorted(empresas)
-        rows = execute_query(
-            'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id '
-            '  FROM extrato_lancamentos WHERE ' + ' AND '.join(cond) +
-            ' ORDER BY data DESC, id DESC', tuple(params), fetch=True) or []
-        achados = [l for l in rows if RegraExtrato.casa(regra, l, empresas)]
+        if empresas is not None and not empresas:
+            return []
+        rows = (RegraExtrato.universo(so_sem_categoria) if universo is None
+                else universo)
+        achados = []
+        for l in rows:
+            if so_sem_categoria and l.get('categoria_id'):
+                continue
+            if empresas is not None and l.get('empresa_id') not in empresas:
+                continue
+            if RegraExtrato.casa(regra, l, empresas):
+                achados.append(l)
         return achados[:limite] if limite else achados
 
     @staticmethod
