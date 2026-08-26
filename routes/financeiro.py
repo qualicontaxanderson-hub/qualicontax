@@ -1177,13 +1177,17 @@ def extrato_classificar(lanc_id):
     if not cat:
         flash('Escolha a categoria.', 'danger')
         return redirect(url_for('financeiro.extrato'))
-    # Crédito é receita, débito é despesa — categoria do tipo errado é engano.
+    # Crédito é receita, débito é despesa. TRANSFERÊNCIA vale nos dois
+    # sentidos (é dinheiro seu andando de conta) e INVESTIMENTO vale na
+    # saída — sem isso o extrato não tinha como classificar nenhum dos dois,
+    # e é justamente aqui que eles aparecem.
     esperado = 'R' if lanc['valor'] >= 0 else 'P'
-    if cat['tipo'] != esperado:
-        flash(('Este lançamento é um CRÉDITO — escolha uma categoria de receita.'
+    aceitos = {esperado, 'T'} | ({'I'} if esperado == 'P' else set())
+    if cat['tipo'] not in aceitos:
+        flash(('Este lançamento é um CRÉDITO — escolha receita ou transferência.'
                if esperado == 'R' else
-               'Este lançamento é um DÉBITO — escolha uma categoria de despesa.'),
-              'danger')
+               'Este lançamento é um DÉBITO — escolha despesa, investimento '
+               'ou transferência.'), 'danger')
         return redirect(url_for('financeiro.extrato'))
     centro_raw = (f.get('centro_custo_id') or '').strip()
     centro = int(centro_raw) if centro_raw.isdigit() else None
@@ -1231,6 +1235,43 @@ def extrato_classificar(lanc_id):
                      'lançamento foi classificado, mas nenhuma regra nova '
                      'nasceu.')
 
+    # ---- O TÍTULO (degrau 6). Três saídas, e transferência não tem título:
+    # não é obrigação, é dinheiro andando entre contas próprias.
+    titulo_acao = (f.get('titulo_acao') or 'nao').strip()
+    conciliou, titulo_msg = None, ''
+    if titulo_acao in ('criar', 'casar') and cat['tipo'] != 'T':
+        from datetime import date as _date
+        leitura = ExtratoLancamento.ler_descricao(lanc['descricao'])
+        if titulo_acao == 'criar':
+            comp_raw = (f.get('titulo_competencia') or '').strip()  # AAAA-MM
+            try:
+                ano, mes = comp_raw.split('-')[:2]
+                competencia = _date(int(ano), int(mes), 1)
+            except (ValueError, AttributeError):
+                competencia = lanc['data'].replace(day=1)
+            okc, motivo, tid = ExtratoLancamento.conciliar(
+                lanc, criar={'competencia': competencia,
+                             'contraparte_nome': leitura['nome'] or cat['nome'],
+                             'contraparte_doc': leitura['doc'],
+                             'categoria_id': cat['id'],
+                             'centro_custo_id': centro},
+                usuario_id=current_user.id)
+        else:
+            tid_raw = (f.get('titulo_id') or '').strip()
+            okc, motivo, tid = ExtratoLancamento.conciliar(
+                lanc, titulo_id=int(tid_raw) if tid_raw.isdigit() else None,
+                usuario_id=current_user.id)
+        if okc:
+            conciliou = tid
+            registrar('escrita.conciliou_extrato', 'financeiro',
+                      tabela='fin_titulos', registro_id=tid,
+                      depois={'lancamento_id': lanc_id, 'acao': titulo_acao,
+                              'valor': float(lanc['valor'])})
+            titulo_msg = (' Título criado já quitado.' if titulo_acao == 'criar'
+                          else ' Baixa registrada no título.')
+        else:
+            flash(f'A classificação valeu, mas o título não: {motivo}', 'warning')
+
     ok = ExtratoLancamento.classificar(lanc_id, cat['id'], centro, mem_id)
     if ok and mem_id:
         # A regra acabou de classificar este lancamento: conta como uso. Sem
@@ -1241,7 +1282,7 @@ def extrato_classificar(lanc_id):
                   tabela='extrato_lancamentos', registro_id=lanc_id,
                   depois={'categoria': cat['nome'], 'centro_custo_id': centro,
                           'regra_id': mem_id})
-        msg = f'Classificado em "{cat["nome"]}".'
+        msg = f'Classificado em "{cat["nome"]}".' + titulo_msg
         if mem_id:
             modo = ('Regra criada — os próximos vão pedir sua conferência.'
                     if f.get('aplicar') == 'aprovar'
@@ -1349,6 +1390,26 @@ def extrato_sugestoes(lanc_id):
             'data': lanc['data'].strftime('%d/%m/%Y') if lanc.get('data') else '',
         },
         sugestoes=RegraExtrato.sugestoes(lanc))
+
+
+@financeiro.route('/financeiro/extrato/<int:lanc_id>/titulos-candidatos')
+@permission_required('financeiro.extrato')
+def extrato_titulos_candidatos(lanc_id):
+    """Titulos em aberto que podem ser este pagamento — o melhor primeiro."""
+    from models.extrato_lancamento import ExtratoLancamento
+    lanc = ExtratoLancamento.get(lanc_id)
+    if not lanc:
+        return jsonify(ok=False, msg='Lançamento não encontrado.'), 404
+    cands = ExtratoLancamento.titulos_candidatos(lanc)
+    return jsonify(ok=True, candidatos=[{
+        'id': t['id'],
+        'quem': t['contraparte_nome'],
+        'descricao': (t['descricao'] or '')[:60],
+        'categoria': '%s · %s' % (t['categoria_grupo'], t['categoria_nome']),
+        'competencia': t['competencia'].strftime('%m/%Y') if t['competencia'] else '',
+        'vencimento': t['vencimento'].strftime('%d/%m/%Y') if t['vencimento'] else '',
+        'saldo': float(t['valor']) - float(t['valor_baixado'] or 0),
+    } for t in cands])
 
 
 @financeiro.route('/financeiro/extrato/regra/previa', methods=['POST'])

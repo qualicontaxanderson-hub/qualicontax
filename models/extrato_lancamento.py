@@ -253,6 +253,102 @@ class ExtratoLancamento:
                              (lanc_id,), fetch=True, fetch_one=True)
 
     @staticmethod
+    def titulos_candidatos(lanc, limite=6):
+        """Titulos em aberto que PODEM ser este pagamento, o melhor primeiro.
+
+        Melhor = mesmo documento da contraparte, depois saldo que bate com o
+        valor, depois vencimento mais perto da data do lancamento. So entram
+        titulos da MESMA empresa, do tipo certo (credito quita a-receber,
+        debito quita a-pagar) e com saldo que comporta o valor — casar num
+        titulo menor criaria baixa maior que o titulo sem ninguem pedir
+        juros, e isso e decisao humana, nao chute de ranking.
+        """
+        valor = abs(float(lanc.get('valor') or 0))
+        tipo = 'R' if float(lanc.get('valor') or 0) >= 0 else 'P'
+        doc = (ExtratoLancamento.ler_descricao(lanc.get('descricao'))
+               .get('doc') or '')
+        rows = execute_query(
+            """SELECT t.id, t.contraparte_nome, t.contraparte_doc, t.descricao,
+                      t.competencia, t.vencimento, t.valor, t.valor_baixado,
+                      c.nome AS categoria_nome, c.grupo AS categoria_grupo
+                 FROM fin_titulos t
+                 JOIN fin_categorias c ON c.id = t.categoria_id
+                WHERE t.empresa_id = %s AND t.tipo = %s
+                  AND t.status IN ('aberto', 'parcial')
+                  AND (t.valor - t.valor_baixado) >= %s - 0.01""",
+            (lanc.get('empresa_id'), tipo, valor), fetch=True) or []
+
+        data = lanc.get('data')
+
+        def peso(t):
+            saldo = float(t['valor']) - float(t['valor_baixado'] or 0)
+            doc_bate = 0 if (doc and t['contraparte_doc'] == doc) else 1
+            valor_bate = 0 if abs(saldo - valor) <= 0.01 else 1
+            dist = abs((t['vencimento'] - data).days) if (t['vencimento'] and data) else 9999
+            return (doc_bate, valor_bate, dist)
+
+        rows.sort(key=peso)
+        return rows[:limite]
+
+    @staticmethod
+    def conciliar(lanc, titulo_id=None, criar=None, usuario_id=None):
+        """Amarra o lancamento a um titulo — casando ou criando ja quitado.
+
+        A baixa passa por registrar_baixa, o UNICO escritor autorizado
+        (regra de ouro do Documento E). A referencia e o hash_dedup do
+        lancamento: e ele que torna a segunda tentativa inofensiva.
+
+        ``criar`` (dict competencia/contraparte_nome/contraparte_doc/
+        categoria_id/centro_custo_id/descricao) monta o titulo com origem
+        'extrato' e chave_idem propria — reprocessar o mesmo lancamento nao
+        duplica o titulo.
+
+        Devolve (ok, motivo, titulo_id).
+        """
+        from models.fin_titulo import FinTitulo
+        from utils.financeiro_core import registrar_baixa, BaixaInvalida
+
+        valor = abs(float(lanc.get('valor') or 0))
+        if valor <= 0:
+            return False, 'Lançamento sem valor.', None
+
+        if criar is not None:
+            chave = 'extrato:%s' % lanc['id']
+            ja = execute_query(
+                'SELECT id FROM fin_titulos WHERE chave_idem = %s',
+                (chave,), fetch=True, fetch_one=True)
+            if ja:
+                titulo_id = ja['id']       # reprocesso: o titulo ja existe
+            else:
+                titulo_id = FinTitulo.criar(
+                    tipo='R' if float(lanc['valor']) >= 0 else 'P',
+                    contraparte_nome=(criar.get('contraparte_nome')
+                                      or 'sem contraparte')[:255],
+                    categoria_id=criar['categoria_id'],
+                    descricao=(criar.get('descricao')
+                               or lanc.get('descricao') or '')[:255],
+                    competencia=criar['competencia'],
+                    emissao=lanc['data'], vencimento=lanc['data'],
+                    valor=valor, empresa_id=lanc.get('empresa_id'),
+                    contraparte_doc=(criar.get('contraparte_doc') or None),
+                    centro_custo_id=criar.get('centro_custo_id'),
+                    origem='extrato', chave_idem=chave)
+                if not titulo_id or titulo_id is True:
+                    return False, 'Não consegui criar o título.', None
+
+        if not titulo_id:
+            return False, 'Escolha o título.', None
+
+        try:
+            r = registrar_baixa(
+                titulo_id=titulo_id, valor=valor, data_baixa=lanc['data'],
+                origem='extrato', referencia=lanc.get('hash_dedup'),
+                lancamento_id=lanc['id'], usuario_id=usuario_id)
+        except BaixaInvalida as e:
+            return False, str(e), titulo_id
+        return True, ('nova' if r.get('criada') else 'ja-existia'), titulo_id
+
+    @staticmethod
     def confirmar(lanc_id):
         """O humano olhou e disse "era isso mesmo": a marca sai, a
         classificacao fica, e o vinculo com a regra fica — confirmar nao e
