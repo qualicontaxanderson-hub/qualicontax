@@ -270,6 +270,30 @@
   .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
 }
 
+/* ================= LOTE: selecionar e classificar de uma vez ========== */
+.ex-reg .ex-caixinha { display:none; flex:0 0 24px; height:24px; border-radius:8px;
+  border:2px solid #cbd5e1; background:#fff; margin-top:2px; align-items:center;
+  justify-content:center; color:transparent; font-weight:900; font-size:13px; }
+body.ex-selecionando .ex-reg .ex-caixinha { display:flex; }
+body.ex-selecionando .ex-reg { cursor:pointer; }
+body.ex-selecionando .ex-reg.marcado { background:#f0fdf4; }
+body.ex-selecionando .ex-reg.marcado .ex-caixinha { background:#00a85a;
+  border-color:#00a85a; color:#fff; }
+body.ex-selecionando .ex-pe .ex-btn-tag,
+body.ex-selecionando .ex-pe form { display:none; }
+.ex-dia-marcar { display:none; margin-left:10px; border:0; background:transparent;
+  font-family:inherit; font-size:10.5px; font-weight:800; color:#00a85a;
+  cursor:pointer; letter-spacing:.03em; text-transform:uppercase; }
+body.ex-selecionando .ex-dia-marcar { display:inline; }
+.ex-barra-lote { position:fixed; left:0; right:0; bottom:0; z-index:300;
+  background:#0f3d2e; color:#eafff3; padding:12px 16px
+    calc(12px + env(safe-area-inset-bottom)); display:none; align-items:center;
+  gap:12px; box-shadow:0 -4px 18px rgba(0,0,0,.25); }
+body.ex-selecionando .ex-barra-lote { display:flex; }
+.ex-barra-lote b { font-size:14px; font-weight:800; }
+.ex-barra-lote span { font-size:12px; opacity:.8; font-variant-numeric:tabular-nums; }
+.ex-barra-lote .btn { margin-left:auto; }
+
 /* No CELULAR o valor desce para baixo do bloco, em vez de disputar a largura. */
 @media (max-width: 768px) {
   .ex-reg { flex-direction:column; gap:0; padding:12px 14px; }
@@ -307,7 +331,11 @@
   .ex-aba { white-space:nowrap; padding:9px 13px; }
   .ex-abas-dir { margin-left:0; }
   .ex-caixa { border:0; background:transparent; box-shadow:none; }
-  .ex-abas-dir { display:none; }   /* ja existe no topo da tela */
+  /* O link de Memorizacoes repete no topo da tela e some daqui; o botao
+     SELECIONAR so existe aqui — esconder a barra inteira deixava o celular
+     sem como entrar no modo de lote (pego pelo teste no webkit). */
+  .ex-abas-dir { display:flex; }
+  .ex-abas-dir .btn:not(#exBtSelecionar) { display:none; }
   .ex-mob { display:inline; }
 }
 </style>
@@ -509,7 +537,19 @@
        href="{{ url_for('financeiro.extrato', classif='sim', **_base) }}">
         <i class="fas fa-check"></i> Classificados
     </a>
+    {% if totais.a_conferir or filtros.classif == 'conferir' %}
+    {# So existe quando ha o que conferir: aba permanente com zero e mobilia. #}
+    <a class="ex-aba {{ 'ativa' if filtros.classif == 'conferir' }}"
+       href="{{ url_for('financeiro.extrato', classif='conferir', **_base) }}">
+        <i class="fas fa-eye"></i> A conferir
+        <span class="ex-cont alerta">{{ totais.a_conferir or 0 }}</span>
+    </a>
+    {% endif %}
     <div class="ex-abas-dir">
+        <button type="button" class="btn btn-outline" id="exBtSelecionar"
+                onclick="exLoteLiga()">
+            <i class="fas fa-check-double"></i> Selecionar
+        </button>
         <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
             <i class="fas fa-memory"></i> Memorizações
         </a>
@@ -526,6 +566,8 @@
         {% for d in dias %}
         <div class="ex-dia">
             <b>{{ SEMANA[d.data.weekday()] }} · {{ d.data.strftime('%d/%m') }}</b>
+            <button type="button" class="ex-dia-marcar"
+                    onclick="exLoteDia(this)">marcar dia</button>
             <span>
                 {{ d.itens | length }} lanç.
                 {% if d.entradas %}<i class="ex-cred">+{{ d.entradas | float | round(2) | format_currency }}</i>{% endif %}
@@ -536,7 +578,10 @@
         {% for l in d.itens %}
         {% set q = ler(l.descricao) %}
         {% set cc = contas_cad.get(l.conta | string, {}) %}
-        <div class="ex-reg">
+        <div class="ex-reg" data-lanc="{{ l.id }}" data-valor="{{ l.valor }}"
+             data-tem-cat="{{ 1 if l.categoria_id else 0 }}"
+             onclick="exLoteToca(this, event)">
+            <span class="ex-caixinha">✓</span>
             <div class="ex-corpo">
                 {# 1 — a descricao do banco, literal, com o nome em negrito #}
                 <div class="ex-desc">{{ q.antes }}{% if q.nome %} <b>{{ q.nome }}</b>{% endif %}</div>
@@ -570,7 +615,11 @@
 
             {# 6 — o valor, e a acao #}
             <div class="ex-pe">
-                {% if l.categoria_id %}
+                {% if l.categoria_id and l.conferir %}
+                <span class="ex-pil">
+                    👁 a conferir · {{ l.categoria_nome }}{% if l.centro_nome %} · {{ l.centro_nome }}{% endif %}
+                </span>
+                {% elif l.categoria_id %}
                 <span class="ex-pil ok">
                     {{ l.categoria_nome }}{% if l.centro_nome %} · {{ l.centro_nome }}{% endif %}
                     {% if l.memorizacao_id %}<em title="Classificado sozinho pela memorização">auto</em>{% endif %}
@@ -580,8 +629,21 @@
                 {% endif %}
                 <span class="ex-val {{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
                     {{ l.valor | float | round(2) | format_currency }}</span>
+                {% if l.conferir %}
+                {# As tres saidas: era isso mesmo / muda so este / muda o criterio. #}
+                <form method="POST" style="display:inline;"
+                      action="{{ url_for('financeiro.extrato_confirmar', lanc_id=l.id) }}">
+                    <button class="ex-btn-tag" style="border-color:#86efac; background:#f0fdf4; color:#15803d;"
+                            title="Era isso mesmo — a marca sai, a classificação fica">
+                        <i class="fas fa-check"></i> Confirmar
+                    </button>
+                </form>
+                {% endif %}
                 <button class="ex-btn-tag {{ '' if l.categoria_id else 'destaque' }}"
-                        title="{{ 'Trocar a categoria' if l.categoria_id else 'Classificar (e memorizar, se quiser)' }}"
+                        title="{{ ('Desta vez foi outra coisa — muda só este, a regra continua'
+                                   if l.conferir else
+                                   ('Trocar a categoria' if l.categoria_id
+                                    else 'Classificar (e memorizar, se quiser)')) }}"
                         data-id="{{ l.id }}" data-desc="{{ l.descricao }}"
                         data-tipo="{{ 'R' if l.valor >= 0 else 'P' }}"
                         data-valor="{{ l.valor | float | round(2) | format_currency }}"
@@ -591,6 +653,12 @@
                     <i class="fas fa-tag"></i>
                     {{ 'Trocar' if l.categoria_id else 'Classificar' }}
                 </button>
+                {% if l.conferir and l.memorizacao_id %}
+                <a class="ex-btn-tag" title="O chute da regra estava errado — mude o critério dela"
+                   href="{{ url_for('financeiro.extrato_memorizacoes') }}">
+                    <i class="fas fa-memory"></i> a regra…
+                </a>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -652,6 +720,61 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="exFecharImport()">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Importar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── Barra do lote ──────────────────────────────────────── -->
+<div class="ex-barra-lote">
+    <b id="exLoteQtd">0 selecionados</b>
+    <span id="exLoteSoma"></span>
+    <button type="button" class="btn btn-outline" style="color:#eafff3; border-color:rgba(255,255,255,.4);"
+            onclick="exLoteDesliga()">Cancelar</button>
+    <button type="button" class="btn btn-primary" id="exLoteIr"
+            onclick="exLoteAbre()" disabled>Classificar</button>
+</div>
+
+<!-- ── Modal do lote ─────────────────────────────────────── -->
+{# Deliberadamente MENOR que o assistente: categoria, centro e a regra
+   quando cabe. Lote e para arrumar rapido; condicao e escopo e no de um. #}
+<div id="exModalLote" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 id="exLoteTitulo">Classificar em lote</h3>
+            <button class="modal-close" onclick="exLoteFecha()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.extrato_lote') }}">
+            <div class="modal-body">
+                <div id="exLoteIds"></div>
+                <p id="exLoteAviso" class="ex-alerta" style="display:none; margin:0 0 12px;"></p>
+                <div class="form-group">
+                    <label>Categoria *</label>
+                    {# O select e montado em JS SO com as categorias do tipo da
+                       selecao — nada de option escondida, que o Safari ignora. #}
+                    <select name="categoria_id" id="exLoteCat" class="form-control" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Centro de custo</label>
+                    <select name="centro_custo_id" class="form-control">
+                        <option value="">— sem centro —</option>
+                        {% for cc in centros %}
+                        <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" id="exLoteRegraBox" style="display:none;
+                     border-top:1px solid #e5e7eb; padding-top:12px;">
+                    <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">
+                        <input type="checkbox" name="criar_regra" style="margin-top:3px;">
+                        <span><strong>Criar regra junto</strong> — todos são de
+                            <b id="exLoteQuem"></b>; o que vier com esse nome entra sozinho</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="exLoteFecha()">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="exLoteGravar">Classificar</button>
             </div>
         </form>
     </div>
@@ -765,6 +888,140 @@ function exPeriodo(qual) {
     document.getElementById('exDataDe').value = iso(ini);
     document.getElementById('exDataAte').value = iso(fim);
     document.getElementById('exFormFiltro').submit();
+}
+
+// =====================================================================
+// LOTE. Um estado (os marcados) e uma funcao que redesenha a partir dele —
+// tres funcoes mexendo em classe soltas foi o que ja quebrou os filtros da
+// tela de categorias uma vez.
+// =====================================================================
+var LOTE = { ligado: false, marcados: {} };
+
+function exLoteLiga() {
+  LOTE = { ligado: true, marcados: {} };
+  document.body.classList.add('ex-selecionando');
+  exLotePinta();
+}
+function exLoteDesliga() {
+  LOTE = { ligado: false, marcados: {} };
+  document.body.classList.remove('ex-selecionando');
+  exLotePinta();
+}
+
+function exLoteToca(reg, ev) {
+  if (!LOTE.ligado) return;
+  // clique num botao/link dentro do cartao nao e marcacao
+  if (ev.target.closest('a, button, form')) return;
+  var id = reg.getAttribute('data-lanc');
+  if (LOTE.marcados[id]) delete LOTE.marcados[id];
+  else LOTE.marcados[id] = { valor: parseFloat(reg.getAttribute('data-valor')),
+                             temCat: reg.getAttribute('data-tem-cat') === '1',
+                             reg: reg };
+  exLotePinta();
+}
+
+function exLoteDia(bt) {
+  // marca (ou desmarca) todos os lancamentos entre este cabecalho e o proximo
+  var el = bt.closest('.ex-dia').nextElementSibling;
+  var doDia = [];
+  while (el && !el.classList.contains('ex-dia')) {
+    if (el.classList.contains('ex-reg')) doDia.push(el);
+    el = el.nextElementSibling;
+  }
+  var todos = doDia.every(function (r) { return LOTE.marcados[r.getAttribute('data-lanc')]; });
+  doDia.forEach(function (r) {
+    var id = r.getAttribute('data-lanc');
+    if (todos) delete LOTE.marcados[id];
+    else LOTE.marcados[id] = { valor: parseFloat(r.getAttribute('data-valor')),
+                               temCat: r.getAttribute('data-tem-cat') === '1',
+                               reg: r };
+  });
+  exLotePinta();
+}
+
+function exLotePinta() {
+  document.querySelectorAll('.ex-reg').forEach(function (r) {
+    r.classList.toggle('marcado',
+      !!LOTE.marcados[r.getAttribute('data-lanc')]);
+  });
+  var ids = Object.keys(LOTE.marcados);
+  var soma = 0;
+  ids.forEach(function (id) { soma += LOTE.marcados[id].valor; });
+  var q = document.getElementById('exLoteQtd');
+  if (q) {
+    q.textContent = ids.length + ' selecionado' + (ids.length === 1 ? '' : 's');
+    document.getElementById('exLoteSoma').textContent = ids.length ? exMoeda(soma) : '';
+    document.getElementById('exLoteIr').disabled = !ids.length;
+  }
+}
+
+function exLoteAbre() {
+  var ids = Object.keys(LOTE.marcados);
+  if (!ids.length) return;
+
+  // As travas da rota, avisadas ANTES do envio — descobrir no flash da volta
+  // e tarde.
+  var livres = ids.filter(function (id) { return !LOTE.marcados[id].temCat; });
+  var sinais = {};
+  livres.forEach(function (id) {
+    sinais[LOTE.marcados[id].valor < 0 ? 'P' : 'R'] = 1;
+  });
+  var aviso = document.getElementById('exLoteAviso');
+  aviso.style.display = 'none';
+  if (!livres.length) {
+    aviso.textContent = 'Todos os selecionados já têm categoria — o lote não sobrescreve.';
+    aviso.style.display = '';
+  } else if (Object.keys(sinais).length > 1) {
+    aviso.textContent = '⚠ A seleção mistura entradas e saídas. Desmarque um dos ' +
+      'lados: uma categoria não serve aos dois.';
+    aviso.style.display = '';
+  } else if (livres.length < ids.length) {
+    aviso.textContent = (ids.length - livres.length) + ' já classificado(s) ficarão ' +
+      'como estão; o lote pega os ' + livres.length + ' sem categoria.';
+    aviso.style.display = '';
+  }
+
+  var tipo = Object.keys(sinais)[0] || 'P';
+  // O select nasce SO com as categorias do tipo certo — nada de option
+  // escondida, que o Safari do iPhone ignora.
+  var sel = document.getElementById('exLoteCat');
+  sel.innerHTML = '';
+  document.querySelectorAll('#exCatalogo option').forEach(function (o) {
+    if (o.getAttribute('data-tipo') !== tipo) return;
+    var novo = document.createElement('option');
+    novo.value = o.value;
+    novo.textContent = o.getAttribute('data-grupo') + ' · ' + o.getAttribute('data-nome');
+    sel.appendChild(novo);
+  });
+
+  // a regra em lote so cabe quando todos os livres sao da MESMA contraparte
+  var nomes = {};
+  livres.forEach(function (id) {
+    var d = LOTE.marcados[id].reg.querySelector('.ex-quem b');
+    nomes[d ? d.textContent.trim() : ''] = 1;
+  });
+  var unicos = Object.keys(nomes).filter(function (n) { return n && n !== '—'; });
+  var caixa = document.getElementById('exLoteRegraBox');
+  if (unicos.length === 1 && Object.keys(nomes).length === 1) {
+    document.getElementById('exLoteQuem').textContent = unicos[0];
+    caixa.style.display = '';
+  } else {
+    caixa.style.display = 'none';
+    caixa.querySelector('input').checked = false;
+  }
+
+  document.getElementById('exLoteTitulo').textContent =
+    'Classificar ' + livres.length + ' em lote';
+  document.getElementById('exLoteIds').innerHTML = livres.map(function (id) {
+    return '<input type="hidden" name="lanc" value="' + id + '">';
+  }).join('');
+  document.getElementById('exLoteGravar').disabled = !livres.length ||
+    Object.keys(sinais).length > 1;
+  document.getElementById('exModalLote').style.display = 'block';
+}
+
+function exLoteFecha() {
+  document.getElementById('exModalLote').style.display = 'none';
 }
 
 // =====================================================================

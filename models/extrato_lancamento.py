@@ -41,7 +41,9 @@ class ExtratoLancamento:
         if documento:
             cond.append('e.documento LIKE %s')
             params.append(f'%{documento}%')
-        if classif == 'sim':
+        if classif == 'conferir':
+            cond.append('e.conferir = 1')
+        elif classif == 'sim':
             cond.append('e.categoria_id IS NOT NULL')
         elif classif == 'nao':
             cond.append('e.categoria_id IS NULL')
@@ -72,7 +74,7 @@ class ExtratoLancamento:
             f"""SELECT e.id, e.empresa_id, e.banco, e.conta, e.data, e.valor,
                        e.tipo, e.descricao, e.documento, e.fitid, e.origem,
                        e.arquivo, e.criado_em, e.categoria_id, e.centro_custo_id,
-                       e.memorizacao_id, c.nome AS categoria_nome,
+                       e.memorizacao_id, e.conferir, c.nome AS categoria_nome,
                        c.grupo AS categoria_grupo, cc.nome AS centro_nome
                   FROM extrato_lancamentos e
                   LEFT JOIN fin_categorias c ON c.id = e.categoria_id
@@ -103,6 +105,15 @@ class ExtratoLancamento:
             f'SELECT COUNT(*) AS n FROM extrato_lancamentos e WHERE {w2}',
             tuple(p2), fetch=True, fetch_one=True) or {}
         base['sem_cat'] = int(sem.get('n') or 0)
+        # A CONFERIR ignora o filtro de classificacao pelo mesmo motivo do
+        # sem-categoria: estando na propria aba, o cartao repetiria o total.
+        f_conf = dict(f)
+        f_conf['classif'] = 'conferir'
+        w3, p3 = ExtratoLancamento._where(**f_conf)
+        conf = execute_query(
+            f'SELECT COUNT(*) AS n FROM extrato_lancamentos e WHERE {w3}',
+            tuple(p3), fetch=True, fetch_one=True) or {}
+        base['a_conferir'] = int(conf.get('n') or 0)
         return base
 
     @staticmethod
@@ -240,6 +251,37 @@ class ExtratoLancamento:
     def get(lanc_id):
         return execute_query('SELECT * FROM extrato_lancamentos WHERE id = %s',
                              (lanc_id,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def confirmar(lanc_id):
+        """O humano olhou e disse "era isso mesmo": a marca sai, a
+        classificacao fica, e o vinculo com a regra fica — confirmar nao e
+        reclassificar a mao."""
+        # Olha ANTES de agir: conferir o estado final diria "confirmei" para
+        # um lancamento que ja estava confirmado — e a rota usa a resposta
+        # para escolher a mensagem (pista do rowcount, 14/08: "ja estava
+        # assim" e "nao existe" respondem igual depois do UPDATE).
+        r = execute_query('SELECT conferir FROM extrato_lancamentos WHERE id = %s',
+                          (lanc_id,), fetch=True, fetch_one=True)
+        if not r or not r['conferir']:
+            return False
+        execute_query('UPDATE extrato_lancamentos SET conferir = 0 '
+                      ' WHERE id = %s', (lanc_id,))
+        return True
+
+    @staticmethod
+    def confirmar_da_regra(regra_id):
+        """A regra acertou em todos: limpa a marca de tudo o que ela deixou
+        esperando. Devolve quantos."""
+        r = execute_query(
+            'SELECT COUNT(*) n FROM extrato_lancamentos '
+            ' WHERE memorizacao_id = %s AND conferir = 1',
+            (regra_id,), fetch=True, fetch_one=True)
+        n = int((r or {}).get('n') or 0)
+        if n:
+            execute_query('UPDATE extrato_lancamentos SET conferir = 0 '
+                          ' WHERE memorizacao_id = %s AND conferir = 1', (regra_id,))
+        return n
 
     @staticmethod
     def hashes_existentes(hashes):

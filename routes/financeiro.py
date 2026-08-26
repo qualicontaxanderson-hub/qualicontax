@@ -860,7 +860,7 @@ def extrato():
         conta=request.args.get('conta') or '',
         busca=(request.args.get('busca') or '').strip(),
         documento=(request.args.get('documento') or '').strip(),
-        classif=_um('classif', ('sim', 'nao')),
+        classif=_um('classif', ('sim', 'nao', 'conferir')),
         tipo=_um('tipo', ('credito', 'debito')),
         categoria_id=_um('categoria_id'),
         centro_id=_um('centro_id'),
@@ -1291,6 +1291,39 @@ def _regra_do_form(f, lanc):
     }
 
 
+@financeiro.route('/financeiro/extrato/<int:lanc_id>/confirmar',
+                  methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_confirmar(lanc_id):
+    """O humano diz "era isso mesmo". A classificacao e o vinculo com a
+    regra ficam — confirmar nao e reclassificar."""
+    from models.extrato_lancamento import ExtratoLancamento
+    if ExtratoLancamento.confirmar(lanc_id):
+        registrar('escrita.confirmou_extrato', 'financeiro',
+                  tabela='extrato_lancamentos', registro_id=lanc_id,
+                  depois={'conferir': False})
+        flash('Confirmado.', 'success')
+    else:
+        flash('Este lançamento não estava aguardando conferência.', 'warning')
+    return redirect(url_for('financeiro.extrato', classif='conferir'))
+
+
+@financeiro.route('/financeiro/extrato/regra/<int:mem_id>/confirmar-todos',
+                  methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_confirmar_todos(mem_id):
+    """A regra acertou em todos os que deixou esperando."""
+    from models.extrato_lancamento import ExtratoLancamento
+    n = ExtratoLancamento.confirmar_da_regra(mem_id)
+    registrar('escrita.confirmou_extrato_lote', 'financeiro',
+              tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+              depois={'confirmados': n})
+    flash(f'{n} lançamento(s) confirmados.' if n
+          else 'Nenhum lançamento desta regra aguardava conferência.',
+          'success' if n else 'warning')
+    return redirect(url_for('financeiro.extrato', classif='conferir'))
+
+
 @financeiro.route('/financeiro/extrato/<int:lanc_id>/sugestoes')
 @permission_required('financeiro.extrato')
 def extrato_sugestoes(lanc_id):
@@ -1346,6 +1379,93 @@ def extrato_regra_previa():
                    'valor': float(a['valor']),
                    'data': a['data'].strftime('%d/%m/%Y') if a.get('data') else ''}
                   for a in livres[:6]])
+
+
+@financeiro.route('/financeiro/extrato/lote', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_lote():
+    """Classifica varios de uma vez — com ou sem regra junto."""
+    from models.extrato_lancamento import ExtratoLancamento, RegraExtrato
+    f = request.form
+    ids = [int(i) for i in f.getlist('lanc') if str(i).isdigit()]
+    if not ids:
+        flash('Nenhum lançamento selecionado.', 'warning')
+        return redirect(url_for('financeiro.extrato'))
+
+    marks = ','.join(['%s'] * len(ids))
+    lancs = execute_query(
+        f'SELECT id, empresa_id, valor, descricao, categoria_id '
+        f'  FROM extrato_lancamentos WHERE id IN ({marks})',
+        tuple(ids), fetch=True) or []
+
+    livres = [l for l in lancs if not l['categoria_id']]
+    pulados = len(lancs) - len(livres)
+    if not livres:
+        flash('Todos os selecionados já têm categoria — o lote não '
+              'sobrescreve decisão já tomada.', 'warning')
+        return redirect(url_for('financeiro.extrato'))
+
+    # Credito e receita, debito e despesa: uma categoria nao serve aos dois.
+    sinais = {('R' if float(l['valor']) >= 0 else 'P') for l in livres}
+    if len(sinais) > 1:
+        flash('A seleção mistura entradas e saídas — classifique cada '
+              'sentido de uma vez, porque uma categoria não serve aos dois.',
+              'danger')
+        return redirect(url_for('financeiro.extrato'))
+
+    cat_raw = (f.get('categoria_id') or '').strip()
+    cat = next((c for c in FinCategoria.listar() if str(c['id']) == cat_raw), None)
+    if not cat:
+        flash('Escolha a categoria.', 'danger')
+        return redirect(url_for('financeiro.extrato'))
+    if cat['tipo'] != next(iter(sinais)):
+        flash('A categoria escolhida é do tipo errado para esta seleção.', 'danger')
+        return redirect(url_for('financeiro.extrato'))
+
+    centro_raw = (f.get('centro_custo_id') or '').strip()
+    centro = int(centro_raw) if centro_raw.isdigit() else None
+
+    # A regra em lote so faz sentido quando todos falam da MESMA contraparte;
+    # o proprio nome vira o trecho.
+    mem_id = None
+    if f.get('criar_regra') == 'on':
+        nomes = {ExtratoLancamento.ler_descricao(l['descricao'])['nome']
+                 for l in livres}
+        nome = nomes.pop() if len(nomes) == 1 else ''
+        if not nome:
+            flash('Para criar regra em lote, todos os selecionados precisam '
+                  'ser da mesma contraparte — estes não são. Foram '
+                  'classificados sem regra.', 'warning')
+        else:
+            mem_id = RegraExtrato.criar(
+                [nome], cat['id'], centro,
+                empresa_id=livres[0]['empresa_id'],
+                sinal=next(iter(sinais)) == 'P' and 'D' or 'C',
+                aplicar='direto', criado_por=current_user.id)
+            if mem_id:
+                registrar('escrita.criou_regra_extrato', 'financeiro',
+                          tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+                          depois={'termos': [nome], 'categoria': cat['nome'],
+                                  'origem': 'lote', 'lancamentos': len(livres)})
+
+    for l in livres:
+        ExtratoLancamento.classificar(l['id'], cat['id'], centro, mem_id)
+    if mem_id:
+        RegraExtrato.contar_uso(mem_id, len(livres))
+
+    registrar('escrita.classificou_extrato_lote', 'financeiro',
+              tabela='extrato_lancamentos',
+              depois={'quantos': len(livres), 'ids': [l['id'] for l in livres],
+                      'categoria': cat['nome'], 'centro_custo_id': centro,
+                      'regra_id': mem_id, 'pulados_ja_classificados': pulados})
+
+    msg = f'{len(livres)} lançamento(s) classificados em "{cat["nome"]}".'
+    if mem_id:
+        msg += ' Regra criada — os próximos entram sozinhos.'
+    if pulados:
+        msg += f' {pulados} já tinham categoria e ficaram como estavam.'
+    flash(msg, 'success')
+    return redirect(url_for('financeiro.extrato'))
 
 
 @financeiro.route('/financeiro/extrato/memorizacoes')
