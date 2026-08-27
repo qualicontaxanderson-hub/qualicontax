@@ -49,6 +49,17 @@ def _parse_decimal_input(value):
     return Decimal(cleaned)
 
 
+def _numero_inteiro(numero):
+    """'007' -> '7' (padronizacao de 27/08/2026: o numero e so o inteiro).
+
+    Normaliza ANTES da checagem de duplicado: '007' nao existe no banco, mas
+    o '7' que ele vira pode existir — checar o cru deixaria a colisao passar.
+    So mexe no que e todo digito; texto misto fica como veio.
+    """
+    n = (numero or '').strip()
+    return str(int(n)) if n.isdigit() else n
+
+
 @clientes.route('/clientes')
 @permission_required('clientes.index')
 def index():
@@ -151,7 +162,7 @@ def novo():
         # value that appears first in getlist(); pick the first non-empty one.
         cpf_cnpj = next((v for v in request.form.getlist('cpf_cnpj') if v.strip()), '')
         nome_razao_social = next((v for v in request.form.getlist('nome_razao_social') if v.strip()), '')
-        numero_cliente = request.form.get('numero_cliente', '').strip()
+        numero_cliente = _numero_inteiro(request.form.get('numero_cliente', ''))
         
         if Cliente.existe_cpf_cnpj(cpf_cnpj):
             # REDE DE SEGURANÇA: se o duplicado for um AVULSO, "já cadastrado"
@@ -807,7 +818,7 @@ def editar(id):
                 return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
             
             # Validar número do cliente se fornecido
-            numero_cliente = request.form.get('numero_cliente', '').strip()
+            numero_cliente = _numero_inteiro(request.form.get('numero_cliente', ''))
             if numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
                 flash(f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!', 'danger')
                 ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
@@ -1049,7 +1060,7 @@ def converter_avulso(id):
         flash('Este cadastro já é um cliente.', 'warning')
         return redirect(url_for('clientes.detalhes', id=id))
 
-    numero = (request.form.get('numero_cliente') or '').strip()
+    numero = _numero_inteiro(request.form.get('numero_cliente') or '')
     if not numero:
         flash('Informe o número que este cliente vai receber.', 'danger')
         return redirect(url_for('clientes.avulsos'))
