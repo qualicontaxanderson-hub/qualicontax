@@ -820,7 +820,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             <select id="exCatalogo" style="display:none" aria-hidden="true" tabindex="-1">
                 {% for c in categorias %}
                 <option value="{{ c.id }}" data-tipo="{{ c.tipo }}"
-                        data-grupo="{{ c.grupo }}" data-nome="{{ c.nome }}">{{ c.nome }}</option>
+                        data-grupo="{{ c.grupo }}" data-nome="{{ c.nome }}"
+                        data-pai="{{ c.pai_id or '' }}">{{ c.nome }}</option>
                 {% endfor %}
             </select>
             <select id="exCentrosCat" style="display:none" aria-hidden="true" tabindex="-1">
@@ -994,7 +995,15 @@ function exLoteAbre() {
     if (o.getAttribute('data-tipo') !== tipo) return;
     var novo = document.createElement('option');
     novo.value = o.value;
-    novo.textContent = o.getAttribute('data-grupo') + ' · ' + o.getAttribute('data-nome');
+    // subcategoria leva a MAE no rotulo: "Manutencao" sozinho nao diz de
+    // qual caminhao e — mesmo defeito da lista chapada do assistente.
+    var rotulo = o.getAttribute('data-nome');
+    var pai = o.getAttribute('data-pai');
+    if (pai) {
+      var om = document.querySelector('#exCatalogo option[value="' + pai + '"]');
+      if (om) rotulo = om.getAttribute('data-nome') + ' › ' + rotulo;
+    }
+    novo.textContent = o.getAttribute('data-grupo') + ' · ' + rotulo;
     sel.appendChild(novo);
   });
 
@@ -1094,7 +1103,7 @@ function exAbrirClassificar(el) {
     aplicar: 'direto', retroagir: null,   // null = ainda nao escolheu
     tituloAcao: null, tituloId: null, tituloComp: null, candidatos: null,
     repete: null,     // null = ainda nao escolheu — sem default, licao da 1a regra
-    grupoCat: null, previa: null, buscando: false
+    grupoCat: null, maeCat: null, previa: null, buscando: false
   };
   document.getElementById('exWizForm').action =
     EX_URL_CLAS.replace('/0/', '/' + W.id + '/');
@@ -1165,7 +1174,8 @@ function exWizAndar(d) {
   var passos = exPassosDe(W.modo);
   if (d < 0 && W.i === 0) return exWizFechar();
   if (d < 0 && passos[W.i] === 'Trecho' && W.manual) { W.manual = false; return exWizDesenha(); }
-  if (d < 0 && passos[W.i] === 'Categoria' && W.grupoCat) { W.grupoCat = null; return exWizDesenha(); }
+  if (d < 0 && passos[W.i] === 'Categoria' && W.maeCat) { W.maeCat = null; W.cat = ''; return exWizDesenha(); }
+  if (d < 0 && passos[W.i] === 'Categoria' && W.grupoCat) { W.grupoCat = null; W.cat = ''; return exWizDesenha(); }
   W.i = Math.max(0, Math.min(passos.length - 1, W.i + d));
   exWizDesenha();
 }
@@ -1375,9 +1385,12 @@ function exTelaCategoria() {
   var opts = Array.prototype.slice.call(
     document.querySelectorAll('#exCatalogo option'))
     .filter(function (o) { return aceitos.indexOf(o.getAttribute('data-tipo')) >= 0; });
+
+  // NIVEL 1: o grupo (a linha do DRE)
   if (!W.grupoCat) {
     var grupos = {};
     opts.forEach(function (o) {
+      if (o.getAttribute('data-pai')) return;      // sub nao conta no cartao
       var g = o.getAttribute('data-grupo');
       grupos[g] = (grupos[g] || 0) + 1;
     });
@@ -1389,16 +1402,55 @@ function exTelaCategoria() {
           ' categorias</small></span><span class="ok">✓</span></button>';
       }).join('') + '</div>';
   }
+
+  var filhasDe = function (id) {
+    return opts.filter(function (o) { return o.getAttribute('data-pai') === String(id); });
+  };
+
+  // NIVEL 3: a despesa dentro da categoria escolhida (o veiculo)
+  if (W.maeCat) {
+    var mae = document.querySelector('#exCatalogo option[value="' + W.maeCat + '"]');
+    var nomeMae = mae ? mae.getAttribute('data-nome') : '?';
+    return '<span class="ex-rot" style="margin-top:0">o que foi, em ' + exEsc(nomeMae) +
+      '</span><div class="ex-cartoes">' + filhasDe(W.maeCat).map(function (o) {
+        return '<button type="button" class="ex-cartao' +
+          (String(W.cat) === o.value ? ' on' : '') + '" onclick="exWizCat(\'' + o.value +
+          '\')"><span class="t"><b>' + exEsc(o.getAttribute('data-nome')) +
+          '</b></span><span class="ok">✓</span></button>';
+      }).join('') +
+      '<button type="button" class="ex-cartao' +
+        (String(W.cat) === String(W.maeCat) ? ' on' : '') +
+        '" onclick="exWizCat(\'' + W.maeCat + '\')">' +
+        '<span class="t"><b>Sem detalhar</b><small>lança direto em ' +
+        exEsc(nomeMae) + '</small></span><span class="ok">✓</span></button>' +
+      '</div>' + exRodapeCentro();
+  }
+
+  // NIVEL 2: a categoria (a coisa — o veiculo, o fornecedor). So as MAES:
+  // era aqui que a lista chapada misturava "Manutencao" de tres caminhoes
+  // sem dizer de qual era cada uma.
   var doGrupo = opts.filter(function (o) {
-    return o.getAttribute('data-grupo') === W.grupoCat; });
+    return o.getAttribute('data-grupo') === W.grupoCat && !o.getAttribute('data-pai');
+  });
   return '<span class="ex-rot" style="margin-top:0">categoria de ' + exEsc(W.grupoCat) +
     '</span><div class="ex-cartoes">' + doGrupo.map(function (o) {
+      var filhas = filhasDe(o.value).length;
+      if (filhas) {
+        return '<button type="button" class="ex-cartao" onclick="exWizMaeCat(\'' +
+          o.value + '\')"><span class="t"><b>' + exEsc(o.getAttribute('data-nome')) +
+          '</b><small>' + filhas + ' tipo(s) de gasto — toque para abrir</small></span>' +
+          '<span class="ex-rot" style="margin:4px 0 0">›</span></button>';
+      }
       return '<button type="button" class="ex-cartao' +
         (String(W.cat) === o.value ? ' on' : '') + '" onclick="exWizCat(\'' + o.value +
         '\')"><span class="t"><b>' + exEsc(o.getAttribute('data-nome')) +
         '</b></span><span class="ok">✓</span></button>';
     }).join('') + '</div>' +
-    '<span class="ex-rot">centro de custo</span><div class="ex-pedacos">' +
+    exRodapeCentro();
+}
+
+function exRodapeCentro() {
+  return '<span class="ex-rot">centro de custo</span><div class="ex-pedacos">' +
     '<button type="button" class="ex-pedaco' + (W.centro ? '' : ' on') +
     '" onclick="exWizCentro(\'\')">— sem centro —</button>' +
     Array.prototype.slice.call(document.querySelectorAll('#exCentrosCat option'))
@@ -1408,6 +1460,8 @@ function exTelaCategoria() {
           o.value + '\')">' + exEsc(o.textContent) + '</button>';
       }).join('') + '</div>';
 }
+
+function exWizMaeCat(id) { W.maeCat = id; W.cat = ''; exWizDesenha(); }
 
 function exTelaTitulo() {
   if (W.candidatos === null) {
@@ -1481,7 +1535,17 @@ function exWizRepete(v) { W.repete = v; exWizDesenha(); }
 function exTelaConfirmar() {
   var nomeCat = '';
   var o = document.querySelector('#exCatalogo option[value="' + W.cat + '"]');
-  if (o) nomeCat = o.getAttribute('data-grupo') + ' · ' + o.getAttribute('data-nome');
+  if (o) {
+    nomeCat = o.getAttribute('data-grupo') + ' · ' + o.getAttribute('data-nome');
+    // subcategoria mostra a MAE junto: "Manutencao" sozinho nao diz de qual
+    // caminhao e — foi o defeito da lista chapada.
+    var pai = o.getAttribute('data-pai');
+    if (pai) {
+      var om = document.querySelector('#exCatalogo option[value="' + pai + '"]');
+      if (om) nomeCat = o.getAttribute('data-grupo') + ' · ' +
+        om.getAttribute('data-nome') + ' › ' + o.getAttribute('data-nome');
+    }
+  }
   var html = '';
 
   if (W.modo !== 'unico') {
@@ -1597,7 +1661,7 @@ function exWizEmpresa(id) {
   exWizDesenha();
 }
 function exWizGrupo(id) { W.grupo = id; exPedePrevia(exWizDesenha); exWizDesenha(); }
-function exWizGrupoCat(g) { W.grupoCat = g; exWizDesenha(); }
+function exWizGrupoCat(g) { W.grupoCat = g; W.maeCat = null; W.cat = ''; exWizDesenha(); }
 function exWizCat(id) { W.cat = id; exWizDesenha(); }
 function exWizCentro(id) { W.centro = id; exWizDesenha(); }
 function exWizAplicar(a) { W.aplicar = a; exWizDesenha(); }
