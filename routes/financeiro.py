@@ -139,7 +139,7 @@ from decimal import Decimal, InvalidOperation
 
 from flask_login import current_user
 
-from models.fin_titulo import FinTitulo, FinCategoria
+from models.fin_titulo import FinTitulo, FinCategoria, FinProgramacao
 from utils.atividade import registrar
 from utils.db_helper import execute_query
 from utils.financeiro_core import registrar_baixa, BaixaInvalida
@@ -1271,6 +1271,53 @@ def extrato_classificar(lanc_id):
                           else ' Baixa registrada no título.')
         else:
             flash(f'A classificação valeu, mas o título não: {motivo}', 'warning')
+
+    # ---- "ISSO SE REPETE?" (degrau 7). So com titulo no gesto: programacao
+    # gera titulo todo mes, e sem titulo agora nao ha o que repetir.
+    repete = (f.get('repete') or '').strip()
+    if conciliou and repete in ('fixa', 'variavel'):
+        from datetime import date as _date
+        leitura = ExtratoLancamento.ler_descricao(lanc['descricao'])
+        nome_prog = (leitura['nome'] or cat['nome'])[:255]
+        tipo_prog = 'R' if lanc['valor'] >= 0 else 'P'
+        # Ja existe programacao ATIVA para a mesma contraparte, mesmo tipo e
+        # mesma empresa? Criar outra faria gerar_mes duplicar a conta.
+        dup = execute_query(
+            'SELECT id FROM fin_programacoes '
+            ' WHERE ativo = 1 AND empresa_id = %s AND tipo = %s '
+            '   AND contraparte_nome = %s',
+            (lanc.get('empresa_id'), tipo_prog, nome_prog),
+            fetch=True, fetch_one=True)
+        if dup:
+            flash(f'Já existe programação ativa para "{nome_prog}" — '
+                  'nenhuma nova foi criada.', 'warning')
+        else:
+            d = lanc['data']
+            # inicio no MES SEGUINTE: o titulo deste mes acabou de nascer na
+            # conciliacao; comecar neste mes faria gerar_mes duplicar.
+            inicio = (_date(d.year + 1, 1, 1) if d.month == 12
+                      else _date(d.year, d.month + 1, 1))
+            pid = FinProgramacao.criar(
+                empresa_id=lanc.get('empresa_id'), tipo=tipo_prog,
+                descricao=nome_prog, contraparte_nome=nome_prog,
+                categoria_id=cat['id'],
+                valor_esperado=abs(float(lanc['valor'])),
+                dia_vencimento=d.day,
+                variavel=(repete == 'variavel'), inicio=inicio,
+                contraparte_doc=leitura['doc'] or None,
+                centro_custo_id=centro)
+            if pid and pid is not True:
+                registrar('escrita.criou_programacao', 'financeiro',
+                          tabela='fin_programacoes', registro_id=pid,
+                          depois={'contraparte': nome_prog,
+                                  'valor_esperado': abs(float(lanc['valor'])),
+                                  'dia_vencimento': d.day,
+                                  'variavel': repete == 'variavel',
+                                  'inicio': str(inicio), 'origem': 'extrato'})
+                titulo_msg += (
+                    f' Programação criada: todo dia {d.day}'
+                    + (', valor variável.' if repete == 'variavel'
+                       else f', {abs(float(lanc["valor"])):.2f} esperados.'))
 
     ok = ExtratoLancamento.classificar(lanc_id, cat['id'], centro, mem_id)
     if ok and mem_id:

@@ -807,6 +807,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             <input type="hidden" name="titulo_acao" id="exwTituloAcao">
             <input type="hidden" name="titulo_id"   id="exwTituloId">
             <input type="hidden" name="titulo_competencia" id="exwTituloComp">
+            <input type="hidden" name="repete" id="exwRepete">
             <input type="hidden" name="categoria_id"    id="exCategoriaOculta">
             <input type="hidden" name="centro_custo_id" id="exCentroOculto">
             <div id="exwTermos"></div>
@@ -1049,15 +1050,20 @@ var EX_GRUPOS = [
 var W = null;
 
 var PASSOS_BASE = {
-  unico:  ['Como', 'Categoria', 'Título', 'Confirmar'],
-  memo:   ['Como', 'Trecho', 'Empresas', 'Categoria', 'Título', 'Confirmar'],
-  regra:  ['Como', 'Trecho', 'Condições', 'Empresas', 'Categoria', 'Título', 'Confirmar']
+  unico:  ['Como', 'Categoria', 'Título', 'Repete?', 'Confirmar'],
+  memo:   ['Como', 'Trecho', 'Empresas', 'Categoria', 'Título', 'Repete?', 'Confirmar'],
+  regra:  ['Como', 'Trecho', 'Condições', 'Empresas', 'Categoria', 'Título', 'Repete?', 'Confirmar']
 };
-// TRANSFERENCIA nao tem titulo: nao e obrigacao, e dinheiro andando entre
-// contas proprias. Escolhida uma categoria T, o passo some.
+// TRANSFERENCIA nao tem titulo (nao e obrigacao) nem repeticao. E REPETE?
+// so existe quando um titulo nasceu ou casou: programacao gera titulo todo
+// mes, e sem titulo agora nao ha o que repetir.
 function exPassosDe(modo) {
   var p = (PASSOS_BASE[modo] || PASSOS_BASE.unico).slice();
-  if (exCatTipo() === 'T') p = p.filter(function (x) { return x !== 'Título'; });
+  if (exCatTipo() === 'T') {
+    p = p.filter(function (x) { return x !== 'Título' && x !== 'Repete?'; });
+  } else if (W && W.tituloAcao === 'nao') {
+    p = p.filter(function (x) { return x !== 'Repete?'; });
+  }
   return p;
 }
 function exCatTipo() {
@@ -1087,6 +1093,7 @@ function exAbrirClassificar(el) {
     escopo: 'empresa', empresas: [], grupo: null,
     aplicar: 'direto', retroagir: null,   // null = ainda nao escolheu
     tituloAcao: null, tituloId: null, tituloComp: null, candidatos: null,
+    repete: null,     // null = ainda nao escolheu — sem default, licao da 1a regra
     grupoCat: null, previa: null, buscando: false
   };
   document.getElementById('exWizForm').action =
@@ -1288,6 +1295,29 @@ function exWizDesenha() {
     html = exTelaCategoria();
     pronto = !!W.cat;
 
+  } else if (passo === 'Repete?') {
+    var dia = (W.lanc && W.lanc.data) ? W.lanc.data.split('/')[0] : '?';
+    var valor = W.lanc ? exMoeda(Math.abs(W.lanc.valor)) : '';
+    html = '<span class="ex-rot" style="margin-top:0">isso se repete todo mês?' +
+      (W.repete === null ? ' <b style="color:#b45309">— escolha um</b>' : '') +
+      '</span><div class="ex-cartoes">' + [
+      ['nao', '1️⃣', 'Não, foi uma vez só',
+       'nada além do que já foi feito'],
+      ['fixa', '📌', 'Sim, todo mês no mesmo valor',
+       'todo dia ' + dia + ' entram ' + valor + '. Se um mês vier diferente, o sistema PERGUNTA: juros do atraso, reajuste, ou só daquele mês'],
+      ['variavel', '📈', 'Sim, mas o valor muda',
+       'energia, salário — todo dia ' + dia + ', e ' + valor + ' vira só referência: diferença não pergunta nada']
+    ].map(function (o) {
+      return '<button type="button" class="ex-cartao' + (W.repete === o[0] ? ' on' : '') +
+        '" onclick="exWizRepete(\'' + o[0] + '\')"><span class="b">' + o[1] +
+        '</span><span class="t"><b>' + o[2] + '</b><small>' + o[3] +
+        '</small></span><span class="ok">✓</span></button>';
+    }).join('') + '</div>' +
+      '<small class="ex-rot" style="text-transform:none; letter-spacing:0; font-weight:600;">' +
+      'A programação começa no mês que vem — o título deste mês acabou de nascer aqui. ' +
+      'O lançamento do próximo mês vai casar com o título dela sozinho.</small>';
+    pronto = W.repete !== null;
+
   } else if (passo === 'Título') {
     html = exTelaTitulo();
     pronto = W.tituloAcao === 'nao' ||
@@ -1444,7 +1474,9 @@ function exTelaTitulo() {
 
 function exWizTitCasar(id) { W.tituloAcao = 'casar'; W.tituloId = id; exWizDesenha(); }
 function exWizTitCriar() { W.tituloAcao = 'criar'; W.tituloId = null; exWizDesenha(); }
-function exWizTitNao() { W.tituloAcao = 'nao'; W.tituloId = null; exWizDesenha(); }
+function exWizTitNao() { W.tituloAcao = 'nao'; W.tituloId = null; W.repete = null; exWizDesenha(); }
+
+function exWizRepete(v) { W.repete = v; exWizDesenha(); }
 
 function exTelaConfirmar() {
   var nomeCat = '';
@@ -1483,6 +1515,12 @@ function exTelaConfirmar() {
       }).join('') + '</div><span class="ex-rot">resumo</span>';
   }
 
+  var rep = '';
+  if (exCatTipo() !== 'T' && W.tituloAcao !== 'nao' && W.repete && W.repete !== 'nao') {
+    rep = W.repete === 'fixa'
+      ? '<br><b>📌 Programação mensal</b> — valor fixo; diferença dispara a pergunta'
+      : '<br><b>📈 Programação mensal</b> — valor variável, sem pergunta';
+  }
   var tit = '';
   if (exCatTipo() !== 'T') {
     tit = W.tituloAcao === 'criar'
@@ -1490,6 +1528,7 @@ function exTelaConfirmar() {
       : (W.tituloAcao === 'casar'
         ? '<br><b>🔗 Baixa no título #' + W.tituloId + '</b>'
         : '<br><b>⏭ Sem título</b> — só fluxo de caixa, sem competência');
+    tit += rep;
   }
   var alvo = '<b>' + exEsc(nomeCat) + '</b>';
   if (W.modo === 'unico') {
@@ -1585,6 +1624,8 @@ function exSincronizaForm() {
     (W.tituloAcao === 'casar' && W.tituloId) ? W.tituloId : '';
   document.getElementById('exwTituloComp').value =
     (W.tituloAcao === 'criar') ? (W.tituloComp || '') : '';
+  document.getElementById('exwRepete').value =
+    (exCatTipo() !== 'T' && W.tituloAcao !== 'nao' && W.repete) ? W.repete : 'nao';
 
   document.getElementById('exwTermos').innerHTML = (W.modo === 'unico') ? '' :
     exTermos().map(function (t) {
