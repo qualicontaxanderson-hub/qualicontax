@@ -425,7 +425,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
         <i class="fas fa-chevron-down" id="exChevron"
            style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
     </div>
-    <div id="exFiltroCorpo" style="display:{{ '' if filtros_ativos else 'none' }};">
+    {# Nasce fechado SEMPRE — o selo "N ativo(s)" ja diz que ha filtro. #}
+    <div id="exFiltroCorpo" style="display:none;">
         <form method="GET" action="{{ url_for('financeiro.extrato') }}" id="exFormFiltro">
             <input type="hidden" name="emp" value="{{ sel_empresas | join(',') }}">
             <div class="ex-grade">
@@ -869,6 +870,25 @@ function exAbrirImport() {
 function exFecharImport() {
     document.getElementById('exModalImport').style.display = 'none';
 }
+
+// Volta para onde estava: todo POST da tela (classificar, confirmar,
+// lote, gerar titulos) guarda a rolagem; a pagina recarregada recoloca.
+// Filtrar fica de fora — filtro novo comeca do topo.
+document.addEventListener('submit', function (e) {
+    if (e.target && e.target.id !== 'exFormFiltro') {
+        try { sessionStorage.setItem('exVolta', String(window.scrollY || 0)); }
+        catch (err) { /* modo privado sem storage: paciencia */ }
+    }
+}, true);
+(function () {
+    try {
+        var y = sessionStorage.getItem('exVolta');
+        if (y !== null) {
+            sessionStorage.removeItem('exVolta');
+            window.scrollTo(0, parseInt(y, 10) || 0);
+        }
+    } catch (err) { }
+})();
 
 function exToggleFiltros() {
     var corpo = document.getElementById('exFiltroCorpo');

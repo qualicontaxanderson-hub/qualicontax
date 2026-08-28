@@ -923,6 +923,20 @@ def extrato():
                            limite=500, filtros=filtros)
 
 
+def _volta_extrato(**padrao):
+    """Volta para a MESMA visao do extrato de onde o gesto partiu.
+
+    O referrer traz a aba e os filtros (classif=..., datas, conta); sem ele,
+    cai no padrao do gesto. So a query e reaproveitada — o caminho e sempre
+    o nosso, nunca o que veio de fora.
+    """
+    from urllib.parse import urlsplit
+    ref = urlsplit(request.referrer or '')
+    if ref.path.rstrip('/').endswith('/financeiro/extrato') and ref.query:
+        return redirect(url_for('financeiro.extrato') + '?' + ref.query)
+    return redirect(url_for('financeiro.extrato', **padrao))
+
+
 @financeiro.route('/financeiro/extrato/importar', methods=['POST'])
 @permission_required('financeiro.extrato')
 def extrato_importar():
@@ -932,12 +946,12 @@ def extrato_importar():
     empresa_raw = (request.form.get('empresa_id') or '').strip()
     if not empresa_raw.isdigit() or int(empresa_raw) not in FinEmpresa.ids_validos():
         flash('Escolha de qual empresa é a conta antes de importar.', 'warning')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
     empresa_id = int(empresa_raw)
     arquivos = [a for a in request.files.getlist('arquivos') if a and a.filename]
     if not arquivos:
         flash('Escolha ao menos um arquivo OFX.', 'warning')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     for arq in arquivos:
         try:
@@ -999,7 +1013,7 @@ def extrato_importar():
                           'banco': dados['banco'],
                           'conta': dados['conta'], 'novos': len(novos),
                           'repetidos': len(unicos) - len(novos)})
-    return redirect(url_for('financeiro.extrato'))
+    return _volta_extrato()
 
 
 # =======================================================================
@@ -1142,7 +1156,7 @@ def extrato_apagar_periodo():
     conta = (f.get('conta') or '').strip()
     if not emp.isdigit() or not de or not ate:
         flash('Escolha a empresa e o período a apagar.', 'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     cond = ['empresa_id = %s', 'data BETWEEN %s AND %s']
     params = [int(emp), de, ate]
@@ -1156,7 +1170,7 @@ def extrato_apagar_periodo():
     if not quantos:
         flash('Nenhum lançamento nesse período/conta — nada foi apagado.',
               'warning')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     _q(f'DELETE FROM extrato_lancamentos WHERE {where}', tuple(params))
     registrar('escrita.apagou_periodo_extrato', 'financeiro',
@@ -1165,7 +1179,7 @@ def extrato_apagar_periodo():
                      'conta': conta or 'todas', 'apagados': quantos})
     flash(f'{quantos} lançamento(s) apagados de {de} a {ate}. Mande o arquivo '
           'para a pasta de novo — ele entra limpo.', 'success')
-    return redirect(url_for('financeiro.extrato'))
+    return _volta_extrato()
 
 
 # =======================================================================
@@ -1179,12 +1193,12 @@ def extrato_classificar(lanc_id):
     lanc = ExtratoLancamento.get(lanc_id)
     if not lanc:
         flash('Lançamento não encontrado.', 'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
     cat_raw = (f.get('categoria_id') or '').strip()
     cat = next((c for c in FinCategoria.listar() if str(c['id']) == cat_raw), None)
     if not cat:
         flash('Escolha a categoria.', 'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
     # Crédito é receita, débito é despesa. TRANSFERÊNCIA vale nos dois
     # sentidos (é dinheiro seu andando de conta) e INVESTIMENTO vale na
     # saída — sem isso o extrato não tinha como classificar nenhum dos dois,
@@ -1196,7 +1210,7 @@ def extrato_classificar(lanc_id):
                if esperado == 'R' else
                'Este lançamento é um DÉBITO — escolha despesa, investimento '
                'ou transferência.'), 'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
     centro_raw = (f.get('centro_custo_id') or '').strip()
     centro = int(centro_raw) if centro_raw.isdigit() else None
 
@@ -1210,13 +1224,13 @@ def extrato_classificar(lanc_id):
         d = _regra_do_form(f, lanc)
         if not d['termos'] or len(' '.join(d['termos'])) < 4:
             flash('A regra precisa de pelo menos um trecho com 4 letras.', 'danger')
-            return redirect(url_for('financeiro.extrato'))
+            return _volta_extrato()
         if d['escopo'] == 'lista' and not d['empresas']:
             flash('Escolha ao menos uma empresa para a regra.', 'danger')
-            return redirect(url_for('financeiro.extrato'))
+            return _volta_extrato()
         if d['escopo'] == 'grupo' and not d['grupo_id']:
             flash('Escolha o grupo de empresas.', 'danger')
-            return redirect(url_for('financeiro.extrato'))
+            return _volta_extrato()
 
         mem_id = ExtratoMemorizacao.criar(
             d['termos'], cat['id'], centro,
@@ -1353,7 +1367,7 @@ def extrato_classificar(lanc_id):
             flash(aviso, 'warning')
     else:
         flash('Erro ao classificar.', 'danger')
-    return redirect(url_for('financeiro.extrato'))
+    return _volta_extrato()
 
 
 def _regra_do_form(f, lanc):
@@ -1409,7 +1423,7 @@ def extrato_confirmar(lanc_id):
                                 if resultado == 'casou' else '')), 'success')
     else:
         flash('Este lançamento não estava aguardando conferência.', 'warning')
-    return redirect(url_for('financeiro.extrato', classif='conferir'))
+    return _volta_extrato(classif='conferir')
 
 
 @financeiro.route('/financeiro/extrato/regra/<int:mem_id>/confirmar-todos',
@@ -1436,7 +1450,7 @@ def extrato_confirmar_todos(mem_id):
     flash(f'{n} lançamento(s) confirmados.' if n
           else 'Nenhum lançamento desta regra aguardava conferência.',
           'success' if n else 'warning')
-    return redirect(url_for('financeiro.extrato', classif='conferir'))
+    return _volta_extrato(classif='conferir')
 
 
 @financeiro.route('/financeiro/extrato/<int:lanc_id>/sugestoes')
@@ -1525,7 +1539,7 @@ def extrato_lote():
     ids = [int(i) for i in f.getlist('lanc') if str(i).isdigit()]
     if not ids:
         flash('Nenhum lançamento selecionado.', 'warning')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     marks = ','.join(['%s'] * len(ids))
     lancs = execute_query(
@@ -1538,7 +1552,7 @@ def extrato_lote():
     if not livres:
         flash('Todos os selecionados já têm categoria — o lote não '
               'sobrescreve decisão já tomada.', 'warning')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     # Credito e receita, debito e despesa: uma categoria nao serve aos dois.
     sinais = {('R' if float(l['valor']) >= 0 else 'P') for l in livres}
@@ -1546,16 +1560,16 @@ def extrato_lote():
         flash('A seleção mistura entradas e saídas — classifique cada '
               'sentido de uma vez, porque uma categoria não serve aos dois.',
               'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     cat_raw = (f.get('categoria_id') or '').strip()
     cat = next((c for c in FinCategoria.listar() if str(c['id']) == cat_raw), None)
     if not cat:
         flash('Escolha a categoria.', 'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
     if cat['tipo'] != next(iter(sinais)):
         flash('A categoria escolhida é do tipo errado para esta seleção.', 'danger')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     centro_raw = (f.get('centro_custo_id') or '').strip()
     centro = int(centro_raw) if centro_raw.isdigit() else None
@@ -1600,7 +1614,7 @@ def extrato_lote():
     if pulados:
         msg += f' {pulados} já tinham categoria e ficaram como estavam.'
     flash(msg, 'success')
-    return redirect(url_for('financeiro.extrato'))
+    return _volta_extrato()
 
 
 @financeiro.route('/financeiro/extrato/lote/titulos', methods=['POST'])
@@ -1616,7 +1630,7 @@ def extrato_lote_titulos():
     ids = [int(i) for i in request.form.getlist('lanc') if str(i).isdigit()]
     if not ids:
         flash('Nenhum lançamento selecionado.', 'warning')
-        return redirect(url_for('financeiro.extrato'))
+        return _volta_extrato()
 
     marks = ','.join(['%s'] * len(ids))
     lancs = execute_query(
@@ -1687,7 +1701,7 @@ def extrato_lote_titulos():
     flash(('. '.join(partes) + '. O DRE já reflete.') if (criados or casados)
           else ('. '.join(partes) or 'Nada a fazer.'),
           'success' if (criados or casados) else 'warning')
-    return redirect(url_for('financeiro.extrato', classif='sim'))
+    return _volta_extrato(classif='sim')
 
 
 @financeiro.route('/financeiro/extrato/memorizacoes')
