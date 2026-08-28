@@ -23,6 +23,34 @@
 .dre-sub { background: #f0fdf4; font-weight: 700; border-top: 2px solid #bbf7d0; }
 .dre-neg { color: #b91c1c; }
 .dre-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+/* ===== MOBILE: um mês por vez, em cartão (a tabela de 14 colunas some) ===== */
+.dre-mob { display: none; }
+.dre-mob-meses { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 12px;
+  -webkit-overflow-scrolling: touch; }
+.dre-mob-meses::-webkit-scrollbar { display: none; }
+.dre-mes-chip { flex: 0 0 auto; padding: 8px 15px 10px; border-radius: 999px;
+  border: 1px solid #d1d5db; background: #fff; color: #374151; font-weight: 700;
+  font-size: .85em; cursor: pointer; position: relative; font-family: inherit; }
+.dre-mes-chip.ativo { background: var(--primary-green, #00A85A); color: #fff;
+  border-color: var(--primary-green, #00A85A); }
+.dre-mes-chip .pt { position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 4px; width: 4px; height: 4px; border-radius: 999px;
+  background: var(--primary-green, #00A85A); }
+.dre-mes-chip.ativo .pt { background: #fff; }
+.dre-m-bloco { display: none; }
+.dre-m-bloco.ativo { display: block; }
+.dre-m-lin { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; padding: 11px 10px; border-bottom: 1px solid #f3f4f6; }
+.dre-m-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dre-m-grupo { cursor: pointer; font-weight: 600; }
+.dre-m-grupo i { color: #9ca3af; width: 13px; }
+.dre-m-cat { padding-left: 33px; color: #6b7280; font-size: .92em; background: #fafafa; }
+.dre-m-sub { background: #f0fdf4; font-weight: 800; border-top: 2px solid #bbf7d0; }
+.dre-m-zero { text-align: center; color: #9ca3af; padding: 22px 0 10px; font-size: .9em; }
+@media (max-width: 1023px) {
+  .dre-wrap { display: none; }
+  .dre-mob { display: block; }
+}
 </style>
 
 <div class="page-header">
@@ -126,9 +154,10 @@
 </div>
 
 <div class="card">
-    <div class="card-body dre-wrap">
+    <div class="card-body">
         {% set tem_dado = linhas | selectattr('tipo', 'equalto', 'grupo') | list %}
         {% if tem_dado %}
+        <div class="dre-wrap">
         <table class="table">
             <thead>
                 <tr>
@@ -174,6 +203,72 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
+
+        {# MOBILE: um mês por vez — mesmo dado, na vertical #}
+        {% macro m_bloco(idx, ativo) %}
+        {% set ns = namespace(mov=false) %}
+        {% for l in linhas if l.tipo == 'grupo' %}
+            {% if (l.g.total if idx == 'ano' else l.g.meses[idx]) %}
+                {% set ns.mov = true %}
+            {% endif %}
+        {% endfor %}
+        <div class="dre-m-bloco {{ 'ativo' if ativo }}" data-mes="{{ idx }}">
+            {% if ns.mov %}
+            {% for l in linhas %}
+            {% if l.tipo == 'grupo' %}
+            {% set v = l.g.total if idx == 'ano' else l.g.meses[idx] %}
+            {% if v %}
+            <div class="dre-m-lin dre-m-grupo" onclick="dreMToggle(this)">
+                <span><i class="fas fa-caret-right"></i>
+                    ({{ '−' if l.sinal == '-' else '+' }}) {{ l.g.grupo }}</span>
+                <span class="dre-m-val">{{ v | float | round(2) | format_currency }}</span>
+            </div>
+            {% for c in l.g.cats %}
+            {% set cv = c.total if idx == 'ano' else c.meses[idx] %}
+            {% if cv %}
+            <div class="dre-m-lin dre-m-cat" style="display:none;">
+                <span>{{ c.nome }}</span>
+                <span class="dre-m-val">{{ cv | float | round(2) | format_currency }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+            {% else %}
+            {% set v = (l.meses | sum) if idx == 'ano' else l.meses[idx] %}
+            <div class="dre-m-lin dre-m-sub">
+                <span>{{ l.rotulo }}</span>
+                <span class="dre-m-val {{ 'dre-neg' if v < 0 }}">{{ v | float | round(2) | format_currency }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <div class="dre-m-zero">Sem movimento
+                {{ 'em ' ~ ano if idx == 'ano' else 'neste mês' }}.</div>
+            {% endif %}
+        </div>
+        {% endmacro %}
+
+        <div class="dre-mob">
+            <div class="dre-mob-meses">
+                {% for m in meses %}
+                {% set i = loop.index0 %}
+                {% set nsc = namespace(tem=false) %}
+                {% for l in linhas if l.tipo == 'grupo' %}
+                    {% if l.g.meses[i] %}{% set nsc.tem = true %}{% endif %}
+                {% endfor %}
+                <button type="button" class="dre-mes-chip {{ 'ativo' if loop.index == mes_ini }}"
+                        data-mes="{{ i }}" onclick="dreMes(this)">{{ m }}
+                    {%- if nsc.tem %}<span class="pt"></span>{% endif %}</button>
+                {% endfor %}
+                <button type="button" class="dre-mes-chip" data-mes="ano"
+                        onclick="dreMes(this)">{{ ano }}<span class="pt"></span></button>
+            </div>
+            {% for i in range(12) %}
+            {{ m_bloco(i, loop.index == mes_ini) }}
+            {% endfor %}
+            {{ m_bloco('ano', false) }}
+        </div>
         {% else %}
         <div class="dre-vazio">
             <i class="fas fa-chart-pie" style="font-size:2em; display:block; margin-bottom:10px;"></i>
@@ -196,5 +291,31 @@ function dreToggle(bloco) {
     });
     if (caret) caret.className = abertas ? 'fas fa-caret-down' : 'fas fa-caret-right';
 }
+function dreMes(btn) {
+    document.querySelectorAll('.dre-mes-chip').forEach(function (b) {
+        b.classList.remove('ativo');
+    });
+    btn.classList.add('ativo');
+    var m = btn.getAttribute('data-mes');
+    document.querySelectorAll('.dre-m-bloco').forEach(function (d) {
+        d.classList.toggle('ativo', d.getAttribute('data-mes') === m);
+    });
+}
+function dreMToggle(lin) {
+    var caret = lin.querySelector('i'), abriu = false;
+    var n = lin.nextElementSibling;
+    while (n && n.classList.contains('dre-m-cat')) {
+        abriu = n.style.display === 'none';
+        n.style.display = abriu ? '' : 'none';
+        n = n.nextElementSibling;
+    }
+    if (caret) caret.className = abriu ? 'fas fa-caret-down' : 'fas fa-caret-right';
+}
+(function () {
+    var ativo = document.querySelector('.dre-mes-chip.ativo');
+    if (ativo && ativo.scrollIntoView) {
+        ativo.scrollIntoView({inline: 'center', block: 'nearest'});
+    }
+})();
 </script>
 {% endblock %}

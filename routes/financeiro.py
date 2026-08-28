@@ -736,7 +736,15 @@ def dre():
         any(c['id'] == int(centro_raw) for c in centros) else None
     rows, nota_centro = _aplicar_centro(
         FinDre.por_ano(ano, regime, empresa_ids=sel), centro_sel, centros)
-    return render_template('financeiro/dre.html', linhas=_montar_dre(rows),
+    linhas = _montar_dre(rows)
+    # No celular abre um mes por vez: comeca no ULTIMO mes com movimento
+    # (o retrato mais recente); sem movimento nenhum, no mes de hoje.
+    mes_ini = max((i + 1 for l in linhas if l['tipo'] == 'grupo'
+                   for i, v in enumerate(l['g']['meses']) if v), default=None)
+    if mes_ini is None:
+        mes_ini = date.today().month if ano == ano_atual else 12
+    return render_template('financeiro/dre.html', linhas=linhas,
+                           mes_ini=mes_ini,
                            regime=regime,
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            centros=centros, centro_sel=centro_sel,
