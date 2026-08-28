@@ -112,7 +112,8 @@
                 {% endfor %}
             </div>
             <div class="rg-cond">
-                {% if m.conta %}<span>só na conta {{ m.conta }}</span>{% endif %}
+                {% if m.conta %}{% set _b = contas_cad.get(m.conta | string, {}).get('apelido') %}
+                <span>só na conta {{ (_b ~ ' · ' if _b else '') ~ m.conta }}</span>{% endif %}
                 {% if m.sinal %}<span>só {{ 'saídas' if m.sinal == 'D' else 'entradas' }}</span>{% endif %}
                 {% if m.valor_exato is not none %}
                 <span>só no valor {{ m.valor_exato | float | round(2) | format_currency }}</span>{% endif %}
