@@ -868,7 +868,9 @@ def extrato():
         conta=request.args.get('conta') or '',
         busca=(request.args.get('busca') or '').strip(),
         documento=(request.args.get('documento') or '').strip(),
-        classif=_um('classif', ('sim', 'nao', 'conferir')),
+        # Sem categoria e o PADRAO: o objetivo da tela e classificar.
+        # "todos" e o valor explicito da aba Lancamentos.
+        classif=_um('classif', ('sim', 'nao', 'conferir', 'todos')) or 'nao',
         tipo=_um('tipo', ('credito', 'debito')),
         categoria_id=_um('categoria_id'),
         centro_id=_um('centro_id'),
@@ -887,10 +889,15 @@ def extrato():
     if args.get('centro_id') and args['centro_id'] != 'sem' \
             and not str(args['centro_id']).isdigit():
         args['centro_id'] = None
+    if args.get('classif') == 'todos':
+        args['classif'] = None
     args['empresa_ids'] = sel
 
     # Quantos filtros o usuário ligou — vira o selo do painel fechado.
-    ativos = sum(1 for k, v in filtros.items() if v)
+    # O padrao (sem categoria) nao conta: selo permanente e ruido.
+    ativos = sum(1 for k, v in filtros.items() if v and k != 'classif')
+    if filtros['classif'] != 'nao':
+        ativos += 1
 
     # A lista sai UMA vez e é agrupada por dia aqui: decidir "mudou o dia?"
     # no Jinja exigiria comparar a linha com a anterior, que foi o que

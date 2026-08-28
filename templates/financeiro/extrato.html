@@ -479,8 +479,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 <div>
                     <label>Classificação</label>
                     <select name="classif">
-                        <option value="">Todos</option>
                         <option value="nao" {% if filtros.classif == 'nao' %}selected{% endif %}>Sem categoria</option>
+                        <option value="todos" {% if filtros.classif == 'todos' %}selected{% endif %}>Todos</option>
                         <option value="sim" {% if filtros.classif == 'sim' %}selected{% endif %}>Classificados</option>
                     </select>
                 </div>
@@ -526,8 +526,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 {% set _base = {} %}
 {% for k, v in request.args.items() %}{% if k != 'classif' and v %}{% set _ = _base.update({k: v}) %}{% endif %}{% endfor %}
 <div class="ex-abas">
-    <a class="ex-aba {{ 'ativa' if not filtros.classif }}"
-       href="{{ url_for('financeiro.extrato', **_base) }}">
+    <a class="ex-aba {{ 'ativa' if filtros.classif == 'todos' }}"
+       href="{{ url_for('financeiro.extrato', classif='todos', **_base) }}">
         <i class="fas fa-list"></i> Lançamentos <span class="ex-cont">{{ totais.n or 0 }}</span>
     </a>
     <a class="ex-aba {{ 'ativa' if filtros.classif == 'nao' }}"
