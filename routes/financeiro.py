@@ -1387,10 +1387,18 @@ def extrato_confirmar(lanc_id):
     regra ficam — confirmar nao e reclassificar."""
     from models.extrato_lancamento import ExtratoLancamento
     if ExtratoLancamento.confirmar(lanc_id):
+        # O aval humano chegou: agora o titulo pode nascer — "quando for
+        # aparecendo vai informando no DRE" (Anderson, 27/08).
+        lanc = ExtratoLancamento.get(lanc_id)
+        resultado = ExtratoLancamento.conciliar_automatico(
+            lanc, usuario_id=current_user.id) if lanc else 'pulado'
         registrar('escrita.confirmou_extrato', 'financeiro',
                   tabela='extrato_lancamentos', registro_id=lanc_id,
-                  depois={'conferir': False})
-        flash('Confirmado.', 'success')
+                  depois={'conferir': False, 'titulo': resultado})
+        flash('Confirmado.' + (' Título criado — já está no DRE.'
+                               if resultado == 'criou' else
+                               (' Baixa registrada no título.'
+                                if resultado == 'casou' else '')), 'success')
     else:
         flash('Este lançamento não estava aguardando conferência.', 'warning')
     return redirect(url_for('financeiro.extrato', classif='conferir'))
@@ -1402,10 +1410,21 @@ def extrato_confirmar(lanc_id):
 def extrato_confirmar_todos(mem_id):
     """A regra acertou em todos os que deixou esperando."""
     from models.extrato_lancamento import ExtratoLancamento
+    # os ids ANTES de limpar a marca: depois nao ha mais como saber quais eram
+    alvos = execute_query(
+        'SELECT id FROM extrato_lancamentos '
+        ' WHERE memorizacao_id = %s AND conferir = 1', (mem_id,), fetch=True) or []
     n = ExtratoLancamento.confirmar_da_regra(mem_id)
+    # o aval veio para todos: cada um concilia e entra no DRE
+    titulos = {'criou': 0, 'casou': 0, 'pulado': 0, 'erro': 0}
+    for a in alvos:
+        lanc = ExtratoLancamento.get(a['id'])
+        if lanc:
+            titulos[ExtratoLancamento.conciliar_automatico(
+                lanc, usuario_id=current_user.id)] += 1
     registrar('escrita.confirmou_extrato_lote', 'financeiro',
               tabela='fin_extrato_memorizacoes', registro_id=mem_id,
-              depois={'confirmados': n})
+              depois={'confirmados': n, 'titulos': titulos})
     flash(f'{n} lançamento(s) confirmados.' if n
           else 'Nenhum lançamento desta regra aguardava conferência.',
           'success' if n else 'warning')

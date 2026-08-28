@@ -340,13 +340,93 @@ class ExtratoLancamento:
             return False, 'Escolha o título.', None
 
         try:
+            # a referencia nunca pode faltar: sem ela a baixa e recusada e o
+            # titulo recem-criado fica pela metade
             r = registrar_baixa(
                 titulo_id=titulo_id, valor=valor, data_baixa=lanc['data'],
-                origem='extrato', referencia=lanc.get('hash_dedup'),
+                origem='extrato',
+                referencia=lanc.get('hash_dedup') or ('extrato:%s' % lanc['id']),
                 lancamento_id=lanc['id'], usuario_id=usuario_id)
         except BaixaInvalida as e:
             return False, str(e), titulo_id
         return True, ('nova' if r.get('criada') else 'ja-existia'), titulo_id
+
+    @staticmethod
+    def conciliar_automatico(lanc, usuario_id=None):
+        """Casa-ou-cria sem perguntar — o mesmo criterio do gesto em lote.
+
+        Casa quando ha titulo aberto do MESMO documento com saldo IGUAL
+        (e o que impede duplicar a conta quando uma programacao ja gerou o
+        titulo do mes); senao cria ja quitado com a competencia do mes do
+        lancamento. Transferencia nao concilia. Ja amarrado, nao repete.
+
+        Devolve 'casou', 'criou', 'pulado' ou 'erro'.
+        """
+        cat = execute_query('SELECT tipo, nome FROM fin_categorias WHERE id = %s',
+                            (lanc.get('categoria_id'),), fetch=True, fetch_one=True)
+        if not cat or cat['tipo'] == 'T':
+            return 'pulado'
+        ja = execute_query(
+            'SELECT 1 FROM fin_titulo_baixas WHERE lancamento_id = %s '
+            'UNION SELECT 1 FROM fin_titulos WHERE chave_idem = %s LIMIT 1',
+            (lanc['id'], 'extrato:%s' % lanc['id']), fetch=True, fetch_one=True)
+        if ja:
+            return 'pulado'
+
+        leitura = ExtratoLancamento.ler_descricao(lanc.get('descricao'))
+        for cand in ExtratoLancamento.titulos_candidatos(lanc, limite=3):
+            saldo = float(cand['valor']) - float(cand['valor_baixado'] or 0)
+            if (leitura['doc'] and cand['contraparte_doc'] == leitura['doc']
+                    and abs(saldo - abs(float(lanc['valor']))) <= 0.01):
+                ok, _, _ = ExtratoLancamento.conciliar(
+                    lanc, titulo_id=cand['id'], usuario_id=usuario_id)
+                return 'casou' if ok else 'erro'
+
+        ok, _, _ = ExtratoLancamento.conciliar(
+            lanc, criar={'competencia': lanc['data'].replace(day=1),
+                         'contraparte_nome': leitura['nome'] or cat['nome'],
+                         'contraparte_doc': leitura['doc'],
+                         'categoria_id': lanc['categoria_id'],
+                         'centro_custo_id': lanc.get('centro_custo_id')},
+            usuario_id=usuario_id)
+        return 'criou' if ok else 'erro'
+
+    @staticmethod
+    def desconciliar(lanc_id):
+        """Desfaz o que conciliar_automatico fez por ESTE lancamento.
+
+        Remove a baixa apontando o lancamento e, se o titulo nasceu DELE
+        (chave extrato:<id>) e ficou sem nenhuma baixa, o titulo sai junto —
+        senao o DRE guardaria um custo cuja origem foi desfeita. Titulo que
+        ja existia (programacao, manual) fica: so a baixa sai e o status e
+        recalculado.
+        """
+        from utils.financeiro_core import recalcular_status
+        # o meio-nascido: titulo criado a partir DESTE lancamento que ficou
+        # sem nenhuma baixa (a quitacao falhou no meio) tambem tem de sair.
+        execute_query(
+            'DELETE FROM fin_titulos WHERE chave_idem = %s '
+            '  AND NOT EXISTS (SELECT 1 FROM fin_titulo_baixas b '
+            '                   WHERE b.titulo_id = fin_titulos.id)',
+            ('extrato:%s' % lanc_id,))
+        baixas = execute_query(
+            'SELECT id, titulo_id FROM fin_titulo_baixas WHERE lancamento_id = %s',
+            (lanc_id,), fetch=True) or []
+        for b in baixas:
+            execute_query('DELETE FROM fin_titulo_baixas WHERE id = %s', (b['id'],))
+            t = execute_query(
+                'SELECT id, chave_idem FROM fin_titulos WHERE id = %s',
+                (b['titulo_id'],), fetch=True, fetch_one=True)
+            if not t:
+                continue
+            resto = execute_query(
+                'SELECT COUNT(*) n FROM fin_titulo_baixas WHERE titulo_id = %s',
+                (t['id'],), fetch=True, fetch_one=True)['n']
+            if t['chave_idem'] == 'extrato:%s' % lanc_id and not resto:
+                execute_query('DELETE FROM fin_titulos WHERE id = %s', (t['id'],))
+            else:
+                recalcular_status(t['id'])
+        return len(baixas)
 
     @staticmethod
     def confirmar(lanc_id):
@@ -793,16 +873,19 @@ class RegraExtrato:
         O que foi classificado a mao tem memorizacao_id NULL e nao e tocado —
         e por isso que a coluna existe.
         """
-        r = execute_query(
-            'SELECT COUNT(*) n FROM extrato_lancamentos WHERE memorizacao_id = %s',
-            (regra_id,), fetch=True, fetch_one=True)
-        n = int((r or {}).get('n') or 0)
-        if n:
+        alvos = execute_query(
+            'SELECT id FROM extrato_lancamentos WHERE memorizacao_id = %s',
+            (regra_id,), fetch=True) or []
+        for a in alvos:
+            # o titulo que a regra criou sai junto — senao o DRE guardaria
+            # um custo cuja origem acabou de ser desfeita
+            ExtratoLancamento.desconciliar(a['id'])
+        if alvos:
             execute_query(
                 'UPDATE extrato_lancamentos SET categoria_id = NULL, '
                 '       centro_custo_id = NULL, memorizacao_id = NULL, conferir = 0 '
                 ' WHERE memorizacao_id = %s', (regra_id,))
-        return n
+        return len(alvos)
 
     # -------------------------------------------------------------- aplicar
     @staticmethod
@@ -844,6 +927,12 @@ class RegraExtrato:
                 conferir += 1
             else:
                 direto += 1
+                # Pedido do Anderson (27/08): "quando for aparecendo vai
+                # informando no DRE". A direta concilia sozinha; a de
+                # aprovacao espera o CONFIRMAR — titulo nasce do aval.
+                l2 = dict(l, categoria_id=r['categoria_id'],
+                          centro_custo_id=r['centro_custo_id'])
+                ExtratoLancamento.conciliar_automatico(l2)
         RegraExtrato._contabiliza(usos)
         return direto, conferir
 
@@ -854,7 +943,8 @@ class RegraExtrato:
             return 0
         marks = ','.join(['%s'] * len(ids))
         rows = execute_query(
-            f'SELECT id, empresa_id, conta, valor, descricao, categoria_id '
+            f'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id, '
+            f'       hash_dedup '
             f'  FROM extrato_lancamentos WHERE id IN ({marks}) '
             f'   AND categoria_id IS NULL', tuple(ids), fetch=True) or []
         direto, conferir = RegraExtrato.aplicar_em(rows)
@@ -870,9 +960,11 @@ class RegraExtrato:
         custa a ida e a volta: media de 5,5s so para abrir.
         """
         cond = ' WHERE categoria_id IS NULL' if so_sem_categoria else ''
+        # hash_dedup vai junto: e a REFERENCIA da baixa. Sem ele o
+        # registrar_baixa recusa e o titulo nasce pela metade.
         return execute_query(
             'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id, '
-            '       memorizacao_id, conferir '
+            '       memorizacao_id, conferir, hash_dedup '
             '  FROM extrato_lancamentos' + cond +
             ' ORDER BY data DESC, id DESC', fetch=True) or []
 
@@ -1005,8 +1097,13 @@ class RegraExtrato:
         if not r or not r['ativo']:
             return 0
         alvos = RegraExtrato.preve(r, so_sem_categoria=True)
+        direta = (r.get('aplicar') or 'direto') == 'direto'
         for l in alvos:
             RegraExtrato._grava_no_lancamento(r, l['id'])
+            if direta:
+                l2 = dict(l, categoria_id=r['categoria_id'],
+                          centro_custo_id=r['centro_custo_id'])
+                ExtratoLancamento.conciliar_automatico(l2)
         if alvos:
             RegraExtrato._contabiliza({regra_id: len(alvos)})
         return len(alvos)
