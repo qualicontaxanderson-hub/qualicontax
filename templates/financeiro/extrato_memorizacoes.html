@@ -5,61 +5,12 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-/* A regra deixou de ser um padrão de texto e virou um conjunto de decisões:
-   trechos, condições, para quem vale e como roda. A tabela de 7 colunas não
-   dava conta — cada regra vira uma FICHA, e cada decisão dela aparece com o
-   rótulo dizendo o que é. */
-.rg-lista { display:flex; flex-direction:column; gap:14px; }
-.rg { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:15px 17px; }
-.rg.morta { opacity:.6; }
-.rg-topo { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
-.rg-alvo { flex:1 1 240px; min-width:0; }
-.rg-alvo b { display:block; font-size:16px; font-weight:800; color:#0f3d2e;
-  line-height:1.25; overflow-wrap:anywhere; }
-.rg-alvo span { display:block; font-size:11.5px; color:#64748b; font-weight:600;
-  margin-top:2px; }
-.rg-selos { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-.rg-selo { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800;
-  letter-spacing:.04em; border-radius:99px; padding:3px 10px; white-space:nowrap; }
-.rg-selo.viva { background:#dcfce7; color:#166534; border:1px solid #86efac; }
-.rg-selo.morta { background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; }
-.rg-selo.direto { background:#e0f2fe; color:#075985; border:1px solid #7dd3fc; }
-.rg-selo.aprovar { background:#fef6e3; color:#b45309; border:1px solid #fcd9a0; }
+/* O desenho aprovado no modelo (28/08): secoes pelos GRUPOS do DRE com o
+   cabecalho verde e, dentro, as regras como cartoes mosaico — faixa verde
+   quando executa direto, ambar quando pede aprovacao. A busca fica sempre
+   a vista; sem painel de filtros para abrir. */
 
-.rg-quando { margin-top:13px; }
-.rg-rot { display:block; font-size:9px; font-weight:800; letter-spacing:.09em;
-  text-transform:uppercase; color:#94a3b8; margin-bottom:5px; }
-.rg-termos { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-.rg-termo { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:12px; font-weight:700; background:#f0fdf4; color:#0f3d2e;
-  border:1px solid #86efac; border-radius:8px; padding:4px 10px;
-  overflow-wrap:anywhere; }
-.rg-e { font-size:10.5px; font-weight:800; color:#94a3b8; }
-.rg-cond { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-.rg-cond span { font-size:11px; font-weight:700; background:#f8fafc; color:#475569;
-  border:1px solid #e2e8f0; border-radius:7px; padding:3px 9px; }
-.rg-cond span.nenhuma { color:#94a3b8; font-weight:600; font-style:italic; }
-
-.rg-grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:11px 18px; margin-top:13px; padding-top:12px; border-top:1px dashed #e2e8f0; }
-.rg-campo b { display:block; font-size:13px; font-weight:700; color:#1e293b;
-  overflow-wrap:anywhere; }
-.rg-campo small { display:block; font-size:11px; color:#94a3b8; margin-top:1px; }
-
-.rg-pe { display:flex; gap:8px; flex-wrap:wrap; margin-top:13px; padding-top:12px;
-  border-top:1px solid #f1f5f9; }
-.rg-pe form { display:inline-flex; }
-.rg-bt { border:1.5px solid #e2e8f0; background:#fff; border-radius:8px; padding:7px 13px;
-  font-size:12px; font-weight:700; color:#475569; cursor:pointer; white-space:nowrap;
-  display:inline-flex; align-items:center; gap:6px; font-family:inherit; }
-.rg-bt:hover { border-color:#86efac; background:#f0fdf4; color:#15803d; }
-.rg-bt.forte { border-color:#86efac; background:#f0fdf4; color:#15803d; }
-.rg-bt.perigo:hover { border-color:#fca5a5; background:#fef2f2; color:#b91c1c; }
-.rg-aviso { margin-top:11px; background:#fef6e3; border:1px solid #fcd9a0;
-  border-radius:9px; padding:9px 12px; font-size:12px; color:#b45309; line-height:1.5; }
-.rg-aviso b { font-weight:800; }
-
-/* ── filtro: busca sempre a vista + chips, sem painel para abrir ── */
+/* ── filtro ── */
 .rg-filtro { position:sticky; top:calc(var(--top-bar-height, 60px) + 49px);
   z-index:5; background:var(--page-bg, #f8f9fa); padding:8px 0 10px;
   margin-bottom:6px; }
@@ -80,16 +31,77 @@
 .rg-mostrando { color:#64748b; font-size:12px; margin:6px 2px 0; }
 .rg-mostrando b { color:#0f172a; }
 
-/* ── pilula da empresa (a mesma linguagem do extrato) ── */
-.rg-emp { display:inline-flex; align-items:center; gap:8px; background:#f0fdf4;
-  border:1px solid #bbf7d0; border-radius:10px; padding:4px 12px 4px 5px;
-  margin:1px 0 2px; }
-.rg-emp i { display:flex; align-items:center; justify-content:center; width:23px;
-  height:23px; border-radius:8px; background:#0f3d2e; color:#fff; font-weight:800;
-  font-size:12px; font-style:normal; }
-.rg-emp b { font-size:12.5px; letter-spacing:.02em; color:#0f172a; }
+/* ── secao do grupo ── */
+.gd-sec { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
+  margin-bottom:14px; overflow:hidden; }
+.gd-cab { display:flex; align-items:center; gap:10px; padding:12px 16px;
+  background:#f0fdf4; border-bottom:1px solid #bbf7d0; }
+.gd-cab b { color:#0f3d2e; font-size:13.5px; flex:1; text-transform:uppercase;
+  letter-spacing:.05em; }
+.gd-cab span { color:#0f3d2e; font-size:11.5px; font-weight:700; opacity:.75;
+  white-space:nowrap; }
+.gd-corpo { padding:12px; display:grid; gap:10px; grid-template-columns:1fr; }
+@media (min-width:760px) { .gd-corpo { grid-template-columns:1fr 1fr; } }
+@media (min-width:1100px) {
+  .gd-corpo { grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); }
+}
 
-/* ── modal de edicao ── */
+/* ── cartao da regra ── */
+.rg { background:#fff; border:1.5px solid #e2e8f0;
+  border-left:4px solid var(--primary-green, #00A85A); border-radius:13px;
+  padding:13px 15px; display:flex; flex-direction:column; gap:9px;
+  transition:box-shadow .15s; }
+.rg.aprova { border-left-color:#f59e0b; }
+.rg.morta { opacity:.62; border-left-color:#cbd5e1; }
+.rg:hover { box-shadow:0 5px 16px -8px rgba(15,61,46,.25); }
+.mo-topo { display:flex; align-items:flex-start; gap:8px; }
+.mo-topo > b { font-size:14.5px; flex:1; min-width:0; overflow-wrap:anywhere;
+  color:#0f172a; }
+.rg-selos { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; }
+.rg-selo { display:inline-flex; align-items:center; gap:4px; font-size:10px;
+  font-weight:800; letter-spacing:.04em; border-radius:99px; padding:3px 9px;
+  white-space:nowrap; }
+.rg-selo.direto { background:#e0f2fe; color:#075985; }
+.rg-selo.aprovar { background:#fef6e3; color:#b45309; }
+.rg-selo.mortasel { background:#f3f4f6; color:#6b7280; }
+.mo-grupo { color:#64748b; font-size:11.5px; margin-top:-6px; }
+.mo-termos { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.rg-termo { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11px; font-weight:700; background:#f0fdf4; color:#0f3d2e;
+  border:1px solid #86efac; border-radius:7px; padding:2px 8px;
+  overflow-wrap:anywhere; }
+.rg-e { font-size:10px; font-weight:800; color:#94a3b8; padding:0 1px; }
+.mo-meta { display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+  color:#64748b; font-size:11.5px; }
+.rg-emp { display:inline-flex; align-items:center; background:#f0fdf4;
+  border:1px solid #bbf7d0; border-radius:9px; padding:3px 11px; }
+.rg-emp b { font-size:12px; letter-spacing:.03em; color:#0f3d2e; }
+.mo-stat { display:flex; gap:6px; margin-top:auto; }
+.mo-stat span { flex:1; background:var(--page-bg, #f8f9fa);
+  border:1px solid #e2e8f0; border-radius:9px; padding:6px 8px;
+  text-align:center; font-size:10.5px; color:#64748b; font-weight:700; }
+.mo-stat span b { display:block; font-size:15px; color:#0f172a;
+  font-variant-numeric:tabular-nums; }
+.rg-aviso { background:#fef6e3; border:1px solid #fcd9a0; border-radius:9px;
+  padding:8px 11px; font-size:11.5px; color:#b45309; line-height:1.45; }
+.rg-aviso b { font-weight:800; }
+.mo-pe { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.mo-pe .esp { flex:1; }
+.mo-pe form { display:inline-flex; }
+.rg-bt { border:1.5px solid #e2e8f0; background:#fff; border-radius:9px;
+  padding:6px 12px; font-size:12px; font-weight:700; color:#475569;
+  cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center;
+  gap:6px; font-family:inherit; }
+.rg-bt:hover { border-color:#86efac; background:#f0fdf4; color:#15803d; }
+.rg-bt.forte { border-color:#86efac; background:#f0fdf4; color:#15803d; }
+.rg-bt.editar { background:var(--primary-green, #00A85A);
+  border-color:var(--primary-green, #00A85A); color:#fff; }
+.rg-bt.editar:hover { filter:brightness(1.06); color:#fff; }
+.rg-bt.suave { color:#64748b; font-weight:600; }
+.rg-bt.perigo:hover { border-color:#fca5a5; background:#fef2f2; color:#b91c1c; }
+.rg-nada { text-align:center; color:#64748b; padding:40px 10px; display:none; }
+
+/* ── modal de edicao (o aprovado) ── */
 .rg-veu { position:fixed; inset:0; background:rgba(15,23,42,.55); display:none;
   z-index:1100; }
 .rg-veu.aberto { display:flex; align-items:center; justify-content:center;
@@ -143,12 +155,7 @@
   border-color:var(--primary-green, #00A85A); color:#fff; }
 .rg-mpe .rg-bt.salvar:disabled { opacity:.45; cursor:not-allowed; }
 
-@media (max-width: 768px) {
-  .rg-pe .rg-bt { flex:1 1 auto; justify-content:center; padding:10px; font-size:13px; }
-  .rg-pe form { flex:1 1 auto; }
-  .rg-pe form .rg-bt { width:100%; }
-  .rg-2col { flex-direction:column; }
-}
+@media (max-width:768px) { .rg-2col { flex-direction:column; } }
 </style>
 
 <div class="page-header">
@@ -186,145 +193,120 @@
     </div>
     <p class="rg-mostrando" id="rgMostrando"></p>
 </div>
-<div class="rg-lista">
-    {% for m in memorizacoes %}
-    {% set _bco = contas_cad.get(m.conta | string, {}).get('apelido') if m.conta else '' %}
-    {% set _emp = emp_mapa.get(m.empresa_id) or 'QUALICONTAX' %}
-    <div class="rg {{ 'morta' if not m.ativo }}" data-id="{{ m.id }}"
-         data-aplicar="{{ 'aprovar' if m.aplicar == 'aprovar' else 'direto' }}"
-         data-ativo="{{ 1 if m.ativo else 0 }}"
-         {# aspas SIMPLES: o tojson do Flask nao escapa a aspa dupla #}
-         data-termos='{{ m.termos | tojson }}' 
-         data-cat="{{ m.categoria_id }}"
-         data-cat-rotulo="{{ m.categoria_grupo }} › {{ m.categoria_nome }}"
-         data-conta="{{ m.conta or '' }}"
-         data-emp="{{ _emp }}"
-         data-presos="{{ presos.get(m.id, 0) }}"
-         data-busca="{{ (m.categoria_nome ~ ' ' ~ m.categoria_grupo ~ ' ' ~
-                         (m.termos | join(' ')) ~ ' ' ~ (m.conta or '') ~ ' ' ~
-                         _bco ~ ' ' ~ _emp) | lower }}">
-        <div class="rg-topo">
-            <div class="rg-alvo">
-                <b>{{ m.categoria_nome }}</b>
-                <span>{{ m.categoria_grupo }}{% if m.centro_nome %} · centro {{ m.centro_nome }}{% endif %}</span>
-            </div>
-            <div class="rg-selos">
-                <span class="rg-selo {{ 'viva' if m.ativo else 'morta' }}">
-                    {{ 'ATIVA' if m.ativo else 'DESATIVADA' }}</span>
-                <span class="rg-selo {{ 'direto' if m.aplicar != 'aprovar' else 'aprovar' }}">
-                    {{ '⚡ EXECUTA DIRETO' if m.aplicar != 'aprovar' else '👁 PEDE APROVAÇÃO' }}</span>
-            </div>
-        </div>
 
-        {# OS TRECHOS INTEIROS. A tela antiga mostrava so a coluna `padrao`, que
-           guarda apenas o PRIMEIRO termo — a regra parecia metade do que e. #}
-        <div class="rg-quando">
-            <span class="rg-rot">Quando a descrição tiver</span>
-            <div class="rg-termos">
+{# As secoes sao os GRUPOS do DRE — a mesma cabeca da tela de categorias. #}
+{% for grupo, regras_g in memorizacoes | groupby('categoria_grupo') %}
+{% set regras_g = regras_g | list %}
+{% set ns = namespace(soma=0) %}
+{% for m in regras_g %}{% set ns.soma = ns.soma + presos.get(m.id, 0) %}{% endfor %}
+<div class="gd-sec">
+    <div class="gd-cab">
+        <b>{{ grupo or 'Sem grupo' }}</b>
+        <span>{{ regras_g | length }} regra(s) · {{ ns.soma }} classificados</span>
+    </div>
+    <div class="gd-corpo">
+        {% for m in regras_g %}
+        {% set _bco = contas_cad.get(m.conta | string, {}).get('apelido') if m.conta else '' %}
+        {% set _emp = emp_mapa.get(m.empresa_id) or 'QUALICONTAX' %}
+        <div class="rg {{ 'aprova' if m.aplicar == 'aprovar' }} {{ 'morta' if not m.ativo }}"
+             data-id="{{ m.id }}"
+             data-aplicar="{{ 'aprovar' if m.aplicar == 'aprovar' else 'direto' }}"
+             data-ativo="{{ 1 if m.ativo else 0 }}"
+             {# aspas SIMPLES: o tojson do Flask nao escapa a aspa dupla #}
+             data-termos='{{ m.termos | tojson }}'
+             data-cat="{{ m.categoria_id }}"
+             data-cat-rotulo="{{ m.categoria_grupo }} › {{ m.categoria_nome }}"
+             data-conta="{{ m.conta or '' }}"
+             data-emp="{{ _emp }}"
+             data-presos="{{ presos.get(m.id, 0) }}"
+             data-busca="{{ (m.categoria_nome ~ ' ' ~ m.categoria_grupo ~ ' ' ~
+                             (m.termos | join(' ')) ~ ' ' ~ (m.conta or '') ~ ' ' ~
+                             _bco ~ ' ' ~ _emp) | lower }}">
+            <div class="mo-topo">
+                <b>{{ m.categoria_nome }}</b>
+                <span class="rg-selos">
+                    {% if not m.ativo %}<span class="rg-selo mortasel">DESATIVADA</span>{% endif %}
+                    <span class="rg-selo {{ 'direto' if m.aplicar != 'aprovar' else 'aprovar' }}">
+                        {{ '⚡ DIRETO' if m.aplicar != 'aprovar' else '👁 APROVAÇÃO' }}</span>
+                </span>
+            </div>
+            {% if m.centro_nome %}<div class="mo-grupo">centro {{ m.centro_nome }}</div>{% endif %}
+            <div class="mo-termos">
                 {% for t in m.termos %}
                 <span class="rg-termo">{{ t }}</span>
                 {% if not loop.last %}<span class="rg-e">E</span>{% endif %}
                 {% endfor %}
             </div>
-            <div class="rg-cond">
-                {% if m.conta %}{% set _b = contas_cad.get(m.conta | string, {}).get('apelido') %}
-                <span>só na conta {{ (_b ~ ' · ' if _b else '') ~ m.conta }}</span>{% endif %}
-                {% if m.sinal %}<span>só {{ 'saídas' if m.sinal == 'D' else 'entradas' }}</span>{% endif %}
-                {% if m.valor_exato is not none %}
-                <span>só no valor {{ m.valor_exato | float | round(2) | format_currency }}</span>{% endif %}
-                {% if not m.conta and not m.sinal and m.valor_exato is none %}
-                <span class="nenhuma">sem condição — vale para qualquer conta, valor e sentido</span>
-                {% endif %}
+            <div class="mo-meta">
+                <span class="rg-emp"><b>{% if m.escopo == 'grupo' %}GRUPO {{ m.grupo_nome or '?' }}
+                    {%- elif m.escopo == 'lista' -%}
+                    {{ (regra_empresas.get(m.id) or []) | join(', ') or 'empresas escolhidas' }}
+                    {%- else %}{{ _emp }}{% endif %}</b></span>
+                <span>
+                    {% if m.conta %}· só na conta {{ _bco or '' }} …{{ (m.conta | string)[-4:] }}
+                    {% else %}· qualquer conta{% endif %}
+                    {% if m.sinal %} · só {{ 'saídas' if m.sinal == 'D' else 'entradas' }}{% endif %}
+                    {% if m.valor_exato is not none %}
+                    · só {{ m.valor_exato | float | round(2) | format_currency }}{% endif %}
+                </span>
             </div>
-        </div>
-
-        <div class="rg-grade">
-            <div class="rg-campo">
-                <span class="rg-rot">Vale para</span>
-                {% if m.escopo == 'grupo' %}
-                <b>Grupo {{ m.grupo_nome or '?' }}</b>
-                <small>e quem entrar no grupo depois</small>
-                {% elif m.escopo == 'lista' %}
-                <b>{{ (regra_empresas.get(m.id) or []) | map('string') | join(', ') or 'nenhuma' }}</b>
-                <small>empresas escolhidas</small>
-                {% elif m.empresa_id %}
-                <b>{{ emp_mapa.get(m.empresa_id) or ('empresa ' ~ m.empresa_id) }}</b>
-                <small>só esta empresa</small>
-                {% else %}
-                <b>Todas as empresas</b>
-                <small>nenhuma foi fixada</small>
-                {% endif %}
+            <div class="mo-stat">
+                <span title="{{ m.ultimo_uso.strftime('último em %d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca rodou sozinha' }}">
+                    <b>{{ presos.get(m.id, 0) }}</b>já classificou</span>
+                <span title="casam com ela e ainda não entraram">
+                    <b>{{ pendentes.get(m.id, 0) }}</b>esperando</span>
             </div>
-            <div class="rg-campo">
-                <span class="rg-rot">Conta</span>
-                <b>{{ m.conta or 'qualquer uma' }}</b>
-                {% if m.conta %}<small>{{ contas_cad.get(m.conta | string, {}).get('apelido') or '' }}</small>{% endif %}
-            </div>
-            <div class="rg-campo">
-                <span class="rg-rot">Já classificou</span>
-                <b>{{ presos.get(m.id, 0) }} lançamento(s)</b>
-                <small>{{ m.ultimo_uso.strftime('último em %d/%m/%Y %H:%M') if m.ultimo_uso else 'nunca rodou sozinha' }}</small>
-            </div>
-            <div class="rg-campo">
-                <span class="rg-rot">Esperando</span>
-                <b>{{ pendentes.get(m.id, 0) }} sem categoria</b>
-                <small>casam com ela e ainda não entraram</small>
-            </div>
-        </div>
-
-        {% if m.ativo and pendentes.get(m.id, 0) %}
-        <div class="rg-aviso">
-            <b>{{ pendentes.get(m.id) }} lançamento(s) antigo(s)</b> casam com esta regra e
-            continuam sem categoria — eles ficaram de fora porque a regra foi criada
-            valendo só daqui para frente.
-        </div>
-        {% endif %}
-
-        <div class="rg-pe">
             {% if m.ativo and pendentes.get(m.id, 0) %}
+            <div class="rg-aviso">
+                <b>{{ pendentes.get(m.id) }} antigo(s)</b> casam e continuam sem
+                categoria — a regra nasceu valendo só daqui para frente.
+            </div>
             <form method="POST"
                   action="{{ url_for('financeiro.extrato_regra_retroagir', mem_id=m.id) }}"
                   onsubmit="return confirm('Classificar os {{ pendentes.get(m.id) }} lançamento(s) antigos que casam com esta regra?');">
-                <button class="rg-bt forte">
+                <button class="rg-bt forte" style="width:100%; justify-content:center;">
                     <i class="fas fa-backward"></i>
                     Classificar os {{ pendentes.get(m.id) }} antigos
                 </button>
             </form>
             {% endif %}
-
-            {% if m.ativo %}
-            <button type="button" class="rg-bt forte" onclick="rgEditar({{ m.id }})">
-                <i class="fas fa-pen"></i> Editar
-            </button>
-            <form method="POST"
-                  action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
-                <button class="rg-bt" name="devolver" value="">
-                    <i class="fas fa-toggle-on" style="color:#16a34a;"></i>
-                    Desativar — o que já classificou fica
+            <div class="mo-pe">
+                {% if m.ativo %}
+                <form method="POST"
+                      action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
+                    <button class="rg-bt suave" name="devolver" value=""
+                            title="Desativar — o que já classificou fica">Desativar</button>
+                </form>
+                {% if presos.get(m.id, 0) %}
+                <form method="POST"
+                      action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}"
+                      onsubmit="return confirm('Desativar e devolver os {{ presos.get(m.id) }} lançamento(s) para SEM CATEGORIA? O que foi classificado à mão não é tocado.');">
+                    <button class="rg-bt suave perigo" name="devolver" value="on">
+                        <i class="fas fa-rotate-left"></i> Devolver os {{ presos.get(m.id) }}
+                    </button>
+                </form>
+                {% endif %}
+                <span class="esp"></span>
+                <button type="button" class="rg-bt editar" onclick="rgEditar({{ m.id }})">
+                    <i class="fas fa-pen"></i> Editar
                 </button>
-            </form>
-            {% if presos.get(m.id, 0) %}
-            <form method="POST"
-                  action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}"
-                  onsubmit="return confirm('Desativar e devolver os {{ presos.get(m.id) }} lançamento(s) para SEM CATEGORIA? O que foi classificado à mão não é tocado.');">
-                <button class="rg-bt perigo" name="devolver" value="on">
-                    <i class="fas fa-rotate-left"></i>
-                    Desativar e devolver os {{ presos.get(m.id) }}
-                </button>
-            </form>
-            {% endif %}
-            {% else %}
-            <form method="POST"
-                  action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
-                <button class="rg-bt forte">
-                    <i class="fas fa-toggle-off" style="color:#9ca3af;"></i> Reativar
-                </button>
-            </form>
-            {% endif %}
+                {% else %}
+                <span class="esp"></span>
+                <form method="POST"
+                      action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
+                    <button class="rg-bt forte">
+                        <i class="fas fa-toggle-off"></i> Reativar
+                    </button>
+                </form>
+                {% endif %}
+            </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
+{% endfor %}
+<div class="rg-nada" id="rgNada">Nenhuma regra bate com essa busca.</div>
+
 {% else %}
 <div class="fin-caixa">
     <div class="fin-vazio">
@@ -354,7 +336,7 @@
       <div class="rg-mcorpo">
           <span class="rg-rot2">Vale para</span>
           <div class="rg-cat-atual">
-              <span class="rg-emp"><i id="rgEmpIni">Q</i><b id="rgEmpNome"></b></span>
+              <span class="rg-emp"><b id="rgEmpNome"></b></span>
               <small style="color:#64748b; flex:1;">só esta empresa</small>
           </div>
 
@@ -367,7 +349,7 @@
 
           <span class="rg-rot2">Quando a descrição tiver
               <small style="text-transform:none; font-weight:600;">(todos os pedaços)</small></span>
-          <div class="rg-termos" id="rgTermosEd"></div>
+          <div class="mo-termos" id="rgTermosEd"></div>
           <div class="rg-add">
               <input id="rgNovoTermo" placeholder="adicionar outro pedaço…">
               <button type="button" class="rg-bt" onclick="rgAddTermo()">+ Adicionar</button>
@@ -456,7 +438,7 @@ function rgFiltra() {
     var q = (document.getElementById('rgQ').value || '').trim().toLowerCase();
     document.getElementById('rgLimpa').style.display = q ? '' : 'none';
     var total = 0, vivos = 0;
-    document.querySelectorAll('.rg-lista .rg').forEach(function (el) {
+    document.querySelectorAll('.gd-corpo .rg').forEach(function (el) {
         total++;
         var ok;
         if (rgF === 'desativadas') ok = el.getAttribute('data-ativo') === '0';
@@ -468,6 +450,14 @@ function rgFiltra() {
         el.style.display = ok ? '' : 'none';
         if (ok) vivos++;
     });
+    // secao sem cartao visivel some junto
+    document.querySelectorAll('.gd-sec').forEach(function (sec) {
+        var tem = Array.prototype.some.call(
+            sec.querySelectorAll('.gd-corpo .rg'),
+            function (el) { return el.style.display !== 'none'; });
+        sec.style.display = tem ? '' : 'none';
+    });
+    document.getElementById('rgNada').style.display = vivos ? 'none' : '';
     document.getElementById('rgMostrando').innerHTML =
         'mostrando <b>' + vivos + '</b> de ' + total + ' regras';
 }
@@ -498,9 +488,8 @@ function rgEditar(id) {
         antigos: null,   // pergunta de tempo: SEM pre-selecao, lei da casa
         fun: null
     };
-    var emp = el.getAttribute('data-emp') || 'QUALICONTAX';
-    document.getElementById('rgEmpNome').textContent = emp;
-    document.getElementById('rgEmpIni').textContent = emp.charAt(0).toUpperCase();
+    document.getElementById('rgEmpNome').textContent =
+        el.getAttribute('data-emp') || 'QUALICONTAX';
     var sel = document.getElementById('rgContaSel');
     if (RG.conta) sel.value = RG.conta;
     document.getElementById('rgFunil').style.display = 'none';
