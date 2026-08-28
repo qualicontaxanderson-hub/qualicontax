@@ -867,6 +867,37 @@ class RegraExtrato:
                       (1 if ativa else 0, regra_id))
 
     @staticmethod
+    def reprocessar(regra_id):
+        """A regra nova decide DE NOVO so o que era dela.
+
+        Devolve tudo que esta preso (titulos da regra saem junto, via
+        desfazer) e reclassifica os que ainda casam com o desenho novo.
+        Quem nao casa mais fica em Sem categoria — e o combinado da tela.
+        Devolve (devolvidos, reclassificados).
+        """
+        ids = {a['id'] for a in execute_query(
+            'SELECT id FROM extrato_lancamentos WHERE memorizacao_id = %s',
+            (regra_id,), fetch=True) or []}
+        if not ids:
+            return 0, 0
+        devolvidos = RegraExtrato.desfazer(regra_id)
+        r = RegraExtrato.get(regra_id)
+        if not r or not r.get('ativo'):
+            return devolvidos, 0
+        alvos = [l for l in RegraExtrato.preve(r, so_sem_categoria=True)
+                 if l['id'] in ids]
+        direta = (r.get('aplicar') or 'direto') == 'direto'
+        for l in alvos:
+            RegraExtrato._grava_no_lancamento(r, l['id'])
+            if direta:
+                l2 = dict(l, categoria_id=r['categoria_id'],
+                          centro_custo_id=r['centro_custo_id'])
+                ExtratoLancamento.conciliar_automatico(l2)
+        if alvos:
+            RegraExtrato._contabiliza({regra_id: len(alvos)})
+        return devolvidos, len(alvos)
+
+    @staticmethod
     def desfazer(regra_id):
         """Devolve para "sem categoria" SO o que esta regra classificou.
 
@@ -1046,6 +1077,21 @@ class RegraExtrato:
             empresas = sorted(RegraExtrato.empresas_da(atual) or [])
         if novo['escopo'] == 'lista' and not empresas:
             return False, 'Escolha ao menos uma empresa.', 0
+
+        # REPETIDA? Mesmo criterio do criar: virar copia de outra regra
+        # ativa e recusado — duas iguais brigariam pela mesma descricao.
+        emp_chave = atual['empresa_id'] if novo['escopo'] == 'empresa' else None
+        chave = RegraExtrato._chave(novo['termos'], novo['conta'], novo['sinal'],
+                                    novo['valor_exato'], novo['escopo'],
+                                    novo['grupo_id'], emp_chave)
+        for outra in RegraExtrato.listar(apenas_ativas=True):
+            if outra['id'] == regra_id:
+                continue
+            if RegraExtrato._chave(outra['termos'], outra.get('conta'),
+                                   outra.get('sinal'), outra.get('valor_exato'),
+                                   outra.get('escopo'), outra.get('grupo_id'),
+                                   outra.get('empresa_id')) == chave:
+                return False, 'Já existe outra regra exatamente igual.', 0
 
         # O passado sai ANTES da troca: depois dela o criterio novo nao
         # reconheceria mais o que o criterio velho pegou.

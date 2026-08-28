@@ -59,10 +59,95 @@
   border-radius:9px; padding:9px 12px; font-size:12px; color:#b45309; line-height:1.5; }
 .rg-aviso b { font-weight:800; }
 
+/* ── filtro: busca sempre a vista + chips, sem painel para abrir ── */
+.rg-filtro { position:sticky; top:calc(var(--top-bar-height, 60px) + 49px);
+  z-index:5; background:var(--page-bg, #f8f9fa); padding:8px 0 10px;
+  margin-bottom:6px; }
+.rg-busca { display:flex; align-items:center; gap:9px; background:#fff;
+  border:1.5px solid #e2e8f0; border-radius:12px; padding:9px 14px; }
+.rg-busca i { color:#94a3b8; font-size:13px; }
+.rg-busca input { flex:1; border:0; outline:0; background:transparent;
+  font:inherit; font-size:14.5px; color:#0f172a; min-width:0; }
+.rg-busca input::placeholder { color:#94a3b8; }
+.rg-busca .rg-limpa { border:0; background:transparent; color:#94a3b8;
+  cursor:pointer; font-size:16px; padding:0 2px; display:none; }
+.rg-chips { display:flex; gap:7px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+.rg-chip { border:1px solid #d1d5db; background:#fff; color:#475569;
+  border-radius:999px; padding:5px 13px; font-weight:700; font-size:12px;
+  cursor:pointer; font-family:inherit; }
+.rg-chip.on { background:var(--primary-green, #00A85A);
+  border-color:var(--primary-green, #00A85A); color:#fff; }
+.rg-mostrando { color:#64748b; font-size:12px; margin:6px 2px 0; }
+.rg-mostrando b { color:#0f172a; }
+
+/* ── pilula da empresa (a mesma linguagem do extrato) ── */
+.rg-emp { display:inline-flex; align-items:center; gap:8px; background:#f0fdf4;
+  border:1px solid #bbf7d0; border-radius:10px; padding:4px 12px 4px 5px;
+  margin:1px 0 2px; }
+.rg-emp i { display:flex; align-items:center; justify-content:center; width:23px;
+  height:23px; border-radius:8px; background:#0f3d2e; color:#fff; font-weight:800;
+  font-size:12px; font-style:normal; }
+.rg-emp b { font-size:12.5px; letter-spacing:.02em; color:#0f172a; }
+
+/* ── modal de edicao ── */
+.rg-veu { position:fixed; inset:0; background:rgba(15,23,42,.55); display:none;
+  z-index:1100; }
+.rg-veu.aberto { display:flex; align-items:center; justify-content:center;
+  padding:14px; }
+.rg-modal { background:#fff; border-radius:16px; width:100%; max-width:520px;
+  max-height:92vh; display:flex; flex-direction:column; }
+.rg-modal form { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.rg-mcab { display:flex; align-items:center; gap:10px; padding:15px 18px 8px; }
+.rg-mcab h3 { font-size:16.5px; margin:0; flex:1; color:#0f3d2e; }
+.rg-mcab button { border:0; background:transparent; color:#94a3b8; font-size:20px;
+  cursor:pointer; }
+.rg-mcorpo { overflow-y:auto; padding:2px 18px 16px; flex:1 1 auto; min-height:0; }
+.rg-rot2 { display:block; font-size:10px; font-weight:800; letter-spacing:.07em;
+  color:#94a3b8; text-transform:uppercase; margin:15px 0 6px; }
+.rg-rot2 .cobra { color:#b45309; }
+.rg-cat-atual { display:flex; align-items:center; gap:10px; border:1.5px solid #e2e8f0;
+  border-radius:12px; padding:10px 13px; }
+.rg-cat-atual b { flex:1; font-size:13.5px; color:#0f172a; overflow-wrap:anywhere; }
+.rg-funil { margin-top:8px; }
+.rg-nivel { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px; }
+.rg-op { border:1.5px solid #e2e8f0; background:#fff; border-radius:9px;
+  padding:6px 11px; font-size:12.5px; font-weight:700; color:#334155;
+  cursor:pointer; font-family:inherit; }
+.rg-op.on { border-color:var(--primary-green, #00A85A); background:#f0fdf4;
+  color:#0f3d2e; }
+.rg-chip-t { display:inline-flex; align-items:center; gap:4px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px; font-weight:700; background:#f0fdf4; color:#0f3d2e;
+  border:1px solid #86efac; border-radius:8px; padding:4px 6px 4px 10px;
+  overflow-wrap:anywhere; }
+.rg-chip-t button { border:0; background:transparent; color:#64748b;
+  cursor:pointer; font-weight:800; font-size:13px; padding:0 3px; }
+.rg-add { display:flex; gap:7px; margin-top:7px; }
+.rg-add input { flex:1; border:1.5px solid #e2e8f0; border-radius:9px;
+  padding:7px 10px; font:inherit; font-size:13px; min-width:0; }
+.rg-2col { display:flex; gap:7px; }
+.rg-2col .rg-cartao { flex:1 1 0; min-width:0; }
+.rg-cartoes { display:flex; flex-direction:column; gap:7px; }
+.rg-cartao { display:flex; gap:9px; align-items:flex-start; text-align:left;
+  border:1.5px solid #e2e8f0; border-radius:12px; background:#fff;
+  padding:10px 12px; cursor:pointer; font-family:inherit; color:#0f172a; }
+.rg-cartao.on { border-color:var(--primary-green, #00A85A); background:#f0fdf4; }
+.rg-cartao b { font-size:13px; display:block; }
+.rg-cartao small { display:block; color:#64748b; font-size:11.5px; }
+.rg-cartao .ok { margin-left:auto; color:var(--primary-green, #00A85A);
+  font-weight:800; visibility:hidden; }
+.rg-cartao.on .ok { visibility:visible; }
+.rg-mpe { display:flex; gap:9px; padding:12px 18px 15px; border-top:1px solid #e2e8f0; }
+.rg-mpe .rg-bt { flex:1; justify-content:center; padding:11px; font-size:13.5px; }
+.rg-mpe .rg-bt.salvar { background:var(--primary-green, #00A85A);
+  border-color:var(--primary-green, #00A85A); color:#fff; }
+.rg-mpe .rg-bt.salvar:disabled { opacity:.45; cursor:not-allowed; }
+
 @media (max-width: 768px) {
   .rg-pe .rg-bt { flex:1 1 auto; justify-content:center; padding:10px; font-size:13px; }
   .rg-pe form { flex:1 1 auto; }
   .rg-pe form .rg-bt { width:100%; }
+  .rg-2col { flex-direction:column; }
 }
 </style>
 
@@ -85,9 +170,39 @@
 </div>
 
 {% if memorizacoes %}
+<div class="rg-filtro">
+    <div class="rg-busca">
+        <i class="fas fa-magnifying-glass"></i>
+        <input id="rgQ" placeholder="Busque por nome, categoria ou trecho da descrição…"
+               oninput="rgFiltra()">
+        <button type="button" class="rg-limpa" id="rgLimpa"
+                onclick="document.getElementById('rgQ').value=''; rgFiltra();">×</button>
+    </div>
+    <div class="rg-chips" id="rgChips">
+        <button type="button" class="rg-chip on" data-f="todas" onclick="rgChip(this)">Todas</button>
+        <button type="button" class="rg-chip" data-f="direto" onclick="rgChip(this)">⚡ Executa direto</button>
+        <button type="button" class="rg-chip" data-f="aprovar" onclick="rgChip(this)">👁 Pede aprovação</button>
+        <button type="button" class="rg-chip" data-f="desativadas" onclick="rgChip(this)">Desativadas</button>
+    </div>
+    <p class="rg-mostrando" id="rgMostrando"></p>
+</div>
 <div class="rg-lista">
     {% for m in memorizacoes %}
-    <div class="rg {{ 'morta' if not m.ativo }}">
+    {% set _bco = contas_cad.get(m.conta | string, {}).get('apelido') if m.conta else '' %}
+    {% set _emp = emp_mapa.get(m.empresa_id) or 'QUALICONTAX' %}
+    <div class="rg {{ 'morta' if not m.ativo }}" data-id="{{ m.id }}"
+         data-aplicar="{{ 'aprovar' if m.aplicar == 'aprovar' else 'direto' }}"
+         data-ativo="{{ 1 if m.ativo else 0 }}"
+         {# aspas SIMPLES: o tojson do Flask nao escapa a aspa dupla #}
+         data-termos='{{ m.termos | tojson }}' 
+         data-cat="{{ m.categoria_id }}"
+         data-cat-rotulo="{{ m.categoria_grupo }} › {{ m.categoria_nome }}"
+         data-conta="{{ m.conta or '' }}"
+         data-emp="{{ _emp }}"
+         data-presos="{{ presos.get(m.id, 0) }}"
+         data-busca="{{ (m.categoria_nome ~ ' ' ~ m.categoria_grupo ~ ' ' ~
+                         (m.termos | join(' ')) ~ ' ' ~ (m.conta or '') ~ ' ' ~
+                         _bco ~ ' ' ~ _emp) | lower }}">
         <div class="rg-topo">
             <div class="rg-alvo">
                 <b>{{ m.categoria_nome }}</b>
@@ -178,6 +293,9 @@
             {% endif %}
 
             {% if m.ativo %}
+            <button type="button" class="rg-bt forte" onclick="rgEditar({{ m.id }})">
+                <i class="fas fa-pen"></i> Editar
+            </button>
             <form method="POST"
                   action="{{ url_for('financeiro.extrato_memorizacao_alternar', mem_id=m.id) }}">
                 <button class="rg-bt" name="devolver" value="">
@@ -216,4 +334,322 @@
     </div>
 </div>
 {% endif %}
+
+{# O catalogo mora no HTML, como no extrato: o Jinja ja tem a lista. #}
+<select id="rgCatalogo" style="display:none" aria-hidden="true" tabindex="-1">
+    {% for c in categorias %}
+    <option value="{{ c.id }}" data-tipo="{{ c.tipo }}" data-grupo="{{ c.grupo }}"
+            data-nome="{{ c.nome }}" data-pai="{{ c.pai_id or '' }}"></option>
+    {% endfor %}
+</select>
+
+<!-- ── modal: editar a regra ─────────────────────────────── -->
+<div class="rg-veu" id="rgVeu">
+  <div class="rg-modal">
+    <form method="POST" id="rgForm" action="" onsubmit="return rgEnvia(this)">
+      <div class="rg-mcab">
+          <h3>Editar regra</h3>
+          <button type="button" onclick="rgFecha()">&times;</button>
+      </div>
+      <div class="rg-mcorpo">
+          <span class="rg-rot2">Vale para</span>
+          <div class="rg-cat-atual">
+              <span class="rg-emp"><i id="rgEmpIni">Q</i><b id="rgEmpNome"></b></span>
+              <small style="color:#64748b; flex:1;">só esta empresa</small>
+          </div>
+
+          <span class="rg-rot2">Categoria</span>
+          <div class="rg-cat-atual">
+              <b id="rgCatRot"></b>
+              <button type="button" class="rg-bt" onclick="rgFunilLiga()">Trocar</button>
+          </div>
+          <div class="rg-funil" id="rgFunil" style="display:none;"></div>
+
+          <span class="rg-rot2">Quando a descrição tiver
+              <small style="text-transform:none; font-weight:600;">(todos os pedaços)</small></span>
+          <div class="rg-termos" id="rgTermosEd"></div>
+          <div class="rg-add">
+              <input id="rgNovoTermo" placeholder="adicionar outro pedaço…">
+              <button type="button" class="rg-bt" onclick="rgAddTermo()">+ Adicionar</button>
+          </div>
+
+          <span class="rg-rot2">E em qual conta?</span>
+          <div class="rg-2col">
+              <div class="rg-cartao" id="rgCartaoContaSo" onclick="rgMuda('conta','so')"
+                   role="button" tabindex="0">
+                  <span>🏦</span>
+                  <span style="min-width:0;"><b>Só nesta conta</b>
+                      <small id="rgContaSoRot"></small>
+                      <select id="rgContaSel" style="display:none; margin-top:5px;
+                              max-width:100%; font-size:12px;"
+                              onclick="event.stopPropagation()" onchange="rgContaRot()">
+                          {% for k, cc in contas_cad.items() %}
+                          <option value="{{ k }}">{{ cc.apelido or 'conta' }} · {{ k }}</option>
+                          {% endfor %}
+                      </select></span>
+                  <span class="ok">✓</span>
+              </div>
+              <div class="rg-cartao" id="rgCartaoContaQq" onclick="rgMuda('conta','qualquer')"
+                   role="button" tabindex="0">
+                  <span>🌐</span>
+                  <span><b>Qualquer conta</b>
+                      <small>vale em todos os bancos da empresa</small></span>
+                  <span class="ok">✓</span>
+              </div>
+          </div>
+
+          <span class="rg-rot2">Quando vier de novo</span>
+          <div class="rg-2col">
+              <div class="rg-cartao" id="rgCartaoDireto" onclick="rgMuda('aplicar','direto')"
+                   role="button" tabindex="0">
+                  <span>⚡</span>
+                  <span><b>Executa direto</b><small>classifica sozinha</small></span>
+                  <span class="ok">✓</span>
+              </div>
+              <div class="rg-cartao" id="rgCartaoAprovar" onclick="rgMuda('aplicar','aprovar')"
+                   role="button" tabindex="0">
+                  <span>👁</span>
+                  <span><b>Pede aprovação</b><small>fica marcada a conferir</small></span>
+                  <span class="ok">✓</span>
+              </div>
+          </div>
+
+          <div id="rgBlocoAntigos">
+              <span class="rg-rot2">E os <span class="rgN"></span> que ela já classificou?
+                  <b class="cobra" id="rgCobra">— escolha um</b></span>
+              <div class="rg-cartoes">
+                  <div class="rg-cartao" id="rgCartaoFicam" onclick="rgMuda('antigos','ficam')"
+                       role="button" tabindex="0">
+                      <span>⏭</span>
+                      <span><b>Ficam como estão</b>
+                          <small>a mudança vale só daqui para frente</small></span>
+                      <span class="ok">✓</span>
+                  </div>
+                  <div class="rg-cartao" id="rgCartaoReprocessa" onclick="rgMuda('antigos','reprocessa')"
+                       role="button" tabindex="0">
+                      <span>⏮</span>
+                      <span><b>Reprocessar os <span class="rgN"></span></b>
+                          <small>a regra nova decide de novo cada um — quem não casar
+                          mais volta para Sem categoria (e o título que a regra criou sai)</small></span>
+                      <span class="ok">✓</span>
+                  </div>
+              </div>
+          </div>
+          <div id="rgOcultos"></div>
+      </div>
+      <div class="rg-mpe">
+          <button type="button" class="rg-bt" onclick="rgFecha()">Cancelar</button>
+          <button type="submit" class="rg-bt salvar" id="rgSalvar" disabled>Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var RG_EDITAR_URL = "{{ url_for('financeiro.extrato_regra_editar', mem_id=0) }}";
+
+// ---------------------------------------------------------------- filtro
+var rgF = 'todas';
+function rgFiltra() {
+    var q = (document.getElementById('rgQ').value || '').trim().toLowerCase();
+    document.getElementById('rgLimpa').style.display = q ? '' : 'none';
+    var total = 0, vivos = 0;
+    document.querySelectorAll('.rg-lista .rg').forEach(function (el) {
+        total++;
+        var ok;
+        if (rgF === 'desativadas') ok = el.getAttribute('data-ativo') === '0';
+        else {
+            ok = el.getAttribute('data-ativo') === '1' &&
+                 (rgF === 'todas' || el.getAttribute('data-aplicar') === rgF);
+        }
+        if (ok && q) ok = (el.getAttribute('data-busca') || '').indexOf(q) >= 0;
+        el.style.display = ok ? '' : 'none';
+        if (ok) vivos++;
+    });
+    document.getElementById('rgMostrando').innerHTML =
+        'mostrando <b>' + vivos + '</b> de ' + total + ' regras';
+}
+function rgChip(el) {
+    document.querySelectorAll('#rgChips .rg-chip').forEach(function (c) {
+        c.classList.remove('on'); });
+    el.classList.add('on');
+    rgF = el.getAttribute('data-f');
+    rgFiltra();
+}
+rgFiltra();
+
+// ---------------------------------------------------------------- edicao
+var RG = null;
+function rgEditar(id) {
+    var el = document.querySelector('.rg[data-id="' + id + '"]');
+    if (!el) return;
+    RG = {
+        id: id,
+        termos: JSON.parse(el.getAttribute('data-termos') || '[]'),
+        cat: el.getAttribute('data-cat'),
+        catRot: el.getAttribute('data-cat-rotulo'),
+        conta: el.getAttribute('data-conta') || '',
+        // pre-selecionado = o estado ATUAL da regra (nao e default novo)
+        contaEscolha: el.getAttribute('data-conta') ? 'so' : 'qualquer',
+        aplicar: el.getAttribute('data-aplicar'),
+        presos: parseInt(el.getAttribute('data-presos') || '0', 10),
+        antigos: null,   // pergunta de tempo: SEM pre-selecao, lei da casa
+        fun: null
+    };
+    var emp = el.getAttribute('data-emp') || 'QUALICONTAX';
+    document.getElementById('rgEmpNome').textContent = emp;
+    document.getElementById('rgEmpIni').textContent = emp.charAt(0).toUpperCase();
+    var sel = document.getElementById('rgContaSel');
+    if (RG.conta) sel.value = RG.conta;
+    document.getElementById('rgFunil').style.display = 'none';
+    document.getElementById('rgForm').action =
+        RG_EDITAR_URL.replace('/0/', '/' + id + '/');
+    rgDesenha();
+    document.getElementById('rgVeu').classList.add('aberto');
+}
+function rgFecha() { document.getElementById('rgVeu').classList.remove('aberto'); }
+
+function rgDesenha() {
+    document.getElementById('rgCatRot').textContent = RG.catRot;
+    document.getElementById('rgTermosEd').innerHTML = RG.termos.map(function (t, k) {
+        return '<span class="rg-chip-t">' + rgEsc(t) +
+            '<button type="button" onclick="rgTiraTermo(' + k + ')">×</button></span>';
+    }).join('<span class="rg-e">E</span>') ||
+        '<span style="color:#b45309; font-size:12px;">a regra precisa de ao menos um pedaço</span>';
+    marca('rgCartaoContaSo', RG.contaEscolha === 'so');
+    marca('rgCartaoContaQq', RG.contaEscolha === 'qualquer');
+    var sel = document.getElementById('rgContaSel');
+    sel.style.display = (RG.contaEscolha === 'so' && sel.options.length > 1) ? '' : 'none';
+    rgContaRot();
+    marca('rgCartaoDireto', RG.aplicar === 'direto');
+    marca('rgCartaoAprovar', RG.aplicar === 'aprovar');
+    var bloco = document.getElementById('rgBlocoAntigos');
+    bloco.style.display = RG.presos ? '' : 'none';
+    document.querySelectorAll('.rgN').forEach(function (n) {
+        n.textContent = RG.presos; });
+    document.getElementById('rgCobra').style.display =
+        RG.antigos === null ? '' : 'none';
+    marca('rgCartaoFicam', RG.antigos === 'ficam');
+    marca('rgCartaoReprocessa', RG.antigos === 'reprocessa');
+    document.getElementById('rgSalvar').disabled =
+        !RG.termos.length || !RG.cat || (RG.presos > 0 && RG.antigos === null);
+}
+function marca(id, on) {
+    document.getElementById(id).classList.toggle('on', !!on);
+}
+function rgContaRot() {
+    var sel = document.getElementById('rgContaSel');
+    var rot = document.getElementById('rgContaSoRot');
+    var op = sel.options[sel.selectedIndex];
+    rot.textContent = op ? op.textContent : '—';
+    rot.style.display = (RG && RG.contaEscolha === 'so' && sel.options.length > 1)
+        ? 'none' : '';
+}
+function rgMuda(campo, valor) {
+    if (campo === 'conta') RG.contaEscolha = valor;
+    if (campo === 'aplicar') RG.aplicar = valor;
+    if (campo === 'antigos') RG.antigos = valor;
+    rgDesenha();
+}
+function rgTiraTermo(k) { RG.termos.splice(k, 1); rgDesenha(); }
+function rgAddTermo() {
+    var c = document.getElementById('rgNovoTermo');
+    var v = (c.value || '').trim();
+    if (v) { RG.termos.push(v); c.value = ''; rgDesenha(); }
+}
+
+// funil: grupo -> categoria -> subcategoria, lendo o catalogo do HTML
+function rgCatalogo() {
+    return Array.prototype.map.call(
+        document.querySelectorAll('#rgCatalogo option'), function (o) {
+            return { id: o.value, tipo: o.getAttribute('data-tipo'),
+                     grupo: o.getAttribute('data-grupo'),
+                     nome: o.getAttribute('data-nome'),
+                     pai: o.getAttribute('data-pai') };
+        });
+}
+function rgTipoAtual() {
+    var alvo = rgCatalogo().filter(function (c) { return c.id === String(RG.cat); })[0];
+    return alvo ? alvo.tipo : 'P';
+}
+function rgFunilLiga() {
+    RG.fun = { grupo: null, mae: null };
+    document.getElementById('rgFunil').style.display = '';
+    rgFunilDesenha();
+}
+function rgFunilDesenha() {
+    var cat = rgCatalogo(), tipo = rgTipoAtual(), f = RG.fun;
+    var grupos = [];
+    cat.forEach(function (c) {
+        if (c.tipo === tipo && grupos.indexOf(c.grupo) < 0) grupos.push(c.grupo);
+    });
+    var h = '<div class="rg-nivel">' + grupos.map(function (g) {
+        return '<button type="button" class="rg-op' + (f.grupo === g ? ' on' : '') +
+            '" onclick="rgFunGrupo(\'' + rgEsc(g).replace(/'/g, "\\'") + '\')">' +
+            rgEsc(g) + '</button>';
+    }).join('') + '</div>';
+    if (f.grupo) {
+        var maes = cat.filter(function (c) {
+            return c.tipo === tipo && c.grupo === f.grupo && !c.pai; });
+        h += '<div class="rg-nivel">' + maes.map(function (c) {
+            return '<button type="button" class="rg-op' +
+                (f.mae === c.id ? ' on' : '') + '" onclick="rgFunMae(\'' + c.id +
+                '\')">' + rgEsc(c.nome) + '</button>';
+        }).join('') + '</div>';
+    }
+    if (f.mae) {
+        var subs = cat.filter(function (c) { return c.pai === String(f.mae); });
+        if (subs.length) {
+            h += '<div class="rg-nivel">' +
+                '<button type="button" class="rg-op" onclick="rgFunEscolhe(\'' +
+                f.mae + '\')">Sem detalhar</button>' +
+                subs.map(function (c) {
+                    return '<button type="button" class="rg-op" ' +
+                        'onclick="rgFunEscolhe(\'' + c.id + '\')">' +
+                        rgEsc(c.nome) + '</button>';
+                }).join('') + '</div>';
+        }
+    }
+    document.getElementById('rgFunil').innerHTML = h;
+}
+function rgFunGrupo(g) { RG.fun.grupo = g; RG.fun.mae = null; rgFunilDesenha(); }
+function rgFunMae(id) {
+    RG.fun.mae = id;
+    var subs = rgCatalogo().filter(function (c) { return c.pai === String(id); });
+    if (!subs.length) { rgFunEscolhe(id); return; }
+    rgFunilDesenha();
+}
+function rgFunEscolhe(id) {
+    var cat = rgCatalogo();
+    var c = cat.filter(function (x) { return x.id === String(id); })[0];
+    if (!c) return;
+    RG.cat = c.id;
+    var mae = c.pai ? cat.filter(function (x) { return x.id === c.pai; })[0] : null;
+    RG.catRot = c.grupo + ' › ' + (mae ? mae.nome + ' › ' : '') + c.nome;
+    document.getElementById('rgFunil').style.display = 'none';
+    rgDesenha();
+}
+
+function rgEnvia(f) {
+    if (document.getElementById('rgSalvar').disabled) return false;
+    var oc = document.getElementById('rgOcultos');
+    var conta = RG.contaEscolha === 'so'
+        ? document.getElementById('rgContaSel').value : '';
+    oc.innerHTML = RG.termos.map(function (t) {
+        return '<input type="hidden" name="termo" value="' + rgEsc(t) + '">';
+    }).join('') +
+        '<input type="hidden" name="categoria_id" value="' + rgEsc(RG.cat) + '">' +
+        '<input type="hidden" name="conta" value="' + rgEsc(conta) + '">' +
+        '<input type="hidden" name="aplicar" value="' + rgEsc(RG.aplicar) + '">' +
+        '<input type="hidden" name="antigos" value="' + rgEsc(RG.antigos || '') + '">';
+    return true;
+}
+function rgEsc(t) {
+    var d = document.createElement('div');
+    d.textContent = t == null ? '' : String(t);
+    return d.innerHTML.replace(/"/g, '&quot;');
+}
+</script>
 {% endblock %}

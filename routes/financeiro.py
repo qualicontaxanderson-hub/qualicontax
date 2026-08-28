@@ -1753,7 +1753,83 @@ def extrato_memorizacoes():
                            presos=presos, pendentes=pendentes,
                            regra_empresas=regra_empresas,
                            emp_mapa=mapa,
+                           categorias=FinCategoria.listar(),
                            contas_cad=ExtratoLancamento.contas_mapa())
+
+
+@financeiro.route('/financeiro/extrato/regra/<int:mem_id>/editar',
+                  methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_regra_editar(mem_id):
+    """Edita a regra. Os ja classificados vao pelo caminho que o USUARIO
+    escolher: ficam como estao, ou a regra nova decide de novo cada um."""
+    from models.extrato_lancamento import RegraExtrato
+    f = request.form
+    volta = redirect(url_for('financeiro.extrato_memorizacoes'))
+    r = RegraExtrato.get(mem_id)
+    if not r or not r.get('ativo'):
+        flash('Regra não encontrada (ou desativada).', 'danger')
+        return volta
+
+    termos = [t.strip() for t in f.getlist('termo') if t and t.strip()]
+    cat_raw = (f.get('categoria_id') or '').strip()
+    cats = FinCategoria.listar()
+    cat = next((c for c in cats if str(c['id']) == cat_raw), None)
+    if not termos or not cat:
+        flash('A regra precisa de ao menos um trecho e uma categoria.', 'danger')
+        return volta
+    # trocar P por R viraria o sentido da regra — isso e criar OUTRA regra
+    velha = next((c for c in cats if c['id'] == r.get('categoria_id')), None)
+    if velha and cat['tipo'] != velha['tipo']:
+        flash('A nova categoria é de outro tipo (entrada × saída) — '
+              'para virar o sentido, crie outra regra.', 'danger')
+        return volta
+
+    conta = (f.get('conta') or '').strip()[:60] or None
+    aplicar = (f.get('aplicar') or '').strip()
+    presos = execute_query(
+        'SELECT COUNT(*) n FROM extrato_lancamentos WHERE memorizacao_id = %s',
+        (mem_id,), fetch=True, fetch_one=True)['n']
+    antigos = (f.get('antigos') or '').strip()
+    if presos and antigos not in ('ficam', 'reprocessa'):
+        flash(f'Escolha o que fazer com os {presos} que a regra já '
+              'classificou.', 'danger')
+        return volta
+
+    antes = {'termos': r.get('termos'), 'conta': r.get('conta'),
+             'aplicar': r.get('aplicar'), 'categoria_id': r.get('categoria_id')}
+    ok, motivo, _ = RegraExtrato.editar(
+        mem_id, termos=termos, categoria_id=cat['id'], conta=conta,
+        aplicar=aplicar or None)
+    if not ok:
+        flash(f'Não deu para editar: {motivo}', 'danger')
+        return volta
+
+    devolvidos = reclassificados = 0
+    if presos and antigos == 'reprocessa':
+        devolvidos, reclassificados = RegraExtrato.reprocessar(mem_id)
+
+    registrar('escrita.editou_regra_extrato', 'financeiro',
+              tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+              antes=antes,
+              depois={'termos': termos, 'conta': conta, 'aplicar': aplicar,
+                      'categoria_id': cat['id'],
+                      'antigos': antigos or 'nada-preso',
+                      'devolvidos': devolvidos,
+                      'reclassificados': reclassificados})
+
+    msg = 'Regra atualizada.'
+    if antigos == 'reprocessa':
+        msg += (f' {devolvidos} devolvido(s), {reclassificados} '
+                'reclassificado(s) pela regra nova')
+        if devolvidos > reclassificados:
+            msg += (f' — {devolvidos - reclassificados} não casam mais e '
+                    'voltaram para Sem categoria')
+        msg += '.'
+    elif presos:
+        msg += f' Os {presos} já classificados ficaram como estavam.'
+    flash(msg, 'success')
+    return volta
 
 
 @financeiro.route('/financeiro/extrato/memorizacoes/<int:mem_id>/retroagir',
