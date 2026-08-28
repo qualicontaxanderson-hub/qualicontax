@@ -188,7 +188,7 @@
 .ex-wiz-passo b { display:block; font-size:17px; font-weight:800; color:#0f3d2e;
   margin-top:1px; }
 .ex-wiz-lanc { background:#f7faf8; border-radius:11px; padding:10px 12px;
-  margin-bottom:13px; font-size:11.5px; }
+  margin:0 22px 12px; font-size:11.5px; flex:0 0 auto; }
 .ex-wiz-lanc .d { font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   font-size:10.5px; color:#94a3b8; overflow-wrap:anywhere; line-height:1.45; }
 .ex-wiz-lanc .n { font-size:13.5px; font-weight:700; color:#1e293b; margin-top:3px; }
@@ -265,6 +265,7 @@
     max-width:none; max-height:92vh; border-radius:18px 18px 0 0; animation:none; }
   .ex-wiz .modal-header { padding:16px 18px 12px; flex:0 0 auto; }
   .ex-wiz-abas { padding:0 18px 12px; }
+  .ex-wiz-lanc { margin:0 18px 12px; }
   .ex-wiz-corpo { max-height:none; padding:0 18px 18px; -webkit-overflow-scrolling:touch; }
   .ex-wiz-pe { padding:12px 18px calc(12px + env(safe-area-inset-bottom)); background:#fff; }
   .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
@@ -580,6 +581,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
         {% set q = ler(l.descricao) %}
         {% set cc = contas_cad.get(l.conta | string, {}) %}
         <div class="ex-reg" data-lanc="{{ l.id }}" data-valor="{{ l.valor }}"
+             data-conta="{{ l.conta }}" data-banco="{{ cc.get('apelido') or '' }}"
              data-tem-cat="{{ 1 if l.categoria_id else 0 }}"
              onclick="exLoteToca(this, event)">
             <span class="ex-caixinha">✓</span>
@@ -753,7 +755,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             <h3 id="exLoteTitulo">Classificar em lote</h3>
             <button class="modal-close" onclick="exLoteFecha()">&times;</button>
         </div>
-        <form method="POST" action="{{ url_for('financeiro.extrato_lote') }}">
+        <form method="POST" action="{{ url_for('financeiro.extrato_lote') }}"
+              onsubmit="return exLoteValida(this)">
             <div class="modal-body">
                 <div id="exLoteIds"></div>
                 <p id="exLoteAviso" class="ex-alerta" style="display:none; margin:0 0 12px;"></p>
@@ -775,10 +778,29 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 <div class="form-group" id="exLoteRegraBox" style="display:none;
                      border-top:1px solid #e5e7eb; padding-top:12px;">
                     <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">
-                        <input type="checkbox" name="criar_regra" style="margin-top:3px;">
+                        <input type="checkbox" name="criar_regra" style="margin-top:3px;"
+                               onchange="exLoteConta(this.checked)">
                         <span><strong>Criar regra junto</strong> — todos são de
                             <b id="exLoteQuem"></b>; o que vier com esse nome entra sozinho</span>
                     </label>
+                    {# A conta e escolha do usuario, sem default — mesma regra
+                       do assistente. Selecao com contas misturadas nao tem
+                       "so nesta": vira qualquer conta, avisado. #}
+                    <div id="exLoteContaBox" style="display:none; margin:10px 0 0 26px;">
+                        <span style="display:block; font-size:.85em; color:#6b7280; margin-bottom:6px;">
+                            E a regra vale em qual conta?
+                            <b id="exLoteContaCobra" style="color:#b45309">— escolha um</b></span>
+                        <label id="exLoteContaSo" style="display:block; cursor:pointer; margin-bottom:4px;">
+                            <input type="radio" name="regra_conta" value="so"
+                                   onchange="exLoteContaCobra()">
+                            Só nesta conta: <b id="exLoteContaRotulo"></b></label>
+                        <label style="display:block; cursor:pointer;">
+                            <input type="radio" name="regra_conta" value="todas"
+                                   onchange="exLoteContaCobra()">
+                            Qualquer conta</label>
+                        <span id="exLoteContaMistura" style="display:none; font-size:.85em; color:#92400e;">
+                            A seleção mistura contas — a regra valerá para qualquer conta.</span>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -839,8 +861,11 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 {% endfor %}
             </select>
 
+            {# O cartao do lancamento fica FORA da area que rola: em
+               qualquer passo, em qualquer rolagem, da para ver o que se
+               esta classificando. #}
+            <div class="ex-wiz-lanc" id="exWizLanc"></div>
             <div class="modal-body ex-wiz-corpo">
-                <div class="ex-wiz-lanc" id="exWizLanc"></div>
                 <p class="ex-wiz-passo" id="exWizPasso"></p>
                 <div id="exWizTela"></div>
             </div>
@@ -1078,6 +1103,51 @@ function exLoteFecha() {
   document.getElementById('exModalLote').style.display = 'none';
 }
 
+// A caixa da conta abre junto com "criar regra". Uma conta so na selecao:
+// o usuario ESCOLHE (sem default). Contas misturadas: so ha um jeito
+// coerente — qualquer conta — e a caixa avisa em vez de perguntar.
+function exLoteConta(ligado) {
+  var box = document.getElementById('exLoteContaBox');
+  box.style.display = ligado ? '' : 'none';
+  document.getElementById('exLoteContaCobra').style.display = '';
+  box.querySelectorAll('input[name=regra_conta]').forEach(function (r) {
+    r.checked = false;
+  });
+  if (!ligado) return;
+  var contas = {};
+  Object.keys(LOTE.marcados).forEach(function (id) {
+    var m = LOTE.marcados[id];
+    if (m.temCat) return;
+    contas[m.reg.getAttribute('data-conta') || ''] =
+      m.reg.getAttribute('data-banco') || '';
+  });
+  var chaves = Object.keys(contas);
+  var una = chaves.length === 1;
+  document.getElementById('exLoteContaSo').style.display = una ? '' : 'none';
+  document.getElementById('exLoteContaMistura').style.display = una ? 'none' : '';
+  if (una) {
+    document.getElementById('exLoteContaRotulo').textContent =
+      (contas[chaves[0]] ? contas[chaves[0]] + ' · ' : '') + chaves[0];
+  } else {
+    // sem escolha a fazer: marca "todas" para o form ja ir coerente
+    box.querySelector('input[value="todas"]').checked = true;
+    document.getElementById('exLoteContaCobra').style.display = 'none';
+  }
+}
+function exLoteContaCobra() {
+  document.getElementById('exLoteContaCobra').style.display = 'none';
+}
+function exLoteValida(f) {
+  var cb = f.querySelector('input[name=criar_regra]');
+  if (cb && cb.checked && !f.querySelector('input[name=regra_conta]:checked')) {
+    var cobra = document.getElementById('exLoteContaCobra');
+    cobra.style.display = '';
+    cobra.scrollIntoView({ block: 'nearest' });
+    return false;
+  }
+  return true;
+}
+
 // =====================================================================
 // ASSISTENTE DE CLASSIFICAR. Um passo por tela.
 //
@@ -1140,6 +1210,7 @@ function exAbrirClassificar(el) {
     modo: null, i: 0,
     lanc: null, sugestoes: [], pedacos: [], sugEscolhida: null, manual: false,
     cond: { conta: false, sinal: false, valor: false },
+    contaEscolha: null,   // null = ainda nao escolheu — conta e escolha DELE
     escopo: 'empresa', empresas: [], grupo: null,
     aplicar: 'direto', retroagir: null,   // null = ainda nao escolheu
     tituloAcao: null, tituloId: null, tituloComp: null, candidatos: null,
@@ -1293,8 +1364,8 @@ function exWizDesenha() {
 
   } else if (passo === 'Condições') {
     var neg = W.lanc.valor < 0;
+    // a CONTA nao esta aqui: e pergunta obrigatoria do passo Empresas
     html = [
-      ['conta', 'Só nesta conta', exEsc(W.lanc.banco) + ' · ' + exEsc(W.lanc.conta)],
       ['sinal', 'Só ' + (neg ? 'saídas (débito)' : 'entradas (crédito)'),
        'ignora o sentido contrário — evita pegar um estorno ou o recebimento do mesmo cliente'],
       ['valor', 'Só neste valor exato', exMoeda(Math.abs(W.lanc.valor)) + ' — para tarifa fixa']
@@ -1337,10 +1408,26 @@ function exWizDesenha() {
             ' (' + x.n + ')</button>';
         }).join('') + '</div>';
     }
+    // "Cesta de Relacionamento" de um banco pode nao ser a do outro:
+    // a conta e escolha do usuario, SEM pre-selecao.
+    html += '<span class="ex-rot">e em qual conta?' +
+      (W.contaEscolha === null ? ' <b style="color:#b45309">— escolha um</b>' : '') +
+      '</span><div class="ex-cartoes">' + [
+      ['so', '🏦', 'Só nesta conta',
+       exEsc(W.lanc.banco || '') + ' · ' + exEsc(W.lanc.conta || '')],
+      ['qualquer', '🌐', 'Qualquer conta', 'vale em todos os bancos da empresa']
+    ].map(function (o) {
+      return '<button type="button" class="ex-cartao' +
+        (W.contaEscolha === o[0] ? ' on' : '') +
+        '" onclick="exWizConta(\'' + o[0] + '\')"><span class="b">' + o[1] +
+        '</span><span class="t"><b>' + o[2] + '</b><small>' + o[3] +
+        '</small></span><span class="ok">✓</span></button>';
+    }).join('') + '</div>';
     html += exCaixaContagem();
     pronto = !!(W.previa && W.previa.n > 0) &&
       (W.escopo !== 'lista' || W.empresas.length > 0) &&
-      (W.escopo !== 'grupo' || !!W.grupo);
+      (W.escopo !== 'grupo' || !!W.grupo) &&
+      W.contaEscolha !== null;
 
   } else if (passo === 'Categoria') {
     html = exTelaCategoria();
@@ -1651,7 +1738,10 @@ function exTelaConfirmar() {
     html += '<div class="ex-resumo">Classifica este lançamento como ' + alvo + '.' +
       '<br><br><b>Regra criada:</b> quando a descrição tiver ' +
       exTermos().map(function (t) { return '<code>' + exEsc(t) + '</code>'; }).join(' <b>e</b> ') +
-      (W.cond.conta ? '<br>e for da conta <b>' + exEsc(W.lanc.conta) + '</b>' : '') +
+      (W.cond.conta
+        ? '<br>e for da conta <b>' + exEsc(W.lanc.banco || '') + ' · ' +
+          exEsc(W.lanc.conta) + '</b>'
+        : '<br>em <b>qualquer conta</b>') +
       (W.cond.sinal ? '<br>e for <b>' + (W.lanc.valor < 0 ? 'saída' : 'entrada') + '</b>' : '') +
       (W.cond.valor ? '<br>e o valor for <b>' + exMoeda(Math.abs(W.lanc.valor)) + '</b>' : '') +
       '<br><br><b>Vale para:</b> ' + quem +
@@ -1680,6 +1770,12 @@ function exWizSugestao(k) {
 }
 function exWizPedaco(k) {
   W.pedacos[k].on = !W.pedacos[k].on;
+  exPedePrevia(exWizDesenha);
+  exWizDesenha();
+}
+function exWizConta(v) {
+  W.contaEscolha = v;
+  W.cond.conta = (v === 'so');
   exPedePrevia(exWizDesenha);
   exWizDesenha();
 }

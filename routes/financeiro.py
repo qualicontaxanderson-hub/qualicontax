@@ -1543,7 +1543,7 @@ def extrato_lote():
 
     marks = ','.join(['%s'] * len(ids))
     lancs = execute_query(
-        f'SELECT id, empresa_id, valor, descricao, categoria_id '
+        f'SELECT id, empresa_id, conta, valor, descricao, categoria_id '
         f'  FROM extrato_lancamentos WHERE id IN ({marks})',
         tuple(ids), fetch=True) or []
 
@@ -1586,15 +1586,29 @@ def extrato_lote():
                   'ser da mesma contraparte — estes não são. Foram '
                   'classificados sem regra.', 'warning')
         else:
+            # A conta e escolha do usuario ("Cesta de Relacionamento" de um
+            # banco pode nao ser a do outro). Sem escolha, regra nao nasce.
+            regra_conta = (f.get('regra_conta') or '').strip()
+            contas_sel = {l['conta'] for l in livres}
+            if regra_conta not in ('so', 'todas'):
+                flash('Escolha se a regra vale só nesta conta ou em qualquer '
+                      'uma — foram classificados sem regra.', 'warning')
+                nome = ''
+            conta_regra = (contas_sel.pop()
+                           if regra_conta == 'so' and len(contas_sel) == 1
+                           else None)
+        if nome:
             mem_id = RegraExtrato.criar(
                 [nome], cat['id'], centro,
                 empresa_id=livres[0]['empresa_id'],
+                conta=conta_regra,
                 sinal=next(iter(sinais)) == 'P' and 'D' or 'C',
                 aplicar='direto', criado_por=current_user.id)
             if mem_id:
                 registrar('escrita.criou_regra_extrato', 'financeiro',
                           tabela='fin_extrato_memorizacoes', registro_id=mem_id,
                           depois={'termos': [nome], 'categoria': cat['nome'],
+                                  'conta': conta_regra,
                                   'origem': 'lote', 'lancamentos': len(livres)})
 
     for l in livres:
