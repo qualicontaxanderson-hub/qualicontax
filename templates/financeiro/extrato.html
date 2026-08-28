@@ -733,6 +733,14 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             onclick="exLoteDesliga()">Cancelar</button>
     <button type="button" class="btn btn-primary" id="exLoteIr"
             onclick="exLoteAbre()" disabled>Classificar</button>
+    {# So aparece quando TODOS os marcados ja tem categoria: e o gesto que
+       faz o classificado-por-regra chegar ao DRE — regra nao cria titulo. #}
+    <form method="POST" id="exLoteTitulosForm" style="display:none;"
+          action="{{ url_for('financeiro.extrato_lote_titulos') }}"
+          onsubmit="return confirm('Gerar os títulos quitados destes lançamentos? Cada um entra no DRE no mês da sua data.');">
+        <span id="exLoteTitulosIds"></span>
+        <button type="submit" class="btn btn-primary">Gerar títulos</button>
+    </form>
 </div>
 
 <!-- ── Modal do lote ─────────────────────────────────────── -->
@@ -957,6 +965,19 @@ function exLotePinta() {
     q.textContent = ids.length + ' selecionado' + (ids.length === 1 ? '' : 's');
     document.getElementById('exLoteSoma').textContent = ids.length ? exMoeda(soma) : '';
     document.getElementById('exLoteIr').disabled = !ids.length;
+    // Todos ja classificados? O gesto certo e GERAR TITULOS, nao reclassificar.
+    var todosComCat = ids.length > 0 && ids.every(function (id) {
+      return LOTE.marcados[id].temCat; });
+    var ft = document.getElementById('exLoteTitulosForm');
+    if (ft) {
+      ft.style.display = todosComCat ? '' : 'none';
+      document.getElementById('exLoteIr').style.display = todosComCat ? 'none' : '';
+      if (todosComCat) {
+        document.getElementById('exLoteTitulosIds').innerHTML = ids.map(function (id) {
+          return '<input type="hidden" name="lanc" value="' + id + '">';
+        }).join('');
+      }
+    }
   }
 }
 

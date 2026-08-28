@@ -1576,6 +1576,93 @@ def extrato_lote():
     return redirect(url_for('financeiro.extrato'))
 
 
+@financeiro.route('/financeiro/extrato/lote/titulos', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_lote_titulos():
+    """Gera (ou casa) os titulos dos lancamentos JA CLASSIFICADOS.
+
+    E o que faz o classificado-por-regra aparecer no DRE: regra nao cria
+    titulo, e o DRE le titulos. A competencia de cada um e o mes do proprio
+    lancamento.
+    """
+    from models.extrato_lancamento import ExtratoLancamento
+    ids = [int(i) for i in request.form.getlist('lanc') if str(i).isdigit()]
+    if not ids:
+        flash('Nenhum lançamento selecionado.', 'warning')
+        return redirect(url_for('financeiro.extrato'))
+
+    marks = ','.join(['%s'] * len(ids))
+    lancs = execute_query(
+        f"""SELECT e.*, c.tipo AS cat_tipo, c.nome AS cat_nome
+              FROM extrato_lancamentos e
+              JOIN fin_categorias c ON c.id = e.categoria_id
+             WHERE e.id IN ({marks})""", tuple(ids), fetch=True) or []
+
+    criados, casados, pulados, erros = 0, 0, 0, []
+    for l in lancs:
+        if l['cat_tipo'] == 'T':
+            pulados += 1              # transferencia nao e obrigacao
+            continue
+        ja = execute_query(
+            'SELECT 1 FROM fin_titulo_baixas WHERE lancamento_id = %s '
+            'UNION SELECT 1 FROM fin_titulos WHERE chave_idem = %s LIMIT 1',
+            (l['id'], 'extrato:%s' % l['id']), fetch=True, fetch_one=True)
+        if ja:
+            pulados += 1              # ja amarrado: idempotente
+            continue
+
+        # CASA-PRIMEIRO: se uma programacao ja gerou o titulo do mes, a baixa
+        # entra nele — criar outro duplicaria a conta no DRE.
+        leitura = ExtratoLancamento.ler_descricao(l['descricao'])
+        alvo = None
+        for cand in ExtratoLancamento.titulos_candidatos(l, limite=3):
+            saldo = float(cand['valor']) - float(cand['valor_baixado'] or 0)
+            if (leitura['doc'] and cand['contraparte_doc'] == leitura['doc']
+                    and abs(saldo - abs(float(l['valor']))) <= 0.01):
+                alvo = cand['id']
+                break
+
+        if alvo:
+            ok, motivo, tid = ExtratoLancamento.conciliar(
+                l, titulo_id=alvo, usuario_id=current_user.id)
+            if ok:
+                casados += 1
+            else:
+                erros.append('#%s: %s' % (l['id'], motivo))
+            continue
+
+        ok, motivo, tid = ExtratoLancamento.conciliar(
+            l, criar={'competencia': l['data'].replace(day=1),
+                      'contraparte_nome': leitura['nome'] or l['cat_nome'],
+                      'contraparte_doc': leitura['doc'],
+                      'categoria_id': l['categoria_id'],
+                      'centro_custo_id': l['centro_custo_id']},
+            usuario_id=current_user.id)
+        if ok:
+            criados += 1
+        else:
+            erros.append('#%s: %s' % (l['id'], motivo))
+
+    registrar('escrita.gerou_titulos_lote', 'financeiro',
+              tabela='fin_titulos',
+              depois={'ids': ids, 'criados': criados, 'casados': casados,
+                      'pulados': pulados, 'erros': erros[:5]})
+
+    partes = []
+    if criados:
+        partes.append(f'{criados} título(s) criados já quitados')
+    if casados:
+        partes.append(f'{casados} casado(s) com título existente')
+    if pulados:
+        partes.append(f'{pulados} pulado(s) — transferência ou já amarrado')
+    if erros:
+        partes.append(f'{len(erros)} com erro: {"; ".join(erros[:3])}')
+    flash(('. '.join(partes) + '. O DRE já reflete.') if (criados or casados)
+          else ('. '.join(partes) or 'Nada a fazer.'),
+          'success' if (criados or casados) else 'warning')
+    return redirect(url_for('financeiro.extrato', classif='sim'))
+
+
 @financeiro.route('/financeiro/extrato/memorizacoes')
 @permission_required('financeiro.extrato')
 def extrato_memorizacoes():
