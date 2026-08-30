@@ -78,6 +78,12 @@ def _railway_upsert_variable(name: str, value: str) -> tuple[bool, str]:
                 timeout=25,
             )
             if response.status_code != 200:
+                logger.warning(
+                    'Railway endpoint %s retornou %s: %s',
+                    endpoint,
+                    response.status_code,
+                    response.text[:1000],
+                )
                 last_error = f'HTTP {response.status_code}'
                 continue
             payload = response.json()
