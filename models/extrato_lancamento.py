@@ -697,6 +697,28 @@ class RegraExtrato:
     #: o outro (nosso numero do boleto, sequencia da guia, id da operacao)
     _SO_NUMERO = re.compile(r'^[0-9][0-9./-]{3,}$')
 
+    #: Numero COLADO em letra. O _SO_NUMERO acima so ve o token que COMECA com
+    #: digito, entao em "LIQUIDACAO BOLETO SICREDI-264388416" ele nao enxergava
+    #: nada e o numero do boleto — que muda todo mes — entrava na regra. A regra
+    #: nascia casando com um lancamento so, o Questor voltava todo mes para
+    #: classificar e uma regra nova nascia junto (02/09/2026, achado pelo
+    #: Anderson: duas regras do Questor, uma por boleto).
+    _NUM_COLADO = re.compile(r'\d{4,}')
+
+    @staticmethod
+    def _sem_numero(tok):
+        """'SICREDI-264388416' -> 'SICREDI';  '79011862000170' -> ''.
+
+        Devolver vazio quer dizer "aqui so tinha numero" — e esse ponto vira
+        divisor de trecho, igual ao que o _SO_NUMERO ja fazia.
+        """
+        if not RegraExtrato._NUM_COLADO.search(tok or ''):
+            return tok or ''          # sem numero, devolve intacto: mexer no
+                                      # hifen de "LIQUIDACAO BOLETO-" mudaria
+                                      # o trecho das regras que ja funcionam
+        limpo = RegraExtrato._NUM_COLADO.sub('', tok)
+        return limpo.strip(' .-/')
+
     @staticmethod
     def sugestoes(lanc, escopo='empresa', grupo_id=None, empresas=None):
         """Trechos propostos para virar regra, do mais util para o menos.
@@ -718,7 +740,11 @@ class RegraExtrato:
         """
         desc = RegraExtrato._norma(lanc.get('descricao'))
         toks = desc.split(' ') if desc else []
-        numeros = [t for t in toks if RegraExtrato._SO_NUMERO.match(t)]
+        # Cada token sem o numero que muda. Vazio = so tinha numero ali.
+        limpos = [RegraExtrato._sem_numero(t) for t in toks]
+        numeros = []
+        for t in toks:
+            numeros.extend(RegraExtrato._NUM_COLADO.findall(t))
         props, vistos = [], set()
         # UMA leitura para as quatro propostas.
         todos = RegraExtrato.universo(so_sem_categoria=False)
@@ -748,35 +774,35 @@ class RegraExtrato:
         # 1. sem os numeros que mudam
         if numeros:
             corridos, atual = [], []
-            for t in toks:
-                if RegraExtrato._SO_NUMERO.match(t):
+            for limpo in limpos:
+                if not limpo:
                     if atual:
                         corridos.append(' '.join(atual))
                         atual = []
                 else:
-                    atual.append(t)
+                    atual.append(limpo)
             if atual:
                 corridos.append(' '.join(atual))
             poe('Sem o que muda', corridos,
-                'ignora ' + ', '.join(numeros) + ' — é o que muda de um mês '
-                'para o outro', 0)
+                'tira os números (' + ', '.join(numeros) + ') — é o que '
+                'costuma mudar de um lançamento para o outro', 0)
 
         # 2. so o nome de quem esta do outro lado (o rabo em letras)
         cauda = []
-        for t in reversed(toks):
-            if RegraExtrato._SO_NUMERO.match(t):
+        for limpo in reversed(limpos):
+            if not limpo:
                 break
-            cauda.insert(0, t)
+            cauda.insert(0, limpo)
         if cauda and len(cauda) < len(toks):
             poe('Só quem está do outro lado', [' '.join(cauda)],
                 'o nome de quem recebeu ou pagou, sem o tipo da operação', 2)
 
         # 3. so o tipo da operacao (a cabeca em letras)
         cabeca = []
-        for t in toks:
-            if RegraExtrato._SO_NUMERO.match(t):
+        for limpo in limpos:
+            if not limpo:
                 break
-            cabeca.append(t)
+            cabeca.append(limpo)
         if cabeca and len(cabeca) < len(toks):
             poe('Toda a família', [' '.join(cabeca)],
                 'todo lançamento desse tipo, seja de quem for — bem amplo', 3)
