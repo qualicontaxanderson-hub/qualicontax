@@ -39,6 +39,7 @@ Por isso o portão tem três partes: código de saída do ``mysqldump``, CRC do
 gzip lido de volta do disco e o marcador ``Dump completed on`` na última linha.
 Só passando nas três o arquivo sobe para o Dropbox.
 """
+import glob
 import gzip
 import json
 import logging
@@ -188,14 +189,58 @@ def _escrever_cnf(pasta: str, cred: dict) -> str:
     return caminho
 
 
-def _achar_mysqldump() -> str:
-    """Caminho do binário, ou '' se não existir no container.
+#: Lugares onde o cliente MySQL costuma cair quando NÃO está no PATH. O Nix
+#: instala em ``/nix/store/<hash>-mysql-.../bin`` e o comando de start nem
+#: sempre enxerga esse caminho — foi assim que a primeira rodada do cron
+#: falhou em 02/09/2026, com o pacote instalado e o binário "inexistente".
+_CANDIDATOS_DUMP = (
+    '/usr/bin/mysqldump',
+    '/usr/local/bin/mysqldump',
+    '/usr/local/mysql/bin/mysqldump',
+)
 
-    A imagem da Railway não traz cliente MySQL por padrão — é preciso pedir
-    (``NIXPACKS_PKGS=mysql80`` no serviço de Cron). Faltando o binário, o
-    backup falha com uma frase clara em vez de um traceback de FileNotFound.
+
+def _achar_mysqldump() -> str:
+    """Caminho do binário, ou '' se não existir mesmo.
+
+    Procura em quatro lugares, do mais explícito ao mais desesperado:
+    ``BACKUP_MYSQLDUMP_BIN``, o PATH, os caminhos usuais de pacote apt e por
+    fim o ``/nix/store``. Procurar é barato; uma rodada perdida por PATH custa
+    um dia de backup.
     """
-    return os.getenv('BACKUP_MYSQLDUMP_BIN') or shutil.which('mysqldump') or ''
+    forcado = os.getenv('BACKUP_MYSQLDUMP_BIN')
+    if forcado:
+        return forcado
+
+    achado = shutil.which('mysqldump')
+    if achado:
+        return achado
+
+    for caminho in _CANDIDATOS_DUMP:
+        if os.path.exists(caminho):
+            logger.info('[backup] mysqldump fora do PATH, achado em %s', caminho)
+            return caminho
+
+    for caminho in sorted(glob.glob('/nix/store/*/bin/mysqldump')):
+        logger.info('[backup] mysqldump fora do PATH, achado em %s', caminho)
+        return caminho
+
+    return ''
+
+
+def _diagnostico_dump() -> str:
+    """O que existe no container — para o erro ACUSAR em vez de só reclamar.
+
+    Sem isto, "não existe" manda a gente adivinhar qual variável de imagem
+    usar, a dez minutos por tentativa. Com isto, a própria mensagem diz se o
+    pacote foi instalado e onde.
+    """
+    try:
+        no_store = [os.path.basename(c) for c in sorted(glob.glob('/nix/store/*mysql*'))[:4]]
+    except Exception:
+        no_store = []
+    return 'PATH=%s | /nix/store com mysql: %s' % (
+        (os.getenv('PATH', '') or '(vazio)')[:400], no_store or 'nada')
 
 
 def _dump(binario: str, cnf: str, banco: str, destino: str) -> tuple:
@@ -302,8 +347,9 @@ def executar() -> dict:
             st['etapa'] = 'mysqldump'
             st['erro'] = ('mysqldump não existe neste container — instale o '
                           'cliente MySQL no serviço de Cron '
-                          '(NIXPACKS_PKGS=mysql80) ou aponte '
-                          'BACKUP_MYSQLDUMP_BIN.')
+                          '(NIXPACKS_APT_PKGS=default-mysql-client) ou aponte '
+                          'BACKUP_MYSQLDUMP_BIN. Diagnóstico: %s'
+                          % _diagnostico_dump())
             return _fechar(st, inicio)
 
         cnf = _escrever_cnf(tmp, cred)
