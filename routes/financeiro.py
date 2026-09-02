@@ -1664,8 +1664,17 @@ def extrato_lote():
     if not cat:
         flash('Escolha a categoria.', 'danger')
         return _volta_extrato()
-    if cat['tipo'] != next(iter(sinais)) and cat['tipo'] != 'T':
-        flash('A categoria escolhida é do tipo errado para esta seleção.', 'danger')
+    # A MESMA regra do de um lancamento, e nao uma parecida: TRANSFERENCIA
+    # vale nos dois sentidos (e dinheiro seu andando de conta) e INVESTIMENTO
+    # vale na saida. Escrever aqui uma versao mais curta fez o lote recusar as
+    # 41 categorias de investimento que a propria tela oferecia (02/09/2026).
+    esperado = next(iter(sinais))
+    aceitos = {esperado, 'T'} | ({'I'} if esperado == 'P' else set())
+    if cat['tipo'] not in aceitos:
+        flash(('A seleção é de CRÉDITOS — escolha receita ou transferência.'
+               if esperado == 'R' else
+               'A seleção é de DÉBITOS — escolha despesa, investimento '
+               'ou transferência.'), 'danger')
         return _volta_extrato()
 
     centro_raw = (f.get('centro_custo_id') or '').strip()
