@@ -644,13 +644,28 @@ def _aplicar_centro(rows, centro_sel, centros):
     return out, nota
 
 
-def _montar_dre(rows):
+def _montar_dre(rows, grupos_vis=None):
     """Linhas de exibição do DRE na ordem da seção 7 do documento.
 
     Grupos R somam na RECEITA BRUTA; o grupo 'Impostos sobre serviço' desce
-    antes da RECEITA LÍQUIDA; 'Financeiras' desce depois do RESULTADO
-    OPERACIONAL; qualquer outro grupo P (inclusive os criados depois na tela
-    de categorias) entra no bloco operacional, na ordem do plano.
+    antes da RECEITA LÍQUIDA; qualquer outro grupo P — **inclusive Financeiras**
+    — entra no bloco operacional, na ordem do plano.
+
+    Financeiras subiu para dentro do operacional em 02/09/2026, a pedido do
+    Anderson: juros e tarifa de banco sao custo de operar, e mante-las embaixo
+    fazia RESULTADO OPERACIONAL e RESULTADO LIQUIDO diferirem por trocados
+    (R$ 152,28 no ano) — duas linhas quase iguais que so davam ruido.
+
+    INVESTIMENTO (tipo I) ganhou bloco proprio, ABAIXO do resultado e FORA
+    dele: comprar um apartamento nao e despesa e nao pode reduzir o lucro —
+    mas some-lo da tela escondia R$ 61 mil que sairam do banco. A ultima linha,
+    RESULTADO APOS INVESTIMENTOS, responde a pergunta do dono: sobrou quanto
+    depois de tudo, inclusive do que eu investi.
+
+    ``grupos_vis`` e o RECORTE: None mostra o DRE inteiro; um conjunto de nomes
+    de grupo mostra so eles e devolve UM subtotal, dito com todas as letras.
+    O recorte e feito aqui, no servidor, e nunca somado na tela — a mesma lei
+    da previa das regras: um numero, um lugar que o calcula.
     """
     grupos = {}
     for r in rows:
@@ -677,24 +692,39 @@ def _montar_dre(rows):
                 out[i] += g['meses'][i]
         return out
 
+    # ---- RECORTE: so os grupos escolhidos, com um subtotal proprio -------
+    if grupos_vis is not None:
+        vistos = sorted((g for g in grupos.values() if g['grupo'] in grupos_vis),
+                        key=lambda g: (g['tipo'] != 'R', g['ordem']))
+        linhas = [{'tipo': 'grupo', 'sinal': '+' if g['tipo'] == 'R' else '-',
+                   'g': g} for g in vistos]
+        tot = [Decimal('0')] * 12
+        for g in vistos:
+            for i in range(12):
+                tot[i] += g['meses'][i] if g['tipo'] == 'R' else -g['meses'][i]
+        linhas.append({'tipo': 'subtotal', 'recorte': True,
+                       'rotulo': 'SOMA DOS %d GRUPOS MOSTRADOS' % len(vistos),
+                       'meses': tot})
+        return linhas
+
     receitas = sorted((g for (t, _n), g in grupos.items() if t == 'R'),
                       key=lambda g: g['ordem'])
     impostos = [g for (t, n), g in grupos.items()
                 if t == 'P' and n == _DRE_IMPOSTOS]
-    financeiras = [g for (t, n), g in grupos.items()
-                   if t == 'P' and n == _DRE_FINANCEIRAS]
+    # Financeiras NAO sai mais daqui: e despesa operacional como as outras.
     operacionais = sorted((g for (t, n), g in grupos.items()
-                           if t == 'P' and n not in (_DRE_IMPOSTOS,
-                                                     _DRE_FINANCEIRAS)),
+                           if t == 'P' and n != _DRE_IMPOSTOS),
                           key=lambda g: g['ordem'])
+    investimentos = sorted((g for (t, _n), g in grupos.items() if t == 'I'),
+                           key=lambda g: g['ordem'])
 
     rb = soma(receitas)
     imp = soma(impostos)
     rl = [rb[i] - imp[i] for i in range(12)]
     op = soma(operacionais)
     ro = [rl[i] - op[i] for i in range(12)]
-    fin = soma(financeiras)
-    liq = [ro[i] - fin[i] for i in range(12)]
+    inv = soma(investimentos)
+    apos = [ro[i] - inv[i] for i in range(12)]
 
     linhas = []
     for g in receitas:
@@ -706,9 +736,13 @@ def _montar_dre(rows):
     for g in operacionais:
         linhas.append({'tipo': 'grupo', 'sinal': '-', 'g': g})
     linhas.append({'tipo': 'subtotal', 'rotulo': 'RESULTADO OPERACIONAL', 'meses': ro})
-    for g in financeiras:
-        linhas.append({'tipo': 'grupo', 'sinal': '-', 'g': g})
-    linhas.append({'tipo': 'subtotal', 'rotulo': 'RESULTADO LÍQUIDO', 'meses': liq})
+    # O bloco de investimento so aparece quando existe: linha zerada num ano
+    # sem investimento seria enfeite, e enfeite em relatorio vira duvida.
+    if investimentos:
+        for g in investimentos:
+            linhas.append({'tipo': 'grupo', 'sinal': '-', 'g': g})
+        linhas.append({'tipo': 'subtotal',
+                       'rotulo': 'RESULTADO APÓS INVESTIMENTOS', 'meses': apos})
     return linhas
 
 
@@ -736,7 +770,21 @@ def dre():
         any(c['id'] == int(centro_raw) for c in centros) else None
     rows, nota_centro = _aplicar_centro(
         FinDre.por_ano(ano, regime, empresa_ids=sel), centro_sel, centros)
-    linhas = _montar_dre(rows)
+
+    # Os grupos que EXISTEM no ano, na ordem do plano — é o que vira chip.
+    # Sai da mesma consulta que monta a tela: um grupo sem movimento no ano
+    # nao vira filtro, porque filtrar por ele daria uma tela vazia.
+    ordem_g = {}
+    for r in rows:
+        k = (r['tipo'], r['grupo'])
+        ordem_g[k] = min(ordem_g.get(k, r['ordem']), r['ordem'])
+    grupos_todos = [g for (_t, g) in sorted(ordem_g, key=lambda k: (k[0] != 'R',
+                                                                    ordem_g[k]))]
+    bruto = (request.args.get('grupos') or '').strip()
+    escolhidos = [g for g in bruto.split('|') if g in grupos_todos] if bruto else []
+    # Escolher TODOS e o mesmo que nao filtrar: sem recorte, sem aviso.
+    grupos_sel = escolhidos if escolhidos and len(escolhidos) < len(grupos_todos) else []
+    linhas = _montar_dre(rows, set(grupos_sel) or None)
     # No celular abre um mes por vez: comeca no ULTIMO mes com movimento
     # (o retrato mais recente); sem movimento nenhum, no mes de hoje.
     mes_ini = max((i + 1 for l in linhas if l['tipo'] == 'grupo'
@@ -745,6 +793,7 @@ def dre():
         mes_ini = date.today().month if ano == ano_atual else 12
     return render_template('financeiro/dre.html', linhas=linhas,
                            mes_ini=mes_ini,
+                           grupos_todos=grupos_todos, grupos_sel=grupos_sel,
                            regime=regime,
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            centros=centros, centro_sel=centro_sel,
