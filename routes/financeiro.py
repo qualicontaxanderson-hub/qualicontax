@@ -1362,18 +1362,42 @@ def extrato_classificar(lanc_id):
                   tabela='extrato_lancamentos', registro_id=lanc_id,
                   depois={'categoria': cat['nome'], 'centro_custo_id': centro,
                           'regra_id': mem_id})
-        msg = f'Classificado em "{cat["nome"]}".' + titulo_msg
+        # A FRASE tem UMA cabeca, e o numero que abre e o TOTAL. Antes cada
+        # pedaco colava a sua parte no fim e sobrava para a pessoa somar: a
+        # tela dizia "3 antigos" (contando o proprio da tela), a frase dizia
+        # "2 antigos", e o total — 3 classificacoes — nao aparecia em lugar
+        # nenhum. (02/09/2026, achado pelo Anderson.)
+        aprovar = f.get('aplicar') == 'aprovar'
+        # varridos conta TODOS os que a regra pegou, inclusive este; os outros
+        # sao os que a pessoa nao estava vendo.
+        antigos = max(0, varridos - 1) if (mem_id and retroagir) else 0
+        partes = []
+        if antigos and not aprovar:
+            partes.append(
+                '%d lançamentos classificados em "%s" — este e mais %s.'
+                % (antigos + 1, cat['nome'],
+                   'um que já estava no extrato' if antigos == 1
+                   else '%d que já estavam no extrato' % antigos))
+        else:
+            partes.append('Classificado em "%s".' % cat['nome'])
+            # Regra de APROVACAO nao deixa os antigos prontos: eles nascem
+            # preenchidos e marcados. Chamar isso de "classificado" seria
+            # mentir no numero.
+            if antigos:
+                partes.append(
+                    'Mais %s preenchido%s e marcado%s "a conferir".'
+                    % ('um antigo foi' if antigos == 1
+                       else '%d antigos foram' % antigos,
+                       '' if antigos == 1 else 's', '' if antigos == 1 else 's'))
+        if titulo_msg.strip():
+            partes.append(titulo_msg.strip())
         if mem_id:
-            modo = ('Regra criada — os próximos vão pedir sua conferência.'
-                    if f.get('aplicar') == 'aprovar'
-                    else 'Regra criada — os próximos entram sozinhos.')
-            msg += ' ' + modo
-            if retroagir:
-                extra = max(0, varridos - 1)
-                msg += (f' {extra} lançamento(s) antigo(s) também '
-                        'foram classificados.' if extra
-                        else ' Nenhum lançamento antigo se encaixou.')
-        flash(msg, 'success')
+            partes.append('Regra criada: os próximos %s.'
+                          % ('vão pedir sua conferência' if aprovar
+                             else 'entram sozinhos'))
+            if retroagir and not antigos:
+                partes.append('Nenhum lançamento antigo se encaixou.')
+        flash(' '.join(partes), 'success')
         if aviso:
             flash(aviso, 'warning')
     else:
@@ -1531,8 +1555,15 @@ def extrato_regra_previa():
     todos = RegraExtrato.preve(falsa, so_sem_categoria=False)
     livres = [a for a in todos if not a['categoria_id']]
     saidas = sum(1 for a in livres if float(a['valor'] or 0) < 0)
+    # ANTIGOS e o que a pessoa realmente ve como "os outros": o lancamento
+    # aberto no assistente esta em `livres` (ainda sem categoria) e chama-lo de
+    # antigo foi o que fez a tela dizer 3 e a frase dizer 2 (02/09/2026).
+    # A conta sai daqui, e nao de um "-1" no JavaScript: quando o lancamento
+    # aberto JA tem categoria ele nem esta na lista, e subtrair mentiria.
+    atual = lanc['id'] if lanc else None
+    antigos = sum(1 for a in livres if a['id'] != atual)
     return jsonify(
-        ok=True, n=len(livres), livres=len(livres),
+        ok=True, n=len(livres), livres=len(livres), antigos=antigos,
         ocupados=len(todos) - len(livres),
         saidas=saidas, entradas=len(livres) - saidas,
         exemplos=[{'descricao': ExtratoLancamento.corrigir_acento(a['descricao'])[:70],
