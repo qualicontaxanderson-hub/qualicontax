@@ -1512,7 +1512,42 @@ def extrato_sugestoes(lanc_id):
                       .get('apelido') or lanc['banco'] or ''),
             'data': lanc['data'].strftime('%d/%m/%Y') if lanc.get('data') else '',
         },
-        sugestoes=RegraExtrato.sugestoes(lanc))
+        sugestoes=_sugestoes_do_lote(lanc, RegraExtrato.sugestoes(lanc)))
+
+
+def _sugestoes_do_lote(lanc, sugestoes):
+    """No LOTE, so entra a proposta que casa com TODOS os selecionados.
+
+    Uma regra que pega 2 dos 3 marcados nao e a regra que a pessoa acha que
+    esta criando — e o terceiro voltaria amanha para classificar de novo. A
+    checagem usa ``RegraExtrato.casa``, o mesmo juiz que aplica, e nao uma
+    comparacao de texto escrita aqui.
+    """
+    from models.extrato_lancamento import RegraExtrato
+    bruto = (request.args.get('lote') or '').strip()
+    ids = [int(i) for i in bruto.split(',') if i.strip().isdigit()]
+    ids = [i for i in ids if i != lanc['id']]
+    if not ids:
+        return sugestoes
+
+    marks = ','.join(['%s'] * len(ids))
+    outros = execute_query(
+        f'SELECT id, descricao, valor, conta, empresa_id, categoria_id '
+        f'  FROM extrato_lancamentos WHERE id IN ({marks})',
+        tuple(ids), fetch=True) or []
+    if not outros:
+        return sugestoes
+
+    def casa_com_todos(termos):
+        # empresa_id VAZIO de proposito: `empresas_da` devolve None e a
+        # checagem fica so no TEXTO. O alcance por empresa e pergunta do
+        # passo Empresas, mais adiante — nao cabe filtrar por ele aqui.
+        falsa = {'id': 0, 'termos': termos, 'ativo': 1, 'escopo': 'empresa',
+                 'grupo_id': None, 'empresa_id': None,
+                 'conta': None, 'sinal': None, 'valor_exato': None}
+        return all(RegraExtrato.casa(falsa, o, None) for o in outros)
+
+    return [s for s in sugestoes if casa_com_todos(s['termos'])]
 
 
 @financeiro.route('/financeiro/extrato/<int:lanc_id>/titulos-candidatos')
@@ -1575,7 +1610,27 @@ def extrato_regra_previa():
 @financeiro.route('/financeiro/extrato/lote', methods=['POST'])
 @permission_required('financeiro.extrato')
 def extrato_lote():
-    """Classifica varios de uma vez — com ou sem regra junto."""
+    """Classifica varios de uma vez — pelo MESMO assistente do de um.
+
+    Ate 02/09/2026 o lote tinha um modal proprio, menor de proposito:
+    categoria, centro e uma caixinha "criar regra junto". Na pratica virou
+    uma segunda tela com regras diferentes das do assistente — sem escolher
+    o trecho, sem condicoes, sem titulo. O Anderson pediu identico, e
+    identico e a palavra certa: a tela do lote passou a ser o assistente,
+    com os mesmos passos e o mesmo JS.
+
+    O que o lote NAO pode espelhar, e por que:
+
+    casar titulo  e 1 para 1 — um titulo existente casa com UM lancamento.
+                  No lote so existem "criar para cada um" e "sem titulo";
+    programacao   nasce UMA, do lancamento mais recente da selecao. Uma por
+                  lancamento faria N contas mensais da mesma coisa.
+
+    A ordem aqui e de proposito: cria a regra, classifica os SELECIONADOS e
+    so entao retroage. Assim o retroativo pega exatamente os OUTROS — os
+    selecionados ja tem categoria e o ``so_sem_categoria`` os pula — e o
+    numero que aparece na frase e o certo, sem subtracao adivinhada.
+    """
     from models.extrato_lancamento import ExtratoLancamento, RegraExtrato
     f = request.form
     ids = [int(i) for i in f.getlist('lanc') if str(i).isdigit()]
@@ -1585,8 +1640,8 @@ def extrato_lote():
 
     marks = ','.join(['%s'] * len(ids))
     lancs = execute_query(
-        f'SELECT id, empresa_id, conta, valor, descricao, categoria_id '
-        f'  FROM extrato_lancamentos WHERE id IN ({marks})',
+        f'SELECT id, empresa_id, conta, valor, descricao, categoria_id, data '
+        f'  FROM extrato_lancamentos WHERE id IN ({marks}) ORDER BY data DESC',
         tuple(ids), fetch=True) or []
 
     livres = [l for l in lancs if not l['categoria_id']]
@@ -1609,69 +1664,185 @@ def extrato_lote():
     if not cat:
         flash('Escolha a categoria.', 'danger')
         return _volta_extrato()
-    if cat['tipo'] != next(iter(sinais)):
+    if cat['tipo'] != next(iter(sinais)) and cat['tipo'] != 'T':
         flash('A categoria escolhida é do tipo errado para esta seleção.', 'danger')
         return _volta_extrato()
 
     centro_raw = (f.get('centro_custo_id') or '').strip()
     centro = int(centro_raw) if centro_raw.isdigit() else None
 
-    # A regra em lote so faz sentido quando todos falam da MESMA contraparte;
-    # o proprio nome vira o trecho.
-    mem_id = None
-    if f.get('criar_regra') == 'on':
-        nomes = {ExtratoLancamento.ler_descricao(l['descricao'])['nome']
-                 for l in livres}
-        nome = nomes.pop() if len(nomes) == 1 else ''
-        if not nome:
-            flash('Para criar regra em lote, todos os selecionados precisam '
-                  'ser da mesma contraparte — estes não são. Foram '
-                  'classificados sem regra.', 'warning')
-        else:
-            # A conta e escolha do usuario ("Cesta de Relacionamento" de um
-            # banco pode nao ser a do outro). Sem escolha, regra nao nasce.
-            regra_conta = (f.get('regra_conta') or '').strip()
-            contas_sel = {l['conta'] for l in livres}
-            if regra_conta not in ('so', 'todas'):
-                flash('Escolha se a regra vale só nesta conta ou em qualquer '
-                      'uma — foram classificados sem regra.', 'warning')
-                nome = ''
-            conta_regra = (contas_sel.pop()
-                           if regra_conta == 'so' and len(contas_sel) == 1
-                           else None)
-        if nome:
-            mem_id = RegraExtrato.criar(
-                [nome], cat['id'], centro,
-                empresa_id=livres[0]['empresa_id'],
-                conta=conta_regra,
-                sinal=next(iter(sinais)) == 'P' and 'D' or 'C',
-                aplicar='direto', criado_por=current_user.id)
-            if mem_id:
-                registrar('escrita.criou_regra_extrato', 'financeiro',
-                          tabela='fin_extrato_memorizacoes', registro_id=mem_id,
-                          depois={'termos': [nome], 'categoria': cat['nome'],
-                                  'conta': conta_regra,
-                                  'origem': 'lote', 'lancamentos': len(livres)})
+    #: O REPRESENTANTE da selecao: o mais recente. E dele que saem o trecho
+    #: proposto, o dia da programacao e o valor esperado — o mes que acabou de
+    #: acontecer diz mais sobre o proximo do que um de seis meses atras.
+    rep_raw = (f.get('rep_id') or '').strip()
+    rep = next((l for l in livres if str(l['id']) == rep_raw), livres[0])
 
+    # ---- A REGRA (uma so, para a selecao inteira) -----------------------
+    virar_regra = f.get('memorizar') == 'on'
+    retroagir = f.get('retroagir') == 'on'
+    mem_id, varridos, aviso = None, 0, None
+
+    if virar_regra:
+        d = _regra_do_form(f, rep)
+        if not d['termos'] or len(' '.join(d['termos'])) < 4:
+            flash('A regra precisa de pelo menos um trecho com 4 letras.', 'danger')
+            return _volta_extrato()
+        if d['escopo'] == 'lista' and not d['empresas']:
+            flash('Escolha ao menos uma empresa para a regra.', 'danger')
+            return _volta_extrato()
+        if d['escopo'] == 'grupo' and not d['grupo_id']:
+            flash('Escolha o grupo de empresas.', 'danger')
+            return _volta_extrato()
+
+        mem_id = RegraExtrato.criar(
+            d['termos'], cat['id'], centro,
+            empresa_id=rep.get('empresa_id'),
+            conta=d['conta'], sinal=d['sinal'], valor_exato=d['valor_exato'],
+            escopo=d['escopo'], grupo_id=d['grupo_id'], empresas=d['empresas'],
+            aplicar=d['aplicar'], criado_por=current_user.id)
+
+        if mem_id:
+            registrar('escrita.criou_regra_extrato', 'financeiro',
+                      tabela='fin_extrato_memorizacoes', registro_id=mem_id,
+                      depois={'termos': d['termos'], 'categoria': cat['nome'],
+                              'centro_custo_id': centro, 'conta': d['conta'],
+                              'sinal': d['sinal'], 'valor_exato': d['valor_exato'],
+                              'escopo': d['escopo'], 'grupo_id': d['grupo_id'],
+                              'empresas': sorted(d['empresas']),
+                              'aplicar': d['aplicar'], 'retroagiu': retroagir,
+                              'origem': 'lote', 'selecionados': len(livres)})
+        else:
+            aviso = ('Já existe uma regra ativa idêntica — com os mesmos '
+                     'trechos, as mesmas condições e o mesmo alcance. Os '
+                     'lançamentos foram classificados, mas nenhuma regra '
+                     'nova nasceu.')
+
+    # ---- CLASSIFICAR os selecionados ------------------------------------
     for l in livres:
         ExtratoLancamento.classificar(l['id'], cat['id'], centro, mem_id)
     if mem_id:
         RegraExtrato.contar_uso(mem_id, len(livres))
 
+    # ---- RETROAGIR: agora pega exatamente os OUTROS ---------------------
+    if mem_id and retroagir:
+        varridos = RegraExtrato.aplicar_retroativa(mem_id)
+
+    # ---- O TITULO, um por lancamento ------------------------------------
+    # "casar" nao existe aqui: casar e 1 para 1. Sobram criar e nao.
+    titulo_acao = (f.get('titulo_acao') or 'nao').strip()
+    criados, falhou_titulo = 0, 0
+    if titulo_acao == 'criar' and cat['tipo'] != 'T':
+        for l in livres:
+            leitura = ExtratoLancamento.ler_descricao(l['descricao'])
+            okc, motivo, tid = ExtratoLancamento.conciliar(
+                l, criar={'competencia': l['data'].replace(day=1),
+                          'contraparte_nome': leitura['nome'] or cat['nome'],
+                          'contraparte_doc': leitura['doc'],
+                          'categoria_id': cat['id'],
+                          'centro_custo_id': centro},
+                usuario_id=current_user.id)
+            if okc:
+                criados += 1
+                registrar('escrita.conciliou_extrato', 'financeiro',
+                          tabela='fin_titulos', registro_id=tid,
+                          depois={'lancamento_id': l['id'], 'acao': 'criar',
+                                  'valor': float(l['valor']), 'origem': 'lote'})
+            else:
+                falhou_titulo += 1
+
+    # ---- "ISSO SE REPETE?" — UMA programacao, do representante ----------
+    repete = (f.get('repete') or '').strip()
+    prog_msg = ''
+    if criados and repete in ('fixa', 'variavel') and virar_regra:
+        from datetime import date as _date
+        leitura = ExtratoLancamento.ler_descricao(rep['descricao'])
+        nome_prog = (leitura['nome'] or cat['nome'])[:255]
+        tipo_prog = 'R' if rep['valor'] >= 0 else 'P'
+        dup = execute_query(
+            'SELECT id FROM fin_programacoes '
+            ' WHERE ativo = 1 AND empresa_id = %s AND tipo = %s '
+            '   AND contraparte_nome = %s',
+            (rep.get('empresa_id'), tipo_prog, nome_prog),
+            fetch=True, fetch_one=True)
+        if dup:
+            flash(f'Já existe programação ativa para "{nome_prog}" — '
+                  'nenhuma nova foi criada.', 'warning')
+        else:
+            dt = rep['data']
+            inicio = (_date(dt.year + 1, 1, 1) if dt.month == 12
+                      else _date(dt.year, dt.month + 1, 1))
+            pid = FinProgramacao.criar(
+                empresa_id=rep.get('empresa_id'), tipo=tipo_prog,
+                descricao=nome_prog, contraparte_nome=nome_prog,
+                categoria_id=cat['id'],
+                valor_esperado=abs(float(rep['valor'])),
+                dia_vencimento=dt.day,
+                variavel=(repete == 'variavel'), inicio=inicio,
+                contraparte_doc=leitura['doc'] or None,
+                centro_custo_id=centro)
+            if pid and pid is not True:
+                registrar('escrita.criou_programacao', 'financeiro',
+                          tabela='fin_programacoes', registro_id=pid,
+                          depois={'contraparte': nome_prog,
+                                  'valor_esperado': abs(float(rep['valor'])),
+                                  'dia_vencimento': dt.day,
+                                  'variavel': repete == 'variavel',
+                                  'inicio': str(inicio), 'origem': 'lote'})
+                prog_msg = (f'Programação criada: todo dia {dt.day}'
+                            + (', valor variável.' if repete == 'variavel'
+                               else f', {abs(float(rep["valor"])):.2f} esperados.'))
+
     registrar('escrita.classificou_extrato_lote', 'financeiro',
               tabela='extrato_lancamentos',
               depois={'quantos': len(livres), 'ids': [l['id'] for l in livres],
                       'categoria': cat['nome'], 'centro_custo_id': centro,
-                      'regra_id': mem_id, 'pulados_ja_classificados': pulados})
+                      'regra_id': mem_id, 'titulos_criados': criados,
+                      'retroagiu': bool(mem_id and retroagir),
+                      'antigos': varridos,
+                      'pulados_ja_classificados': pulados})
 
-    msg = f'{len(livres)} lançamento(s) classificados em "{cat["nome"]}".'
+    # ---- A FRASE, na mesma forma do assistente de um --------------------
+    aprovar = f.get('aplicar') == 'aprovar'
+    partes = []
+    if varridos and not aprovar:
+        partes.append(
+            '%d lançamentos classificados em "%s" — os %d que você marcou e '
+            'mais %s.' % (len(livres) + varridos, cat['nome'], len(livres),
+                          'um que já estava no extrato' if varridos == 1
+                          else '%d que já estavam no extrato' % varridos))
+    else:
+        partes.append('%d lançamento%s classificado%s em "%s".'
+                      % (len(livres), '' if len(livres) == 1 else 's',
+                         '' if len(livres) == 1 else 's', cat['nome']))
+        if varridos:
+            partes.append('Mais %s preenchido%s e marcado%s "a conferir".'
+                          % ('um antigo foi' if varridos == 1
+                             else '%d antigos foram' % varridos,
+                             '' if varridos == 1 else 's',
+                             '' if varridos == 1 else 's'))
+    if criados:
+        partes.append('%d título%s criado%s já quitado%s.'
+                      % (criados, '' if criados == 1 else 's',
+                         '' if criados == 1 else 's',
+                         '' if criados == 1 else 's'))
+    if falhou_titulo:
+        partes.append('%d não deu para conciliar.' % falhou_titulo)
+    if prog_msg:
+        partes.append(prog_msg)
     if mem_id:
-        msg += ' Regra criada — os próximos entram sozinhos.'
+        partes.append('Regra criada: os próximos %s.'
+                      % ('vão pedir sua conferência' if aprovar
+                         else 'entram sozinhos'))
+        if retroagir and not varridos:
+            partes.append('Nenhum lançamento antigo se encaixou.')
     if pulados:
-        msg += f' {pulados} já tinham categoria e ficaram como estavam.'
-    flash(msg, 'success')
+        partes.append('%d já tinha%s categoria e ficou como estava%s.'
+                      % (pulados, '' if pulados == 1 else 'm',
+                         '' if pulados == 1 else 'm'))
+    flash(' '.join(partes), 'success')
+    if aviso:
+        flash(aviso, 'warning')
     return _volta_extrato()
-
 
 @financeiro.route('/financeiro/extrato/lote/titulos', methods=['POST'])
 @permission_required('financeiro.extrato')
