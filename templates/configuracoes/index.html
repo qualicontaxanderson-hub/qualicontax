@@ -200,6 +200,87 @@
         {% endif %}
     </div>
 
+    {# Backup do banco — o card existe porque a falha PRECISA ter testemunha.
+       De 29/08 a 01/09/2026 o backup ficou quatro dias sem sair (dump vazio e
+       depois PC desligado) e ninguem soube: o unico registro era um .log. Aqui
+       a cor nao fala so do ultimo resultado, fala da PROTECAO — backup que deu
+       certo, mas ha tres dias, tambem fica amarelo. #}
+    {% if backup %}
+    <style>
+    .bkp-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 20px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .bkp-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+    .bkp-tit { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; color:#1e293b; }
+    .bkp-tit i { color:#0061ff; font-size:16px; }
+    .bkp-selo { font-size:12px; font-weight:800; padding:4px 11px; border-radius:99px; }
+    .bkp-selo.verde { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+    .bkp-selo.amarelo { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .bkp-selo.vermelho { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .bkp-selo.cinza { background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
+    .bkp-linha { font-size:13.5px; font-weight:600; color:#334155; }
+    .bkp-foot { margin-top:8px; font-size:12px; color:#64748b; word-break:break-all; }
+    .bkp-aviso { margin-top:10px; padding:9px 13px; border-radius:9px; font-size:12.5px; line-height:1.5; }
+    .bkp-aviso.amarelo { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .bkp-aviso.vermelho { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .bkp-aviso.cinza { background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
+    </style>
+
+    <div class="bkp-card">
+        <div class="bkp-head">
+            <div class="bkp-tit">
+                <i class="fas fa-database"></i> Backup do banco
+                <span style="font-weight:600;color:#94a3b8;font-size:11px;">copia na nuvem</span>
+            </div>
+            {% if backup.registrado %}
+            <span class="bkp-selo {{ backup.cor }}">
+                {% if backup.ok %}{{ 'EM DIA' if backup.cor == 'verde' else 'ATRASADO' }}
+                {% else %}FALHOU{% endif %}
+            </span>
+            {% else %}
+            <span class="bkp-selo cinza">SEM REGISTRO</span>
+            {% endif %}
+        </div>
+
+        {% if not backup.registrado %}
+        <div class="bkp-aviso cinza">
+            <i class="fas fa-circle-info"></i>
+            <b>Nenhum backup automatico registrado ainda.</b> O servico de Cron
+            grava aqui o desfecho de cada rodada — enquanto nao rodar uma vez,
+            este card fica em branco de proposito, sem inventar numero.
+        </div>
+        {% else %}
+        <div class="bkp-linha">
+            {% if backup.ok %}
+                Ultimo backup {{ backup.idade_fmt }} — {{ backup.quando }},
+                {{ backup.tamanho_fmt }} em {{ backup.duracao_s }}s.
+            {% else %}
+                Ultima tentativa {{ backup.idade_fmt }} — {{ backup.quando }}.
+            {% endif %}
+        </div>
+        <div class="bkp-foot">{{ backup.destino }}</div>
+
+        {% if not backup.ok %}
+        <div class="bkp-aviso vermelho">
+            <i class="fas fa-circle-exclamation"></i>
+            <b>O backup falhou na etapa "{{ backup.etapa }}".</b> {{ backup.erro }}
+        </div>
+        {% elif backup.cor == 'amarelo' %}
+        <div class="bkp-aviso amarelo">
+            <i class="fas fa-triangle-exclamation"></i>
+            <b>O ultimo backup completou {{ backup.idade_fmt }}.</b> Passou de 48 h:
+            alguma rodada nao aconteceu — e rodada que nao acontece nao deixa erro,
+            some calada. Vale conferir o servico de Cron.
+        </div>
+        {% endif %}
+
+        {% if backup.alerta %}
+        <div class="bkp-aviso amarelo">
+            <i class="fas fa-triangle-exclamation"></i> {{ backup.alerta }}.
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
     <script>
     // Estado do alerta no momento do render (server-side). Se um "Atualizar"
     // cruzar o limite, recarrega a página para o banner do topo entrar/sair.

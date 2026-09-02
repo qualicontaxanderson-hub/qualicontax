@@ -99,6 +99,12 @@ def _build_empresa_folder(numero: Optional[str], nome: str) -> str:
 class DropboxService:
     """Serviço Dropbox com OAuth2 refresh token e suporte a pastas por departamento."""
 
+    # Teto do ``files_upload`` simples é 150 MB; acima disso a API exige
+    # sessão. Ficamos em 140 MB para não namorar a borda, e o bloco de 8 MB é
+    # o meio-termo entre número de chamadas e memória por vez.
+    _LIMITE_SESSAO = 140 * 1024 * 1024
+    _CHUNK_UPLOAD = 8 * 1024 * 1024
+
     def __init__(self):
         self._dbx = None
         self._departamento_root_cache: dict[str, str] = {}
@@ -622,6 +628,67 @@ class DropboxService:
                         self._dbx = None
                     if _attempt == 0:
                         logger.info('Dropbox upload_bytes: token expirado, renovando silenciosamente...')
+                        continue
+                    raise self._erro_auth(exc) from exc
+                logger.error('Erro ao enviar %s ao Dropbox: %s', path, exc)
+                return False
+        return False
+
+    def upload_arquivo(self, caminho_local: str, path: str) -> bool:
+        """Envia um ARQUIVO do disco para ``path`` no Dropbox, sobrescrevendo.
+
+        Diferente de :meth:`upload_bytes`, que carrega o conteúdo inteiro na
+        memória e esbarra no teto de 150 MB do ``files_upload``: aqui o arquivo
+        é lido em blocos e, passando de 140 MB, sobe por SESSÃO
+        (``start`` → ``append_v2`` → ``finish``). É o que permite mandar o
+        backup do banco (~200 MB e crescendo) sem estourar a memória do
+        container nem bater no limite da API.
+
+        Sobrescreve (``WriteMode.overwrite``) porque o nome carrega o carimbo
+        de tempo: reenviar o mesmo backup repõe o arquivo, não duplica.
+
+        Raises:
+            DropboxAuthError: credenciais definitivamente inválidas (após retry).
+        """
+        import dropbox as dropbox_sdk
+
+        tamanho = os.path.getsize(caminho_local)
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return False
+            try:
+                with open(caminho_local, 'rb') as fh:
+                    if tamanho <= self._LIMITE_SESSAO:
+                        dbx.files_upload(
+                            fh.read(), path,
+                            mode=dropbox_sdk.files.WriteMode.overwrite)
+                    else:
+                        sessao = dbx.files_upload_session_start(
+                            fh.read(self._CHUNK_UPLOAD))
+                        cursor = dropbox_sdk.files.UploadSessionCursor(
+                            session_id=sessao.session_id, offset=fh.tell())
+                        commit = dropbox_sdk.files.CommitInfo(
+                            path=path,
+                            mode=dropbox_sdk.files.WriteMode.overwrite)
+                        # Enquanto sobrar MAIS de um bloco, faz append; o resto
+                        # (sempre <= _CHUNK_UPLOAD) vai junto no finish.
+                        while tamanho - fh.tell() > self._CHUNK_UPLOAD:
+                            dbx.files_upload_session_append_v2(
+                                fh.read(self._CHUNK_UPLOAD), cursor)
+                            cursor.offset = fh.tell()
+                        dbx.files_upload_session_finish(
+                            fh.read(self._CHUNK_UPLOAD), cursor, commit)
+                logger.info('Arquivo enviado ao Dropbox: %s (%d bytes)',
+                            path, tamanho)
+                return True
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        logger.info('Dropbox upload_arquivo: token expirado, '
+                                    'renovando e reenviando do zero...')
                         continue
                     raise self._erro_auth(exc) from exc
                 logger.error('Erro ao enviar %s ao Dropbox: %s', path, exc)

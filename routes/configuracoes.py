@@ -36,13 +36,18 @@ def index():
     # saúde por escopo de ARQUIVO (o que o sistema usa), espaço por
     # account_info.read (informativo). Antes o painel gritava "credencial
     # inválida" por causa do segundo, com o primeiro funcionando perfeitamente.
-    espaco = saude = None
+    espaco = saude = backup = None
     if current_user.is_admin():
         from utils.dropbox_space import get_saude, get_space
         saude = get_saude()
         espaco = get_space()
+        # Último backup do banco: leitura de app_config, sem tocar em Dropbox
+        # nem no mysqldump — quem faz o backup é o serviço de Cron.
+        from utils.backup_bd import ler_status
+        backup = ler_status()
     return render_template('configuracoes/index.html',
-                           dropbox_espaco=espaco, dropbox_saude=saude)
+                           dropbox_espaco=espaco, dropbox_saude=saude,
+                           backup=backup)
 
 
 # ---------------------------------------------------------------------------
