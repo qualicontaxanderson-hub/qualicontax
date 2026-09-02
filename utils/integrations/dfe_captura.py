@@ -886,6 +886,8 @@ def _retry_pendentes(empresa, ctx):
         return 0
     promovidas = 0
     sem_completa = 0
+    motivos = {}            # cStat da recusa -> quantas vezes
+    primeiro_motivo = ''    # o xMotivo por extenso, uma amostra basta
     for row in pend:
         if ctx["chnfe_usadas"] >= ctx["chnfe_max"] or ctx.get("cooldown_656"):
             break
@@ -903,7 +905,19 @@ def _retry_pendentes(empresa, ctx):
             # A SEFAZ respondeu, mas SEM a nota completa. É o caso que mantém o
             # resumo preso: contado à parte porque tentar-e-não-vir é diagnóstico
             # diferente de nem-tentar.
+            #
+            # E guarda O QUE ELA DISSE. Em 02/09/2026 havia 903 resumos presos em
+            # 103 empresas e 33 mil consultas por chave em uma semana sem UMA
+            # promoção — e nenhuma linha registrava o motivo da recusa. Sem o
+            # cStat, "sem completa disponível" é um fato sem causa: nao da para
+            # saber se falta manifestacao, se a nota saiu do prazo ou se e outra
+            # coisa. O texto vai AGREGADO na linha de resumo que ja existe: uma
+            # linha por nota triplicaria o log (10 mil/dia) para dizer a mesma
+            # coisa.
             sem_completa += 1
+            motivos[(_text(ret, "cStat") or '?')] =                 motivos.get((_text(ret, "cStat") or '?'), 0) + 1
+            if not primeiro_motivo:
+                primeiro_motivo = (_text(ret, "xMotivo") or '')[:60]
             continue
         try:
             _importar_nfe_completa(empresa, xmlc, ctx.get("cli_index"))
@@ -920,7 +934,12 @@ def _retry_pendentes(empresa, ctx):
         detalhe=(f'{len(pend)} resumo(s) tentado(s) por chave: '
                  f'{promovidas} promovido(s) a completa, '
                  f'{sem_completa} sem completa disponível na SEFAZ'
-                 + (', 656 no meio (cota)' if ctx.get('cooldown_656') else '')))
+                 + (', 656 no meio (cota)' if ctx.get('cooldown_656') else '')
+                 + (' | SEFAZ: ' + ', '.join(
+                     f'{k}x{v}' for k, v in sorted(motivos.items(),
+                                                   key=lambda kv: -kv[1]))
+                    if motivos else '')
+                 + (f' | "{primeiro_motivo}"' if primeiro_motivo else '')))
     return promovidas
 
 
