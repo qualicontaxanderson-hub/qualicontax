@@ -1304,7 +1304,11 @@ def extrato_classificar(lanc_id):
     # ---- "ISSO SE REPETE?" (degrau 7). So com titulo no gesto: programacao
     # gera titulo todo mes, e sem titulo agora nao ha o que repetir.
     repete = (f.get('repete') or '').strip()
-    if conciliou and repete in ('fixa', 'variavel'):
+    # ...e SO quando o gesto memorizou. "So este lancamento" quer dizer unico:
+    # a tela ja nao pergunta, e esta trava impede que uma aba velha ou um POST
+    # fora de ordem crie a programacao assim mesmo (02/09/2026 — o Anderson
+    # achou: o Como dizia unico e o Repete? criava conta mensal).
+    if conciliou and repete in ('fixa', 'variavel') and virar_regra:
         from datetime import date as _date
         leitura = ExtratoLancamento.ler_descricao(lanc['descricao'])
         nome_prog = (leitura['nome'] or cat['nome'])[:255]

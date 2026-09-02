@@ -1170,7 +1170,11 @@ var EX_GRUPOS = [
 var W = null;
 
 var PASSOS_BASE = {
-  unico:  ['Como', 'Categoria', 'Título', 'Repete?', 'Confirmar'],
+  // UNICO nao tem 'Repete?': o cartao do passo Como ja promete "para o que
+  // nao se repete — um servico avulso, uma compra unica". Perguntar depois
+  // se repete todo mes era a tela se contradizendo, e quem respondesse SIM
+  // sem querer ganhava uma programacao gerando titulo todo mes (02/09/2026).
+  unico:  ['Como', 'Categoria', 'Título', 'Confirmar'],
   memo:   ['Como', 'Trecho', 'Empresas', 'Categoria', 'Título', 'Repete?', 'Confirmar'],
   regra:  ['Como', 'Trecho', 'Condições', 'Empresas', 'Categoria', 'Título', 'Repete?', 'Confirmar']
 };
@@ -1758,7 +1762,7 @@ function exTelaConfirmar() {
 // ---------------------------------------------------------------- acoes
 function exWizModo(m) {
   W.modo = m; W.i = 0;
-  if (m === 'unico') { W.sugEscolhida = null; W.previa = null; }
+  if (m === 'unico') { W.sugEscolhida = null; W.previa = null; W.repete = null; }
   exWizDesenha();
 }
 function exWizSugestao(k) {
@@ -1826,7 +1830,8 @@ function exSincronizaForm() {
   document.getElementById('exwTituloComp').value =
     (W.tituloAcao === 'criar') ? (W.tituloComp || '') : '';
   document.getElementById('exwRepete').value =
-    (exCatTipo() !== 'T' && W.tituloAcao !== 'nao' && W.repete) ? W.repete : 'nao';
+    (W.modo !== 'unico' && exCatTipo() !== 'T' && W.tituloAcao !== 'nao'
+     && W.repete) ? W.repete : 'nao';
 
   document.getElementById('exwTermos').innerHTML = (W.modo === 'unico') ? '' :
     exTermos().map(function (t) {
