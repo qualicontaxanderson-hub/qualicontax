@@ -35,7 +35,14 @@ TP_AMB = "1"   # 1 = PRODUÇÃO (nunca homologação: distDFeInt tpAmb=2 não tr
 ENDPOINT = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx"
 NS_WSDL = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"
 NS_NFE = "http://www.portalfiscal.inf.br/nfe"
-VERSAO = "1.35"   # layout do distDFeInt
+VERSAO = "1.35"        # o que a SEFAZ aceita no distNSU (a captura por NSU)
+#: O consChNFe (busca por CHAVE) exige o layout 1.01 e RECUSA o 1.35 com
+#: cStat 215 "Falha no esquema xml". Descoberto em 02/09/2026: eram 33 mil
+#: consultas por semana rejeitadas na porta, e ZERO resumos promovidos em toda
+#: a base — o log só dizia "sem completa disponível" e escondia a causa.
+#: O distNSU fica no 1.35 porque é o que funciona lá; misturar os dois numa
+#: constante só foi possível enquanto ninguém olhava o retorno do consChNFe.
+VERSAO_CHAVE = "1.01"  # layout do distDFeInt no modo consChNFe
 TIMEOUT = 60
 
 # --------------------------------------------------------------------------
@@ -163,7 +170,7 @@ def montar_soap_chave(documento, cuf, chave):
         '<soap12:Body>'
         f'<nfeDistDFeInteresse xmlns="{NS_WSDL}">'
         '<nfeDadosMsg>'
-        f'<distDFeInt xmlns="{NS_NFE}" versao="{VERSAO}">'
+        f'<distDFeInt xmlns="{NS_NFE}" versao="{VERSAO_CHAVE}">'
         f'<tpAmb>{TP_AMB}</tpAmb>'
         f'<cUFAutor>{cuf}</cUFAutor>'
         f'{tag_interessado(documento)}'
