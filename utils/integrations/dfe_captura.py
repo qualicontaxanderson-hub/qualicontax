@@ -797,12 +797,90 @@ def _processar_resumo(conn, cur, empresa, root, ctx):
 
     xmlc = _primeiro_nfeproc(ret)
     if xmlc is None:
-        # A SEFAZ não devolveu a completa (só resumo disponível): fica pendente.
-        gravar_resumo_nota(conn, cur, empresa, res)
-        return "resumo", 0
+        # A SEFAZ localizou a nota mas devolveu SÓ o resumo: para o destinatário
+        # que não manifestou, a completa não sai. É isso que mantinha 903
+        # resumos presos em 103 empresas (02/09/2026).
+        #
+        # A Ciência da Operação (210210) destrava — e só é aceita até 10 DIAS da
+        # emissão. Por isso ela acontece AQUI, no momento em que o resumo chega,
+        # e não num resgate posterior: depois do prazo não há o que fazer.
+        #
+        # SÓ para quem autorizou. Manifestar é ato fiscal em nome do cliente:
+        # sem a autorização gravada, o resumo fica pendente como sempre ficou.
+        if _autorizou_ciencia(empresa["cliente_id"]):
+            xmlc = _manifestar_e_rebuscar(empresa, ctx, res["chave"])
+        if xmlc is None:
+            gravar_resumo_nota(conn, cur, empresa, res)
+            return "resumo", 0
 
     ni = _importar_nfe_completa(empresa, xmlc, ctx.get("cli_index"))  # resumo VIRA completa
     return "nota", ni
+
+
+def _autorizou_ciencia(cliente_id):
+    """O cliente autorizou a Ciência da Operação em nome dele?
+
+    Default NÃO: a coluna nasce 0 e a regra da casa continua sendo não
+    manifestar. Quem liga é uma pessoa, na tela de Status SEFAZ, e fica
+    registrado quem foi e quando.
+    """
+    r = execute_query(
+        'SELECT manifesta_ciencia FROM dfe_certificados '
+        ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
+        (cliente_id,), fetch=True, fetch_one=True) or {}
+    return bool(r.get('manifesta_ciencia'))
+
+
+def _manifestar_e_rebuscar(empresa, ctx, chave):
+    """Ciência da Operação numa nota e nova busca da completa. (xml ou None)
+
+    Uma manifestação, uma nota — nunca em lote. Falhar aqui NÃO derruba a
+    captura: o resumo segue o caminho de sempre e a nota fica pendente, que é
+    exatamente onde ela estaria se este código não existisse.
+
+    O 596 ("apresentado após o prazo") não é erro nosso e não vira alarme: é a
+    nota que envelheceu antes de a empresa ser autorizada.
+    """
+    from utils.integrations import dfe_manifesto
+    from utils.certificado_digital import carregar_par_chave_cert, decifrar_senha
+
+    cid = empresa["cliente_id"]
+    try:
+        cert_row = execute_query(
+            'SELECT id, dropbox_path FROM dfe_certificados '
+            ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
+            (cid,), fetch=True, fetch_one=True)
+        senha = decifrar_senha(DfeCertificado.get_senha_cifrada(cert_row['id']))
+        pfx = dropbox_sync._service.download_file(cert_row['dropbox_path'])
+        chave_priv, cert, _cadeia = carregar_par_chave_cert(pfx, senha)
+
+        xml, ide = dfe_manifesto.montar_evento_ciencia(ctx["cnpj"], chave)
+        soap = dfe_manifesto.montar_soap_evento(
+            dfe_manifesto.assinar_evento(xml, ide, chave_priv, cert))
+        ret_ev = dfe_manifesto.enviar_evento(ctx["sess"], soap)
+    except Exception:
+        logger.exception('[dfe] falha ao manifestar ciência de %s', chave)
+        return None
+
+    inf = _find(ret_ev, 'infEvento')
+    cst = _text(inf, 'cStat') if inf is not None else _text(ret_ev, 'cStat')
+    # 135 = registrado agora; 573 = já havia um evento igual (serve do mesmo jeito)
+    if cst not in ('135', '573'):
+        dfe_log.registrar('ciencia_nao', cid, empresa.get('cnpj'), c_stat=cst,
+                          x_motivo=_text(inf, 'xMotivo') if inf is not None else None,
+                          detalhe='Ciência recusada para %s' % chave[:20])
+        return None
+
+    dfe_log.registrar('ciencia_ok', cid, empresa.get('cnpj'), c_stat=cst, notas=1,
+                      detalhe='Ciência registrada (%s) — buscando a completa de %s'
+                              % (_text(inf, 'nProt') if inf is not None else '', chave[:20]))
+    # Com o evento registrado, a mesma consulta que devolvia resumo agora traz
+    # o nfeProc. Uma tentativa só: se não vier, o resumo fica pendente.
+    try:
+        return _primeiro_nfeproc(consultar_chave(ctx["sess"], ctx["cnpj"],
+                                                 ctx["cuf"], chave))
+    except RuntimeError:
+        return None
 
 
 def processar_um_doc(conn, cur, empresa, d, ctx):

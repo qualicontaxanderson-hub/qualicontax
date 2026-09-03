@@ -1151,6 +1151,53 @@ def api_home_destaques():
 # Painel de Status da Captura SEFAZ — SÓ LEITURA (dfe_nsu / dfe_consulta_log /
 # nfe_importacoes). NÃO captura, NÃO consome cota — só mostra o que o cron gravou.
 # ---------------------------------------------------------------------------
+@escrita_fiscal.route('/status-sefaz/<int:cliente_id>/ciencia', methods=['POST'])
+@permission_required('escrita_fiscal.conf_compras')
+def status_sefaz_ciencia(cliente_id):
+    """Liga/desliga a Ciência da Operação automática de UMA empresa.
+
+    O que esta chave declara não é uma preferência técnica: é que **o cliente
+    autorizou** manifestar em nome dele. A manifestação é IRREVERSÍVEL e
+    aparece na SEFAZ como ato dele, feito com o certificado dele — por isso
+    quem ligou e quando ficam gravados na linha, e não só no log.
+
+    Ligar não manifesta nada agora: passa a valer para o que a captura trouxer
+    daqui para frente. O passado não volta — a Ciência só é aceita até 10 dias
+    da emissão.
+    """
+    ligar = (request.form.get('ligar') or '') == '1'
+    cert = execute_query(
+        'SELECT id, manifesta_ciencia FROM dfe_certificados '
+        ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
+        (cliente_id,), fetch=True, fetch_one=True)
+    if not cert:
+        flash('Esta empresa não tem certificado próprio ativo — a manifestação '
+              'usa o certificado dela, então a chave não se aplica aqui.', 'warning')
+        return redirect(url_for('escrita_fiscal.status_sefaz'))
+
+    antes = bool(cert.get('manifesta_ciencia'))
+    quem = getattr(current_user, 'nome', None) or getattr(current_user, 'login', '?')
+    execute_query(
+        'UPDATE dfe_certificados SET manifesta_ciencia = %s, '
+        '       manifesta_por = %s, manifesta_em = NOW() WHERE id = %s',
+        (1 if ligar else 0, quem[:120] if ligar else None, cert['id']), fetch=False)
+
+    registrar('escrita.alterou_ciencia_automatica', 'fiscal',
+              tabela='dfe_certificados', registro_id=cert['id'],
+              antes={'manifesta_ciencia': antes},
+              depois={'manifesta_ciencia': ligar, 'cliente_id': cliente_id,
+                      'autorizado_por': quem if ligar else None})
+
+    if ligar:
+        flash('Ciência da Operação LIGADA para esta empresa. A partir de agora, '
+              'nota que chegar como resumo será manifestada na captura — o que '
+              'já passou de 10 dias não volta.', 'success')
+    else:
+        flash('Ciência da Operação desligada. Nada mais será manifestado para '
+              'esta empresa; o que já foi manifestado não se desfaz.', 'success')
+    return redirect(url_for('escrita_fiscal.status_sefaz'))
+
+
 @escrita_fiscal.route('/status-sefaz/')
 @permission_required('escrita_fiscal.conf_compras')
 def status_sefaz():
@@ -1290,7 +1337,10 @@ def status_sefaz():
         "  (nc.proximo_permitido IS NOT NULL AND nc.proximo_permitido > NOW()) AS cte_em_cota, "
         "  TIMESTAMPDIFF(MINUTE, NOW(), nc.proximo_permitido) AS cte_libera_min, "
         "  COALESCE(ct.total,0) AS cte_total, COALESCE(ct.tomados,0) AS cte_tomados, "
-        "  COALESCE(ct.valor_frete,0) AS cte_valor_frete "
+        "  COALESCE(ct.valor_frete,0) AS cte_valor_frete, "
+        # A chave da Ciência e o rastro de quem a ligou — moram no vínculo do
+        # certificado, que é onde já vive a configuração de DFe da empresa.
+        "  dc.manifesta_ciencia, dc.manifesta_por, dc.manifesta_em "
         "FROM ( "
         "    SELECT cliente_id AS id FROM dfe_certificados WHERE ativo = 1 "
         "    UNION SELECT cliente_id FROM cliente_contadores "
@@ -1332,6 +1382,11 @@ def status_sefaz():
         "SELECT cliente_id, "
         "  SUM(tipo='entrada' AND COALESCE(incompleta,0)=1 AND DATEDIFF(CURDATE(), data_emissao) > 30) AS travados, "
         "  SUM(tipo='entrada' AND COALESCE(incompleta,0)=1 AND DATEDIFF(CURDATE(), data_emissao) <= 30) AS recentes, "
+        # RESGATAVEIS: resumo preso e AINDA dentro dos 10 dias em que a SEFAZ
+        # aceita a Ciencia da Operacao. Passou disso, cStat 596 e a nota nao
+        # volta mais — por isso o numero fica no cartao: e o que se perde por
+        # nao ligar a chave hoje.
+        "  SUM(tipo='entrada' AND COALESCE(incompleta,0)=1 AND DATEDIFF(CURDATE(), data_emissao) <= 10) AS resgataveis, "
         "  MAX(importado_em >= NOW() - INTERVAL 30 DAY) AS cap_30d "
         "FROM nfe_importacoes WHERE origem='SEFAZ' AND cliente_id IS NOT NULL GROUP BY cliente_id",
         fetch=True) or []
@@ -1413,6 +1468,11 @@ def status_sefaz():
 
         empresas.append({
             'grupo': grupo, 'resumos_travados': travados,
+            'resgataveis': _i(a.get('resgataveis')),
+            'ciencia_on': bool(r.get('manifesta_ciencia')),
+            'ciencia_por': r.get('manifesta_por'),
+            'ciencia_em': _fmt(r.get('manifesta_em')),
+            'cliente_id': r['id'],
             'resumos_recentes': recentes, 'sem_doc_137': sem_doc_137,
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
             'fonte': fonte, 'fonte_icone': fonte_icone,

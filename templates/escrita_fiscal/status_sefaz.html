@@ -85,6 +85,18 @@
 
 .ss-muted { color:#94a3b8; }
 .ss-empty { text-align:center; padding:26px; color:#94a3b8; font-size:13px; }
+/* Chave da Ciência da Operação. Discreta quando desligada (é o normal e a
+   regra da casa), verde e afirmativa quando ligada — o estado ligado é o que
+   precisa ser visto de longe, porque é o que manifesta em nome do cliente. */
+.ss-ciencia { margin-top:8px; padding-top:8px; border-top:1px dashed #eef2f0;
+              display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ss-ciencia-bt { font-size:11.5px; font-weight:700; cursor:pointer;
+                 border:1px solid #d8e3dd; background:#f8fbfa; color:#64748b;
+                 border-radius:99px; padding:3px 11px; }
+.ss-ciencia-bt:hover { border-color:#15803d; color:#15803d; }
+.ss-ciencia.on .ss-ciencia-bt { background:#f0fdf4; border-color:#86efac; color:#166534; }
+.ss-ciencia-quem { font-size:11px; color:#15803d; }
+.ss-ciencia-ganho { font-size:11px; color:#b45309; font-weight:700; }
 
 @media (max-width:820px) {
     /* Regra da casa: a PAGINA nao rola de lado. */
@@ -446,6 +458,33 @@
             <div class="ss-emp-stats"><span class="ss-muted">{{ e.resumos_recentes }} em resumo recente (normal, promove sozinho)</span></div>
             {% elif e.grupo == 'sem_movimento' and e.sem_doc_137 %}
             <div class="ss-emp-stats"><span class="ss-muted">SEFAZ não tem documentos para este CNPJ — não é falha de captura</span></div>
+            {% endif %}
+            {# CIÊNCIA DA OPERAÇÃO — a chave que destrava a nota completa.
+               O rótulo fala de AUTORIZAÇÃO, não de "ativar": quem clica está
+               afirmando que o cliente autorizou manifestar em nome dele, e
+               isso é irreversível na SEFAZ. O número ao lado é o que se
+               ganha (ou se perde) hoje: resumo preso AINDA dentro dos 10
+               dias em que a SEFAZ aceita a Ciência. #}
+            {% if e.fonte != 'carona' %}
+            <div class="ss-ciencia {{ 'on' if e.ciencia_on else '' }}">
+                <form method="POST" style="display:inline;"
+                      action="{{ url_for('escrita_fiscal.status_sefaz_ciencia', cliente_id=e.cliente_id) }}"
+                      onsubmit="return confirm({{ ('Desligar a Ciência automática desta empresa? O que já foi manifestado não se desfaz.' if e.ciencia_on else 'LIGAR a Ciência da Operação para esta empresa?
+
+O sistema passará a manifestar em nome do cliente, com o certificado dele, para toda nota que chegar como resumo. É IRREVERSÍVEL na SEFAZ.
+
+Confirme que o cliente autorizou.') | tojson }});">
+                    <input type="hidden" name="ligar" value="{{ '0' if e.ciencia_on else '1' }}">
+                    <button type="submit" class="ss-ciencia-bt">
+                        {{ '✓ cliente autorizou a Ciência' if e.ciencia_on else 'cliente autorizou a Ciência?' }}
+                    </button>
+                </form>
+                {% if e.ciencia_on %}
+                <span class="ss-ciencia-quem">ligada por {{ e.ciencia_por or '?' }}{% if e.ciencia_em %} em {{ e.ciencia_em }}{% endif %}</span>
+                {% elif e.resgataveis %}
+                <span class="ss-ciencia-ganho">{{ e.resgataveis }} nota{{ '' if e.resgataveis == 1 else 's' }} ainda no prazo de 10 dias</span>
+                {% endif %}
+            </div>
             {% endif %}
             <div class="ss-emp-foot">
                 <span><span class="ss-backlog-num {{ 'zero' if e.backlog == 0 else 'pos' }}">{{ e.backlog }}</span> pendentes</span>

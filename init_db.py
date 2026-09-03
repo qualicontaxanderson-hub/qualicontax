@@ -995,6 +995,15 @@ def _apply_migrations():
         # Fase 2: vínculo por PROCURAÇÃO (titular do .pfx ≠ empresa). Default 0 —
         # todo vínculo anterior continua sendo "titular == empresa".
         ('procuracao',      'TINYINT(1) NOT NULL DEFAULT 0'),
+        # 02/09/2026 — o cliente AUTORIZOU a Ciência da Operação (210210) ser
+        # manifestada em nome dele no momento da captura. Default 0: ninguém
+        # nasce autorizado, e a regra da casa continua sendo NÃO manifestar
+        # para quem não ligou. Quem ligou e quando ficam gravados aqui porque
+        # é ato fiscal em nome de terceiro — daqui a seis meses ninguém vai
+        # lembrar se houve autorização ou se alguém clicou sem pensar.
+        ('manifesta_ciencia',     'TINYINT(1) NOT NULL DEFAULT 0'),
+        ('manifesta_por',         'VARCHAR(120) NULL'),
+        ('manifesta_em',          'DATETIME NULL'),
     ]:
         _col_exists = execute_query(
             "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
