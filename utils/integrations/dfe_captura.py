@@ -954,12 +954,20 @@ def _retry_pendentes(empresa, ctx):
                                       f'a cota de consulta por chave do ciclo acabou '
                                       f'({ctx["chnfe_usadas"]}/{ctx["chnfe_max"]})')
         return 0
+    # A IDADE entra na fila: a Ciência só é aceita até 10 dias da emissão, e o
+    # que ainda dá tempo vem PRIMEIRO — com a cota do ciclo limitada, gastar as
+    # tentativas numa nota de 40 dias é perder a de 3 que ainda tinha salvação.
     pend = execute_query(
-        "SELECT chave_acesso FROM nfe_importacoes "
-        "WHERE cliente_id=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1 "
-        "ORDER BY id LIMIT %s",
+        "SELECT chave_acesso, DATEDIFF(CURDATE(), data_emissao) AS dias "
+        "  FROM nfe_importacoes "
+        " WHERE cliente_id=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1 "
+        " ORDER BY (DATEDIFF(CURDATE(), data_emissao) <= 10) DESC, id "
+        " LIMIT %s",
         (empresa["cliente_id"], int(restante)), fetch=True,
     ) or []
+    # Lido UMA vez por rodada: a autorização não muda no meio do laço.
+    pode_ciencia = _autorizou_ciencia(cid)
+    manifestadas = 0
     if not pend:
         return 0
     promovidas = 0
@@ -979,6 +987,16 @@ def _retry_pendentes(empresa, ctx):
             ctx["cooldown_656"] = True
             break
         xmlc = _primeiro_nfeproc(ret)
+        if xmlc is None and pode_ciencia and (row.get("dias") or 999) <= 10:
+            # AQUI é que o passado recente se resolve. A chave da empresa está
+            # ligada e a nota ainda está dentro dos 10 dias: manifesta e busca
+            # de novo. Sem este trecho a chave só protegia o que ESTIVESSE
+            # CHEGANDO — e as notas já presas, mesmo no prazo, ficavam
+            # esperando envelhecer (achado em 03/09/2026, depois que o Anderson
+            # ligou a chave em 9 empresas e nenhuma Ciência disparou).
+            xmlc = _manifestar_e_rebuscar(empresa, ctx, chave)
+            if xmlc is not None:
+                manifestadas += 1
         if xmlc is None:
             # A SEFAZ respondeu, mas SEM a nota completa. É o caso que mantém o
             # resumo preso: contado à parte porque tentar-e-não-vir é diagnóstico
@@ -1017,7 +1035,8 @@ def _retry_pendentes(empresa, ctx):
                      f'{k}x{v}' for k, v in sorted(motivos.items(),
                                                    key=lambda kv: -kv[1]))
                     if motivos else '')
-                 + (f' | "{primeiro_motivo}"' if primeiro_motivo else '')))
+                 + (f' | "{primeiro_motivo}"' if primeiro_motivo else '')
+                 + (f' | {manifestadas} destravada(s) por Ciência' if manifestadas else '')))
     return promovidas
 
 
