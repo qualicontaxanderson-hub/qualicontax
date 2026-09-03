@@ -1204,9 +1204,13 @@ function mostrarToast(msg, tipo, ms) {
 // e não assina nada). Veio completa → recarrega a lista e a linha passa a ter
 // olhinho/XML/PDF. Veio só resumo → copia a chave e abre o portal da NF-e, onde
 // o captcha é resolvido À MÃO (não automatizamos isso).
-const PORTAL_NFE = 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx';
+// A URL COM os parâmetros — é ela que cai direto na consulta de RESUMO, onde
+// se cola a chave e se baixa o documento. A URL "pelada" abre uma tela
+// genérica e obriga a navegar de novo (Anderson, 03/09/2026).
+const PORTAL_NFE = 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx'
+                 + '?tipoConsulta=resumo&tipoConteudo=7PhJ+gAVw2g=';
 
-function capturarNota(id, btn) {
+function capturarNota(id, btn, chaveDaLinha) {
     const rotulo = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Capturando...';
@@ -1214,16 +1218,30 @@ function capturarNota(id, btn) {
           {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
         .then(r => r.json())
         .then(d => {
-            if (d.aguardar) { mostrarToast(d.erro, 'aviso', 6000); return; }
-            if (!d.ok) { mostrarToast(d.erro || 'Não foi possível capturar.', 'erro', 6000); return; }
             if (d.completa) {
                 mostrarToast('Documento completo capturado.', 'ok');
                 loadNotas();   // a linha volta sem RESUMO e com os botões de export
                 return;
             }
-            abrirNoPortal(d.chave);
+            // NENHUM CAMINHO MORRE AQUI. Antes, cota da SEFAZ ou erro na consulta
+            // terminavam num aviso e ponto final — e o portal, que era a saída
+            // manual, ficava inalcançável. Mas copiar a chave e abrir o portal
+            // NÃO depende da SEFAZ: a chave já está na linha. Então qualquer
+            // desfecho que não seja "veio completa" leva ao portal, com o motivo
+            // dito no aviso. (03/09/2026)
+            if (d.aguardar) {
+                mostrarToast(d.erro + ' Abrindo o portal para baixar à mão.', 'aviso', 7000);
+            } else if (!d.ok) {
+                mostrarToast((d.erro || 'A SEFAZ não devolveu a nota.') +
+                             ' Abrindo o portal para baixar à mão.', 'aviso', 7000);
+            }
+            abrirNoPortal(d.chave || chaveDaLinha);
         })
-        .catch(() => mostrarToast('Erro de conexão ao capturar.', 'erro', 6000))
+        .catch(() => {
+            mostrarToast('Sem resposta da SEFAZ. Abrindo o portal para baixar à mão.',
+                         'aviso', 7000);
+            abrirNoPortal(chaveDaLinha);
+        })
         .finally(() => { btn.disabled = false; btn.innerHTML = rotulo; });
 }
 
@@ -1723,7 +1741,7 @@ function loadNotas() {
                     <td class="mc-cad" data-l="Cadastro" style="text-align:center;"><div class="vinc-cell"><span class="vinc-dot ${dotCls}" title="${dotTip}"></span></div></td>
                     <td class="money mc-valor" data-l="Valor"><strong>${fmtBRL(r.valor_total)}</strong></td>
                     <td class="money mc-icms" data-l="ICMS">${fmtBRL(r.valor_icms)}</td>
-                    <td class="mc-origem" data-l="Origem"><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''} ${r.incompleta ? `<button class="btn-capturar" title="Tentar baixar o XML completo na SEFAZ (não manifesta)" onclick="event.stopPropagation(); capturarNota(${r.id}, this)"><i class="fas fa-cloud-download-alt"></i> Capturar</button>` : ''}</td>
+                    <td class="mc-origem" data-l="Origem"><span class="badge-${(r.origem||'upload').toLowerCase()}">${r.origem}</span>${r.incompleta ? ' <span class="badge-resumo" title="Resumo da SEFAZ — sem itens (o app não manifesta)">RESUMO</span>' : ''} ${r.incompleta ? `<button class="btn-capturar" title="Tentar baixar o XML completo na SEFAZ (não manifesta)" onclick="event.stopPropagation(); capturarNota(${r.id}, this, '${r.chave_acesso||''}')"><i class="fas fa-cloud-download-alt"></i> Capturar</button>` : ''}</td>
                     <td class="mc-acoes" onclick="event.stopPropagation()">
                         ${exportBtns(r)}
                         ${delBtn(r)}
