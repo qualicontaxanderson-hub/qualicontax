@@ -57,11 +57,35 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     chave = h['chave_acesso']
 
     existing = execute_query(
-        "SELECT id FROM nfe_importacoes WHERE chave_acesso = %s AND tipo = %s",
+        "SELECT id, origem, incompleta FROM nfe_importacoes "
+        " WHERE chave_acesso = %s AND tipo = %s",
         (chave, tipo), fetch=True, fetch_one=True,
     )
     if existing:
-        return 'dup'
+        # A linha que já existe pode ser uma CASCA: o resumo da SEFAZ, sem itens,
+        # sem impostos. Tratá-la como duplicata jogava fora a nota COMPLETA que
+        # chegava pelo Dropbox/Q-Colabore — que é justamente o caminho de quem
+        # baixou o XML à mão no portal da NF-e depois que a SEFAZ recusou
+        # entregá-lo. O Anderson colocou um XML no _ENTRADA em 04/09/2026, o
+        # roteador consumiu, e a nota continuou resumo: o trabalho manual dele
+        # ia para o lixo em silêncio.
+        #
+        # A casca sai e a completa entra. O guard é rígido — só resumo da SEFAZ,
+        # e só quando o que está chegando REALMENTE tem itens: nunca se apaga
+        # uma nota completa nem uma linha manual (UPLOAD/DROPBOX) já gravada.
+        casca = (existing.get('incompleta')
+                 and (existing.get('origem') or '').upper() == 'SEFAZ'
+                 and parsed.get('itens'))
+        if not casca:
+            return 'dup'
+        execute_query(
+            "DELETE it FROM nfe_itens it JOIN nfe_importacoes n ON n.id = it.nfe_id "
+            " WHERE n.id = %s AND n.origem = 'SEFAZ' AND n.incompleta = 1",
+            (existing['id'],), fetch=False)
+        execute_query(
+            "DELETE FROM nfe_importacoes "
+            " WHERE id = %s AND origem = 'SEFAZ' AND incompleta = 1",
+            (existing['id'],), fetch=False)
 
     xml_raw_store = xml_raw[:_MAX_XML_SIZE] if xml_raw else ''
     cli = int(cliente_id) if cliente_id else None
