@@ -858,8 +858,15 @@ def _manifestar_e_rebuscar(empresa, ctx, chave):
         soap = dfe_manifesto.montar_soap_evento(
             dfe_manifesto.assinar_evento(xml, ide, chave_priv, cert))
         ret_ev = dfe_manifesto.enviar_evento(ctx["sess"], soap)
-    except Exception:
+    except Exception as exc:
+        # VISÍVEL, e não só no log do container. Em 04/09/2026 a manifestação
+        # falhava em produção e funcionava aqui: sem ciencia_ok nem ciencia_nao,
+        # o rastro morria no logger.exception que ninguém lê — o MESMO defeito
+        # que fez o cStat 215 ficar dois dias escondido. Erro que não aparece
+        # onde se procura é erro que não existe.
         logger.exception('[dfe] falha ao manifestar ciência de %s', chave)
+        dfe_log.registrar('ciencia_erro', cid, empresa.get('cnpj'),
+                          detalhe='%s: %s' % (type(exc).__name__, str(exc)[:200]))
         return None
 
     inf = _find(ret_ev, 'infEvento')
@@ -987,7 +994,11 @@ def _retry_pendentes(empresa, ctx):
             ctx["cooldown_656"] = True
             break
         xmlc = _primeiro_nfeproc(ret)
-        if xmlc is None and pode_ciencia and (row.get("dias") or 999) <= 10:
+        # `dias` pode ser 0 (nota de HOJE) — e `0 or 999` daria 999 em Python,
+        # justamente barrando a nota mais nova de todas. Por isso o teste é
+        # contra None, não pela verdade do valor.
+        _dias = row.get("dias")
+        if xmlc is None and pode_ciencia and _dias is not None and _dias <= 10:
             # AQUI é que o passado recente se resolve. A chave da empresa está
             # ligada e a nota ainda está dentro dos 10 dias: manifesta e busca
             # de novo. Sem este trecho a chave só protegia o que ESTIVESSE
