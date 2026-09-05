@@ -88,7 +88,11 @@ def montar_evento_ciencia(cnpj, chave, n_seq=1, quando=None):
     chave + nSeqEvento com dois dígitos — e é ele que a assinatura referencia.
 
     Args:
-        cnpj: CNPJ do DESTINATÁRIO (quem manifesta), só dígitos ou formatado.
+        cnpj: CNPJ (14 dígitos) ou CPF (11) do DESTINATÁRIO — quem manifesta.
+            Pessoa física também recebe NF-e e também manifesta; o schema do
+            evento é um choice CNPJ|CPF, igual ao distDFeInt. Até 05/09/2026
+            só CNPJ passava, e a empresa 5000 (CPF) caía no portal sem
+            nunca tentar a Ciência.
         chave: chave de acesso da NF-e (44 dígitos).
         n_seq: sequência do evento. 1 na primeira vez; só muda se a SEFAZ
             recusar por duplicidade (573) e for preciso repetir.
@@ -100,8 +104,10 @@ def montar_evento_ciencia(cnpj, chave, n_seq=1, quando=None):
     if len(chave) != 44:
         raise ValueError('chave de acesso precisa ter 44 dígitos, veio %d'
                          % len(chave))
-    if len(cnpj) != 14:
-        raise ValueError('CNPJ do destinatário precisa ter 14 dígitos')
+    if len(cnpj) not in (11, 14):
+        raise ValueError('documento do destinatário precisa ter 14 dígitos '
+                         '(CNPJ) ou 11 (CPF), veio %d' % len(cnpj))
+    tag_doc = ('<CPF>%s</CPF>' if len(cnpj) == 11 else '<CNPJ>%s</CNPJ>') % cnpj
 
     dh = (quando or datetime.now(_TZ)).replace(microsecond=0).isoformat()
     id_evento = 'ID%s%s%02d' % (TP_EVENTO_CIENCIA, chave, int(n_seq))
@@ -111,7 +117,7 @@ def montar_evento_ciencia(cnpj, chave, n_seq=1, quando=None):
         f'<infEvento Id="{id_evento}">'
         f'<cOrgao>{C_ORGAO}</cOrgao>'
         f'<tpAmb>{TP_AMB}</tpAmb>'
-        f'<CNPJ>{cnpj}</CNPJ>'
+        f'{tag_doc}'
         f'<chNFe>{chave}</chNFe>'
         f'<dhEvento>{dh}</dhEvento>'
         f'<tpEvento>{TP_EVENTO_CIENCIA}</tpEvento>'
