@@ -850,7 +850,12 @@ def _manifestar_e_rebuscar(empresa, ctx, chave):
             'SELECT id, dropbox_path FROM dfe_certificados '
             ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
             (cid,), fetch=True, fetch_one=True)
-        senha = decifrar_senha(DfeCertificado.get_senha_cifrada(cert_row['id']))
+        # get_senha_cifrada recebe o CLIENTE, não o id da linha do certificado.
+        # Passar cert_row['id'] devolvia a senha de OUTRA empresa e estourava
+        # SenhaInvalidaError — e passou no meu teste porque a Easy Petro é uma
+        # das 6 (de 181) em que os dois números coincidem. Testar na empresa
+        # errada prova o código por acidente (04/09/2026).
+        senha = decifrar_senha(DfeCertificado.get_senha_cifrada(cid))
         pfx = dropbox_sync._service.download_file(cert_row['dropbox_path'])
         chave_priv, cert, _cadeia = carregar_par_chave_cert(pfx, senha)
 
@@ -865,8 +870,17 @@ def _manifestar_e_rebuscar(empresa, ctx, chave):
         # que fez o cStat 215 ficar dois dias escondido. Erro que não aparece
         # onde se procura é erro que não existe.
         logger.exception('[dfe] falha ao manifestar ciência de %s', chave)
+        # O ÚLTIMO QUADRO da pilha vai junto: "AttributeError: ... ExtensionPolicy"
+        # apareceu 1 vez em 10 (04/09/2026) e a mensagem sozinha não diz de onde
+        # veio — assinar isolado funciona 5/5. Sem arquivo:linha, a próxima
+        # ocorrência custaria outra rodada de adivinhação.
+        import traceback as _tb
+        _q = _tb.extract_tb(exc.__traceback__)
+        _onde = ('%s:%s em %s' % (os.path.basename(_q[-1].filename), _q[-1].lineno,
+                                  _q[-1].name)) if _q else '?'
         dfe_log.registrar('ciencia_erro', cid, empresa.get('cnpj'),
-                          detalhe='%s: %s' % (type(exc).__name__, str(exc)[:200]))
+                          detalhe='%s: %s | %s' % (type(exc).__name__,
+                                                   str(exc)[:150], _onde))
         return None
 
     inf = _find(ret_ev, 'infEvento')
