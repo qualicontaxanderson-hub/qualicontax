@@ -1609,13 +1609,32 @@ def capturar_por_chave(cliente_id, chave, origem='manual'):
                 'erro': 'A SEFAZ pediu para aguardar (consumo indevido). '
                         'Tente novamente mais tarde.'}
 
-    xmlc = _primeiro_nfeproc(ret)
-    if xmlc is None:
-        return {'ok': True, 'completa': False, 'cStat': cStat, 'xMotivo': xMotivo,
-                'mensagem': 'A SEFAZ ainda só tem o resumo desta nota.'}
-
     empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
                'cnpj': cnpj, 'uf': uf}
+
+    xmlc = _primeiro_nfeproc(ret)
+    if xmlc is None and _autorizou_ciencia(cliente_id):
+        # O BOTAO faz o mesmo que o cron: se a empresa autorizou e a nota ainda
+        # está no prazo, manifesta a Ciência e busca de novo — em vez de mandar
+        # a pessoa ao portal resolver captcha para uma nota que o sistema
+        # conseguiria sozinho. Pedido do Anderson em 05/09/2026: "clicar em
+        # capturar e o sistema puxar, para o usuário não demorar a trabalhar".
+        idade = execute_query(
+            'SELECT DATEDIFF(CURDATE(), data_emissao) AS dias '
+            '  FROM nfe_importacoes '
+            ' WHERE chave_acesso = %s AND tipo = %s LIMIT 1',
+            (chave, 'entrada'), fetch=True, fetch_one=True) or {}
+        dias = idade.get('dias')
+        if dias is not None and dias <= 10:
+            ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf}
+            xmlc = _manifestar_e_rebuscar(empresa, ctx, chave)
+
+    if xmlc is None:
+        # Segue sem completa: a tela cai no portal, que é o caminho manual.
+        # Passando de 10 dias a Ciência é recusada com 596 — e aí só o portal
+        # (ou a Confirmação da Operação, que é decisão de negócio).
+        return {'ok': True, 'completa': False, 'cStat': cStat, 'xMotivo': xMotivo,
+                'mensagem': 'A SEFAZ ainda só tem o resumo desta nota.'}
     try:
         n_itens = _importar_nfe_completa(empresa, xmlc)
     except Exception as exc:
