@@ -126,6 +126,33 @@ def montar_evento_ciencia(cnpj, chave, n_seq=1, quando=None):
     return xml, id_evento
 
 
+def _garantir_extension_policy():
+    """Dá o NOME que o signxml procura no import, quando o cryptography não tem.
+
+    O signxml anota funções do VERIFICADOR com
+    ``x509.verification.ExtensionPolicy``. Em Python 3.12 as anotações são
+    avaliadas NA HORA do import; no ``cryptography`` 43 — que este projeto fixa,
+    porque é quem abre o certificado de todas as 159 empresas — esse nome não
+    existe, e o import inteiro do signxml morre com AttributeError. Nunca
+    chegamos a usar o verificador: só assinamos.
+
+    Aqui em Python 3.14 o problema NÃO aparece: as anotações são preguiçosas
+    (PEP 649) e o nome nunca é resolvido. Foi por isso que a manifestação
+    funcionou na minha máquina e falhou em produção por duas rodadas
+    (04/09/2026) — a diferença não era a versão da biblioteca, era a do Python.
+
+    Dar o nome é mais barato e mais seguro do que subir o cryptography: um
+    placeholder satisfaz a anotação, e o verificador continua sem uso.
+    """
+    from cryptography import x509
+    verif = getattr(x509, 'verification', None)
+    if verif is not None and not hasattr(verif, 'ExtensionPolicy'):
+        class ExtensionPolicy:                     # noqa: D401 — só o nome importa
+            """Placeholder: existe para a anotação do signxml resolver."""
+
+        verif.ExtensionPolicy = ExtensionPolicy
+
+
 def assinar_evento(xml_evento, id_evento, chave_privada, certificado):
     """Assina o ``infEvento`` em XML-DSig e devolve o ``<evento>`` assinado.
 
@@ -133,6 +160,7 @@ def assinar_evento(xml_evento, id_evento, chave_privada, certificado):
     inteiro): é o que o layout da NF-e manda, e assinar o nó errado produz um
     XML que passa aqui e é recusado lá.
     """
+    _garantir_extension_policy()
     from signxml import XMLSigner, methods
 
     class _AssinadorNFe(XMLSigner):
