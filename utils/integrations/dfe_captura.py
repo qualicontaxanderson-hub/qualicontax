@@ -978,13 +978,23 @@ def _retry_pendentes(empresa, ctx):
     # A IDADE entra na fila: a Ciência só é aceita até 10 dias da emissão, e o
     # que ainda dá tempo vem PRIMEIRO — com a cota do ciclo limitada, gastar as
     # tentativas numa nota de 40 dias é perder a de 3 que ainda tinha salvação.
+    #
+    # E a nota VELHA (>10 dias) só entra na fila na madrugada. Passado o prazo
+    # da Ciência ela só vira completa se o cliente manifestar por fora — coisa
+    # rara, que não muda de hora em hora. Tentar as 15 velhas do Girão e as 9 da
+    # 5000 a cada ciclo (0 promovidas em semanas) era o que gastava a cota e
+    # produzia o 656 que trancava o botão Capturar. Nota cancelada fica de fora
+    # de vez: o resumo já diz que cancelou, e a Ciência dela volta 650.
+    madrugada = datetime.now(_TZ_BR).hour < 3
     pend = execute_query(
         "SELECT chave_acesso, DATEDIFF(CURDATE(), data_emissao) AS dias "
         "  FROM nfe_importacoes "
         " WHERE cliente_id=%s AND tipo='entrada' AND origem='SEFAZ' AND incompleta=1 "
+        "   AND COALESCE(cancelada, 0) = 0 "
+        "   AND (DATEDIFF(CURDATE(), data_emissao) <= 10 OR %s) "
         " ORDER BY (DATEDIFF(CURDATE(), data_emissao) <= 10) DESC, id "
         " LIMIT %s",
-        (empresa["cliente_id"], int(restante)), fetch=True,
+        (empresa["cliente_id"], 1 if madrugada else 0, int(restante)), fetch=True,
     ) or []
     # Lido UMA vez por rodada: a autorização não muda no meio do laço.
     pode_ciencia = _autorizou_ciencia(cid)
@@ -1518,8 +1528,9 @@ def capturar_por_chave(cliente_id, chave, origem='manual'):
     É o mesmo caminho que ``_processar_resumo`` já usa dentro da captura, exposto
     para o botão "Capturar documento" da tela: mesma resolução de certificado,
     mesmo mTLS, UMA requisição (nunca em loop) e a MESMA gravação
-    (``_importar_nfe_completa``). **Não manifesta e não assina nada** — o consChNFe
-    é leitura pura, o mesmo verbo do distDFeInt.
+    (``_importar_nfe_completa``). Se a empresa autorizou a Ciência (chave no
+    STATUS SEFAZ) e a nota está no prazo de 10 dias, manifesta e busca de novo —
+    o mesmo que o cron faz.
 
     Devolve dict com:
       ok=False + bloqueado/consumo_indevido → cota; o chamador pede para tentar
@@ -1576,10 +1587,16 @@ def capturar_por_chave(cliente_id, chave, origem='manual'):
     except CertificadoError as exc:
         return {'ok': False, 'erro': f'Falha ao abrir o certificado: {exc}'}
 
-    # A busca por chave consome a MESMA cota do distDFeInt: se a SEFAZ já mandou
-    # aguardar, nem tenta (senão renova o castigo).
+    # Só o 656 barra o botão. O proximo_permitido também é gravado depois de um
+    # 137 ("nada novo") — 130 min, toda hora, pelo cron — e isso é um RITMO que
+    # nós mesmos impomos ao distNSU, não um castigo da SEFAZ. Tratar os dois
+    # igual deixava o botão morto quase o dia inteiro: em 06/09/2026 o Anderson
+    # clicou no Girão e na 5000 e caiu no portal sem UMA consulta, porque as
+    # duas estavam "aguardando" um 137 (faltam 117 min / 56 min). O clique é
+    # uma consulta por chave (duas, com a Ciência); o 656 de verdade, quando
+    # vem, continua selando o cooldown logo abaixo.
     bloqueio = _bloqueado_por_cota(cliente_id)
-    if bloqueio:
+    if bloqueio and str(bloqueio.get('ult_status') or '').startswith('656'):
         faltam = bloqueio.get('faltam_min')
         pp = bloqueio.get('proximo_permitido')
         libera = pp.strftime('%H:%M') if hasattr(pp, 'strftime') else None
