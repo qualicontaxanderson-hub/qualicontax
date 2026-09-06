@@ -4,719 +4,493 @@
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
 <style>
-/* Cabecalho (.tela-*), notas (.nota-*), filtros (.qf-*), pilulas (.lst-*) e a
-   TABELA DA CASA (.tbl-*) vem do identidade.css. Aqui fica so o especifico. */
-
-/* ── Secao que abre e fecha ─────────────────────────────────────────────── */
-.ss-sec { background:#fff; border:1px solid #e3ece7; border-radius:15px; margin-bottom:12px; }
-.ss-sec-head { display:flex; align-items:center; gap:11px; padding:13px 16px; cursor:pointer;
-               user-select:none; transition:background .15s; }
-.ss-sec-head:hover { background:#f4faf6; }
-.ss-sec-chev { font-size:12px; color:#7d968a; transition:transform .25s; flex-shrink:0; }
-.ss-sec.aberta .ss-sec-chev { transform:rotate(90deg); }
-.ss-sec-tit { font-size:13.5px; font-weight:800; color:#0f3d2e; flex:1; }
-.ss-sec-cnt { font-size:11.5px; color:#7d968a; font-variant-numeric:tabular-nums; }
-.ss-sec-corpo { display:none; border-top:1px solid #eef2f0; padding:14px 16px; }
-.ss-sec.aberta .ss-sec-corpo { display:block; }
-
-/* ── Indicadores — cartao branco da casa; cor so onde significa ─────────── */
-.ss-grupo { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;
-            color:#15803d; display:flex; align-items:center; gap:10px; margin:22px 0 9px; }
-.ss-grupo::after { content:''; flex:1; height:1px; background:#e8f1ec; }
-.ss-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
-.ss-kpi { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 16px; }
-.ss-kpi-label { font-size:11.5px; font-weight:600; color:#7d968a; }
-.ss-kpi-value { font-size:24px; font-weight:800; color:#0f3d2e; line-height:1.15; margin-top:3px;
-                font-variant-numeric:tabular-nums; }
-.ss-kpi-sub { font-size:11px; color:#94a3b8; margin-top:4px; }
-/* ambar SO quando ha o que olhar: pendencia > 0 ou certificado vencendo */
-.ss-kpi.alerta { border-color:#fde68a; background:#fffdf5; }
-.ss-kpi.alerta .ss-kpi-value { color:#b45309; }
-
-/* ── Cartao de EMPRESA (ja era cartao; so retinge) ──────────────────────── */
-.ss-emp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; }
-.ss-emp { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 16px; }
-.ss-emp-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
-.ss-emp-nome { font-size:13px; font-weight:700; color:#0f3d2e; line-height:1.3; min-width:0; }
-.ss-emp-num { color:#15803d; font-weight:800; }
-.ss-emp-stats { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:#475569; }
-.ss-emp-stats b { color:#0f3d2e; font-variant-numeric:tabular-nums; }
-.ss-emp-foot { margin-top:10px; padding-top:9px; border-top:1px dashed #eef2f0; font-size:11.5px;
-               color:#94a3b8; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
-/* Sub-blocos dentro do cartao de empresa: Entradas / Saidas / CT-e */
-.ss-bloco { border-top:1px dashed #eef2f0; padding-top:9px; margin-top:9px; }
-.ss-bloco:first-of-type { border-top:0; padding-top:0; margin-top:0; }
-.ss-bloco-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:5px; }
-.ss-bloco-tit { font-size:11px; font-weight:800; letter-spacing:.4px; color:#0f3d2e; }
-.ss-backlog-num { font-weight:800; font-variant-numeric:tabular-nums; }
-.ss-backlog-num.zero { color:#15803d; }
-.ss-backlog-num.pos  { color:#b45309; }
-
-/* Selos — os quatro estados da casa */
-.ss-badge { padding:3px 11px; border-radius:99px; font-size:11px; font-weight:800; white-space:nowrap; }
-.ss-badge.verde   { background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; }
-.ss-badge.amarelo { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
-.ss-badge.vermelho{ background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; }
-.ss-badge.cinza   { background:#eef2f0; color:#64748b; border:1px solid #e3ece7; }
-
-.ss-pill { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
-.ss-pill.agendado { background:#f0f7f3; color:#15803d; }
-.ss-pill.manual   { background:#eef2f0; color:#5b7468; }
-.ss-pill.nfe { background:#dcfce7; color:#15803d; }
-.ss-pill.cte { background:#f0f7f3; color:#0f766e; }
-
-.ss-fonte { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; margin:-2px 0 11px;
-            padding:6px 10px; border-radius:9px; font-size:11.5px; }
-.ss-fonte b { font-weight:800; }
-.ss-fonte-det { color:#7d968a; }
-.ss-fonte.propria    { background:#f0f7f3; border:1px solid #dcfce7; color:#15803d; }
-.ss-fonte.procuracao { background:#f0f7f3; border:1px solid #bbf7d0; color:#166534; }
-.ss-fonte.carona     { background:#fffbeb; border:1px solid #fde68a; color:#b45309; }
-.ss-selo { padding:2px 7px; border-radius:99px; font-size:9.5px; font-weight:700; text-transform:none;
-           background:#eef2f0; color:#5b7468; }
-
-/* 4o estado do certificado: "<=60d" e ambar CLARO, para nao se confundir com
-   o "<=30d" que pede acao mais urgente. Modificador local em cima do .lst-sit. */
-.lst-sit.cert-60 { background:#fefce8; color:#a16207; }
-
-.ss-cstat { font-family:ui-monospace,monospace; font-weight:700; }
-.ss-cstat.ok  { color:#15803d; }   /* 137/138 */
-.ss-cstat.bad { color:#b45309; }   /* 656 = cota */
-
-.ss-muted { color:#94a3b8; }
-.ss-empty { text-align:center; padding:26px; color:#94a3b8; font-size:13px; }
-/* Chave da Ciência da Operação. Discreta quando desligada (é o normal e a
-   regra da casa), verde e afirmativa quando ligada — o estado ligado é o que
-   precisa ser visto de longe, porque é o que manifesta em nome do cliente. */
-.ss-ciencia { margin-top:8px; padding-top:8px; border-top:1px dashed #eef2f0;
-              display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.ss-ciencia-bt { font-size:11.5px; font-weight:700; cursor:pointer;
-                 border:1px solid #d8e3dd; background:#f8fbfa; color:#64748b;
-                 border-radius:99px; padding:3px 11px; }
-.ss-ciencia-bt:hover { border-color:#15803d; color:#15803d; }
-.ss-ciencia.on .ss-ciencia-bt { background:#f0fdf4; border-color:#86efac; color:#166534; }
-.ss-ciencia-quem { font-size:11px; color:#15803d; }
-.ss-ciencia-ganho { font-size:11px; color:#b45309; font-weight:700; }
-
-@media (max-width:820px) {
-    /* Regra da casa: a PAGINA nao rola de lado. */
-    .ss-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
-    .ss-emp-grid { grid-template-columns:1fr; }
-    .ss-sec-corpo { padding:12px 11px; }
+/* Cabecalho (.tela-*), notas (.nota*) e a TABELA DA CASA (.tbl-*) vem do
+   identidade.css. Aqui fica so o especifico da tela em abas (desenho aprovado
+   em 06/09/2026): as abas, a barra de filtro, os indicadores e os selos. */
+:root{
+  --ss-verde:#15803d; --ss-verde-esc:#0f3d2e; --ss-verde-claro:#dcfce7; --ss-verde-borda:#bbf7d0;
+  --ss-borda:#e3ece7; --ss-muted:#7d968a; --ss-apagado:#94a3b8;
+  --ss-ambar:#b45309; --ss-ambar-fundo:#fef3c7; --ss-ambar-borda:#fde68a;
+  --ss-verm:#b91c1c; --ss-verm-fundo:#fee2e2; --ss-verm-borda:#fecaca;
+  --ss-cinza-fundo:#eef2f0; --ss-cinza:#64748b;
 }
-@media (max-width:480px) { .ss-kpis { grid-template-columns:1fr; } }
+
+/* ── ABAS da tela: grudam logo abaixo da testeira do Fiscal ─────── */
+.abas{position:sticky;top:calc(var(--top-bar-height) + 49px);z-index:50;background:var(--page-bg,#f3f7f5);padding:6px 0 0;margin-bottom:12px;border-bottom:1px solid var(--ss-borda)}
+.abas-track{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.abas-track::-webkit-scrollbar{display:none}
+.aba{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:0;background:transparent;border-bottom:3px solid transparent;margin-bottom:-1px;font:inherit;font-size:12.5px;font-weight:700;color:var(--ss-muted);cursor:pointer;white-space:nowrap}
+.aba:hover{color:var(--ss-verde-esc)}
+.aba.on{color:var(--ss-verde-esc);border-bottom-color:var(--ss-verde)}
+.aba[hidden]{display:none}
+.aba .n{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px;background:var(--ss-cinza-fundo);color:var(--ss-cinza);font-variant-numeric:tabular-nums}
+.aba .n.verm{background:var(--ss-verm-fundo);color:var(--ss-verm)}
+.aba .n.amb{background:var(--ss-ambar-fundo);color:var(--ss-ambar)}
+.aba .n.verde{background:var(--ss-verde-claro);color:var(--ss-verde)}
+.aba.emp{border:1px dashed var(--ss-borda);border-bottom:3px solid transparent;border-radius:9px 9px 0 0;margin-left:8px;background:#fff}
+.aba.emp.on{border-bottom-color:var(--ss-verde)}
+.aba.emp .x{color:var(--ss-apagado);font-weight:800;margin-left:2px}
+.painel{display:none}
+.painel.on{display:block}
+
+/* ── barra de FILTRO (sempre a vista, no alto de cada aba) ──────── */
+.filtro{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;background:#fff;border:1px solid var(--ss-borda);border-radius:13px;padding:10px 12px;margin-bottom:12px}
+.busca{display:flex;align-items:center;gap:7px;border:1px solid #d7e3dc;border-radius:9px;padding:0 10px;height:34px;min-width:250px;flex:1;max-width:380px;background:#fff}
+.busca input{border:0;outline:0;font:inherit;width:100%;background:transparent;color:#0f172a}
+.busca input:focus{outline:none}
+.busca:focus-within{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+.chips{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.chips .rot{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--ss-muted);margin-right:2px}
+.chip{border:1px solid #d7e3dc;background:#fff;color:#475569;border-radius:99px;padding:5px 11px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;gap:5px;align-items:center;font-variant-numeric:tabular-nums}
+.chip:hover{border-color:var(--ss-verde);color:var(--ss-verde)}
+.chip.on{background:var(--ss-verde-esc);border-color:var(--ss-verde-esc);color:#fff}
+.chip .q{font-size:10px;opacity:.75}
+.filtro .conta{margin-left:auto;font-size:11.5px;color:var(--ss-muted);font-variant-numeric:tabular-nums}
+.filtro .limpar,.limpar{font:inherit;font-size:11.5px;color:var(--ss-verde);font-weight:700;background:none;border:0;cursor:pointer;text-decoration:underline}
+
+/* ── indicadores ────────────────────────────────────────────────── */
+.grupo{font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--ss-verde);display:flex;align-items:center;gap:10px;margin:18px 0 9px}
+.grupo::after{content:'';flex:1;height:1px;background:#e8f1ec}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.kpi{background:#fff;border:1px solid var(--ss-borda);border-radius:15px;padding:14px 16px}
+.kpi-l{font-size:11.5px;font-weight:600;color:var(--ss-muted)}
+.kpi-v{font-size:24px;font-weight:800;color:var(--ss-verde-esc);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
+.kpi-v.md{font-size:18px}.kpi-v.sm{font-size:16px}
+.kpi-s{font-size:11px;color:var(--ss-apagado);margin-top:4px}
+.kpi.alerta{border-color:var(--ss-ambar-borda);background:#fffdf5}.kpi.alerta .kpi-v{color:var(--ss-ambar)}
+.kpi.ruim{border-color:var(--ss-verm-borda);background:#fff7f7}.kpi.ruim .kpi-v{color:var(--ss-verm)}
+.kpi.link{cursor:pointer}.kpi.link:hover{border-color:var(--ss-verde)}
+.nota b{color:var(--ss-verde-esc)}.nota-erro b{color:var(--ss-verm)}.nota-atencao b{color:#78350f}
+.nota a{color:var(--ss-verde);font-weight:700}
+
+/* tabela: o que a casa nao tem */
+.tbl tr.clic{cursor:pointer}
+.tbl .n-emp{color:var(--ss-verde);font-weight:800;margin-right:4px}
+
+/* selos */
+.sit{display:inline-block;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:800;white-space:nowrap;letter-spacing:.2px}
+.sit.verde{background:var(--ss-verde-claro);color:var(--ss-verde);border:1px solid var(--ss-verde-borda)}
+.sit.amb{background:var(--ss-ambar-fundo);color:var(--ss-ambar);border:1px solid var(--ss-ambar-borda)}
+.sit.verm{background:var(--ss-verm-fundo);color:var(--ss-verm);border:1px solid var(--ss-verm-borda)}
+.sit.cinza{background:var(--ss-cinza-fundo);color:var(--ss-cinza);border:1px solid var(--ss-borda)}
+.sit.azul{background:#e0f2fe;color:#075985;border:1px solid #bae6fd}
+.cstat{font-family:ui-monospace,monospace;font-weight:800;font-size:12px}
+.cstat.ok{color:var(--ss-verde)}.cstat.bad{color:var(--ss-ambar)}.cstat.err{color:var(--ss-verm)}
+
+/* chave da Ciencia: e um <form> — o clique confirma e faz POST */
+.ci{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:11.5px;font-weight:700;border:1px solid #d8e3dd;background:#f8fbfa;color:#64748b;border-radius:99px;padding:3px 10px 3px 4px;cursor:pointer;white-space:nowrap}
+.ci .sw{width:26px;height:15px;border-radius:99px;background:#cbd5e1;position:relative;flex:0 0 auto}
+.ci .sw::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:#fff;transition:left .15s}
+.ci.on{background:#f0fdf4;border-color:#86efac;color:#166534}
+.ci.on .sw{background:var(--ss-verde)}.ci.on .sw::after{left:13px}
+.ci-quem{display:block;font-size:10.5px;color:var(--ss-verde);margin-top:3px}
+.ci-form{display:inline;margin:0}
+
+/* sparkline 30 dias */
+.spark{display:flex;align-items:flex-end;gap:2px;height:34px}
+.spark i{flex:1;background:var(--ss-verde-borda);border-radius:2px 2px 0 0;min-height:2px}
+.spark i.hoje{background:var(--ss-verde)}
+.spark i.zero{background:#eef2f0}
+
+/* grafico do historico */
+.graf{background:#fff;border:1px solid var(--ss-borda);border-radius:15px;padding:14px 16px;margin-bottom:12px}
+.graf-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.graf-t{font-size:12.5px;font-weight:800;color:var(--ss-verde-esc)}
+.leg{display:flex;gap:14px;font-size:11px;color:var(--ss-muted)}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.barras{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:3px;align-items:end;height:120px}
+.bar{display:flex;flex-direction:column-reverse;justify-content:flex-start;height:100%;cursor:pointer;border-radius:3px 3px 0 0;overflow:hidden}
+.bar b{display:block;width:100%}
+.bar:hover{outline:2px solid var(--ss-verde)}
+.eixo{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));min-width:0;overflow:hidden;gap:3px;font-size:9.5px;color:var(--ss-apagado);text-align:center;margin-top:4px;font-variant-numeric:tabular-nums}
+.graf-dia{font-size:12px;color:#475569;margin-top:8px;min-height:18px}
+
+/* cabecalho da aba-empresa */
+.emp-head{background:#fff;border:1px solid var(--ss-borda);border-radius:15px;padding:16px 18px;margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
+.emp-nome{font-size:16px;font-weight:800;color:var(--ss-verde-esc)}
+.emp-nome .n-emp{color:var(--ss-verde)}
+.emp-meta{font-size:12px;color:var(--ss-muted);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
+.emp-selos{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:900px){.cols2{grid-template-columns:1fr}}
+.mini{background:#fff;border:1px solid var(--ss-borda);border-radius:15px;padding:14px 16px}
+.mini-t{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px}
+.ss-refresh{font-size:11.5px;color:var(--ss-apagado)}
+
+/* MOBILE: a tabela vira cartao pelo identidade.css; aqui so o resto */
+@media(max-width:820px){
+  .abas{top:calc(var(--top-bar-height) + 49px)}
+  .kpis{grid-template-columns:repeat(2,1fr);gap:8px}
+  .eixo span:not(:nth-child(5n+1)){visibility:hidden}
+  .busca{max-width:none}
+  .ss-refresh{display:none}
+}
+@media(max-width:480px){.kpis{grid-template-columns:1fr}}
 </style>
 
 <div class="tela-head">
-    <div>
-        <h1 class="tela-title"><i class="fas fa-satellite-dish" style="color:#22c55e;margin-right:8px;"></i>Status da Captura SEFAZ</h1>
-        <p class="tela-sub">Somente leitura — a captura roda sozinha pelo cron. Esta tela não consome cota da SEFAZ.</p>
-    </div>
-    <div class="tela-actions">
-        <span class="ss-muted" style="font-size:11.5px;"><i class="fas fa-rotate"></i> atualiza sozinho a cada 60s</span>
-        <button onclick="location.reload()" class="btn btn-outline">
-            <i class="fas fa-rotate-right"></i> Atualizar
-        </button>
-    </div>
-</div>
-
-<!-- BANNER de certificados vencidos/vencendo — reusa as classes .alert globais
-     (mesma linguagem visual do alerta de espaço do Dropbox), zero CSS novo. -->
-{% if cert_alerta and cert_alerta.mostrar %}
-<div class="nota {{ 'nota-erro' if cert_alerta.nivel == 'vermelho' else 'nota-atencao' }}">
-    <i class="fas fa-{{ 'circle-exclamation' if cert_alerta.nivel == 'vermelho' else 'triangle-exclamation' }}"></i>
-    <div>
-        {% if cert_alerta.n_vencidos %}<b>{{ cert_alerta.n_vencidos }} certificado(s) VENCIDO(S).</b> {% endif %}
-        {% if cert_alerta.n_venc %}<b>{{ cert_alerta.n_venc }} vencendo em ≤{{ cert_alerta.dias }} dias.</b> {% endif %}
-        Um certificado vencido faz a SEFAZ recusar o mTLS (HTTP 403) e a captura para
-        <b>sem aviso</b> — renove antes de vencer. Detalhes na seção <b>Certificados</b> abaixo.
-    </div>
-</div>
-{% endif %}
-
-<!-- TOPO — cards de resumo (NF-e) -->
-<div class="ss-grupo">NF-e (notas)</div>
-<div class="ss-kpis">
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Notas capturadas</div>
-        <div class="ss-kpi-value">{{ topo.total }}</div>
-        <div class="ss-kpi-sub">{{ topo.completas }} completas · {{ topo.resumos }} resumo</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Capturadas hoje</div>
-        <div class="ss-kpi-value">{{ topo.hoje }}</div>
-        <div class="ss-kpi-sub">{{ topo.semana }} na semana · {{ topo.mes }} no mês</div>
-    </div>
-    <div class="ss-kpi {% if topo.backlog %}alerta{% endif %}">
-        <div class="ss-kpi-label">Documentos pendentes (SEFAZ)</div>
-        <div class="ss-kpi-value">{{ topo.backlog }}</div>
-        <div class="ss-kpi-sub">NSU a baixar: notas + eventos + resumos</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Última captura</div>
-        <div class="ss-kpi-value" style="font-size:18px;">{{ topo.ult_consulta or '—' }}</div>
-        <div class="ss-kpi-sub">última consulta de qualquer CNPJ</div>
-    </div>
-</div>
-
-<div class="nota">
-    <i class="fas fa-circle-info"></i>
-    <div><b>Documentos pendentes ≠ notas.</b> Os <b>{{ topo.backlog }} documentos pendentes na SEFAZ</b> contam cada NSU — uma nota, um evento (ex.: cancelamento) ou um resumo. As <b>{{ topo.total }} notas capturadas</b> contam só NF-e. Por isso os pendentes podem ser mais que as notas: <b>nenhuma nota sumiu</b> — eventos e resumos também ocupam NSU na fila.</div>
-</div>
-
-<!-- SAÍDAS — mesma fonte (nfe_importacoes/SEFAZ), recorte tipo='saida'.
-     Zero CSS novo: reusa .ss-kpis/.ss-kpi/.ss-table/.ss-legend. -->
-<div class="ss-grupo">NF-e — saídas (notas emitidas)</div>
-<div class="ss-kpis">
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Saídas capturadas</div>
-        <div class="ss-kpi-value">{{ topo_saida.total }}</div>
-        <div class="ss-kpi-sub">
-            {{ topo_saida.completas }} completas
-            {%- if topo_saida.resumos %} · {{ topo_saida.resumos }} resumo{% endif %}
-            · {{ topo_saida.empresas }} empresa(s)
-        </div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Saídas capturadas hoje</div>
-        <div class="ss-kpi-value">{{ topo_saida.hoje }}</div>
-        <div class="ss-kpi-sub">{{ topo_saida.semana }} na semana · {{ topo_saida.mes }} no mês</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Valor total das saídas</div>
-        <div class="ss-kpi-value" style="font-size:20px;">{{ topo_saida.valor | format_currency }}</div>
-        <div class="ss-kpi-sub">soma das notas emitidas capturadas</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Última saída capturada</div>
-        <div class="ss-kpi-value" style="font-size:18px;">{{ topo_saida.ult_captura or '—' }}</div>
-        <div class="ss-kpi-sub">momento da importação</div>
-    </div>
-</div>
-
-<div class="nota nota-atencao">
-    <i class="fas fa-circle-info" style="color:#b45309;"></i>
-    <div><b>As saídas chegam “de carona”.</b> A SEFAZ entrega o documento a quem é
-    <b>destinatário</b> ou <b>autorizado (autXML)</b> — nunca a quem emitiu. Então a saída
-    só aparece quando a nota cai no cursor de <i>outra</i> empresa (o comprador, ou o
-    escritório no autXML) e o sistema reconhece o emitente como cliente. Por isso esta
-    lista pode conter empresas <b>sem certificado</b>, e por isso ela <b>não é o
-    faturamento completo</b> de ninguém: é só o que passou por algum cursor nosso.</div>
-</div>
-
-<!-- O detalhe por empresa emitente vive no bloco 📤 de cada card ("Por empresa"). -->
-
-<!-- TOPO CT-e — webservice separado (CTeDistribuicaoDFe), fila e cota próprias -->
-<div class="ss-grupo">CT-e (fretes)</div>
-<div class="ss-kpis">
-    <div class="ss-kpi accent-teal">
-        <div class="ss-kpi-label">CT-e capturados</div>
-        <div class="ss-kpi-value">{{ topo_cte.total }}</div>
-        <div class="ss-kpi-sub">{{ topo_cte.tomados }} como tomador · {{ topo_cte.cancelados }} cancelado(s)</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Capturados hoje</div>
-        <div class="ss-kpi-value">{{ topo_cte.hoje }}</div>
-        <div class="ss-kpi-sub">{{ topo_cte.semana }} na semana · {{ topo_cte.mes }} no mês</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">CT-e pendentes (SEFAZ)</div>
-        <div class="ss-kpi-value">{{ topo_cte.backlog }}</div>
-        <div class="ss-kpi-sub">NSU a baixar na fila de CT-e</div>
-    </div>
-    <div class="ss-kpi">
-        <div class="ss-kpi-label">Valor total de frete</div>
-        <div class="ss-kpi-value" style="font-size:20px;">{{ topo_cte.valor_frete | format_currency }}</div>
-        <div class="ss-kpi-sub">última captura: {{ topo_cte.ult_consulta or '—' }}</div>
-    </div>
-</div>
-
-<div class="nota">
-    <i class="fas fa-circle-info" style="color:#0d9488;"></i>
-    <div><b>CT-e tem fila própria.</b> O <b>CTeDistribuicaoDFe</b> é outro webservice: cursor de NSU e cota de 1h (656) <b>independentes</b> da NF-e — capturar CT-e não gasta a cota de NF-e. E CT-e <b>não tem resumo</b>: o documento já vem completo, então não existe linha incompleta esperando complemento.</div>
-</div>
-
-{# ── CAPTURAS TRAVADAS ────────────────────────────────────────────────────
-   Fica ANTES dos filtros e da lista geral de propósito: é a única parte desta
-   tela que pede AÇÃO. Os totais acima informam; isto cobra.
-
-   Só aparece quem tem documento represado — empresa em dia não entra. Se a
-   lista some, é porque não há nada travado, e o silêncio aqui é boa notícia. #}
-{% if travadas %}
-<style>
-.trv-card{background:#fff;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:12px;
-          padding:16px 18px;margin-bottom:22px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.trv-tit{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;color:#991b1b;margin-bottom:4px;}
-.trv-sub{font-size:12.5px;color:#64748b;margin-bottom:12px;line-height:1.5;}
-.trv-tab{width:100%;border-collapse:collapse;font-size:13px;}
-.trv-tab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;
-            color:#64748b;font-weight:700;padding:6px 8px;border-bottom:1px solid #e5e7eb;}
-.trv-tab td{padding:9px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
-.trv-tab tr:last-child td{border-bottom:none;}
-.trv-emp{font-weight:700;color:#0f172a;text-decoration:none;}
-.trv-emp:hover{text-decoration:underline;}
-.trv-num{font-variant-numeric:tabular-nums;font-weight:700;}
-.trv-tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
-.trv-tag.nunca{background:#fee2e2;color:#991b1b;}
-.trv-tag.parada{background:#ffedd5;color:#9a3412;}
-@media(max-width:720px){
-  .trv-tab thead{display:none;}
-  .trv-tab tr{display:block;border-bottom:1px solid #e5e7eb;padding:10px 0;}
-  .trv-tab td{display:flex;justify-content:space-between;gap:12px;border:none;padding:3px 0;}
-  .trv-tab td::before{content:attr(data-rot);font-size:11px;text-transform:uppercase;
-                      color:#94a3b8;font-weight:700;}
-}
-</style>
-<div class="trv-card">
-    <div class="trv-tit">
-        <i class="fas fa-triangle-exclamation"></i>
-        Capturas travadas — {{ travadas|length }} empresa(s)
-    </div>
-    <div class="trv-sub">
-        Estas empresas têm documento esperando na SEFAZ e não estão recebendo. O
-        <b>atraso</b> é quantos documentos estão represados; quanto maior, mais a SEFAZ
-        recusa — é um círculo vicioso. Quem está em dia não aparece aqui.
-    </div>
-    <table class="trv-tab">
-        <thead>
-            <tr>
-                <th>Empresa</th><th>Atraso</th><th>Situação</th>
-                <th>Recusa</th><th>Cursor</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for t in travadas %}
-            <tr>
-                <td data-rot="Empresa">
-                    <a class="trv-emp" href="{{ url_for('clientes.detalhes', id=t.id) }}#certificado">
-                        {{ t.numero or 's/nº' }} — {{ t.razao }}
-                    </a>
-                </td>
-                <td data-rot="Atraso"><span class="trv-num">{{ t.atraso }}</span> doc.</td>
-                <td data-rot="Situação">
-                    {% if t.nunca_capturou %}
-                        <span class="trv-tag nunca">nunca capturou</span>
-                    {% elif t.dias_parada is not none %}
-                        <span class="trv-tag parada">parada há {{ t.dias_parada }} dia(s)</span>
-                    {% else %}—{% endif %}
-                </td>
-                <td data-rot="Recusa">{{ t.taxa656 }}% de 656</td>
-                <td data-rot="Cursor">{{ t.ult_nsu }} → {{ t.sefaz_ult }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    {% if travadas | selectattr('nunca_capturou') | first %}
-    <div style="margin-top:12px;padding:10px 12px;background:#fef2f2;border-radius:8px;
-                font-size:12.5px;color:#991b1b;line-height:1.55;">
-        <b>As marcadas como “nunca capturou” não destravam sozinhas.</b> O cursor está em
-        zero e a SEFAZ não entrega o histórico inteiro de uma vez — por mais que o cron
-        insista, elas seguem recusadas. Abra a empresa e use <b>semear cursor de NSU</b>,
-        ciente de que os documentos anteriores não serão capturados.
-    </div>
-    {% endif %}
-</div>
-{% endif %}
-
-<!-- POR EMPRESA -->
-
-<!-- ── Filtros ─────────────────────────────────────────────────────────── -->
-<div class="qf-card">
-    <div class="qf-head" onclick="toggleFilters()">
-        <span class="qf-title">
-            <i class="fas fa-filter"></i> Filtros de pesquisa
-            {% if filters_active %}<span class="qf-badge">filtros ativos</span>{% endif %}
-        </span>
-        <i class="fas fa-chevron-down qf-chev" id="filters-chevron"></i>
-    </div>
-    <div class="qf-body" id="filters-body" style="display:none;">
-        <div class="qf-wrap">
-            <form method="GET" action="{{ url_for('escrita_fiscal.status_sefaz') }}">
-                <div class="qf-row">
-                    <div class="qf-group">
-                        <span class="qf-lbl">Empresa</span>
-                        <input type="text" name="empresa" class="qf-ctrl"
-                               placeholder="Nome ou número…" value="{{ filtros.empresa }}">
-                    </div>
-                    <div class="qf-group">
-                        <span class="qf-lbl">Serviço</span>
-                        <select name="servico" class="qf-ctrl">
-                            <option value="">Todos</option>
-                            <option value="nfe" {% if filtros.servico == 'nfe' %}selected{% endif %}>NF-e</option>
-                            <option value="cte" {% if filtros.servico == 'cte' %}selected{% endif %}>CT-e</option>
-                        </select>
-                    </div>
-                    <div class="qf-group">
-                        <span class="qf-lbl">Certificado</span>
-                        <select name="cert" class="qf-ctrl">
-                            <option value="">Todos</option>
-                            <option value="vencido" {% if filtros.cert == 'vencido' %}selected{% endif %}>Vencido</option>
-                            <option value="d30" {% if filtros.cert == 'd30' %}selected{% endif %}>Vence em ≤{{ cert_laranja }}d</option>
-                            <option value="d60" {% if filtros.cert == 'd60' %}selected{% endif %}>Vence em ≤{{ cert_amarelo }}d</option>
-                            <option value="ok" {% if filtros.cert == 'ok' %}selected{% endif %}>Ok</option>
-                        </select>
-                    </div>
-                    <div class="qf-group">
-                        {# c_stat existe no log de consulta; por isso este filtro age
-                           sobre o HISTORICO, que e onde o dado aparece. #}
-                        <span class="qf-lbl">Status da consulta</span>
-                        <select name="cstat" class="qf-ctrl">
-                            <option value="">Todos</option>
-                            <option value="137" {% if filtros.cstat == '137' %}selected{% endif %}>137 — sem documentos</option>
-                            <option value="138" {% if filtros.cstat == '138' %}selected{% endif %}>138 — documentos localizados</option>
-                            <option value="656" {% if filtros.cstat == '656' %}selected{% endif %}>656 — consumo indevido (cota)</option>
-                            <option value="erro" {% if filtros.cstat == 'erro' %}selected{% endif %}>Outro / erro</option>
-                        </select>
-                    </div>
-                    <div class="qf-group">
-                        <span class="qf-lbl">Período do histórico</span>
-                        <select name="periodo" class="qf-ctrl">
-                            <option value="">Últimas 20 rodadas</option>
-                            <option value="1"  {% if filtros.periodo == '1'  %}selected{% endif %}>Últimas 24 horas</option>
-                            <option value="7"  {% if filtros.periodo == '7'  %}selected{% endif %}>Últimos 7 dias</option>
-                            <option value="30" {% if filtros.periodo == '30' %}selected{% endif %}>Últimos 30 dias</option>
-                        </select>
-                    </div>
-                    <div class="qf-group qf-actions">
-                        <span class="qf-lbl">&nbsp;</span>
-                        <div class="qf-btns">
-                            <button type="submit" class="btn btn-primary qf-btn">
-                                <i class="fas fa-search"></i> Filtrar
-                            </button>
-                            {% if filters_active %}
-                            <a href="{{ url_for('escrita_fiscal.status_sefaz') }}" class="btn btn-outline qf-btn" title="Limpar filtros">
-                                <i class="fas fa-times"></i> Limpar
-                            </a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- ── POR EMPRESA ─────────────────────────────────────────────────────── -->
-<div class="ss-sec" id="sec_empresas">
-    <div class="ss-sec-head" onclick="toggleSecao('sec_empresas')">
-        <i class="fas fa-chevron-right ss-sec-chev"></i>
-        <span class="ss-sec-tit">Por empresa</span>
-        <span class="ss-sec-cnt">{{ empresas|length }}{% if empresas|length != total_empresas %} de {{ total_empresas }}{% endif %}</span>
-    </div>
-    <div class="ss-sec-corpo">
-
-{% if empresas %}
-{# Frente B — três grupos + o "sem certificado". Ordem fixa; grupo vazio some.
-   Só o grupo de ATENÇÃO leva tom de alerta (badge amarelo); os demais neutros. #}
-{% set _grupos = [
-    ('atencao',       'Precisa de atenção',    'amarelo', 'fa-triangle-exclamation'),
-    ('em_dia',        'Em dia',                'cinza',   ''),
-    ('sem_movimento', 'Sem movimento',         'cinza',   ''),
-    ('sem_cert',      'Sem certificado ativo', 'cinza',   '')
-] %}
-{% for _gk, _gt, _gc, _gi in _grupos %}
-{% set _membros = empresas | selectattr('grupo', 'equalto', _gk) | list %}
-{% if _membros %}
-<div class="ss-grupo">{% if _gi %}<i class="fas {{ _gi }}"></i> {% endif %}{{ _gt }} <span class="ss-badge {{ _gc }}">{{ _membros|length }}</span></div>
-<div class="ss-emp-grid">
-    {% for e in _membros %}
-    <div class="ss-emp">
-        <div class="ss-emp-head">
-            <div class="ss-emp-nome">
-                {% if e.numero %}<span class="ss-emp-num">{{ e.numero }}</span> — {% endif %}{{ e.nome }}
-            </div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-                <span class="ss-badge {{ e.status_cor }}">{{ e.status_label }}</span>
-                {% if e.cert_nivel == 'vencido' %}
-                <span class="ss-badge vermelho">Cert vencido {{ e.cert_validade }}</span>
-                {% elif e.cert_nivel == 'laranja' %}
-                <span class="ss-badge amarelo">Cert vence em {{ e.cert_dias }}d</span>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="ss-fonte {{ e.fonte }}">
-            <span>{{ e.fonte_icone }} <b>{{ e.fonte_label }}</b></span>
-            <span class="ss-fonte-det">{{ e.fonte_det }}{% if e.cert_validade and e.fonte != 'carona' %} · até {{ e.cert_validade }}{% endif %}</span>
-        </div>
-
-        <div class="ss-bloco entrada">
-            <div class="ss-bloco-head"><span class="ss-bloco-tit">📥 Entradas</span></div>
-            {% if e.ent_total %}
-            <div class="ss-emp-stats">
-                <span><b>{{ e.ent_total }}</b> capturadas</span>
-                <span>{{ e.ent_completas }} completas</span>
-                <span>{{ e.ent_resumos }} resumo</span>
-            </div>
-            {% else %}
-            <div class="ss-emp-stats"><span class="ss-muted">nenhuma entrada capturada</span></div>
-            {% endif %}
-            {# Frente B — recado por grupo (só o de ATENÇÃO usa tom de alerta) #}
-            {% if e.grupo == 'atencao' and e.resumos_travados %}
-            <div class="ss-emp-stats"><span class="ss-badge amarelo"><i class="fas fa-triangle-exclamation"></i> {{ e.resumos_travados }} nota{{ '' if e.resumos_travados == 1 else 's' }} presa{{ '' if e.resumos_travados == 1 else 's' }} em resumo</span></div>
-            {% elif e.grupo == 'em_dia' and e.resumos_recentes %}
-            <div class="ss-emp-stats"><span class="ss-muted">{{ e.resumos_recentes }} em resumo recente (normal, promove sozinho)</span></div>
-            {% elif e.grupo == 'sem_movimento' and e.sem_doc_137 %}
-            <div class="ss-emp-stats"><span class="ss-muted">SEFAZ não tem documentos para este CNPJ — não é falha de captura</span></div>
-            {% endif %}
-            {# CIÊNCIA DA OPERAÇÃO — a chave que destrava a nota completa.
-               O rótulo fala de AUTORIZAÇÃO, não de "ativar": quem clica está
-               afirmando que o cliente autorizou manifestar em nome dele, e
-               isso é irreversível na SEFAZ. O número ao lado é o que se
-               ganha (ou se perde) hoje: resumo preso AINDA dentro dos 10
-               dias em que a SEFAZ aceita a Ciência. #}
-            {% if e.fonte != 'carona' %}
-            <div class="ss-ciencia {{ 'on' if e.ciencia_on else '' }}">
-                <form method="POST" style="display:inline;"
-                      action="{{ url_for('escrita_fiscal.status_sefaz_ciencia', cliente_id=e.cliente_id) }}"
-                      onsubmit="return confirm({{ ('Desligar a Ciência automática desta empresa? O que já foi manifestado não se desfaz.' if e.ciencia_on else 'LIGAR a Ciência da Operação para esta empresa?
-
-O sistema passará a manifestar em nome do cliente, com o certificado dele, para toda nota que chegar como resumo. É IRREVERSÍVEL na SEFAZ.
-
-Confirme que o cliente autorizou.') | tojson }});">
-                    <input type="hidden" name="ligar" value="{{ '0' if e.ciencia_on else '1' }}">
-                    <button type="submit" class="ss-ciencia-bt">
-                        {{ '✓ cliente autorizou a Ciência' if e.ciencia_on else 'cliente autorizou a Ciência?' }}
-                    </button>
-                </form>
-                {% if e.ciencia_on %}
-                <span class="ss-ciencia-quem">ligada por {{ e.ciencia_por or '?' }}{% if e.ciencia_em %} em {{ e.ciencia_em }}{% endif %}</span>
-                {% elif e.resgataveis %}
-                <span class="ss-ciencia-ganho">{{ e.resgataveis }} nota{{ '' if e.resgataveis == 1 else 's' }} ainda no prazo de 10 dias</span>
-                {% endif %}
-            </div>
-            {% endif %}
-            <div class="ss-emp-foot">
-                <span><span class="ss-backlog-num {{ 'zero' if e.backlog == 0 else 'pos' }}">{{ e.backlog }}</span> pendentes</span>
-                <span><i class="far fa-clock"></i> {{ e.ult_consulta or 'sem consulta' }}</span>
-                {% if e.em_cota %}
-                <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.libera_min }} min</span>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="ss-bloco saida">
-            <div class="ss-bloco-head">
-                <span class="ss-bloco-tit">📤 Saídas</span>
-                {% if e.sai_qtd %}<span class="ss-selo" title="A SEFAZ entrega ao destinatário ou ao autorizado (autXML), nunca a quem emitiu: esta saída chegou pelo cursor de outra empresa.">via autXML (carona)</span>{% endif %}
-            </div>
-            {% if e.sai_qtd %}
-            <div class="ss-emp-stats">
-                <span><b>{{ e.sai_qtd }}</b> notas</span>
-                <span><b>{{ e.sai_valor | format_currency }}</b></span>
-            </div>
-            <div class="ss-emp-foot">
-                <span>{{ e.sai_de }}{% if e.sai_ate and e.sai_ate != e.sai_de %} a {{ e.sai_ate }}{% endif %}</span>
-                <span><i class="far fa-clock"></i> {{ e.sai_ult or '—' }}</span>
-            </div>
-            {% else %}
-            <div class="ss-emp-stats"><span class="ss-muted">nenhuma saída capturada</span></div>
-            {% endif %}
-        </div>
-
-        <div class="ss-bloco cte">
-            <div class="ss-bloco-head">
-                <span class="ss-bloco-tit">🚚 CT-e</span>
-                <span class="ss-badge {{ e.cte_status_cor }}">{{ e.cte_status_label }}</span>
-            </div>
-            {% if e.cte_total %}
-            <div class="ss-emp-stats">
-                <span><b>{{ e.cte_total }}</b> CT-e</span>
-                <span>{{ e.cte_tomados }} como tomador</span>
-                <span>{{ e.cte_valor_frete | format_currency }} de frete</span>
-            </div>
-            {% else %}
-            <div class="ss-emp-stats"><span class="ss-muted">nenhum CT-e capturado</span></div>
-            {% endif %}
-            <div class="ss-emp-foot">
-                <span><span class="ss-backlog-num {{ 'zero' if e.cte_backlog == 0 else 'pos' }}">{{ e.cte_backlog }}</span> pendentes</span>
-                <span><i class="far fa-clock"></i> {{ e.cte_ult_consulta or 'sem consulta' }}</span>
-                {% if e.cte_em_cota %}
-                <span style="color:#dc2626;font-weight:700;"><i class="fas fa-hourglass-half"></i> libera em ~{{ e.cte_libera_min }} min</span>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}{# _membros #}
-{% endfor %}{# _grupos #}
-{% else %}
-<div class="ss-empty">Nenhuma empresa com certificado ativo.</div>
-{% endif %}
-
-<!-- CERTIFICADOS — validade e dias até vencer (só leitura). Reusa .ss-table/.ss-legend,
-     zero CSS novo: o status é o próprio emoji (🔴/🟠/🟡/✅). -->
-    </div>
-</div>
-
-<!-- ── CERTIFICADOS ────────────────────────────────────────────────────── -->
-{# nasce ABERTA quando ha certificado vencido ou vencendo — e o unico caso
-   em que a secao exige atencao imediata. #}
-<div class="ss-sec" id="sec_certs">
-    <div class="ss-sec-head" onclick="toggleSecao('sec_certs')">
-        <i class="fas fa-chevron-right ss-sec-chev"></i>
-        <span class="ss-sec-tit">Certificados</span>
-        <span class="ss-sec-cnt">{{ certificados|length }}{% if certificados|length != total_certs %} de {{ total_certs }}{% endif %}</span>
-    </div>
-    <div class="ss-sec-corpo">
-<div class="nota">
-    <i class="fas fa-circle-info"></i>
-    <div><b>Validade dos certificados A1.</b>
-        🔴 <b>vencido</b> · 🟠 vence em ≤{{ cert_alerta.dias if cert_alerta else 30 }}d ·
-        🟡 vence em ≤{{ cert_alerta.dias_amarelo if cert_alerta else 60 }}d · ✅ ok.
-        Um certificado <b>vencido</b> faz a SEFAZ recusar o mTLS (HTTP 403) e a captura
-        para <b>sem aviso</b> — por isso este bloco. Ordenado do mais próximo de vencer.</div>
-</div>
-{# TABELA DA CASA (.tbl-*, D0): 40+ linhas, cabecalho fixo ao rolar, e no
-   celular cada linha vira cartao pelo data-label. #}
-<div class="tbl-card">
-  <div class="tbl-scroll">
-    <table class="tbl">
-        <thead>
-            <tr>
-                <th>Empresa</th>
-                <th>Validade</th>
-                <th class="num">Dias até vencer</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if certificados %}
-                {% for cert in certificados %}
-                <tr>
-                    <td data-label="Empresa">{% if cert.numero %}<span class="ss-emp-num">{{ cert.numero }}</span> — {% endif %}{{ cert.nome }}</td>
-                    <td data-label="Validade" class="mono">{{ cert.validade or '—' }}</td>
-                    <td data-label="Dias" class="num">{% if cert.dias is not none %}{{ cert.dias }}{% else %}<span class="vazio">—</span>{% endif %}</td>
-                    <td data-label="Status">
-                        {% set d = cert.dias %}
-                        <span class="lst-sit {% if d is none %}lst-sit-off{% elif d < 0 %}lst-sit-err{% elif d <= cert_laranja %}lst-sit-warn{% elif d <= cert_amarelo %}lst-sit-warn cert-60{% else %}lst-sit-on{% endif %}">
-                            {{ cert.emoji }} {{ cert.status }}
-                        </span>
-                    </td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="4"><div class="tbl-empty"><i class="fas fa-id-card"></i><p>Nenhum certificado ativo.</p></div></td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+  <div>
+    <h1 class="tela-title">📡 Status da Captura SEFAZ</h1>
+    <p class="tela-sub">Somente leitura — a captura roda sozinha pelo cron. Esta tela não consome cota da SEFAZ. <span id="gerado"></span></p>
+  </div>
+  <div class="tela-actions">
+    <span class="ss-refresh">↻ atualiza sozinho a cada 60s</span>
+    <button class="btn btn-outline" type="button" onclick="ssRecarregar()">⟳ Atualizar</button>
   </div>
 </div>
 
-    </div>
-</div>
+<div class="abas"><div class="abas-track" id="abas">
+  <button class="aba on" data-aba="painel">Painel</button>
+  <button class="aba" data-aba="empresas">Empresas <span class="n" id="n-emp"></span></button>
+  <button class="aba" data-aba="capturas">Capturas <span class="n verde" id="n-cap"></span></button>
+  <button class="aba" data-aba="travadas">Travadas <span class="n verm" id="n-trv"></span></button>
+  <button class="aba" data-aba="certificados">Certificados <span class="n" id="n-cert"></span></button>
+  <button class="aba" data-aba="historico">Histórico 30 dias</button>
+  <button class="aba emp" data-aba="empresa" id="aba-emp" hidden></button>
+</div></div>
 
-<!-- ── HISTÓRICO ───────────────────────────────────────────────────────── -->
-<div class="ss-sec" id="sec_hist">
-    <div class="ss-sec-head" onclick="toggleSecao('sec_hist')">
-        <i class="fas fa-chevron-right ss-sec-chev"></i>
-        <span class="ss-sec-tit">Histórico{% if filtros.periodo %} (últimos {{ filtros.periodo }} dia{{ '' if filtros.periodo == '1' else 's' }}){% else %} (últimas 20 rodadas){% endif %}</span>
-        <span class="ss-sec-cnt">{{ historico|length }}</span>
-    </div>
-    <div class="ss-sec-corpo">
-<div class="tbl-card">
-  <div class="tbl-scroll">
-    <table class="tbl">
-        <thead>
-            <tr>
-                <th>Momento</th>
-                <th>Serviço</th>
-                <th>Empresa</th>
-                <th>Evento</th>
-                <th>Status</th>
-                <th class="num">Docs</th>
-                <th class="num" title="Notas (NF-e) ou CT-e gravados na rodada">Gravados</th>
-                <th>Origem</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if historico %}
-                {% for h in historico %}
-                <tr>
-                    <td data-label="Momento" class="mono">{{ h.momento or '—' }}</td>
-                    <td data-label="Serviço"><span class="ss-pill {{ h.servico }}">{{ 'CT-e' if h.servico == 'cte' else 'NF-e' }}</span></td>
-                    <td data-label="Empresa">{{ h.empresa }}</td>
-                    <td data-label="Evento">{{ h.evento }}</td>
-                    <td data-label="Status">
-                        {% if h.c_stat %}
-                        <span class="ss-cstat {{ 'bad' if h.c_stat == '656' else 'ok' }}"
-                              title="{{ h.x_motivo or '' }}">{{ h.c_stat }}</span>
-                        {% else %}<span class="ss-muted">—</span>{% endif %}
-                    </td>
-                    <td data-label="Docs" class="num">{{ h.docs }}</td>
-                    <td data-label="Gravados" class="num">{{ h.notas }}</td>
-                    <td data-label="Origem"><span class="ss-pill {{ h.origem }}">{{ h.origem }}</span></td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="8"><div class="tbl-empty"><i class="fas fa-clock-rotate-left"></i><p>Nenhuma rodada registrada ainda.</p></div></td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+<!-- ══ PAINEL ══ -->
+<section class="painel on" id="p-painel"></section>
+
+<!-- ══ EMPRESAS ══ -->
+<section class="painel" id="p-empresas">
+  <div class="filtro" id="f-emp">
+    <label class="busca">🔎 <input type="search" placeholder="nº ou nome da empresa… (ex.: 362, mobil)" data-k="q"></label>
+    <div class="chips" data-k="sit"><span class="rot">Situação</span></div>
+    <div class="chips" data-k="ci"><span class="rot">Ciência</span></div>
+    <div class="chips" data-k="cert"><span class="rot">Certificado</span></div>
+    <span class="conta" id="c-emp"></span>
+    <button class="limpar" data-limpa="f-emp">limpar</button>
   </div>
-</div>
-    </div>
-</div>
-{% endblock %}
+  <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-emp"></table></div></div>
+</section>
 
-{% block extra_js %}
+<!-- ══ CAPTURAS ══ -->
+<section class="painel" id="p-capturas">
+  <div class="nota nota-neutra">📥 <div><b>Quem capturou, a que horas e quando foi a última nota.</b> Uma linha por empresa que tem cursor na SEFAZ, a mais recente no alto. “Última consulta” é o horário em que o cron falou com a SEFAZ; “última rodada com nota” é quando de fato entrou nota; “última nota” é a emissão mais nova que temos.</div></div>
+  <div class="filtro" id="f-cap">
+    <label class="busca">🔎 <input type="search" placeholder="nº ou nome da empresa…" data-k="q"></label>
+    <div class="chips" data-k="per"><span class="rot">Capturou nota</span></div>
+    <div class="chips" data-k="res"><span class="rot">Última resposta</span></div>
+    <span class="conta" id="c-cap"></span>
+    <button class="limpar" data-limpa="f-cap">limpar</button>
+  </div>
+  <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-cap"></table></div></div>
+</section>
+
+<!-- ══ TRAVADAS ══ -->
+<section class="painel" id="p-travadas">
+  <div class="nota nota-erro">⚠️ <div><b>Estas empresas têm documento esperando na SEFAZ e não estão recebendo.</b> O <b>atraso</b> é quantos documentos estão represados. O <b>motivo</b> vem da última resposta 656 da SEFAZ: <b>“aguardar 1 hora”</b> = a cota do CNPJ foi gasta (outro sistema consulta o mesmo CNPJ); <b>“cursor recusado”</b> = a SEFAZ já entregou documentos além do ponto onde o nosso cursor parou e recusa o ultNSU antigo. A captura recupera o buraco sozinha, NSU a NSU (até 20 por rodada — é o limite da SEFAZ). Quem está em dia não aparece aqui.</div></div>
+  <div class="filtro" id="f-trv">
+    <label class="busca">🔎 <input type="search" placeholder="nº ou nome da empresa…" data-k="q"></label>
+    <div class="chips" data-k="mot"><span class="rot">Motivo</span></div>
+    <span class="conta" id="c-trv"></span>
+    <button class="limpar" data-limpa="f-trv">limpar</button>
+  </div>
+  <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-trv"></table></div></div>
+</section>
+
+<!-- ══ CERTIFICADOS ══ -->
+<section class="painel" id="p-certificados">
+  <div id="cert-banner"></div>
+  <div class="filtro" id="f-cert">
+    <label class="busca">🔎 <input type="search" placeholder="nº ou nome da empresa…" data-k="q"></label>
+    <div class="chips" data-k="sit"><span class="rot">Validade</span></div>
+    <span class="conta" id="c-cert"></span>
+    <button class="limpar" data-limpa="f-cert">limpar</button>
+  </div>
+  <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-cert"></table></div></div>
+</section>
+
+<!-- ══ HISTÓRICO ══ -->
+<section class="painel" id="p-historico">
+  <div class="graf" id="graf"></div>
+  <div class="filtro" id="f-hist">
+    <label class="busca">🔎 <input type="search" placeholder="empresa, motivo, chave…" data-k="q"></label>
+    <div class="chips" data-k="per"><span class="rot">Período</span></div>
+    <div class="chips" data-k="tipo"><span class="rot">O que</span></div>
+    <div class="chips" data-k="serv"><span class="rot">Serviço</span></div>
+    <span class="conta" id="c-hist"></span>
+    <button class="limpar" data-limpa="f-hist">limpar</button>
+  </div>
+  <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-hist"></table></div></div>
+  <div class="nota nota-neutra" id="hist-rodape"></div>
+</section>
+
+<!-- ══ EMPRESA (abre ao clicar numa linha) ══ -->
+<section class="painel" id="p-empresa"></section>
+
+{# O JSON vem da rota ja com '</' escapado (_json_para_tela); |safe porque
+   dentro de <script type="application/json"> o HTML nao e interpretado. #}
+<script id="dados" type="application/json">{{ dados_json|safe }}</script>
 <script>
-function toggleFilters() {
-    var body    = document.getElementById('filters-body');
-    var chevron = document.getElementById('filters-chevron');
-    var isOpen  = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    chevron.classList.toggle('open', !isOpen);
+const D = JSON.parse(document.getElementById('dados').textContent);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const HOJE = new Date(); HOJE.setHours(0,0,0,0);
+const URL_CIENCIA = {{ url_for('escrita_fiscal.status_sefaz_ciencia', cliente_id=0)|tojson }};
+const URL_LOG = {{ url_for('escrita_fiscal.status_sefaz_empresa_log', cliente_id=0)|tojson }};
+$('#gerado').textContent = 'Gerado em ' + D.gerado_em + '.';
+
+// ── datas: o banco manda 'YYYY-mm-dd HH:MM:SS'; a rota manda 'dd/mm/YYYY HH:MM'
+function pd(s){ if(!s) return null; if(/^\d{4}-/.test(s)) return new Date(s.replace(' ','T'));
+  const m = s.match(/(\d\d)\/(\d\d)\/(\d{4})(?: (\d\d):(\d\d))?/); return m ? new Date(+m[3], m[2]-1, +m[1], +(m[4]||0), +(m[5]||0)) : null; }
+const p2 = n => String(n).padStart(2,'0');
+function fdh(s){ const d = pd(s); return d ? `${p2(d.getDate())}/${p2(d.getMonth()+1)} ${p2(d.getHours())}:${p2(d.getMinutes())}` : '—'; }
+function fd(s){ const d = pd(s); return d ? `${p2(d.getDate())}/${p2(d.getMonth()+1)}/${d.getFullYear()}` : '—'; }
+function fh(s){ const d = pd(s); return d ? `${p2(d.getHours())}:${p2(d.getMinutes())}` : '—'; }
+function dias(s){ const d = pd(s); if(!d) return null; const x = new Date(d); x.setHours(0,0,0,0); return Math.round((HOJE - x)/864e5); }
+function rel(s){ const n = dias(s); if(n===null) return '—'; if(n===0) return 'hoje '+fh(s); if(n===1) return 'ontem '+fh(s); return `há ${n} dias · ${fd(s)}`; }
+const num = n => (n||0).toLocaleString('pt-BR');
+const brl = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const casa = (q, ...campos) => !q || campos.join(' ').toLowerCase().includes(q.toLowerCase());
+
+// ── junta as fontes por empresa
+const cap = {}; D.capturas.forEach(c => cap[c.id] = c);
+const u656 = {}; D.ult656.forEach(u => u656[u.cliente_id] = u);
+const trv = {}; D.travadas.forEach(t => trv[t.id] = t);
+const empDia = {}; D.emp_dia.forEach(r => (empDia[r.cid] ||= {})[r.dia] = r.n);
+
+// situação REAL da captura, lida da última resposta da SEFAZ (não do cooldown)
+function situacao(e){
+  const c = cap[e.cliente_id] || {}; const st = String(c.ult_status || '');
+  if(!c.ult_consulta) return {k:'nunca', cor:'cinza', t:'Nunca consultou'};
+  if(st.startsWith('656')) return /ultNSU/i.test(st) ? {k:'cursor', cor:'verm', t:'Cursor recusado'} : {k:'cota', cor:'amb', t:'Aguardando cota'};
+  if(st.startsWith('137') || st.startsWith('138')) return e.backlog > 0 ? {k:'baixando', cor:'amb', t:'Baixando'} : {k:'emdia', cor:'verde', t:'Em dia'};
+  return {k:'erro', cor:'verm', t:'Erro'};
 }
-
-// As TRÊS seções nascem fechadas. Abrir/fechar é só do usuário.
-function toggleSecao(id) {
-    var el = document.getElementById(id);
-    if (el) { el.classList.toggle('aberta'); }
+function motivo(id){
+  const u = u656[id]; if(!u) return {k:'outro', t:'sem 656 recente'};
+  if(/ultNSU/i.test(u.x_motivo||'')) return {k:'cursor', t:'cursor recusado — SEFAZ já está adiante do nosso cursor', det:`SEFAZ em ${num(u.ret_ult_nsu)}, nós em ${num(u.ult_nsu_env)}`};
+  return {k:'cota', t:'cota do CNPJ gasta — “aguardar 1 hora”', det:'outro sistema consulta o mesmo CNPJ'};
 }
+function certSit(dias){ if(dias===null||dias===undefined) return {k:'sem', cor:'cinza', t:'sem validade'};
+  if(dias<0) return {k:'vencido', cor:'verm', t:`vencido há ${-dias}d`}; if(dias<=D.cert_laranja) return {k:'d30', cor:'amb', t:`vence em ${dias}d`};
+  if(dias<=D.cert_amarelo) return {k:'d60', cor:'amb', t:`vence em ${dias}d`}; return {k:'ok', cor:'verde', t:'ok'}; }
+const cstatCls = c => (c==='137'||c==='138'||c==='135') ? 'ok' : c==='656' ? 'bad' : 'err';
+const evNome = {consulta:'consulta', erro:'erro', retry_pendente:'retry de resumo', retry_pulado:'retry pulado', ciencia_ok:'Ciência ✓', ciencia_nao:'Ciência recusada', ciencia_erro:'Ciência — erro', seed_manual:'seed do cursor', cons_nsu:'consulta por NSU', pulado_cota:'pulado (cota)', pulado_lock:'pulado (lock)'};
 
-// Preserva o estado através do AUTO-REFRESH (que é um reload). Um flag marca que
-// o reload veio do refresh; assim, uma navegação nova para a página continua
-// fechada (regra: nascem fechadas), mas o refresh não mexe no que o usuário abriu.
-var SS_ABERTAS = 'ss_sefaz_abertas', SS_SCROLL = 'ss_sefaz_scroll', SS_FLAG = 'ss_sefaz_refresh';
+// ── ABAS (a aba aberta e a empresa aberta sobrevivem ao refresh de 60s)
+const LS = {get:k => { try{ return localStorage.getItem(k); }catch(e){ return null; } }, set:(k,v) => { try{ localStorage.setItem(k,v); }catch(e){} }};
+function abrir(k){ document.querySelectorAll('.aba').forEach(a => a.classList.toggle('on', a.dataset.aba===k));
+  document.querySelectorAll('.painel').forEach(p => p.classList.toggle('on', p.id==='p-'+k)); window.scrollTo({top:0}); LS.set('ss.aba', k); }
+$('#abas').addEventListener('click', e => { const a = e.target.closest('.aba'); if(!a) return;
+  if(e.target.classList.contains('x')){ a.hidden = true; LS.set('ss.emp', ''); abrir('empresas'); return; } abrir(a.dataset.aba); });
 
-function ssSalvarEstado() {
-    try {
-        var abertas = Array.prototype.map.call(
-            document.querySelectorAll('.ss-sec.aberta'), function (el) { return el.id; });
-        sessionStorage.setItem(SS_ABERTAS, JSON.stringify(abertas));
-        sessionStorage.setItem(SS_SCROLL, String(window.scrollY || window.pageYOffset || 0));
-    } catch (e) {}
+// ── filtros genéricos: chips + busca, estado por aba
+const F = {};
+function montaChips(fid, k, opcoes, def){ const box = document.querySelector(`#${fid} .chips[data-k="${k}"]`);
+  (F[fid] ||= {})[k] = def; opcoes.forEach(o => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'+(o.v===def?' on':''); b.dataset.v = o.v;
+    b.innerHTML = esc(o.t) + (o.q!==undefined ? ` <span class="q">${o.q}</span>` : ''); b.onclick = () => { F[fid][k] = o.v; box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v===o.v)); RENDER[fid](); }; box.appendChild(b); }); }
+function ligaBusca(fid){ const i = document.querySelector(`#${fid} input`); (F[fid] ||= {}).q = ''; i.oninput = () => { F[fid].q = i.value.trim(); LS.set('ss.q.'+fid, F[fid].q); RENDER[fid](); }; }
+document.querySelectorAll('.limpar[data-limpa]').forEach(b => b.onclick = () => { const fid = b.dataset.limpa; const f = F[fid];
+  Object.keys(f).forEach(k => { if(k==='q'){ f.q=''; document.querySelector(`#${fid} input`).value=''; LS.set('ss.q.'+fid, ''); } else { f[k] = DEF[fid][k]; const box = document.querySelector(`#${fid} .chips[data-k="${k}"]`); if(box) box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v===f[k])); } }); RENDER[fid](); });
+const RENDER = {}, DEF = {};
+function tabela(id, cols, linhas, vazio){ const t = document.getElementById(id);
+  if(!linhas.length){ t.innerHTML = `<tbody><tr><td colspan="${cols.length}"><div class="tbl-empty">${esc(vazio||'Nada com este filtro.')}</div></td></tr></tbody>`; return; }
+  t.innerHTML = '<thead><tr>' + cols.map(c => `<th class="${c.num?'num':''}">${c.t}</th>`).join('') + '</tr></thead><tbody>' +
+    linhas.map(l => `<tr class="${l.emp?'clic':''}" ${l.emp?`data-emp="${l.emp}"`:''}>` + cols.map((c,i) => `<td data-label="${esc(c.t)}" class="${c.num?'num':''}">${l.c[i]}</td>`).join('') + '</tr>').join('') + '</tbody>';
+  t.querySelectorAll('tr.clic').forEach(tr => tr.onclick = ev => { if(ev.target.closest('.ci-form')) return; abrirEmpresa(+tr.dataset.emp); }); }
+const nome = e => `<span class="forte"><span class="n-emp">${esc(e.numero||'s/nº')}</span>${esc(e.nome||e.razao)}</span>`;
+
+// ══ PAINEL
+(function(){ const t = D.topo, s = D.topo_saida, c = D.topo_cte, a = D.cert_alerta; const nTrv = D.travadas.length, nCi = D.empresas.filter(e=>e.ciencia_on).length;
+  const capHoje = D.capturas.filter(x => x.hoje>0).length;
+  $('#p-painel').innerHTML = (a.mostrar ? `<div class="nota ${a.nivel==='vermelho'?'nota-erro':'nota-atencao'}">⛔ <div><b>${a.n_vencidos} certificado(s) VENCIDO(S). ${a.n_venc} vencendo em ≤${a.dias} dias.</b> Um certificado vencido faz a SEFAZ recusar o mTLS (HTTP 403) e a captura para <b>sem aviso</b>. <a href="#" onclick="abrir('certificados');return false">Ver certificados →</a></div></div>` : '') +
+  `<div class="grupo" style="margin-top:0">Hoje</div><div class="kpis">
+     <div class="kpi link" onclick="abrir('capturas')"><div class="kpi-l">Empresas que receberam nota hoje</div><div class="kpi-v">${capHoje}</div><div class="kpi-s">de ${D.capturas.length} com cursor · ${num(t.hoje)} notas</div></div>
+     <div class="kpi link ${nTrv?'ruim':''}" onclick="abrir('travadas')"><div class="kpi-l">Capturas travadas</div><div class="kpi-v">${nTrv}</div><div class="kpi-s">${D.travadas.filter(x=>motivo(x.id).k==='cursor').length} com cursor recusado · ${D.travadas.filter(x=>x.nunca_capturou).length} nunca capturou</div></div>
+     <div class="kpi link" onclick="abrir('empresas');document.querySelector('#f-emp .chips[data-k=ci] .chip[data-v=on]').click()"><div class="kpi-l">Ciência autorizada</div><div class="kpi-v">${nCi}</div><div class="kpi-s">empresas em que o cliente autorizou a Ciência</div></div>
+     <div class="kpi link ${a.n_vencidos?'ruim':a.n_venc?'alerta':''}" onclick="abrir('certificados')"><div class="kpi-l">Certificados</div><div class="kpi-v">${a.n_vencidos} <span style="font-size:13px;font-weight:600;color:var(--ss-muted)">vencidos</span></div><div class="kpi-s">${a.n_venc} vencem em ≤${a.dias} dias · ${D.certificados.length} ativos</div></div>
+   </div>
+   <div class="grupo">NF-e (notas)</div><div class="kpis">
+     <div class="kpi"><div class="kpi-l">Notas capturadas</div><div class="kpi-v">${num(t.total)}</div><div class="kpi-s">${num(t.completas)} completas · ${num(t.resumos)} resumo</div></div>
+     <div class="kpi"><div class="kpi-l">Capturadas hoje</div><div class="kpi-v">${num(t.hoje)}</div><div class="kpi-s">${num(t.semana)} na semana · ${num(t.mes)} no mês</div></div>
+     <div class="kpi ${t.backlog?'alerta':''}"><div class="kpi-l">Documentos pendentes (SEFAZ)</div><div class="kpi-v">${num(t.backlog)}</div><div class="kpi-s">NSU a baixar: notas + eventos + resumos</div></div>
+     <div class="kpi"><div class="kpi-l">Última captura</div><div class="kpi-v md">${t.ult_consulta||'—'}</div><div class="kpi-s">última consulta de qualquer CNPJ</div></div>
+   </div>
+   <div class="nota nota-neutra" style="margin-top:12px">ℹ️ <div><b>Documentos pendentes ≠ notas.</b> Os ${num(t.backlog)} pendentes contam cada NSU — uma nota, um evento (ex.: cancelamento) ou um resumo. Eventos e resumos também ocupam NSU na fila: nenhuma nota sumiu.</div></div>
+   <div class="grupo">NF-e — saídas (notas emitidas)</div><div class="kpis">
+     <div class="kpi"><div class="kpi-l">Saídas capturadas</div><div class="kpi-v">${num(s.total)}</div><div class="kpi-s">${num(s.completas)} completas · ${s.empresas} empresa(s)</div></div>
+     <div class="kpi"><div class="kpi-l">Saídas capturadas hoje</div><div class="kpi-v">${num(s.hoje)}</div><div class="kpi-s">${num(s.semana)} na semana · ${num(s.mes)} no mês</div></div>
+     <div class="kpi"><div class="kpi-l">Valor total das saídas</div><div class="kpi-v md">${brl(s.valor)}</div><div class="kpi-s">soma das notas emitidas capturadas</div></div>
+     <div class="kpi"><div class="kpi-l">Última saída capturada</div><div class="kpi-v md">${s.ult_captura||'—'}</div><div class="kpi-s">momento da importação</div></div>
+   </div>
+   <div class="grupo">CT-e (fretes)</div><div class="kpis">
+     <div class="kpi"><div class="kpi-l">CT-e capturados</div><div class="kpi-v">${num(c.total)}</div><div class="kpi-s">${num(c.tomados)} como tomador · ${c.cancelados} cancelado(s)</div></div>
+     <div class="kpi"><div class="kpi-l">Capturados hoje</div><div class="kpi-v">${num(c.hoje)}</div><div class="kpi-s">${num(c.semana)} na semana · ${num(c.mes)} no mês</div></div>
+     <div class="kpi ${c.backlog?'alerta':''}"><div class="kpi-l">CT-e pendentes (SEFAZ)</div><div class="kpi-v">${num(c.backlog)}</div><div class="kpi-s">NSU a baixar na fila de CT-e</div></div>
+     <div class="kpi"><div class="kpi-l">Valor total de frete</div><div class="kpi-v md">${brl(c.valor_frete)}</div><div class="kpi-s">última captura: ${c.ult_consulta||'—'}</div></div>
+   </div>`;
+})();
+
+// ══ EMPRESAS
+$('#n-emp').textContent = D.empresas.length;
+const sits = ['emdia','baixando','cota','cursor','erro','nunca'];
+const sitT = {emdia:'Em dia', baixando:'Baixando', cota:'Aguardando cota', cursor:'Cursor recusado', erro:'Erro', nunca:'Nunca consultou'};
+const cnt = (arr, fn) => arr.filter(fn).length;
+montaChips('f-emp','sit',[{v:'',t:'Todas',q:D.empresas.length}, ...sits.map(k => ({v:k,t:sitT[k],q:cnt(D.empresas,e=>situacao(e).k===k)}))],'');
+montaChips('f-emp','ci',[{v:'',t:'Todas'},{v:'on',t:'ligada',q:cnt(D.empresas,e=>e.ciencia_on)},{v:'off',t:'desligada',q:cnt(D.empresas,e=>!e.ciencia_on)}],'');
+montaChips('f-emp','cert',[{v:'',t:'Todos'},{v:'vencido',t:'vencido',q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='vencido')},{v:'d30',t:`≤${D.cert_laranja}d`,q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='d30')},{v:'d60',t:`≤${D.cert_amarelo}d`,q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='d60')},{v:'ok',t:'ok',q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='ok')}],'');
+ligaBusca('f-emp'); DEF['f-emp'] = {...F['f-emp']};
+
+// CIÊNCIA DA OPERAÇÃO — a chave que destrava a nota completa. O rótulo fala de
+// AUTORIZAÇÃO: quem clica afirma que o cliente autorizou manifestar em nome
+// dele, e isso é irreversível na SEFAZ. O clique confirma e faz POST em
+// status_sefaz_ciencia (mesmo texto de confirmação de sempre). Sem certificado
+// (fonte 'carona') a chave não se aplica — não aparece.
+const TXT_LIGAR = 'LIGAR a Ciência da Operação para esta empresa?\n\nO sistema passará a manifestar em nome do cliente, com o certificado dele, para toda nota que chegar como resumo. É IRREVERSÍVEL na SEFAZ.\n\nConfirme que o cliente autorizou.';
+const TXT_DESLIGAR = 'Desligar a Ciência automática desta empresa? O que já foi manifestado não se desfaz.';
+function ciencia(e){ if(e.fonte==='carona') return '<span class="vazio" title="sem certificado próprio: a chave não se aplica">—</span>';
+  return `<form class="ci-form" method="POST" action="${esc(URL_CIENCIA.replace('/0/', '/'+e.cliente_id+'/'))}" onsubmit="return ssConfirmaCiencia(this, ${e.ciencia_on?1:0})"><input type="hidden" name="ligar" value="${e.ciencia_on?'0':'1'}"><button type="submit" class="ci ${e.ciencia_on?'on':''}" title="${e.ciencia_on?'clique para desligar':'liga a Ciência da Operação — só com o cliente autorizando'}"><span class="sw"></span>${e.ciencia_on?'cliente autorizou':'desligada'}</button></form>${e.ciencia_on?`<span class="ci-quem">por ${esc(e.ciencia_por||'—')} em ${esc(e.ciencia_em||'—')}</span>`:(e.resgataveis?`<span class="ci-quem" style="color:var(--ss-ambar)">${e.resgataveis} nota(s) ainda no prazo de 10 dias</span>`:'')}`; }
+window.ssConfirmaCiencia = function(form, ligada){ if(!confirm(ligada ? TXT_DESLIGAR : TXT_LIGAR)) return false; ssGuardarEstado(); return true; };
+
+RENDER['f-emp'] = function(){ const f = F['f-emp'];
+  const L = D.empresas.filter(e => casa(f.q, e.numero, e.nome) && (!f.sit || situacao(e).k===f.sit) && (!f.ci || (f.ci==='on')===!!e.ciencia_on) && (!f.cert || certSit(e.cert_dias).k===f.cert));
+  L.sort((a,b) => (+a.numero||1e9) - (+b.numero||1e9));
+  $('#c-emp').textContent = `${L.length} de ${D.empresas.length} empresas`;
+  tabela('t-emp', [{t:'Empresa'},{t:'Situação NF-e'},{t:'Ciência'},{t:'Última consulta'},{t:'Última nota'},{t:'Notas 30d',num:1},{t:'Resumos presos',num:1},{t:'CT-e'},{t:'Certificado'}],
+    L.map(e => { const s = situacao(e), c = cap[e.cliente_id]||{}, cs = certSit(e.cert_dias), t = trv[e.cliente_id];
+      return {emp:e.cliente_id, c:[ nome(e) + `<span class="apoio">${e.fonte_icone} ${esc(e.fonte_label)} · ${esc(e.fonte_det)}</span>`,
+        `<span class="sit ${s.cor}">${s.t}</span>` + (t ? `<span class="apoio">${num(t.atraso)} doc. represados</span>` : e.backlog ? `<span class="apoio">${num(e.backlog)} NSU a baixar</span>` : ''),
+        ciencia(e),
+        c.ult_consulta ? `<span class="mono">${fdh(c.ult_consulta)}</span><span class="apoio"><span class="cstat ${cstatCls(String(c.ult_status||'').slice(0,3))}">${esc(String(c.ult_status||'').slice(0,3))}</span> ${esc(String(c.ult_status||'').replace(/^\d+\s*/,'').slice(0,42))}</span>` : '<span class="vazio">—</span>',
+        c.ult_emissao ? `<span class="mono">${fd(c.ult_emissao)}</span><span class="apoio">entrou ${rel(c.ult_import)}</span>` : '<span class="vazio">—</span>',
+        `<span class="forte">${num(c.d30)}</span><span class="apoio">${c.hoje||0} hoje · ${c.d7||0} em 7d</span>`,
+        e.ent_resumos ? `<span class="${e.resgataveis?'forte':''}">${e.ent_resumos}</span>` + (e.resgataveis ? `<span class="apoio" style="color:var(--ss-ambar)">${e.resgataveis} no prazo da Ciência</span>` : '') : '<span class="vazio">0</span>',
+        `<span class="sit ${e.cte_status_cor==='verde'?'verde':e.cte_status_cor==='cinza'?'cinza':'amb'}">${esc(e.cte_status_label)}</span><span class="apoio">${num(e.cte_total)} CT-e</span>`,
+        `<span class="sit ${cs.cor}">${cs.t}</span><span class="apoio">${esc(e.cert_validade||'—')}</span>` ]}; }), 'Nenhuma empresa com este filtro.'); };
+RENDER['f-emp']();
+
+// ══ CAPTURAS
+const capOrd = [...D.capturas].sort((a,b) => (pd(b.ult_consulta)||0) - (pd(a.ult_consulta)||0));
+$('#n-cap').textContent = D.capturas.filter(x=>x.hoje>0).length + ' hoje';
+montaChips('f-cap','per',[{v:'',t:'Todas',q:D.capturas.length},{v:'hoje',t:'hoje',q:cnt(D.capturas,x=>x.hoje>0)},{v:'7',t:'nos últimos 7 dias',q:cnt(D.capturas,x=>x.d7>0)},{v:'30',t:'nos últimos 30 dias',q:cnt(D.capturas,x=>x.d30>0)},{v:'nada30',t:'nada em 30 dias',q:cnt(D.capturas,x=>!x.d30)}],'');
+montaChips('f-cap','res',[{v:'',t:'Todas'},{v:'138',t:'138 trouxe documento',q:cnt(D.capturas,x=>String(x.ult_status||'').startsWith('138'))},{v:'137',t:'137 nada novo',q:cnt(D.capturas,x=>String(x.ult_status||'').startsWith('137'))},{v:'656',t:'656 cota',q:cnt(D.capturas,x=>String(x.ult_status||'').startsWith('656'))},{v:'erro',t:'erro',q:cnt(D.capturas,x=>!/^(137|138|656)/.test(String(x.ult_status||'')))}],'');
+ligaBusca('f-cap'); DEF['f-cap'] = {...F['f-cap']};
+RENDER['f-cap'] = function(){ const f = F['f-cap'];
+  const L = capOrd.filter(x => casa(f.q, x.numero, x.nome) && (!f.per || (f.per==='hoje'?x.hoje>0 : f.per==='7'?x.d7>0 : f.per==='30'?x.d30>0 : !x.d30))
+    && (!f.res || (f.res==='erro' ? !/^(137|138|656)/.test(String(x.ult_status||'')) : String(x.ult_status||'').startsWith(f.res))));
+  $('#c-cap').textContent = `${L.length} de ${D.capturas.length} empresas`;
+  tabela('t-cap', [{t:'Empresa'},{t:'Última consulta'},{t:'Resposta da SEFAZ'},{t:'Última rodada com nota'},{t:'Hoje',num:1},{t:'7 dias',num:1},{t:'30 dias',num:1},{t:'Última nota emitida'},{t:'CT-e 30d',num:1}],
+    L.map(x => { const st = String(x.ult_status||''), c3 = st.slice(0,3);
+      return {emp:x.id, c:[ nome(x), `<span class="mono">${fdh(x.ult_consulta)}</span><span class="apoio">${rel(x.ult_consulta)}</span>`,
+        `<span class="cstat ${cstatCls(c3)}">${esc(c3)}</span> <span style="font-size:12px;color:#475569">${esc(st.replace(/^\d+\s*/,'').replace('Rejeicao: Consumo Indevido','Consumo indevido').slice(0,60))}</span>`,
+        x.ult_com_nota ? `<span class="mono">${fdh(x.ult_com_nota)}</span><span class="apoio">${rel(x.ult_com_nota)}</span>` : '<span class="vazio">nunca</span>',
+        x.hoje ? `<span class="forte">${x.hoje}</span>` : '<span class="vazio">0</span>', x.d7 ? x.d7 : '<span class="vazio">0</span>', x.d30 ? x.d30 : '<span class="vazio">0</span>',
+        x.ult_emissao ? `<span class="mono">${fd(x.ult_emissao)}</span>` : '<span class="vazio">—</span>', x.cte30 ? x.cte30 : '<span class="vazio">0</span>' ]}; }), 'Nenhuma captura com este filtro.'); };
+RENDER['f-cap']();
+
+// ══ TRAVADAS
+$('#n-trv').textContent = D.travadas.length;
+montaChips('f-trv','mot',[{v:'',t:'Todas',q:D.travadas.length},{v:'cursor',t:'cursor recusado',q:cnt(D.travadas,t=>motivo(t.id).k==='cursor')},{v:'cota',t:'cota gasta (1 hora)',q:cnt(D.travadas,t=>motivo(t.id).k==='cota')},{v:'nunca',t:'nunca capturou',q:cnt(D.travadas,t=>t.nunca_capturou)}],'');
+ligaBusca('f-trv'); DEF['f-trv'] = {...F['f-trv']};
+RENDER['f-trv'] = function(){ const f = F['f-trv'];
+  const L = D.travadas.filter(t => casa(f.q, t.numero, t.razao) && (!f.mot || (f.mot==='nunca' ? t.nunca_capturou : motivo(t.id).k===f.mot)));
+  $('#c-trv').textContent = `${L.length} de ${D.travadas.length} empresas`;
+  tabela('t-trv', [{t:'Empresa'},{t:'Atraso',num:1},{t:'Situação'},{t:'Motivo'},{t:'Recusa 7d',num:1},{t:'Último sucesso'},{t:'Cursor'}],
+    L.map(t => { const m = motivo(t.id); return {emp:t.id, c:[ nome(t), `<span class="forte">${num(t.atraso)}</span><span class="apoio">doc.</span>`,
+      t.nunca_capturou ? '<span class="sit verm">nunca capturou</span>' : t.dias_parada===0 ? '<span class="sit amb">oscilando hoje</span>' : `<span class="sit verm">parada há ${t.dias_parada} dia(s)</span>`,
+      `<span style="color:${m.k==='cursor'?'var(--ss-verm)':'var(--ss-ambar)'};font-weight:700">${esc(m.t)}</span>` + (m.det ? `<span class="apoio">${esc(m.det)}</span>` : ''),
+      `${t.taxa656}% de 656`, t.ult_sucesso ? `<span class="mono">${fdh(t.ult_sucesso)}</span>` : '<span class="vazio">nunca</span>',
+      `<span class="mono">${num(t.ult_nsu)} → ${num(t.sefaz_ult)}</span>` ]}; }), 'Nenhuma travada com este filtro — bom sinal.'); };
+RENDER['f-trv']();
+
+// ══ CERTIFICADOS
+$('#n-cert').textContent = D.certificados.length;
+$('#cert-banner').innerHTML = `<div class="kpis" style="margin-bottom:12px">
+  <div class="kpi ${D.cert_alerta.n_vencidos?'ruim':''}"><div class="kpi-l">Vencidos</div><div class="kpi-v">${D.cert_alerta.n_vencidos}</div><div class="kpi-s">SEFAZ recusa o mTLS (403)</div></div>
+  <div class="kpi ${D.cert_alerta.n_venc?'alerta':''}"><div class="kpi-l">Vencem em ≤${D.cert_laranja} dias</div><div class="kpi-v">${D.cert_alerta.n_venc}</div><div class="kpi-s">renovar antes de vencer</div></div>
+  <div class="kpi"><div class="kpi-l">Vencem em ≤${D.cert_amarelo} dias</div><div class="kpi-v">${cnt(D.certificados,c=>certSit(c.dias).k==='d60')}</div><div class="kpi-s">já dá para programar</div></div>
+  <div class="kpi"><div class="kpi-l">Em dia</div><div class="kpi-v">${cnt(D.certificados,c=>certSit(c.dias).k==='ok')}</div><div class="kpi-s">de ${D.certificados.length} ativos</div></div></div>`;
+montaChips('f-cert','sit',[{v:'',t:'Todos',q:D.certificados.length},{v:'vencido',t:'vencido',q:cnt(D.certificados,c=>certSit(c.dias).k==='vencido')},{v:'d30',t:`≤${D.cert_laranja}d`,q:cnt(D.certificados,c=>certSit(c.dias).k==='d30')},{v:'d60',t:`≤${D.cert_amarelo}d`,q:cnt(D.certificados,c=>certSit(c.dias).k==='d60')},{v:'ok',t:'ok',q:cnt(D.certificados,c=>certSit(c.dias).k==='ok')},{v:'sem',t:'sem validade',q:cnt(D.certificados,c=>certSit(c.dias).k==='sem')}],'');
+ligaBusca('f-cert'); DEF['f-cert'] = {...F['f-cert']};
+RENDER['f-cert'] = function(){ const f = F['f-cert'];
+  const L = D.certificados.filter(c => casa(f.q, c.numero, c.nome) && (!f.sit || certSit(c.dias).k===f.sit));
+  $('#c-cert').textContent = `${L.length} de ${D.certificados.length} certificados`;
+  tabela('t-cert', [{t:'Empresa'},{t:'Validade'},{t:'Dias',num:1},{t:'Situação'}], L.map(c => { const s = certSit(c.dias);
+    return {emp:c.cliente_id, c:[ nome(c), `<span class="mono">${esc(c.validade||'—')}</span>`, c.dias===null?'<span class="vazio">—</span>':`<span class="${c.dias<0?'forte':''}" style="${c.dias<0?'color:var(--ss-verm)':''}">${c.dias}</span>`, `<span class="sit ${s.cor}">${s.t}</span>` ]}; }), 'Nenhum certificado com este filtro.'); };
+RENDER['f-cert']();
+
+// ══ HISTÓRICO — 30 dias
+const diasLista = []; for(let i=29;i>=0;i--){ const d = new Date(HOJE); d.setDate(d.getDate()-i); diasLista.push(`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`); }
+const porDia = {}; diasLista.forEach(d => porDia[d] = {nfe:{}, cte:{}}); D.hist_dia.forEach(r => { if(porDia[r.dia]) porDia[r.dia][r.servico==='cte'?'cte':'nfe'] = r; });
+(function(){ const max = Math.max(1, ...diasLista.map(d => (porDia[d].nfe.notas||0)+(porDia[d].cte.notas||0)));
+  $('#graf').innerHTML = `<div class="graf-h"><span class="graf-t">Notas capturadas por dia — últimos 30 dias</span><span class="leg"><span><i style="background:var(--ss-verde)"></i>NF-e</span><span><i style="background:#0f766e"></i>CT-e</span><span><i style="background:var(--ss-ambar-borda)"></i>656 (cota) no dia</span></span></div>
+    <div class="barras">${diasLista.map(d => { const n = porDia[d].nfe.notas||0, c = porDia[d].cte.notas||0; return `<div class="bar" data-d="${d}" onmouseenter="diaInfo('${d}')" onclick="diaFiltro('${d}')"><b style="height:${Math.round(100*n/max)}%;background:var(--ss-verde)"></b><b style="height:${Math.round(100*c/max)}%;background:#0f766e"></b></div>`; }).join('')}</div>
+    <div class="barras" style="height:26px;margin-top:3px">${diasLista.map(d => { const s = porDia[d].nfe.c656||0, q = porDia[d].nfe.consultas||1; return `<div class="bar" title="${s} × 656 em ${q} consultas"><b style="height:${Math.round(100*s/Math.max(q,1))}%;background:var(--ss-ambar-borda)"></b></div>`; }).join('')}</div>
+    <div class="eixo">${diasLista.map((d,i) => `<span>${i%3===0||i===29 ? d.slice(8,10)+'/'+d.slice(5,7) : ''}</span>`).join('')}</div>
+    <div class="graf-dia" id="graf-dia">passe o mouse num dia · clique para filtrar a lista abaixo</div>`; })();
+window.diaInfo = d => { const n = porDia[d].nfe, c = porDia[d].cte; $('#graf-dia').innerHTML = `<b>${fd(d)}</b> — NF-e: <b>${num(n.notas)}</b> notas em ${num(n.consultas)} consultas (${num(n.c138)} × 138 · ${num(n.c137)} × 137 · <span style="color:var(--ss-ambar)">${num(n.c656)} × 656</span> · <span style="color:var(--ss-verm)">${num(n.erros)} erros</span>) · ${n.empresas||0} empresas · Ciência ✓ ${num(n.ciencia)} &nbsp;|&nbsp; CT-e: <b>${num(c.notas)}</b> em ${num(c.consultas)} consultas`; };
+window.diaFiltro = d => { F['f-hist'].dia = d; RENDER['f-hist'](); };
+montaChips('f-hist','per',[{v:'',t:'30 dias'},{v:'1',t:'hoje'},{v:'2',t:'ontem e hoje'},{v:'7',t:'7 dias'}],'');
+montaChips('f-hist','tipo',[{v:'',t:'Tudo que importa'},{v:'nota',t:'trouxe nota',q:cnt(D.hist_ev,h=>h.notas>0)},{v:'erro',t:'erro',q:cnt(D.hist_ev,h=>h.evento==='erro')},{v:'ciencia',t:'Ciência',q:cnt(D.hist_ev,h=>/^ciencia/.test(h.evento))},{v:'manual',t:'clique manual',q:cnt(D.hist_ev,h=>h.origem==='manual'&&h.evento==='consulta')},{v:'656',t:'656',q:cnt(D.hist_ev,h=>h.c_stat==='656')}],'');
+montaChips('f-hist','serv',[{v:'',t:'NF-e + CT-e'},{v:'nfe',t:'NF-e'},{v:'cte',t:'CT-e'}],'');
+ligaBusca('f-hist'); F['f-hist'].dia = ''; DEF['f-hist'] = {...F['f-hist']};
+RENDER['f-hist'] = function(){ const f = F['f-hist'];
+  const L = D.hist_ev.filter(h => casa(f.q, h.numero, h.nome, h.x_motivo, h.detalhe) && (!f.dia || String(h.momento).startsWith(f.dia)) && (!f.per || dias(h.momento) < +f.per)
+    && (!f.serv || (h.servico||'nfe')===f.serv) && (!f.tipo || (f.tipo==='nota'?h.notas>0 : f.tipo==='erro'?h.evento==='erro' : f.tipo==='ciencia'?/^ciencia/.test(h.evento) : f.tipo==='manual'?(h.origem==='manual'&&h.evento==='consulta') : h.c_stat==='656'))).slice(0,400);
+  $('#c-hist').innerHTML = `${L.length}${L.length===400?'+':''} registros` + (f.dia ? ` · dia ${fd(f.dia)} <button type="button" class="limpar" onclick="F['f-hist'].dia='';RENDER['f-hist']()">tirar o dia</button>` : '');
+  tabela('t-hist', [{t:'Momento'},{t:'Empresa'},{t:'Serviço'},{t:'Evento'},{t:'Resposta'},{t:'Docs',num:1},{t:'Notas',num:1},{t:'Detalhe'}], L.map(h => ({emp:h.cid, c:[
+    `<span class="mono">${fdh(h.momento)}</span>`, h.cid ? nome(h) : '<span class="vazio">—</span>', `<span class="sit ${h.servico==='cte'?'azul':'verde'}">${h.servico==='cte'?'CT-e':'NF-e'}</span>`,
+    `${esc(evNome[h.evento]||h.evento)}<span class="apoio">${h.origem==='manual'?'clique manual':'cron'}</span>`,
+    h.c_stat ? `<span class="cstat ${cstatCls(h.c_stat)}">${esc(h.c_stat)}</span> <span style="font-size:12px;color:#475569">${esc((h.x_motivo||'').replace('Rejeicao: Consumo Indevido','Consumo indevido').slice(0,70))}</span>` : '<span class="vazio">—</span>',
+    h.docs ? h.docs : '<span class="vazio">0</span>', h.notas ? `<span class="forte">${h.notas}</span>` : '<span class="vazio">0</span>', `<span style="font-size:12px;color:#475569">${esc((h.detalhe||'').slice(0,90))}</span>` ]})), 'Nada neste recorte.');
+  const total = D.hist_ev_total.n, fora = Math.max(0, total - D.hist_ev.length);
+  $('#hist-rodape').innerHTML = `ℹ️ <div>O cron faz ~${num(Math.round(D.hist_dia.filter(r=>r.servico!=='cte').reduce((a,r)=>a+r.consultas,0)/30))} consultas de NF-e por dia — a lista mostra só <b>o que importa</b>: rodadas que trouxeram nota, erros, Ciência, cliques manuais e 656. Nos 30 dias são ${num(total)} registros assim${fora ? `; a tela carrega os ${num(D.hist_ev.length)} mais recentes (${num(fora)} mais antigos ficam de fora)` : ''}.</div>`; };
+RENDER['f-hist']();
+
+// ══ EMPRESA — abre como aba. As últimas consultas vêm de status_sefaz_empresa_log
+// quando a aba abre (25 × 180 linhas seria 1,3 MB a cada refresh).
+window.abrirEmpresa = function(id){ const e = D.empresas.find(x=>x.cliente_id===id); if(!e) return; const c = cap[id]||{}, s = situacao(e), t = trv[id], cs = certSit(e.cert_dias), m = t ? motivo(id) : null;
+  const ab = $('#aba-emp'); ab.hidden = false; ab.innerHTML = `<span class="n-emp" style="color:var(--ss-verde)">${esc(e.numero||'')}</span> ${esc((e.nome||'').slice(0,26))} <span class="x" title="fechar">✕</span>`;
+  LS.set('ss.emp', String(id));
+  const serie = diasLista.map(d => (empDia[id]||{})[d]||0), mx = Math.max(1,...serie);
+  $('#p-empresa').innerHTML = `<div class="emp-head"><div><div class="emp-nome"><span class="n-emp">${esc(e.numero||'s/nº')}</span> — ${esc(e.nome)}</div>
+      <div class="emp-meta"><span>${e.fonte_icone} ${esc(e.fonte_label)} · ${esc(e.fonte_det)}</span><span>certificado até ${esc(e.cert_validade||'—')}</span><span>cursor: ${c.ult_consulta?fdh(c.ult_consulta):'nunca consultou'}</span></div>
+      <div style="margin-top:10px">${ciencia(e)}</div></div>
+    <div class="emp-selos"><span class="sit ${s.cor}">NF-e: ${s.t}</span><span class="sit ${e.cte_status_cor==='verde'?'verde':e.cte_status_cor==='cinza'?'cinza':'amb'}">CT-e: ${esc(e.cte_status_label)}</span><span class="sit ${cs.cor}">cert ${cs.t}</span><button type="button" class="btn btn-outline" onclick="abrir('empresas')">← Empresas</button></div></div>
+    ${t ? `<div class="nota nota-erro">⚠️ <div><b>Captura travada: ${num(t.atraso)} documentos represados na SEFAZ.</b> ${esc(m.t)}${m.det?' — '+esc(m.det):''}. Último sucesso: ${t.ult_sucesso?fdh(t.ult_sucesso):'nunca'} · ${t.taxa656}% das consultas dos últimos 7 dias voltaram 656.</div></div>` : ''}
+    ${(!t && s.k==='emdia' && !c.d30) ? `<div class="nota nota-neutra">ℹ️ <div><b>Em dia e sem nota há 30 dias.</b> A SEFAZ respondeu 137 (nada novo): não há NF-e emitida contra este CNPJ no período — ausência de nota, não falha de captura.</div></div>` : ''}
+    <div class="kpis" style="margin-bottom:12px">
+      <div class="kpi"><div class="kpi-l">Entradas capturadas</div><div class="kpi-v">${num(e.ent_total)}</div><div class="kpi-s">${num(e.ent_completas)} completas · ${e.ent_resumos} resumo${e.resgataveis?` · <b style="color:var(--ss-ambar)">${e.resgataveis} no prazo da Ciência</b>`:''}</div></div>
+      <div class="kpi"><div class="kpi-l">Últimos 30 dias</div><div class="kpi-v">${num(c.d30)}</div><div class="kpi-s">${c.hoje||0} hoje · ${c.d7||0} em 7 dias · última nota ${c.ult_emissao?fd(c.ult_emissao):'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Saídas (de carona)</div><div class="kpi-v">${num(e.sai_qtd)}</div><div class="kpi-s">${brl(e.sai_valor)}${e.sai_de?` · ${e.sai_de} a ${e.sai_ate}`:''}</div></div>
+      <div class="kpi"><div class="kpi-l">CT-e</div><div class="kpi-v">${num(e.cte_total)}</div><div class="kpi-s">${num(e.cte_tomados)} como tomador · ${brl(e.cte_valor_frete)}</div></div>
+    </div>
+    <div class="cols2"><div class="mini"><div class="mini-t">Notas de entrada por dia — 30 dias</div><div class="spark">${serie.map((n,i) => `<i class="${n?'':'zero'} ${i===29?'hoje':''}" style="height:${Math.max(6,Math.round(100*n/mx))}%" title="${fd(diasLista[i])}: ${n}"></i>`).join('')}</div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ss-apagado);margin-top:4px"><span>${fd(diasLista[0])}</span><span>hoje</span></div></div>
+      <div class="mini"><div class="mini-t">Cursor NSU</div><div style="font-size:12.5px;line-height:1.7;color:#475569">Última resposta: <span class="cstat ${cstatCls(String(c.ult_status||'').slice(0,3))}">${esc(String(c.ult_status||'—').slice(0,3))}</span> ${esc(String(c.ult_status||'').replace(/^\d+\s*/,'').slice(0,90))}<br>Último OK (137/138): <b>${c.ult_ok?fdh(c.ult_ok):'nunca'}</b> · última rodada com nota: <b>${c.ult_com_nota?fdh(c.ult_com_nota):'nunca'}</b><br>${e.backlog?`<b style="color:var(--ss-ambar)">${num(e.backlog)} NSU a baixar</b>`:'cursor em dia com a SEFAZ'}</div></div></div>
+    <div class="grupo" style="margin-top:16px" id="elog-tit">Últimas consultas desta empresa</div>
+    <div class="tbl-card"><div class="tbl-scroll" style="max-height:50vh"><table class="tbl" id="t-elog"><tbody><tr><td><div class="tbl-empty">carregando…</div></td></tr></tbody></table></div></div>`;
+  abrir('empresa');
+  fetch(URL_LOG.replace('/0/', '/'+id+'/'), {credentials:'same-origin'}).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(j => {
+    if(+LS.get('ss.emp') !== id) return;   // já abriu outra empresa
+    const log = j.log || [];
+    $('#elog-tit').textContent = `Últimas ${log.length} consultas desta empresa`;
+    tabela('t-elog', [{t:'Momento'},{t:'Serviço'},{t:'Evento'},{t:'Resposta'},{t:'NSU enviado',num:1},{t:'SEFAZ ult/max',num:1},{t:'Docs',num:1},{t:'Notas',num:1},{t:'Detalhe'}], log.map(h => ({c:[
+      `<span class="mono">${fdh(h.momento)}</span>`, `<span class="sit ${h.servico==='cte'?'azul':'verde'}">${h.servico==='cte'?'CT-e':'NF-e'}</span>`, `${esc(evNome[h.evento]||h.evento)}<span class="apoio">${h.origem==='manual'?'clique manual':'cron'}</span>`,
+      h.c_stat ? `<span class="cstat ${cstatCls(h.c_stat)}">${esc(h.c_stat)}</span> <span style="font-size:12px;color:#475569">${esc((h.x_motivo||'').replace('Rejeicao: Consumo Indevido','Consumo indevido').slice(0,60))}</span>` : '<span class="vazio">—</span>',
+      h.ult_nsu_env!=null ? `<span class="mono">${num(h.ult_nsu_env)}</span>` : '<span class="vazio">—</span>', h.ret_ult_nsu!=null ? `<span class="mono">${num(h.ret_ult_nsu)} / ${num(h.ret_max_nsu)}</span>` : '<span class="vazio">—</span>',
+      h.docs ? h.docs : '<span class="vazio">0</span>', h.notas ? `<span class="forte">${h.notas}</span>` : '<span class="vazio">0</span>', `<span style="font-size:12px;color:#475569">${esc((h.detalhe||'').slice(0,80))}</span>` ]})), 'Esta empresa nunca foi consultada.');
+  }).catch(() => { $('#t-elog').innerHTML = '<tbody><tr><td><div class="tbl-empty">Não deu para carregar as consultas desta empresa. Tente de novo.</div></td></tr></tbody>'; });
+};
+
+// ── ESTADO entre recargas: aba, empresa aberta e o texto das buscas (localStorage).
+// O refresh de 60s e o POST da Ciência recarregam a página — sem isto o
+// usuário perderia o "mobil" que acabou de digitar.
+function ssGuardarEstado(){ try{ sessionStorage.setItem('ss.scroll', String(window.scrollY||0)); }catch(e){} }
+function ssRestaurar(){
+  Object.keys(F).forEach(fid => { const q = LS.get('ss.q.'+fid); if(q){ F[fid].q = q; const i = document.querySelector(`#${fid} input`); if(i) i.value = q; RENDER[fid](); } });
+  if(D.abrir_empresa){ const e = D.empresas.find(x => String(x.numero)===String(D.abrir_empresa)); if(e){ abrirEmpresa(e.cliente_id); return; } }
+  const emp = +LS.get('ss.emp'); if(emp && D.empresas.some(x => x.cliente_id===emp)) abrirEmpresa(emp);
+  const aba = LS.get('ss.aba'); if(aba && document.querySelector(`.aba[data-aba="${aba}"]`) && !(aba==='empresa' && $('#aba-emp').hidden)) abrir(aba);
+  try{ const sy = sessionStorage.getItem('ss.scroll'); if(sy!==null){ sessionStorage.removeItem('ss.scroll'); window.scrollTo(0, parseInt(sy,10)||0); } }catch(e){}
 }
+ssRestaurar();
 
-function ssRestaurarSeVeioDoRefresh() {
-    try {
-        if (!sessionStorage.getItem(SS_FLAG)) return;   // só restaura se o reload foi do refresh
-        sessionStorage.removeItem(SS_FLAG);
-        JSON.parse(sessionStorage.getItem(SS_ABERTAS) || '[]').forEach(function (id) {
-            var el = document.getElementById(id); if (el) el.classList.add('aberta');
-        });
-        var sy = sessionStorage.getItem(SS_SCROLL);
-        if (sy !== null) window.scrollTo(0, parseInt(sy, 10) || 0);
-    } catch (e) {}
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    {% if filters_active %}
-    document.getElementById('filters-body').style.display = 'block';
-    document.getElementById('filters-chevron').classList.add('open');
-    {% endif %}
-    ssRestaurarSeVeioDoRefresh();
-});
-
-// Auto-refresh a cada 60s — apenas re-executa as leituras (não consome cota
-// SEFAZ). Antes de recarregar, guarda as seções abertas e a rolagem e marca que
-// o reload é do refresh, para NÃO atrapalhar o que o usuário abriu/fechou.
-setTimeout(function () {
-    ssSalvarEstado();
-    try { sessionStorage.setItem(SS_FLAG, '1'); } catch (e) {}
-    location.reload();
-}, 60000);
+// Auto-refresh a cada 60s — só re-executa as leituras (não consome cota SEFAZ)
+// e só com a aba do navegador visível: em segundo plano não recarrega.
+window.ssRecarregar = function(){ ssGuardarEstado(); location.reload(); };
+setInterval(function(){ if(document.visibilityState === 'visible') ssRecarregar(); }, 60000);
 </script>
 {% endblock %}

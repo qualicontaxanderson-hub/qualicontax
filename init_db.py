@@ -1342,6 +1342,24 @@ def _apply_migrations():
     except Exception:
         pass
 
+    # Incremental: índice (cliente_id, momento) em dfe_consulta_log. O Status
+    # SEFAZ (capturas travadas, "quando cada empresa foi capturada", histórico
+    # por empresa) agrega o log POR EMPRESA — ~120k linhas/30 dias e só havia
+    # índice por momento/c_stat/(origem,evento): cada empresa virava full scan
+    # (a tela levava 26 s em 06/09/2026). Aditivo e idempotente; espelha
+    # migrations/add_idx_log_cliente.py.
+    _idx_log_cli = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dfe_consulta_log' "
+        "AND INDEX_NAME = 'ix_log_cliente_momento'",
+        fetch=True, fetch_one=True,
+    ) or {}
+    if _idx_log_cli.get('cnt', 0) == 0:
+        execute_query(
+            "ALTER TABLE dfe_consulta_log ADD INDEX ix_log_cliente_momento (cliente_id, momento)",
+            fetch=False,
+        )
+
     # ---- Q-Robô: config por posto + Portal do Instalador (auditoria) ----------
     # A robo_config nasceu em migrations/add_robo_config.py (Fase 1 do Q-Robô).
     # Repetida aqui como IF NOT EXISTS para que um banco novo suba completo: sem

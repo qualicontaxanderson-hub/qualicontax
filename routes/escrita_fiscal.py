@@ -1201,24 +1201,23 @@ def status_sefaz_ciencia(cliente_id):
 @escrita_fiscal.route('/status-sefaz/')
 @permission_required('escrita_fiscal.conf_compras')
 def status_sefaz():
-    # Filtros (Bloco D5). Nenhuma consulta NOVA: empresa, certificado e serviço
-    # peneiram em Python listas que a tela já carregava; c_stat e período só
-    # ajustam o WHERE/LIMIT da consulta de histórico que já existia (a coluna
-    # `momento` é indexada e a tabela tem ~13 mil linhas).
-    fs = {
-        'empresa':  request.args.get('empresa', '').strip(),
-        'servico':  request.args.get('servico', '').strip(),    # nfe|cte
-        'cert':     request.args.get('cert', '').strip(),       # vencido|d30|d60|ok
-        'cstat':    request.args.get('cstat', '').strip(),      # 137|138|656|erro
-        'periodo':  request.args.get('periodo', '').strip(),    # 1|7|30 (dias)
-    }
-    filtros_ativos = any(fs.values())
+    """Status da Captura SEFAZ em abas: Painel, Empresas, Capturas, Travadas,
+    Certificados, Histórico 30 dias e uma aba por empresa (abre ao clicar).
 
-    # AUDITORIA (D2): leitura — abrir o Status SEFAZ de UMA empresa (com a empresa
-    # escolhida). Sem empresa é o painel geral/auto-refresh — não registra.
-    if fs['empresa']:
+    A rota NÃO filtra: entrega tudo num JSON e a tela peneira no navegador —
+    cada aba tem busca e chips, sem ida ao servidor (desenho aprovado em
+    06/09/2026; antes o filtro era por GET e recarregava a página inteira).
+    Só leitura, nada aqui consome cota da SEFAZ.
+
+    ``?empresa=<número>`` abre direto a aba daquela empresa (link profundo).
+    """
+    empresa_link = request.args.get('empresa', '').strip()
+
+    # AUDITORIA (D2): leitura — abrir o Status SEFAZ de UMA empresa pelo link.
+    # Sem empresa é o painel geral/auto-refresh — não registra.
+    if empresa_link:
         registrar('leitura.abriu_status_sefaz', 'fiscal',
-                  depois={k: v for k, v in fs.items() if v})
+                  depois={'empresa': empresa_link})
 
     def _fmt(d):
         return d.strftime('%d/%m/%Y %H:%M') if hasattr(d, 'strftime') else None
@@ -1500,46 +1499,6 @@ def status_sefaz():
             'cte_libera_min': _i(r.get('cte_libera_min')) if r.get('cte_em_cota') else None,
         })
 
-    # ---- HISTÓRICO: últimas ~20 rodadas do dfe_consulta_log (NF-e + CT-e) ----
-    # Sem filtro, continua exatamente como era: as últimas 20 rodadas. Com
-    # período escolhido, recorta por data e amplia o teto para 200 — bastante
-    # para ler uma janela, sem risco de despejar as 13 mil linhas na tela.
-    _hwhere, _hparams = [], []
-    if fs['servico'] in ('nfe', 'cte'):
-        _hwhere.append('l.servico = %s')
-        _hparams.append(fs['servico'])
-    if fs['cstat'] in ('137', '138', '656'):
-        _hwhere.append('l.c_stat = %s')
-        _hparams.append(fs['cstat'])
-    elif fs['cstat'] == 'erro':
-        _hwhere.append("(l.c_stat IS NULL OR l.c_stat NOT IN ('137','138','656'))")
-    if fs['periodo'] in ('1', '7', '30'):
-        _hwhere.append('l.momento >= NOW() - INTERVAL %s DAY')
-        _hparams.append(int(fs['periodo']))
-    if fs['empresa']:
-        _hwhere.append("(c.nome_razao_social LIKE %s OR c.numero_cliente LIKE %s)")
-        _hparams += ['%%%s%%' % fs['empresa'], '%%%s%%' % fs['empresa']]
-    _hsql = (' WHERE ' + ' AND '.join(_hwhere)) if _hwhere else ''
-    _hlimit = 200 if fs['periodo'] else 20
-    hlog = execute_query(
-        "SELECT l.momento, l.origem, l.evento, l.c_stat, l.x_motivo, "
-        "  l.docs, l.notas, l.servico, c.numero_cliente, c.nome_razao_social "
-        "FROM dfe_consulta_log l "
-        "LEFT JOIN clientes c ON c.id = l.cliente_id "
-        + _hsql +
-        " ORDER BY l.momento DESC LIMIT " + str(_hlimit),
-        tuple(_hparams) if _hparams else None,
-        fetch=True,
-    ) or []
-    historico = [{
-        'momento': _fmt(h.get('momento')), 'origem': h.get('origem'),
-        'evento': h.get('evento'), 'c_stat': h.get('c_stat'),
-        'x_motivo': h.get('x_motivo'), 'docs': _i(h.get('docs')),
-        'notas': _i(h.get('notas')), 'servico': (h.get('servico') or 'nfe'),
-        'empresa': ((str(h['numero_cliente']) + ' - ' if h.get('numero_cliente') else '')
-                    + (h.get('nome_razao_social') or '—')),
-    } for h in hlog]
-
     # ---- CERTIFICADOS: validade + dias até vencer (SÓ LEITURA de dfe_certificados).
     # Objetivo: nenhum certificado vence em silêncio — um cert vencido faz a SEFAZ
     # recusar o mTLS (HTTP 403) e a captura para sem aviso (ver _detalhe_403). Limiares
@@ -1548,7 +1507,7 @@ def status_sefaz():
     laranja = max(0, int(os.getenv('CERT_ALERTA_DIAS', '30')))
     amarelo = max(laranja, int(os.getenv('CERT_ALERTA_AMARELO', '60')))
     crows = execute_query(
-        "SELECT c.numero_cliente, c.nome_razao_social, dc.validade, "
+        "SELECT c.id, c.numero_cliente, c.nome_razao_social, dc.validade, "
         "  DATEDIFF(dc.validade, CURDATE()) AS dias "
         "FROM dfe_certificados dc "
         "JOIN clientes c ON c.id = dc.cliente_id "
@@ -1575,6 +1534,7 @@ def status_sefaz():
         else:
             emoji, status = '✅', 'OK'
         certificados.append({
+            'cliente_id': r.get('id'),
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),
             'validade': _fmt_data(r.get('validade')), 'dias': dias,
             'emoji': emoji, 'status': status,
@@ -1589,46 +1549,160 @@ def status_sefaz():
         'dias': laranja, 'dias_amarelo': amarelo,
     }
 
-    # ---- Peneira em Python: só sobre listas JÁ carregadas (Bloco D5) -------
-    total_empresas, total_certs = len(empresas), len(certificados)
+    # ---- O LOG POR EMPRESA, numa varredura só (ver _log_por_empresa) --------
+    log_emp = _log_por_empresa()
 
-    def _casa_empresa(txt, numero, nome):
-        alvo = ('%s %s' % (numero or '', nome or '')).lower()
-        return txt.lower() in alvo
+    # ---- CAPTURAS: quem foi capturado, a que horas e quando foi a última nota.
+    # Uma linha por empresa com cursor (dfe_nsu). Os agregados vêm de três
+    # GROUP BY (log, nfe_importacoes, cte_documentos) juntados aqui em Python —
+    # a versão com subconsulta correlacionada por empresa levava 54 s.
+    nfe_emp = {r['cliente_id']: r for r in (execute_query(
+        "SELECT cliente_id, "
+        "  SUM(DATE(importado_em) = CURDATE()) AS hoje, "
+        "  SUM(importado_em >= NOW() - INTERVAL 7 DAY) AS d7, "
+        "  SUM(importado_em >= NOW() - INTERVAL 30 DAY) AS d30, "
+        "  MAX(data_emissao) AS ult_emissao, MAX(importado_em) AS ult_import "
+        "FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada' "
+        "GROUP BY cliente_id", fetch=True) or [])}
+    cte_emp = {r['cliente_id']: r for r in (execute_query(
+        "SELECT cliente_id, COUNT(*) AS cte30 FROM cte_documentos "
+        "WHERE origem='SEFAZ' AND importado_em >= NOW() - INTERVAL 30 DAY "
+        "GROUP BY cliente_id", fetch=True) or [])}
+    capturas = []
+    for r in (execute_query(
+            "SELECT c.id, c.numero_cliente AS numero, c.nome_razao_social AS nome, "
+            "  n.ult_consulta, n.ult_status "
+            "FROM dfe_nsu n JOIN clientes c ON c.id = n.cliente_id", fetch=True) or []):
+        lg, nf, ct = log_emp.get(r['id']) or {}, nfe_emp.get(r['id']) or {}, cte_emp.get(r['id']) or {}
+        capturas.append({
+            'id': r['id'], 'numero': r['numero'], 'nome': r['nome'],
+            'ult_consulta': r.get('ult_consulta'), 'ult_status': r.get('ult_status'),
+            'ult_com_nota': lg.get('ult_com_nota'), 'ult_ok': lg.get('ult_sucesso'),
+            'hoje': _i(nf.get('hoje')), 'd7': _i(nf.get('d7')), 'd30': _i(nf.get('d30')),
+            'ult_emissao': nf.get('ult_emissao'), 'ult_import': nf.get('ult_import'),
+            'cte30': _i(ct.get('cte30')),
+        })
 
-    if fs['empresa']:
-        empresas = [e for e in empresas if _casa_empresa(fs['empresa'], e.get('numero'), e.get('nome'))]
-        certificados = [c for c in certificados
-                        if _casa_empresa(fs['empresa'], c.get('numero'), c.get('nome'))]
-    if fs['servico'] == 'nfe':
-        empresas = [e for e in empresas if _i(e.get('ent_total')) or _i(e.get('sai_qtd'))]
-    elif fs['servico'] == 'cte':
-        empresas = [e for e in empresas if _i(e.get('cte_total'))]
-    if fs['cert']:
-        # 'ok' = tudo que não está vencido nem dentro das janelas de alerta
-        def _passa_cert(dias):
-            if dias is None:
-                return fs['cert'] == 'ok'
-            if fs['cert'] == 'vencido':
-                return dias < 0
-            if fs['cert'] == 'd30':
-                return 0 <= dias <= laranja
-            if fs['cert'] == 'd60':
-                return laranja < dias <= amarelo
-            return dias > amarelo
-        certificados = [c for c in certificados if _passa_cert(c.get('dias'))]
-        empresas = [e for e in empresas if _passa_cert(e.get('cert_dias'))]
+    # ---- ÚLTIMO 656 por empresa: é ele que diz o MOTIVO da trava ("aguardar
+    # 1 hora" = cota gasta; "utilizar o ultNSU" = cursor recusado).
+    ult656 = execute_query(
+        "SELECT l.cliente_id, l.x_motivo, l.ret_ult_nsu, l.ult_nsu_env, l.momento "
+        "FROM dfe_consulta_log l "
+        "JOIN (SELECT cliente_id, MAX(id) AS mid FROM dfe_consulta_log "
+        "       WHERE c_stat = '656' AND servico <> 'cte' GROUP BY cliente_id) x "
+        "  ON x.mid = l.id", fetch=True) or []
 
+    # ---- HISTÓRICO 30 dias: o gráfico por dia e a lista do que IMPORTA ------
+    # O cron faz ~4 mil consultas de NF-e por dia; a lista mostra só rodada que
+    # trouxe nota, erro, Ciência, seed, consulta por NSU e clique manual. Teto
+    # de 3.000 linhas (as mais recentes) — o total real vai junto para a tela
+    # dizer quantas ficaram de fora.
+    hist_dia = execute_query(
+        "SELECT DATE(momento) AS dia, servico, "
+        "  SUM(evento='consulta') AS consultas, SUM(c_stat='138') AS c138, "
+        "  SUM(c_stat='137') AS c137, SUM(c_stat='656') AS c656, "
+        "  SUM(evento='erro') AS erros, SUM(COALESCE(notas,0)) AS notas, "
+        "  SUM(COALESCE(docs,0)) AS docs, SUM(evento='ciencia_ok') AS ciencia, "
+        "  COUNT(DISTINCT cliente_id) AS empresas "
+        "FROM dfe_consulta_log WHERE momento >= CURDATE() - INTERVAL 29 DAY "
+        "GROUP BY DATE(momento), servico ORDER BY dia", fetch=True) or []
+    _importa = ("(COALESCE(l.notas,0) > 0 OR l.evento IN ('erro','ciencia_ok','ciencia_nao',"
+                "'ciencia_erro','seed_manual','cons_nsu') "
+                "OR (l.origem = 'manual' AND l.evento = 'consulta'))")
+    hist_ev = execute_query(
+        "SELECT l.momento, l.origem, l.evento, l.c_stat, LEFT(l.x_motivo, 100) AS x_motivo, "
+        "  l.docs, l.notas, l.servico, LEFT(l.detalhe, 120) AS detalhe, "
+        "  c.id AS cid, c.numero_cliente AS numero, c.nome_razao_social AS nome "
+        "FROM dfe_consulta_log l LEFT JOIN clientes c ON c.id = l.cliente_id "
+        "WHERE l.momento >= CURDATE() - INTERVAL 29 DAY AND " + _importa +
+        " ORDER BY l.momento DESC LIMIT 3000", fetch=True) or []
+    hist_ev_total = execute_query(
+        "SELECT COUNT(*) AS n FROM dfe_consulta_log l "
+        "WHERE l.momento >= CURDATE() - INTERVAL 29 DAY AND " + _importa,
+        fetch=True, fetch_one=True) or {'n': len(hist_ev)}
+
+    # ---- POR EMPRESA: notas de entrada por dia (sparkline de 30 dias). As
+    # últimas consultas de cada empresa NÃO vêm aqui: são 25 × 180 linhas
+    # (1,3 MB) e a tela recarrega a cada 60 s — a aba da empresa busca em
+    # status_sefaz_empresa_log quando abre.
+    emp_dia = execute_query(
+        "SELECT cliente_id AS cid, DATE(importado_em) AS dia, COUNT(*) AS n "
+        "FROM nfe_importacoes WHERE origem='SEFAZ' AND tipo='entrada' "
+        "  AND importado_em >= CURDATE() - INTERVAL 29 DAY "
+        "GROUP BY cliente_id, DATE(importado_em)", fetch=True) or []
+
+    agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    dados = {
+        'topo': topo, 'topo_saida': topo_saida, 'topo_cte': topo_cte,
+        'empresas': empresas, 'certificados': certificados, 'cert_alerta': cert_alerta,
+        'cert_laranja': laranja, 'cert_amarelo': amarelo,
+        'travadas': _capturas_travadas(limite=None, log_emp=log_emp),
+        'ult656': ult656, 'capturas': capturas,
+        'hist_dia': hist_dia, 'hist_ev': hist_ev, 'hist_ev_total': hist_ev_total,
+        'emp_dia': emp_dia,
+        'gerado_em': agora.strftime('%d/%m/%Y %H:%M'),
+        'abrir_empresa': empresa_link,
+    }
     return render_template(
         'escrita_fiscal/status_sefaz.html',
-        topo=topo, topo_cte=topo_cte, empresas=empresas, historico=historico,
-        certificados=certificados, cert_alerta=cert_alerta,
-        topo_saida=topo_saida,
-        filtros=fs, filters_active=filtros_ativos,
-        total_empresas=total_empresas, total_certs=total_certs,
-        cert_laranja=laranja, cert_amarelo=amarelo,
-        travadas=_capturas_travadas(),
+        dados_json=_json_para_tela(dados),
+        cert_alerta=cert_alerta,
     )
+
+
+def _json_para_tela(dados):
+    """JSON para dentro de <script type="application/json">: datas como
+    'YYYY-mm-dd HH:MM:SS' (a tela lê os dois formatos), Decimal como float e
+    '</' escapado — é a única sequência que fecharia o <script> no meio."""
+    import json
+
+    def _default(o):
+        if isinstance(o, datetime):
+            return o.strftime('%Y-%m-%d %H:%M:%S')
+        if hasattr(o, 'strftime'):
+            return o.strftime('%Y-%m-%d')
+        if isinstance(o, Decimal):
+            return float(o)
+        return str(o)
+    return json.dumps(dados, default=_default, ensure_ascii=False).replace('</', '<\\/')
+
+
+def _log_por_empresa():
+    """Agregados de dfe_consulta_log POR EMPRESA (NF-e), numa varredura só.
+
+    Devolve {cliente_id: {sefaz_ult, ult_sucesso, ult_com_nota, taxa656}}:
+      sefaz_ult    — maior ultNSU que a SEFAZ informou nos últimos 7 dias
+      ult_sucesso  — última resposta 137/138 (qualquer época)
+      ult_com_nota — última rodada que trouxe nota
+      taxa656      — % de 656 entre as consultas dos últimos 7 dias
+
+    Por que IF() e não CASE: medido em 06/09/2026, MAX(CASE WHEN ... THEN
+    ret_ult_nsu END) levava 4,1 s na mesma tabela em que o IF() leva 0,7 s.
+    """
+    linhas = execute_query(
+        "SELECT cliente_id, "
+        "  MAX(IF(momento >= NOW() - INTERVAL 7 DAY, ret_ult_nsu, NULL)) AS sefaz_ult, "
+        "  MAX(IF(c_stat IN ('137','138'), momento, NULL)) AS ult_sucesso, "
+        "  MAX(IF(COALESCE(notas,0) > 0, momento, NULL)) AS ult_com_nota, "
+        "  ROUND(100 * SUM(evento='consulta' AND c_stat='656' AND momento >= NOW() - INTERVAL 7 DAY) "
+        "        / NULLIF(SUM(evento='consulta' AND momento >= NOW() - INTERVAL 7 DAY), 0)) AS taxa656 "
+        "FROM dfe_consulta_log WHERE servico <> 'cte' GROUP BY cliente_id",
+        fetch=True) or []
+    return {r['cliente_id']: r for r in linhas}
+
+
+@escrita_fiscal.route('/status-sefaz/<int:cliente_id>/log')
+@permission_required('escrita_fiscal.conf_compras')
+def status_sefaz_empresa_log(cliente_id):
+    """As últimas 25 consultas de UMA empresa (NF-e + CT-e) — a aba da empresa
+    busca aqui quando abre. Só leitura."""
+    linhas = execute_query(
+        "SELECT momento, origem, evento, c_stat, LEFT(x_motivo, 100) AS x_motivo, "
+        "  docs, notas, servico, LEFT(detalhe, 120) AS detalhe, "
+        "  ult_nsu_env, ret_ult_nsu, ret_max_nsu "
+        "FROM dfe_consulta_log WHERE cliente_id = %s "
+        "ORDER BY id DESC LIMIT 25", (cliente_id,), fetch=True) or []
+    return Response(_json_para_tela({'log': linhas}), mimetype='application/json')
 
 
 # ---------------------------------------------------------------------------
@@ -1648,27 +1722,21 @@ def status_sefaz():
 # 1–50 atrasados, 100% acima de 500. É um círculo vicioso, e o atraso é o que
 # diz a que altura do poço a empresa está.
 # ---------------------------------------------------------------------------
-def _capturas_travadas(limite=25):
-    """Empresas cuja captura de NF-e parou. Só leitura, uma consulta.
+def _capturas_travadas(limite=25, log_emp=None):
+    """Empresas cuja captura de NF-e parou. Só leitura.
 
     Devolve dicts com atraso (documentos represados), dias parada, taxa de 656 e
     se o cursor nunca saiu do zero — este último é o caso que NÃO se resolve
-    sozinho e exige seed manual.
+    sozinho e exige seed manual. ``limite=None`` devolve todas.
+
+    Os agregados do log vêm de _log_por_empresa (uma varredura); a versão com
+    três subconsultas correlacionadas por empresa levava 15 s em 06/09/2026.
     """
+    if log_emp is None:
+        log_emp = _log_por_empresa()
     linhas = execute_query(
         """SELECT c.id, c.numero_cliente AS numero, c.nome_razao_social AS razao,
-                  n.ult_nsu, n.ult_status, n.proximo_permitido,
-                  (SELECT MAX(l.ret_ult_nsu) FROM dfe_consulta_log l
-                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
-                      AND l.momento >= NOW() - INTERVAL 7 DAY) AS sefaz_ult,
-                  (SELECT MAX(l.momento) FROM dfe_consulta_log l
-                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
-                      AND l.c_stat IN ('137','138')) AS ult_sucesso,
-                  (SELECT ROUND(100 * SUM(l.c_stat='656') / COUNT(*))
-                     FROM dfe_consulta_log l
-                    WHERE l.cliente_id = n.cliente_id AND l.servico <> 'cte'
-                      AND l.evento = 'consulta'
-                      AND l.momento >= NOW() - INTERVAL 7 DAY) AS taxa656
+                  n.ult_nsu, n.ult_status, n.proximo_permitido
              FROM dfe_nsu n
              JOIN clientes c ON c.id = n.cliente_id AND c.situacao = 'ATIVO'""",
         fetch=True) or []
@@ -1676,6 +1744,7 @@ def _capturas_travadas(limite=25):
     agora = datetime.now(ZoneInfo('America/Sao_Paulo')).replace(tzinfo=None)
     saida = []
     for r in linhas:
+        r.update(log_emp.get(r['id']) or {})
         atraso = (r.get('sefaz_ult') or 0) - (r.get('ult_nsu') or 0)
         if atraso <= 0:
             continue                      # em dia: não é assunto desta lista
@@ -1693,7 +1762,7 @@ def _capturas_travadas(limite=25):
         })
     # Pior primeiro: quem nunca capturou, depois pelo tamanho do atraso.
     saida.sort(key=lambda x: (not x['nunca_capturou'], -x['atraso']))
-    return saida[:limite]
+    return saida if limite is None else saida[:limite]
 
 
 # ---------------------------------------------------------------------------
