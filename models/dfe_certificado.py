@@ -80,7 +80,8 @@ class DfeCertificado:
             SELECT dc.id, dc.cliente_id, dc.cnpj, dc.tipo_doc, dc.procuracao,
                    dc.dropbox_path, dc.validade, dc.modo_automatico, dc.ativo,
                    c.numero_cliente, c.nome_razao_social,
-                   ec.estado AS uf, n.ult_consulta, n.proximo_permitido
+                   ec.estado AS uf, n.ult_consulta, n.proximo_permitido,
+                   n.ult_nsu, n.max_nsu
             FROM dfe_certificados dc
             JOIN clientes c ON c.id = dc.cliente_id
             LEFT JOIN enderecos_clientes ec ON ec.id = (

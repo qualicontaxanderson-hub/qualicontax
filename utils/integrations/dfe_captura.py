@@ -101,6 +101,15 @@ _MAX_LOTES_CICLO = int(os.getenv('DFE_MAX_LOTES_CICLO', '60'))
 #                        teto de tempo — nenhum laço contra a SEFAZ fica sem freio.
 _MAX_JANELAS_VAZIAS = int(os.getenv('DFE_MAX_JANELAS_VAZIAS', '50'))
 _MAX_SEG_EMPRESA = int(os.getenv('DFE_MAX_SEG_EMPRESA', '90'))
+#   _MAX_SEG_ATRASO    teto de tempo quando a empresa chega à rodada com atraso
+#                      grande (max_nsu - ult_nsu >= _ATRASO_GRANDE). A SEFAZ só
+#                      aceita o distNSU dessas empresas de vez em quando (SAARA
+#                      1012 em 06/09/2026: 3 vezes no dia) e a janela tem de
+#                      render — com 90 s a SAARA baixou 150 docs e parou; a fila
+#                      era de 11 mil. 300 s × 3 empresas cabe no prazo suave da
+#                      rodada (960 s); quem ficou de fora vai no próximo tick.
+_MAX_SEG_ATRASO = int(os.getenv('DFE_MAX_SEG_ATRASO', '300'))
+_ATRASO_GRANDE = int(os.getenv('DFE_ATRASO_GRANDE', '500'))
 _INTERVALO_LOTE = float(os.getenv('DFE_INTERVALO_LOTE_SEG', '0.4'))
 # Teto de consNSU por rodada na recuperação do buraco (656 "utilizar o ultNSU").
 # A SEFAZ limita o consNSU a 20 POR HORA por CNPJ — medido em 06/09/2026 na De
@@ -1448,8 +1457,15 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
             else:
                 execute_query(SQL_NSU_OK, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
 
-            # Fim da drenagem? doc falhou / 656 (consChNFe) / fim REAL da fila.
-            if parada or ctx['cooldown_656']:
+            # Fim da drenagem? Só documento que falhou (parada). O 656 numa busca
+            # por chave (ctx['cooldown_656']) NÃO encerra: ele desliga as buscas
+            # por chave (os resumos seguintes ficam pendentes p/ o retry) e o
+            # cursor já vai gravado com cooldown, mas o distNSU é outra cota —
+            # em 06/09/2026 a SAARA (1012) e a PLUS (159) tiveram o distNSU
+            # aceito com 11 mil e 1,5 mil NSU na fila e a rodada parou no 1º
+            # resumo cujo consChNFe deu 656, com 50 e 200 docs baixados. Se o
+            # distNSU também devolver 656, o laço para logo abaixo, como sempre.
+            if parada:
                 break
 
             # ENCADEIA JANELA VAZIA NO MESMO CICLO.
@@ -1881,8 +1897,11 @@ def capturar_agendado():
             try:
                 # Cron DRENA: multi-lote até 137 (fim), 656 (cota) ou os tetos de
                 # segurança por empresa (lotes/tempo). O caminho manual continua 1 lote.
+                atraso = (emp.get('max_nsu') or 0) - (emp.get('ult_nsu') or 0)
                 r = capturar_cliente(cid, dry_run=False, origem='agendado',
-                                     max_lotes=_MAX_LOTES_CICLO, max_seg=_MAX_SEG_EMPRESA)
+                                     max_lotes=_MAX_LOTES_CICLO,
+                                     max_seg=_MAX_SEG_ATRASO if atraso >= _ATRASO_GRANDE
+                                     else _MAX_SEG_EMPRESA)
             except Exception as exc:
                 n_erro += 1
                 logger.exception('[dfe-sched] erro no cliente_id=%s', cid)
