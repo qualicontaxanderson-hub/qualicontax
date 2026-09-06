@@ -184,6 +184,35 @@ def montar_soap_chave(documento, cuf, chave):
     return corpo
 
 
+def montar_soap_nsu(documento, cuf, nsu):
+    """SOAP do nfeDistDFeInteresse no modo consNSU (UM NSU específico).
+
+    É o terceiro modo do mesmo distDFeInt (distNSU / consChNFe / consNSU). Serve
+    para o buraco na fila: a SEFAZ entrega por ele um NSU que ela JÁ considera
+    entregue ao CNPJ — o que o distNSU recusa com 656 "utilizar o ultNSU". Provado
+    em 06/09/2026 na De Paula (254): distNSU recusado há 10 dias, consNSU 21739
+    devolveu 138 com o documento. Mesma versão do distNSU (1.35), não a do consChNFe."""
+    nsu_fmt = str(int(nsu)).zfill(15)
+    corpo = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">'
+        '<soap12:Body>'
+        f'<nfeDistDFeInteresse xmlns="{NS_WSDL}">'
+        '<nfeDadosMsg>'
+        f'<distDFeInt xmlns="{NS_NFE}" versao="{VERSAO}">'
+        f'<tpAmb>{TP_AMB}</tpAmb>'
+        f'<cUFAutor>{cuf}</cUFAutor>'
+        f'{tag_interessado(documento)}'
+        f'<consNSU><NSU>{nsu_fmt}</NSU></consNSU>'
+        '</distDFeInt>'
+        '</nfeDadosMsg>'
+        '</nfeDistDFeInteresse>'
+        '</soap12:Body>'
+        '</soap12:Envelope>'
+    )
+    return corpo
+
+
 def _post_dist(sess, soap):
     """POST único ao distDFeInt e parse do <retDistDFeInt>. Compartilhado por
     consultar()/consultar_chave(). Levanta RuntimeError em erro de transporte/HTTP/parse."""
@@ -219,6 +248,12 @@ def consultar_chave(sess, documento, cuf, chave):
     """Faz UMA requisição ao distDFeInt no modo consChNFe (por chave) e devolve o
     <retDistDFeInt>. NUNCA manifesta. Levanta RuntimeError em erro de transporte."""
     return _post_dist(sess, montar_soap_chave(documento, cuf, chave))
+
+
+def consultar_nsu(sess, documento, cuf, nsu):
+    """Faz UMA requisição ao distDFeInt no modo consNSU (um NSU pontual) e devolve
+    o <retDistDFeInt>. NUNCA manifesta. Levanta RuntimeError em erro de transporte."""
+    return _post_dist(sess, montar_soap_nsu(documento, cuf, nsu))
 
 
 # --------------------------------------------------------------------------

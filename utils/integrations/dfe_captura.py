@@ -37,7 +37,7 @@ from models.endereco_cliente import EnderecoCliente
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
 from utils.integrations.dfe_sefaz import (
-    montar_sessao_mtls, consultar, consultar_chave, cuf_autor, UfInvalidaError,
+    montar_sessao_mtls, consultar, consultar_chave, consultar_nsu, cuf_autor, UfInvalidaError,
     _find, _text, _local,
 )
 from utils.integrations import dfe_log
@@ -102,6 +102,12 @@ _MAX_LOTES_CICLO = int(os.getenv('DFE_MAX_LOTES_CICLO', '60'))
 _MAX_JANELAS_VAZIAS = int(os.getenv('DFE_MAX_JANELAS_VAZIAS', '50'))
 _MAX_SEG_EMPRESA = int(os.getenv('DFE_MAX_SEG_EMPRESA', '90'))
 _INTERVALO_LOTE = float(os.getenv('DFE_INTERVALO_LOTE_SEG', '0.4'))
+# Teto de consNSU por rodada na recuperação do buraco (656 "utilizar o ultNSU").
+# A SEFAZ limita o consNSU a 20 POR HORA por CNPJ — medido em 06/09/2026 na De
+# Paula (254): o 21º voltou "656 Ultrapassou o limite de 20 consultas por hora".
+# 20 por rodada (o cron volta em ~80 min) cobre o buraco típico (≤ 76 NSU) em
+# 2-4 rodadas; o pior caso (458: 1.784) leva dias, mas anda sozinho.
+_MAX_CONSNSU_RODADA = int(os.getenv('DFE_MAX_CONSNSU_RODADA', '20'))
 
 
 # ==========================================================================
@@ -773,8 +779,10 @@ def _processar_resumo(conn, cur, empresa, root, ctx):
     res = extrair_resumo_nota(root)
     chave = res["chave"]
 
-    # Teto de buscas por chave no ciclo → não consulta; deixa pendente p/ próximo tick.
-    if ctx["chnfe_usadas"] >= ctx["chnfe_max"]:
+    # Teto de buscas por chave no ciclo, OU a busca por chave já tomou 656 nesta
+    # rodada → não consulta; deixa pendente p/ o retry. O documento em si (o
+    # resumo) é gravado do mesmo jeito — a SEFAZ já o entregou, e não reentrega.
+    if ctx["chnfe_usadas"] >= ctx["chnfe_max"] or ctx.get("cooldown_656"):
         gravar_resumo_nota(conn, cur, empresa, res)
         return "resumo", 0
 
@@ -1140,8 +1148,15 @@ def _peek(d):
 
 def _processar_lote(conn, cur, empresa, docs, ctx, nsu_inicial):
     """Processa UM lote de docZip em ordem de NSU. Avança nsu_ok só APÓS cada doc
-    salvo (retoma de onde parou se cair). Para no 1º doc que falhar OU no corte de
-    656 numa busca por chave (ctx['cortar']). Devolve dict com contagens/nsu_ok/parada."""
+    salvo (retoma de onde parou se cair). Para no 1º doc que falhar.
+
+    O 656 numa busca por chave (ctx['cortar']) NÃO para o lote: só desliga as
+    buscas por chave (os resumos seguintes ficam pendentes). Até 06/09/2026 ele
+    parava aqui, e o resto do lote — que a SEFAZ JÁ tinha entregado — era jogado
+    fora; o cursor ficava até 49 NSU atrás do ultNSU e a rodada seguinte tomava
+    656 "utilizar o ultNSU" (82 vezes em 7 dias, 10 empresas: SAARA, PLUS, 458…).
+    A SEFAZ não reentrega o que já entregou — o que está na mão tem de ser salvo.
+    Devolve dict com contagens/nsu_ok/parada."""
     r = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0,
          'nsu_ok': nsu_inicial, 'parada': None}
     for d in docs:
@@ -1162,9 +1177,6 @@ def _processar_lote(conn, cur, empresa, docs, ctx, nsu_inicial):
         else:
             r['n_outro'] += 1
         r['nsu_ok'] = nsu   # só avança a marca APÓS salvar com sucesso
-        if ctx['cortar']:   # 656 numa busca por chave → para o lote (resumo pendente)
-            r['parada'] = f'NSU {nsu}: {ctx["motivo_corte"]}'
-            break
     return r
 
 
@@ -1351,6 +1363,15 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
                      'mensagem': 'A SEFAZ pediu para aguardar ~1h (consumo indevido). '
                                  f'Ela informou ultNSU={ret_ult}. O cursor local foi mantido — '
                                  'a próxima consulta retoma daqui.'})
+        # Variante "utilizar o ultNSU": a SEFAZ já entregou (a alguém) além do
+        # nosso cursor e não reentrega pelo distNSU. Sem isto a empresa fica
+        # presa para sempre — De Paula (254), Cata Preta (347), Harmonia (313),
+        # Maria do Carmo (348), Marques (350): 100% de 656 de 27/08 a 06/09/2026.
+        if 'ultnsu' in (xMotivo or '').lower() and ret_ult > ult_nsu and not dry_run:
+            empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
+                       'cnpj': cnpj, 'uf': uf}
+            base['recuperacao'] = _recuperar_buraco(sess, empresa, cuf, ult_nsu, ret_ult,
+                                                    ret_max, status_txt, origem, _det)
         return base
 
     # DRY-RUN (fora do 656): só lista o que viria. Não grava, não sobe, não avança.
@@ -1409,10 +1430,14 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
             # consultas), a 5002 e a 5000 (esta destravada por seed manual).
             #
             # Só avança quando o lote fechou LIMPO: com parada (documento falhou)
-            # ou 656 no meio, o cursor fica onde está — pular NSU não processado
-            # perderia documento em silêncio, que é o oposto do que se quer aqui.
-            if (cStat == '137' and parada is None and not ctx['cooldown_656']
-                    and ret_ult > nsu_ok):
+            # o cursor fica onde está — pular NSU não processado perderia documento
+            # em silêncio, que é o oposto do que se quer aqui.
+            #
+            # Vale para o 138 também: a SEFAZ diz "o último que entreguei foi
+            # ultNSU" e espera a próxima pergunta a partir dele. Com o lote todo
+            # salvo (inclusive após o 656 da busca por chave, que já não corta o
+            # lote), ficar atrás do ultNSU é o que rende o 656 "utilizar o ultNSU".
+            if cStat in ('137', '138') and parada is None and ret_ult > nsu_ok:
                 nsu_ok = ret_ult
 
             # Constraint 6: grava e AVANÇA o cursor ANTES do próximo lote (cai no
@@ -1509,7 +1534,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     tot_docs = tot['n_nota'] + tot['n_resumo'] + tot['n_evento'] + tot['n_outro']
     dfe_log.registrar('consulta', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
                       ret_ult, ret_max, tot_docs, tot['n_nota'], tot['n_evento'],
-                      detalhe=_det(parada or limite), origem=origem)
+                      detalhe=_det(parada or limite or ctx.get('motivo_corte')), origem=origem)
 
     base.update({'notas': tot['n_nota'], 'resumos': tot['n_resumo'],
                  'eventos': tot['n_evento'], 'outros': tot['n_outro'],
@@ -1520,6 +1545,75 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
                  'cooldown_656_chave': ctx['cooldown_656'],
                  'limite_atingido': limite, 'parada': parada})
     return base
+
+
+def _recuperar_buraco(sess, empresa, cuf, nsu_de, nsu_ate, ret_max, status_txt, origem, _det):
+    """Anda o cursor pelo BURACO (nsu_de, nsu_ate] com consNSU, um NSU por vez.
+
+    Por que assim e não "pular para o ultNSU": o ultNSU que a SEFAZ manda no 656
+    nem sempre é o que ela entregou a NÓS — na SAARA (1012) ele alternou entre
+    +2 e +12.000 na mesma manhã, e o distNSU voltou a aceitar de onde estávamos.
+    Pular perderia documento; andar NSU a NSU não perde nada, e se o distNSU
+    voltar a aceitar, a rodada seguinte simplesmente continua de onde a
+    caminhada chegou. O consNSU entrega inclusive o que a SEFAZ "já entregou"
+    (provado em 06/09/2026: 254, NSU 21739 → 138 com o documento).
+
+    Cada NSU salvo AVANÇA o cursor (SQL_NSU_656: mantém o cooldown do 656 que
+    acabou de vir). Para no teto da rodada, num 656 do próprio consNSU ou num
+    documento que falhar. Devolve um resumo para o chamador/log."""
+    cliente_id, cnpj = empresa['cliente_id'], empresa['cnpj']
+    ate = min(nsu_ate, nsu_de + _MAX_CONSNSU_RODADA)
+    ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf,
+           'chnfe_usadas': 0, 'chnfe_max': _MAX_CHNFE_CICLO,
+           'cooldown_656': False, 'cortar': False, 'motivo_corte': None,
+           'cli_index': Cliente.index_cpf_cnpj()}
+    tot = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0}
+    nsu_ok = nsu_de
+    parada = None
+    n_cons = 0
+    conn = _conectar()
+    try:
+        cur = conn.cursor(dictionary=True)
+        for nsu in range(nsu_de + 1, ate + 1):
+            time.sleep(_INTERVALO_LOTE)
+            try:
+                ret = consultar_nsu(sess, cnpj, cuf, nsu)
+            except RuntimeError as exc:
+                parada = f'consNSU {nsu}: {exc}'
+                break
+            n_cons += 1
+            c = _text(ret, 'cStat')
+            if c == '656':
+                parada = f'consNSU {nsu}: 656 {_text(ret, "xMotivo")}'
+                break
+            if c not in ('137', '138'):
+                parada = f'consNSU {nsu}: {c} {_text(ret, "xMotivo")}'
+                break
+            lote = _find(ret, 'loteDistDFeInt')
+            docs = [e for e in (lote.iter() if lote is not None else []) if _local(e.tag) == 'docZip']
+            rl = _processar_lote(conn, cur, empresa, docs, ctx, nsu)
+            for k in tot:
+                tot[k] += rl[k]
+            if rl['parada']:
+                parada = rl['parada']
+                break
+            # 137 = este NSU não tem nada nosso: passa por ele. 138 = salvo.
+            nsu_ok = nsu
+            execute_query(SQL_NSU_656, (cliente_id, cnpj, nsu_ok, ret_max, status_txt), fetch=False)
+        cur.close()
+    finally:
+        conn.close()
+
+    tot_docs = tot['n_nota'] + tot['n_resumo'] + tot['n_evento'] + tot['n_outro']
+    faltam = max(0, nsu_ate - nsu_ok)
+    det = (f'recuperação do buraco {nsu_de + 1}..{nsu_ate}: andou até {nsu_ok} '
+           f'({n_cons} consNSU, faltam {faltam})' + (f'; {parada}' if parada else ''))
+    dfe_log.registrar('cons_nsu', cliente_id, cnpj, nsu_de, '138' if tot_docs else '137',
+                      'recuperação por consNSU', nsu_ok, ret_max, tot_docs,
+                      tot['n_nota'], tot['n_evento'], detalhe=_det(det), origem=origem)
+    return {'de': nsu_de, 'ate': nsu_ate, 'chegou': nsu_ok, 'consultas': n_cons,
+            'docs': tot_docs, 'notas': tot['n_nota'], 'resumos': tot['n_resumo'],
+            'eventos': tot['n_evento'], 'faltam': faltam, 'parada': parada}
 
 
 def capturar_por_chave(cliente_id, chave, origem='manual'):
