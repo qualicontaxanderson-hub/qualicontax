@@ -750,15 +750,17 @@ def api_opcoes_filtros():
                     'numeros': numeros, 'numeros_trunc': num_trunc,
                     'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
                     'cnpjs_dest': cnpjs_dest,
-                    'estados': _opcoes_estados_entradas(where_sql, params)})
+                    'estados': _opcoes_estados_nfe(where_sql, params)})
 
 
-def _opcoes_estados_entradas(where_sql, params):
+def _opcoes_estados_nfe(where_sql, params):
     """Quantas notas há em cada opção dos selects FIXOS (Origem, Situação,
     Cadastro de Produtos, Documento) dentro do MESMO escopo/período. A tela
     esconde a opção que vier com zero — pedido de 07/09/2026: escolhida a
     empresa e o período, todo filtro oferece só o que existe ali (os Tom Select
-    já faziam isso; os quatro selects fixos ofereciam tudo sempre).
+    já faziam isso; os selects fixos ofereciam tudo sempre). Serve Entradas e
+    Saídas: o WHERE de quem chama já traz o tipo; a tela ignora chave que não
+    tem select (Saídas não tem Documento).
 
     As contas repetem a régua de cada filtro na listagem: cadastro por
     nfe_itens (completo = tem item e nenhum sem catálogo; parcial = com e sem;
@@ -769,6 +771,7 @@ def _opcoes_estados_entradas(where_sql, params):
         f"""SELECT SUM(x.origem = 'SEFAZ') AS o_sefaz,
                    SUM(x.origem IN ('UPLOAD','DROPBOX')) AS o_manual,
                    SUM(x.origem = 'Q-COLABORE') AS o_colabore,
+                   SUM(x.origem = 'Q-ROBO') AS o_robo,
                    SUM(x.cancelada = 0) AS autorizadas,
                    SUM(x.cancelada = 1) AS canceladas,
                    SUM(COALESCE(x.incompleta,0) = 0) AS completas,
@@ -791,11 +794,38 @@ def _opcoes_estados_entradas(where_sql, params):
         return int(r.get(k) or 0)
     return {
         'origem': {'SEFAZ': _i('o_sefaz'), 'MANUAL': _i('o_manual'),
-                   'Q-COLABORE': _i('o_colabore')},
+                   'Q-COLABORE': _i('o_colabore'), 'Q-ROBO': _i('o_robo')},
         'cancelado': {'0': _i('autorizadas'), '1': _i('canceladas')},
         'resumo': {'0': _i('completas'), '1': _i('resumos')},
         'vinc_status': {'completo': _i('cad_completo'), 'parcial': _i('cad_parcial'),
                         'sem': _i('cad_sem'), 'incompleto': _i('cad_incompleto')},
+    }
+
+
+def _opcoes_estados_cte(where_sql, params):
+    """O mesmo para os CT-e: Origem, Situação (coluna 'cancelado') e Modelo.
+    Sem o papel de propósito — a barra Emitidos/Tomados já mostra a contagem
+    dos dois lados, e o select não pode esconder o que ela oferece."""
+    r = execute_query(
+        f"""SELECT SUM(t.origem = 'SEFAZ') AS o_sefaz,
+                   SUM(t.origem IN ('UPLOAD','DROPBOX')) AS o_manual,
+                   SUM(t.origem = 'Q-COLABORE') AS o_colabore,
+                   SUM(t.origem = 'Q-ROBO') AS o_robo,
+                   SUM(t.cancelado = 0) AS autorizados,
+                   SUM(t.cancelado = 1) AS cancelados,
+                   SUM(t.modelo = '57') AS m57,
+                   SUM(t.modelo = '67') AS m67,
+                   SUM(t.modelo = '64') AS m64
+              FROM cte_documentos t {where_sql}""",
+        tuple(params), fetch=True, fetch_one=True) or {}
+
+    def _i(k):
+        return int(r.get(k) or 0)
+    return {
+        'origem': {'SEFAZ': _i('o_sefaz'), 'MANUAL': _i('o_manual'),
+                   'Q-COLABORE': _i('o_colabore'), 'Q-ROBO': _i('o_robo')},
+        'cancelado': {'0': _i('autorizados'), '1': _i('cancelados')},
+        'modelo': {'57': _i('m57'), '67': _i('m67'), '64': _i('m64')},
     }
 
 
@@ -827,7 +857,8 @@ def api_opcoes_filtros_saidas():
     return jsonify({'cnpjs': cnpjs, 'ufs': ufs['dest_uf'],
                     'numeros': numeros, 'numeros_trunc': num_trunc,
                     'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
-                    'cnpjs_emit': cnpjs_emit})
+                    'cnpjs_emit': cnpjs_emit,
+                    'estados': _opcoes_estados_nfe(where_sql, params)})
 
 
 @escrita_fiscal.route('/conf-cte/api/opcoes-filtros')
@@ -849,7 +880,8 @@ def api_opcoes_filtros_cte():
     params = params + d_params
     cnpjs, ufs = _opcoes_cnpjs_ufs('cte_documentos', 't', where_sql, params,
                                    'emit_cnpj', 'emit_nome', ['uf_ini', 'uf_fim'])
-    return jsonify({'cnpjs': cnpjs, 'ufs_ini': ufs['uf_ini'], 'ufs_fim': ufs['uf_fim']})
+    return jsonify({'cnpjs': cnpjs, 'ufs_ini': ufs['uf_ini'], 'ufs_fim': ufs['uf_fim'],
+                    'estados': _opcoes_estados_cte(where_sql, params)})
 
 
 # ---------------------------------------------------------------------------
@@ -2541,7 +2573,12 @@ def _where_lote_saidas(data):
     if f_vmax:
         where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
-    if f_origem:
+    # A MESMA tradução da listagem (07/09/2026): MANUAL = UPLOAD+DROPBOX.
+    if f_origem == 'SEFAZ':
+        where.append("n.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("n.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 'n')
@@ -5644,7 +5681,13 @@ def excluir_lote():
     if f_vmax:
         where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
-    if f_origem:
+    # A MESMA tradução da listagem: MANUAL = UPLOAD+DROPBOX. A coluna nunca
+    # guarda 'MANUAL'; sem isto o botão apaga 0 e a tela mente sobre o total.
+    if f_origem == 'SEFAZ':
+        where.append("n.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("n.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
 
@@ -8170,7 +8213,13 @@ def excluir_lote_saidas():
     if f_vmax:
         where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
-    if f_origem:
+    # A MESMA tradução da listagem: MANUAL = UPLOAD+DROPBOX. A coluna nunca
+    # guarda 'MANUAL'; sem isto o botão apaga 0 e a tela mente sobre o total.
+    if f_origem == 'SEFAZ':
+        where.append("n.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("n.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
 
@@ -8523,7 +8572,13 @@ def api_opcoes_filtros_nfse():
         f"""SELECT DISTINCT n.municipio_ibge AS m FROM nfse_capturadas n {where_sql}
             HAVING m IS NOT NULL AND m <> '' ORDER BY m""",
         tuple(params), fetch=True) or []
-    return jsonify({'prestadores': prest, 'municipios': [r['m'] for r in muni]})
+    # Situação: só a que existe no escopo (mesma regra das outras três telas).
+    # Sem o papel, pela mesma razão da barra Emitidas/Tomadas.
+    sit = execute_query(
+        f"""SELECT n.situacao AS s, COUNT(*) AS n FROM nfse_capturadas n {where_sql}
+            GROUP BY n.situacao""", tuple(params), fetch=True) or []
+    return jsonify({'prestadores': prest, 'municipios': [r['m'] for r in muni],
+                    'estados': {'situacao': {str(r['s']): int(r['n']) for r in sit if r['s']}}})
 
 
 @escrita_fiscal.route('/conf-nfse/api/notas')
