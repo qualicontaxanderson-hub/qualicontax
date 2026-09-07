@@ -749,7 +749,54 @@ def api_opcoes_filtros():
     return jsonify({'cnpjs': cnpjs, 'ufs': ufs['emit_uf'],
                     'numeros': numeros, 'numeros_trunc': num_trunc,
                     'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
-                    'cnpjs_dest': cnpjs_dest})
+                    'cnpjs_dest': cnpjs_dest,
+                    'estados': _opcoes_estados_entradas(where_sql, params)})
+
+
+def _opcoes_estados_entradas(where_sql, params):
+    """Quantas notas há em cada opção dos selects FIXOS (Origem, Situação,
+    Cadastro de Produtos, Documento) dentro do MESMO escopo/período. A tela
+    esconde a opção que vier com zero — pedido de 07/09/2026: escolhida a
+    empresa e o período, todo filtro oferece só o que existe ali (os Tom Select
+    já faziam isso; os quatro selects fixos ofereciam tudo sempre).
+
+    As contas repetem a régua de cada filtro na listagem: cadastro por
+    nfe_itens (completo = tem item e nenhum sem catálogo; parcial = com e sem;
+    sem = nenhum com catálogo — inclui a nota sem item; incompleto = algum sem),
+    Origem MANUAL = UPLOAD+DROPBOX, Documento por COALESCE(incompleta,0).
+    Chaves = o VALUE de cada <option>."""
+    r = execute_query(
+        f"""SELECT SUM(x.origem = 'SEFAZ') AS o_sefaz,
+                   SUM(x.origem IN ('UPLOAD','DROPBOX')) AS o_manual,
+                   SUM(x.origem = 'Q-COLABORE') AS o_colabore,
+                   SUM(x.cancelada = 0) AS autorizadas,
+                   SUM(x.cancelada = 1) AS canceladas,
+                   SUM(COALESCE(x.incompleta,0) = 0) AS completas,
+                   SUM(COALESCE(x.incompleta,0) = 1) AS resumos,
+                   SUM(x.itens > 0 AND x.sem_vinc = 0) AS cad_completo,
+                   SUM(x.sem_vinc > 0 AND x.com_vinc > 0) AS cad_parcial,
+                   SUM(x.com_vinc = 0) AS cad_sem,
+                   SUM(x.sem_vinc > 0) AS cad_incompleto
+              FROM (SELECT n.id, n.origem, n.cancelada, n.incompleta,
+                           COUNT(i.id) AS itens,
+                           SUM(i.id IS NOT NULL AND i.produto_catalogo_id IS NULL) AS sem_vinc,
+                           SUM(i.produto_catalogo_id IS NOT NULL) AS com_vinc
+                      FROM nfe_importacoes n
+                      LEFT JOIN nfe_itens i ON i.nfe_id = n.id
+                     {where_sql}
+                     GROUP BY n.id) x""",
+        tuple(params), fetch=True, fetch_one=True) or {}
+
+    def _i(k):
+        return int(r.get(k) or 0)
+    return {
+        'origem': {'SEFAZ': _i('o_sefaz'), 'MANUAL': _i('o_manual'),
+                   'Q-COLABORE': _i('o_colabore')},
+        'cancelado': {'0': _i('autorizadas'), '1': _i('canceladas')},
+        'resumo': {'0': _i('completas'), '1': _i('resumos')},
+        'vinc_status': {'completo': _i('cad_completo'), 'parcial': _i('cad_parcial'),
+                        'sem': _i('cad_sem'), 'incompleto': _i('cad_incompleto')},
+    }
 
 
 @escrita_fiscal.route('/conf-saidas/api/opcoes-filtros')
@@ -2431,7 +2478,14 @@ def _where_lote_entradas(data):
     if f_vmax:
         where.append('n.valor_total <= %s')
         params.append(float(f_vmax))
-    if f_origem:
+    # A MESMA tradução da listagem: MANUAL = UPLOAD+DROPBOX. Até 07/09/2026 o
+    # lote comparava origem='MANUAL' literal — que não existe — e o "excluir o
+    # que está na tela" com Origem=Manual não excluía nada.
+    if f_origem == 'SEFAZ':
+        where.append("n.origem = 'SEFAZ'")
+    elif f_origem == 'MANUAL':
+        where.append("n.origem IN ('UPLOAD','DROPBOX')")
+    elif f_origem:
         where.append('n.origem = %s')
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 'n')

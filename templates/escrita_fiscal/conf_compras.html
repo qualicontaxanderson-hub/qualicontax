@@ -604,6 +604,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     <option value="">— Todas —</option>
                     <option value="MANUAL">Manual (Upload/Dropbox)</option>
                     <option value="SEFAZ">SEFAZ (DFe)</option>
+                    <option value="Q-COLABORE">Q-Colabore</option>
                 </select>
             </div>
             <div>
@@ -1446,9 +1447,44 @@ function _preencheTS(ts, opcoes) {
         .filter(v => v && ts.options[v]);
     if (mantidos.length) ts.setValue(mantidos, true);
 }
+// Selects FIXOS (Origem, Situação, Cadastro de Produtos, Documento): oferecem
+// só a opção que tem nota no escopo/período — igual aos Tom Select. A lista
+// completa é guardada UMA vez e o select é REMONTADO a cada carga (remover e
+// recriar <option>, não esconder: o Safari ignora option[hidden]).
+// "— Todos —" (value '') fica sempre. Sem escopo, volta a lista inteira.
+const SELECTS_FIXOS = ['f_origem', 'f_cancelado', 'f_vinc_status', 'f_resumo'];
+const _opcoesFixas = {};
+function _guardaOpcoesFixas() {
+    SELECTS_FIXOS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !_opcoesFixas[id])
+            _opcoesFixas[id] = Array.from(el.options).map(o => ({value: o.value, text: o.text}));
+    });
+}
+function _recortaSelect(id, contagem) {
+    const el = document.getElementById(id);
+    if (!el || !_opcoesFixas[id]) return;
+    const antes = el.value;
+    const todas = _opcoesFixas[id];
+    const ficam = contagem
+        ? todas.filter(o => o.value === '' || (contagem[o.value] || 0) > 0)
+        : todas;
+    el.innerHTML = '';
+    ficam.forEach(o => el.add(new Option(o.text, o.value)));
+    el.value = ficam.some(o => o.value === antes) ? antes : '';
+    if (el.value !== antes) agendarBusca();  // o que estava marcado sumiu do escopo
+}
+function _recortaSelectsFixos(estados) {
+    _guardaOpcoesFixas();
+    SELECTS_FIXOS.forEach(id => {
+        const chave = id.replace(/^f_/, '');      // f_origem → estados.origem
+        _recortaSelect(id, estados ? (estados[chave] || {}) : null);
+    });
+}
 function carregarOpcoesFiltros() {
     if (!currentClienteId && !currentGrupoId) {
         [tsEmit, tsUf, tsNum, tsCfop, tsChave, tsDest].forEach(ts => _preencheTS(ts, []));
+        _recortaSelectsFixos(null);
         return;
     }
     // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
@@ -1469,6 +1505,7 @@ function carregarOpcoesFiltros() {
             _preencheTS(tsChave, (d.chaves || []).map(v => ({valor: v, texto: v})));
             _preencheTS(tsDest,
                 (d.cnpjs_dest || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
+            _recortaSelectsFixos(d.estados || null);
         })
         .catch(() => {});  // silencioso: os filtros continuam vazios
 }
