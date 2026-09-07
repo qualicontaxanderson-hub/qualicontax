@@ -1816,6 +1816,7 @@ def api_notas():
     f_origem = request.args.get('origem', '').strip()
     f_vinc_status = request.args.get('vinc_status', '').strip()
     f_cancelado = request.args.get('cancelado', '').strip()
+    f_resumo = request.args.get('resumo', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = 50
 
@@ -1829,7 +1830,7 @@ def api_notas():
         ('emit_uf', request.args.get('emit_uf', '').strip()),
         ('dest_cnpj', f_dest_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
         ('origem', f_origem), ('vinc_status', f_vinc_status),
-        ('cancelado', f_cancelado)) if v}
+        ('cancelado', f_cancelado), ('resumo', f_resumo)) if v}
     if page == 1 and (_termo or _filtros):
         _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
         registrar('leitura.buscou_entradas', 'fiscal', tabela='nfe_importacoes',
@@ -1874,6 +1875,7 @@ def api_notas():
         where.append('n.origem = %s')
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 'n')
+    _aplica_resumo(where, f_resumo, 'n')
     if f_vinc_status == 'completo':
         where.append(
             "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
@@ -2396,6 +2398,7 @@ def _where_lote_entradas(data):
     f_vmax       = str(data.get('vmax', '')).strip()
     f_origem     = str(data.get('origem', '')).strip()
     f_cancelado  = str(data.get('cancelado', '')).strip()
+    f_resumo     = str(data.get('resumo', '')).strip()
 
     where = ["n.tipo = 'entrada'"]
     extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
@@ -2432,6 +2435,7 @@ def _where_lote_entradas(data):
         where.append('n.origem = %s')
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 'n')
+    _aplica_resumo(where, f_resumo, 'n')
     return where, params
 
 
@@ -2916,6 +2920,26 @@ def _aplica_cancelada(where, valor, alias='n', coluna='cancelada'):
         where.append(c)
 
 
+# Filtro DOCUMENTO — parâmetro 'resumo', mesmo contrato de três valores do
+# 'cancelado': '' = Todos, '0' = Completas (XML inteiro), '1' = Só resumo (a
+# SEFAZ entregou só o resumo; falta Capturar). Pedido de 07/09/2026: sem isto o
+# usuário não separa o que já tem itens do que ainda está preso em RESUMO.
+# COALESCE porque a coluna nasceu depois das notas antigas — NULL é completa.
+def _clausula_resumo(valor, alias='n'):
+    v = str(valor or '').strip()
+    if v == '1':
+        return f'COALESCE({alias}.incompleta,0) = 1'
+    if v == '0':
+        return f'COALESCE({alias}.incompleta,0) = 0'
+    return None
+
+
+def _aplica_resumo(where, valor, alias='n'):
+    c = _clausula_resumo(valor, alias)
+    if c:
+        where.append(c)
+
+
 def _rel_filtro(escopo):
     """WHERE do relatório = o MESMO filtro da listagem (request.args). Replica as
     cláusulas de api_notas (entrada) / api_notas_saidas (saida) / api_ctes (cte) —
@@ -3011,6 +3035,7 @@ def _rel_filtro(escopo):
     if cl: w.append(cl)
     vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
     _aplica_cancelada(w, a.get('cancelado'), 'n')
+    _aplica_resumo(w, a.get('resumo'), 'n')
     return 'WHERE ' + ' AND '.join(w), p
 
 

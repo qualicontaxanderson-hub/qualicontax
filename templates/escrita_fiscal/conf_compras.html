@@ -624,6 +624,14 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     <option value="1">Canceladas</option>
                 </select>
             </div>
+            <div>
+                <label>Documento</label>
+                <select id="f_resumo" title="Completa = XML inteiro, com itens. Resumo = a SEFAZ entregou só o cabeçalho; falta Capturar.">
+                    <option value="">— Todos —</option>
+                    <option value="0">Completas (XML inteiro)</option>
+                    <option value="1">Só resumo — falta capturar</option>
+                </select>
+            </div>
             <!-- Produto / Por Produto tab -->
             <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
             <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
@@ -1539,6 +1547,7 @@ function clearFilters() {
     document.getElementById('f_origem').value = '';
     document.getElementById('f_vinc_status').value = '';
     document.getElementById('f_cancelado').value = '';
+    document.getElementById('f_resumo').value = '';
     currentPage = 1;
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
     // um Buscar puxaria a base inteira da empresa (dezenas de milhares de notas).
@@ -1564,6 +1573,7 @@ function getFilters() {
         origem: document.getElementById('f_origem').value,
         vinc_status: document.getElementById('f_vinc_status').value,
         cancelado: document.getElementById('f_cancelado').value,
+        resumo: document.getElementById('f_resumo').value,
         descricao: document.getElementById('f_descricao').value,
         ncm: document.getElementById('f_ncm').value,
     };
