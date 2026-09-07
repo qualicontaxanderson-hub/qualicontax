@@ -31,8 +31,9 @@ lados são idempotentes; o caminho impossível é arquivar sem lançar.
 Kill switch: ROTEADOR_IMPORTA=0 volta ao comportamento antigo (só move).
 
 Molde igual ao cron_captura_dfe.py: serviço de Cron próprio no Railway, Start
-Command ``python cron_roteador.py``, schedule ``*/15 * * * *``. O processo sobe,
-roda UMA rodada e SAI — o trigger é do Railway, não de uma thread viva.
+Command ``python cron_roteador.py``, schedule ``*/5 * * * *`` (era ``*/15`` até
+07/09/2026; a espera de 15 min incomodava e a rodada vazia é barata). O processo
+sobe, roda UMA rodada e SAI — o trigger é do Railway, não de uma thread viva.
 
 Cold-start enxuto — de propósito
 --------------------------------
