@@ -1710,6 +1710,52 @@ def status_sefaz():
         "  AND importado_em >= CURDATE() - INTERVAL 29 DAY "
         "GROUP BY cliente_id, DATE(importado_em)", fetch=True) or []
 
+    # ---- BAIXADAS (aba nova): dia da captura x empresa x servico, com a
+    # divisao resumo/completa. Pedido de 07/09/2026 — ver de relance o que
+    # entrou e o que AINDA falta capturar, filtrando por empresa e periodo.
+    #
+    # LEIA ISTO ANTES DE MEXER: `incompleta` e o estado de HOJE, nao o da
+    # chegada. O banco nao guarda o estado na importacao e o dfe_consulta_log
+    # grava docs/notas sem separar resumo de completa. Uma nota que entrou
+    # como resumo e foi capturada depois conta como COMPLETA na linha do dia
+    # em que entrou. Entao a coluna responde "do que entrou naquele dia,
+    # quanto ainda falta capturar" — a fila de trabalho, nao um historico.
+    #
+    # Resumo so existe em NF-e de ENTRADA: o resNFe sempre entra como entrada
+    # na otica do dono do certificado (dfe_captura.SQL_NOTA_RESUMO_UPSERT fixa
+    # tipo='entrada'). Saida e CT-e vem completos, entao ali resumos e 0 por
+    # construcao — nao e falta de dado.
+    #
+    # `resgataveis` repete a regua da aba Empresas: resumo ainda dentro dos 10
+    # dias em que a SEFAZ aceita a Ciencia. O relogio corre da EMISSAO, nao da
+    # captura — por isso DATEDIFF sobre data_emissao e nao sobre importado_em.
+    #
+    # Vai para a tela em VETOR, nao em objeto: sao 2.623 linhas e a pagina
+    # recarrega a cada 60 s. Em objeto o JSON dava 259 KB; em vetor, ~79 KB.
+    # A ordem das colunas esta em BX_COLS, que a tela le pelo nome.
+    bx = execute_query(
+        "SELECT DATE(n.importado_em) AS dia, n.cliente_id AS cid, "
+        "  IF(n.tipo='saida','nfe_sai','nfe_ent') AS servico, "
+        "  COUNT(*) AS total, "
+        "  SUM(COALESCE(n.incompleta,0)=1) AS resumos, "
+        "  SUM(COALESCE(n.incompleta,0)=0) AS completas, "
+        "  SUM(COALESCE(n.incompleta,0)=1 "
+        "      AND DATEDIFF(CURDATE(), n.data_emissao) <= 10) AS resgataveis "
+        "FROM nfe_importacoes n "
+        "WHERE n.origem='SEFAZ' AND n.importado_em >= CURDATE() - INTERVAL 29 DAY "
+        "GROUP BY dia, n.cliente_id, servico "
+        "UNION ALL "
+        "SELECT DATE(t.importado_em), t.cliente_id, 'cte', COUNT(*), 0, COUNT(*), 0 "
+        "FROM cte_documentos t "
+        "WHERE t.origem='SEFAZ' AND t.importado_em >= CURDATE() - INTERVAL 29 DAY "
+        "GROUP BY DATE(t.importado_em), t.cliente_id "
+        "ORDER BY dia DESC", fetch=True) or []
+    SERV = {'nfe_ent': 0, 'nfe_sai': 1, 'cte': 2}
+    # a data sai como 'YYYY-MM-DD' pelo _default de _json_para_tela
+    baixadas = [[r['dia'], r['cid'], SERV.get(r['servico'], 0),
+                 _i(r['total']), _i(r['resumos']), _i(r['completas']),
+                 _i(r['resgataveis'])] for r in bx if r['cid']]
+
     agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
     dados = {
         'topo': topo, 'topo_saida': topo_saida, 'topo_cte': topo_cte,
@@ -1719,6 +1765,10 @@ def status_sefaz():
         'ult656': ult656, 'capturas': capturas,
         'hist_dia': hist_dia, 'hist_ev': hist_ev, 'hist_ev_total': hist_ev_total,
         'emp_dia': emp_dia,
+        'baixadas': baixadas,
+        'bx_cols': ['dia', 'cid', 'servico', 'total', 'resumos',
+                    'completas', 'resgataveis'],
+        'bx_serv': ['nfe_ent', 'nfe_sai', 'cte'],
         'gerado_em': agora.strftime('%d/%m/%Y %H:%M'),
         'abrir_empresa': empresa_link,
     }

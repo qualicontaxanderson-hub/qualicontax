@@ -145,6 +145,7 @@
   <button class="aba" data-aba="capturas">Capturas <span class="n verde" id="n-cap"></span></button>
   <button class="aba" data-aba="travadas">Travadas <span class="n verm" id="n-trv"></span></button>
   <button class="aba" data-aba="certificados">Certificados <span class="n" id="n-cert"></span></button>
+  <button class="aba" data-aba="baixadas">Baixadas <span class="n amb" id="n-bx"></span></button>
   <button class="aba" data-aba="historico">Histórico 30 dias</button>
   <button class="aba emp" data-aba="empresa" id="aba-emp" hidden></button>
 </div></div>
@@ -200,6 +201,22 @@
     <button class="limpar" data-limpa="f-cert">limpar</button>
   </div>
   <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-cert"></table></div></div>
+</section>
+
+<!-- ══ BAIXADAS — o que a captura trouxe por dia e o que ainda e resumo ══ -->
+<section class="painel" id="p-baixadas">
+  <div class="kpis" id="bx-kpis"></div>
+  <div class="filtro" id="f-bx">
+    <label class="busca">🔎 <input type="search" placeholder="nº ou nome da empresa…" data-k="q"></label>
+    <div class="chips" data-k="per"><span class="rot">Período</span></div>
+    <div class="chips" data-k="serv"><span class="rot">Serviço</span></div>
+    <div class="chips" data-k="so"><span class="rot">Mostrar</span></div>
+    <div class="chips" data-k="agr"><span class="rot">Agrupar</span></div>
+    <span class="conta" id="c-bx"></span>
+    <button class="limpar" data-limpa="f-bx">limpar</button>
+  </div>
+  <div class="tbl-card"><div class="tbl-scroll"><table class="tbl" id="t-bx"></table></div></div>
+  <div class="nota nota-neutra" id="bx-rodape"></div>
 </section>
 
 <!-- ══ HISTÓRICO ══ -->
@@ -411,6 +428,84 @@ RENDER['f-cert'] = function(){ const f = F['f-cert'];
   tabela('t-cert', [{t:'Empresa'},{t:'Validade'},{t:'Dias',num:1},{t:'Situação'}], L.map(c => { const s = certSit(c.dias);
     return {emp:c.cliente_id, c:[ nome(c), `<span class="mono">${esc(c.validade||'—')}</span>`, c.dias===null?'<span class="vazio">—</span>':`<span class="${c.dias<0?'forte':''}" style="${c.dias<0?'color:var(--ss-verm)':''}">${c.dias}</span>`, `<span class="sit ${s.cor}">${s.t}</span>` ]}; }), 'Nenhum certificado com este filtro.'); };
 RENDER['f-cert']();
+
+// ══ BAIXADAS — o que a captura trouxe por dia e quanto ainda é resumo.
+// D.baixadas vem em VETOR (ver a rota): [dia, cid, servico, total, resumos,
+// completas, resgataveis]. São 2.623 linhas e a página recarrega a cada 60 s —
+// em objeto o JSON custava 259 KB, em vetor ~79 KB.
+//
+// O QUE 'resumo' SIGNIFICA AQUI: é o estado de HOJE. Do que entrou naquele
+// dia, quanto AINDA falta capturar. Não é histórico da chegada — nota que
+// entrou resumo e já foi capturada aparece como completa. O banco só guarda o
+// estado atual (`incompleta`) e o dfe_consulta_log grava docs/notas sem
+// separar resumo de completa. Está escrito no rodapé da aba, não some daqui.
+//
+// DATA COMO TEXTO, de propósito: `new Date('2026-09-08')` é lido como UTC e
+// no Brasil volta um dia. O eixo do gráfico já fatia a string pelo mesmo
+// motivo — aqui o filtro de período compara 'YYYY-MM-DD' como string.
+const BXS = ['nfe_ent','nfe_sai','cte'];
+const bxNome = {nfe_ent:'NF-e entrada', nfe_sai:'NF-e saída', cte:'CT-e'};
+const bxCor  = {nfe_ent:'verde', nfe_sai:'cinza', cte:'azul'};
+const BX = (D.baixadas||[]).map(v => ({dia:v[0], cid:v[1], serv:BXS[v[2]]||'nfe_ent',
+  total:v[3], resumos:v[4], completas:v[5], resgataveis:v[6]}));
+const bxEmp = {}; D.empresas.forEach(e => bxEmp[e.cliente_id] = e);
+const bxFd = d => `${d.slice(8,10)}/${d.slice(5,7)}/${d.slice(0,4)}`;
+function bxCorte(n){ const d = new Date(HOJE); d.setDate(d.getDate() - (n-1));
+  return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`; }
+const bxSelo = k => `<span class="sit ${bxCor[k]}">${bxNome[k]}</span>`;
+// resumo fora do prazo = a SEFAZ não aceita mais a Ciência (10 dias da EMISSÃO)
+const bxRes = r => !r.resumos ? '<span class="vazio">0</span>'
+  : `<span class="forte" style="color:var(--ss-ambar)">${num(r.resumos)}</span>`
+    + (r.resgataveis ? `<span class="apoio" style="color:var(--ss-ambar)">${num(r.resgataveis)} no prazo da Ciência</span>` : '')
+    + (r.resumos-r.resgataveis ? `<span class="apoio" style="color:var(--ss-verm)">${num(r.resumos-r.resgataveis)} fora do prazo</span>` : '');
+$('#n-bx').textContent = num(BX.reduce((a,r)=>a+r.resumos,0));
+
+montaChips('f-bx','per',[{v:'',t:'30 dias'},{v:'15',t:'15 dias'},{v:'7',t:'7 dias'},{v:'2',t:'ontem e hoje'},{v:'1',t:'hoje'}],'');
+montaChips('f-bx','serv',[{v:'',t:'Tudo',q:BX.reduce((a,r)=>a+r.total,0)},
+  {v:'nfe_ent',t:'NF-e entrada',q:BX.filter(r=>r.serv==='nfe_ent').reduce((a,r)=>a+r.total,0)},
+  {v:'nfe_sai',t:'NF-e saída',q:BX.filter(r=>r.serv==='nfe_sai').reduce((a,r)=>a+r.total,0)},
+  {v:'cte',t:'CT-e',q:BX.filter(r=>r.serv==='cte').reduce((a,r)=>a+r.total,0)}],'');
+montaChips('f-bx','so',[{v:'',t:'Tudo'},{v:'res',t:'só com resumo',q:cnt(BX,r=>r.resumos>0)}],'');
+montaChips('f-bx','agr',[{v:'dia',t:'por dia'},{v:'emp',t:'por empresa'}],'dia');
+ligaBusca('f-bx'); DEF['f-bx'] = {...F['f-bx']};
+
+RENDER['f-bx'] = function(){ const f = F['f-bx'];
+  const corte = f.per ? bxCorte(+f.per) : '';
+  const L = BX.filter(r => { const e = bxEmp[r.cid];
+    return casa(f.q, e&&e.numero, e&&e.nome) && (!corte || r.dia >= corte)
+        && (!f.serv || r.serv===f.serv) && (!f.so || r.resumos>0); });
+  const T = L.reduce((a,r) => ({t:a.t+r.total, r:a.r+r.resumos, c:a.c+r.completas, g:a.g+r.resgataveis}),
+                     {t:0, r:0, c:0, g:0});
+  const nEmp = new Set(L.map(r=>r.cid)).size, nDias = new Set(L.map(r=>r.dia)).size;
+  const pct = T.t ? Math.round(1000*T.r/T.t)/10 : 0, fora = T.r - T.g;
+  $('#bx-kpis').innerHTML =
+    `<div class="kpi"><div class="kpi-l">Baixadas no recorte</div><div class="kpi-v">${num(T.t)}</div><div class="kpi-s">${num(nEmp)} empresa(s) · ${num(nDias)} dia(s) com captura</div></div>
+     <div class="kpi ${T.r?'alerta':''}"><div class="kpi-l">Ainda em resumo</div><div class="kpi-v">${num(T.r)}</div><div class="kpi-s">${T.t?pct+'% do que entrou':'nada no recorte'}${T.g?` · <b>${num(T.g)} no prazo da Ciência</b>`:''}</div></div>
+     <div class="kpi ${fora?'ruim':''}"><div class="kpi-l">Resumo fora do prazo</div><div class="kpi-v">${num(fora)}</div><div class="kpi-s">passou dos 10 dias da emissão — a SEFAZ não aceita mais a Ciência</div></div>
+     <div class="kpi"><div class="kpi-l">Completas</div><div class="kpi-v">${num(T.c)}</div><div class="kpi-s">XML inteiro, com itens</div></div>`;
+
+  if(f.agr === 'emp'){
+    const g = {};
+    L.forEach(r => { const k = r.cid+'|'+r.serv;
+      (g[k] ||= {cid:r.cid, serv:r.serv, total:0, resumos:0, completas:0, resgataveis:0, dias:new Set()});
+      g[k].total += r.total; g[k].resumos += r.resumos; g[k].completas += r.completas;
+      g[k].resgataveis += r.resgataveis; g[k].dias.add(r.dia); });
+    const G = Object.values(g).sort((a,b) => b.resumos-a.resumos || b.total-a.total);
+    $('#c-bx').textContent = `${num(G.length)} linha(s) · ${num(T.t)} documento(s)`;
+    tabela('t-bx', [{t:'Empresa'},{t:'Serviço'},{t:'Dias com captura',num:1},{t:'Baixadas',num:1},{t:'Resumo',num:1},{t:'Completas',num:1}],
+      G.map(r => ({emp:r.cid, c:[ nome(bxEmp[r.cid]||{}), bxSelo(r.serv), num(r.dias.size),
+        `<span class="forte">${num(r.total)}</span>`, bxRes(r), num(r.completas) ]})),
+      'Nada neste recorte.');
+  } else {
+    const S = L.slice().sort((a,b) => a.dia<b.dia ? 1 : a.dia>b.dia ? -1 : (b.resumos-a.resumos || b.total-a.total));
+    $('#c-bx').textContent = `${num(S.length)} linha(s) · ${num(T.t)} documento(s)`;
+    tabela('t-bx', [{t:'Dia da captura'},{t:'Empresa'},{t:'Serviço'},{t:'Baixadas',num:1},{t:'Resumo',num:1},{t:'Completas',num:1}],
+      S.map(r => ({emp:r.cid, c:[ `<span class="mono">${bxFd(r.dia)}</span>`, nome(bxEmp[r.cid]||{}), bxSelo(r.serv),
+        `<span class="forte">${num(r.total)}</span>`, bxRes(r), num(r.completas) ]})),
+      'Nada neste recorte.');
+  }
+  $('#bx-rodape').innerHTML = `ℹ️ <div><b>Resumo = a SEFAZ entregou só o cabeçalho; falta Capturar o XML inteiro.</b> A coluna mostra o estado de <b>hoje</b>: do que entrou naquele dia, quanto ainda falta capturar — não é o histórico da chegada, porque o banco guarda só o estado atual (nota que entrou resumo e você já capturou aparece aqui como completa). <b>Só NF-e de entrada tem resumo</b>: saída e CT-e sempre chegam completos, por isso a coluna é 0 neles. O prazo da Ciência conta da <b>emissão</b> da nota, 10 dias — não da captura. Clique numa linha para abrir a empresa.</div>`; };
+RENDER['f-bx']();
 
 // ══ HISTÓRICO — 30 dias
 const diasLista = []; for(let i=29;i>=0;i--){ const d = new Date(HOJE); d.setDate(d.getDate()-i); diasLista.push(`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`); }
