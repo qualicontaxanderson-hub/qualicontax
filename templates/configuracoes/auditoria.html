@@ -29,6 +29,10 @@
     font-size:12px; color:#334155; }
 .aud-chip b { color:#0f3d2e; }
 .aud-vazio { color:#64748b; padding:24px 4px; }
+.page-actions { margin-left:auto; }
+.aud-atalho { display:inline-flex; align-items:center; gap:7px; border:1px solid #16a34a; color:#15803d;
+    background:#fff; border-radius:8px; padding:9px 15px; font-weight:700; font-size:13px; text-decoration:none; }
+.aud-atalho:hover { background:#ecfdf5; }
 .aud-lista { display:flex; flex-direction:column; gap:10px; }
 .aud-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:10px;
     padding:12px 14px; background:#fff; }
@@ -55,6 +59,10 @@
         <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
         <h1 class="page-title">Auditoria</h1>
         <p class="page-subtitle">Todas as movimentações registradas — quem fez o quê, quando e em qual empresa</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('configuracoes.colabore_envios') }}" class="aud-atalho">
+            <i class="fas fa-paper-plane"></i> Q-Colabore · Envios</a>
     </div>
 </div>
 

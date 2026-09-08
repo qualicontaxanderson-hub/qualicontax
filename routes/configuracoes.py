@@ -448,6 +448,322 @@ def _aud_export(f, cond, params):
 
 
 # ---------------------------------------------------------------------------
+# Q-COLABORE — painel de ENVIOS. SÓ ADMIN.
+#
+# PARA QUE ESTA TELA EXISTE: quando o arquivo não chega, a discussão vira
+# "eu coloquei na pasta" x "o Q-Colabore não funciona". Esta tela decide isso
+# com dado, separando DOIS estados que de fora parecem o mesmo:
+#
+#   PARADO    — o agente está VIVO (deu sinal agora há pouco) e não mandou
+#               nada. O programa roda; o problema é a pasta, a data de corte
+#               ou a extensão. A cobrança é do lado de lá.
+#   SEM SINAL — o agente não fala com a nuvem. Programa fechado, PC desligado
+#               ou sem internet. Aqui não adianta procurar arquivo nenhum.
+#
+# O QUE ESTA TELA NÃO SABE, e é honesto dizer: ela só enxerga o que CHEGOU. O
+# arquivo largado numa pasta que o agente não vigia, ou com extensão fora da
+# lista, não produz linha nenhuma aqui — a recusa (415/413/409) não é gravada
+# e o servidor nem fica sabendo. Quem enxerga a pasta é a máquina do
+# funcionário: lá o agente mantém o contador "Em 'Não enviados'" e uma cópia
+# de cada recusado. Trazer esse número para cá exige o agente REPORTAR o ciclo
+# (build novo do .exe). Enquanto isso não existe, "agente vivo + zero envio" é
+# a melhor denúncia que temos — e é exatamente o cartão PARADO.
+#
+# O NOME DO ARQUIVO NÃO APARECE porque não é gravado, de propósito: nome de
+# .pfx carrega a senha do certificado (ver routes/colabore_api.py). O que a
+# auditoria guarda por envio é ação, módulo, extensão e tamanho.
+# ---------------------------------------------------------------------------
+_CB_ACAO = 'escrita.enviou_arquivo'
+
+# Sem contato acima disso = o agente não está falando com a nuvem. O heartbeat
+# é o próprio GET /config, a cada 60 s (teto de 5 min no recuo por falha de
+# rede), então 24 h é folga enorme: quem passa disso está mesmo fora do ar.
+_CB_SEM_SINAL_H = 24
+
+# Agente vivo e nenhum envio em tantos DIAS UTEIS JA FECHADOS = PARADO.
+#
+# Por que dia util fechado, e nao dia corrido: na primeira medicao real
+# (08/09/2026) o time inteiro caiu em "Parado" com tres dias corridos — o
+# ultimo envio tinha sido sexta 04/09 e vieram sabado, domingo e o feriado de
+# 7 de setembro. O alarme estava tecnicamente certo e operacionalmente inutil:
+# um indicador que grita toda segunda-feira deixa de ser lido. Contar so dia
+# util EXCLUI o fim de semana; contar so dia FECHADO (nem o dia do envio nem o
+# de hoje) tira o susto das 9h da manha, quando ninguem ainda mandou nada.
+#
+# Feriado no meio da semana ainda conta — nao ha calendario de feriado aqui, e
+# inventar um seria pior que o erro que ele evita. O cartao sempre mostra "ha
+# N dias" junto do selo, entao o numero cru nunca fica escondido.
+_CB_PARADO_DIAS = 3
+
+# Enviou nas últimas tantas horas = está entregando agora.
+_CB_ENVIANDO_H = 24
+
+_CB_ESTADOS = {
+    'enviando':    ('Enviando',    'ok',     'entregou nas últimas 24 h'),
+    'ok':          ('Em dia',      'ok',     'entregou há poucos dias'),
+    'parado':      ('Parado',      'alerta', 'o agente está vivo e não manda nada'),
+    'sem_sinal':   ('Sem sinal',   'ruim',   'o agente não fala com a nuvem'),
+    'nunca_ligou': ('Nunca ligou', 'ruim',   'a chave foi gerada e o programa nunca abriu'),
+    'revogada':    ('Revogada',    'neutro', 'a chave está desligada — não envia'),
+    'sem_chave':   ('Sem chave',   'neutro', 'o funcionário ainda não tem chave'),
+}
+
+
+def _cb_tam(b):
+    """Bytes em texto curto. Sem casa decimal onde ela não informa nada."""
+    b = int(b or 0)
+    if b < 1024:
+        return '%d B' % b
+    if b < 1024 * 1024:
+        return '%.0f KB' % (b / 1024.0)
+    if b < 1024 * 1024 * 1024:
+        return '%.1f MB' % (b / (1024.0 * 1024))
+    return '%.2f GB' % (b / (1024.0 * 1024 * 1024))
+
+
+def _cb_uteis(quando, agora):
+    """Dias uteis JA FECHADOS entre o envio e hoje. Nao conta o dia do envio
+    nem o dia de hoje — os dois estao em curso do ponto de vista da cobranca.
+    Devolve None quando nunca houve envio."""
+    if not quando or not agora:
+        return None
+    d = quando.date() + timedelta(days=1)
+    fim = agora.date()
+    n = 0
+    while d < fim and n < 400:
+        if d.weekday() < 5:                 # 5=sabado, 6=domingo
+            n += 1
+        d += timedelta(days=1)
+    return n
+
+
+def _cb_desde(horas):
+    """'há 3 h' / 'há 2 dias'. None quando nunca houve."""
+    if horas is None:
+        return None
+    h = int(horas)
+    if h < 1:
+        return 'agora há pouco'
+    if h < 24:
+        return 'há %d h' % h
+    d = h // 24
+    return 'há 1 dia' if d == 1 else 'há %d dias' % d
+
+
+def _cb_filtros():
+    """Filtros da query string. Período padrão: 30 dias — envio é hábito, e em
+    7 dias um feriado já vira 'ninguém mandou nada'."""
+    hoje = date.today()
+
+    def _int(nome):
+        v = (request.args.get(nome) or '').strip()
+        try:
+            return int(v) if v != '' else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        'data_ini': request.args.get('data_ini', '').strip() or (hoje - timedelta(days=29)).isoformat(),
+        'data_fim': request.args.get('data_fim', '').strip() or hoje.isoformat(),
+        'estado': request.args.get('estado', '').strip(),
+        'pessoa': request.args.get('pessoa', '').strip(),
+        'qmin': _int('qmin'),
+        'qmax': _int('qmax'),
+        'ordem': request.args.get('ordem', '').strip() or 'risco',
+    }
+
+
+def _cb_qs(f, **over):
+    """Query string dos filtros com sobrescrita. Existe porque a tela monta link
+    trocando UM filtro e mantendo os outros: colar `&data_ini=novo` no fim de uma
+    qs que ja tinha data_ini nao troca nada — o Flask le a PRIMEIRA ocorrencia e
+    o clique nao faz efeito nenhum. Aqui o dicionario e mesclado ANTES de virar
+    texto. Passar None num campo o REMOVE (e assim que "Todos" limpa o estado)."""
+    from urllib.parse import urlencode
+    d = dict(f)
+    d.update(over)
+    return urlencode({k: v for k, v in d.items()
+                      if v not in ('', None) and not (k == 'ordem' and v == 'risco')})
+
+
+@configuracoes.route('/colabore/envios')
+@admin_required
+def colabore_envios():
+    f = _cb_filtros()
+    ini, fim = f['data_ini'] + ' 00:00:00', f['data_fim'] + ' 23:59:59'
+
+    # (0) O relogio e o do BANCO, um so para a tela inteira. NOW() do MySQL vem
+    #     em -03:00; datetime.now() do Python nesta maquina daria outra hora e
+    #     "ha 3 h" viraria "ha 6 h" em quem acabou de enviar.
+    agora = (execute_query("SELECT NOW() AS agora", fetch=True, fetch_one=True) or {}).get('agora')
+
+    # (1) Quem tem chave. A idade do contato é calculada NO BANCO
+    #     (TIMESTAMPDIFF contra NOW()) — misturar o relógio do Python com o do
+    #     MySQL daria "3 horas sem sinal" em quem acabou de falar.
+    pessoas_raw = execute_query(
+        "SELECT c.usuario_id AS uid, u.nome, u.login, u.situacao, "
+        "       c.ativo, c.versao, c.token_prefixo, c.data_inicio_captura, "
+        "       c.ultimo_contato, "
+        "       TIMESTAMPDIFF(MINUTE, c.ultimo_contato, NOW()) AS min_contato, "
+        "       (c.token_hash IS NOT NULL AND c.token_hash <> '') AS tem_chave "
+        "  FROM colabore_config c JOIN usuarios u ON u.id = c.usuario_id",
+        fetch=True) or []
+
+    # (2) Envios DENTRO do período — é o que as quantidades e o filtro medem.
+    env = execute_query(
+        "SELECT l.usuario_id AS uid, COUNT(*) AS n, "
+        "       COALESCE(SUM(CAST(JSON_UNQUOTE(JSON_EXTRACT(l.dados_novos,'$.tamanho_bytes')) "
+        "                         AS UNSIGNED)), 0) AS bytes, "
+        "       MAX(l.data_hora) AS ultimo "
+        "  FROM logs_sistema l "
+        " WHERE l.acao = %s AND l.modulo = 'colabore' "
+        "   AND l.data_hora >= %s AND l.data_hora <= %s "
+        " GROUP BY l.usuario_id", (_CB_ACAO, ini, fim), fetch=True) or []
+    por_uid = {r['uid']: r for r in env if r['uid']}
+
+    # (3) Último envio de TODOS OS TEMPOS. O estado não pode depender do
+    #     período escolhido: quem mandou ontem não vira "parado" porque alguém
+    #     filtrou a semana passada.
+    ult = {r['uid']: r for r in (execute_query(
+        "SELECT l.usuario_id AS uid, MAX(l.data_hora) AS quando, "
+        "       TIMESTAMPDIFF(HOUR, MAX(l.data_hora), NOW()) AS h "
+        "  FROM logs_sistema l WHERE l.acao = %s AND l.modulo = 'colabore' "
+        " GROUP BY l.usuario_id", (_CB_ACAO,), fetch=True) or []) if r['uid']}
+
+    # (4) Extensões e (5) dias — o retrato do período, já com a pessoa aplicada
+    #     quando houver, para o gráfico não contar o que a lista não mostra.
+    cond_p, par_p = '', []
+    if f['pessoa']:
+        cond_p, par_p = " AND COALESCE(l.usuario_nome,'') = %s ", [f['pessoa']]
+    base = ("  FROM logs_sistema l WHERE l.acao = %s AND l.modulo = 'colabore' "
+            "   AND l.data_hora >= %s AND l.data_hora <= %s " + cond_p)
+    pars = [_CB_ACAO, ini, fim] + par_p
+
+    exts = execute_query(
+        "SELECT COALESCE(JSON_UNQUOTE(JSON_EXTRACT(l.dados_novos,'$.ext')),'?') AS ext, "
+        "       COUNT(*) AS n, "
+        "       COALESCE(SUM(CAST(JSON_UNQUOTE(JSON_EXTRACT(l.dados_novos,'$.tamanho_bytes')) "
+        "                         AS UNSIGNED)), 0) AS bytes " + base +
+        " GROUP BY ext ORDER BY n DESC", tuple(pars), fetch=True) or []
+
+    dias_raw = {str(r['dia']): int(r['n']) for r in execute_query(
+        "SELECT DATE(l.data_hora) AS dia, COUNT(*) AS n " + base +
+        " GROUP BY dia", tuple(pars), fetch=True) or []}
+
+    # Série do gráfico: TODOS os dias do período, inclusive os zerados — buraco
+    # de fim de semana é informação, e barra ausente mentiria sobre a data.
+    d0 = date.fromisoformat(f['data_ini'])
+    d1 = date.fromisoformat(f['data_fim'])
+    if d1 < d0:
+        d0, d1 = d1, d0
+    dias, pico = [], max(list(dias_raw.values()) + [0])
+    d = d0
+    while d <= d1 and len(dias) <= 120:
+        iso = d.isoformat()
+        n = dias_raw.get(iso, 0)
+        dias.append({'iso': iso, 'br': d.strftime('%d/%m'), 'n': n,
+                     'pct': round(100.0 * n / pico) if pico else 0})
+        d += timedelta(days=1)
+
+    # (6) O cartão de cada pessoa. A ORDEM DOS TESTES É A REGRA: chave
+    #     desligada vence tudo (não envia mesmo), depois o sinal do agente, e
+    #     só então a idade do último envio.
+    cartoes = []
+    for p in pessoas_raw:
+        e = por_uid.get(p['uid']) or {}
+        u = ult.get(p['uid']) or {}
+        h_env = u.get('h')
+        h_env = int(h_env) if h_env is not None else None
+        m_con = p.get('min_contato')
+        m_con = int(m_con) if m_con is not None else None
+        vivo = m_con is not None and m_con <= _CB_SEM_SINAL_H * 60
+        uteis = _cb_uteis(u.get('quando'), agora)
+
+        if not p['tem_chave']:
+            estado = 'sem_chave'
+        elif not p['ativo']:
+            estado = 'revogada'
+        elif m_con is None:
+            estado = 'nunca_ligou'
+        elif not vivo:
+            estado = 'sem_sinal'
+        elif h_env is not None and h_env <= _CB_ENVIANDO_H:
+            estado = 'enviando'
+        elif uteis is not None and uteis < _CB_PARADO_DIAS:
+            estado = 'ok'
+        else:
+            estado = 'parado'
+
+        rot, cor, frase = _CB_ESTADOS[estado]
+        cartoes.append({
+            'uid': p['uid'], 'nome': p['nome'], 'login': p.get('login'),
+            'inativo': (p.get('situacao') or 'ATIVO') != 'ATIVO',
+            'estado': estado, 'rotulo': rot, 'cor': cor, 'frase': frase,
+            'n': int(e.get('n') or 0), 'bytes': int(e.get('bytes') or 0),
+            'tam': _cb_tam(e.get('bytes')),
+            'ultimo_periodo': e.get('ultimo'),
+            'ultimo_sempre': u.get('quando'),
+            'envio_desde': _cb_desde(h_env), 'uteis': uteis,
+            'contato_desde': _cb_desde(None if m_con is None else m_con / 60.0),
+            'vivo': vivo, 'data_inicio': p.get('data_inicio_captura'),
+            'prefixo': p.get('token_prefixo'), 'versao': p.get('versao'),
+        })
+
+    # Totais ANTES do filtro de exibição — o topo conta o que aconteceu, não o
+    # recorte que a pessoa escolheu ver.
+    tot_arq = sum(c['n'] for c in cartoes)
+    tot_byt = sum(c['bytes'] for c in cartoes)
+    kpi = {
+        'arquivos': tot_arq, 'volume': _cb_tam(tot_byt),
+        'enviaram': sum(1 for c in cartoes if c['n']),
+        'com_chave': sum(1 for c in cartoes if c['estado'] != 'sem_chave'),
+        'parados': sum(1 for c in cartoes if c['estado'] == 'parado'),
+        'sem_sinal': sum(1 for c in cartoes if c['estado'] in ('sem_sinal', 'nunca_ligou')),
+    }
+    # Contagem por estado para os chips do filtro — sempre sobre a base inteira,
+    # senão o chip diria zero justamente depois de você clicar nele.
+    por_estado = {k: sum(1 for c in cartoes if c['estado'] == k) for k in _CB_ESTADOS}
+
+    if f['estado']:
+        cartoes = [c for c in cartoes if c['estado'] == f['estado']]
+    if f['pessoa']:
+        cartoes = [c for c in cartoes if c['nome'] == f['pessoa']]
+    if f['qmin'] is not None:
+        cartoes = [c for c in cartoes if c['n'] >= f['qmin']]
+    if f['qmax'] is not None:
+        cartoes = [c for c in cartoes if c['n'] <= f['qmax']]
+
+    ordens = {
+        # Atenção primeiro: parado e sem sinal no topo, o resto por quantidade.
+        'risco': lambda c: ({'parado': 0, 'nunca_ligou': 1, 'sem_sinal': 1}.get(c['estado'], 5),
+                            -c['n'], (c['nome'] or '').upper()),
+        'mais':  lambda c: (-c['n'], (c['nome'] or '').upper()),
+        'menos': lambda c: (c['n'], (c['nome'] or '').upper()),
+        'nome':  lambda c: (c['nome'] or '').upper(),
+    }
+    cartoes.sort(key=ordens.get(f['ordem'], ordens['risco']))
+
+    pessoas = sorted({p['nome'] for p in pessoas_raw if p['nome']})
+    # Atalhos de periodo montados AQUI: o Jinja nao faz aritmetica de data, e
+    # calcular no template com string daria off-by-one na virada do mes.
+    hoje = date.today()
+    atalhos = [{'t': t, 'ini': (hoje - timedelta(days=k - 1)).isoformat(),
+                'fim': hoje.isoformat()}
+               for t, k in (('hoje', 1), ('7 dias', 7), ('15 dias', 15),
+                            ('30 dias', 30), ('90 dias', 90))]
+    registrar('leitura.abriu_envios_colabore', 'colabore', tabela='logs_sistema',
+              depois={'periodo': '%s a %s' % (f['data_ini'], f['data_fim']),
+                      'arquivos': tot_arq, 'parados': kpi['parados']})
+    return render_template('configuracoes/colabore_envios.html',
+                           f=f, qs=_cb_qs(f), link=lambda **kw: '?' + _cb_qs(f, **kw),
+                           cartoes=cartoes, kpi=kpi,
+                           por_estado=por_estado, estados=_CB_ESTADOS,
+                           exts=[dict(r, tam=_cb_tam(r['bytes'])) for r in exts],
+                           dias=dias, pico=pico, pessoas=pessoas, atalhos=atalhos,
+                           parado_dias=_CB_PARADO_DIAS, sem_sinal_h=_CB_SEM_SINAL_H)
+
+
+# ---------------------------------------------------------------------------
 # F1 — Caixa de entrada (_ENTRADA do Dropbox). SÓ ADMIN. SÓ metadados: nunca
 # baixa/abre arquivo, nunca grava o NOME no log (nomes de .pfx podem conter a
 # senha do certificado). Só listar e renomear.

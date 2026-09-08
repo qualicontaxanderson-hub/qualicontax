@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Q-Colabore · Envios - Qualicontax{% endblock %}
+{% block content %}
+{#
+  Painel de envios do Q-Colabore. Cartão por PESSOA, não tabela: cada
+  funcionário é uma "coisa" com ESTADO (enviando / parado / sem sinal), e é o
+  estado que se lê de relance — tabela esconderia isso numa coluna.
+
+  O cartão inteiro é link para a Auditoria já filtrada por essa pessoa, módulo
+  Colabore e o mesmo período: daqui se vê QUANTO, lá se vê CADA envio.
+#}
+<style>
+.cb-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:16px; }
+.cb-kpi { border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:13px 15px; border-left:3px solid #16a34a; }
+.cb-kpi.alerta { border-left-color:#d97706; background:#fffbeb; }
+.cb-kpi.ruim { border-left-color:#dc2626; background:#fef2f2; }
+.cb-kpi-l { font-size:11.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.3px; }
+.cb-kpi-v { font-size:27px; font-weight:800; color:#0f3d2e; line-height:1.25; }
+.cb-kpi.alerta .cb-kpi-v { color:#b45309; } .cb-kpi.ruim .cb-kpi-v { color:#b91c1c; }
+.cb-kpi-s { font-size:12px; color:#64748b; line-height:1.45; }
+
+.cb-nota { border-radius:10px; padding:11px 15px; margin-bottom:16px; font-size:13px; line-height:1.55; display:flex; gap:9px; }
+.cb-nota.al { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+.cb-nota.ne { background:#f8fafc; border:1px solid #e2e8f0; color:#475569; }
+.cb-nota i { margin-top:2px; }
+
+.cb-graf { border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:14px 16px 10px; margin-bottom:16px; }
+.cb-graf-t { font-size:12.5px; font-weight:700; color:#0f3d2e; margin-bottom:12px; }
+.cb-barras { display:flex; align-items:flex-end; gap:2px; height:110px; }
+.cb-b { flex:1; min-width:3px; display:flex; flex-direction:column; justify-content:flex-end; height:100%; }
+.cb-b i { display:block; background:#16a34a; border-radius:3px 3px 0 0; min-height:2px; }
+.cb-b.zero i { background:#e5e7eb; }
+.cb-eixo { display:flex; justify-content:space-between; font-size:10.5px; color:#94a3b8; margin-top:6px; }
+
+.cb-filtro { border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:14px 16px; margin-bottom:16px; }
+.cb-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+.cb-grid label { display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:#475569; }
+.cb-grid input, .cb-grid select { height:36px; border:1px solid #d1d5db; border-radius:8px; padding:0 10px; font-size:13px; background:#fff; }
+.cb-qtd { display:flex; gap:8px; } .cb-qtd input { width:100%; min-width:0; }
+.cb-linha { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; }
+.cb-rot { font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.3px; }
+.cb-chip { border:1px solid #d1d5db; border-radius:999px; padding:4px 12px; font-size:12px; color:#475569;
+    text-decoration:none; background:#fff; }
+.cb-chip:hover { border-color:#16a34a; color:#15803d; }
+.cb-chip.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; font-weight:700; }
+.cb-chip b { margin-left:5px; opacity:.7; font-weight:700; }
+.cb-btn { background:#0f3d2e; color:#fff; border:none; padding:8px 18px; border-radius:8px; font-weight:700; cursor:pointer; }
+.cb-lim { font-size:13px; color:#475569; text-decoration:none; padding:8px 6px; }
+
+.cb-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(268px,1fr)); gap:12px; }
+.cb-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:12px; background:#fff;
+    padding:13px 15px; text-decoration:none; display:block; color:inherit; }
+.cb-card:hover { border-color:#16a34a; box-shadow:0 2px 10px rgba(15,61,46,.09); }
+.cb-card.alerta { border-left-color:#d97706; } .cb-card.alerta:hover { border-color:#d97706; }
+.cb-card.ruim { border-left-color:#dc2626; } .cb-card.ruim:hover { border-color:#dc2626; }
+.cb-card.neutro { border-left-color:#cbd5e1; }
+.cb-top { display:flex; align-items:flex-start; gap:8px; }
+.cb-nome { font-size:13.5px; font-weight:800; color:#0f3d2e; line-height:1.3; flex:1; }
+.cb-sit { font-size:10.5px; font-weight:700; border-radius:999px; padding:2px 9px; white-space:nowrap; }
+.cb-sit.ok { background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; }
+.cb-sit.alerta { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+.cb-sit.ruim { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+.cb-sit.neutro { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+.cb-num { font-size:29px; font-weight:800; color:#0f3d2e; line-height:1.15; margin-top:9px; }
+.cb-num small { font-size:12px; font-weight:600; color:#64748b; margin-left:5px; }
+.cb-zero { color:#cbd5e1; }
+.cb-linhas { margin-top:8px; display:flex; flex-direction:column; gap:2px; }
+.cb-li { font-size:12px; color:#475569; line-height:1.5; }
+.cb-li b { color:#0f172a; font-weight:700; }
+.cb-frase { font-size:11.5px; color:#94a3b8; margin-top:7px; line-height:1.45; }
+.cb-vazio { color:#64748b; padding:26px 4px; }
+@media (max-width:520px) { .cb-cards { grid-template-columns:1fr; } .cb-barras { height:82px; } }
+</style>
+
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.auditoria') }}" class="back-link">← Auditoria</a>
+        <h1 class="page-title">Q-Colabore · Envios</h1>
+        <p class="page-subtitle">Quem está mandando arquivo, quanto, e quem tem o programa aberto sem mandar nada</p>
+    </div>
+</div>
+
+<div class="cb-kpis">
+    <div class="cb-kpi">
+        <div class="cb-kpi-l">Arquivos recebidos</div>
+        <div class="cb-kpi-v">{{ kpi.arquivos }}</div>
+        <div class="cb-kpi-s">{{ kpi.volume }} no período</div>
+    </div>
+    <div class="cb-kpi">
+        <div class="cb-kpi-l">Quem mandou</div>
+        <div class="cb-kpi-v">{{ kpi.enviaram }}</div>
+        <div class="cb-kpi-s">de {{ kpi.com_chave }} pessoa(s) com chave</div>
+    </div>
+    <div class="cb-kpi {{ 'alerta' if kpi.parados else '' }}">
+        <div class="cb-kpi-l">Parados</div>
+        <div class="cb-kpi-v">{{ kpi.parados }}</div>
+        <div class="cb-kpi-s">programa aberto e nenhum envio há {{ parado_dias }}+ dias úteis</div>
+    </div>
+    <div class="cb-kpi {{ 'ruim' if kpi.sem_sinal else '' }}">
+        <div class="cb-kpi-l">Sem sinal</div>
+        <div class="cb-kpi-v">{{ kpi.sem_sinal }}</div>
+        <div class="cb-kpi-s">o agente não fala com a nuvem há {{ sem_sinal_h }}h+</div>
+    </div>
+</div>
+
+{% if kpi.parados %}
+<div class="cb-nota al">
+    <i class="fas fa-triangle-exclamation"></i>
+    <div><b>{{ kpi.parados }} pessoa(s) com o Q-Colabore vivo e sem mandar nada há {{ parado_dias }}+ dias úteis.</b>
+    O programa está rodando e falando com a nuvem agora — então não é "o Q-Colabore não funciona".
+    O arquivo está numa pasta que o agente não vigia, é anterior à data de corte, ou tem extensão fora da lista.
+    Na máquina da pessoa, a subpasta <b>"Não enviados"</b> guarda cópia de cada recusado.
+    <br>Fim de semana não conta, e nem o dia de hoje — só dia útil já fechado.</div>
+</div>
+{% endif %}
+
+<div class="cb-graf">
+    <div class="cb-graf-t">Arquivos recebidos por dia{% if f.pessoa %} — {{ f.pessoa }}{% endif %}</div>
+    <div class="cb-barras">
+        {% for d in dias %}
+        <span class="cb-b {{ 'zero' if not d.n else '' }}" title="{{ d.br }} · {{ d.n }} arquivo(s)">
+            <i style="height:{{ d.pct if d.n else 0 }}%"></i></span>
+        {% endfor %}
+    </div>
+    <div class="cb-eixo">
+        <span>{{ dias[0].br if dias else '' }}</span>
+        <span>pico do período: {{ pico }} arquivo(s) num dia</span>
+        <span>{{ dias[-1].br if dias else '' }}</span>
+    </div>
+</div>
+
+<form method="get" class="cb-filtro">
+    <div class="cb-grid">
+        <label>De <input type="date" name="data_ini" value="{{ f.data_ini }}"></label>
+        <label>Até <input type="date" name="data_fim" value="{{ f.data_fim }}"></label>
+        <label>Pessoa
+            <select name="pessoa">
+                <option value="">Todas</option>
+                {% for p in pessoas %}<option value="{{ p }}" {{ 'selected' if f.pessoa == p else '' }}>{{ p }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Quantidade de arquivos
+            <span class="cb-qtd">
+                <input type="number" name="qmin" min="0" placeholder="mín." value="{{ f.qmin if f.qmin is not none else '' }}">
+                <input type="number" name="qmax" min="0" placeholder="máx." value="{{ f.qmax if f.qmax is not none else '' }}">
+            </span>
+        </label>
+        <label>Ordenar por
+            <select name="ordem">
+                <option value="risco" {{ 'selected' if f.ordem == 'risco' else '' }}>Quem precisa de atenção</option>
+                <option value="mais" {{ 'selected' if f.ordem == 'mais' else '' }}>Mais arquivos</option>
+                <option value="menos" {{ 'selected' if f.ordem == 'menos' else '' }}>Menos arquivos</option>
+                <option value="nome" {{ 'selected' if f.ordem == 'nome' else '' }}>Nome</option>
+            </select>
+        </label>
+    </div>
+    {# O estado vai por LINK e não por select: é o gesto de um clique que o
+       Anderson usa nas outras telas, e o chip já mostra quantos são. #}
+    <input type="hidden" name="estado" value="{{ f.estado }}">
+    <div class="cb-linha">
+        <span class="cb-rot">Período</span>
+        {% for a in atalhos %}
+        <a class="cb-chip {{ 'on' if f.data_ini == a.ini and f.data_fim == a.fim else '' }}"
+           href="{{ link(data_ini=a.ini, data_fim=a.fim) }}">{{ a.t }}</a>
+        {% endfor %}
+    </div>
+    <div class="cb-linha">
+        <span class="cb-rot">Estado</span>
+        <a class="cb-chip {{ 'on' if not f.estado else '' }}"
+           href="{{ link(estado=None) }}">Todos<b>{{ kpi.com_chave }}</b></a>
+        {% for k, v in estados.items() %}{% if por_estado[k] %}
+        <a class="cb-chip {{ 'on' if f.estado == k else '' }}"
+           href="{{ link(estado=k) }}">{{ v[0] }}<b>{{ por_estado[k] }}</b></a>
+        {% endif %}{% endfor %}
+    </div>
+    <div class="cb-linha">
+        <button type="submit" class="cb-btn">Filtrar</button>
+        <a class="cb-lim" href="{{ url_for('configuracoes.colabore_envios') }}">Limpar</a>
+        {% if exts %}
+        <span class="cb-rot" style="margin-left:auto">Tipos</span>
+        {% for e in exts %}<span class="cb-chip">.{{ e.ext }}<b>{{ e.n }}</b></span>{% endfor %}
+        {% endif %}
+    </div>
+</form>
+
+{% if not cartoes %}
+    <div class="cb-vazio">Ninguém neste filtro.</div>
+{% else %}
+<div class="cb-cards">
+    {% for c in cartoes %}
+    {# Clique abre a Auditoria com a MESMA pessoa, módulo e período: daqui o
+       quanto, lá cada envio, um por linha. #}
+    <a class="cb-card {{ c.cor }}" href="{{ url_for('configuracoes.auditoria') }}?pessoa={{ c.nome|urlencode }}&modulo=colabore&tipo=escrita&data_ini={{ f.data_ini }}&data_fim={{ f.data_fim }}">
+        <div class="cb-top">
+            <div class="cb-nome">{{ c.nome }}{% if c.inativo %} <span class="cb-sit neutro">usuário inativo</span>{% endif %}</div>
+            <span class="cb-sit {{ c.cor }}">{{ c.rotulo }}</span>
+        </div>
+        <div class="cb-num {{ 'cb-zero' if not c.n else '' }}">{{ c.n }}<small>arquivo(s) · {{ c.tam }}</small></div>
+        <div class="cb-linhas">
+            <div class="cb-li">Último envio:
+                {% if c.envio_desde %}<b>{{ c.envio_desde }}</b>{% if c.uteis %} · {{ c.uteis }} dia(s) útil(eis) sem enviar{% endif %}
+                {% else %}<b>nunca enviou</b>{% endif %}</div>
+            <div class="cb-li">Programa:
+                {% if c.contato_desde %}deu sinal <b>{{ c.contato_desde }}</b>{% else %}<b>nunca abriu</b>{% endif %}</div>
+            {% if c.data_inicio %}<div class="cb-li">Só manda arquivo a partir de <b>{{ c.data_inicio.strftime('%d/%m/%Y') }}</b></div>{% endif %}
+        </div>
+        <div class="cb-frase">{{ c.frase }}</div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="cb-nota ne" style="margin-top:16px">
+    <i class="fas fa-circle-info"></i>
+    <div>Esta tela conta o que <b>chegou</b>. O arquivo largado numa pasta que o agente não vigia,
+    ou com extensão fora da lista, não aparece aqui — a recusa não é registrada no servidor.
+    Quem enxerga a pasta é a máquina do funcionário: lá o Q-Colabore mostra <b>"Enviados hoje"</b> e
+    <b>"Em 'Não enviados'"</b>, e guarda cópia de cada recusado.
+    O <b>nome do arquivo não é gravado</b> de propósito — nome de certificado (.pfx) pode conter a senha.</div>
+</div>
+{% endblock %}
