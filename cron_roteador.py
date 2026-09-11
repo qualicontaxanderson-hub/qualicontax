@@ -1012,6 +1012,24 @@ def main() -> int:
         # Erro de BOOT/lock/mapa: loga e sai != 0 para o Railway marcar "failed".
         logger.exception('[roteador] rodada abortada por erro de infraestrutura.')
         return 1
+
+    # A _ENTRADA tem DOIS cérebros e passa a ter UM tick só: os .xml acabaram
+    # de ser varridos acima, e os .ofx do EXTRATO vêm agora, no mesmo serviço
+    # de 5 minutos. Decisão do Anderson em 10/09/2026, em vez de criar um sexto
+    # serviço no Railway — o do extrato rodou UMA vez na vida (21/08 08:51) por
+    # nunca ter tido casa.
+    #
+    # Em try PRÓPRIO, e o retorno não muda: falha na varredura de extrato NÃO
+    # derruba o roteador de XML, que é o serviço crítico. E nasce inerte — sem
+    # EXTRATO_ATIVO=1 nas variáveis, o main do extrato volta na primeira linha
+    # sem tocar em nada.
+    try:
+        import cron_extrato
+        cron_extrato.main()
+    except Exception:
+        logger.exception('[roteador] varredura de EXTRATO falhou; os .xml desta '
+                         'rodada VALEM.')
+
     logger.warning('[roteador] >>> Cron do roteador CONCLUIDO (pid=%s).', os.getpid())
     return 0
 

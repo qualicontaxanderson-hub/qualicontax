@@ -243,17 +243,63 @@ def processar_um(caminho_dropbox, usuario_id=None):
             'destino': f'{destino}/{final}'}
 
 
+def _conectar_lock():
+    """Conexão dedicada para segurar o GET_LOCK durante toda a varredura.
+
+    Cópia deliberada de ``cron_roteador._conectar_lock`` — mesma forma, para os
+    dois não divergirem quando um for corrigido.
+    """
+    import mysql.connector
+    from config import Config
+    return mysql.connector.connect(
+        host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
+        user=Config.DB_USER, password=Config.DB_PASSWORD,
+        connection_timeout=Config.DB_CONNECT_TIMEOUT,
+        autocommit=True, time_zone='-03:00')
+
+
 def main():
     if not ATIVO:
         logger.info('[extrato] EXTRATO_ATIVO != 1 — nada a fazer.')
         return 0
-    r = rodar()
-    logger.info('[extrato] %s lido(s) | %s lançado(s) | %s novo(s) | '
-                '%s repetido(s) | %s classificado(s) | %s erro(s)',
-                r['lidos'], r['lancados'], r['novos'], r['repetidos'],
-                r['classificados'], r['erros'])
-    for d in r['detalhes']:
-        logger.info('   %s -> %s', d.get('arquivo'), d.get('resultado'))
+
+    # LOCK PRÓPRIO, com nome SEPARADO do 'roteador'. O motivo é concreto: o
+    # tick do roteador que encontra o lock dele ocupado RETORNA e segue para
+    # esta varredura — então dois ticks sobrepostos chegariam aqui juntos e
+    # leriam a mesma _ENTRADA. Nome separado (e não o mesmo lock) porque os
+    # dois cérebros da _ENTRADA não disputam arquivo nenhum: .xml é de um,
+    # .ofx é do outro, por whitelist.
+    conn = _conectar_lock()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT GET_LOCK('roteador_extrato', 0)")
+    if (cur.fetchone() or [0])[0] != 1:
+        logger.info('[extrato] lock ocupado — outra varredura em andamento; pulando.')
+        cur.close()
+        conn.close()
+        return 0
+
+    try:
+        r = rodar()
+        logger.info('[extrato] %s lido(s) | %s lançado(s) | %s novo(s) | '
+                    '%s repetido(s) | %s classificado(s) | %s erro(s)',
+                    r['lidos'], r['lancados'], r['novos'], r['repetidos'],
+                    r['classificados'], r['erros'])
+        for d in r['detalhes']:
+            logger.info('   %s -> %s', d.get('arquivo'), d.get('resultado'))
+    finally:
+        try:
+            cur.execute("SELECT RELEASE_LOCK('roteador_extrato')")
+            cur.fetchall()
+        except Exception:
+            pass
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
     return 0
 
 
