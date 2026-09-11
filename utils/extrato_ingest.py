@@ -286,6 +286,27 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
         ids = execute_query(
             f'SELECT id FROM extrato_lancamentos WHERE hash_dedup IN ({marks})',
             tuple(h for h, _ in novos), fetch=True) or []
+
+        # A ORDEM AQUI É O QUE IMPORTA: primeiro TRAVAR as pontas de
+        # transferência, só depois deixar as regras classificarem. Invertido,
+        # uma regra ampla (a 112 pega 1.433 "Recebimento de cobrança") poderia
+        # classificar a ponta antes de o par ser detectado, e o dinheiro
+        # contaria duas vezes — o defeito que a trava existe para impedir.
+        #
+        # Roda sobre o GRUPO INTEIRO, e não só sobre esta empresa ou sobre os
+        # lançamentos novos. Dois motivos:
+        #  * par ENTRE empresas precisa dos dois lados na mesma consulta —
+        #    filtrar por esta empresa esconderia a outra ponta;
+        #  * quando o arquivo do EFI entra antes do do Sicredi, a ponta do EFI
+        #    está esperando desde o ciclo anterior e só agora ganha par.
+        try:
+            from utils.extrato_par import marcar
+            par = marcar(dry=False)
+        except Exception:
+            logger.exception('[extrato] detector de pares falhou; os '
+                             'lançamentos VALEM e ficam sem trava nesta rodada.')
+            par = {}
+
         auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids])
 
     return {
@@ -294,5 +315,6 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
         'saldo': dados.get('saldo'),
         'total': len(lancs), 'novos': len(novos),
         'repetidos': len(unicos) - len(novos), 'classificados': auto,
+        'travados': (par or {}).get('gravados', 0),
         'datas': [l['data'] for l in lancs],
     }

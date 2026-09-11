@@ -1245,10 +1245,19 @@ def extrato_apagar_periodo():
 @permission_required('financeiro.extrato')
 def extrato_classificar(lanc_id):
     from models.extrato_lancamento import ExtratoLancamento, ExtratoMemorizacao
+    from utils.extrato_par import motivo_trava
     f = request.form
     lanc = ExtratoLancamento.get(lanc_id)
     if not lanc:
         flash('Lançamento não encontrado.', 'danger')
+        return _volta_extrato()
+    # A TRAVA vem antes de tudo: ponta de transferência não se classifica
+    # sozinha. Recusar aqui, e não avisar, é o ponto — classificar um lado só
+    # conta o mesmo dinheiro duas vezes, e foi o que o Anderson viu inflar os
+    # cartões em R$ 1,9 milhão.
+    trava = motivo_trava(lanc)
+    if trava:
+        flash(trava, 'warning')
         return _volta_extrato()
     cat_raw = (f.get('categoria_id') or '').strip()
     cat = next((c for c in FinCategoria.listar() if str(c['id']) == cat_raw), None)
@@ -1689,15 +1698,34 @@ def extrato_lote():
 
     marks = ','.join(['%s'] * len(ids))
     lancs = execute_query(
-        f'SELECT id, empresa_id, conta, valor, descricao, categoria_id, data '
+        f'SELECT id, empresa_id, conta, valor, descricao, categoria_id, data, '
+        f'       par_estado '
         f'  FROM extrato_lancamentos WHERE id IN ({marks}) ORDER BY data DESC',
         tuple(ids), fetch=True) or []
 
-    livres = [l for l in lancs if not l['categoria_id']]
-    pulados = len(lancs) - len(livres)
+    # Duas exclusões, contadas SEPARADAMENTE porque dizem coisas diferentes:
+    # "já tem categoria" é decisão tomada; "travado" é ponta de transferência
+    # esperando o par. Somar os dois num "pulados" esconderia a transferência
+    # justamente de quem precisa vê-la.
+    from utils.extrato_par import ESTADOS_TRAVA
+    ids_travados = {l['id'] for l in lancs
+                    if (l.get('par_estado') or '') in ESTADOS_TRAVA}
+    livres = [l for l in lancs
+              if not l['categoria_id'] and l['id'] not in ids_travados]
+    pulados = len(lancs) - len(livres) - len(ids_travados)
+    if ids_travados:
+        n = len(ids_travados)
+        flash(f'{n} da seleção {"é" if n == 1 else "são"} ponta de '
+              f'TRANSFERÊNCIA entre contas do grupo e {"ficou" if n == 1 else "ficaram"} '
+              'de fora: transferência se resolve aprovando o par, não '
+              'classificando um lado.', 'warning')
     if not livres:
-        flash('Todos os selecionados já têm categoria — o lote não '
-              'sobrescreve decisão já tomada.', 'warning')
+        # Só fala de categoria se havia algum com categoria. Dizer "todos já
+        # têm categoria" quando todos eram transferência seria mentir para
+        # quem acabou de ler o aviso de cima.
+        if pulados:
+            flash('Todos os selecionados já têm categoria — o lote não '
+                  'sobrescreve decisão já tomada.', 'warning')
         return _volta_extrato()
 
     # Credito e receita, debito e despesa: uma categoria nao serve aos dois.

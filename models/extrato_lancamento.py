@@ -999,11 +999,17 @@ class RegraExtrato:
         if not ids:
             return 0
         marks = ','.join(['%s'] * len(ids))
+        # A trava vale aqui tambem, e aqui e o caminho mais perigoso: este
+        # metodo roda logo depois do import, sem ninguem olhando. Sem a
+        # condicao, uma regra ampla classificaria a ponta da transferencia
+        # antes de o par sequer ser detectado.
+        from utils.extrato_par import SQL_FORA_DA_TRAVA
         rows = execute_query(
             f'SELECT id, empresa_id, conta, valor, data, descricao, categoria_id, '
             f'       hash_dedup '
             f'  FROM extrato_lancamentos WHERE id IN ({marks}) '
-            f'   AND categoria_id IS NULL', tuple(ids), fetch=True) or []
+            f'   AND categoria_id IS NULL AND {SQL_FORA_DA_TRAVA}',
+            tuple(ids), fetch=True) or []
         direto, conferir = RegraExtrato.aplicar_em(rows)
         return direto + conferir
 
@@ -1016,7 +1022,15 @@ class RegraExtrato:
         varreduras completas por abertura, e como o banco e remoto cada uma
         custa a ida e a volta: media de 5,5s so para abrir.
         """
-        cond = ' WHERE categoria_id IS NULL' if so_sem_categoria else ''
+        # A TRAVA entra nos DOIS casos, com ou sem so_sem_categoria: ponta de
+        # transferencia nao e pega por regra nenhuma — nem para classificar,
+        # nem para CONTAR na previa. Se contasse na previa, a tela prometeria
+        # "pega 8" e pegaria 6, e o numero errado e pior que numero nenhum.
+        from utils.extrato_par import SQL_FORA_DA_TRAVA
+        onde = [SQL_FORA_DA_TRAVA]
+        if so_sem_categoria:
+            onde.append('categoria_id IS NULL')
+        cond = ' WHERE ' + ' AND '.join(onde)
         # hash_dedup vai junto: e a REFERENCIA da baixa. Sem ele o
         # registrar_baixa recusa e o titulo nasce pela metade.
         return execute_query(

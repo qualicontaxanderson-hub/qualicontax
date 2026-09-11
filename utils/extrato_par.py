@@ -280,3 +280,108 @@ def candidatos(empresa_ids=None, exigir_marca=True):
         'empresas': apelido,
     }
     return pares, suspeitos, resumo
+
+
+# =======================================================================
+# O MARCADOR — a única parte deste módulo que escreve
+# =======================================================================
+#
+# Roda depois de cada importação e é uma PASSADA DE RECONCILIAÇÃO, não um
+# gravador de uma vez: quando o arquivo do EFI entra antes do do Sicredi, a
+# ponta do EFI nasce 'suspeito' (nomeia a própria empresa, par não existe
+# ainda) e VIRA 'casado' quando o outro arquivo chega. Por isso ele reavalia
+# tudo em vez de só marcar o que está em branco.
+#
+# TRÊS COISAS QUE ELE NUNCA FAZ:
+#  * não toca em quem você já decidiu ('aprovado' ou 'liberado') — decisão de
+#    gente não é revista por rotina;
+#  * não trava quem JÁ está classificado. Travar depois seria desfazer
+#    trabalho, e o caso existe: uma regra pode classificar a ponta antes de o
+#    par aparecer. Quem já tem categoria fica de fora e aparece no resumo como
+#    'ignorados_classificados', para alguém olhar;
+#  * não classifica, não cria título, não mexe em categoria. Só par_id e
+#    par_estado.
+ESTADOS_DECIDIDOS = ('aprovado', 'liberado')
+
+#: Estados que TRAVAM o lançamento: nem gente nem regra classifica.
+ESTADOS_TRAVA = ('casado', 'suspeito')
+
+#: Para pôr direto num WHERE. Quem está fora da trava é NULL, 'aprovado' ou
+#: 'liberado' — os dois últimos já foram decididos e voltaram para a vida.
+SQL_FORA_DA_TRAVA = ("COALESCE(par_estado, '') NOT IN ('%s', '%s')"
+                     % ESTADOS_TRAVA)
+
+
+def motivo_trava(lanc):
+    """Por que este lançamento não pode ser classificado — ou None se pode.
+
+    Devolve a frase que a tela mostra. Não é aviso: é recusa. O lançamento só
+    sai daqui pela aprovação do par ou pela liberação com motivo.
+    """
+    estado = (lanc or {}).get('par_estado') or ''
+    if estado == 'casado':
+        return ('Este lançamento é uma das pontas de uma TRANSFERÊNCIA entre '
+                'contas do grupo — a outra ponta já foi encontrada. Classificar '
+                'só um lado contaria o mesmo dinheiro duas vezes. Aprove o par '
+                'na fila de transferências.')
+    if estado == 'suspeito':
+        return ('Este lançamento parece TRANSFERÊNCIA para outra empresa do '
+                'grupo, e a outra ponta ainda não chegou ao sistema. Importe o '
+                'extrato da outra empresa, ou libere com motivo se não houver '
+                'mais acesso a ele.')
+    return None
+
+
+def marcar(empresa_ids=None, dry=True):
+    """Grava par_id/par_estado. ``dry=True`` (padrão) só devolve o que faria."""
+    from utils.db_helper import execute_query
+
+    pares, suspeitos, resumo = candidatos(empresa_ids=empresa_ids)
+
+    # quem já foi decidido por gente, ou já está classificado, fica fora
+    alvos = {}
+    for p in pares:
+        for lado, outro in ((p['saida'], p['entrada']), (p['entrada'], p['saida'])):
+            alvos[lado['id']] = (outro['id'], 'casado', lado)
+    for s in suspeitos:
+        l = s['lancamento']
+        alvos[l['id']] = (None, 'suspeito', l)
+
+    plano, ignorados_decididos, ignorados_classificados, ja_ok = [], [], [], []
+    for lid, (par_id, estado, l) in alvos.items():
+        if (l.get('par_estado') or '') in ESTADOS_DECIDIDOS:
+            ignorados_decididos.append(lid)
+            continue
+        if l.get('categoria_id'):
+            ignorados_classificados.append(lid)
+            continue
+        if l.get('par_estado') == estado and (l.get('par_id') or None) == par_id:
+            ja_ok.append(lid)
+            continue
+        plano.append((lid, par_id, estado))
+
+    r = {
+        'pares': resumo['pares'],
+        'suspeitos': resumo['suspeitos'],
+        'a_gravar': len(plano),
+        'ja_corretos': len(ja_ok),
+        'ignorados_decididos': len(ignorados_decididos),
+        'ignorados_classificados': len(ignorados_classificados),
+        'casado': sum(1 for _, _, e in plano if e == 'casado'),
+        'suspeito_a_gravar': sum(1 for _, _, e in plano if e == 'suspeito'),
+        'dry': dry,
+    }
+    if dry or not plano:
+        r['plano'] = plano
+        return r
+
+    # UPDATE por lançamento, não em lote: são centenas, não milhares, e cada
+    # linha leva um par_id diferente. Fazer em CASE WHEN daria uma query
+    # ilegível para ganhar milissegundos.
+    for lid, par_id, estado in plano:
+        execute_query(
+            'UPDATE extrato_lancamentos SET par_id = %s, par_estado = %s '
+            ' WHERE id = %s AND COALESCE(par_estado, \'\') NOT IN (%s, %s)',
+            (par_id, estado, lid) + ESTADOS_DECIDIDOS, fetch=False)
+    r['gravados'] = len(plano)
+    return r
