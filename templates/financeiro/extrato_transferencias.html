@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Transferências do Grupo - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+/* Duas naturezas, dois desenhos. O par CASADO e uma "coisa" com estado
+   (espera decisao) e tem dois lados que precisam ser vistos juntos: cartao.
+   O suspeito e registro para percorrer e marcar em lote: lista com caixa.
+   Ver o criterio cartao-ou-tabela. Nada de tabela larga: no celular ela
+   rolaria a pagina, e a regra e que a pagina nunca rola de lado. */
+.tf-topo { display:grid; gap:10px; grid-template-columns:1fr; margin-bottom:14px; }
+@media (min-width:700px) { .tf-topo { grid-template-columns:1fr 1fr; } }
+.tf-card-n { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
+  padding:14px 16px; }
+.tf-card-n small { color:#64748b; font-size:11.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; display:block; }
+.tf-card-n b { font-size:26px; color:#0f172a; display:block; margin-top:2px;
+  line-height:1.1; }
+.tf-card-n span { color:#475569; font-size:12.5px; }
+
+.tf-sec { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
+  margin-bottom:14px; overflow:hidden; }
+.tf-cab { display:flex; align-items:center; gap:10px; padding:12px 16px;
+  background:#f0fdf4; border-bottom:1px solid #bbf7d0; flex-wrap:wrap; }
+.tf-cab b { color:#0f3d2e; font-size:13.5px; flex:1; text-transform:uppercase;
+  letter-spacing:.05em; min-width:0; }
+.tf-cab span { color:#0f3d2e; font-size:11.5px; font-weight:700; opacity:.8;
+  white-space:nowrap; }
+.tf-cab.amb { background:#fffbeb; border-bottom-color:#fde68a; }
+.tf-cab.amb b, .tf-cab.amb span { color:#7c2d12; }
+.tf-corpo { padding:12px; display:grid; gap:10px; }
+
+/* ── o par ── */
+.tf-par { border:1.5px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+.tf-par-cab { display:flex; align-items:center; gap:10px; padding:9px 12px;
+  background:#f8fafc; border-bottom:1px solid #eef2f7; }
+.tf-par-cab label { display:flex; align-items:center; gap:8px; margin:0;
+  cursor:pointer; font-weight:800; color:#0f172a; font-size:15px; }
+.tf-par-cab .tf-quando { margin-left:auto; color:#64748b; font-size:12px;
+  white-space:nowrap; }
+.tf-lado { display:flex; gap:10px; padding:9px 12px; align-items:flex-start; }
+.tf-lado + .tf-lado { border-top:1px dashed #e2e8f0; }
+.tf-seta { width:22px; flex:0 0 22px; text-align:center; font-size:13px; }
+.tf-saiu .tf-seta { color:#dc2626; }
+.tf-entrou .tf-seta { color:#059669; }
+.tf-lado-txt { min-width:0; flex:1; }
+.tf-lado-txt b { display:block; font-size:12.5px; color:#0f172a; }
+.tf-lado-txt code { display:block; font-size:11.5px; color:#64748b;
+  background:transparent; padding:0; word-break:break-word; }
+.tf-lado-v { font-weight:800; font-size:13px; white-space:nowrap; }
+.tf-saiu .tf-lado-v { color:#dc2626; }
+.tf-entrou .tf-lado-v { color:#059669; }
+
+/* ── o suspeito ── */
+.tf-sus { display:flex; gap:10px; padding:9px 12px; align-items:flex-start;
+  border:1.5px solid #e2e8f0; border-radius:12px; }
+.tf-sus label { display:flex; gap:9px; align-items:flex-start; margin:0;
+  cursor:pointer; flex:1; min-width:0; }
+.tf-sus .tf-lado-txt b { font-size:13px; }
+
+.tf-acoes { display:flex; gap:8px; padding:10px 12px; flex-wrap:wrap;
+  border-top:1px solid #eef2f7; background:#fcfdfe; align-items:center; }
+.tf-bt { border:0; border-radius:10px; padding:9px 15px; font-weight:800;
+  font-size:13px; cursor:pointer; font-family:inherit; }
+.tf-bt-ok { background:var(--primary-green, #00A85A); color:#fff; }
+.tf-bt-nao { background:#fff; color:#b91c1c; border:1.5px solid #fecaca; }
+.tf-bt-lib { background:#b45309; color:#fff; }
+.tf-bt:disabled { opacity:.45; cursor:not-allowed; }
+.tf-marcatudo { border:1px solid #d1d5db; background:#fff; color:#475569;
+  border-radius:999px; padding:5px 13px; font-weight:700; font-size:12px;
+  cursor:pointer; font-family:inherit; }
+.tf-form-lib { display:grid; gap:8px; padding:10px 12px; background:#fffbeb;
+  border-top:1px solid #fde68a; }
+@media (min-width:820px) {
+  .tf-form-lib { grid-template-columns:1fr 260px auto; align-items:center; }
+}
+.tf-form-lib input, .tf-form-lib select { border:1.5px solid #e2e8f0;
+  border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px;
+  min-width:0; background:#fff; }
+.tf-vazio { padding:22px 16px; text-align:center; color:#64748b;
+  font-size:13.5px; }
+.tf-nota { color:#475569; font-size:12.5px; margin:0 2px 14px; line-height:1.5; }
+</style>
+
+<h4 style="margin:0 0 4px"><i class="fas fa-right-left"></i> Transferências do Grupo</h4>
+<p class="tf-nota">
+  Dinheiro que andou entre as suas contas não é receita nem despesa — é o mesmo
+  dinheiro trocando de bolso. Enquanto estiver aqui, <b>não entra no DRE e não
+  pode ser classificado</b>: classificar um lado só contaria duas vezes.
+</p>
+
+<div class="tf-topo">
+  <div class="tf-card-n">
+    <small>Pares a aprovar</small>
+    <b>{{ pares|length }}</b>
+    <span>R$ {{ '{:,.2f}'.format(total_pares).replace(',', 'X').replace('.', ',').replace('X', '.') }} — as duas pontas já se acharam</span>
+  </div>
+  <div class="tf-card-n">
+    <small>Esperando a outra ponta</small>
+    <b>{{ n_suspeitos }}</b>
+    <span>R$ {{ '{:,.2f}'.format(total_suspeitos).replace(',', 'X').replace('.', ',').replace('X', '.') }} — falta o extrato do outro lado</span>
+  </div>
+</div>
+
+{# ─────────────── PARES ─────────────── #}
+<div class="tf-sec">
+  <div class="tf-cab">
+    <b><i class="fas fa-link"></i> As duas pontas se acharam</b>
+    <span>{{ pares|length }} par(es)</span>
+  </div>
+  {% if pares %}
+  <form method="POST" id="fPares">
+    <div class="tf-corpo">
+      {% for p in pares %}
+      <div class="tf-par">
+        <div class="tf-par-cab">
+          <label>
+            <input type="checkbox" name="lanc" value="{{ p.saiu.id }}" class="ckPar">
+            R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+          </label>
+          <span class="tf-quando">
+            {{ p.saiu.data.strftime('%d/%m/%Y') }}
+            {% if p.dias %}· entrou {{ p.dias }} dia depois{% endif %}
+            {% if not p.mesma_empresa %}· <b>entre empresas</b>{% endif %}
+          </span>
+        </div>
+        <div class="tf-lado tf-saiu">
+          <div class="tf-seta"><i class="fas fa-arrow-up"></i></div>
+          <div class="tf-lado-txt">
+            <b>SAIU · {{ p.saiu.banco }} · {{ p.saiu.conta }}{% if mapa.get(p.saiu.empresa_id) %} · {{ mapa[p.saiu.empresa_id] }}{% endif %}</b>
+            <code>{{ p.saiu.descricao }}</code>
+          </div>
+          <div class="tf-lado-v">−R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+        </div>
+        <div class="tf-lado tf-entrou">
+          <div class="tf-seta"><i class="fas fa-arrow-down"></i></div>
+          <div class="tf-lado-txt">
+            <b>ENTROU · {{ p.entrou.banco }} · {{ p.entrou.conta }}{% if mapa.get(p.entrou.empresa_id) %} · {{ mapa[p.entrou.empresa_id] }}{% endif %}</b>
+            <code>{{ p.entrou.descricao }}</code>
+          </div>
+          <div class="tf-lado-v">+R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tf-acoes">
+      <button type="button" class="tf-marcatudo" onclick="tfTudo('ckPar', this)">Marcar todos</button>
+      <button type="submit" class="tf-bt tf-bt-ok"
+              formaction="{{ url_for('financeiro.extrato_transferencias_aprovar') }}">
+        <i class="fas fa-check"></i> É transferência — aprovar
+      </button>
+      <button type="submit" class="tf-bt tf-bt-nao"
+              formaction="{{ url_for('financeiro.extrato_transferencias_negar') }}"
+              onclick="return confirm('Destravar o par? Os dois lados voltam para a fila normal e passam a poder ser classificados como qualquer outro lançamento.')">
+        Não é transferência
+      </button>
+      <span style="color:#64748b;font-size:12px">Aprovar classifica os dois lados
+        como “Entre contas do grupo”.</span>
+    </div>
+  </form>
+  {% else %}
+  <div class="tf-vazio">Nenhum par esperando decisão.</div>
+  {% endif %}
+</div>
+
+{# ─────────────── SUSPEITOS, por destino ─────────────── #}
+{% for destino, d in destinos.items() %}
+<div class="tf-sec">
+  <div class="tf-cab amb">
+    <b><i class="fas fa-hourglass-half"></i> Esperando o extrato de {{ destino }}</b>
+    <span>{{ d.itens|length }} lançamento(s) ·
+      R$ {{ '{:,.2f}'.format(d.total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</span>
+  </div>
+  <form method="POST" action="{{ url_for('financeiro.extrato_transferencias_liberar') }}">
+    <div class="tf-corpo">
+      {% for s in d.itens %}
+      <div class="tf-sus">
+        <label>
+          <input type="checkbox" name="lanc" value="{{ s.l.id }}">
+          <span class="tf-lado-txt">
+            <b>{{ s.l.data.strftime('%d/%m/%Y') }} · {{ s.l.banco }} · {{ s.l.conta }}</b>
+            <code>{{ s.l.descricao }}</code>
+          </span>
+        </label>
+        <div class="tf-lado-v" style="color:{{ '#059669' if s.l.valor >= 0 else '#dc2626' }}">
+          {{ '+' if s.l.valor >= 0 else '−' }}R$ {{ '{:,.2f}'.format(s.l.valor|abs|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tf-form-lib">
+      <input type="text" name="motivo" maxlength="255" required
+             placeholder="Por que liberar sem a outra ponta? (obrigatório — ex.: conta encerrada, sem acesso ao extrato)">
+      <select name="categoria_id" required>
+        <option value="">O que era este dinheiro?</option>
+        {% for c in categorias %}
+          {% if c.ativo %}
+          <option value="{{ c.id }}">{{ {'R':'Receita','P':'Despesa','I':'Investimento','T':'Transferência'}.get(c.tipo, c.tipo) }} · {{ c.grupo }} · {{ c.nome }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <button type="submit" class="tf-bt tf-bt-lib">
+        <i class="fas fa-unlock"></i> Liberar selecionados
+      </button>
+    </div>
+    <div class="tf-acoes">
+      <button type="button" class="tf-marcatudo"
+              onclick="tfTudoNoForm(this)">Marcar todos deste grupo</button>
+      <span style="color:#64748b;font-size:12px">Liberar <b>classifica no mesmo
+        gesto</b>, e o motivo fica gravado na linha.</span>
+    </div>
+  </form>
+</div>
+{% endfor %}
+
+{% if not destinos %}
+<div class="tf-sec">
+  <div class="tf-cab amb">
+    <b><i class="fas fa-hourglass-half"></i> Esperando a outra ponta</b>
+    <span>0</span>
+  </div>
+  <div class="tf-vazio">Nada esperando extrato de outra empresa.</div>
+</div>
+{% endif %}
+
+<script>
+// Marcar todos por CLASSE (os pares) — o rotulo do botao conta o que ele fez,
+// para ninguem clicar duas vezes achando que nao pegou.
+function tfTudo(classe, bt) {
+  var cks = document.querySelectorAll('.' + classe);
+  var ligar = bt.getAttribute('data-on') !== '1';
+  cks.forEach(function (c) { c.checked = ligar; });
+  bt.setAttribute('data-on', ligar ? '1' : '0');
+  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')') : 'Marcar todos';
+}
+// Marcar todos DENTRO DO FORMULARIO (cada destino tem o seu): buscar por
+// classe pegaria os outros destinos tambem, e a liberacao e por grupo.
+function tfTudoNoForm(bt) {
+  var form = bt.closest('form');
+  var cks = form.querySelectorAll('input[name="lanc"]');
+  var ligar = bt.getAttribute('data-on') !== '1';
+  cks.forEach(function (c) { c.checked = ligar; });
+  bt.setAttribute('data-on', ligar ? '1' : '0');
+  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')')
+                         : 'Marcar todos deste grupo';
+}
+</script>
+{% endblock %}

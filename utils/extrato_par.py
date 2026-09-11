@@ -332,6 +332,150 @@ def motivo_trava(lanc):
     return None
 
 
+def categoria_entre_contas():
+    """A categoria 'Entre contas do grupo' (tipo T), ou None.
+
+    Buscada por nome e tipo, e não pelo id 138 cravado: id de categoria é dado,
+    não constante — renomear ou recriar o plano quebraria a aprovação em
+    silêncio, e o silêncio seria "aprovei" com categoria errada.
+    """
+    from utils.db_helper import execute_query
+    r = execute_query(
+        "SELECT id FROM fin_categorias "
+        " WHERE tipo = 'T' AND ativo = 1 AND nome LIKE 'Entre contas%' "
+        " ORDER BY id LIMIT 1", fetch=True, fetch_one=True)
+    return (r or {}).get('id')
+
+
+def aprovar(lanc_ids, usuario_id=None):
+    """Aprova pares da MESMA empresa: classifica os dois lados e destrava.
+
+    Recebe ids de lançamento; para cada um, o par vem do ``par_id`` gravado —
+    quem aprova não escolhe a outra ponta, ela já está amarrada. Aprovar um
+    lado aprova os dois, sempre: meio par aprovado seria o defeito que a trava
+    existe para impedir.
+
+    Só atende ``escopo`` de mesma empresa. Par ENTRE empresas tem duas
+    naturezas diferentes (pró-labore é despesa lá e receita aqui) e não cabe
+    num gesto de uma categoria — quando o primeiro aparecer, entra por outra
+    porta. Hoje não existe nenhum no banco.
+
+    Devolve (aprovados, recusados) — recusados com o motivo, para a tela dizer.
+    """
+    from utils.db_helper import execute_query
+    from models.extrato_lancamento import ExtratoLancamento
+
+    cat = categoria_entre_contas()
+    if not cat:
+        return [], [(None, 'não achei a categoria "Entre contas do grupo" '
+                           '(tipo Transferência) no plano de contas')]
+
+    aprovados, recusados = [], []
+    vistos = set()
+    for lid in lanc_ids:
+        if lid in vistos:
+            continue
+        a = ExtratoLancamento.get(lid)
+        if not a:
+            recusados.append((lid, 'lançamento não encontrado'))
+            continue
+        if (a.get('par_estado') or '') != 'casado':
+            recusados.append((lid, f'não está casado (está {a.get("par_estado") or "livre"})'))
+            continue
+        b = ExtratoLancamento.get(a.get('par_id'))
+        if not b:
+            recusados.append((lid, 'a outra ponta desapareceu — rode o detector'))
+            continue
+        if a['empresa_id'] != b['empresa_id']:
+            recusados.append((lid, 'par ENTRE empresas do grupo: as duas pontas '
+                                   'têm naturezas diferentes e precisam de uma '
+                                   'decisão por lado'))
+            continue
+        for x in (a, b):
+            ExtratoLancamento.classificar(x['id'], cat)
+            execute_query(
+                "UPDATE extrato_lancamentos SET par_estado = 'aprovado' "
+                " WHERE id = %s", (x['id'],), fetch=False)
+            vistos.add(x['id'])
+        aprovados.append((a['id'], b['id']))
+    return aprovados, recusados
+
+
+def liberar(lanc_ids, motivo, categoria_id, usuario_id=None):
+    """Libera sem a outra ponta, CLASSIFICANDO no mesmo gesto.
+
+    Decisão do Anderson em 10/09/2026: quem clica em liberar sabe que a outra
+    ponta não vem, e quem sabe disso sabe o que o dinheiro era — obrigar a
+    voltar depois no mesmo lançamento seria trabalho em dobro.
+
+    O motivo é obrigatório e fica NA LINHA, não só no log: a tela precisa
+    mostrar por que aquele valor deixou de esperar, sem garimpar auditoria.
+    """
+    from utils.db_helper import execute_query
+    from models.extrato_lancamento import ExtratoLancamento
+
+    motivo = (motivo or '').strip()
+    if not motivo:
+        return [], [(None, 'o motivo da liberação é obrigatório')]
+    if not categoria_id:
+        return [], [(None, 'escolha a categoria — liberar é decidir o que era')]
+
+    liberados, recusados = [], []
+    for lid in lanc_ids:
+        l = ExtratoLancamento.get(lid)
+        if not l:
+            recusados.append((lid, 'lançamento não encontrado'))
+            continue
+        if (l.get('par_estado') or '') not in ESTADOS_TRAVA:
+            recusados.append((lid, 'não está travado'))
+            continue
+        ExtratoLancamento.classificar(lid, categoria_id)
+        execute_query(
+            "UPDATE extrato_lancamentos SET par_estado = 'liberado', "
+            "       par_liberado_motivo = %s, par_liberado_por = %s, "
+            "       par_liberado_em = NOW() WHERE id = %s",
+            (motivo[:255], usuario_id, lid), fetch=False)
+        liberados.append(lid)
+    return liberados, recusados
+
+
+def negar(lanc_ids, usuario_id=None):
+    """'Não é transferência': desfaz o par e devolve os dois lados à vida.
+
+    Existe porque o detector pode errar, e errar aqui custa caro: um par falso
+    travaria receita ou despesa de verdade. A simulação de 11/09/2026 achou 25
+    falsos positivos antes de gravar nada — em produção, quem acha é você.
+
+    Não classifica: desfaz a trava e deixa o lançamento voltar para a fila
+    normal, onde ele é tratado como qualquer outro.
+    """
+    from utils.db_helper import execute_query
+    from models.extrato_lancamento import ExtratoLancamento
+
+    negados, recusados = [], []
+    vistos = set()
+    for lid in lanc_ids:
+        if lid in vistos:
+            continue
+        l = ExtratoLancamento.get(lid)
+        if not l:
+            recusados.append((lid, 'lançamento não encontrado'))
+            continue
+        if (l.get('par_estado') or '') not in ESTADOS_TRAVA:
+            recusados.append((lid, 'não está travado'))
+            continue
+        # os DOIS lados: negar um lado e deixar o outro travado seria deixar
+        # metade de uma decisão no banco
+        lados = [l['id']] + ([l['par_id']] if l.get('par_id') else [])
+        for x in lados:
+            execute_query(
+                'UPDATE extrato_lancamentos SET par_id = NULL, '
+                '       par_estado = NULL WHERE id = %s', (x,), fetch=False)
+            vistos.add(x)
+        negados.extend(lados)
+    return negados, recusados
+
+
 def marcar(empresa_ids=None, dry=True):
     """Grava par_id/par_estado. ``dry=True`` (padrão) só devolve o que faria."""
     from utils.db_helper import execute_query

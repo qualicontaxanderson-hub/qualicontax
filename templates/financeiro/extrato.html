@@ -355,6 +355,15 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
         <button class="btn btn-primary" onclick="exAbrirImport()">
             <i class="fas fa-file-import"></i> Importar OFX
         </button>
+        {# A porta da fila de transferências só aparece quando há fila: botão
+           que nunca tem nada atrás vira enfeite, e enfeite ensina a ignorar. #}
+        {% if n_travados %}
+        <a href="{{ url_for('financeiro.extrato_transferencias') }}"
+           class="btn btn-outline" style="border-color:#fbbf24;color:#b45309">
+            <i class="fas fa-right-left"></i> Transferências
+            <span class="badge" style="background:#b45309">{{ n_travados }}</span>
+        </a>
+        {% endif %}
         <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
             <i class="fas fa-memory"></i> Memorizações
         </a>

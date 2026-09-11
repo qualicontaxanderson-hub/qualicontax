@@ -952,8 +952,17 @@ def extrato():
     # no Jinja exigiria comparar a linha com a anterior, que foi o que
     # duplicou cabeçalho na tela de categorias quando a ordem veio torta.
     lancs = ExtratoLancamento.listar(**args)
+    # A fila de transferências não respeita o filtro da tela: ela é uma
+    # pendência do escritório, não um recorte do que se está olhando. Se
+    # seguisse o filtro, ela desapareceria ao trocar de mês e ninguém a
+    # resolveria.
+    n_travados = (execute_query(
+        "SELECT COUNT(*) n FROM extrato_lancamentos "
+        " WHERE par_estado IN ('casado', 'suspeito')",
+        fetch=True, fetch_one=True) or {}).get('n') or 0
     return render_template('financeiro/extrato.html',
                            lancamentos=lancs,
+                           n_travados=n_travados,
                            dias=ExtratoLancamento.por_dia(lancs),
                            totais=ExtratoLancamento.totais(**args),
                            contas=ExtratoLancamento.contas(empresa_ids=sel),
@@ -2015,6 +2024,189 @@ def extrato_lote_titulos():
           else ('. '.join(partes) or 'Nada a fazer.'),
           'success' if (criados or casados) else 'warning')
     return _volta_extrato(classif='sim')
+
+
+# =======================================================================
+# TRANSFERÊNCIAS ENTRE CONTAS DO GRUPO (11/09/2026)
+#
+# A fila que o Anderson pediu: "saiu do EFI 5.000 e no Sicredi entrou 5.000,
+# aí já era para aparecer para aprovar, porque é óbvio a transferência".
+#
+# A tela lê o ESTADO GRAVADO (par_estado), não o detector. O detector roda na
+# importação; aqui mostramos o que está travado de verdade. Reexecutá-lo a
+# cada abertura varreria 4.387 linhas para mostrar coisa que ninguém marcou.
+# =======================================================================
+def _volta_transferencias():
+    return redirect(url_for('financeiro.extrato_transferencias'))
+
+
+@financeiro.route('/financeiro/extrato/transferencias')
+@permission_required('financeiro.extrato')
+def extrato_transferencias():
+    from utils.extrato_par import (empresas_do_grupo, _marcas, _nomeia_grupo,
+                                   categoria_entre_contas)
+    travados = execute_query(
+        """SELECT id, empresa_id, banco, conta, data, valor, descricao,
+                  par_id, par_estado
+             FROM extrato_lancamentos
+            WHERE par_estado IN ('casado', 'suspeito')
+            ORDER BY data DESC, id DESC""", fetch=True) or []
+    por_id = {l['id']: l for l in travados}
+
+    # UM cartão por par, não dois: a saída lidera (é de onde o dinheiro saiu)
+    # e a entrada vem dentro dele. Mostrar os dois lados como linhas soltas
+    # seria repetir o defeito que a tela existe para consertar.
+    pares, vistos = [], set()
+    for l in travados:
+        if l['par_estado'] != 'casado' or l['id'] in vistos:
+            continue
+        outro = por_id.get(l['par_id'])
+        if not outro:
+            continue                      # par fora da lista: cai em suspeito
+        saiu, entrou = ((l, outro) if float(l['valor']) < 0 else (outro, l))
+        vistos.add(l['id'])
+        vistos.add(outro['id'])
+        pares.append({
+            'saiu': saiu, 'entrou': entrou,
+            'valor': abs(float(saiu['valor'])),
+            'dias': (entrou['data'] - saiu['data']).days,
+            'mesma_empresa': saiu['empresa_id'] == entrou['empresa_id'],
+        })
+
+    # Para o suspeito, PARA QUEM ele aponta não está em coluna nenhuma — é
+    # lido da descrição na hora. São poucos e é comparação de texto em
+    # memória; guardar a resposta criaria um dado que envelhece quando o
+    # cadastro do grupo muda.
+    grupo = empresas_do_grupo()
+    marcas = _marcas(grupo)
+    apelido = {e['cliente_id']: (e['apelido'] or e['nome']) for e in grupo}
+    suspeitos = []
+    for l in travados:
+        if l['par_estado'] != 'suspeito':
+            continue
+        cid, txt = _nomeia_grupo(l['descricao'], marcas)
+        suspeitos.append({
+            'l': l, 'marca': txt,
+            'aponta': apelido.get(cid, '—'),
+            'propria': cid == l['empresa_id'],
+        })
+    suspeitos.sort(key=lambda s: (s['aponta'], -abs(float(s['l']['valor']))))
+
+    # agrupado por destino: é assim que ele vai liberar em lote (os 124 dele
+    # de uma vez, os 13 da Brilho de outra)
+    destinos = {}
+    for s in suspeitos:
+        d = destinos.setdefault(s['aponta'], {'itens': [], 'total': 0.0})
+        d['itens'].append(s)
+        d['total'] += abs(float(s['l']['valor']))
+
+    _emps, _sel, mapa = _empresas_ctx()
+    registrar('leitura.transferencias', 'financeiro')
+    return render_template(
+        'financeiro/extrato_transferencias.html',
+        pares=pares, destinos=destinos,
+        total_pares=sum(p['valor'] for p in pares),
+        total_suspeitos=sum(abs(float(s['l']['valor'])) for s in suspeitos),
+        n_suspeitos=len(suspeitos), mapa=mapa,
+        categorias=FinCategoria.listar(),
+        cat_entre_contas=categoria_entre_contas())
+
+
+@financeiro.route('/financeiro/extrato/transferencias/aprovar', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_transferencias_aprovar():
+    """Aprova um par ou vários — a decisão é a mesma para todos: é dinheiro seu
+    andando de conta, e vai para 'Entre contas do grupo' nos dois lados."""
+    from utils.extrato_par import aprovar
+    ids = [int(i) for i in request.form.getlist('lanc') if str(i).isdigit()]
+    if not ids:
+        flash('Nenhum par selecionado.', 'warning')
+        return _volta_transferencias()
+    ok, nao = aprovar(ids, usuario_id=current_user.id)
+    registrar('escrita.aprovou_transferencia', 'financeiro',
+              tabela='extrato_lancamentos',
+              depois={'pares': [list(p) for p in ok],
+                      'recusados': [list(map(str, r)) for r in nao[:5]]})
+    if ok:
+        flash(f'{len(ok)} transferência(s) aprovada(s) — os dois lados foram '
+              'classificados como "Entre contas do grupo" e ficam fora do DRE.',
+              'success')
+    for _lid, motivo in nao[:3]:
+        flash(f'Não aprovei: {motivo}', 'warning')
+    return _volta_transferencias()
+
+
+@financeiro.route('/financeiro/extrato/transferencias/liberar', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_transferencias_liberar():
+    """Libera sem a outra ponta, classificando no mesmo gesto."""
+    from utils.extrato_par import liberar
+    f = request.form
+    ids = [int(i) for i in f.getlist('lanc') if str(i).isdigit()]
+    motivo = (f.get('motivo') or '').strip()
+    cat_raw = (f.get('categoria_id') or '').strip()
+    cat = next((c for c in FinCategoria.listar() if str(c['id']) == cat_raw), None)
+    if not ids:
+        flash('Nenhum lançamento selecionado.', 'warning')
+        return _volta_transferencias()
+    if not motivo:
+        flash('O motivo é obrigatório — é ele que explica, depois, por que '
+              'aquele valor deixou de esperar a outra ponta.', 'danger')
+        return _volta_transferencias()
+    if not cat:
+        flash('Escolha a categoria: liberar é decidir o que aquilo era.', 'danger')
+        return _volta_transferencias()
+
+    # Mesma regra do lote: uma categoria não serve a entrada e saída juntas.
+    marks = ','.join(['%s'] * len(ids))
+    sinais = execute_query(
+        f'SELECT DISTINCT valor >= 0 AS credito FROM extrato_lancamentos '
+        f' WHERE id IN ({marks})', tuple(ids), fetch=True) or []
+    if len(sinais) > 1:
+        flash('A seleção mistura entradas e saídas — libere um sentido de cada '
+              'vez, porque uma categoria não serve aos dois.', 'danger')
+        return _volta_transferencias()
+    credito = bool(sinais and sinais[0]['credito'])
+    aceitos = {'R', 'T'} if credito else {'P', 'T', 'I'}
+    if cat['tipo'] not in aceitos:
+        flash(('Estes são CRÉDITOS — escolha receita ou transferência.'
+               if credito else
+               'Estes são DÉBITOS — escolha despesa, investimento ou '
+               'transferência.'), 'danger')
+        return _volta_transferencias()
+
+    ok, nao = liberar(ids, motivo, cat['id'], usuario_id=current_user.id)
+    registrar('escrita.liberou_transferencia', 'financeiro',
+              tabela='extrato_lancamentos',
+              depois={'ids': ok, 'motivo': motivo, 'categoria_id': cat['id'],
+                      'recusados': [list(map(str, r)) for r in nao[:5]]})
+    if ok:
+        flash(f'{len(ok)} lançamento(s) liberado(s) como "{cat["nome"]}". O '
+              'motivo ficou gravado na linha e na auditoria.', 'success')
+    for _lid, motivo_erro in nao[:3]:
+        flash(f'Não liberei: {motivo_erro}', 'warning')
+    return _volta_transferencias()
+
+
+@financeiro.route('/financeiro/extrato/transferencias/negar', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_transferencias_negar():
+    """"Não é transferência" — desfaz o par e devolve os dois lados à fila."""
+    from utils.extrato_par import negar
+    ids = [int(i) for i in request.form.getlist('lanc') if str(i).isdigit()]
+    if not ids:
+        flash('Nenhum selecionado.', 'warning')
+        return _volta_transferencias()
+    ok, nao = negar(ids, usuario_id=current_user.id)
+    registrar('escrita.negou_transferencia', 'financeiro',
+              tabela='extrato_lancamentos',
+              depois={'ids': ok, 'recusados': [list(map(str, r)) for r in nao[:5]]})
+    if ok:
+        flash(f'{len(ok)} lançamento(s) destravado(s) — voltaram para a fila '
+              'normal e podem ser classificados como qualquer outro.', 'success')
+    for _lid, motivo in nao[:3]:
+        flash(f'Não destravei: {motivo}', 'warning')
+    return _volta_transferencias()
 
 
 @financeiro.route('/financeiro/extrato/memorizacoes')
