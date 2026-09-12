@@ -1030,6 +1030,24 @@ def main() -> int:
         logger.exception('[roteador] varredura de EXTRATO falhou; os .xml desta '
                          'rodada VALEM.')
 
+    # E o arquivamento das saídas que o Q-Robô mandou. Isto ESTAVA dentro da
+    # requisição do robô até 12/09/2026, gastando 0,8s de thread do site por
+    # nota — com 14 robôs mandando 60 notas/min, e 200 robôs para instalar.
+    # Aqui é o lugar certo: fora do site, em lote e em paralelo.
+    #
+    # Em try próprio, como o de extrato: falha ao arquivar não derruba o
+    # roteador de XML, e a nota já está no banco de qualquer forma.
+    try:
+        from utils.arquivar_saidas import arquivar_pendentes
+        r = arquivar_pendentes(dry=False)
+        if r.get('subidos') or r.get('falhas'):
+            logger.warning('[roteador] saidas arquivadas: %s subida(s), %s falha(s) '
+                           '(leva de %s).', r['subidos'], r['falhas'],
+                           r['pendentes_nesta_leva'])
+    except Exception:
+        logger.exception('[roteador] arquivamento de SAIDAS falhou; as notas '
+                         'estao no banco e voltam no proximo tick.')
+
     logger.warning('[roteador] >>> Cron do roteador CONCLUIDO (pid=%s).', os.getpid())
     return 0
 

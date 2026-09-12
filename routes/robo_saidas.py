@@ -77,21 +77,11 @@ def _cabecalho(parsed):
     }
 
 
-def _arquivar_dropbox(cliente, chave, data_emissao, xml_bytes):
-    """Sobe o XML da saída no Dropbox sob o EMITENTE, DIRETO na convenção definitiva
-    ``EMPRESAS/{nº - razão}/FISCAL/SAIDAS/{ano}/{mês}`` (a mesma do roteador — sem
-    passar mais pela ponte /Fiscal/IMPORTADOS). Best-effort: a linha no banco já
-    entrou; falha aqui não derruba o request (só loga)."""
-    try:
-        svc = dropbox_sync._service
-        numero = (cliente.get('numero_cliente') or '').strip() or None
-        razao = cliente.get('nome_razao_social') or 'SEM_NOME'
-        dt = data_emissao or date.today()
-        pasta = svc.pasta_fiscal(razao, dt.year, dt.month, 'SAIDAS', numero)
-        svc.upload_bytes(f"{pasta}/{chave}.xml", xml_bytes)
-    except Exception:
-        logger.warning('[q-robo] saída gravada, mas falha ao arquivar XML no Dropbox '
-                       '(cliente_id=%s, chave=%s)', cliente.get('id'), chave)
+# O `_arquivar_dropbox` que existia aqui SAIU em 12/09/2026 — ele subia o XML
+# dentro da requisição e era o que travava o site (ver a nota em receber_saida).
+# A mesma lógica, em lote e em paralelo, vive em utils/arquivar_saidas.py, e
+# roda no cron do roteador. A convenção de pasta é a mesma:
+#     EMPRESAS/{nº - razão}/FISCAL/SAIDAS/{ano}/{mês}/{chave}.xml
 
 
 # ---------------------------------------------------------------------------
@@ -229,8 +219,19 @@ def receber_saida():
         logger.exception('[q-robo] falha ao gravar saída chave=%s', dados['chave'])
         return jsonify({'status': 'erro', 'erro': str(exc)}), 500
 
-    _arquivar_dropbox(cliente, dados['chave'], dados['data_emissao'], xml_bytes)
-
+    # (7b) O ARQUIVAMENTO NO DROPBOX SAIU DAQUI em 12/09/2026, e não é detalhe.
+    #
+    # Este upload levava 0,7 a 0,9 segundo de espera de rede DENTRO da
+    # requisição. Com o Q-Robô mandando ~60 notas por minuto, eram 48 segundos
+    # de thread do gunicorn por minuto gastos esperando o Dropbox — uma thread
+    # inteira, em tempo integral — e o site ia a 6-8 segundos para servir um
+    # CSS, com a CPU do contêiner em 0,0 vCPU. Não era falta de máquina: era
+    # espera. E eram 14 robôs, com 200 a instalar.
+    #
+    # Nada se perde: `xml_raw` já guardou o XML inteiro no banco. O Dropbox é a
+    # segunda cópia, e quem a faz agora é utils/arquivar_saidas.py, chamado
+    # pelo cron do roteador a cada 5 min — fora do site, e em paralelo.
+    #
     # (8) ok
     return jsonify({'status': 'salvo', 'chave': dados['chave'],
                     'modelo': dados['modelo']}), 200
