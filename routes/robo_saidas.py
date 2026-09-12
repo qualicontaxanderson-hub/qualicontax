@@ -248,9 +248,34 @@ def config_saida():
     RoboConfig.touch_ultimo_contato(robo['cliente_id'])
     cliente = Cliente.get_by_id(robo['cliente_id'])
     di = robo.get('data_inicio_captura')
+
+    # O `ativo` que vai na resposta é o EFETIVO: o botão do cadastro E a fase E
+    # a janela da noite. É aqui que a política mora, e não na recusa por nota —
+    # o agente lê este campo ANTES de varrer a máquina (runner.py, passo 1) e
+    # aborta o ciclo inteiro quando vem false. Recusar nota por nota faria ele
+    # despejar as milhares e levar recusa em cada uma.
+    #
+    # O campo `ativo` do BANCO continua sendo só a vontade do Anderson: não é
+    # sobrescrito. Quem some é a distinção na resposta, e por isso `fase` e
+    # `motivo` vão junto — para o painel dizer "ligado, em retroativo, volta às
+    # 22:00" em vez de "desligado", que seria mentira.
+    from utils.robo_fase import situacao
+    try:
+        sit = situacao(robo['cliente_id'], ativo_cadastro=bool(robo['ativo']))
+    except Exception:
+        # Falha ao decidir a fase NÃO pode calar o robô: na dúvida ele manda,
+        # que é o comportamento de antes desta mudança.
+        logger.exception('[q-robo] falha ao calcular a fase (cliente_id=%s) — '
+                         'liberando como antes.', robo['cliente_id'])
+        sit = {'fase': 'indefinida', 'liberado': bool(robo['ativo']),
+               'motivo': 'não consegui calcular a fase; liberado por garantia'}
+
     return jsonify({
         'empresa': (cliente.get('nome_razao_social') if cliente else None),
-        'ativo': bool(robo['ativo']),
+        'ativo': bool(sit['liberado']),
+        'ativo_cadastro': bool(robo['ativo']),
+        'fase': sit['fase'],
+        'motivo': sit['motivo'],
         'data_inicio_captura': di.isoformat() if di else None,
         'reset_seq': int(robo['robo_reset_seq'] or 0),
     }), 200
