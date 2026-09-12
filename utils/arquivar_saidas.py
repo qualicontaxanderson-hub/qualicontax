@@ -48,13 +48,21 @@ logger = logging.getLogger(__name__)
 CORTE_ID = int(os.getenv('QROBO_ARQ_DESDE_ID', '293768'))
 
 #: Teto por rodada e prazo suave, no mesmo espírito dos outros crons da casa.
-MAX_POR_RODADA = max(1, int(os.getenv('QROBO_ARQ_MAX', '600')))
-PRAZO_SEG = max(10, int(os.getenv('QROBO_ARQ_PRAZO_SEG', '180')))
+#:
+#: O 600 inicial foi calculado para as 60 notas/min de antes do conserto. No
+#: minuto em que o upload saiu da requisição o robô passou a despachar ~250/min
+#: (medido em 12/09/2026: 2.503 notas em 10 min), e 600 por tick de 5 min são
+#: 120/min — a fila CRESCIA. 2.000 por tick dão 400/min, que cobre a entrada
+#: com folga. A conta do prazo: 2000 ÷ 12 paralelos × 0,8s ≈ 133s, dentro dos
+#: 240s, e os 240 cabem no tick de 5 minutos.
+MAX_POR_RODADA = max(1, int(os.getenv('QROBO_ARQ_MAX', '2000')))
+PRAZO_SEG = max(10, int(os.getenv('QROBO_ARQ_PRAZO_SEG', '240')))
 
-#: Uploads em PARALELO. Um upload é 0,8s de espera de rede, não de CPU — então
-#: subir 8 ao mesmo tempo custa quase nada de processador e multiplica por 8 a
-#: vazão. Com 214 robôs a fila chega a ~15 notas/s; serial não daria conta.
-PARALELO = max(1, min(16, int(os.getenv('QROBO_ARQ_PARALELO', '8'))))
+#: Uploads em PARALELO. Um upload é 0,8s de espera de REDE, não de CPU — então
+#: subir vários ao mesmo tempo custa quase nada de processador e multiplica a
+#: vazão. Não subo mais que isso porque o Dropbox limita (429), e a partir daí
+#: paralelismo só produz recusa: ver o freio em ``limitado_por()``.
+PARALELO = max(1, min(16, int(os.getenv('QROBO_ARQ_PARALELO', '12'))))
 
 
 def pendentes(limite=None):
@@ -130,11 +138,24 @@ def arquivar_pendentes(limite=None, dry=True):
         return r
 
     # Fatias de PARALELO em vez de mandar a leva inteira ao pool: assim o prazo
-    # suave é conferido entre as fatias e a rodada para de verdade quando estoura.
+    # suave E o freio do 429 são conferidos entre as fatias, e a rodada para de
+    # verdade em vez de enfileirar tudo de uma vez num pool que não olha mais.
+    from utils import dropbox_sync
+    svc = dropbox_sync._service
     for i in range(0, len(linhas), PARALELO):
         if time.monotonic() > fim:
             logger.info('[arq-saidas] prazo (%ss) atingido; resto no próximo tick.',
                         PRAZO_SEG)
+            break
+        # FREIO DO 429: com o Dropbox limitando, continuar é bater mais forte
+        # numa porta fechada — e pior, gastar a leva inteira em recusa, o que
+        # faria a rodada seguinte encontrar a mesma fila e repetir. Para aqui e
+        # volta no próximo tick, quando a janela dele já passou.
+        falta = svc.limitado_por()
+        if falta > 0:
+            logger.warning('[arq-saidas] Dropbox limitando por mais %.0fs — '
+                           'parando a rodada com %s subida(s).', falta, r['subidos'])
+            r['freado_por_429'] = round(falta)
             break
         fatia = linhas[i:i + PARALELO]
         with ThreadPoolExecutor(max_workers=PARALELO) as pool:

@@ -10,9 +10,36 @@ import logging
 import re
 import os
 import threading
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Optional
+
+#: Teto do que se espera DENTRO de uma chamada quando o Dropbox pede espera.
+#: O upload também é chamado de tela (upload manual), e dormir meio minuto numa
+#: requisição é pior que devolver a falha — o lote tenta de novo sozinho.
+_RATE_LIMIT_MAX_ESPERA = max(1, int(os.getenv('DROPBOX_ESPERA_MAX_SEG', '10')))
+
+
+def _segundos_de_espera(exc: Exception) -> Optional[float]:
+    """Quantos segundos o Dropbox pediu para esperar, ou None se não foi 429.
+
+    O 429 chega como ``RateLimitError``, e o número vem em ``error.retry_after``
+    — mas a posição mudou entre versões do SDK, então a busca é defensiva e cai
+    para um padrão em vez de estourar. Devolver None significa "não é limite de
+    taxa", e é o que mantém o erro de credencial no caminho dele.
+    """
+    if 'RateLimit' not in type(exc).__name__ and '429' not in str(exc):
+        return None
+    for caminho in ('backoff', 'retry_after'):
+        v = getattr(exc, caminho, None)
+        if isinstance(v, (int, float)) and v >= 0:
+            return float(v)
+    err = getattr(exc, 'error', None)
+    v = getattr(err, 'retry_after', None)
+    if isinstance(v, (int, float)) and v >= 0:
+        return float(v)
+    return 5.0            # pediu espera sem dizer quanto: 5s é o padrão do SDK
 
 logger = logging.getLogger(__name__)
 
@@ -612,7 +639,7 @@ class DropboxService:
         Raises:
             DropboxAuthError: credenciais definitivamente inválidas (após retry).
         """
-        for _attempt in range(2):
+        for _attempt in range(3):
             dbx = self._client()
             if not dbx:
                 return False
@@ -623,6 +650,22 @@ class DropboxService:
                 logger.info('Arquivo enviado ao Dropbox: %s (%d bytes)', path, len(content))
                 return True
             except Exception as exc:
+                # LIMITE DE TAXA (429) vem ANTES do teste de auth: os dois são
+                # erro de HTTP e confundi-los faria trocar credencial que está
+                # certa — foi o que aconteceu com o escopo do Dropbox em agosto.
+                espera = _segundos_de_espera(exc)
+                if espera is not None:
+                    self._limitado_ate = time.time() + espera
+                    if _attempt < 2:
+                        dorme = min(espera, _RATE_LIMIT_MAX_ESPERA)
+                        logger.warning('Dropbox pediu para esperar %ss (429) — '
+                                       'aguardando %ss e tentando de novo: %s',
+                                       espera, dorme, path)
+                        time.sleep(dorme)
+                        continue
+                    logger.error('Dropbox ainda limitando (429) depois de esperar '
+                                 '— %s fica para a próxima rodada.', path)
+                    return False
                 if self._is_auth_error(exc):
                     with self._client_lock:
                         self._dbx = None
@@ -633,6 +676,16 @@ class DropboxService:
                 logger.error('Erro ao enviar %s ao Dropbox: %s', path, exc)
                 return False
         return False
+
+    def limitado_por(self) -> float:
+        """Segundos que ainda faltam do último 429, ou 0 se não há limite ativo.
+
+        Existe para quem manda em LOTE poder parar a rodada em vez de insistir:
+        com o Dropbox limitando, continuar é bater mais forte numa porta que
+        já está fechada. Ver utils/arquivar_saidas.py.
+        """
+        falta = getattr(self, '_limitado_ate', 0) - time.time()
+        return max(0.0, falta)
 
     def upload_arquivo(self, caminho_local: str, path: str) -> bool:
         """Envia um ARQUIVO do disco para ``path`` no Dropbox, sobrescrevendo.
