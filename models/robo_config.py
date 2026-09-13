@@ -41,26 +41,48 @@ class RoboConfig:
         (TIMESTAMP convertido na leitura) estão todos em BRT e são comparáveis
         entre si. Fazer a conta em Python usaria o relógio do processo — UTC no
         Railway — e daria 3h de erro no status."""
-        return execute_query(
+        # O agregado por robô (total de saídas, última captura) NÃO é mais
+        # calculado aqui. Até 12/09/2026 era um GROUP BY sobre nfe_importacoes
+        # dentro desta consulta — com 700 mil linhas de Q-ROBO levou 413
+        # SEGUNDOS, duas abas ao mesmo tempo, com o site fora do ar. Agora o
+        # cron do roteador calcula (utils/painel_cache.atualizar_painel_qrobo) e
+        # esta função só LÊ o resultado e junta em Python. O que fica ao vivo
+        # no SQL é só o barato: robo_config e clientes.
+        #
+        # A matemática de tempo continua no relógio do BANCO: ``agora`` vem de
+        # NOW() na mesma conexão (-03:00), e a ultima_captura foi gravada por
+        # NOW() do banco também — comparáveis entre si, sem o relógio do
+        # processo (UTC no Railway, 3h de erro).
+        from datetime import datetime
+        from utils.painel_cache import ler, CHAVE_PAINEL_QROBO
+
+        rows = execute_query(
             "SELECT r.id, r.cliente_id, r.ativo, r.data_inicio_captura, "
             "       r.robo_reset_seq, r.robo_ultimo_contato, "
             "       TIMESTAMPDIFF(MINUTE, r.robo_ultimo_contato, NOW()) AS min_sem_contato, "
-            "       c.numero_cliente, c.nome_razao_social, "
-            "       COALESCE(s.total_saidas, 0) AS total_saidas, "
-            "       s.ultima_captura, "
-            "       TIMESTAMPDIFF(MINUTE, s.ultima_captura, NOW()) AS min_ultima_captura "
+            "       c.numero_cliente, c.nome_razao_social, NOW() AS agora "
             "  FROM robo_config r "
             "  LEFT JOIN clientes c ON c.id = r.cliente_id "
-            "  LEFT JOIN ("
-            "        SELECT cliente_id, COUNT(*) AS total_saidas, "
-            "               MAX(importado_em) AS ultima_captura "
-            "          FROM nfe_importacoes "
-            "         WHERE tipo = 'saida' AND origem = 'Q-ROBO' "
-            "         GROUP BY cliente_id "
-            "  ) s ON s.cliente_id = r.cliente_id "
             " ORDER BY c.nome_razao_social",
             fetch=True,
         ) or []
+        painel, _idade = ler(CHAVE_PAINEL_QROBO)
+        painel = painel or {}
+        for r in rows:
+            p = painel.get(str(r['cliente_id'])) or {}
+            r['total_saidas'] = int(p.get('total_saidas') or 0)
+            ult = p.get('ultima_captura')
+            if isinstance(ult, str) and ult:
+                try:
+                    ult = datetime.strptime(ult[:19], '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    ult = None
+            r['ultima_captura'] = ult
+            agora = r.pop('agora', None)
+            r['min_ultima_captura'] = (
+                int((agora - ult).total_seconds() // 60)
+                if (ult and agora) else None)
+        return rows
 
     @staticmethod
     def touch_ultimo_contato(cliente_id):

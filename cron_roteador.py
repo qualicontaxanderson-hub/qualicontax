@@ -1066,6 +1066,19 @@ def main() -> int:
         logger.exception('[roteador] painel da home falhou; a tela segue com o '
                          'ultimo valor gravado.')
 
+    # E o painel do Q-Robo (total de saidas e ultima captura por robo), que
+    # tambem era calculado dentro da tela — 413s com o site fora do ar em
+    # 12/09/2026. Consulta index-only, uma por tick, sob lock.
+    try:
+        from utils.painel_cache import atualizar_painel_qrobo
+        _t0 = _t.monotonic()
+        if atualizar_painel_qrobo() is not None:
+            logger.warning('[roteador] painel do Q-Robo recalculado em %.1fs.',
+                           _t.monotonic() - _t0)
+    except Exception:
+        logger.exception('[roteador] painel do Q-Robo falhou; a tela segue com '
+                         'o ultimo valor gravado.')
+
     logger.warning('[roteador] >>> Cron do roteador CONCLUIDO (pid=%s).', os.getpid())
     return 0
 

@@ -80,6 +80,64 @@ def ler(chave):
         return None, None
 
 
+CHAVE_PAINEL_QROBO = 'painel_qrobo'
+
+
+def atualizar_painel_qrobo():
+    """Total de saídas e última captura POR ROBÔ — para o cron, não para a tela.
+
+    Até 12/09/2026 ``RoboConfig.listar_painel`` fazia isto dentro da requisição,
+    com um ``GROUP BY cliente_id`` que filtrava ``tipo`` e pegava
+    ``MAX(importado_em)`` — colunas fora do índice, então o MySQL percorria o
+    índice inteiro E buscava cada uma das 700 mil linhas. Medido: **413
+    segundos**, duas vezes (duas abas), enquanto o site estava fora do ar.
+    Mesmo defeito do painel da home: agregado sobre a tabela grande dentro da
+    tela.
+
+    Aqui a consulta é index-only (``origem`` e ``MAX(id)`` cabem no índice
+    ``(cliente_id, origem, data_emissao)``; ``tipo`` saiu porque Q-ROBO é sempre
+    saída) e a ``importado_em`` da última nota vem por PK, uma por robô. Roda
+    no tick do roteador, sob lock, e a tela só lê.
+    """
+    import mysql.connector
+    from config import Config
+    from utils.db_helper import execute_query
+
+    conn = mysql.connector.connect(
+        host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
+        user=Config.DB_USER, password=Config.DB_PASSWORD,
+        connection_timeout=Config.DB_CONNECT_TIMEOUT, autocommit=True,
+        time_zone='-03:00')
+    cur = conn.cursor(buffered=True)
+    try:
+        cur.execute("SELECT GET_LOCK(%s, 0)", (CHAVE_PAINEL_QROBO,))
+        if (cur.fetchone() or [0])[0] != 1:
+            return None
+        agreg = execute_query(
+            "SELECT cliente_id, COUNT(*) AS total, MAX(id) AS max_id "
+            "  FROM nfe_importacoes WHERE origem = 'Q-ROBO' "
+            " GROUP BY cliente_id", fetch=True) or []
+        painel = {}
+        for a in agreg:
+            ult = execute_query(
+                "SELECT importado_em FROM nfe_importacoes WHERE id = %s",
+                (a['max_id'],), fetch=True, fetch_one=True) or {}
+            painel[str(a['cliente_id'])] = {
+                'total_saidas': int(a['total'] or 0),
+                'ultima_captura': ult.get('importado_em'),   # default=str no dumps
+            }
+        guardar(CHAVE_PAINEL_QROBO, painel)
+        return painel
+    finally:
+        for fn in (lambda: (cur.execute("SELECT RELEASE_LOCK(%s)", (CHAVE_PAINEL_QROBO,)),
+                            cur.fetchall()),
+                   cur.close, conn.close):
+            try:
+                fn()
+            except Exception:
+                pass
+
+
 #: De quanto em quanto tempo vale recalcular. O tick do roteador é de 5 min, e
 #: a conta MEDIDA em 12/09/2026 passa de 300 SEGUNDOS — sem este intervalo o
 #: cron começaria uma conta nova antes de a anterior terminar, e eu teria
