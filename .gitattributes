@@ -1,0 +1,13 @@
+# Binarios: nunca normalizar quebras de linha (core.autocrlf=true no Windows
+# trataria o PDF como texto — visto no commit 23bb0a6, 13/09/2026).
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pfx  binary
+*.p12  binary
+*.zip  binary
+*.xlsx binary
+*.docx binary
