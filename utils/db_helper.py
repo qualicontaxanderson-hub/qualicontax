@@ -1,6 +1,7 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import threading
 import os
+import sys
 import atexit
 from contextlib import contextmanager
 import mysql.connector
@@ -28,9 +29,38 @@ def _set_last_db_error(msg: str) -> None:
 _pool: pooling.MySQLConnectionPool | None = None
 
 
+#: Erro do MySQL quando a consulta passa do max_execution_time.
+_ERRNO_TEMPO_EXCEDIDO = 3024
+
+
+def _limite_ms() -> int:
+    """Teto de tempo por SELECT para ESTE processo, em ms (0 = sem teto).
+
+    O site recebe ``Config.DB_MAX_EXEC_MS`` (30s). Os crons (``cron_*.py``) e
+    as migrações (``migrations/*.py``) rodam sem teto: eles fazem varredura
+    pesada de propósito, fora do site — é justamente para lá que o trabalho
+    lento foi movido. A variável ``DB_MAX_EXEC_MS`` no ambiente vence tudo,
+    para poder ligar/desligar num serviço sem mexer em código.
+    """
+    if os.getenv('DB_MAX_EXEC_MS') is not None:
+        return Config.DB_MAX_EXEC_MS
+    prog = os.path.basename(sys.argv[0] or '').lower()
+    caminho = (sys.argv[0] or '').replace(os.sep, '/').lower()
+    if prog.startswith('cron_') or '/migrations/' in caminho or caminho.startswith('migrations/'):
+        return 0
+    return Config.DB_MAX_EXEC_MS
+
+
 def _get_pool() -> pooling.MySQLConnectionPool:
     global _pool
     if _pool is None:
+        ms = _limite_ms()
+        extras = {}
+        if ms > 0:
+            # Roda em toda conexão nova do pool (e nas reconexões): é o
+            # "disjuntor" do site. Só SELECT é afetado; gravação nunca é cortada.
+            extras['init_command'] = f'SET SESSION max_execution_time={ms}'
+            logger.info('Pool MySQL com teto de %d ms por consulta de leitura.', ms)
         _pool = pooling.MySQLConnectionPool(
             pool_name=f'qualicontax_pool_{os.getpid()}',
             pool_size=Config.DB_POOL_SIZE,
@@ -56,6 +86,7 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             # offset é fixo. Feito na conexão (não SET GLOBAL): sobrevive a restart
             # do container do MySQL.
             time_zone='-03:00',
+            **extras,
         )
     return _pool
 
@@ -93,6 +124,24 @@ def close_pool():
 
 # Fecha o pool quando o processo (worker gunicorn ou script) encerra normalmente.
 atexit.register(close_pool)
+
+
+def _avisar_tela_consulta_cortada():
+    """Deixa um aviso claro para o usuário quando estamos numa requisição.
+
+    Sem isto a tela abriria VAZIA em silêncio (as rotas tratam None como
+    "sem dados"). O flash aparece no próximo HTML renderizado — na própria
+    tela, ou na seguinte se a chamada era um fetch de JSON.
+    """
+    try:
+        from flask import has_request_context, flash
+        if has_request_context():
+            flash('Uma consulta desta tela passou de %d segundos e foi interrompida '
+                  'para não travar o sistema. Os dados podem estar incompletos — '
+                  'avise o suporte informando qual tela.' % (_limite_ms() // 1000),
+                  'danger')
+    except Exception:
+        pass
 
 
 def get_db_connection():
@@ -219,6 +268,13 @@ def execute_query(query, params=None, fetch=False, fetch_one=False):
             
     except Error as e:
         _set_last_db_error(str(e))
+        if getattr(e, 'errno', None) == _ERRNO_TEMPO_EXCEDIDO:
+            # Cortada pelo teto (max_execution_time). Este log é a lista de
+            # telas a consertar: quem aparece aqui precisa de índice ou cache.
+            logger.warning('[db] consulta CORTADA pelo teto de %d ms: %s',
+                           _limite_ms(), ' '.join(str(query).split())[:400])
+            _avisar_tela_consulta_cortada()
+            return None
         logger.error(f"Erro ao executar query: {e}")
         logger.error(f"Query: {query}")
         logger.error(f"Params: {params}")

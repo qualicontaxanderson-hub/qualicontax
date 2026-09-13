@@ -22,6 +22,13 @@ class Config:
     # Suba via env DB_POOL_SIZE se o plano MySQL permitir mais (max 32 pelo conector).
     DB_POOL_SIZE = max(1, min(32, int(os.getenv('DB_POOL_SIZE', 10))))
     DB_CONNECT_TIMEOUT = max(1, int(os.getenv('DB_CONNECT_TIMEOUT', 3)))
+    # Teto por consulta de LEITURA nas conexões do SITE, em milissegundos
+    # (max_execution_time do MySQL; só vale para SELECT). Decisão de 13/09/2026:
+    # 30s. Consulta que passar disso é cortada pelo próprio banco — a tela
+    # falha com aviso em vez de segurar o MySQL por minutos para um usuário
+    # que já desistiu (8 varreduras órfãs de 5 min em 12/09). Os crons e as
+    # migrações rodam SEM teto (ver utils.db_helper._limite_ms). 0 desliga.
+    DB_MAX_EXEC_MS = max(0, int(os.getenv('DB_MAX_EXEC_MS', 30000)))
     
     # SQLAlchemy
     SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
