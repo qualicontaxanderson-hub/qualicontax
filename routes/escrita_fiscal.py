@@ -1301,6 +1301,12 @@ def status_sefaz():
     Só leitura, nada aqui consome cota da SEFAZ.
 
     ``?empresa=<número>`` abre direto a aba daquela empresa (link profundo).
+
+    Desde 13/09/2026 a rota NAO CALCULA: le o JSON que o cron do roteador
+    gravou em app_config (``utils.painel_cache.atualizar_status_sefaz``).
+    Antes, cada recarga de 60s fazia varredura completa de nfe_importacoes
+    (750 mil linhas); com o worker morrendo aos 60s, a consulta ficava orfa
+    no banco — quatro ao mesmo tempo — e a tela nunca abria.
     """
     empresa_link = request.args.get('empresa', '').strip()
 
@@ -1310,6 +1316,25 @@ def status_sefaz():
         registrar('leitura.abriu_status_sefaz', 'fiscal',
                   depois={'empresa': empresa_link})
 
+    from utils.painel_cache import ler, CHAVE_STATUS_SEFAZ
+    dados, idade = ler(CHAVE_STATUS_SEFAZ)
+    if not dados:
+        # Primeiro tick depois do deploy ainda nao rodou. Nunca calcular aqui.
+        return render_template('escrita_fiscal/status_sefaz_aguarde.html'), 503
+    dados['abrir_empresa'] = empresa_link
+    dados['cache_idade_s'] = idade
+    return render_template(
+        'escrita_fiscal/status_sefaz.html',
+        dados_json=_json_para_tela(dados),
+        cert_alerta=dados.get('cert_alerta'),
+    )
+
+
+def _status_sefaz_dados():
+    """Monta o JSON inteiro do Status SEFAZ (topo, empresas, certificados,
+    travadas, capturas, historico, baixadas). Chamado pelo CRON do roteador —
+    nunca por uma requisicao. Devolve o dict que a tela consome; datas e
+    Decimal saem crus e viram texto/float em ``_json_para_tela``."""
     def _fmt(d):
         return d.strftime('%d/%m/%Y %H:%M') if hasattr(d, 'strftime') else None
 
@@ -1782,13 +1807,8 @@ def status_sefaz():
                     'completas', 'resgataveis'],
         'bx_serv': ['nfe_ent', 'nfe_sai', 'cte'],
         'gerado_em': agora.strftime('%d/%m/%Y %H:%M'),
-        'abrir_empresa': empresa_link,
     }
-    return render_template(
-        'escrita_fiscal/status_sefaz.html',
-        dados_json=_json_para_tela(dados),
-        cert_alerta=cert_alerta,
-    )
+    return dados
 
 
 def _json_para_tela(dados):

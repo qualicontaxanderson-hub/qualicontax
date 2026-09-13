@@ -206,3 +206,55 @@ def atualizar_home_fiscal(forcar=False):
             conn.close()
         except Exception:
             pass
+
+
+CHAVE_STATUS_SEFAZ = 'painel_status_sefaz'
+
+
+def atualizar_status_sefaz():
+    """Recalcula o JSON do Status SEFAZ e grava — para o cron, a cada tick.
+
+    Em 13/09/2026 a rota ``/status-sefaz/`` fazia, a cada recarga automatica
+    de 60s, ``COUNT``/``SUM`` sobre ``nfe_importacoes`` inteira (750 mil
+    linhas) mais o GROUP BY da aba Baixadas. Com ``--timeout 60`` o worker
+    morria antes de responder, a consulta seguia orfa no MySQL (quatro ao
+    mesmo tempo, 150-320s cada) e a tela nunca abria. Mesmo remedio da home:
+    uma conta, fora do site, sob lock; a tela so le.
+
+    Sem idade minima: o tick e de 5 min e a tela mostra ``gerado_em``.
+    Devolve o payload quando calculou, None se outro processo ja estava nisso.
+    """
+    import json
+    import mysql.connector
+    from config import Config
+
+    conn = mysql.connector.connect(
+        host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
+        user=Config.DB_USER, password=Config.DB_PASSWORD,
+        connection_timeout=Config.DB_CONNECT_TIMEOUT, autocommit=True,
+        time_zone='-03:00')
+    cur = conn.cursor(buffered=True)
+    try:
+        cur.execute("SELECT GET_LOCK(%s, 0)", (CHAVE_STATUS_SEFAZ,))
+        if (cur.fetchone() or [0])[0] != 1:
+            logger.info('[painel] status sefaz: outro processo calculando; pulando.')
+            return None
+        from routes.escrita_fiscal import _status_sefaz_dados, _json_para_tela
+        dados = _status_sefaz_dados()
+        if not dados:
+            logger.warning('[painel] status sefaz: payload vazio; nao gravei.')
+            return None
+        # Passa pelo serializador da tela (datas e Decimal) e volta a dict
+        # simples: o que fica gravado e exatamente o que a tela receberia.
+        # (o '<\/' do serializador e JSON valido; json.loads devolve '</'.)
+        payload = json.loads(_json_para_tela(dados))
+        guardar(CHAVE_STATUS_SEFAZ, payload)
+        return payload
+    finally:
+        for fn in (lambda: (cur.execute("SELECT RELEASE_LOCK(%s)", (CHAVE_STATUS_SEFAZ,)),
+                            cur.fetchall()),
+                   cur.close, conn.close):
+            try:
+                fn()
+            except Exception:
+                pass

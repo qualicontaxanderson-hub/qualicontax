@@ -19,7 +19,11 @@
     if (!carEl) return;
     var endpoint = carEl.getAttribute('data-endpoint');
     if (!endpoint) return;
-    var STALE_MS = 5 * 60 * 1000;
+    // Desde 12/09/2026 o painel e calculado pelo CRON a cada 15 min (nao
+    // pela tela). Com 5 min aqui o carrossel ficava escondido dois tercos
+    // do tempo — a home 'sem dados' de 13/09. 45 min cobre o tick de 15
+    // mais uma conta lenta; acima disso e sinal de cron parado, e ai some.
+    var STALE_MS = 45 * 60 * 1000;
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
