@@ -2081,24 +2081,10 @@ def api_notas():
                    n.nome_arquivo,
                    n.importado_em, n.atualizado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
-                   g.nome AS grupo_nome,
-                   COALESCE(ic.qtd_itens, 0) AS qtd_itens,
-                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados,
-                   COUNT(*) OVER() AS _total,
-                   COALESCE(SUM(n.valor_total) OVER(), 0) AS _kpi_valor,
-                   COALESCE(SUM(n.valor_icms)  OVER(), 0) AS _kpi_icms,
-                   COALESCE(SUM(n.valor_pis)   OVER(), 0) AS _kpi_pis,
-                   COALESCE(SUM(n.valor_cofins) OVER(), 0) AS _kpi_cofins
+                   g.nome AS grupo_nome
               FROM nfe_importacoes n
               LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
-              LEFT JOIN (
-                  SELECT nfe_id,
-                         COUNT(*) AS qtd_itens,
-                         COUNT(produto_catalogo_id) AS itens_vinculados
-                    FROM nfe_itens
-                   GROUP BY nfe_id
-              ) ic ON ic.nfe_id = n.id
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
@@ -2107,19 +2093,41 @@ def api_notas():
     ) or []
 
     # Extract window-function values from the first row (same for all rows)
-    first = all_rows[0] if all_rows else {}
-    total = int(first.get('_total') or 0)
+    # Totais e KPIs numa consulta de AGREGADO, separada da pagina. Ate 13/09/2026
+    # eram COUNT(*)/SUM() OVER() na mesma consulta: para devolver 50 linhas o
+    # MySQL lia TODAS as do filtro — 259 mil notas x 8 KB de XML na linha =
+    # 498 s na Westpark. Aqui o agregado le so o indice idx_lista.
+    _tot = execute_query(
+        f"""SELECT COUNT(*) AS _total,
+                   COALESCE(SUM(n.valor_total), 0) AS _kpi_valor,
+                   COALESCE(SUM(n.valor_icms), 0) AS _kpi_icms,
+                   COALESCE(SUM(n.valor_pis), 0) AS _kpi_pis,
+                   COALESCE(SUM(n.valor_cofins), 0) AS _kpi_cofins
+              FROM nfe_importacoes n
+              {where_sql}""",
+        tuple(params), fetch=True, fetch_one=True) or {}
+    total = int(_tot.get('_total') or 0)
     kpi = {
-        'total_valor': float(first.get('_kpi_valor') or 0),
-        'total_icms':  float(first.get('_kpi_icms')  or 0),
-        'total_pis':   float(first.get('_kpi_pis')   or 0),
-        'total_cofins':float(first.get('_kpi_cofins') or 0),
+        'total_valor':  float(_tot.get('_kpi_valor') or 0),
+        'total_icms':   float(_tot.get('_kpi_icms') or 0),
+        'total_pis':    float(_tot.get('_kpi_pis') or 0),
+        'total_cofins': float(_tot.get('_kpi_cofins') or 0),
     }
-
-    # Handle empty result: total/kpi must still be valid (window cols absent)
-    if not all_rows:
-        total = 0
-        kpi = {'total_valor': 0, 'total_icms': 0, 'total_pis': 0, 'total_cofins': 0}
+    # Itens SO das notas da pagina (antes: GROUP BY sobre 1,17 milhao de itens
+    # a cada pagina, dentro de um LEFT JOIN derivado).
+    _itens = {}
+    if all_rows:
+        _ph = ','.join(['%s'] * len(all_rows))
+        for _it in execute_query(
+                f"SELECT nfe_id, COUNT(*) AS qtd_itens, "
+                f"       COUNT(produto_catalogo_id) AS itens_vinculados "
+                f"  FROM nfe_itens WHERE nfe_id IN ({_ph}) GROUP BY nfe_id",
+                tuple(r['id'] for r in all_rows), fetch=True) or []:
+            _itens[_it['nfe_id']] = _it
+    for r in all_rows:
+        _it = _itens.get(r['id']) or {}
+        r['qtd_itens'] = int(_it.get('qtd_itens') or 0)
+        r['itens_vinculados'] = int(_it.get('itens_vinculados') or 0)
 
     rows = []
     _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
@@ -8109,24 +8117,10 @@ def api_notas_saidas():
                    n.nome_arquivo,
                    n.importado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome,
-                   g.nome AS grupo_nome,
-                   COALESCE(ic.qtd_itens, 0) AS qtd_itens,
-                   COALESCE(ic.itens_vinculados, 0) AS itens_vinculados,
-                   COUNT(*) OVER() AS _total,
-                   COALESCE(SUM(n.valor_total) OVER(), 0) AS _kpi_valor,
-                   COALESCE(SUM(n.valor_icms)  OVER(), 0) AS _kpi_icms,
-                   COALESCE(SUM(n.valor_pis)   OVER(), 0) AS _kpi_pis,
-                   COALESCE(SUM(n.valor_cofins) OVER(), 0) AS _kpi_cofins
+                   g.nome AS grupo_nome
               FROM nfe_importacoes n
               LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
-              LEFT JOIN (
-                  SELECT nfe_id,
-                         COUNT(*) AS qtd_itens,
-                         COUNT(produto_catalogo_id) AS itens_vinculados
-                    FROM nfe_itens
-                   GROUP BY nfe_id
-              ) ic ON ic.nfe_id = n.id
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
@@ -8134,17 +8128,41 @@ def api_notas_saidas():
         fetch=True,
     ) or []
 
-    first = all_rows[0] if all_rows else {}
-    total = int(first.get('_total') or 0)
+    # Totais e KPIs numa consulta de AGREGADO, separada da pagina. Ate 13/09/2026
+    # eram COUNT(*)/SUM() OVER() na mesma consulta: para devolver 50 linhas o
+    # MySQL lia TODAS as do filtro — 259 mil notas x 8 KB de XML na linha =
+    # 498 s na Westpark. Aqui o agregado le so o indice idx_lista.
+    _tot = execute_query(
+        f"""SELECT COUNT(*) AS _total,
+                   COALESCE(SUM(n.valor_total), 0) AS _kpi_valor,
+                   COALESCE(SUM(n.valor_icms), 0) AS _kpi_icms,
+                   COALESCE(SUM(n.valor_pis), 0) AS _kpi_pis,
+                   COALESCE(SUM(n.valor_cofins), 0) AS _kpi_cofins
+              FROM nfe_importacoes n
+              {where_sql}""",
+        tuple(params), fetch=True, fetch_one=True) or {}
+    total = int(_tot.get('_total') or 0)
     kpi = {
-        'total_valor':  float(first.get('_kpi_valor') or 0),
-        'total_icms':   float(first.get('_kpi_icms')  or 0),
-        'total_pis':    float(first.get('_kpi_pis')   or 0),
-        'total_cofins': float(first.get('_kpi_cofins') or 0),
+        'total_valor':  float(_tot.get('_kpi_valor') or 0),
+        'total_icms':   float(_tot.get('_kpi_icms') or 0),
+        'total_pis':    float(_tot.get('_kpi_pis') or 0),
+        'total_cofins': float(_tot.get('_kpi_cofins') or 0),
     }
-    if not all_rows:
-        total = 0
-        kpi = {'total_valor': 0, 'total_icms': 0, 'total_pis': 0, 'total_cofins': 0}
+    # Itens SO das notas da pagina (antes: GROUP BY sobre 1,17 milhao de itens
+    # a cada pagina, dentro de um LEFT JOIN derivado).
+    _itens = {}
+    if all_rows:
+        _ph = ','.join(['%s'] * len(all_rows))
+        for _it in execute_query(
+                f"SELECT nfe_id, COUNT(*) AS qtd_itens, "
+                f"       COUNT(produto_catalogo_id) AS itens_vinculados "
+                f"  FROM nfe_itens WHERE nfe_id IN ({_ph}) GROUP BY nfe_id",
+                tuple(r['id'] for r in all_rows), fetch=True) or []:
+            _itens[_it['nfe_id']] = _it
+    for r in all_rows:
+        _it = _itens.get(r['id']) or {}
+        r['qtd_itens'] = int(_it.get('qtd_itens') or 0)
+        r['itens_vinculados'] = int(_it.get('itens_vinculados') or 0)
 
     # Hora de emissão (HH:MM:SS) das linhas da página. data_emissao é DATE (sem
     # hora), então a hora sai do dhEmi do xml_raw (formato 'AAAA-MM-DDThh:mm:ss…',

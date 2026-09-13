@@ -58,7 +58,7 @@ TAMANHO_MAX_BYTES = 200 * 1024 * 1024            # 200 MB
 #   .jpg/.png  foto de comprovante, print de portal
 #   .xlsx/.docx  planilha e documento do Office
 #   .csv  extrato/relatório exportado
-EXTENSOES_PERMITIDAS = ('.xml', '.pdf', '.pfx', '.txt', '.ofx', '.zip', '.dec', '.rec',
+EXTENSOES_PERMITIDAS = ('.xml', '.pdf', '.pfx', '.p12', '.txt', '.ofx', '.zip', '.dec', '.rec',
                         '.jpg', '.jpeg', '.png', '.xlsx', '.docx', '.csv')
 
 # Caracteres que o Dropbox recusa em nome de arquivo (/ \ : ? * " < > |) + controle.

@@ -1,6 +1,7 @@
 """Módulo de conexão com banco de dados Railway MySQL"""
 import threading
 import os
+import time
 import sys
 import atexit
 from contextlib import contextmanager
@@ -29,6 +30,9 @@ def _set_last_db_error(msg: str) -> None:
 _pool: pooling.MySQLConnectionPool | None = None
 
 
+#: Quanto tempo uma thread espera por conexão quando o pool está cheio.
+_POOL_ESPERA_SEG = max(0.0, float(os.getenv('DB_POOL_ESPERA_SEG', '5')))
+
 #: Erro do MySQL quando a consulta passa do max_execution_time.
 _ERRNO_TEMPO_EXCEDIDO = 3024
 
@@ -51,9 +55,19 @@ def _limite_ms() -> int:
     return Config.DB_MAX_EXEC_MS
 
 
+_pool_lock = threading.Lock()
+
+
 def _get_pool() -> pooling.MySQLConnectionPool:
     global _pool
-    if _pool is None:
+    if _pool is not None:
+        return _pool
+    # Trava: com gthread, N threads chegam aqui juntas na primeira consulta e
+    # cada uma criaria o próprio pool (N x pool_size conexões, as sobras vivas
+    # até o wait_timeout). Uma cria; as outras esperam e usam a mesma.
+    with _pool_lock:
+        if _pool is not None:
+            return _pool
         ms = _limite_ms()
         extras = {}
         if ms > 0:
@@ -152,12 +166,27 @@ def get_db_connection():
     Returns:
         connection: Objeto de conexão MySQL ou None em caso de erro
     """
-    try:
-        return _get_pool().get_connection()
-    except Error as e:
-        logger.error(f"Erro ao obter conexão do pool MySQL: {e}")
-        print(f"Erro ao obter conexão do pool MySQL: {e}")
-        return None
+    # Pool cheio NÃO é erro: é fila. Até 13/09/2026 o conector devolvia
+    # "Failed getting connection; pool exhausted" na hora e a consulta virava
+    # None — o detalhe do cliente dispara 12 consultas em paralelo (ThreadPool
+    # de 11) sobre um pool de 10, e a tela abria com "Nenhum certificado"
+    # mesmo com o certificado gravado. Agora espera até DB_POOL_ESPERA_SEG
+    # por uma conexão livre; só depois disso desiste e loga.
+    limite = time.monotonic() + _POOL_ESPERA_SEG
+    while True:
+        try:
+            return _get_pool().get_connection()
+        except pooling.PoolError as e:
+            if time.monotonic() >= limite:
+                logger.error(f"Erro ao obter conexão do pool MySQL: {e} "
+                             f"(esperei {_POOL_ESPERA_SEG}s)")
+                print(f"Erro ao obter conexão do pool MySQL: {e}")
+                return None
+            time.sleep(0.05)
+        except Error as e:
+            logger.error(f"Erro ao obter conexão do pool MySQL: {e}")
+            print(f"Erro ao obter conexão do pool MySQL: {e}")
+            return None
 
 
 @contextmanager

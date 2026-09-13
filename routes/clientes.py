@@ -531,8 +531,8 @@ def _localizar_certificados_novo(svc, cliente):
 def _erro_ambiguidade_certificado(achados):
     """Mensagem quando mais de um .pfx casa com a empresa — lista quais, não escolhe."""
     nomes = ', '.join(sorted(i.get('name', '?') for i in achados))
-    return ('Mais de um certificado casa com esta empresa na _ENTRADA: '
-            f'{nomes}. Deixe só o arquivo correto na pasta e tente de novo.')
+    return ('Mais de um certificado enviado casa com esta empresa: '
+            f'{nomes}. Deixe só o arquivo correto na Caixa de entrada e tente de novo.')
 
 
 @clientes.route('/clientes/<int:id>/certificado/buscar', methods=['POST'])
@@ -562,7 +562,7 @@ def certificado_buscar(id):
         return jsonify({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}), 200
     if not achados:
         return jsonify({'ok': True, 'encontrado': False,
-                        'erro': 'Certificado não encontrado na pasta _ENTRADA.'}), 200
+                        'erro': 'Certificado não encontrado entre os arquivos enviados.'}), 200
 
     return jsonify({'ok': True, 'encontrado': True, 'arquivo': achados[0]['name']}), 200
 
@@ -610,7 +610,7 @@ def vincular_certificado_arquivo(cliente, senha, procuracao_pedida=False):
     if len(achados) > 1:
         return _resp({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}, 200)
     if not achados:
-        return _resp({'ok': False, 'erro': 'Certificado não encontrado na pasta _ENTRADA.'}, 200)
+        return _resp({'ok': False, 'erro': 'Certificado não encontrado entre os arquivos enviados.'}, 200)
     item = achados[0]
 
     # 2) Baixa o .pfx em memória.

@@ -1225,8 +1225,9 @@
                                 </div>
                                 {% endif %}
                                 <div class="info-item full-width">
-                                    <label>Arquivo no Dropbox</label>
-                                    <span style="word-break: break-all;">{{ certificado.dropbox_path }}</span>
+                                    <label>Arquivo</label>
+                                    {# só o nome: o caminho interno de armazenamento não é assunto do usuário (13/09/2026) #}
+                                    <span style="word-break: break-all;">{{ (certificado.dropbox_path or '').rsplit('/', 1)[-1] }}</span>
                                 </div>
                             </div>
                             {% else %}
@@ -1236,16 +1237,15 @@
 
                         <div style="margin-top:16px;">
                             <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
-                                Coloque o arquivo <strong>.pfx</strong> ou <strong>.p12</strong> na pasta
-                                <code>_ENTRADA</code> do Dropbox, nomeado com o
-                                <strong>número da empresa</strong>
+                                Envie o arquivo <strong>.pfx</strong> ou <strong>.p12</strong> pelo
+                                <strong>Q-Colabore</strong>, nomeado com o
+                                <strong>número do cadastro</strong>
                                 ({{ (cliente.numero_cliente or 's/nº') }}.pfx) ou o
-                                <strong>CNPJ</strong>. Se o nome trouxer a palavra
+                                <strong>CPF/CNPJ</strong>. Se o nome trouxer a palavra
                                 <strong>senha</strong> seguida da senha
                                 (ex.: <code>{{ (cliente.numero_cliente or '175') }} senha 1234.pfx</code>),
-                                o sistema vincula sozinho em até 5 minutos e renomeia
-                                o arquivo sem a senha. Senão, clique abaixo — o sistema
-                                localiza o arquivo e pede a senha.
+                                o sistema vincula sozinho em até 5 minutos. Senão, clique
+                                abaixo — o sistema localiza o arquivo e pede a senha.
                             </p>
 
                             <button type="button" class="btn btn-primary" id="btnCertBuscar"
@@ -1950,7 +1950,7 @@ function _certMsg(texto, tipo) {
 function certBuscar(clienteId) {
     var btn = document.getElementById('btnCertBuscar');
     btn.disabled = true;
-    _certMsg('Procurando certificado na pasta NOVO...', 'ok');
+    _certMsg('Procurando o certificado enviado...', 'ok');
     fetch('/clientes/' + clienteId + '/certificado/buscar', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
@@ -1965,7 +1965,7 @@ function certBuscar(clienteId) {
             _certMsg('Certificado <strong>' + d.arquivo + '</strong> encontrado. Informe a senha.', 'ok');
         } else {
             document.getElementById('certSenhaBox').style.display = 'none';
-            _certMsg(d.erro || 'Certificado não encontrado na pasta NOVO.', 'erro');
+            _certMsg(d.erro || 'Certificado não encontrado entre os arquivos enviados.', 'erro');
         }
     })
     .catch(function() { btn.disabled = false; _certMsg('Erro de comunicação com o servidor.', 'erro'); });
