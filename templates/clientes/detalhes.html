@@ -1186,7 +1186,15 @@
 
                 <div class="card fv-cert-hero">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-certificate"></i> Certificado Digital (A1)</h3>
+                        <h3 class="card-title"><i class="fas fa-certificate"></i> Certificado Digital (A1)
+                            {# link discreto para o guia em PDF (static/docs) — pedido de 13/09/2026 #}
+                            <a href="{{ url_for('static', filename='docs/certificado-digital-instrucoes.pdf') }}"
+                               target="_blank" rel="noopener"
+                               style="font-size:12px; font-weight:500; margin-left:12px; color:#dcfce7; opacity:.9; text-decoration:none; border:1px solid rgba(220,252,231,.45); border-radius:999px; padding:2px 10px; vertical-align:middle;"
+                               title="Como enviar e instalar o certificado (PDF)">
+                                <i class="fas fa-file-pdf"></i> instruções
+                            </a>
+                        </h3>
                     </div>
                     <div class="card-body">
                         <div id="certVinculoAtual">
