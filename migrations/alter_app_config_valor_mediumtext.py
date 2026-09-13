@@ -16,8 +16,8 @@ crescer com os 200 robôs sem voltar aqui.
 
 CUSTO
 -----
-Nenhum que se perceba: a tabela tem 4 linhas. ALGORITHM=INPLACE, LOCK=NONE
-como nas outras, por disciplina.
+Nenhum que se perceba: a tabela tem 4 linhas. Mudar tipo de coluna exige
+ALGORITHM=COPY (INPLACE e recusado); com 4 linhas, e instantaneo.
 
     python migrations/alter_app_config_valor_mediumtext.py            # dry-run
     python migrations/alter_app_config_valor_mediumtext.py --apply
@@ -63,8 +63,11 @@ def main():
         print('já comporta o painel — nada a fazer.')
         return 0
 
-    sql = (f'ALTER TABLE {TABELA} MODIFY {COLUNA} MEDIUMTEXT NOT NULL, '
-           f'ALGORITHM=INPLACE, LOCK=NONE')
+    # Trocar o tipo da coluna exige ALGORITHM=COPY (o InnoDB recusa INPLACE
+    # com "Cannot change column type INPLACE", medido em 13/09/2026). Numa
+    # tabela de 4 linhas a copia e instantanea; o LOCK explicito fica de fora
+    # porque COPY nao aceita LOCK=NONE.
+    sql = f'ALTER TABLE {TABELA} MODIFY {COLUNA} MEDIUMTEXT NOT NULL, ALGORITHM=COPY'
 
     if not args.apply:
         print()
