@@ -2109,17 +2109,23 @@ def api_notas():
 
 # ---------------------------------------------------------------------------
 # Export de nota (Fase 1: por nota) — XML e PDF. Reaproveitado por conf-compras
-# e conf-saidas. Fonte do XML = nfe_importacoes.xml_raw (banco), que é o nfeProc
-# completo (com protNFe) — NÃO usa Dropbox. O guard de acesso segue o TIPO da
-# nota, igual às telas que a listam: entrada→conf_compras, saída→conf_saidas.
+# e conf-saidas. Fonte do XML: nfe_importacoes.xml_raw quando há; senão o
+# arquivo no Dropbox (utils/nfe_xml_fonte) — desde 12/09/2026, etapa 1 da regra
+# "documento no Dropbox, dado no banco": nota com mais de 3 meses vai deixar de
+# ter xml_raw, e o olhinho tem de continuar abrindo. O guard de acesso segue o
+# TIPO da nota, igual às telas que a listam: entrada→conf_compras,
+# saída→conf_saidas.
 # ---------------------------------------------------------------------------
 def _carregar_nota_export(nfe_id):
-    """Retorna (nota, None) pronta para exportar, ou (None, (msg, status)) com uma
-    resposta amigável para o chamador devolver direto. Cobre: nota inexistente
-    (404), sem permissão para o tipo (403) e resumo/xml vazio (404)."""
+    """Retorna (nota, None) pronta para exportar — com ``nota['xml_raw']``
+    preenchido de onde quer que o XML tenha vindo —, ou (None, (msg, status))
+    com uma resposta amigável para o chamador devolver direto. Cobre: nota
+    inexistente (404), sem permissão para o tipo (403), resumo da SEFAZ (404),
+    XML sumido do Dropbox (404) e Dropbox fora do ar (502)."""
+    from utils.nfe_xml_fonte import COLUNAS, JOIN_CLIENTE, resolver
     nota = execute_query(
-        "SELECT xml_raw, chave_acesso, incompleta, tipo "
-        "FROM nfe_importacoes WHERE id = %s",
+        f"SELECT {COLUNAS}, n.incompleta FROM nfe_importacoes n {JOIN_CLIENTE} "
+        "WHERE n.id = %s",
         (nfe_id,), fetch=True, fetch_one=True,
     )
     if not nota:
@@ -2129,9 +2135,13 @@ def _carregar_nota_export(nfe_id):
               else 'escrita_fiscal.conf_compras')
     if not current_user.has_permission(codigo):
         return None, ('Você não tem permissão para baixar esta nota.', 403)
-    if nota.get('incompleta') or not (nota.get('xml_raw') or '').strip():
+    if nota.get('incompleta'):
         return None, ('Esta nota é só um resumo da SEFAZ — o XML completo não está '
                       'disponível para exportar.', 404)
+    xml, _fonte, erro = resolver(nota)
+    if erro:
+        return None, erro
+    nota['xml_raw'] = xml
     return nota, None
 
 
@@ -2767,14 +2777,19 @@ def _stream_xml_lote_nfe(where_sql, params, nome_zip):
     ids = [m['id'] for m in meta]
 
     def fonte_xml():
-        # xml_raw na MESMA ordem de ``meta`` (por id), em lotes — cada arquivo do
-        # zip puxa um next() desta fonte, alinhado 1-a-1 com ``meta``.
+        # XML na MESMA ordem de ``meta`` (por id), em lotes — cada arquivo do zip
+        # puxa um next() desta fonte, alinhado 1-a-1 com ``meta``. Desde
+        # 12/09/2026 o lote passa pelo resolvedor: o que não está em xml_raw é
+        # buscado no Dropbox, em paralelo dentro do lote. Nota antiga fica cara
+        # aqui (uma ida ao Dropbox por arquivo) — é o custo assumido da regra.
+        from utils.nfe_xml_fonte import COLUNAS, JOIN_CLIENTE, resolver_lote
         for i in range(0, len(ids), _LOTE_STREAM_CHUNK):
             lote = ids[i:i + _LOTE_STREAM_CHUNK]
             ph = ','.join(['%s'] * len(lote))
-            porid = {r['id']: (r['xml_raw'] or '') for r in (execute_query(
-                f"SELECT id, xml_raw FROM nfe_importacoes WHERE id IN ({ph})",
-                tuple(lote), fetch=True) or [])}
+            rows = execute_query(
+                f"SELECT {COLUNAS} FROM nfe_importacoes n {JOIN_CLIENTE} "
+                f"WHERE n.id IN ({ph})", tuple(lote), fetch=True) or []
+            porid = resolver_lote(rows)
             for _id in lote:
                 yield porid.get(_id, '')
     cursor = fonte_xml()
@@ -2799,8 +2814,11 @@ def _lote_xml_nfe(escopo, permissao):
     data = request.get_json(silent=True) or {}
     ids = _ids_do_lote(data)
     where, params = _where_lote(escopo, data)
-    # Só o que dá para exportar: resumo da SEFAZ e xml vazio não entram no zip.
-    where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
+    # Só o que dá para exportar: resumo da SEFAZ não entra no zip. XML vazio no
+    # banco NÃO exclui mais (12/09/2026): nota com mais de 3 meses vai ter o XML
+    # só no Dropbox, e o resolvedor busca lá — quem não for achado em lugar
+    # nenhum fica de fora do zip, em vez de nunca ter entrado na contagem.
+    where = list(where) + ["n.incompleta = 0"]
     where_sql = 'WHERE ' + ' AND '.join(where)
 
     total = int((execute_query(
@@ -2823,11 +2841,16 @@ def _lote_xml_nfe(escopo, permissao):
     # Seleção da página (ids marcados) → poucos: zip em memória. "Tudo do filtro"
     # (sem ids) → pode ser dezenas de milhares: zip em STREAMING.
     if ids:
+        from utils.nfe_xml_fonte import COLUNAS, JOIN_CLIENTE, resolver_lote
         rows = execute_query(
-            f"SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n {where_sql}",
+            f"SELECT {COLUNAS} FROM nfe_importacoes n {JOIN_CLIENTE} {where_sql}",
             tuple(params), fetch=True) or []
+        xmls = resolver_lote(rows)      # banco, senão Dropbox em paralelo
         arquivos = [((r['chave_acesso'] or str(r['id'])) + '.xml',
-                     (r['xml_raw'] or '').encode('utf-8')) for r in rows]
+                     xmls[r['id']].encode('utf-8')) for r in rows if xmls.get(r['id'])]
+        if not arquivos:
+            return jsonify({'error': 'Nenhuma das notas marcadas tem XML disponível '
+                                     '— nem no banco nem no Dropbox.'}), 404
         return _zip_download(arquivos, _nome_zip_lote(
             data, [r['data_emissao'] for r in rows], _prefixo_lote(escopo, 'XML')))
 
@@ -2860,17 +2883,25 @@ def _lote_pdf_nfe(escopo, permissao):
                       'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
                                   **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
-    where = list(where) + ["n.incompleta = 0", "COALESCE(n.xml_raw,'') <> ''"]
+    from utils.nfe_xml_fonte import COLUNAS, JOIN_CLIENTE, resolver_lote
+    # XML vazio no banco não exclui mais (12/09/2026): o resolvedor busca no
+    # Dropbox o que a nota antiga não tem mais em xml_raw.
+    where = list(where) + ["n.incompleta = 0"]
     rows = execute_query(
-        "SELECT n.id, n.chave_acesso, n.data_emissao, n.xml_raw FROM nfe_importacoes n "
+        f"SELECT {COLUNAS} FROM nfe_importacoes n {JOIN_CLIENTE} "
         "WHERE " + ' AND '.join(where), tuple(params), fetch=True) or []
+    xmls = resolver_lote(rows)
 
     arquivos, ignorados = [], 0
     for r in rows:
         chave = r['chave_acesso'] or ''
         modelo = chave[20:22] if len(chave) >= 22 else ''
+        xml = xmls.get(r['id'])
+        if not xml:
+            ignorados += 1
+            continue
         try:
-            pdf = _gerar_pdf_documento(r['xml_raw'], modelo)
+            pdf = _gerar_pdf_documento(xml, modelo)
         except Exception:
             logging.getLogger(__name__).exception(
                 '[export-lote] falha no PDF da nfe_id=%s', r['id'])
