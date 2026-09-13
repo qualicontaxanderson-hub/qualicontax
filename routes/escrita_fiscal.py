@@ -908,9 +908,11 @@ def index():
 # consulta é isolada: se a query de um card falhar, o card é OMITIDO (os outros
 # vivem) e o erro vai pro log, nunca pro usuário — melhor faltar que mentir.
 # ---------------------------------------------------------------------------
-_HOME_CACHE: dict = {}
-_HOME_CACHE_LOCK = threading.Lock()
-_HOME_TTL_S = 60
+# O cache em memoria que existia aqui (_HOME_CACHE, por worker e por usuario,
+# TTL de 60s) SAIU em 12/09/2026. Ele nao era cache, era manada: com a conta
+# passando de 60s, cada aba em cada worker disparava a propria varredura de
+# 7 GB e nada nunca ficava pronto. Quem guarda o painel agora e o app_config,
+# escrito pelo cron — ver utils/painel_cache.py.
 
 # 1º dia do mês corrente e a mesma janela (mês-a-dia) do mês anterior — em SQL,
 # sem DATE_FORMAT (evita o '%' no paramstyle do driver).
@@ -1213,16 +1215,26 @@ def _home_destaques_payload():
 @escrita_fiscal.route('/api/home-destaques')
 @permission_required('escrita_fiscal.conf_compras')
 def api_home_destaques():
-    """Números da home (carrossel + contadores). Cache 60s por usuário."""
-    uid = getattr(current_user, 'id', None)
-    agora = datetime.now(timezone.utc).timestamp()
-    with _HOME_CACHE_LOCK:
-        hit = _HOME_CACHE.get(uid)
-        if hit and (agora - hit[0]) < _HOME_TTL_S:
-            return jsonify(hit[1])
-    payload = _home_destaques_payload()
-    with _HOME_CACHE_LOCK:
-        _HOME_CACHE[uid] = (agora, payload)
+    """Números da home: LÊ o que o cron calculou. Esta rota não calcula nada.
+
+    Até 12/09/2026 ela calculava aqui, com cache em memória de 60s por worker e
+    por usuário. Enquanto a conta durava um segundo, passava. Com a tabela em
+    750 mil linhas e 7 GB ela passou a durar MINUTOS — e aí o cache virou
+    manada: cada aba, em cada worker, disparando a própria varredura, tudo
+    vencendo antes de terminar. A home ficou branca no celular e o app
+    inutilizável. Ver utils/painel_cache.py.
+
+    Sem valor gravado, devolve ``calculando`` em vez de calcular: tela que abre
+    vazia e se preenche no próximo ciclo é melhor que tela que não abre.
+    """
+    from utils.painel_cache import ler, CHAVE_HOME_FISCAL
+    payload, idade = ler(CHAVE_HOME_FISCAL)
+    if payload is None:
+        return jsonify({'cards': [], 'counters': {}, 'estado': 'calculando',
+                        'aviso': 'Os números estão sendo calculados e aparecem '
+                                 'no próximo ciclo (até 5 minutos).'})
+    payload['estado'] = 'ok'
+    payload['idade_seg'] = idade
     return jsonify(payload)
 
 

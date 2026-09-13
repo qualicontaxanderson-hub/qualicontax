@@ -1048,6 +1048,24 @@ def main() -> int:
         logger.exception('[roteador] arquivamento de SAIDAS falhou; as notas '
                          'estao no banco e voltam no proximo tick.')
 
+    # E o painel da home do Fiscal, que ATE HOJE era calculado dentro da
+    # requisicao: agregados sobre uma tabela de 750 mil linhas e 7 GB, com
+    # cache de 60s por worker e por usuario. Virou manada e deixou a home
+    # branca no celular. Aqui e o lugar: uma conta, fora do site, a cada tick.
+    #
+    # Em try proprio: se o painel falhar, o roteador de XML e o arquivamento
+    # desta rodada VALEM, e a tela continua mostrando o ultimo valor bom.
+    try:
+        from utils.painel_cache import atualizar_home_fiscal
+        import time as _t
+        _t0 = _t.monotonic()
+        if atualizar_home_fiscal():
+            logger.warning('[roteador] painel da home do Fiscal recalculado '
+                           'em %.1fs.', _t.monotonic() - _t0)
+    except Exception:
+        logger.exception('[roteador] painel da home falhou; a tela segue com o '
+                         'ultimo valor gravado.')
+
     logger.warning('[roteador] >>> Cron do roteador CONCLUIDO (pid=%s).', os.getpid())
     return 0
 
