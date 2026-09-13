@@ -106,15 +106,17 @@ _ATOR_LOGIN = 'roteador'
 # REGRA DE FERRO: este cron só toca em arquivo .xml. NADA MAIS.
 #
 # A _ENTRADA é a caixa de entrada ÚNICA e PLANA do sistema — chega de tudo nela e
-# cada tipo tem seu consumidor. Em especial, o .pfx de um certificado digital fica
-# na _ENTRADA até alguém clicar em "Vincular Certificado" na tela da empresa (é a
-# rota clientes.certificado_vincular que o move para EMPRESAS/{empresa}/CERTIFICADO,
-# depois de validar a senha e conferir o titular).
+# cada tipo tem seu consumidor. O .pfx/.p12 de um certificado digital tem o
+# dele: utils/certificado_auto.py, chamado em main() no mesmo tick — se o nome
+# traz o número/CNPJ da empresa E "senha <senha>", vincula sozinho (mesmo
+# núcleo da rota clientes.certificado_vincular: valida a senha, confere o
+# titular, move para EMPRESAS/{empresa}/CERTIFICADO). Sem senha no nome, ou
+# com senha errada, o arquivo fica na _ENTRADA até alguém vincular na tela.
 #
-# Portanto: qualquer extensão diferente de .xml (.pfx, .pdf, .zip, ...) é IGNORADA
-# — não move, não renomeia, não apaga, não baixa. A checagem é uma WHITELIST (só
-# passa o que termina em .xml), e não uma lista de proibidos: extensão nova que
-# apareça amanhã já nasce ignorada, sem precisar de manutenção aqui.
+# Portanto, PARA O ROTEADOR DE XML: qualquer extensão diferente de .xml (.pfx,
+# .pdf, .zip, ...) é IGNORADA — não move, não renomeia, não apaga, não baixa. A
+# checagem é uma WHITELIST (só passa o que termina em .xml), e não uma lista de
+# proibidos: extensão nova que apareça amanhã já nasce ignorada.
 EXTENSAO_PROCESSADA = '.xml'
 
 ATIVO = os.getenv('ROTEADOR_ATIVO', '0').strip() == '1'
@@ -1029,6 +1031,18 @@ def main() -> int:
     except Exception:
         logger.exception('[roteador] varredura de EXTRATO falhou; os .xml desta '
                          'rodada VALEM.')
+
+    # E os certificados digitais deixados na _ENTRADA com a senha no nome
+    # ("175 senha 1234.pfx"): vincula sozinho, pelo mesmo núcleo da tela.
+    # Pedido do Anderson em 13/09/2026 — o .p12 do posto 175 estava lá parado.
+    # Em try próprio: falha aqui não derruba o roteador de XML.
+    try:
+        from utils import dropbox_sync
+        from utils.certificado_auto import instalar_pendentes
+        instalar_pendentes(dropbox_sync._service)
+    except Exception:
+        logger.exception('[roteador] instalador de certificados falhou; os '
+                         'arquivos seguem na _ENTRADA para vínculo pela tela.')
 
     # E o arquivamento das saídas que o Q-Robô mandou. Isto ESTAVA dentro da
     # requisição do robô até 12/09/2026, gastando 0,8s de thread do site por

@@ -419,9 +419,46 @@ def _tokens_certificado(cliente):
 _CERT_SEPARADORES = ('-', '_', ' ', '.')
 
 
+#: Extensões de certificado A1 aceitas na _ENTRADA. .p12 e .pfx são o MESMO
+#: contêiner (PKCS#12) — só o nome muda conforme quem exportou. Até 13/09/2026
+#: só .pfx entrava, e um .p12 ficava na _ENTRADA "não encontrado".
+_EXT_CERT = ('.pfx', '.p12')
+
+
+def _e_certificado(nome):
+    return (nome or '').lower().endswith(_EXT_CERT)
+
+
 def _nome_base_pfx(nome):
-    """Nome do arquivo sem a extensão .pfx final (case-insensitive)."""
-    return nome[:-4] if nome.lower().endswith('.pfx') else nome
+    """Nome do arquivo sem a extensão .pfx/.p12 final (case-insensitive)."""
+    return nome[:-4] if _e_certificado(nome) else nome
+
+
+# "senha" no nome do arquivo: o que vem DEPOIS da palavra é a senha, até o
+# próximo " - " (é assim que os arquivos chegam: "175 - POSTO X - Senha Ce123 -
+# Venc 31.08.27.p12") ou até o fim do nome.
+#   "175 senha 1234.pfx"  -> 1234      "175-senha-Ab@12.p12" -> Ab@12
+#   "175 - POSTO X - Senha Ce123 - Venc 31.08.27.p12" -> Ce123
+# A palavra precisa estar isolada — separador antes E depois — para não
+# confundir com nome que contenha "senha" por acaso ("Senhas 175.pfx" não
+# casa; "senha1234" colado também não: é "senha 1234", "senha-1234", "senha=1234").
+_RE_SENHA_NO_NOME = re.compile(r'(?:^|[\s_\-.])senha[\s:=_\-]+(.+?)(?:\s+-\s+.*)?$', re.IGNORECASE)
+
+
+def _senha_no_nome(nome):
+    """Senha embutida no nome do arquivo (regra "senha <senha>"), ou None.
+
+    É a convenção que deixa o roteador vincular o certificado SOZINHO
+    (utils/certificado_auto.py): o usuário nomeia "175 senha 1234.pfx", o cron
+    tenta a senha; se estiver errada, o arquivo fica na _ENTRADA e a tela pede
+    a senha como sempre. Depois do vínculo o arquivo é renomeado para
+    {CNPJ}.pfx — a senha NÃO sobrevive no nome.
+    """
+    m = _RE_SENHA_NO_NOME.search(_nome_base_pfx(nome or ''))
+    if not m:
+        return None
+    senha = m.group(1).strip()
+    return senha or None
 
 
 def _nome_casa_numero(nome, numero):
@@ -473,7 +510,7 @@ def _nome_casa_empresa(nome, cliente):
 def _localizar_certificados_novo(svc, cliente):
     """Lista os .pfx da _ENTRADA que casam com a empresa: NÚMERO como prefixo
     (+ separador) OU DOCUMENTO contido em qualquer posição — ver
-    ``_nome_casa_empresa``. Extensão .pfx/.PFX aceita (case-insensitive).
+    ``_nome_casa_empresa``. Extensões .pfx e .p12 aceitas (case-insensitive).
 
     Retorna a LISTA de itens casados (0, 1 ou vários). A busca é sempre refeita
     no servidor (não confia em caminho vindo do cliente). O chamador decide: 0 =
@@ -484,7 +521,7 @@ def _localizar_certificados_novo(svc, cliente):
     achados = []
     for item in svc.list_folder(svc.pasta_cert_novo()):
         nome = item.get('name') or ''
-        if not item.get('is_file') or not nome.lower().endswith('.pfx'):
+        if not item.get('is_file') or not _e_certificado(nome):
             continue
         if _nome_casa_empresa(nome, cliente):
             achados.append(item)
@@ -544,66 +581,62 @@ def _matriz_ou_filial(doc):
     return 'matriz' if len(d) == 14 and d[8:12] == '0001' else 'filial'
 
 
-@clientes.route('/clientes/<int:id>/certificado/vincular', methods=['POST'])
-@login_required
-def certificado_vincular(id):
-    """Valida a senha, confere o titular, move p/ IMPORTADOS e grava o vínculo."""
-    cliente = Cliente.get_by_id(id)
-    if not cliente:
-        return jsonify({'ok': False, 'erro': 'Cliente não encontrado.'}), 404
+def _resp(payload, http=200):
+    """(ok, payload, http) — o núcleo do vínculo devolve isto; a rota faz jsonify."""
+    return bool(payload.get('ok')), payload, http
 
-    data = request.get_json(silent=True) or request.form
-    senha = (data.get('senha') or '').strip()
-    if not senha:
-        return jsonify({'ok': False, 'erro': 'Informe a senha do certificado.'}), 400
 
-    # Fase 2: vínculo por PROCURAÇÃO (e-CPF do contador / terceiro autorizado).
-    # Só surte efeito quando o titular do .pfx NÃO for a empresa (passo 4); no
-    # caminho normal (titular == empresa) o checkbox é ignorado de propósito.
-    procuracao_pedida = str(data.get('procuracao') or '').strip().lower() in (
-        '1', 'true', 'on', 'sim')
+def vincular_certificado_arquivo(cliente, senha, procuracao_pedida=False):
+    """NÚCLEO do vínculo: reencontra o arquivo na _ENTRADA, valida a senha,
+    confere o titular, preserva o anterior, move para CERTIFICADO e grava.
 
+    Devolve ``(ok, payload, http)``. Não toca em ``request`` nem em ``jsonify``
+    de propósito: é chamado pela rota ``certificado_vincular`` (tela) E pelo
+    instalador automático do roteador (``utils/certificado_auto.py``), que
+    roda fora do site. Toda a lógica que existia na rota está aqui, intacta.
+    """
+    id = cliente['id']
     svc = dropbox_sync._service
     if not svc.is_configured():
-        return jsonify({'ok': False, 'erro': 'Dropbox não configurado.'}), 400
+        return _resp({'ok': False, 'erro': 'Dropbox não configurado.'}, 400)
 
     # 1) Reencontra o arquivo na _ENTRADA (não confia em path do cliente).
     try:
         achados = _localizar_certificados_novo(svc, cliente)
     except dropbox_sync.DropboxAuthError:
-        return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+        return _resp({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}, 401)
     except dropbox_sync.DropboxError:
-        return jsonify({'ok': False, 'erro': 'Erro ao acessar o Dropbox. Verifique a conexão.'}), 502
+        return _resp({'ok': False, 'erro': 'Erro ao acessar o Dropbox. Verifique a conexão.'}, 502)
     if len(achados) > 1:
-        return jsonify({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}), 200
+        return _resp({'ok': False, 'erro': _erro_ambiguidade_certificado(achados)}, 200)
     if not achados:
-        return jsonify({'ok': False, 'erro': 'Certificado não encontrado na pasta _ENTRADA.'}), 200
+        return _resp({'ok': False, 'erro': 'Certificado não encontrado na pasta _ENTRADA.'}, 200)
     item = achados[0]
 
     # 2) Baixa o .pfx em memória.
     raw = svc.download_file(item['path'])
     if raw is None:
-        return jsonify({'ok': False, 'erro': 'Falha ao baixar o certificado do Dropbox.'}), 502
+        return _resp({'ok': False, 'erro': 'Falha ao baixar o certificado do Dropbox.'}, 502)
 
     # 3) Valida a senha e extrai o documento do titular.
     try:
         info = abrir_certificado(raw, senha)
     except SenhaInvalidaError:
-        return jsonify({'ok': False, 'erro': 'Senha do certificado incorreta.'}), 200
+        return _resp({'ok': False, 'erro': 'Senha do certificado incorreta.'}, 200)
     except DocumentoNaoEncontradoError:
-        return jsonify({'ok': False, 'erro': 'Não foi possível identificar o CNPJ/CPF no certificado.'}), 200
+        return _resp({'ok': False, 'erro': 'Não foi possível identificar o CNPJ/CPF no certificado.'}, 200)
     except CertificadoError as exc:
-        return jsonify({'ok': False, 'erro': f'Certificado inválido: {exc}'}), 200
+        return _resp({'ok': False, 'erro': f'Certificado inválido: {exc}'}, 200)
 
     # 3b) BLOQUEIO: certificado VENCIDO não vincula — vincular só criaria um vínculo
     #     que já nasce quebrado (a SEFAZ recusa o mTLS com HTTP 403). Só bloqueia o
     #     vencido; um cert válido, mesmo vencendo em breve (laranja), vincula normal.
     if info['validade'] and DfeCertificado.classificar_validade(
             info['validade'])['nivel'] == 'vencido':
-        return jsonify({'ok': False,
+        return _resp({'ok': False,
                         'erro': f'Certificado vencido em {info["validade"].strftime("%d/%m/%Y")} '
                                 '— não é possível vincular um certificado vencido. '
-                                'Renove e tente de novo.'}), 200
+                                'Renove e tente de novo.'}, 200)
 
     # 4) Confere se o certificado é mesmo dessa empresa.
     #    O e-CNPJ é emitido para a RAIZ (8 primeiros dígitos) e cobre as filiais.
@@ -635,12 +668,12 @@ def certificado_vincular(id):
             # e consultaria a SEFAZ com o documento do CONTADOR — trazendo os
             # documentos dele para dentro desta empresa.
             if not doc_empresa:
-                return jsonify({'ok': False,
+                return _resp({'ok': False,
                                 'erro': 'Esta empresa está sem CPF/CNPJ cadastrado. '
                                         'Cadastre o documento antes de vincular um '
                                         'certificado de procuração — sem ele a captura '
                                         'consultaria a SEFAZ com o documento do titular '
-                                        'do certificado, e não com o desta empresa.'}), 200
+                                        'do certificado, e não com o desta empresa.'}, 200)
             procuracao = 1
             aviso = (f'Certificado de TERCEIRO (procuração) — titular {doc_cert} '
                      f'≠ empresa {doc_empresa}. Confira.')
@@ -649,9 +682,9 @@ def certificado_vincular(id):
                        and len(doc_cert) == 14 and len(doc_empresa) == 14
                        and doc_cert[:8] == doc_empresa[:8])
             if not raiz_ok:
-                return jsonify({'ok': False,
+                return _resp({'ok': False,
                                 'erro': 'O certificado da pasta não é dessa empresa '
-                                        f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}), 200
+                                        f'(certificado: {doc_cert} · empresa: {doc_empresa or "sem CNPJ"}).'}, 200)
             aviso = (f'Certificado da {_matriz_ou_filial(doc_cert)} {_fmt_cnpj(doc_cert)} '
                      f'vinculado à {_matriz_ou_filial(doc_empresa)} {_fmt_cnpj(doc_empresa)} '
                      f'(mesma raiz — o e-CNPJ da matriz cobre as filiais).')
@@ -660,7 +693,7 @@ def certificado_vincular(id):
     try:
         senha_cifrada = cifrar_senha(senha)
     except CertificadoError as exc:
-        return jsonify({'ok': False, 'erro': str(exc)}), 500
+        return _resp({'ok': False, 'erro': str(exc)}, 500)
 
     # 6) Move + renomeia para CERTIFICADO/{numero} - {razão}/{CNPJ}.pfx
     origem = item['path']
@@ -705,18 +738,18 @@ def certificado_vincular(id):
             _k += 1
         try:
             if not svc.move_file(_old, _novo):
-                return jsonify({'ok': False, 'erro': 'Falha ao arquivar o certificado anterior no Dropbox.'}), 502
+                return _resp({'ok': False, 'erro': 'Falha ao arquivar o certificado anterior no Dropbox.'}, 502)
         except dropbox_sync.DropboxAuthError:
-            return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+            return _resp({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}, 401)
         renamed.append((_old, _novo))
 
     # 6b) Move o novo .pfx com o nome padrão {CNPJ}.pfx (NUNCA a senha no nome).
     #     O destino agora está livre (o anterior, se havia, virou substituido...).
     try:
         if not svc.move_file(origem, destino):
-            return jsonify({'ok': False, 'erro': 'Falha ao mover o certificado no Dropbox.'}), 502
+            return _resp({'ok': False, 'erro': 'Falha ao mover o certificado no Dropbox.'}, 502)
     except dropbox_sync.DropboxAuthError:
-        return jsonify({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}), 401
+        return _resp({'ok': False, 'erro': 'Credenciais Dropbox inválidas ou expiradas.'}, 401)
 
     # 6c) Mensagem p/ a tela: qual cert saiu de cena e como foi preservado.
     substituicao = None
@@ -756,12 +789,12 @@ def certificado_vincular(id):
         if revertido:
             logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s). '
                          'Arquivo devolvido para NOVO: %s', id, origem)
-            return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
-                            'O certificado foi devolvido para a pasta _ENTRADA — tente novamente.'}), 500
+            return _resp({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
+                            'O certificado foi devolvido para a pasta _ENTRADA — tente novamente.'}, 500)
         logger.error('Vínculo do certificado NÃO gravado (cliente_id=%s) e reversão FALHOU. '
                      'ARQUIVO ÓRFÃO em: %s', id, destino)
-        return jsonify({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
-                        f'Atenção: o arquivo ficou em {destino} — avise o suporte.'}), 500
+        return _resp({'ok': False, 'erro': 'Falha ao gravar o vínculo no banco. '
+                        f'Atenção: o arquivo ficou em {destino} — avise o suporte.'}, 500)
 
     # AUDITORIA (D2): vinculou/trocou certificado. senha_cifrada e dropbox_path
     # estão na lista negra — entram só pelo NOME, nunca o valor (nada de dentro
@@ -776,7 +809,7 @@ def certificado_vincular(id):
                       'validade': info['validade'], 'procuracao': procuracao,
                       'senha_cifrada': '(nova)', 'dropbox_path': destino})
 
-    return jsonify({
+    return _resp({
         'ok': True,
         'documento': doc_cert,
         'tipo_doc': info['tipo_doc'],
@@ -785,7 +818,29 @@ def certificado_vincular(id):
         'arquivo': f'{doc_cert}.pfx',
         'aviso': aviso,                 # vínculo por raiz (matriz→filial) OU procuração
         'substituicao': substituicao,   # preenchido só quando trocou um cert anterior
-    }), 200
+    }, 200)
+
+
+@clientes.route('/clientes/<int:id>/certificado/vincular', methods=['POST'])
+@login_required
+def certificado_vincular(id):
+    """Valida a senha, confere o titular, move p/ IMPORTADOS e grava o vínculo."""
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        return jsonify({'ok': False, 'erro': 'Cliente não encontrado.'}), 404
+
+    data = request.get_json(silent=True) or request.form
+    senha = (data.get('senha') or '').strip()
+    if not senha:
+        return jsonify({'ok': False, 'erro': 'Informe a senha do certificado.'}), 400
+
+    # Fase 2: vínculo por PROCURAÇÃO (e-CPF do contador / terceiro autorizado).
+    # Só surte efeito quando o titular do .pfx NÃO for a empresa (passo 4); no
+    # caminho normal (titular == empresa) o checkbox é ignorado de propósito.
+    procuracao_pedida = str(data.get('procuracao') or '').strip().lower() in (
+        '1', 'true', 'on', 'sim')
+    ok, payload, http = vincular_certificado_arquivo(cliente, senha, procuracao_pedida)
+    return jsonify(payload), http
 
 
 @clientes.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])

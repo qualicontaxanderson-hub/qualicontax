@@ -991,9 +991,14 @@ def _home_destaques_payload():
     keys7 = _hdias_iso(7)
 
     # ---- scalares (cada um isolado) ----
+    # imp_hoje separado: importado_em >= CURDATE() e range no idx_importado
+    # (index-only). O resto so precisa dos ultimos dois meses de EMISSAO —
+    # WHERE data_emissao >= mes anterior usa idx_data em vez de varrer a
+    # tabela inteira (224s medidos em 13/09/2026 sem o WHERE).
+    _hoje = _hq1("SELECT COUNT(*) imp_hoje FROM nfe_importacoes "
+                 "WHERE importado_em >= CURDATE()")
     nfe = _hq1(
         "SELECT "
-        " SUM(DATE(importado_em)=CURDATE()) imp_hoje, "
         f" SUM(tipo='entrada' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI}) ent_mes, "
         f" SUM(tipo='saida'   AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI}) sai_mes, "
         f" COALESCE(SUM(CASE WHEN tipo='entrada' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI} THEN valor_total END),0) ent_valor, "
@@ -1001,7 +1006,9 @@ def _home_destaques_payload():
         f" SUM(tipo='saida' AND COALESCE(cancelada,0)=0 AND data_emissao>={_MES_INI} AND SUBSTRING(chave_acesso,21,2)='55') sai_nfe, "
         f" SUM(tipo='entrada' AND COALESCE(cancelada,0)=0 AND data_emissao>={_PMES_INI} AND data_emissao<={_PMES_FIM}) ent_prev, "
         f" SUM(tipo='saida'   AND COALESCE(cancelada,0)=0 AND data_emissao>={_PMES_INI} AND data_emissao<={_PMES_FIM}) sai_prev "
-        "FROM nfe_importacoes")
+        f"FROM nfe_importacoes WHERE data_emissao >= {_PMES_INI}")
+    if nfe is not None:
+        nfe['imp_hoje'] = (_hoje or {}).get('imp_hoje')
     cte = _hq1(
         "SELECT SUM(DATE(importado_em)=CURDATE()) imp_hoje, "
         f" SUM(COALESCE(cancelado,0)=0 AND data_emissao>={_MES_INI}) cte_mes "
@@ -1503,7 +1510,11 @@ def _status_sefaz_dados():
         # nao ligar a chave hoje.
         "  SUM(tipo='entrada' AND COALESCE(incompleta,0)=1 AND DATEDIFF(CURDATE(), data_emissao) <= 10) AS resgataveis, "
         "  MAX(importado_em >= NOW() - INTERVAL 30 DAY) AS cap_30d "
-        "FROM nfe_importacoes WHERE origem='SEFAZ' AND cliente_id IS NOT NULL GROUP BY cliente_id",
+        # tipo IN (...) e redundante no resultado e decisivo no plano: idx_painel
+        # comeca por tipo, e so com ele o MySQL faz range index-only (0,64s).
+        # Sem ele varria a tabela de 9 GB: 510s medidos em 13/09/2026.
+        "FROM nfe_importacoes WHERE tipo IN ('entrada','saida') AND origem='SEFAZ' "
+        "  AND cliente_id IS NOT NULL GROUP BY cliente_id",
         fetch=True) or []
     agg = {a['cliente_id']: a for a in _agg}
 

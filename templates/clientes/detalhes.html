@@ -1236,12 +1236,16 @@
 
                         <div style="margin-top:16px;">
                             <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
-                                Coloque o arquivo <strong>.pfx</strong> na pasta
+                                Coloque o arquivo <strong>.pfx</strong> ou <strong>.p12</strong> na pasta
                                 <code>_ENTRADA</code> do Dropbox, nomeado com o
                                 <strong>número da empresa</strong>
                                 ({{ (cliente.numero_cliente or 's/nº') }}.pfx) ou o
-                                <strong>CNPJ</strong>. Depois clique abaixo — o sistema
-                                localiza o arquivo sozinho.
+                                <strong>CNPJ</strong>. Se o nome trouxer a palavra
+                                <strong>senha</strong> seguida da senha
+                                (ex.: <code>{{ (cliente.numero_cliente or '175') }} senha 1234.pfx</code>),
+                                o sistema vincula sozinho em até 5 minutos e renomeia
+                                o arquivo sem a senha. Senão, clique abaixo — o sistema
+                                localiza o arquivo e pede a senha.
                             </p>
 
                             <button type="button" class="btn btn-primary" id="btnCertBuscar"

@@ -326,8 +326,11 @@ class DropboxService:
                     if not result.has_more:
                         break
                     result = dbx.files_list_folder_continue(result.cursor)
-                logger.info('Dropbox list_folder(%r, recursive=%s): %d item(s) encontrado(s): %s',
-                            path, recursive, len(entries), [e['name'] for e in entries])
+                # Só a contagem: os nomes NÃO vão para o log. A _ENTRADA recebe
+                # certificados nomeados com a senha ("... - Senha Ce123 - ...") e
+                # esta linha os imprimia inteiros a cada tick do roteador (13/09/2026).
+                logger.info('Dropbox list_folder(%r, recursive=%s): %d item(s) encontrado(s).',
+                            path, recursive, len(entries))
                 return entries
             except (DropboxAuthError, DropboxError):
                 raise
