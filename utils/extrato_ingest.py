@@ -82,10 +82,33 @@ _MES = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
 
 
 def numero_empresa_do_nome(nome_arquivo):
-    """'498 - c6 julho.ofx' -> '498'. Devolve None se não houver número na frente."""
+    """Número do cadastro da empresa indicado no NOME do arquivo, ou None.
+
+    Duas formas, na mesma regra do certificado (pedido de 14/09/2026):
+      * número do cadastro no começo: '498 - c6 julho.ofx' -> '498';
+      * CPF (11 dígitos) ou CNPJ (14) em qualquer parte, isolado de outros
+        dígitos: 'c6 setembro 12345678901.ofx' -> o número da empresa que tem
+        esse documento no cadastro. Documento que não é de nenhuma empresa
+        cadastrada é ignorado (uma data 'AAAAMMDDhhmmss' de 14 dígitos, por
+        exemplo, não casa com ninguém e não atrapalha).
+    Devolve SEMPRE o número do cadastro, para quem compara com a conta
+    continuar igual.
+    """
     base = os.path.basename(nome_arquivo)
     m = re.match(r'^\s*(\d{1,6})\s*[-_]', base)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    sem_ext = os.path.splitext(base)[0]
+    for doc in re.findall(r'(?<!\d)(\d{11}|\d{14})(?!\d)', sem_ext):
+        from utils.db_helper import execute_query
+        e = execute_query(
+            "SELECT numero_cliente FROM clientes "
+            " WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','') = %s "
+            "   AND COALESCE(numero_cliente,'') <> '' LIMIT 1", (doc,),
+            fetch=True, fetch_one=True)
+        if e:
+            return str(e['numero_cliente'])
+    return None
 
 
 def _so_digitos(v):
@@ -217,8 +240,8 @@ def identificar_empresa(caminho_ou_nome, banco_id=None, conta=None,
 
     ``cliente`` é a empresa dona da conta (ou None). ``motivo`` conta como foi
     decidido, e é o texto que aparece no histórico: "conta 16865 cadastrada
-    em 1", "conta desconhecida", "CONTRADIÇÃO: o nome diz 100 mas a conta é
-    da 1".
+    em 1", "conta desconhecida", "conta 16865 cadastrada em 1 — ATENÇÃO: o
+    nome do arquivo diz 100, ignorado; a conta manda".
     """
     from utils.db_helper import execute_query
 
@@ -234,16 +257,18 @@ def identificar_empresa(caminho_ou_nome, banco_id=None, conta=None,
                'nome_razao_social': reg['nome_razao_social'],
                'cpf_cnpj': reg['cpf_cnpj']}
 
-    # CONFERÊNCIA: o número no nome não manda, mas se ele DISCORDA da conta é
-    # porque alguém errou — e a conta é a fonte confiável. Para tudo e avisa.
-    if num and str(reg['numero_cliente'] or '') != str(num):
-        return None, (f'CONTRADIÇÃO: o nome do arquivo diz empresa {num}, mas a '
-                      f'conta {conta} é de {reg["numero_cliente"]} — '
-                      f'{reg["nome_razao_social"]}. Nada foi lançado. Corrija o '
-                      f'nome do arquivo ou o cadastro da conta.')
-
+    # A CONTA MANDA. Decisão do Anderson em 14/09/2026: depois de cadastrada,
+    # a conta é lida com qualquer nome de arquivo — número errado no nome não
+    # segura o extrato (até então travava com "CONTRADIÇÃO"; ficou confuso e
+    # pouco prático). O número/CPF no nome só importa no PRIMEIRO arquivo, para
+    # a pendência aparecer na tela da empresa certa; se alguém confirmar a conta
+    # na empresa errada, apaga o cadastro da conta e recomeça. A discordância
+    # fica registrada no histórico, para quem quiser conferir.
     como = f'conta {conta} cadastrada em {reg["numero_cliente"]}'
-    if num:
+    if num and str(reg['numero_cliente'] or '') != str(num):
+        como += (f' — ATENÇÃO: o nome do arquivo diz {num}, ignorado; '
+                 f'a conta manda')
+    elif num:
         como += f' (o número {num} no nome confere)'
     return cliente, como
 

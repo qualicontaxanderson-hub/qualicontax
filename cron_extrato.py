@@ -108,6 +108,14 @@ def rodar(dryrun=None, limite=None):
                     from models.extrato_lancamento import FinExtratoPendencia
                     from utils.extrato_ingest import rotulo_periodo
                     num_nome = numero_empresa_do_nome(nome)
+                    if not num_nome:
+                        # Primeiro arquivo de uma conta precisa dizer de quem e:
+                        # numero do cadastro no comeco ou CPF/CNPJ no nome. Sem
+                        # isso a pendencia nasce orfa (so o admin ve) e o aviso
+                        # diz o que falta.
+                        motivo += (' Coloque o número do cadastro ou o CPF/CNPJ '
+                                   'no nome do arquivo para ela aparecer na '
+                                   'empresa certa.')
                     dono_nome = None
                     if num_nome:
                         from utils.db_helper import execute_query as _q
