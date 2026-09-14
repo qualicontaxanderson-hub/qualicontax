@@ -67,6 +67,16 @@ def rodar(dryrun=None, limite=None):
     # list_folder (generico), NAO list_xml_files: aquele peneira .xml e nao
     # devolveria nenhum .ofx. Sem recursivo: a _ENTRADA e plana por definicao.
     itens = svc.list_folder(base, recursive=False) or []
+    # Pendencia cujo arquivo nao esta mais na pasta (renomeado/apagado) sai da
+    # tela; a versao renomeada, se houver, entra como pendencia nova abaixo.
+    if not seco:
+        try:
+            from models.extrato_lancamento import FinExtratoPendencia as _Pend
+            _n = _Pend.encerrar_sumidas([x.get('path') for x in itens if x.get('is_file')])
+            if _n:
+                logger.info('[extrato] %d pendencia(s) encerrada(s): arquivo saiu da pasta.', _n)
+        except Exception:
+            logger.exception('[extrato] falha ao encerrar pendencias sumidas (segue).')
 
     resumo = {'lidos': 0, 'lancados': 0, 'novos': 0, 'repetidos': 0,
               'classificados': 0, 'ignorados': 0, 'erros': 0, 'detalhes': []}

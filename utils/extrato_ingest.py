@@ -95,10 +95,12 @@ def numero_empresa_do_nome(nome_arquivo):
     continuar igual.
     """
     base = os.path.basename(nome_arquivo)
-    m = re.match(r'^\s*(\d{1,6})\s*[-_]', base)
+    sem_ext = os.path.splitext(base)[0]
+    # '5000.ofx', '5000 - c6.ofx', '5000_c6.ofx', '5000 c6.ofx': o numero e o nome
+    # inteiro (sem extensao) ou vem seguido de separador — igual ao certificado.
+    m = re.match(r'^\s*(\d{1,6})(?:\s*[-_ .]|\s*$)', sem_ext)
     if m:
         return m.group(1)
-    sem_ext = os.path.splitext(base)[0]
     for doc in re.findall(r'(?<!\d)(\d{11}|\d{14})(?!\d)', sem_ext):
         from utils.db_helper import execute_query
         e = execute_query(

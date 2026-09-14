@@ -1313,6 +1313,23 @@ class FinExtratoPendencia:
              agencia, conta, qtd, periodo, motivo))
 
     @staticmethod
+    def encerrar_sumidas(caminhos_presentes):
+        """Fecha as pendências abertas cujo arquivo não está mais na _ENTRADA
+        (foi renomeado ou apagado). Sem isto, renomear "X.ofx" para "5000.ofx"
+        deixava DUAS pendências na tela — a velha, órfã, e a nova (14/09/2026).
+        Devolve quantas fechou."""
+        abertas = execute_query(
+            "SELECT id, caminho FROM fin_extrato_pendencias WHERE status = 'aberta'",
+            fetch=True) or []
+        presentes = {(c or '').lower() for c in caminhos_presentes}
+        sumidas = [a['id'] for a in abertas if (a['caminho'] or '').lower() not in presentes]
+        if sumidas:
+            execute_query(
+                f"UPDATE fin_extrato_pendencias SET status = 'sumiu', visto_em = NOW() "
+                f" WHERE id IN ({','.join(['%s'] * len(sumidas))})", tuple(sumidas), fetch=False)
+        return len(sumidas)
+
+    @staticmethod
     def get_por_caminho(caminho):
         return execute_query(
             'SELECT * FROM fin_extrato_pendencias WHERE caminho = %s',
