@@ -700,7 +700,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 <div id="exModalImport" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:520px;">
         <div class="modal-header">
-            <h3>Importar OFX</h3>
+            <h3>Importar extrato</h3>
             <button class="modal-close" onclick="exFecharImport()">&times;</button>
         </div>
         <form method="POST" action="{{ url_for('financeiro.extrato_importar') }}"
@@ -719,14 +719,15 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Arquivos (.ofx) *</label>
-                    <input type="file" name="arquivos" accept=".ofx,.OFX" multiple required
+                    <label>Arquivos (.ofx, ou o PDF do C6) *</label>
+                    <input type="file" name="arquivos" accept=".ofx,.OFX,.pdf,.PDF" multiple required
                            class="form-control">
                 </div>
                 <small style="color:#6b7280;">
                     Pode mandar vários de uma vez (um por conta). Reimportar o mesmo
-                    arquivo <strong>não duplica nada</strong>. Em breve o arquivo chega
-                    pela pasta e o sistema lê sozinho — sem este botão.
+                    arquivo <strong>não duplica nada</strong>.
+                    <strong>C6:</strong> o extrato completo é o PDF que chega por e-mail
+                    — o OFX do C6 entra, mas não diz para quem foi o Pix.
                 </small>
             </div>
             <div class="modal-footer">

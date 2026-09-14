@@ -1020,10 +1020,45 @@ def extrato_importar():
     empresa_id = int(empresa_raw)
     arquivos = [a for a in request.files.getlist('arquivos') if a and a.filename]
     if not arquivos:
-        flash('Escolha ao menos um arquivo OFX.', 'warning')
+        flash('Escolha ao menos um arquivo OFX (ou o PDF do C6).', 'warning')
         return _volta_extrato()
 
+    from utils.extrato_pdf_c6 import (parse_pdf_c6, processar_pdf, senhas_candidatas,
+                                      encaixar_ofx_em_pdf, aviso_ofx, PdfInvalido)
     for arq in arquivos:
+        if (arq.filename or '').lower().endswith('.pdf'):
+            # PDF do C6: o arquivo completo. Abre com o CPF da empresa
+            # escolhida (ou o que estiver no nome), completa e cria.
+            try:
+                from utils.db_helper import execute_query as _q
+                dono = _q('SELECT cpf_cnpj FROM clientes WHERE id = %s',
+                          (empresa_id,), fetch=True, fetch_one=True) or {}
+                senhas = senhas_candidatas(arq.filename)
+                if dono.get('cpf_cnpj'):
+                    senhas.insert(0, dono['cpf_cnpj'])
+                dados = parse_pdf_c6(arq.read(), senhas)
+            except PdfInvalido as e:
+                flash(f'{arq.filename}: {e}', 'danger')
+                continue
+            except Exception:
+                flash(f'{arq.filename}: não consegui ler este PDF — me mande '
+                      'ele que eu ajusto o leitor.', 'danger')
+                continue
+            r = processar_pdf(empresa_id, dados, arquivo=arq.filename,
+                              usuario_id=current_user.id, dry=False)
+            msg = (f"{arq.filename}: {r['novos']} lançamento(s) novo(s), "
+                   f"{r['completadas']} descrição(ões) completada(s), "
+                   f"{r['repetidos']} já estavam")
+            if r['classificados']:
+                msg += f"; {r['classificados']} já chegaram CLASSIFICADOS pela memorização"
+            flash(msg, 'success' if (r['novos'] or r['completadas']) else 'warning')
+            registrar('escrita.importou_extrato', 'financeiro',
+                      tabela='extrato_lancamentos',
+                      depois={'empresa_id': empresa_id, 'arquivo': arq.filename,
+                              'banco': dados['banco'], 'conta': dados['conta'],
+                              'formato': 'pdf', 'novos': r['novos'],
+                              'completadas': r['completadas']})
+            continue
         try:
             dados = parse_ofx(arq.read())
         except OfxInvalido as e:
@@ -1052,6 +1087,11 @@ def extrato_importar():
             unicos.append((h, l))
         ja_existiam = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
         novos = [(h, l) for h, l in unicos if h not in ja_existiam]
+        # O PDF do C6 pode ter criado a linha antes: o OFX só encaixa o FITID.
+        encaixados = 0
+        if novos:
+            novos, encaixados = encaixar_ofx_em_pdf(empresa_id, dados['banco'],
+                                                    dados['conta'], novos)
         auto = 0
         if novos:
             ExtratoLancamento.inserir_lote(
@@ -1068,7 +1108,9 @@ def extrato_importar():
             auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids_rows])
 
         msg = (f"{arq.filename}: {len(novos)} lançamento(s) novo(s), "
-               f"{len(unicos) - len(novos)} já estavam (ignorados)")
+               f"{len(unicos) - len(novos) - encaixados} já estavam (ignorados)")
+        if encaixados:
+            msg += f'; {encaixados} encaixado(s) em lançamento(s) que o PDF já tinha criado'
         if auto:
             msg += f'; {auto} já chegaram CLASSIFICADOS pela memorização'
         if dados.get('saldo'):
@@ -1077,12 +1119,16 @@ def extrato_importar():
             msg += (f". Saldo do arquivo: R$ {sd['valor']:,.2f}{quando} — "
                     "confira no Fluxo de Caixa se vale atualizar o saldo real.")
         flash(msg, 'success' if novos else 'warning')
+        aviso = aviso_ofx(dados.get('banco_id'), dados.get('banco'))
+        if aviso:
+            flash(f'{arq.filename} entrou. {aviso}', 'info')
         registrar('escrita.importou_extrato', 'financeiro',
                   tabela='extrato_lancamentos',
                   depois={'empresa_id': empresa_id, 'arquivo': arq.filename,
                           'banco': dados['banco'],
                           'conta': dados['conta'], 'novos': len(novos),
-                          'repetidos': len(unicos) - len(novos)})
+                          'repetidos': len(unicos) - len(novos),
+                          'encaixados': encaixados, 'aviso': aviso or None})
     return _volta_extrato()
 
 
@@ -1201,10 +1247,17 @@ def pendencia_resolver(pid):
                                               p['caminho'])
         r = {'ok': False, 'motivo': 'não consegui reler o arquivo agora'}
     FinExtratoPendencia.resolver(pid)
-    if r.get('ok'):
+    if r.get('ok') and r.get('formato') == 'pdf':
+        flash(f'Conta {conta} cadastrada e o PDF do C6 entrou: {r["novos"]} '
+              f'lançamento(s) novo(s) e {r.get("completadas") or 0} descrição(ões) '
+              f'completada(s) em {r["empresa"]}. Os próximos meses entram '
+              'sozinhos, em PDF ou OFX.', 'success')
+    elif r.get('ok'):
         flash(f'Conta {conta} cadastrada e o arquivo entrou: {r["novos"]} '
               f'lançamento(s) de {r["empresa"]}. Os próximos meses entram '
               'sozinhos, com qualquer nome de arquivo.', 'success')
+        if r.get('aviso'):
+            flash(r['aviso'], 'info')
     else:
         flash(f'Conta {conta} cadastrada. O arquivo não entrou agora '
               f'({r.get("motivo")}) — ele entra no próximo ciclo.', 'warning')

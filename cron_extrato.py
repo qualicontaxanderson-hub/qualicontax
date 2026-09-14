@@ -8,9 +8,12 @@ WhatsApp, do e-mail, do internet banking —, o Q-Colabore leva para a
 20/08/2026: "não quero importar, igual faz com o XML".
 
 REGRA DE FERRO, igual à do roteador de XML: este cron só toca em arquivo de
-EXTRATO — hoje ``.ofx``. Whitelist, não lista de proibidos: .pfx, .pdf, .xml
-e o que aparecer amanhã já nascem ignorados. Cada tipo tem o seu consumidor e
-ninguém pisa no do outro.
+EXTRATO — ``.ofx`` e, desde 14/09/2026, o ``.pdf`` de extrato do C6 (o OFX
+do C6 não diz para quem foi o Pix; o PDF diz e vale sozinho — os dois se
+encaixam sem duplicar; ``utils/extrato_pdf_c6``).
+Whitelist, não lista de proibidos: .pfx, .xml e o que aparecer amanhã já
+nascem ignorados. Um .pdf que NÃO é extrato do C6 fica onde está, intocado.
+Cada tipo tem o seu consumidor e ninguém pisa no do outro.
 
 Errou? Não há o que "desfazer com cuidado": o usuário apaga o período na tela
 do Extrato e manda o arquivo de novo. A idempotência (hash_dedup) garante que
@@ -34,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger('cron_extrato')
 
 PASTA_ORIGEM = '_ENTRADA'
-EXTENSOES = ('.ofx',)          # whitelist — ver REGRA DE FERRO no topo
+EXTENSOES = ('.ofx', '.pdf')   # whitelist — ver REGRA DE FERRO no topo
 _ATOR_NOME = 'ROTEADOR (extrato)'
 _ATOR_LOGIN = 'roteador_extrato'
 
@@ -49,13 +52,58 @@ def _tmp(nome):
     return os.path.join(tempfile.gettempdir(), 'qc_extrato_' + nome)
 
 
+def _ler_previa(nome, dados):
+    """(previa, formato) — ``formato`` 'ofx' ou 'pdf'; (None, None) quando o
+    arquivo não é nosso (PDF que não é extrato do C6) ou é um PDF protegido
+    que nenhum CPF cadastrado abriu. Nos dois casos o arquivo fica onde está."""
+    if (nome or '').lower().endswith('.pdf'):
+        from utils.extrato_pdf_c6 import (parse_pdf_c6, senhas_candidatas,
+                                          PdfInvalido, PdfProtegido)
+        try:
+            return parse_pdf_c6(dados, senhas_candidatas(nome)), 'pdf'
+        except PdfProtegido:
+            # Sem o nome: arquivo da _ENTRADA não vai para o log.
+            logger.warning('[extrato] um PDF protegido que nenhum CPF cadastrado '
+                           'abriu; ficou na _ENTRADA. Ponha o CPF ou o número do '
+                           'cadastro no nome do arquivo.')
+            return None, None
+        except PdfInvalido:
+            return None, None
+    from utils.ofx_parser import parse_ofx
+    return parse_ofx(dados), 'ofx'
+
+
+def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
+    """Grava o que o arquivo traz. OFX cria lançamentos (e encaixa no que o
+    PDF já criou); PDF do C6 completa o que existe e cria o que falta."""
+    from utils.extrato_ingest import processar_ofx
+    if formato == 'pdf':
+        from utils.extrato_pdf_c6 import processar_pdf
+        c = processar_pdf(empresa_id, previa, arquivo=os.path.basename(caminho),
+                          usuario_id=usuario_id, dry=False)
+        return {'novos': c['novos'], 'repetidos': c['repetidos'],
+                'classificados': c['classificados'], 'completadas': c['completadas'],
+                'no_pdf': c['no_pdf'], 'ambiguos': c['ambiguos'], 'travados': c['travados']}
+    return processar_ofx(caminho, empresa_id, usuario_id=usuario_id)
+
+
+def _dono_pelo_pdf(previa):
+    """Cliente cujo CPF é o do titular impresso no PDF, ou None."""
+    cpf = (previa or {}).get('cpf')
+    if not cpf:
+        return None
+    from models.cliente import Cliente
+    return Cliente.index_cpf_cnpj().get(cpf)
+
+
 def rodar(dryrun=None, limite=None):
     """Varre a _ENTRADA. Devolve o resumo (e imprime o que fez)."""
     from utils.dropbox_sync import _service
-    from utils.extrato_ingest import (identificar_empresa, processar_ofx,
+    from utils.extrato_ingest import (identificar_empresa,
                                       nome_arquivo_final, pasta_destino,
                                       banco_curto, numero_empresa_do_nome)
-    from utils.ofx_parser import parse_ofx, OfxInvalido
+    from utils.ofx_parser import OfxInvalido
+    from utils.extrato_pdf_c6 import PdfInvalido
     from utils.atividade import registrar_agente
 
     seco = DRYRUN if dryrun is None else dryrun
@@ -99,7 +147,11 @@ def rodar(dryrun=None, limite=None):
                 raise RuntimeError('não consegui baixar do Dropbox')
 
             # Lê o arquivo ANTES de decidir o dono: é a CONTA que manda.
-            previa = parse_ofx(dados)
+            previa, formato = _ler_previa(nome, dados)
+            if not formato:
+                resumo['lidos'] -= 1
+                resumo['ignorados'] += 1
+                continue
             banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
             cliente, motivo = identificar_empresa(
                 nome, banco_id=previa.get('banco_id'),
@@ -132,6 +184,10 @@ def rodar(dryrun=None, limite=None):
                         e = _q('SELECT id FROM clientes WHERE numero_cliente = %s',
                                (num_nome,), fetch=True, fetch_one=True)
                         dono_nome = (e or {}).get('id')
+                    if not dono_nome and formato == 'pdf':
+                        # O PDF do C6 imprime o CPF do titular: a pendência
+                        # já nasce na tela da pessoa certa.
+                        dono_nome = _dono_pelo_pdf(previa)
                     FinExtratoPendencia.anotar(
                         caminho=origem, arquivo=nome, motivo=motivo,
                         empresa_id=dono_nome, numero_no_nome=num_nome,
@@ -154,7 +210,7 @@ def rodar(dryrun=None, limite=None):
                 destino_pasta = pasta_destino(
                     cliente['numero_cliente'], cliente['nome_razao_social'], ano)
                 nome_final = nome_arquivo_final(banco, previa.get('conta'),
-                                                datas, 'ofx')
+                                                datas, formato)
                 linha['destino'] = f'{destino_pasta}/{nome_final}'
 
                 if seco:
@@ -162,13 +218,24 @@ def rodar(dryrun=None, limite=None):
                     resumo['detalhes'].append(linha)
                     continue
 
-                r = processar_ofx(caminho, cliente['id'], usuario_id=None)
+                r = _gravar(formato, caminho, previa, cliente['id'], None)
                 resumo['novos'] += r['novos']
                 resumo['repetidos'] += r['repetidos']
                 resumo['classificados'] += r['classificados']
                 resumo['lancados'] += 1
                 linha.update({'novos': r['novos'], 'repetidos': r['repetidos'],
                               'classificados': r['classificados']})
+                if formato == 'pdf':
+                    linha['completadas'] = r['completadas']
+                    resumo['completadas'] = resumo.get('completadas', 0) + r['completadas']
+                else:
+                    if r.get('encaixados'):
+                        linha['encaixados'] = r['encaixados']
+                    from utils.extrato_pdf_c6 import aviso_ofx
+                    aviso = aviso_ofx(previa.get('banco_id'), previa.get('banco'))
+                    if aviso:
+                        linha['aviso'] = aviso
+                        logger.info('[extrato] OFX do C6 lançado; o completo é o PDF.')
 
                 # Arquiva SÓ depois de gravar: arquivo movido sem lançamento
                 # seria perda silenciosa. MOVER (e não subir+apagar) é uma
@@ -188,13 +255,16 @@ def rodar(dryrun=None, limite=None):
                     usuario_login=_ATOR_LOGIN, tabela='extrato_lancamentos',
                     depois={'arquivo': nome, 'empresa_id': cliente['id'],
                             'banco': banco, 'novos': r['novos'],
-                            'repetidos': r['repetidos'], 'origem': 'roteador'})
+                            'repetidos': r['repetidos'], 'origem': 'roteador',
+                            'formato': formato,
+                            'completadas': r.get('completadas'),
+                            'aviso': linha.get('aviso')})
             finally:
                 try:
                     os.unlink(caminho)
                 except OSError:
                     pass
-        except OfxInvalido as e:
+        except (OfxInvalido, PdfInvalido) as e:
             linha['resultado'] = f'RECUSADO: {e}'
             resumo['erros'] += 1
             logger.warning('[extrato] %s recusado: %s', nome, e)
@@ -216,10 +286,9 @@ def processar_um(caminho_dropbox, usuario_id=None):
     responde uma pergunta mexe só no que foi perguntado.
     """
     from utils.dropbox_sync import _service
-    from utils.extrato_ingest import (identificar_empresa, processar_ofx,
+    from utils.extrato_ingest import (identificar_empresa,
                                       nome_arquivo_final, pasta_destino,
                                       banco_curto)
-    from utils.ofx_parser import parse_ofx
     from models.extrato_lancamento import FinExtratoPendencia
 
     svc = _service
@@ -227,9 +296,12 @@ def processar_um(caminho_dropbox, usuario_id=None):
     if not dados:
         return {'ok': False, 'motivo': 'arquivo não está mais na pasta'}
 
-    previa = parse_ofx(dados)
-    banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
     nome = os.path.basename(caminho_dropbox)
+    previa, formato = _ler_previa(nome, dados)
+    if not formato:
+        return {'ok': False, 'motivo': 'não é um extrato que eu saiba ler '
+                                       '(ou o PDF não abriu com o CPF cadastrado)'}
+    banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
     cliente, motivo = identificar_empresa(
         nome, banco_id=previa.get('banco_id'), conta=previa.get('conta'),
         banco_nome=banco)
@@ -240,7 +312,7 @@ def processar_um(caminho_dropbox, usuario_id=None):
     with open(caminho, 'wb') as fh:
         fh.write(dados)
     try:
-        r = processar_ofx(caminho, cliente['id'], usuario_id=usuario_id)
+        r = _gravar(formato, caminho, previa, cliente['id'], usuario_id)
     finally:
         try:
             os.unlink(caminho)
@@ -252,13 +324,16 @@ def processar_um(caminho_dropbox, usuario_id=None):
     destino = pasta_destino(cliente['numero_cliente'],
                             cliente['nome_razao_social'], ano)
     svc.ensure_folder(destino)
-    final = nome_arquivo_final(banco, previa.get('conta'), datas, 'ofx')
+    final = nome_arquivo_final(banco, previa.get('conta'), datas, formato)
     movido = svc.move_file(caminho_dropbox, f'{destino}/{final}')
     FinExtratoPendencia.limpar_resolvidas([caminho_dropbox])
-    return {'ok': True, 'empresa': cliente['nome_razao_social'],
+    from utils.extrato_pdf_c6 import aviso_ofx
+    aviso = aviso_ofx(previa.get('banco_id'), previa.get('banco')) if formato == 'ofx' else ''
+    return {'ok': True, 'empresa': cliente['nome_razao_social'], 'aviso': aviso or None,
             'banco': banco, 'novos': r['novos'], 'repetidos': r['repetidos'],
             'classificados': r['classificados'], 'arquivado': movido,
-            'destino': f'{destino}/{final}'}
+            'formato': formato, 'completadas': r.get('completadas'),
+            'encaixados': r.get('encaixados'), 'destino': f'{destino}/{final}'}
 
 
 def _conectar_lock():

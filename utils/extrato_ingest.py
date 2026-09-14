@@ -304,7 +304,15 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
 
     ja = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
     novos = [(h, l) for h, l in unicos if h not in ja]
-    auto = 0
+    # O PDF do C6 pode ter chegado ANTES e criado a linha (14/09/2026): o
+    # OFX então só encaixa nela o FITID — a descrição do PDF, que tem o
+    # nome de quem recebeu, fica.
+    encaixados = 0
+    if novos:
+        from utils.extrato_pdf_c6 import encaixar_ofx_em_pdf
+        novos, encaixados = encaixar_ofx_em_pdf(empresa_id, dados['banco'],
+                                                dados['conta'], novos)
+    auto, par = 0, {}
     if novos:
         ExtratoLancamento.inserir_lote(
             novos, dados['banco'], dados['conta'], os.path.basename(caminho),
@@ -342,6 +350,7 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
         'saldo': dados.get('saldo'),
         'total': len(lancs), 'novos': len(novos),
         'repetidos': len(unicos) - len(novos), 'classificados': auto,
+        'encaixados': encaixados,
         'travados': (par or {}).get('gravados', 0),
         'datas': [l['data'] for l in lancs],
     }
