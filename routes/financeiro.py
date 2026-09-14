@@ -2041,6 +2041,21 @@ def extrato_lote_titulos():
 # importação; aqui mostramos o que está travado de verdade. Reexecutá-lo a
 # cada abertura varreria 4.387 linhas para mostrar coisa que ninguém marcou.
 # =======================================================================
+def _cats_por_grupo(cats, tipos):
+    """[(grupo, [{'id','rotulo'}])] para <optgroup>: sub aparece como 'Pai · Sub'
+    (o plano tem 4 'Energia' e 3 'Internet' sem o pai — indistinguíveis)."""
+    nome = {c['id']: c['nome'] for c in cats}
+    grupos = {}
+    for c in cats:
+        if c['tipo'] not in tipos:
+            continue
+        rot = (f"{nome.get(c['pai_id'])} · {c['nome']}" if c.get('pai_id') else c['nome'])
+        if c['tipo'] == 'T':
+            rot += ' (fora do DRE)'
+        grupos.setdefault(c['grupo'], []).append({'id': c['id'], 'rotulo': rot})
+    return list(grupos.items())
+
+
 def _volta_transferencias():
     return redirect(url_for('financeiro.extrato_transferencias'))
 
@@ -2124,8 +2139,8 @@ def extrato_transferencias():
         total_suspeitos=sum(abs(float(s['l']['valor'])) for s in suspeitos),
         n_suspeitos=len(suspeitos), mapa=mapa,
         categorias=FinCategoria.listar(),
-        cats_saida=[c for c in FinCategoria.listar() if c['tipo'] in ('P', 'I', 'T')],
-        cats_entrada=[c for c in FinCategoria.listar() if c['tipo'] in ('R', 'T')],
+        cats_saida=_cats_por_grupo(FinCategoria.listar(), ('P', 'I', 'T')),
+        cats_entrada=_cats_por_grupo(FinCategoria.listar(), ('R', 'T')),
         cat_entre_contas=categoria_entre_contas())
 
 

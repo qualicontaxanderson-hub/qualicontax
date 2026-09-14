@@ -5,11 +5,15 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-.tf-lados-cat { display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding:10px 14px 12px; background:#f8fafc; border-top:1px dashed #e2e8f0; }
-.tf-lados-cat label { font-size:12px; color:#475569; display:flex; flex-direction:column; gap:4px; }
-.tf-lados-cat select { font-size:13px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
-.tf-lados-cat small { grid-column: 1 / -1; color:#64748b; }
-@media (max-width: 640px) { .tf-lados-cat { grid-template-columns: 1fr; } }
+/* barra de ações fica visível no fim da rolagem, no PC e no celular */
+.tf-acoes { position: sticky; bottom: 0; background:#fff; border-top:1px solid #e2e8f0; padding:10px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; z-index:2; }
+@media (max-width: 640px) {
+  .tf-acoes { padding:10px; }
+  .tf-acoes .tf-bt { flex: 1 1 100%; justify-content:center; }
+  .tf-acoes .tf-marcatudo { flex: 1 1 100%; }
+  .tf-acoes label { flex: 1 1 100%; }
+  .tf-acoes span { flex: 1 1 100%; }
+}
 
 /* Duas naturezas, dois desenhos. O par CASADO e uma "coisa" com estado
    (espera decisao) e tem dois lados que precisam ser vistos juntos: cartao.
@@ -88,6 +92,61 @@
 .tf-vazio { padding:22px 16px; text-align:center; color:#64748b;
   font-size:13.5px; }
 .tf-nota { color:#475569; font-size:12.5px; margin:0 2px 14px; line-height:1.5; }
+
+/* ================= ASSISTENTE 'APROVAR POR LADO' =================
+   Copia do assistente de Classificar (extrato.html): um passo por tela,
+   cartoes de grupo -> categoria -> tipo de gasto, rodape fixo. */
+#tfWiz { display:none; }
+#tfWiz.aberto { display:block; }
+.ex-wiz { max-width:580px; display:flex; flex-direction:column; max-height:calc(100vh - 10%); }
+#tfWizForm { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.ex-wiz-corpo { flex:1 1 auto; min-height:0; overflow-y:auto; max-height:min(58vh, 470px); }
+.ex-wiz-abas { display:flex; gap:6px; padding:0 22px 12px; }
+.ex-wiz-aba { flex:1 1 0; min-width:0; }
+.ex-wiz-aba i { display:block; height:3px; border-radius:99px; background:#e2e8f0; }
+.ex-wiz-aba span { display:block; font-size:10px; font-weight:700; color:#b6c2bb; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ex-wiz-aba.feita i, .ex-wiz-aba.agora i { background:#00a85a; }
+.ex-wiz-aba.feita span { color:#5b7468; cursor:pointer; }
+.ex-wiz-aba.agora span { color:#0f3d2e; font-weight:800; }
+.ex-wiz-passo { font-size:12px; color:#7d968a; margin:0 0 12px; }
+.ex-wiz-passo b { display:block; font-size:17px; font-weight:800; color:#0f3d2e; margin-top:1px; }
+.ex-wiz-lanc { background:#f7faf8; border-radius:11px; padding:10px 12px; margin:0 22px 12px; font-size:11.5px; flex:0 0 auto; }
+.ex-wiz-lanc .d { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; color:#94a3b8; overflow-wrap:anywhere; line-height:1.45; }
+.ex-wiz-lanc .n { font-size:13.5px; font-weight:700; color:#1e293b; margin-top:3px; }
+.ex-wiz-lanc .m { color:#64748b; font-weight:600; margin-top:2px; }
+.ex-cartoes { display:flex; flex-direction:column; gap:7px; }
+.ex-cartao { display:flex; align-items:flex-start; gap:11px; width:100%; text-align:left; padding:12px 13px; border:1.5px solid #e2e8f0; border-radius:12px; background:#fff; cursor:pointer; font-family:inherit; color:#1e293b; }
+.ex-cartao:hover { border-color:#86efac; background:#f8fdfa; }
+.ex-cartao.on { border-color:#00a85a; background:#f0fdf4; box-shadow:0 0 0 1px #00a85a inset; }
+.ex-cartao .b { flex:0 0 30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:14px; background:#f1f5f9; margin-top:1px; }
+.ex-cartao .t { flex:1 1 auto; min-width:0; }
+.ex-cartao .t b { display:block; font-size:14px; font-weight:700; }
+.ex-cartao .t small { display:block; font-size:11.5px; color:#8a9a91; margin-top:2px; line-height:1.35; }
+.ex-cartao .ok { color:#00a85a; font-weight:900; opacity:0; margin-top:4px; }
+.ex-cartao.on .ok { opacity:1; }
+.ex-rot { display:block; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#94a3b8; margin:14px 0 7px; }
+.ex-resumo { background:#f0fdf4; border:1px solid #86efac; border-radius:11px; padding:12px 13px; font-size:12.5px; color:#166534; line-height:1.55; }
+.ex-resumo b { font-weight:800; }
+.ex-cond { display:flex; align-items:flex-start; gap:9px; padding:9px 2px; border-bottom:1px solid #f1f5f9; font-size:13px; cursor:pointer; }
+.ex-cond:last-child { border-bottom:0; }
+.ex-cond input { margin-top:3px; width:17px; height:17px; accent-color:#00a85a; }
+.ex-cond div { flex:1 1 auto; min-width:0; }
+.ex-cond b { display:block; font-size:13px; font-weight:600; }
+.ex-cond small { display:block; font-size:11.5px; color:#94a3b8; margin-top:1px; }
+.ex-wiz-pe { display:flex; gap:9px; }
+.ex-wiz-pe .btn { flex:1 1 auto; justify-content:center; }
+.ex-vazio-lista { text-align:center; color:#94a3b8; font-size:12.5px; padding:18px 8px; }
+.tf-selo { display:inline-block; font-size:9px; background:#00a85a; color:#fff; border-radius:99px; padding:2px 8px; vertical-align:middle; margin-left:6px; letter-spacing:.04em; }
+@media (max-width: 768px) {
+  #tfWiz.aberto { display:block; }
+  .ex-wiz { position:fixed; left:0; right:0; bottom:0; top:auto; margin:0; width:100%; max-width:none; max-height:92vh; border-radius:18px 18px 0 0; animation:none; }
+  .ex-wiz .modal-header { padding:16px 18px 12px; flex:0 0 auto; }
+  .ex-wiz-abas { padding:0 18px 12px; }
+  .ex-wiz-lanc { margin:0 18px 12px; }
+  .ex-wiz-corpo { max-height:none; padding:0 18px 18px; -webkit-overflow-scrolling:touch; }
+  .ex-wiz-pe { padding:12px 18px calc(12px + env(safe-area-inset-bottom)); background:#fff; }
+  .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
+}
 </style>
 
 <h4 style="margin:0 0 4px"><i class="fas fa-right-left"></i> Transferências do Grupo</h4>
@@ -148,27 +207,6 @@
           </div>
           <div class="tf-lado-v">+R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
         </div>
-        {% if not p.mesma_empresa %}
-        {# Par ENTRE empresas: uma categoria por lado. Pré-marcado pela regra
-           memorizada (ou pró-labore, PJ -> PF). Quem aprova confere e confirma. #}
-        <div class="tf-lados-cat">
-          <label>Saída · {{ mapa.get(p.saiu.empresa_id, '') }}
-            <select name="saida_{{ p.saiu.id }}">
-              {% for c in cats_saida %}
-              <option value="{{ c.id }}" {% if c.id == p.sug_saida %}selected{% endif %}>{{ c.grupo }} · {{ c.nome }}{% if c.tipo == 'T' %} (fora do DRE){% endif %}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label>Entrada · {{ mapa.get(p.entrou.empresa_id, '') }}
-            <select name="entrada_{{ p.saiu.id }}">
-              {% for c in cats_entrada %}
-              <option value="{{ c.id }}" {% if c.id == p.sug_entrada %}selected{% endif %}>{{ c.grupo }} · {{ c.nome }}{% if c.tipo == 'T' %} (fora do DRE){% endif %}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <small>{% if p.de_regra %}regra memorizada para este caminho{% else %}sugestão — confira{% endif %}</small>
-        </div>
-        {% endif %}
       </div>
       {% endfor %}
     </div>
@@ -178,14 +216,10 @@
               formaction="{{ url_for('financeiro.extrato_transferencias_aprovar') }}">
         <i class="fas fa-check"></i> É transferência — aprovar
       </button>
-      <button type="submit" class="tf-bt tf-bt-ok"
-              formaction="{{ url_for('financeiro.extrato_transferencias_aprovar_lado') }}"
+      <button type="button" class="tf-bt tf-bt-ok" onclick="tfLadoAbrir()"
               title="Só para pares ENTRE empresas: cada lado com a sua categoria (pró-labore na PJ, receita na PF)">
         <i class="fas fa-code-branch"></i> Aprovar por lado (entre empresas)
       </button>
-      <label style="font-size:12px;color:#334155;display:inline-flex;align-items:center;gap:6px">
-        <input type="checkbox" name="memorizar"> guardar como regra do caminho
-      </label>
       <button type="submit" class="tf-bt tf-bt-nao"
               formaction="{{ url_for('financeiro.extrato_transferencias_negar') }}"
               onclick="return confirm('Destravar o par? Os dois lados voltam para a fila normal e passam a poder ser classificados como qualquer outro lançamento.')">
@@ -260,7 +294,193 @@
 </div>
 {% endif %}
 
+
+{# ===== ASSISTENTE 'APROVAR POR LADO' — mesmo desenho do Classificar Lancamento ===== #}
+<div id="tfWiz" class="modal">
+  <div class="modal-content ex-wiz">
+    <div class="modal-header">
+      <h3 id="tfWizTitulo">Aprovar por lado</h3>
+      <button class="modal-close" type="button" onclick="tfWizFechar()">&times;</button>
+    </div>
+    <div class="ex-wiz-abas" id="tfWizAbas"></div>
+    <form method="POST" id="tfWizForm" action="{{ url_for('financeiro.extrato_transferencias_aprovar_lado') }}">
+      <div id="tfWizCampos"></div>
+      <select id="tfCatalogo" style="display:none" aria-hidden="true" tabindex="-1">
+        {% for c in categorias %}
+        <option value="{{ c.id }}" data-tipo="{{ c.tipo }}" data-grupo="{{ c.grupo }}"
+                data-nome="{{ c.nome }}" data-pai="{{ c.pai_id or '' }}">{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+      <div class="ex-wiz-lanc" id="tfWizLanc"></div>
+      <div class="modal-body ex-wiz-corpo">
+        <p class="ex-wiz-passo" id="tfWizPasso"></p>
+        <div id="tfWizTela"></div>
+      </div>
+      <div class="modal-footer ex-wiz-pe">
+        <button type="button" class="btn btn-outline" id="tfWizVoltar" onclick="tfWizAndar(-1)">Voltar</button>
+        <button type="button" class="btn btn-primary" id="tfWizSeguir" onclick="tfWizAndar(1)" disabled style="opacity:.45">Continuar</button>
+        <button type="submit" class="btn btn-primary" id="tfWizGravar" style="display:none;">Aprovar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
+
+// ===== ASSISTENTE 'APROVAR POR LADO' (par ENTRE empresas) =====
+// Copia do desenho do Classificar Lancamento (extrato.html): tres passos —
+// Saida, Entrada, Confirmar — com os cartoes grupo -> categoria -> tipo.
+// Uma decisao vale para TODOS os pares marcados do mesmo caminho
+// (Quali -> Anderson), e pode virar regra memorizada.
+var TF_PARES = {
+{% for p in pares if not p.mesma_empresa %}  "{{ p.saiu.id }}": { de: {{ p.saiu.empresa_id }}, para: {{ p.entrou.empresa_id }},
+    deNome: {{ (mapa.get(p.saiu.empresa_id) or '?') | tojson }}, paraNome: {{ (mapa.get(p.entrou.empresa_id) or '?') | tojson }},
+    valor: {{ p.valor }}, data: {{ p.saiu.data.strftime('%d/%m/%Y') | tojson }},
+    sugSaida: {{ p.sug_saida | tojson }}, sugEntrada: {{ p.sug_entrada | tojson }}, deRegra: {{ 'true' if p.de_regra else 'false' }} }{{ ',' if not loop.last }}
+{% endfor %}};
+var TW = null;
+var TF_PASSOS = ['Saída', 'Entrada', 'Confirmar'];
+
+function tfEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+  return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function tfMoeda(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function tfOpt(id) { return document.querySelector('#tfCatalogo option[value="' + id + '"]'); }
+function tfRotulo(id) {
+  var o = tfOpt(id); if (!o) return '?';
+  var pai = o.getAttribute('data-pai') ? tfOpt(o.getAttribute('data-pai')) : null;
+  return (pai ? pai.getAttribute('data-nome') + ' · ' : '') + o.getAttribute('data-nome') +
+    (o.getAttribute('data-tipo') === 'T' ? ' (fora do DRE)' : '');
+}
+
+function tfLadoAbrir() {
+  var ids = Array.prototype.slice.call(document.querySelectorAll('input.ckPar:checked'))
+    .map(function (c) { return c.value; }).filter(function (id) { return TF_PARES[id]; });
+  if (!ids.length) { alert('Marque ao menos um par ENTRE empresas (os da mesma empresa usam "É transferência — aprovar").'); return; }
+  var caminhos = {};
+  ids.forEach(function (id) { var p = TF_PARES[id]; caminhos[p.de + '>' + p.para] = p; });
+  var ks = Object.keys(caminhos);
+  if (ks.length > 1) {
+    alert('A seleção mistura caminhos diferentes (' + ks.map(function (k) {
+      return caminhos[k].deNome + ' → ' + caminhos[k].paraNome; }).join(' e ') +
+      '). Aprove um caminho por vez: a decisão vale para todos os pares marcados.');
+    return;
+  }
+  var p = caminhos[ks[0]];
+  TW = { ids: ids, de: p.de, para: p.para, deNome: p.deNome, paraNome: p.paraNome,
+         total: ids.reduce(function (a, id) { return a + TF_PARES[id].valor; }, 0),
+         i: 0, regra: false, deRegra: p.deRegra,
+         lado: { saida: { cat: p.sugSaida, sug: p.sugSaida, aceitos: ['P', 'I', 'T'], grupo: null, mae: null, trocando: false },
+                 entrada: { cat: p.sugEntrada, sug: p.sugEntrada, aceitos: ['R', 'T'], grupo: null, mae: null, trocando: false } } };
+  document.getElementById('tfWizTitulo').textContent =
+    'Aprovar por lado — ' + ids.length + ' par(es) ' + p.deNome + ' → ' + p.paraNome;
+  document.getElementById('tfWiz').classList.add('aberto');
+  tfWizDesenha();
+}
+function tfWizFechar() { document.getElementById('tfWiz').classList.remove('aberto'); }
+function tfWizIr(k) { TW.i = k; tfWizDesenha(); }
+function tfWizAndar(d) {
+  if (d > 0 && document.getElementById('tfWizSeguir').disabled) return;
+  var passo = TF_PASSOS[TW.i], lado = passo === 'Saída' ? TW.lado.saida : (passo === 'Entrada' ? TW.lado.entrada : null);
+  if (d < 0 && TW.i === 0 && !(lado && lado.trocando)) return tfWizFechar();
+  if (d < 0 && lado && lado.trocando) {
+    if (lado.mae) { lado.mae = null; return tfWizDesenha(); }
+    if (lado.grupo) { lado.grupo = null; return tfWizDesenha(); }
+    lado.trocando = false; return tfWizDesenha();
+  }
+  TW.i = Math.max(0, Math.min(TF_PASSOS.length - 1, TW.i + d));
+  tfWizDesenha();
+}
+function tfTrocar(l) { var s = TW.lado[l]; s.trocando = true; s.grupo = null; s.mae = null; tfWizDesenha(); }
+function tfGrupo(l, g) { TW.lado[l].grupo = g; TW.lado[l].mae = null; tfWizDesenha(); }
+function tfMae(l, id) { TW.lado[l].mae = id; tfWizDesenha(); }
+function tfCat(l, id) { var s = TW.lado[l]; s.cat = id; s.trocando = false; s.grupo = null; s.mae = null; tfWizDesenha(); }
+function tfRegra(v) { TW.regra = v; tfWizDesenha(); }
+
+function tfTelaLado(l) {
+  var s = TW.lado[l];
+  var opts = Array.prototype.slice.call(document.querySelectorAll('#tfCatalogo option'))
+    .filter(function (o) { return s.aceitos.indexOf(o.getAttribute('data-tipo')) >= 0; });
+  var empresa = l === 'saida' ? TW.deNome : TW.paraNome;
+  var papel = l === 'saida' ? 'o que foi, para ' + tfEsc(TW.deNome) + ' (despesa)' : 'o que é, para ' + tfEsc(TW.paraNome) + ' (receita)';
+  if (!s.trocando && s.cat) {
+    // a sugestao (ou a regra) ja escolhida: um cartao marcado + "escolher outra"
+    var selo = TW.deRegra ? 'REGRA' : 'SUGESTÃO';
+    return '<span class="ex-rot" style="margin-top:0">' + papel + '</span>' +
+      '<div class="ex-cartoes"><button type="button" class="ex-cartao on"><span class="b">' +
+      (l === 'saida' ? '↑' : '↓') + '</span><span class="t"><b>' + tfEsc(tfRotulo(s.cat)) +
+      '<span class="tf-selo">' + selo + '</span></b><small>' + tfEsc(empresa) +
+      (TW.deRegra ? ' · é assim que este caminho vem sendo aprovado' : ' · confira antes de aprovar') +
+      '</small></span><span class="ok">✓</span></button>' +
+      '<button type="button" class="ex-cartao" onclick="tfTrocar(\'' + l + '\')"><span class="b">≣</span>' +
+      '<span class="t"><b>Escolher outra categoria</b><small>abre o plano de contas por grupo</small></span></button></div>';
+  }
+  var filhasDe = function (id) { return opts.filter(function (o) { return o.getAttribute('data-pai') === String(id); }); };
+  if (!s.grupo) {
+    var grupos = {};
+    opts.forEach(function (o) { if (o.getAttribute('data-pai')) return; var g = o.getAttribute('data-grupo'); grupos[g] = (grupos[g] || 0) + 1; });
+    return '<span class="ex-rot" style="margin-top:0">grupo — a linha do DRE de ' + tfEsc(empresa) + '</span><div class="ex-cartoes">' +
+      Object.keys(grupos).map(function (g) {
+        return '<button type="button" class="ex-cartao" onclick="tfGrupo(\'' + l + '\',' + JSON.stringify(g).replace(/"/g, '&quot;') +
+          ')"><span class="b">≣</span><span class="t"><b>' + tfEsc(g) + '</b><small>' + grupos[g] + ' categorias</small></span><span class="ok">✓</span></button>';
+      }).join('') + '</div>';
+  }
+  if (s.mae) {
+    var mae = tfOpt(s.mae), nomeMae = mae ? mae.getAttribute('data-nome') : '?';
+    return '<span class="ex-rot" style="margin-top:0">o que foi, em ' + tfEsc(nomeMae) + '</span><div class="ex-cartoes">' +
+      filhasDe(s.mae).map(function (o) {
+        return '<button type="button" class="ex-cartao' + (String(s.cat) === o.value ? ' on' : '') + '" onclick="tfCat(\'' + l + '\',\'' + o.value +
+          '\')"><span class="t"><b>' + tfEsc(o.getAttribute('data-nome')) + '</b></span><span class="ok">✓</span></button>';
+      }).join('') +
+      '<button type="button" class="ex-cartao" onclick="tfCat(\'' + l + '\',\'' + s.mae + '\')"><span class="t"><b>Sem detalhar</b><small>lança direto em ' +
+      tfEsc(nomeMae) + '</small></span><span class="ok">✓</span></button></div>';
+  }
+  var doGrupo = opts.filter(function (o) { return o.getAttribute('data-grupo') === s.grupo && !o.getAttribute('data-pai'); });
+  return '<span class="ex-rot" style="margin-top:0">categoria de ' + tfEsc(s.grupo) + '</span><div class="ex-cartoes">' +
+    doGrupo.map(function (o) {
+      var filhas = filhasDe(o.value).length;
+      if (filhas) return '<button type="button" class="ex-cartao" onclick="tfMae(\'' + l + '\',\'' + o.value + '\')"><span class="t"><b>' +
+        tfEsc(o.getAttribute('data-nome')) + '</b><small>' + filhas + ' tipo(s) — toque para abrir</small></span><span class="ex-rot" style="margin:4px 0 0">›</span></button>';
+      return '<button type="button" class="ex-cartao' + (String(s.cat) === o.value ? ' on' : '') + '" onclick="tfCat(\'' + l + '\',\'' + o.value +
+        '\')"><span class="t"><b>' + tfEsc(o.getAttribute('data-nome')) + '</b></span><span class="ok">✓</span></button>';
+    }).join('') + '</div>';
+}
+
+function tfWizDesenha() {
+  var passo = TF_PASSOS[TW.i], pronto = false, html = '';
+  document.getElementById('tfWizAbas').innerHTML = TF_PASSOS.map(function (n, k) {
+    var cls = k < TW.i ? 'feita' : (k === TW.i ? 'agora' : '');
+    return '<div class="ex-wiz-aba ' + cls + '"' + (k < TW.i ? ' onclick="tfWizIr(' + k + ')"' : '') + '><i></i><span>' + n + '</span></div>';
+  }).join('');
+  document.getElementById('tfWizPasso').innerHTML = 'Passo ' + (TW.i + 1) + ' de ' + TF_PASSOS.length + ' — <b>' + passo + '</b>';
+  document.getElementById('tfWizLanc').innerHTML =
+    '<div class="n">' + TW.ids.length + ' par(es) · ' + tfMoeda(TW.total) + '</div>' +
+    '<div class="m">' + tfEsc(TW.deNome) + ' <b>→</b> ' + tfEsc(TW.paraNome) + ' · ' +
+    (TW.ids.length === 1 ? TF_PARES[TW.ids[0]].data : 'de ' + TF_PARES[TW.ids[TW.ids.length - 1]].data + ' a ' + TF_PARES[TW.ids[0]].data) + '</div>';
+  if (passo === 'Saída') { html = tfTelaLado('saida'); pronto = !!TW.lado.saida.cat && !TW.lado.saida.trocando; }
+  else if (passo === 'Entrada') { html = tfTelaLado('entrada'); pronto = !!TW.lado.entrada.cat && !TW.lado.entrada.trocando; }
+  else {
+    html = '<div class="ex-resumo"><b>' + TW.ids.length + ' par(es)</b> · ' + tfMoeda(TW.total) + '<br>' +
+      '↑ <b>' + tfEsc(TW.deNome) + '</b>: ' + tfEsc(tfRotulo(TW.lado.saida.cat)) + '<br>' +
+      '↓ <b>' + tfEsc(TW.paraNome) + '</b>: ' + tfEsc(tfRotulo(TW.lado.entrada.cat)) + '<br>' +
+      '<small>Cada lado vira título quitado na sua empresa e entra no DRE dela. Quem for transferência (fora do DRE) não gera título.</small></div>' +
+      '<label class="ex-cond" style="margin-top:12px"><input type="checkbox"' + (TW.regra ? ' checked' : '') +
+      ' onchange="tfRegra(this.checked)"><div><b>Guardar como regra do caminho ' + tfEsc(TW.deNome) + ' → ' + tfEsc(TW.paraNome) +
+      '</b><small>os próximos pares desse caminho já chegam com estas categorias — e continuam vindo para você aprovar</small></div></label>';
+    pronto = true;
+  }
+  document.getElementById('tfWizTela').innerHTML = html;
+  var seguir = document.getElementById('tfWizSeguir'), gravar = document.getElementById('tfWizGravar');
+  seguir.disabled = !pronto; seguir.style.opacity = pronto ? '1' : '.45';
+  var ultimo = TW.i === TF_PASSOS.length - 1;
+  seguir.style.display = ultimo ? 'none' : ''; gravar.style.display = ultimo ? '' : 'none';
+  gravar.textContent = 'Aprovar ' + TW.ids.length + ' par(es)';
+  var campos = TW.ids.map(function (id) {
+    return '<input type="hidden" name="lanc" value="' + id + '">' +
+      '<input type="hidden" name="saida_' + id + '" value="' + TW.lado.saida.cat + '">' +
+      '<input type="hidden" name="entrada_' + id + '" value="' + TW.lado.entrada.cat + '">';
+  }).join('') + (TW.regra ? '<input type="hidden" name="memorizar" value="on">' : '');
+  document.getElementById('tfWizCampos').innerHTML = campos;
+}
 // Marcar todos por CLASSE (os pares) — o rotulo do botao conta o que ele fez,
 // para ninguem clicar duas vezes achando que nao pegou.
 function tfTudo(classe, bt) {

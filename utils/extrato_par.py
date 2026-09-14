@@ -443,13 +443,32 @@ def categoria_prolabore_recebido():
     return FinCategoria.criar(tipo, grupo, nome)
 
 
-def categoria_prolabore_pago():
-    """A categoria de despesa 'Pró-labore' já existente (a mais alta do plano)."""
+def _normaliza(txt):
+    import unicodedata
+    t = unicodedata.normalize('NFKD', str(txt or '')).encode('ascii', 'ignore').decode()
+    return ' '.join(t.lower().replace('-', '').split())
+
+
+def categoria_prolabore_pago(nome_socio=None):
+    """A categoria de despesa 'Pró-labore' ATIVA — de preferência a do sócio
+    que recebe (no plano é subcategoria: 'Sócios · Anderson Antunes Vieira ·
+    Pro-Labore'). A 'Pessoal · Pró-labore' antiga está inativa e por isso não
+    aparecia no select (14/09/2026: a tela caía na primeira opção da lista)."""
     from utils.db_helper import execute_query
-    r = execute_query("SELECT id FROM fin_categorias WHERE tipo = 'P' AND pai_id IS NULL "
-                      "  AND LOWER(REPLACE(nome,'-','')) LIKE %s ORDER BY ordem, id LIMIT 1",
-                      ('%prolabore%',), fetch=True, fetch_one=True)
-    return r['id'] if r else None
+    rows = execute_query(
+        "SELECT c.id, c.nome, p.nome AS pai FROM fin_categorias c "
+        "  LEFT JOIN fin_categorias p ON p.id = c.pai_id "
+        " WHERE c.tipo = 'P' AND c.ativo = 1 ORDER BY c.ordem, c.id", fetch=True) or []
+    cands = [r for r in rows if 'prolabore' in _normaliza(r['nome']).replace(' ', '')]
+    if not cands:
+        return None
+    alvo = _normaliza(nome_socio)
+    if alvo:
+        for r in cands:
+            pai = _normaliza(r.get('pai'))
+            if pai and (pai in alvo or alvo in pai or pai.split()[0] == alvo.split()[0]):
+                return r['id']
+    return cands[0]['id']
 
 
 def _so_digitos(v):
@@ -465,9 +484,12 @@ def sugestao_por_lado(de_id, para_id):
         return r['saida'], r['entrada'], True
     ec = categoria_entre_contas()
     ec_id = (ec['id'] if isinstance(ec, dict) else ec) or None
-    docs = {e['cliente_id']: len(_so_digitos(e.get('doc'))) for e in empresas_do_grupo()}
+    emp = {e['cliente_id']: e for e in empresas_do_grupo()}
+    docs = {k: len(_so_digitos(e.get('doc'))) for k, e in emp.items()}
     if docs.get(de_id) == 14 and docs.get(para_id) == 11:
-        return categoria_prolabore_pago() or ec_id, categoria_prolabore_recebido() or ec_id, False
+        nome_pf = (emp.get(para_id) or {}).get('nome')
+        return (categoria_prolabore_pago(nome_pf) or ec_id,
+                categoria_prolabore_recebido() or ec_id, False)
     return ec_id, ec_id, False
 
 
