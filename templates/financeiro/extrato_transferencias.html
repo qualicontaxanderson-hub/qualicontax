@@ -44,6 +44,23 @@
 
 /* ── o par ── */
 .tf-par { border:1.5px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+.tf-par[hidden] { display:none; }
+.tf-filtro { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:10px 14px;
+  background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.tf-filtro-lbl { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+.tf-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.tf-chip { padding:5px 12px; border-radius:99px; border:1.5px solid #d1d5db; background:#fff; color:#334155;
+  font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap; font-family:inherit; }
+.tf-chip b { font-weight:800; color:#64748b; margin-left:4px; }
+.tf-chip:hover { border-color:#16a34a; color:#166534; }
+.tf-chip.ativo { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.tf-chip.ativo b { color:#bbf7d0; }
+.tf-filtro-conta { margin-left:auto; font-size:12px; color:#64748b; }
+@media (max-width: 640px) {
+  .tf-filtro { padding:8px 10px; }
+  .tf-filtro-lbl { flex:1 1 100%; }
+  .tf-filtro-conta { flex:1 1 100%; margin-left:0; }
+}
 .tf-par-cab { display:flex; align-items:center; gap:10px; padding:9px 12px;
   background:#f8fafc; border-bottom:1px solid #eef2f7; }
 .tf-par-cab label { display:flex; align-items:center; gap:8px; margin:0;
@@ -176,10 +193,23 @@
     <span>{{ pares|length }} par(es)</span>
   </div>
   {% if pares %}
+  {# ── Filtros (14/09/2026): um caminho por vez agiliza — a decisão do assistente
+        vale para todos os marcados, e "Marcar todos" marca só o que está visível. ── #}
+  <div class="tf-filtro" id="tfFiltro">
+    <span class="tf-filtro-lbl">Caminho</span>
+    <div class="tf-chips" id="tfChipsCaminho"></div>
+    <span class="tf-filtro-lbl">Mês</span>
+    <div class="tf-chips" id="tfChipsMes"></div>
+    <span class="tf-filtro-conta" id="tfFiltroConta"></span>
+  </div>
   <form method="POST" id="fPares">
     <div class="tf-corpo">
       {% for p in pares %}
-      <div class="tf-par">
+      <div class="tf-par"
+           data-caminho="{{ 'mesma' if p.mesma_empresa else (p.saiu.empresa_id ~ '>' ~ p.entrou.empresa_id) }}"
+           data-rotulo="{{ 'Mesma empresa' if p.mesma_empresa else ((mapa.get(p.saiu.empresa_id) or '?') ~ ' → ' ~ (mapa.get(p.entrou.empresa_id) or '?')) }}"
+           data-mes="{{ p.saiu.data.strftime('%Y-%m') }}"
+           data-mes-rotulo="{{ p.saiu.data.strftime('%m/%Y') }}">
         <div class="tf-par-cab">
           <label>
             <input type="checkbox" name="lanc" value="{{ p.saiu.id }}" class="ckPar">
@@ -484,12 +514,63 @@ function tfWizDesenha() {
 // Marcar todos por CLASSE (os pares) — o rotulo do botao conta o que ele fez,
 // para ninguem clicar duas vezes achando que nao pegou.
 function tfTudo(classe, bt) {
-  var cks = document.querySelectorAll('.' + classe);
+  // so os VISIVEIS: com o filtro de caminho ligado, "todos" e o caminho escolhido
+  var cks = Array.prototype.filter.call(document.querySelectorAll('.' + classe), function (c) {
+    var par = c.closest('.tf-par'); return !par || !par.hidden;
+  });
   var ligar = bt.getAttribute('data-on') !== '1';
   cks.forEach(function (c) { c.checked = ligar; });
   bt.setAttribute('data-on', ligar ? '1' : '0');
-  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')') : 'Marcar todos';
+  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')') : tfRotuloTudo();
 }
+function tfRotuloTudo() {
+  var vis = document.querySelectorAll('.tf-par:not([hidden]) .ckPar').length,
+      tot = document.querySelectorAll('.tf-par .ckPar').length;
+  return vis === tot ? 'Marcar todos' : ('Marcar os ' + vis + ' visíveis');
+}
+
+// ── Filtros de caminho e mês (14/09/2026): montados a partir dos proprios
+// pares, contam sozinhos e escondem sem recarregar. Par escondido perde a
+// marcacao, para o assistente nunca receber um caminho misturado.
+var TF_F = { caminho: '', mes: '' };
+function tfChips(alvo, chave, itens) {
+  var box = document.getElementById(alvo); if (!box) return;
+  box.innerHTML = '';
+  var tudo = document.createElement('button'); tudo.type = 'button'; tudo.className = 'tf-chip' + (TF_F[chave] ? '' : ' ativo');
+  tudo.innerHTML = 'Todos<b>' + itens.reduce(function (a, i) { return a + i.n; }, 0) + '</b>';
+  tudo.onclick = function () { TF_F[chave] = ''; tfFiltrar(); };
+  box.appendChild(tudo);
+  itens.forEach(function (i) {
+    var b = document.createElement('button'); b.type = 'button';
+    b.className = 'tf-chip' + (TF_F[chave] === i.v ? ' ativo' : '');
+    b.innerHTML = i.t.replace(/</g, '&lt;') + '<b>' + i.n + '</b>';
+    b.onclick = function () { TF_F[chave] = (TF_F[chave] === i.v ? '' : i.v); tfFiltrar(); };
+    box.appendChild(b);
+  });
+}
+function tfContar(attr, rot, filtroOutro) {
+  var m = {};
+  document.querySelectorAll('.tf-par').forEach(function (p) {
+    if (filtroOutro && !filtroOutro(p)) return;
+    var v = p.getAttribute(attr); if (!m[v]) m[v] = { v: v, t: p.getAttribute(rot), n: 0 }; m[v].n++;
+  });
+  return Object.keys(m).sort().map(function (k) { return m[k]; });
+}
+function tfFiltrar() {
+  var vis = 0;
+  document.querySelectorAll('.tf-par').forEach(function (p) {
+    var ok = (!TF_F.caminho || p.getAttribute('data-caminho') === TF_F.caminho)
+          && (!TF_F.mes || p.getAttribute('data-mes') === TF_F.mes);
+    p.hidden = !ok;
+    if (!ok) { var ck = p.querySelector('.ckPar'); if (ck) ck.checked = false; }
+    if (ok) vis++;
+  });
+  tfChips('tfChipsCaminho', 'caminho', tfContar('data-caminho', 'data-rotulo', function (p) { return !TF_F.mes || p.getAttribute('data-mes') === TF_F.mes; }));
+  tfChips('tfChipsMes', 'mes', tfContar('data-mes', 'data-mes-rotulo', function (p) { return !TF_F.caminho || p.getAttribute('data-caminho') === TF_F.caminho; }));
+  var c = document.getElementById('tfFiltroConta'); if (c) c.textContent = vis + ' de ' + document.querySelectorAll('.tf-par').length + ' par(es)';
+  var bt = document.querySelector('.tf-acoes .tf-marcatudo'); if (bt) { bt.setAttribute('data-on', '0'); bt.textContent = tfRotuloTudo(); }
+}
+if (document.getElementById('tfFiltro')) tfFiltrar();
 // Marcar todos DENTRO DO FORMULARIO (cada destino tem o seu): buscar por
 // classe pegaria os outros destinos tambem, e a liberacao e por grupo.
 function tfTudoNoForm(bt) {
