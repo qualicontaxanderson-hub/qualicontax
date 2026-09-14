@@ -159,6 +159,7 @@
     <label class="busca">🔎 <input type="search" placeholder="nº ou nome da empresa… (ex.: 362, mobil)" data-k="q"></label>
     <div class="chips" data-k="sit"><span class="rot">Situação</span></div>
     <div class="chips" data-k="ci"><span class="rot">Ciência</span></div>
+    <div class="chips" data-k="cap"><span class="rot">Captura</span></div>
     <div class="chips" data-k="cert"><span class="rot">Certificado</span></div>
     <span class="conta" id="c-emp"></span>
     <button class="limpar" data-limpa="f-emp">limpar</button>
@@ -246,6 +247,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const HOJE = new Date(); HOJE.setHours(0,0,0,0);
 const URL_CIENCIA = {{ url_for('escrita_fiscal.status_sefaz_ciencia', cliente_id=0)|tojson }};
+const URL_CAPTURA = {{ url_for('escrita_fiscal.status_sefaz_captura', cliente_id=0)|tojson }};
 const URL_LOG = {{ url_for('escrita_fiscal.status_sefaz_empresa_log', cliente_id=0)|tojson }};
 $('#gerado').textContent = 'Gerado em ' + D.gerado_em + '.';
 
@@ -348,6 +350,7 @@ const sitT = {emdia:'Em dia', baixando:'Baixando', cota:'Aguardando cota', curso
 const cnt = (arr, fn) => arr.filter(fn).length;
 montaChips('f-emp','sit',[{v:'',t:'Todas',q:D.empresas.length}, ...sits.map(k => ({v:k,t:sitT[k],q:cnt(D.empresas,e=>situacao(e).k===k)}))],'');
 montaChips('f-emp','ci',[{v:'',t:'Todas'},{v:'on',t:'ligada',q:cnt(D.empresas,e=>e.ciencia_on)},{v:'off',t:'desligada',q:cnt(D.empresas,e=>!e.ciencia_on)}],'');
+montaChips('f-emp','cap',[{v:'',t:'Todas'},{v:'on',t:'ligada',q:cnt(D.empresas,e=>e.fonte!=='carona'&&e.captura_on)},{v:'off',t:'desligada',q:cnt(D.empresas,e=>e.fonte!=='carona'&&!e.captura_on)},{v:'outro',t:'outro sistema no CNPJ',q:cnt(D.empresas,e=>e.outro_sistema)}],'');
 montaChips('f-emp','cert',[{v:'',t:'Todos'},{v:'vencido',t:'vencido',q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='vencido')},{v:'d30',t:`≤${D.cert_laranja}d`,q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='d30')},{v:'d60',t:`≤${D.cert_amarelo}d`,q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='d60')},{v:'ok',t:'ok',q:cnt(D.empresas,e=>certSit(e.cert_dias).k==='ok')}],'');
 ligaBusca('f-emp'); DEF['f-emp'] = {...F['f-emp']};
 
@@ -362,14 +365,27 @@ function ciencia(e){ if(e.fonte==='carona') return '<span class="vazio" title="s
   return `<form class="ci-form" method="POST" action="${esc(URL_CIENCIA.replace('/0/', '/'+e.cliente_id+'/'))}" onsubmit="return ssConfirmaCiencia(this, ${e.ciencia_on?1:0})"><input type="hidden" name="ligar" value="${e.ciencia_on?'0':'1'}"><button type="submit" class="ci ${e.ciencia_on?'on':''}" title="${e.ciencia_on?'clique para desligar':'liga a Ciência da Operação — só com o cliente autorizando'}"><span class="sw"></span>${e.ciencia_on?'cliente autorizou':'desligada'}</button></form>${e.ciencia_on?`<span class="ci-quem">por ${esc(e.ciencia_por||'—')} em ${esc(e.ciencia_em||'—')}</span>`:(e.resgataveis?`<span class="ci-quem" style="color:var(--ss-ambar)">${e.resgataveis} nota(s) ainda no prazo de 10 dias</span>`:'')}`; }
 window.ssConfirmaCiencia = function(form, ligada){ if(!confirm(ligada ? TXT_DESLIGAR : TXT_LIGAR)) return false; ssGuardarEstado(); return true; };
 
+// CAPTURA AUTOMÁTICA DE NF-e — a chave que tira o nosso sistema do CNPJ.
+// Caso de uso: cliente com sistema próprio consultando a SEFAZ (a cota de 20
+// chamadas/hora é do CNPJ, compartilhada). Mesmo desenho da Ciência; POST em
+// status_sefaz_captura. O selo "outro sistema" vem do log: 656 "utilizar o
+// ultNSU" com a SEFAZ adiante de nós, 3+ vezes em 7 dias.
+const TXT_CAP_OFF = 'Desligar a captura automática de NF-e desta empresa?\n\nO cron passa a pular o CNPJ; as notas dela precisam chegar pelo Q-Robô ou pela _ENTRADA. O CT-e continua.';
+const TXT_CAP_ON = 'Ligar a captura automática de NF-e desta empresa? Volta na próxima rodada do cron.';
+function captura(e){ if(e.fonte==='carona') return '<span class="vazio" title="sem certificado próprio: não há captura">—</span>';
+  const selo = e.outro_sistema ? `<span class="ci-quem" style="color:var(--ss-ambar)" title="${e.outro_sistema_n} vezes em 7 dias a SEFAZ estava adiante do nosso cursor: outro sistema consulta este CNPJ. A recuperação fica curta e só de madrugada.">⚠ outro sistema consulta este CNPJ</span>` : '';
+  return `<form class="ci-form" method="POST" action="${esc(URL_CAPTURA.replace('/0/', '/'+e.cliente_id+'/'))}" onsubmit="return ssConfirmaCaptura(this, ${e.captura_on?1:0})"><input type="hidden" name="ligar" value="${e.captura_on?'0':'1'}"><button type="submit" class="ci ${e.captura_on?'on':''}" title="${e.captura_on?'clique para desligar a captura de NF-e':'liga a captura automática de NF-e'}"><span class="sw"></span>${e.captura_on?'ligada':'desligada'}</button></form>${selo}`; }
+window.ssConfirmaCaptura = function(form, ligada){ if(!confirm(ligada ? TXT_CAP_OFF : TXT_CAP_ON)) return false; ssGuardarEstado(); return true; };
+
 RENDER['f-emp'] = function(){ const f = F['f-emp'];
-  const L = D.empresas.filter(e => casa(f.q, e.numero, e.nome) && (!f.sit || situacao(e).k===f.sit) && (!f.ci || (f.ci==='on')===!!e.ciencia_on) && (!f.cert || certSit(e.cert_dias).k===f.cert));
+  const L = D.empresas.filter(e => casa(f.q, e.numero, e.nome) && (!f.sit || situacao(e).k===f.sit) && (!f.ci || (f.ci==='on')===!!e.ciencia_on) && (!f.cap || (f.cap==='outro' ? !!e.outro_sistema : (e.fonte!=='carona' && (f.cap==='on')===!!e.captura_on))) && (!f.cert || certSit(e.cert_dias).k===f.cert));
   L.sort((a,b) => (+a.numero||1e9) - (+b.numero||1e9));
   $('#c-emp').textContent = `${L.length} de ${D.empresas.length} empresas`;
-  tabela('t-emp', [{t:'Empresa'},{t:'Situação NF-e'},{t:'Ciência'},{t:'Última consulta'},{t:'Última nota'},{t:'Notas 30d',num:1},{t:'Resumos presos',num:1},{t:'CT-e'},{t:'Certificado'}],
+  tabela('t-emp', [{t:'Empresa'},{t:'Situação NF-e'},{t:'Captura NF-e'},{t:'Ciência'},{t:'Última consulta'},{t:'Última nota'},{t:'Notas 30d',num:1},{t:'Resumos presos',num:1},{t:'CT-e'},{t:'Certificado'}],
     L.map(e => { const s = situacao(e), c = cap[e.cliente_id]||{}, cs = certSit(e.cert_dias), t = trv[e.cliente_id];
       return {emp:e.cliente_id, c:[ nome(e) + `<span class="apoio">${e.fonte_icone} ${esc(e.fonte_label)} · ${esc(e.fonte_det)}</span>`,
         `<span class="sit ${s.cor}">${s.t}</span>` + (t ? `<span class="apoio">${num(t.atraso)} doc. represados</span>` : e.backlog ? `<span class="apoio">${num(e.backlog)} NSU a baixar</span>` : ''),
+        captura(e),
         ciencia(e),
         c.ult_consulta ? `<span class="mono">${fdh(c.ult_consulta)}</span><span class="apoio"><span class="cstat ${cstatCls(String(c.ult_status||'').slice(0,3))}">${esc(String(c.ult_status||'').slice(0,3))}</span> ${esc(String(c.ult_status||'').replace(/^\d+\s*/,'').slice(0,42))}</span>` : '<span class="vazio">—</span>',
         c.ult_emissao ? `<span class="mono">${fd(c.ult_emissao)}</span><span class="apoio">entrou ${rel(c.ult_import)}</span>` : '<span class="vazio">—</span>',
@@ -543,7 +559,7 @@ window.abrirEmpresa = function(id){ const e = D.empresas.find(x=>x.cliente_id===
   const serie = diasLista.map(d => (empDia[id]||{})[d]||0), mx = Math.max(1,...serie);
   $('#p-empresa').innerHTML = `<div class="emp-head"><div><div class="emp-nome"><span class="n-emp">${esc(e.numero||'s/nº')}</span> — ${esc(e.nome)}</div>
       <div class="emp-meta"><span>${e.fonte_icone} ${esc(e.fonte_label)} · ${esc(e.fonte_det)}</span><span>certificado até ${esc(e.cert_validade||'—')}</span><span>cursor: ${c.ult_consulta?fdh(c.ult_consulta):'nunca consultou'}</span></div>
-      <div style="margin-top:10px">${ciencia(e)}</div></div>
+      <div style="margin-top:10px"><span class="apoio" style="margin-right:6px">Captura NF-e:</span>${captura(e)} &nbsp; <span class="apoio" style="margin-right:6px">Ciência:</span>${ciencia(e)}</div></div>
     <div class="emp-selos"><span class="sit ${s.cor}">NF-e: ${s.t}</span><span class="sit ${e.cte_status_cor==='verde'?'verde':e.cte_status_cor==='cinza'?'cinza':'amb'}">CT-e: ${esc(e.cte_status_label)}</span><span class="sit ${cs.cor}">cert ${cs.t}</span><button type="button" class="btn btn-outline" onclick="abrir('empresas')">← Empresas</button></div></div>
     ${t ? `<div class="nota nota-erro">⚠️ <div><b>Captura travada: ${num(t.atraso)} documentos represados na SEFAZ.</b> ${esc(m.t)}${m.det?' — '+esc(m.det):''}. Último sucesso: ${t.ult_sucesso?fdh(t.ult_sucesso):'nunca'} · ${t.taxa656}% das consultas dos últimos 7 dias voltaram 656.</div></div>` : ''}
     ${(!t && s.k==='emdia' && !c.d30) ? `<div class="nota nota-neutra">ℹ️ <div><b>Em dia e sem nota há 30 dias.</b> A SEFAZ respondeu 137 (nada novo): não há NF-e emitida contra este CNPJ no período — ausência de nota, não falha de captura.</div></div>` : ''}

@@ -117,6 +117,29 @@ _INTERVALO_LOTE = float(os.getenv('DFE_INTERVALO_LOTE_SEG', '0.4'))
 # 20 por rodada (o cron volta em ~80 min) cobre o buraco típico (≤ 76 NSU) em
 # 2-4 rodadas; o pior caso (458: 1.784) leva dias, mas anda sozinho.
 _MAX_CONSNSU_RODADA = int(os.getenv('DFE_MAX_CONSNSU_RODADA', '20'))
+# CNPJ com OUTRO consumidor (ver utils/integrations/dfe_log.outro_consumidor):
+# recuperacao curta e so na janela em que o sistema do cliente costuma estar
+# parado. Sobram 17 das 20 chamadas/hora para ele. Anderson, 14/09/2026.
+# Medido em 14/09/2026: 100 das 206 empresas tem o sinal (ERPs de posto, o
+# Novo Horizonte...). A janela e o teto valem para todas elas: 19h-7h de
+# Brasilia (o sistema do cliente costuma estar parado), 5 NSU por rodada —
+# ~36 rodadas por noite, ate 180 NSU, que cobre o atraso tipico.
+_MAX_CONSNSU_COMPARTILHADO = int(os.getenv('DFE_MAX_CONSNSU_COMPARTILHADO', '5'))
+_JANELA_COMPARTILHADO = os.getenv('DFE_JANELA_COMPARTILHADO', '19-7')   # horas de Brasilia, inclusive
+
+
+def _na_janela_compartilhado(agora=None):
+    """True dentro da janela 'a-b' (hora de BRASILIA; o container roda em UTC).
+    Janela que vira a meia-noite ('19-7') funciona."""
+    import datetime as _dt
+    try:
+        a, b = (int(x) for x in _JANELA_COMPARTILHADO.split('-'))
+    except Exception:
+        a, b = 19, 7
+    if agora is None:
+        agora = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-3)))
+    h = agora.hour
+    return (a <= h <= b) if a <= b else (h >= a or h <= b)
 
 
 # ==========================================================================
@@ -1379,8 +1402,21 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
         if 'ultnsu' in (xMotivo or '').lower() and ret_ult > ult_nsu and not dry_run:
             empresa = {'cliente_id': cliente_id, 'numero': numero, 'razao': razao,
                        'cnpj': cnpj, 'uf': uf}
-            base['recuperacao'] = _recuperar_buraco(sess, empresa, cuf, ult_nsu, ret_ult,
-                                                    ret_max, status_txt, origem, _det)
+            # Outro sistema consulta este CNPJ? Entao a recuperacao e curta e
+            # so de madrugada — a cota e dele tambem (B2T, 14/09/2026).
+            from utils.integrations.dfe_log import outro_consumidor
+            compartilhado = outro_consumidor(cliente_id)
+            if compartilhado and not _na_janela_compartilhado():
+                dfe_log.registrar('pulado_cota', cliente_id, cnpj, ult_nsu, cStat, xMotivo,
+                                  ret_ult, ret_max, 0, origem=origem,
+                                  detalhe=_det(f'outro sistema consulta este CNPJ: recuperacao '
+                                               f'so das {_JANELA_COMPARTILHADO}h, '
+                                               f'{_MAX_CONSNSU_COMPARTILHADO} NSU por rodada'))
+                base['recuperacao'] = {'adiada': True, 'motivo': 'outro sistema consulta este CNPJ'}
+                return base
+            base['recuperacao'] = _recuperar_buraco(
+                sess, empresa, cuf, ult_nsu, ret_ult, ret_max, status_txt, origem, _det,
+                teto=_MAX_CONSNSU_COMPARTILHADO if compartilhado else None)
         return base
 
     # DRY-RUN (fora do 656): só lista o que viria. Não grava, não sobe, não avança.
@@ -1563,7 +1599,8 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
     return base
 
 
-def _recuperar_buraco(sess, empresa, cuf, nsu_de, nsu_ate, ret_max, status_txt, origem, _det):
+def _recuperar_buraco(sess, empresa, cuf, nsu_de, nsu_ate, ret_max, status_txt, origem, _det,
+                      teto=None):
     """Anda o cursor pelo BURACO (nsu_de, nsu_ate] com consNSU, um NSU por vez.
 
     Por que assim e não "pular para o ultNSU": o ultNSU que a SEFAZ manda no 656
@@ -1578,7 +1615,7 @@ def _recuperar_buraco(sess, empresa, cuf, nsu_de, nsu_ate, ret_max, status_txt, 
     acabou de vir). Para no teto da rodada, num 656 do próprio consNSU ou num
     documento que falhar. Devolve um resumo para o chamador/log."""
     cliente_id, cnpj = empresa['cliente_id'], empresa['cnpj']
-    ate = min(nsu_ate, nsu_de + _MAX_CONSNSU_RODADA)
+    ate = min(nsu_ate, nsu_de + (teto or _MAX_CONSNSU_RODADA))
     ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf,
            'chnfe_usadas': 0, 'chnfe_max': _MAX_CHNFE_CICLO,
            'cooldown_656': False, 'cortar': False, 'motivo_corte': None,

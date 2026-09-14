@@ -1280,6 +1280,43 @@ def status_sefaz_ciencia(cliente_id):
     return redirect(url_for('escrita_fiscal.status_sefaz'))
 
 
+@escrita_fiscal.route('/status-sefaz/<int:cliente_id>/captura', methods=['POST'])
+@permission_required('escrita_fiscal.conf_compras')
+def status_sefaz_captura(cliente_id):
+    """Liga/desliga a captura automática de NF-e de UMA empresa.
+
+    Desligada, o cron pula a empresa (``listar_para_captura`` só traz
+    ``modo_automatico = 1``). O caso de uso é o cliente que tem sistema
+    próprio consultando a SEFAZ com o mesmo CNPJ: a cota é compartilhada e
+    os dois se atropelam (B2T, 14/09/2026). O CT-e não é afetado.
+    """
+    ligar = (request.form.get('ligar') or '') == '1'
+    cert = execute_query(
+        'SELECT id, modo_automatico FROM dfe_certificados '
+        ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
+        (cliente_id,), fetch=True, fetch_one=True)
+    if not cert:
+        flash('Esta empresa não tem certificado próprio ativo — não há captura '
+              'para ligar ou desligar.', 'warning')
+        return redirect(url_for('escrita_fiscal.status_sefaz'))
+    antes = bool(cert.get('modo_automatico'))
+    execute_query('UPDATE dfe_certificados SET modo_automatico = %s, alterado_por = %s, '
+                  '       alterado_em = NOW() WHERE id = %s',
+                  (1 if ligar else 0, getattr(current_user, 'id', None), cert['id']), fetch=False)
+    registrar('escrita.alterou_captura_automatica', 'fiscal',
+              tabela='dfe_certificados', registro_id=cert['id'],
+              antes={'modo_automatico': antes},
+              depois={'modo_automatico': ligar, 'cliente_id': cliente_id})
+    if ligar:
+        flash('Captura de NF-e LIGADA para esta empresa. Volta na próxima rodada do cron.',
+              'success')
+    else:
+        flash('Captura de NF-e desligada para esta empresa. O cron passa a pular o CNPJ; '
+              'as notas dela chegam pelo Q-Robô ou pela _ENTRADA. O CT-e continua.',
+              'success')
+    return redirect(url_for('escrita_fiscal.status_sefaz'))
+
+
 @escrita_fiscal.route('/status-sefaz/')
 @permission_required('escrita_fiscal.conf_compras')
 def status_sefaz():
@@ -1314,6 +1351,28 @@ def status_sefaz():
         return render_template('escrita_fiscal/status_sefaz_aguarde.html'), 503
     dados['abrir_empresa'] = empresa_link
     dados['cache_idade_s'] = idade
+    # As duas chaves (Ciência e Captura) vêm AO VIVO: quem acabou de clicar
+    # precisa ver o novo estado, e o JSON do cron só muda no próximo tick.
+    try:
+        from utils.integrations.dfe_log import outros_consumidores, OUTRO_CONSUMIDOR_MIN
+        vivo = {r['cliente_id']: r for r in (execute_query(
+            'SELECT cliente_id, modo_automatico, manifesta_ciencia, manifesta_por, '
+            '       manifesta_em FROM dfe_certificados WHERE ativo = 1', fetch=True) or [])}
+        outros = outros_consumidores()
+        for e in dados.get('empresas') or []:
+            cid = e.get('cliente_id')
+            v = vivo.get(cid)
+            if v:
+                e['captura_on'] = bool(v.get('modo_automatico'))
+                e['ciencia_on'] = bool(v.get('manifesta_ciencia'))
+                e['ciencia_por'] = v.get('manifesta_por')
+                me = v.get('manifesta_em')
+                e['ciencia_em'] = me.strftime('%d/%m/%Y %H:%M') if hasattr(me, 'strftime') else None
+            e['outro_sistema_n'] = int(outros.get(cid) or 0)
+            e['outro_sistema'] = e['outro_sistema_n'] >= OUTRO_CONSUMIDOR_MIN
+    except Exception:
+        logging.getLogger(__name__).exception('[status-sefaz] chaves ao vivo falharam; '
+                                              'fica o estado do cron.')
     return render_template(
         'escrita_fiscal/status_sefaz.html',
         dados_json=_json_para_tela(dados),
@@ -1446,7 +1505,7 @@ def _status_sefaz_dados():
         "  COALESCE(ct.valor_frete,0) AS cte_valor_frete, "
         # A chave da Ciência e o rastro de quem a ligou — moram no vínculo do
         # certificado, que é onde já vive a configuração de DFe da empresa.
-        "  dc.manifesta_ciencia, dc.manifesta_por, dc.manifesta_em "
+        "  dc.manifesta_ciencia, dc.manifesta_por, dc.manifesta_em, dc.modo_automatico "
         "FROM ( "
         "    SELECT cliente_id AS id FROM dfe_certificados WHERE ativo = 1 "
         "    UNION SELECT cliente_id FROM cliente_contadores "
@@ -1501,6 +1560,14 @@ def _status_sefaz_dados():
         "  AND cliente_id IS NOT NULL GROUP BY cliente_id",
         fetch=True) or []
     agg = {a['cliente_id']: a for a in _agg}
+
+    # Outro sistema consulta o mesmo CNPJ (656 "utilizar o ultNSU" com a SEFAZ
+    # adiante de nós, 3+ vezes em 7 dias) — mesma regra que freia a captura.
+    from utils.integrations.dfe_log import outros_consumidores, OUTRO_CONSUMIDOR_MIN
+    try:
+        outros = outros_consumidores()
+    except Exception:
+        outros = {}
 
     empresas = []
     for r in rows:
@@ -1582,6 +1649,9 @@ def _status_sefaz_dados():
             'ciencia_on': bool(r.get('manifesta_ciencia')),
             'ciencia_por': r.get('manifesta_por'),
             'ciencia_em': _fmt(r.get('manifesta_em')),
+            'captura_on': bool(r.get('modo_automatico')),
+            'outro_sistema_n': int(outros.get(r['id']) or 0),
+            'outro_sistema': int(outros.get(r['id']) or 0) >= OUTRO_CONSUMIDOR_MIN,
             'cliente_id': r['id'],
             'resumos_recentes': recentes, 'sem_doc_137': sem_doc_137,
             'numero': r.get('numero_cliente'), 'nome': r.get('nome_razao_social'),

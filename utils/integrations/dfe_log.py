@@ -17,6 +17,45 @@ container que ainda não passou pela migration e o log não pode simplesmente su
 """
 from utils.db_helper import execute_query
 
+# ---------------------------------------------------------------------------
+# OUTRO SISTEMA CONSULTA ESTE CNPJ (Anderson, 14/09/2026)
+#
+# O sinal e inequivoco: a SEFAZ responde 656 "utilizar o ultNSU" com o cursor
+# DELA adiante do NOSSO. So quem consulta com o certificado do CNPJ anda o
+# cursor — se nao fomos nos, foi o sistema do cliente (o posto B2T, o
+# app.novohorizonte...). A cota (20 chamadas/hora) e o relogio de 1 hora sao
+# do CNPJ, compartilhados: nossa recuperacao nota a nota (ate 20 por rodada,
+# desde 06/09) passou a gastar a cota que o cliente usava e ele comecou a ver
+# 656 no sistema dele — "sempre funcionou" ate entao.
+#
+# Tres respostas dessas em 7 dias marcam a empresa. Marcada: a recuperacao
+# fica curta (3 NSU por rodada) e so de madrugada, quando o sistema do
+# cliente costuma estar parado; e a tela do Status SEFAZ mostra o selo.
+# ---------------------------------------------------------------------------
+OUTRO_CONSUMIDOR_MIN = 3
+SQL_OUTRO_CONSUMIDOR_7D = (
+    "SELECT cliente_id, COUNT(*) AS n FROM dfe_consulta_log "
+    " WHERE c_stat = '656' AND COALESCE(servico, 'nfe') <> 'cte' "
+    "   AND x_motivo LIKE '%ultNSU%' AND ret_ult_nsu > ult_nsu_env "
+    "   AND momento > NOW() - INTERVAL 7 DAY AND cliente_id IS NOT NULL "
+    " GROUP BY cliente_id")
+
+
+def outros_consumidores():
+    """{cliente_id: n} das empresas com o sinal nos ultimos 7 dias (todas)."""
+    rows = execute_query(SQL_OUTRO_CONSUMIDOR_7D, fetch=True) or []
+    return {r['cliente_id']: int(r['n']) for r in rows}
+
+
+def outro_consumidor(cliente_id):
+    """True quando outro sistema consulta o CNPJ desta empresa (>= 3 sinais/7d)."""
+    r = execute_query(
+        "SELECT COUNT(*) AS n FROM dfe_consulta_log "
+        " WHERE cliente_id = %s AND c_stat = '656' AND COALESCE(servico, 'nfe') <> 'cte' "
+        "   AND x_motivo LIKE '%%ultNSU%%' AND ret_ult_nsu > ult_nsu_env "
+        "   AND momento > NOW() - INTERVAL 7 DAY", (cliente_id,), fetch=True, fetch_one=True)
+    return int((r or {}).get('n') or 0) >= OUTRO_CONSUMIDOR_MIN
+
 _COLS = (
     "momento, origem, evento, cliente_id, cnpj, ult_nsu_env, c_stat, x_motivo, "
     "ret_ult_nsu, ret_max_nsu, docs, notas, eventos, lote, detalhe"
