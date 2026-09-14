@@ -3334,9 +3334,10 @@ def _rel_linhas(escopo, formato, where_sql, params, limite):
             ])
         return out
 
-    hora = (", CASE WHEN LOCATE('<dhEmi>', n.xml_raw) > 0 THEN "
+    # hora_emissao (coluna, preenchida pelo expurgo) primeiro; o XML só enquanto existe
+    hora = (", COALESCE(n.hora_emissao, CASE WHEN LOCATE('<dhEmi>', n.xml_raw) > 0 THEN "
             "SUBSTRING(SUBSTRING_INDEX(SUBSTRING_INDEX(n.xml_raw,'<dhEmi>',-1),'</dhEmi>',1),12,8) "
-            "END AS hora") if escopo == 'saida' else ""
+            "END) AS hora") if escopo == 'saida' else ""
     partes = ("n.dest_nome AS nome, n.dest_cnpj AS doc, n.dest_uf AS uf"
               if escopo == 'saida' else "n.emit_nome AS nome, n.emit_cnpj AS doc, n.emit_uf AS uf")
     rows = execute_query(
@@ -8158,9 +8159,9 @@ def api_notas_saidas():
     if ids_pagina:
         ph = ','.join(['%s'] * len(ids_pagina))
         hrows = execute_query(
-            f"SELECT id, CASE WHEN LOCATE('<dhEmi>', xml_raw) > 0 THEN "
+            f"SELECT id, COALESCE(hora_emissao, CASE WHEN LOCATE('<dhEmi>', xml_raw) > 0 THEN "
             f"SUBSTRING(SUBSTRING_INDEX(SUBSTRING_INDEX(xml_raw,'<dhEmi>',-1),'</dhEmi>',1),12,8) "
-            f"END AS hora_emissao FROM nfe_importacoes WHERE id IN ({ph})",
+            f"END) AS hora_emissao FROM nfe_importacoes WHERE id IN ({ph})",
             tuple(ids_pagina), fetch=True) or []
         horas = {h['id']: h['hora_emissao'] for h in hrows}
 

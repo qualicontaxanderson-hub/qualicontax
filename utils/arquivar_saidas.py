@@ -116,15 +116,54 @@ def _subir_um(linha):
         return linha.get('id'), None
 
 
-def arquivar_pendentes(limite=None, dry=True):
+def _trava(nome='arquivador'):
+    """Conexão dedicada segurando GET_LOCK: o arquivador roda no roteador E no
+    serviço de manutenção (13/09/2026); sem trava os dois pegariam a mesma
+    fatia mais antiga e subiriam a mesma nota duas vezes. Devolve (conn, ok)."""
+    import mysql.connector
+    from config import Config
+    conn = mysql.connector.connect(
+        host=Config.DB_HOST, port=Config.DB_PORT, database=Config.DB_NAME,
+        user=Config.DB_USER, password=Config.DB_PASSWORD,
+        connection_timeout=Config.DB_CONNECT_TIMEOUT, autocommit=True, time_zone='-03:00')
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT GET_LOCK(%s, 0)", (nome,))
+    ok = (cur.fetchone() or [0])[0] == 1
+    cur.close()
+    return conn, ok
+
+
+def arquivar_pendentes(limite=None, dry=True, prazo_seg=None):
     """Sobe o que falta e grava ``xml_caminho``. ``dry=True`` só conta.
+    ``prazo_seg`` sobrepõe o orçamento padrão (o serviço de manutenção passa
+    um orçamento maior que o do tick do roteador).
 
     Devolve o resumo da rodada. O prazo suave existe para a rodada caber no
     tick de 5 minutos do roteador: o que não couber vai no próximo.
     """
     from utils.db_helper import execute_query
+    prazo = int(prazo_seg or PRAZO_SEG)
+    fim = time.monotonic() + prazo
+    conn_lock, ok = _trava()
+    if not ok:
+        conn_lock.close()
+        logger.info('[arq-saidas] outra rodada do arquivador em andamento; pulando.')
+        return {'pulado': 'outra rodada em andamento', 'subidos': 0, 'falhas': 0}
+    try:
+        return _arquivar(limite, dry, prazo, fim, execute_query)
+    finally:
+        try:
+            cur = conn_lock.cursor(buffered=True)
+            cur.execute("SELECT RELEASE_LOCK('arquivador')"); cur.fetchall(); cur.close()
+        except Exception:
+            pass
+        try:
+            conn_lock.close()
+        except Exception:
+            pass
 
-    fim = time.monotonic() + PRAZO_SEG
+
+def _arquivar(limite, dry, prazo, fim, execute_query):
     linhas = pendentes(limite)
     r = {'pendentes_nesta_leva': len(linhas), 'subidos': 0, 'falhas': 0,
          'dry': dry, 'corte_id': CORTE_ID, 'paralelo': PARALELO}
@@ -145,7 +184,7 @@ def arquivar_pendentes(limite=None, dry=True):
     for i in range(0, len(linhas), PARALELO):
         if time.monotonic() > fim:
             logger.info('[arq-saidas] prazo (%ss) atingido; resto no próximo tick.',
-                        PRAZO_SEG)
+                        prazo)
             break
         # FREIO DO 429: com o Dropbox limitando, continuar é bater mais forte
         # numa porta fechada — e pior, gastar a leva inteira em recusa, o que
