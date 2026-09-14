@@ -1006,6 +1006,10 @@ def rodar():
             pass
 
 
+class _ArquivadorDelegado(Exception):
+    """Sinal interno: o arquivador desta rodada fica com o servico de manutencao."""
+
+
 def main() -> int:
     logger.warning('[roteador] >>> Cron do roteador INICIADO (pid=%s).', os.getpid())
     try:
@@ -1053,11 +1057,22 @@ def main() -> int:
     # roteador de XML, e a nota já está no banco de qualquer forma.
     try:
         from utils.arquivar_saidas import arquivar_pendentes
+        from utils.painel_cache import ler as _ler_cache
+        _st, _idade = _ler_cache('manutencao_status')
+        if _st is not None and _idade is not None and _idade < 1800:
+            # O servico de manutencao esta vivo (rodada ha menos de 30 min) e
+            # arquiva em lote com orcamento grande. Se o roteador tambem
+            # rodar, e ele quem fica com a trava 'arquivador' 80% do tempo
+            # (240s a cada 5 min) e a manutencao pula — visto em 14/09/2026.
+            logger.info('[roteador] arquivador a cargo da manutencao (rodada ha %ss); pulando.', _idade)
+            raise _ArquivadorDelegado()
         r = arquivar_pendentes(dry=False)
         if r.get('subidos') or r.get('falhas'):
             logger.warning('[roteador] saidas arquivadas: %s subida(s), %s falha(s) '
                            '(leva de %s).', r['subidos'], r['falhas'],
                            r['pendentes_nesta_leva'])
+    except _ArquivadorDelegado:
+        pass
     except Exception:
         logger.exception('[roteador] arquivamento de SAIDAS falhou; as notas '
                          'estao no banco e voltam no proximo tick.')
