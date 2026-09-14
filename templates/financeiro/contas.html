@@ -102,7 +102,12 @@
             {% endif %}
             <br><em>{{ p.motivo }}</em>
         </div>
-        {% if p.banco_nome == 'PDF com senha' and not p.conta %}
+        {% if p.banco_nome == 'PDF de outro banco' and not p.conta %}
+        <div class="ct-linha" style="color:#6b7280; font-size:12.5px;">
+            <i class="fas fa-file-pdf"></i>&nbsp; Nada a responder aqui: mande o OFX deste
+            banco e apague o PDF da pasta.
+        </div>
+        {% elif p.banco_nome == 'PDF com senha' and not p.conta %}
         <form method="POST" action="{{ url_for('financeiro.pendencia_abrir_pdf', pid=p.id) }}"
               class="ct-linha">
             <div>

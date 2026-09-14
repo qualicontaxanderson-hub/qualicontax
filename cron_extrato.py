@@ -59,26 +59,32 @@ def _ler_previa(nome, dados, senhas_extra=()):
     é extrato do C6): fica onde está, intocado."""
     if (nome or '').lower().endswith('.pdf'):
         from utils.extrato_pdf_c6 import (parse_pdf_c6, senhas_candidatas,
-                                          PdfInvalido, PdfProtegido)
+                                          PdfInvalido, PdfProtegido, PdfOutroBanco)
         try:
             senhas = [x for x in (senhas_extra or ()) if x] + senhas_candidatas(nome)
             return parse_pdf_c6(dados, senhas), 'pdf'
         except PdfProtegido:
             return None, 'pdf-senha'
+        except PdfOutroBanco:
+            return None, 'pdf-outro'
         except PdfInvalido:
             return None, None
     from utils.ofx_parser import parse_ofx
     return parse_ofx(dados), 'ofx'
 
 
-def _pendencia_pdf_senha(origem, nome, seco):
-    """O PDF não abriu: entra na fila de Contas, na empresa que o nome do
-    arquivo indicar (ou órfã, para o admin). Sem o nome no log."""
+def _pendencia_pdf(origem, nome, seco, formato):
+    """PDF que não abriu, ou extrato em PDF de outro banco: entra na fila de
+    Contas, na empresa que o nome do arquivo indicar (ou órfã, para o
+    admin). Sem o nome no log."""
     if seco:
         return
     from models.extrato_lancamento import FinExtratoPendencia
     from utils.extrato_ingest import numero_empresa_do_nome
-    from utils.extrato_pdf_c6 import ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA
+    from utils.extrato_pdf_c6 import (ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA,
+                                      ROTULO_PDF_OUTRO, MOTIVO_PDF_OUTRO)
+    rotulo, motivo = ((ROTULO_PDF_OUTRO, MOTIVO_PDF_OUTRO) if formato == 'pdf-outro'
+                      else (ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA))
     num = numero_empresa_do_nome(nome)
     dono = None
     if num:
@@ -86,9 +92,9 @@ def _pendencia_pdf_senha(origem, nome, seco):
         e = _q('SELECT id FROM clientes WHERE numero_cliente = %s', (num,),
                fetch=True, fetch_one=True)
         dono = (e or {}).get('id')
-    FinExtratoPendencia.anotar(caminho=origem, arquivo=nome, motivo=MOTIVO_PDF_SENHA,
+    FinExtratoPendencia.anotar(caminho=origem, arquivo=nome, motivo=motivo,
                                empresa_id=dono, numero_no_nome=num,
-                               banco_nome=ROTULO_PDF_SENHA, qtd=0)
+                               banco_nome=rotulo, qtd=0)
 
 
 def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
@@ -166,12 +172,16 @@ def rodar(dryrun=None, limite=None):
 
             # Lê o arquivo ANTES de decidir o dono: é a CONTA que manda.
             previa, formato = _ler_previa(nome, dados)
-            if formato == 'pdf-senha':
-                _pendencia_pdf_senha(origem, nome, seco)
-                linha['resultado'] = 'PENDENTE: PDF com senha que nenhum documento abriu'
+            if formato in ('pdf-senha', 'pdf-outro'):
+                _pendencia_pdf(origem, nome, seco, formato)
+                linha['resultado'] = ('PENDENTE: PDF com senha que nenhum documento abriu'
+                                      if formato == 'pdf-senha'
+                                      else 'PENDENTE: extrato em PDF de outro banco (mande o OFX)')
                 resumo['erros'] += 1
                 resumo['detalhes'].append(linha)
-                logger.warning('[extrato] um PDF com senha não abriu; está na fila de Contas.')
+                logger.warning('[extrato] %s; está na fila de Contas.',
+                               'um PDF com senha não abriu' if formato == 'pdf-senha'
+                               else 'um extrato em PDF de outro banco')
                 continue
             if not formato:
                 resumo['lidos'] -= 1
@@ -326,6 +336,9 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
     if formato == 'pdf-senha':
         from utils.extrato_pdf_c6 import MOTIVO_PDF_SENHA
         return {'ok': False, 'motivo': 'Ainda não abriu. ' + MOTIVO_PDF_SENHA, 'pdf_senha': True}
+    if formato == 'pdf-outro':
+        from utils.extrato_pdf_c6 import MOTIVO_PDF_OUTRO
+        return {'ok': False, 'motivo': MOTIVO_PDF_OUTRO}
     if not formato:
         return {'ok': False, 'motivo': 'O arquivo abriu, mas não é um extrato que eu saiba ler '
                                        '(em PDF, por enquanto, só o do C6).'}

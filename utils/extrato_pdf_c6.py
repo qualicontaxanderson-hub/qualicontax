@@ -104,6 +104,23 @@ class PdfProtegido(PdfInvalido):
     """Está com senha e nenhum candidato abriu."""
 
 
+class PdfOutroBanco(PdfInvalido):
+    """Abriu, parece extrato bancário, mas não é o layout do C6."""
+
+
+ROTULO_PDF_OUTRO = 'PDF de outro banco'
+MOTIVO_PDF_OUTRO = ('É um extrato em PDF, mas não do C6 — em PDF eu só leio o do C6. '
+                    'Deste banco mande o OFX: ele já vem completo, com o nome de quem '
+                    'recebeu. Depois apague este PDF da pasta e o cartão some sozinho.')
+
+
+def parece_extrato_bancario(texto):
+    """Cheiro de extrato: agência, conta e saldo na primeira página. DANFE,
+    boleto e cartão CNPJ não têm os três."""
+    t = _norm(texto).replace('Ê', 'E').replace('Ã', 'A')
+    return all(k in t for k in ('AGENCIA', 'CONTA', 'SALDO'))
+
+
 # ---------------------------------------------------------------------------
 # Leitura
 # ---------------------------------------------------------------------------
@@ -145,6 +162,8 @@ def parse_pdf_c6(raw, senhas=()):
     doc = _abrir(raw, senhas)
     paginas = [p.get_text() for p in doc]
     if not paginas or not e_extrato_c6(paginas[0]):
+        if paginas and parece_extrato_bancario(paginas[0]):
+            raise PdfOutroBanco(MOTIVO_PDF_OUTRO)
         raise PdfInvalido('não é um extrato do C6.')
     cab = paginas[0]
     m = _RE_CONTA.search(cab)
