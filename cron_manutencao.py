@@ -64,7 +64,9 @@ def main() -> int:
         from utils.painel_cache import guardar
 
         t0 = time.monotonic()
-        status = {'inicio': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'dry': DRY}
+        # hora do BANCO (-03:00), nao do container (UTC): o resumo e lido ao lado de NOW().
+        cur.execute("SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')")
+        status = {'inicio': (cur.fetchone() or [None])[0], 'dry': DRY}
 
         # O arquivador do Q-Robô vem PRIMEIRO e com o maior orçamento: medido em
         # 13/09/2026, no tick do roteador ele subia ~4.400 notas/hora contra uma

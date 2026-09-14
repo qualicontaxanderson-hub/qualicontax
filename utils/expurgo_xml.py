@@ -87,7 +87,7 @@ def confirmar_pastas(svc, max_pastas=30, prazo_seg=150, dry=True):
 
     Devolve contagens: pastas vistas, notas conferidas, confirmadas, sem arquivo.
     """
-    from utils.db_helper import execute_query, execute_many
+    from utils.db_helper import execute_query
     r = {'pastas': 0, 'conferidas': 0, 'confirmadas': 0, 'sem_arquivo': 0, 'fim_da_volta': False}
     if not svc.is_configured():
         return r
@@ -140,7 +140,16 @@ def confirmar_pastas(svc, max_pastas=30, prazo_seg=150, dry=True):
             else:
                 r['sem_arquivo'] += 1
         if achados and not dry:
-            execute_many("UPDATE nfe_importacoes SET xml_caminho = %s WHERE id = %s", achados)
+            # UM UPDATE por lote de 500 (CASE por id). Um UPDATE por nota levou
+            # 322s para 4.495 notas na rodada de 14/09/2026 e estourou o
+            # orçamento da manutenção inteira.
+            for k in range(0, len(achados), 500):
+                lote = achados[k:k + 500]
+                casos = ' '.join(['WHEN %s THEN %s'] * len(lote))
+                params = [x for cam, i in lote for x in (i, cam[:255])] + [i for _, i in lote]
+                execute_query(
+                    f"UPDATE nfe_importacoes SET xml_caminho = CASE id {casos} END "
+                    f" WHERE id IN ({','.join(['%s'] * len(lote))})", tuple(params), fetch=False)
         r['confirmadas'] += len(achados)
     if ultima is not None:
         acabou = ultima == (grupos[-1]['cliente_id'], grupos[-1]['tipo'], int(grupos[-1]['ano']), int(grupos[-1]['mes']))
