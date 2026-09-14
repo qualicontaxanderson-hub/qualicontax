@@ -14,7 +14,7 @@ Variáveis (Railway → serviço manutencao):
   MANUTENCAO_ATIVO=1        liga (nasce DESLIGADO: sem ela o cron sai na 1ª linha)
   EXPURGO_DRYRUN=1          só conta e loga (padrão). Trocar para 0 para expurgar de verdade.
   MANUTENCAO_PRAZO_SEG=540  orçamento total da rodada (cabe nos 10 min)
-  QROBO_ARQ_MAX=8000        notas do Q-Robô por rodada do arquivador
+  QROBO_ARQ_MAX=12000       notas do Q-Robô por passada do arquivador (duas por rodada)
   QROBO_ARQ_PARALELO=16     uploads simultâneos ao Dropbox
   EXPURGO_MESES=3           meses de XML no banco, pela emissão
 
@@ -75,7 +75,7 @@ def main() -> int:
         # Orçamento: 55% arquivador, 15% confirmação, 20% NF-e, o resto eventos/CT-e.
         from utils.arquivar_saidas import arquivar_pendentes
         for nome, fn, kw in (
-            ('arquivador', arquivar_pendentes, dict(limite=int(os.getenv('QROBO_ARQ_MAX', '8000')),
+            ('arquivador', arquivar_pendentes, dict(limite=int(os.getenv('QROBO_ARQ_MAX', '12000')),
                                                      dry=False, prazo_seg=int(PRAZO * 0.55))),
             ('confirmacao', confirmar_pastas, dict(svc=dropbox_sync._service, max_pastas=40,
                                                    prazo_seg=int(PRAZO * 0.15), dry=DRY)),
@@ -95,6 +95,21 @@ def main() -> int:
             if (time.monotonic() - t0) > PRAZO:
                 logger.warning('[manutencao] orçamento esgotado; o resto fica para a próxima.')
                 break
+        # Segunda passada do arquivador com o que SOBROU do orçamento: na
+        # madrugada de 14/09 as outras etapas levavam ~180s e o arquivador
+        # parava nos seus 300s com fila de 737 mil. Sobra vai para a fila.
+        sobra = PRAZO - (time.monotonic() - t0)
+        if sobra > 45:
+            t1 = time.monotonic()
+            try:
+                res = arquivar_pendentes(limite=int(os.getenv('QROBO_ARQ_MAX', '12000')),
+                                         dry=False, prazo_seg=int(sobra) - 15)
+            except Exception:
+                logger.exception('[manutencao] arquivador (2a passada) falhou.')
+                res = {'erro': True}
+            res['seg'] = round(time.monotonic() - t1, 1)
+            status['arquivador2'] = res
+            logger.warning('[manutencao] arquivador2: %s', res)
         status['seg_total'] = round(time.monotonic() - t0, 1)
         guardar('manutencao_status', status)
         logger.warning('[manutencao] >>> rodada CONCLUÍDA em %ss.', status['seg_total'])
