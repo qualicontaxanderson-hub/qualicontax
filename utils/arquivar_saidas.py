@@ -62,27 +62,49 @@ PRAZO_SEG = max(10, int(os.getenv('QROBO_ARQ_PRAZO_SEG', '240')))
 #: subir vários ao mesmo tempo custa quase nada de processador e multiplica a
 #: vazão. Não subo mais que isso porque o Dropbox limita (429), e a partir daí
 #: paralelismo só produz recusa: ver o freio em ``limitado_por()``.
-PARALELO = max(1, min(16, int(os.getenv('QROBO_ARQ_PARALELO', '12'))))
+PARALELO = max(1, min(32, int(os.getenv('QROBO_ARQ_PARALELO', '24'))))
+#: Arquivos por chamada de lote ao Dropbox (upload_session_finish_batch aceita 1000).
+LOTE_DROPBOX = max(50, min(1000, int(os.getenv('QROBO_ARQ_LOTE', '500'))))
 
 
-def pendentes(limite=None):
+#: Marcador em app_config: último id que o arquivador já processou. Sem ele a
+#: consulta das pendentes percorria, em ordem de índice, TODAS as notas já
+#: subidas antes de achar a primeira pendente — 36s medidos em 14/09/2026 com
+#: 75 mil subidas, e piorando a cada rodada. Com a fronteira, ``id > fronteira``
+#: é um range na chave primária e a consulta volta em milissegundos.
+MARCA_FRONTEIRA = 'arquivador_fronteira'
+
+
+def _fronteira():
+    from utils.painel_cache import ler
+    v, _ = ler(MARCA_FRONTEIRA)
+    return int((v or {}).get('id') or 0)
+
+
+def _gravar_fronteira(id_):
+    from utils.painel_cache import guardar
+    guardar(MARCA_FRONTEIRA, {'id': int(id_)})
+
+
+def pendentes(limite=None, desde=None):
     """As saídas do Q-Robô que ainda não foram arquivadas, mais antigas antes.
 
     ``xml_raw`` vem na consulta porque é o conteúdo a subir — é a coluna mais
     pesada da tabela, então o LIMIT não é conforto, é necessidade.
+    ``desde``: id a partir do qual procurar (a fronteira); default = o corte.
     """
     from utils.db_helper import execute_query
     return execute_query(
         """SELECT i.id, i.chave_acesso, i.data_emissao, i.xml_raw,
                   c.numero_cliente, c.nome_razao_social
-             FROM nfe_importacoes i
+             FROM nfe_importacoes i FORCE INDEX (PRIMARY)
              JOIN clientes c ON c.id = i.cliente_id
-            WHERE i.origem = 'Q-ROBO' AND i.tipo = 'saida'
-              AND i.id > %s
+            WHERE i.id > %s
+              AND i.origem = 'Q-ROBO' AND i.tipo = 'saida'
               AND (i.xml_caminho IS NULL OR i.xml_caminho = '')
             ORDER BY i.id
             LIMIT %s""",
-        (CORTE_ID, int(limite or MAX_POR_RODADA)), fetch=True) or []
+        (max(CORTE_ID, int(desde or 0)), int(limite or MAX_POR_RODADA)), fetch=True) or []
 
 
 def _subir_um(linha):
@@ -164,7 +186,13 @@ def arquivar_pendentes(limite=None, dry=True, prazo_seg=None):
 
 
 def _arquivar(limite, dry, prazo, fim, execute_query):
-    linhas = pendentes(limite)
+    fronteira = _fronteira()
+    linhas = pendentes(limite, desde=fronteira)
+    if not linhas and fronteira > CORTE_ID and not dry:
+        # Chegou ao fim a partir da fronteira: volta ao corte para reapanhar o
+        # que falhou no meio do caminho. A varredura lenta só acontece aqui.
+        _gravar_fronteira(CORTE_ID)
+        linhas = pendentes(limite, desde=CORTE_ID)
     r = {'pendentes_nesta_leva': len(linhas), 'subidos': 0, 'falhas': 0,
          'dry': dry, 'corte_id': CORTE_ID, 'paralelo': PARALELO}
     if dry or not linhas:
@@ -181,7 +209,7 @@ def _arquivar(limite, dry, prazo, fim, execute_query):
     # verdade em vez de enfileirar tudo de uma vez num pool que não olha mais.
     from utils import dropbox_sync
     svc = dropbox_sync._service
-    for i in range(0, len(linhas), PARALELO):
+    for i in range(0, len(linhas), LOTE_DROPBOX):
         if time.monotonic() > fim:
             logger.info('[arq-saidas] prazo (%ss) atingido; resto no próximo tick.',
                         prazo)
@@ -196,14 +224,34 @@ def _arquivar(limite, dry, prazo, fim, execute_query):
                            'parando a rodada com %s subida(s).', falta, r['subidos'])
             r['freado_por_429'] = round(falta)
             break
-        fatia = linhas[i:i + PARALELO]
-        with ThreadPoolExecutor(max_workers=PARALELO) as pool:
-            for lid, caminho in pool.map(_subir_um, fatia):
-                if caminho:
-                    execute_query(
-                        'UPDATE nfe_importacoes SET xml_caminho = %s WHERE id = %s',
-                        (caminho[:255], lid), fetch=False)
-                    r['subidos'] += 1
-                else:
-                    r['falhas'] += 1
+        fatia = linhas[i:i + LOTE_DROPBOX]
+        itens, por_caminho = [], {}
+        for linha in fatia:
+            numero = (linha.get('numero_cliente') or '').strip() or None
+            razao = linha.get('nome_razao_social') or 'SEM_NOME'
+            dt = linha.get('data_emissao') or date.today()
+            pasta = svc.pasta_fiscal(razao, dt.year, dt.month, 'SAIDAS', numero)
+            caminho = f"{pasta}/{linha['chave_acesso']}.xml"
+            dados = linha.get('xml_raw') or ''
+            if not dados:
+                r['falhas'] += 1
+                continue
+            if isinstance(dados, str):
+                dados = dados.encode('utf-8')
+            itens.append((caminho, dados))
+            por_caminho[caminho] = linha['id']
+        resultado = svc.upload_lote(itens, paralelo=PARALELO)
+        subidos = [(caminho[:255], por_caminho[caminho]) for caminho, ok in resultado.items() if ok]
+        if subidos:
+            # UM UPDATE para o lote inteiro (CASE por id): 64 UPDATEs soltos
+            # levavam 13s de ida e volta; um só, uma ida.
+            casos = ' '.join(['WHEN %s THEN %s'] * len(subidos))
+            params = [x for cam, i in subidos for x in (i, cam)] + [i for _, i in subidos]
+            execute_query(
+                f"UPDATE nfe_importacoes SET xml_caminho = CASE id {casos} END "
+                f" WHERE id IN ({','.join(['%s'] * len(subidos))})", tuple(params), fetch=False)
+        r['subidos'] += len(subidos)
+        r['falhas'] += len(itens) - len(subidos)
+        if not dry:
+            _gravar_fronteira(max(l['id'] for l in fatia))
     return r

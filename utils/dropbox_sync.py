@@ -164,6 +164,10 @@ class DropboxService:
                         app_key=app_key,
                         app_secret=app_secret,
                         timeout=60,
+                        # 32 conexões HTTP: o arquivador em lote inicia sessões em
+                        # paralelo (upload_lote); com o padrão de 8 o urllib3 descartava
+                        # conexões a cada chamada ("Connection pool is full").
+                        session=dropbox_sdk.create_session(max_connections=32),
                     )
                     return self._dbx
             except Exception as exc:
@@ -679,6 +683,93 @@ class DropboxService:
                 logger.error('Erro ao enviar %s ao Dropbox: %s', path, exc)
                 return False
         return False
+
+    def upload_lote(self, itens, paralelo: int = 16) -> dict:
+        """Sobe VÁRIOS arquivos pequenos de uma vez, do jeito que o Dropbox pede.
+
+        ``itens`` é uma lista de ``(path, bytes)``. Devolve ``{path: True|False}``.
+
+        POR QUE NÃO ``upload_bytes`` EM 16 THREADS: cada ``files_upload`` toma o
+        LOCK DE ESCRITA do namespace; 16 ao mesmo tempo viram fila + 429
+        ``too_many_write_operations`` + sono de até 10s por tentativa. Medido em
+        14/09/2026 no serviço de manutenção: 288 notas em 299s (~1/s) com 16
+        threads — a fila de 892 mil nunca zeraria.
+
+        Aqui é o protocolo de lote da API: (1) ``upload_session_start`` por
+        arquivo, em paralelo — só transfere bytes, sem lock; (2) UM
+        ``upload_session_finish_batch`` que grava até 1000 arquivos numa única
+        operação de escrita. Falha de um item não derruba os outros: cada um
+        volta True/False e quem falhou fica para a próxima rodada.
+        """
+        import dropbox as dropbox_sdk
+        from concurrent.futures import ThreadPoolExecutor
+        from dropbox.files import (UploadSessionFinishArg, UploadSessionCursor,
+                                   CommitInfo, WriteMode)
+        resultado = {path: False for path, _ in itens}
+        if not itens:
+            return resultado
+        dbx = self._client()
+        if not dbx:
+            return resultado
+
+        def _iniciar(item):
+            path, content = item
+            for _attempt in range(3):
+                try:
+                    r = dbx.files_upload_session_start(content, close=True)
+                    return path, UploadSessionCursor(session_id=r.session_id, offset=len(content))
+                except Exception as exc:
+                    espera = _segundos_de_espera(exc)
+                    if espera is not None and _attempt < 2:
+                        self._limitado_ate = time.time() + espera
+                        time.sleep(min(espera, _RATE_LIMIT_MAX_ESPERA))
+                        continue
+                    logger.warning('Dropbox: falha ao iniciar sessão de %s: %s', path, exc)
+                    return path, None
+
+        for ini in range(0, len(itens), 1000):            # teto do finish_batch
+            fatia = itens[ini:ini + 1000]
+            with ThreadPoolExecutor(max_workers=max(1, paralelo)) as pool:
+                cursores = list(pool.map(_iniciar, fatia))
+            entradas, caminhos = [], []
+            for path, cur in cursores:
+                if cur is None:
+                    continue
+                entradas.append(UploadSessionFinishArg(
+                    cursor=cur, commit=CommitInfo(path=path, mode=WriteMode.overwrite)))
+                caminhos.append(path)
+            if not entradas:
+                continue
+            try:
+                if hasattr(dbx, 'files_upload_session_finish_batch_v2'):
+                    res = dbx.files_upload_session_finish_batch_v2(entradas)
+                    entries = res.entries
+                else:
+                    launch = dbx.files_upload_session_finish_batch(entradas)
+                    if launch.is_complete():
+                        entries = launch.get_complete().entries
+                    else:
+                        job = launch.get_async_job_id()
+                        while True:
+                            time.sleep(1)
+                            st = dbx.files_upload_session_finish_batch_check(job)
+                            if st.is_complete():
+                                entries = st.get_complete().entries
+                                break
+            except Exception as exc:
+                espera = _segundos_de_espera(exc)
+                if espera is not None:
+                    self._limitado_ate = time.time() + espera
+                logger.error('Dropbox: finish_batch falhou (%d itens): %s', len(entradas), exc)
+                continue
+            for path, e in zip(caminhos, entries):
+                ok = bool(e.is_success())
+                resultado[path] = ok
+                if not ok:
+                    logger.warning('Dropbox: lote recusou %s: %s', path, e)
+            logger.info('Dropbox: lote de %d arquivo(s) gravado (%d ok).',
+                        len(entradas), sum(1 for e in entries if e.is_success()))
+        return resultado
 
     def limitado_por(self) -> float:
         """Segundos que ainda faltam do último 429, ou 0 se não há limite ativo.
