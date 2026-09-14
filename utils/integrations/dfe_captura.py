@@ -122,9 +122,11 @@ _MAX_CONSNSU_RODADA = int(os.getenv('DFE_MAX_CONSNSU_RODADA', '20'))
 # parado. Sobram 17 das 20 chamadas/hora para ele. Anderson, 14/09/2026.
 # Medido em 14/09/2026: 100 das 206 empresas tem o sinal (ERPs de posto, o
 # Novo Horizonte...). A janela e o teto valem para todas elas: 19h-7h de
-# Brasilia (o sistema do cliente costuma estar parado), 5 NSU por rodada —
-# ~36 rodadas por noite, ate 180 NSU, que cobre o atraso tipico.
-_MAX_CONSNSU_COMPARTILHADO = int(os.getenv('DFE_MAX_CONSNSU_COMPARTILHADO', '5'))
+# Brasilia (o sistema do cliente costuma estar parado). A CONTA REAL: o
+# cooldown de 75 min apos o 656 da ~9 rodadas por noite, nao 36 — com 15 NSU
+# por rodada sao ~135 NSU/noite por empresa (o maior atraso de 14/09 era 43)
+# e sobram 5 chamadas/hora para o sistema do cliente, se ele rodar de noite.
+_MAX_CONSNSU_COMPARTILHADO = int(os.getenv('DFE_MAX_CONSNSU_COMPARTILHADO', '15'))
 _JANELA_COMPARTILHADO = os.getenv('DFE_JANELA_COMPARTILHADO', '19-7')   # horas de Brasilia, inclusive
 
 
