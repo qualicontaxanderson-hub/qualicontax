@@ -534,110 +534,94 @@ def _upsert_vinculo_batch(cliente_id, emit_cnpj, codigo_desc_map: dict,
         tipo)
 
 
-def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
-    """Retorna fragmento WHERE + params list para filtro empresa/grupo.
+_SQL_DOC = "REPLACE(REPLACE(REPLACE({col},'.',''),'/',''),'-','')"
 
-    Para notas importadas sem empresa definida (cliente_id IS NULL),
-    faz fallback por dest_cnpj comparado ao cpf_cnpj do cliente selecionado.
+
+def _docs_do_escopo(f_cliente_id, f_grupo_id):
+    """CPF/CNPJ (só dígitos) da empresa, ou de todas as empresas do grupo."""
+    if f_cliente_id:
+        r = execute_query("SELECT cpf_cnpj FROM clientes WHERE id = %s",
+                          (int(f_cliente_id),), fetch=True, fetch_one=True) or {}
+        d = re.sub(r'\D', '', r.get('cpf_cnpj') or '')
+        return [d] if d else []
+    rows = execute_query(
+        "SELECT c.cpf_cnpj FROM clientes c "
+        "  JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id "
+        " WHERE c.avulso = 0 AND cgr.grupo_id = %s", (int(f_grupo_id),), fetch=True) or []
+    return [d for d in (re.sub(r'\D', '', r.get('cpf_cnpj') or '') for r in rows) if d]
+
+
+def _ids_sem_empresa(tabela, col_doc, docs):
+    """ids das linhas SEM cliente_id cujo documento casa com ``docs``.
+
+    É o fallback que antes vivia dentro do WHERE como
+    ``(cliente_id = X OR (cliente_id IS NULL AND REPLACE(doc) = ...))``. Medido em
+    13/09/2026: esse OR fazia o MySQL abandonar o índice por empresa — a lista
+    de Saídas da Westpark (259 mil notas) levava mais de 120 s; com
+    ``cliente_id = X`` puro, 0,6 s. E o fallback cobre 3 notas no banco inteiro
+    (todas de entrada). Então ele é resolvido AQUI, numa consulta barata sobre
+    as poucas linhas com cliente_id NULL (índice), e entra no WHERE como
+    ``id IN (...)`` — que o otimizador junta ao índice sem perder o plano.
+    """
+    if not docs:
+        return []
+    ph = ','.join(['%s'] * len(docs))
+    rows = execute_query(
+        f"SELECT id FROM {tabela} WHERE cliente_id IS NULL "
+        f"   AND {_SQL_DOC.format(col=col_doc)} IN ({ph})", tuple(docs), fetch=True) or []
+    return [r['id'] for r in rows]
+
+
+def _escopo_empresa(tabela, col_doc, f_cliente_id, f_grupo_id, alias, params):
+    """Fragmento WHERE + params do escopo empresa/grupo, sem OR que mate o índice.
+
+    * empresa: ``alias.cliente_id = %s`` (+ ``OR alias.id IN (...)`` só se houver
+      linha sem empresa que case pelo documento);
+    * grupo: ``alias.cliente_id IN (empresas do grupo)`` (+ o mesmo fallback).
+      A antiga condição ``grupo_id = %s`` saiu: a coluna não tem índice em
+      nfe_importacoes e, num OR, forçava varredura completa. O grupo é o
+      conjunto ATUAL de empresas dele — é o que a tela promete.
     """
     if params is None:
         params = []
     clauses = []
+    if not (f_cliente_id or f_grupo_id):
+        return clauses, params
+    docs = _docs_do_escopo(f_cliente_id, f_grupo_id)
+    # a consulta do fallback nao tem alias: manda so o nome da coluna
+    extras = _ids_sem_empresa(tabela, col_doc.split('.')[-1], docs)
     if f_cliente_id:
-        cid = int(f_cliente_id)
-        clauses.append(
-            f"({alias}.cliente_id = %s"
-            f" OR ({alias}.cliente_id IS NULL"
-            f"     AND REPLACE(REPLACE(REPLACE({alias}.dest_cnpj,'.',''),'/',''),'-','')"
-            f"       = (SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','')"
-            f"            FROM clientes WHERE id = %s)))"
-        )
-        params.append(cid)
-        params.append(cid)
-    if f_grupo_id:
-        gid = int(f_grupo_id)
-        clauses.append(
-            f"({alias}.grupo_id = %s"
-            f" OR ({alias}.grupo_id IS NULL"
-            f"     AND REPLACE(REPLACE(REPLACE({alias}.dest_cnpj,'.',''),'/',''),'-','')"
-            f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
-            f"             FROM clientes c"
-            f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
-            f"             WHERE c.avulso = 0 AND cgr.grupo_id = %s)))"
-        )
-        params.append(gid)
-        params.append(gid)
+        base = f"{alias}.cliente_id = %s"
+        params.append(int(f_cliente_id))
+    else:
+        base = (f"{alias}.cliente_id IN (SELECT cgr.cliente_id FROM cliente_grupo_relacao cgr "
+                f"JOIN clientes c ON c.id = cgr.cliente_id WHERE c.avulso = 0 AND cgr.grupo_id = %s)")
+        params.append(int(f_grupo_id))
+    if extras:
+        ph = ','.join(['%s'] * len(extras))
+        clauses.append(f"({base} OR {alias}.id IN ({ph}))")
+        params.extend(extras)
+    else:
+        clauses.append(base)
     return clauses, params
+
+
+def _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=None):
+    """Escopo empresa/grupo das ENTRADAS (a empresa é o destinatário)."""
+    return _escopo_empresa('nfe_importacoes', f'{alias}.dest_cnpj',
+                           f_cliente_id, f_grupo_id, alias, params)
 
 
 def _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=None):
-    """Filtro empresa/grupo para CT-e (a empresa é o TOMADOR do frete).
-
-    Mesma forma do ``_empresa_where`` das entradas, trocando ``dest_cnpj`` por
-    ``tomador_cnpj``: o fallback cobre CT-e gravados sem ``cliente_id`` (importação
-    futura pelo Dropbox). Na captura SEFAZ o ``cliente_id`` sempre vem preenchido —
-    é o dono do certificado —, então o fallback nem entra em jogo.
-    """
-    if params is None:
-        params = []
-    clauses = []
-    if f_cliente_id:
-        cid = int(f_cliente_id)
-        clauses.append(
-            f"({alias}.cliente_id = %s"
-            f" OR ({alias}.cliente_id IS NULL"
-            f"     AND REPLACE(REPLACE(REPLACE({alias}.tomador_cnpj,'.',''),'/',''),'-','')"
-            f"       = (SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','')"
-            f"            FROM clientes WHERE id = %s)))"
-        )
-        params.append(cid)
-        params.append(cid)
-    if f_grupo_id:
-        gid = int(f_grupo_id)
-        clauses.append(
-            f"({alias}.grupo_id = %s"
-            f" OR ({alias}.grupo_id IS NULL"
-            f"     AND REPLACE(REPLACE(REPLACE({alias}.tomador_cnpj,'.',''),'/',''),'-','')"
-            f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
-            f"             FROM clientes c"
-            f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
-            f"             WHERE c.avulso = 0 AND cgr.grupo_id = %s)))"
-        )
-        params.append(gid)
-        params.append(gid)
-    return clauses, params
+    """Escopo empresa/grupo do CT-e (a empresa é o TOMADOR do frete)."""
+    return _escopo_empresa('cte_documentos', f'{alias}.tomador_cnpj',
+                           f_cliente_id, f_grupo_id, alias, params)
 
 
 def _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=None):
-    """Filtro empresa/grupo para Saídas (cliente = emitente do XML)."""
-    if params is None:
-        params = []
-    clauses = []
-    if f_cliente_id:
-        cid = int(f_cliente_id)
-        clauses.append(
-            f"({alias}.cliente_id = %s"
-            f" OR ({alias}.cliente_id IS NULL"
-            f"     AND REPLACE(REPLACE(REPLACE({alias}.emit_cnpj,'.',''),'/',''),'-','')"
-            f"       = (SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-','')"
-            f"            FROM clientes WHERE id = %s)))"
-        )
-        params.append(cid)
-        params.append(cid)
-    if f_grupo_id:
-        gid = int(f_grupo_id)
-        clauses.append(
-            f"({alias}.grupo_id = %s"
-            f" OR ({alias}.grupo_id IS NULL"
-            f"     AND REPLACE(REPLACE(REPLACE({alias}.emit_cnpj,'.',''),'/',''),'-','')"
-            f"       IN (SELECT REPLACE(REPLACE(REPLACE(c.cpf_cnpj,'.',''),'/',''),'-','')"
-            f"             FROM clientes c"
-            f"             JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id"
-            f"             WHERE c.avulso = 0 AND cgr.grupo_id = %s)))"
-        )
-        params.append(gid)
-        params.append(gid)
-    return clauses, params
+    """Escopo empresa/grupo das SAÍDAS (a empresa é o emitente)."""
+    return _escopo_empresa('nfe_importacoes', f'{alias}.emit_cnpj',
+                           f_cliente_id, f_grupo_id, alias, params)
 
 
 # ---------------------------------------------------------------------------
