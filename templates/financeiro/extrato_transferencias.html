@@ -5,6 +5,12 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
+.tf-lados-cat { display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding:10px 14px 12px; background:#f8fafc; border-top:1px dashed #e2e8f0; }
+.tf-lados-cat label { font-size:12px; color:#475569; display:flex; flex-direction:column; gap:4px; }
+.tf-lados-cat select { font-size:13px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+.tf-lados-cat small { grid-column: 1 / -1; color:#64748b; }
+@media (max-width: 640px) { .tf-lados-cat { grid-template-columns: 1fr; } }
+
 /* Duas naturezas, dois desenhos. O par CASADO e uma "coisa" com estado
    (espera decisao) e tem dois lados que precisam ser vistos juntos: cartao.
    O suspeito e registro para percorrer e marcar em lote: lista com caixa.
@@ -142,6 +148,27 @@
           </div>
           <div class="tf-lado-v">+R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
         </div>
+        {% if not p.mesma_empresa %}
+        {# Par ENTRE empresas: uma categoria por lado. Pré-marcado pela regra
+           memorizada (ou pró-labore, PJ -> PF). Quem aprova confere e confirma. #}
+        <div class="tf-lados-cat">
+          <label>Saída · {{ mapa.get(p.saiu.empresa_id, '') }}
+            <select name="saida_{{ p.saiu.id }}">
+              {% for c in cats_saida %}
+              <option value="{{ c.id }}" {% if c.id == p.sug_saida %}selected{% endif %}>{{ c.grupo }} · {{ c.nome }}{% if c.tipo == 'T' %} (fora do DRE){% endif %}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Entrada · {{ mapa.get(p.entrou.empresa_id, '') }}
+            <select name="entrada_{{ p.saiu.id }}">
+              {% for c in cats_entrada %}
+              <option value="{{ c.id }}" {% if c.id == p.sug_entrada %}selected{% endif %}>{{ c.grupo }} · {{ c.nome }}{% if c.tipo == 'T' %} (fora do DRE){% endif %}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <small>{% if p.de_regra %}regra memorizada para este caminho{% else %}sugestão — confira{% endif %}</small>
+        </div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
@@ -151,6 +178,14 @@
               formaction="{{ url_for('financeiro.extrato_transferencias_aprovar') }}">
         <i class="fas fa-check"></i> É transferência — aprovar
       </button>
+      <button type="submit" class="tf-bt tf-bt-ok"
+              formaction="{{ url_for('financeiro.extrato_transferencias_aprovar_lado') }}"
+              title="Só para pares ENTRE empresas: cada lado com a sua categoria (pró-labore na PJ, receita na PF)">
+        <i class="fas fa-code-branch"></i> Aprovar por lado (entre empresas)
+      </button>
+      <label style="font-size:12px;color:#334155;display:inline-flex;align-items:center;gap:6px">
+        <input type="checkbox" name="memorizar"> guardar como regra do caminho
+      </label>
       <button type="submit" class="tf-bt tf-bt-nao"
               formaction="{{ url_for('financeiro.extrato_transferencias_negar') }}"
               onclick="return confirm('Destravar o par? Os dois lados voltam para a fila normal e passam a poder ser classificados como qualquer outro lançamento.')">

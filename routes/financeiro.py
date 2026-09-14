@@ -768,8 +768,13 @@ def dre():
     centro_raw = (request.args.get('centro') or '').strip()
     centro_sel = int(centro_raw) if centro_raw.isdigit() and \
         any(c['id'] == int(centro_raw) for c in centros) else None
+    # Entre empresas do grupo: 'incluir' (padrao) ou 'eliminar' as duas pontas
+    # dos pares aprovados entre empresas do recorte (pro-labore, aportes...).
+    entre = (request.args.get('entre') or 'incluir').strip()
+    if entre not in ('incluir', 'eliminar'):
+        entre = 'incluir'
     rows, nota_centro = _aplicar_centro(
-        FinDre.por_ano(ano, regime, empresa_ids=sel), centro_sel, centros)
+        FinDre.por_ano(ano, regime, empresa_ids=sel, entre_grupo=entre), centro_sel, centros)
 
     # Os grupos que EXISTEM no ano, na ordem do plano — é o que vira chip.
     # Sai da mesma consulta que monta a tela: um grupo sem movimento no ano
@@ -797,7 +802,7 @@ def dre():
                            regime=regime,
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            centros=centros, centro_sel=centro_sel,
-                           nota_centro=nota_centro,
+                           nota_centro=nota_centro, entre=entre,
                            ano=ano, anos=anos, meses=_DRE_MESES)
 
 
@@ -2044,7 +2049,7 @@ def _volta_transferencias():
 @permission_required('financeiro.extrato')
 def extrato_transferencias():
     from utils.extrato_par import (empresas_do_grupo, _marcas, _nomeia_grupo,
-                                   categoria_entre_contas)
+                                   categoria_entre_contas, sugestao_por_lado)
     travados = execute_query(
         """SELECT id, empresa_id, banco, conta, data, valor, descricao,
                   par_id, par_estado
@@ -2056,7 +2061,7 @@ def extrato_transferencias():
     # UM cartão por par, não dois: a saída lidera (é de onde o dinheiro saiu)
     # e a entrada vem dentro dele. Mostrar os dois lados como linhas soltas
     # seria repetir o defeito que a tela existe para consertar.
-    pares, vistos = [], set()
+    pares, vistos, _sug = [], set(), {}
     for l in travados:
         if l['par_estado'] != 'casado' or l['id'] in vistos:
             continue
@@ -2066,12 +2071,22 @@ def extrato_transferencias():
         saiu, entrou = ((l, outro) if float(l['valor']) < 0 else (outro, l))
         vistos.add(l['id'])
         vistos.add(outro['id'])
-        pares.append({
+        par = {
             'saiu': saiu, 'entrou': entrou,
             'valor': abs(float(saiu['valor'])),
             'dias': (entrou['data'] - saiu['data']).days,
             'mesma_empresa': saiu['empresa_id'] == entrou['empresa_id'],
-        })
+        }
+        if not par['mesma_empresa']:
+            # Par ENTRE empresas: uma categoria por lado, pré-marcada pela regra
+            # memorizada (ou pró-labore, se PJ -> PF). Aprovar continua manual.
+            # Uma sugestão por CAMINHO (de -> para), não por par: 68 pares x 5
+            # consultas deixaram a tela em minutos (14/09/2026).
+            caminho = (saiu['empresa_id'], entrou['empresa_id'])
+            if caminho not in _sug:
+                _sug[caminho] = sugestao_por_lado(*caminho)
+            par['sug_saida'], par['sug_entrada'], par['de_regra'] = _sug[caminho]
+        pares.append(par)
 
     # Para o suspeito, PARA QUEM ele aponta não está em coluna nenhuma — é
     # lido da descrição na hora. São poucos e é comparação de texto em
@@ -2109,6 +2124,8 @@ def extrato_transferencias():
         total_suspeitos=sum(abs(float(s['l']['valor'])) for s in suspeitos),
         n_suspeitos=len(suspeitos), mapa=mapa,
         categorias=FinCategoria.listar(),
+        cats_saida=[c for c in FinCategoria.listar() if c['tipo'] in ('P', 'I', 'T')],
+        cats_entrada=[c for c in FinCategoria.listar() if c['tipo'] in ('R', 'T')],
         cat_entre_contas=categoria_entre_contas())
 
 
@@ -2130,6 +2147,52 @@ def extrato_transferencias_aprovar():
     if ok:
         flash(f'{len(ok)} transferência(s) aprovada(s) — os dois lados foram '
               'classificados como "Entre contas do grupo" e ficam fora do DRE.',
+              'success')
+    for _lid, motivo in nao[:3]:
+        flash(f'Não aprovei: {motivo}', 'warning')
+    return _volta_transferencias()
+
+
+@financeiro.route('/financeiro/extrato/transferencias/aprovar-lado', methods=['POST'])
+@permission_required('financeiro.extrato')
+def extrato_transferencias_aprovar_lado():
+    """Par ENTRE empresas: aprova com uma categoria por lado (pró-labore na
+    Qualicontax = despesa; no Anderson PF = receita). Cada lado vira título
+    quitado e aparece no DRE da sua empresa. Opcionalmente memoriza a regra
+    do par de empresas para os próximos virem pré-marcados."""
+    from utils.extrato_par import aprovar_por_lado, guardar_regra_par
+    from models.extrato_lancamento import ExtratoLancamento
+    f = request.form
+    ids = [int(i) for i in f.getlist('lanc') if str(i).isdigit()]
+    if not ids:
+        flash('Nenhum par selecionado.', 'warning')
+        return _volta_transferencias()
+    itens = []
+    for lid in ids:
+        cs = (f.get(f'saida_{lid}') or '').strip()
+        ce = (f.get(f'entrada_{lid}') or '').strip()
+        if not (cs.isdigit() and ce.isdigit()):
+            flash(f'Par #{lid}: escolha a categoria dos dois lados.', 'danger')
+            return _volta_transferencias()
+        itens.append((lid, int(cs), int(ce)))
+    ok, nao = aprovar_por_lado(itens, usuario_id=current_user.id)
+    regras = 0
+    if f.get('memorizar') == 'on':
+        cats = {lid: (cs, ce) for lid, cs, ce in itens}
+        for saiu_id, entrou_id in ok:
+            a, b = ExtratoLancamento.get(saiu_id), ExtratoLancamento.get(entrou_id)
+            par_cats = cats.get(saiu_id) or cats.get(entrou_id)
+            if a and b and par_cats:
+                guardar_regra_par(a['empresa_id'], b['empresa_id'], *par_cats)
+                regras += 1
+    registrar('escrita.aprovou_transferencia_por_lado', 'financeiro',
+              tabela='extrato_lancamentos',
+              depois={'pares': [list(p) for p in ok], 'itens': [list(i) for i in itens],
+                      'regras': regras, 'recusados': [list(map(str, r)) for r in nao[:5]]})
+    if ok:
+        flash(f'{len(ok)} par(es) aprovado(s) com uma categoria por lado — cada '
+              'lado virou título quitado e já aparece no DRE da sua empresa.'
+              + (' Regra memorizada: os próximos pares desse caminho vêm pré-marcados.' if regras else ''),
               'success')
     for _lid, motivo in nao[:3]:
         flash(f'Não aprovei: {motivo}', 'warning')

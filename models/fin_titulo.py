@@ -326,13 +326,31 @@ class FinDre:
     """
 
     @staticmethod
-    def por_ano(ano, regime='competencia', empresa_ids=None):
-        """Linhas (tipo, grupo, nome da categoria, mês 1-12, total)."""
+    def por_ano(ano, regime='competencia', empresa_ids=None, entre_grupo='incluir'):
+        """Linhas (tipo, grupo, nome da categoria, mês 1-12, total).
+
+        ``entre_grupo='eliminar'``: tira do DRE os títulos que nasceram de um
+        PAR aprovado entre empresas do recorte (pró-labore pago pela Qualicontax
+        e recebido pelo Anderson PF, por exemplo) — os dois lados. É o filtro
+        do DRE conjunto pedido em 14/09/2026: "escolher quais receitas do grupo
+        considerar". Com uma empresa só, não há o que eliminar.
+        """
         cond, extra = '', ()
         if empresa_ids:
             marks = ','.join(['%s'] * len(empresa_ids))
             cond = f'AND t.empresa_id IN ({marks})'
             extra = tuple(empresa_ids)
+        if entre_grupo == 'eliminar':
+            dentro = ''
+            if empresa_ids:
+                dentro = f'AND l.empresa_id IN ({marks}) AND o.empresa_id IN ({marks})'
+                extra = extra + tuple(empresa_ids) + tuple(empresa_ids)
+            cond += f"""
+                AND t.id NOT IN (
+                    SELECT b2.titulo_id FROM fin_titulo_baixas b2
+                      JOIN extrato_lancamentos l ON l.id = b2.lancamento_id
+                      JOIN extrato_lancamentos o ON o.id = l.par_id
+                     WHERE l.par_estado = 'aprovado' AND l.empresa_id <> o.empresa_id {dentro})"""
         # A subcategoria aparece como "Pai · Sub"; o centro sai CRU em cada
         # linha — o rateio da GERAL é aplicado depois, na leitura.
         rotulo = "COALESCE(CONCAT(p.nome, ' · ', c.nome), c.nome)"

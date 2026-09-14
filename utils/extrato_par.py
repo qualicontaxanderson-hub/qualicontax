@@ -401,6 +401,130 @@ def aprovar(lanc_ids, usuario_id=None):
     return aprovados, recusados
 
 
+# ---------------------------------------------------------------------------
+# Par ENTRE empresas: uma decisão por lado (Anderson, 14/09/2026)
+#
+# "Transferências da Qualicontax para o Anderson, quase 100% é pró-labore."
+# Na Qualicontax é DESPESA (Pró-labore); no Anderson PF é RECEITA
+# (Pró-labore recebido) — "é isso que prova a receita que eu tenho". Cada
+# lado ganha a sua categoria e o seu título; o par fica gravado (par_id) para
+# o DRE conjunto poder eliminar as duas pontas quando o usuário pedir.
+# A regra por par de empresas (de -> para) fica memorizada e vem pré-marcada
+# nos próximos pares — que continuam vindo para aprovação, nunca automático.
+# ---------------------------------------------------------------------------
+REGRAS_PAR = 'fin_regras_par_empresas'
+CAT_PROLABORE_RECEBIDO = ('R', 'Pró-labore', 'Pró-labore recebido')
+
+
+def regras_par():
+    """{'de>para': {'saida': cat_id, 'entrada': cat_id}} memorizadas."""
+    from utils.painel_cache import ler
+    v, _ = ler(REGRAS_PAR)
+    return v or {}
+
+
+def guardar_regra_par(de_id, para_id, cat_saida, cat_entrada):
+    from utils.painel_cache import guardar
+    r = regras_par()
+    r[f'{int(de_id)}>{int(para_id)}'] = {'saida': int(cat_saida), 'entrada': int(cat_entrada)}
+    guardar(REGRAS_PAR, r)
+    return r
+
+
+def categoria_prolabore_recebido():
+    """Categoria de RECEITA 'Pró-labore recebido' — cria na primeira vez."""
+    from utils.db_helper import execute_query
+    from models.fin_titulo import FinCategoria
+    tipo, grupo, nome = CAT_PROLABORE_RECEBIDO
+    r = execute_query("SELECT id FROM fin_categorias WHERE tipo = %s AND grupo = %s AND nome = %s",
+                      (tipo, grupo, nome), fetch=True, fetch_one=True)
+    if r:
+        return r['id']
+    return FinCategoria.criar(tipo, grupo, nome)
+
+
+def categoria_prolabore_pago():
+    """A categoria de despesa 'Pró-labore' já existente (a mais alta do plano)."""
+    from utils.db_helper import execute_query
+    r = execute_query("SELECT id FROM fin_categorias WHERE tipo = 'P' AND pai_id IS NULL "
+                      "  AND LOWER(REPLACE(nome,'-','')) LIKE %s ORDER BY ordem, id LIMIT 1",
+                      ('%prolabore%',), fetch=True, fetch_one=True)
+    return r['id'] if r else None
+
+
+def _so_digitos(v):
+    return ''.join(ch for ch in (v or '') if ch.isdigit())
+
+
+def sugestao_por_lado(de_id, para_id):
+    """(cat_saida, cat_entrada, veio_de_regra) para o par de empresas: a regra
+    memorizada ou, sem regra, Pró-labore / Pró-labore recebido quando a saída
+    é pessoa jurídica e a entrada pessoa física; senão Entre contas nos dois."""
+    r = regras_par().get(f'{int(de_id)}>{int(para_id)}')
+    if r:
+        return r['saida'], r['entrada'], True
+    ec = categoria_entre_contas()
+    ec_id = (ec['id'] if isinstance(ec, dict) else ec) or None
+    docs = {e['cliente_id']: len(_so_digitos(e.get('doc'))) for e in empresas_do_grupo()}
+    if docs.get(de_id) == 14 and docs.get(para_id) == 11:
+        return categoria_prolabore_pago() or ec_id, categoria_prolabore_recebido() or ec_id, False
+    return ec_id, ec_id, False
+
+
+def aprovar_por_lado(itens, usuario_id=None, dry=False):
+    """Aprova pares ENTRE empresas com uma categoria por lado.
+
+    ``itens``: lista de (id_da_saida, cat_saida_id, cat_entrada_id). Para cada
+    par: classifica cada lado com a sua categoria, marca 'aprovado' nos dois e,
+    para lado que NÃO é transferência (tipo T), cria o título já quitado
+    (via ExtratoLancamento.conciliar, idempotente) — é o título que aparece no
+    DRE. ``dry=True`` só valida. Devolve (aprovados, recusados) como ``aprovar``.
+    """
+    from utils.db_helper import execute_query
+    from models.extrato_lancamento import ExtratoLancamento
+    from models.fin_titulo import FinCategoria
+    cats = {c['id']: c for c in FinCategoria.listar(apenas_ativas=False)}
+    emp = {e['cliente_id']: e for e in empresas_do_grupo()}
+    aprovados, recusados = [], []
+    for lid, cat_s, cat_e in itens:
+        a = ExtratoLancamento.get(lid)
+        if not a:
+            recusados.append((lid, 'lançamento não encontrado')); continue
+        if (a.get('par_estado') or '') != 'casado':
+            recusados.append((lid, f'não está casado (está {a.get("par_estado") or "livre"})')); continue
+        b = ExtratoLancamento.get(a.get('par_id'))
+        if not b:
+            recusados.append((lid, 'a outra ponta desapareceu — rode o detector')); continue
+        saiu, entrou = (a, b) if float(a['valor']) < 0 else (b, a)
+        if saiu['empresa_id'] == entrou['empresa_id']:
+            recusados.append((lid, 'par da MESMA empresa: use "É transferência — aprovar"')); continue
+        cs, ce = cats.get(int(cat_s or 0)), cats.get(int(cat_e or 0))
+        if not cs or cs['tipo'] not in ('P', 'I', 'T'):
+            recusados.append((lid, 'categoria da SAÍDA precisa ser despesa, investimento ou transferência')); continue
+        if not ce or ce['tipo'] not in ('R', 'T'):
+            recusados.append((lid, 'categoria da ENTRADA precisa ser receita ou transferência')); continue
+        if dry:
+            aprovados.append((saiu['id'], entrou['id'])); continue
+        for x, cat, outro in ((saiu, cs, entrou), (entrou, ce, saiu)):
+            ExtratoLancamento.classificar(x['id'], cat['id'])
+            execute_query("UPDATE extrato_lancamentos SET par_estado = 'aprovado' WHERE id = %s",
+                          (x['id'],), fetch=False)
+            if cat['tipo'] == 'T':
+                continue
+            e_outro = emp.get(outro['empresa_id']) or {}
+            x2 = ExtratoLancamento.get(x['id'])
+            ok, motivo, _tid = ExtratoLancamento.conciliar(
+                x2, criar={'competencia': x2['data'].replace(day=1),
+                           'contraparte_nome': e_outro.get('apelido') or e_outro.get('nome') or cat['nome'],
+                           'contraparte_doc': _so_digitos(e_outro.get('doc')) or None,
+                           'categoria_id': cat['id'], 'centro_custo_id': None},
+                usuario_id=usuario_id)
+            if not ok:
+                recusados.append((x['id'], f'classificado, mas o título não nasceu: {motivo}'))
+        aprovados.append((saiu['id'], entrou['id']))
+    return aprovados, recusados
+
+
 def liberar(lanc_ids, motivo, categoria_id, usuario_id=None):
     """Libera sem a outra ponta, CLASSIFICANDO no mesmo gesto.
 

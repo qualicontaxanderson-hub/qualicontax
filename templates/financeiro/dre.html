@@ -102,14 +102,15 @@
        trocar de regime jogava fora o centro escolhido. #}
     {% set _grp = grupos_sel | join('|') %}
     <a class="dre-chip {{ 'ativo' if regime == 'competencia' }}"
-       href="{{ url_for('financeiro.dre', regime='competencia', ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Competência</a>
+       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime='competencia', ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Competência</a>
     <a class="dre-chip {{ 'ativo' if regime == 'caixa' }}"
-       href="{{ url_for('financeiro.dre', regime='caixa', ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Caixa</a>
+       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime='caixa', ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Caixa</a>
     <form method="GET" action="{{ url_for('financeiro.dre') }}" style="margin-left:auto;">
         <input type="hidden" name="regime" value="{{ regime }}">
         <input type="hidden" name="emp" value="{{ _emp }}">
         <input type="hidden" name="centro" value="{{ centro_sel or '' }}">
         <input type="hidden" name="grupos" value="{{ _grp }}">
+        {% if entre == 'eliminar' %}<input type="hidden" name="entre" value="eliminar">{% endif %}
         <select name="ano" class="form-control" onchange="this.form.submit()">
             {% for a in anos %}
             <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
@@ -118,15 +119,28 @@
     </form>
 </div>
 
+{% if sel_empresas | length != 1 %}
+<div class="dre-chips" style="margin-top:-4px;">
+    {% set _emp = sel_empresas | join(',') %}
+    {% set _grp = grupos_sel | join('|') %}
+    <span class="fe-rotulo" style="font-size:.78em; color:#6b7280; font-weight:700; text-transform:uppercase;"
+          title="Pares aprovados entre empresas do grupo (ex.: pró-labore pago pela Qualicontax e recebido pelo Anderson PF). Considerar mostra os dois lados; Eliminar tira os dois.">Entre empresas do grupo:</span>
+    <a class="dre-chip {{ 'ativo' if entre != 'eliminar' }}"
+       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Considerar</a>
+    <a class="dre-chip {{ 'ativo' if entre == 'eliminar' }}"
+       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None, entre='eliminar') }}">Eliminar</a>
+</div>
+{% endif %}
+
 <div class="dre-chips" style="margin-top:-4px;">
     {% set _emp = sel_empresas | join(',') %}
     {% set _grp = grupos_sel | join('|') %}
     <span class="fe-rotulo" style="font-size:.78em; color:#6b7280; font-weight:700; text-transform:uppercase;">Centro:</span>
     <a class="dre-chip {{ 'ativo' if not centro_sel }}"
-       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, emp=_emp or None, grupos=_grp or None) }}">TODOS</a>
+       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, emp=_emp or None, grupos=_grp or None) }}">TODOS</a>
     {% for cc in centros %}
     <a class="dre-chip {{ 'ativo' if centro_sel == cc.id }}"
-       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, centro=cc.id, emp=_emp or None, grupos=_grp or None) }}">{{ cc.nome }}</a>
+       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, centro=cc.id, emp=_emp or None, grupos=_grp or None) }}">{{ cc.nome }}</a>
     {% endfor %}
 </div>
 
@@ -137,7 +151,7 @@
 <div class="dre-chips" style="margin-top:-4px;">
     <span class="fe-rotulo" style="font-size:.78em; color:#6b7280; font-weight:700; text-transform:uppercase;">Grupos:</span>
     <a class="dre-chip {{ 'ativo' if not grupos_sel }}"
-       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, centro=centro_sel or None, emp=_emp or None) }}">TODOS</a>
+       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, centro=centro_sel or None, emp=_emp or None) }}">TODOS</a>
     {% for g in grupos_todos %}
         {% if grupos_sel %}
             {% set _novo = (grupos_sel | reject('equalto', g) | list) if g in grupos_sel else (grupos_sel + [g]) %}
@@ -145,7 +159,7 @@
             {% set _novo = [g] %}
         {% endif %}
     <a class="dre-chip {{ 'ativo' if g in grupos_sel }}"
-       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, centro=centro_sel or None, emp=_emp or None, grupos=(_novo | join('|')) or None) }}">{{ g }}</a>
+       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, centro=centro_sel or None, emp=_emp or None, grupos=(_novo | join('|')) or None) }}">{{ g }}</a>
     {% endfor %}
 </div>
 {% endif %}
