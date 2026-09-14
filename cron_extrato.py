@@ -52,25 +52,43 @@ def _tmp(nome):
     return os.path.join(tempfile.gettempdir(), 'qc_extrato_' + nome)
 
 
-def _ler_previa(nome, dados):
-    """(previa, formato) — ``formato`` 'ofx' ou 'pdf'; (None, None) quando o
-    arquivo não é nosso (PDF que não é extrato do C6) ou é um PDF protegido
-    que nenhum CPF cadastrado abriu. Nos dois casos o arquivo fica onde está."""
+def _ler_previa(nome, dados, senhas_extra=()):
+    """(previa, formato) — ``formato`` 'ofx' ou 'pdf'. (None, 'pdf-senha')
+    quando é um PDF protegido que nenhum documento abriu: vira pendência na
+    tela de Contas. (None, None) quando o arquivo não é nosso (PDF que não
+    é extrato do C6): fica onde está, intocado."""
     if (nome or '').lower().endswith('.pdf'):
         from utils.extrato_pdf_c6 import (parse_pdf_c6, senhas_candidatas,
                                           PdfInvalido, PdfProtegido)
         try:
-            return parse_pdf_c6(dados, senhas_candidatas(nome)), 'pdf'
+            senhas = [x for x in (senhas_extra or ()) if x] + senhas_candidatas(nome)
+            return parse_pdf_c6(dados, senhas), 'pdf'
         except PdfProtegido:
-            # Sem o nome: arquivo da _ENTRADA não vai para o log.
-            logger.warning('[extrato] um PDF protegido que nenhum CPF cadastrado '
-                           'abriu; ficou na _ENTRADA. Ponha o CPF ou o número do '
-                           'cadastro no nome do arquivo.')
-            return None, None
+            return None, 'pdf-senha'
         except PdfInvalido:
             return None, None
     from utils.ofx_parser import parse_ofx
     return parse_ofx(dados), 'ofx'
+
+
+def _pendencia_pdf_senha(origem, nome, seco):
+    """O PDF não abriu: entra na fila de Contas, na empresa que o nome do
+    arquivo indicar (ou órfã, para o admin). Sem o nome no log."""
+    if seco:
+        return
+    from models.extrato_lancamento import FinExtratoPendencia
+    from utils.extrato_ingest import numero_empresa_do_nome
+    from utils.extrato_pdf_c6 import ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA
+    num = numero_empresa_do_nome(nome)
+    dono = None
+    if num:
+        from utils.db_helper import execute_query as _q
+        e = _q('SELECT id FROM clientes WHERE numero_cliente = %s', (num,),
+               fetch=True, fetch_one=True)
+        dono = (e or {}).get('id')
+    FinExtratoPendencia.anotar(caminho=origem, arquivo=nome, motivo=MOTIVO_PDF_SENHA,
+                               empresa_id=dono, numero_no_nome=num,
+                               banco_nome=ROTULO_PDF_SENHA, qtd=0)
 
 
 def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
@@ -148,6 +166,13 @@ def rodar(dryrun=None, limite=None):
 
             # Lê o arquivo ANTES de decidir o dono: é a CONTA que manda.
             previa, formato = _ler_previa(nome, dados)
+            if formato == 'pdf-senha':
+                _pendencia_pdf_senha(origem, nome, seco)
+                linha['resultado'] = 'PENDENTE: PDF com senha que nenhum documento abriu'
+                resumo['erros'] += 1
+                resumo['detalhes'].append(linha)
+                logger.warning('[extrato] um PDF com senha não abriu; está na fila de Contas.')
+                continue
             if not formato:
                 resumo['lidos'] -= 1
                 resumo['ignorados'] += 1
@@ -277,7 +302,7 @@ def rodar(dryrun=None, limite=None):
     return resumo
 
 
-def processar_um(caminho_dropbox, usuario_id=None):
+def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
     """Processa UM arquivo, pelo caminho — nada além dele.
 
     Existe porque responder uma pendência NÃO pode disparar varredura geral:
@@ -297,16 +322,24 @@ def processar_um(caminho_dropbox, usuario_id=None):
         return {'ok': False, 'motivo': 'arquivo não está mais na pasta'}
 
     nome = os.path.basename(caminho_dropbox)
-    previa, formato = _ler_previa(nome, dados)
+    previa, formato = _ler_previa(nome, dados, [senha_extra] if senha_extra else ())
+    if formato == 'pdf-senha':
+        from utils.extrato_pdf_c6 import MOTIVO_PDF_SENHA
+        return {'ok': False, 'motivo': 'Ainda não abriu. ' + MOTIVO_PDF_SENHA, 'pdf_senha': True}
     if not formato:
-        return {'ok': False, 'motivo': 'não é um extrato que eu saiba ler '
-                                       '(ou o PDF não abriu com o CPF cadastrado)'}
+        return {'ok': False, 'motivo': 'O arquivo abriu, mas não é um extrato que eu saiba ler '
+                                       '(em PDF, por enquanto, só o do C6).'}
     banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
     cliente, motivo = identificar_empresa(
         nome, banco_id=previa.get('banco_id'), conta=previa.get('conta'),
         banco_nome=banco)
     if not cliente:
-        return {'ok': False, 'motivo': motivo}
+        from utils.extrato_ingest import rotulo_periodo
+        return {'ok': False, 'motivo': motivo, 'formato': formato,
+                'previa': {'banco_id': previa.get('banco_id'), 'banco': banco,
+                           'conta': previa.get('conta'), 'cpf': previa.get('cpf'),
+                           'qtd': len(previa['lancamentos']),
+                           'periodo': rotulo_periodo([l['data'] for l in previa['lancamentos']])}}
 
     caminho = _tmp(nome)
     with open(caminho, 'wb') as fh:

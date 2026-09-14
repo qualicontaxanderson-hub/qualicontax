@@ -48,7 +48,7 @@ BANCO_NOME = 'Banco C6 S.A.'
 _RE_DATA = re.compile(r'^\d\d/\d\d$')
 _RE_VALOR = re.compile(r'^(-?)R\$\s*([\d.]+),(\d\d)$')
 _RE_MES = re.compile(r'^\S+ (\d{4}) \(\s*\d\d/\d\d/(\d{4}) - \d\d/\d\d/\d{4}\s*\)')
-_RE_CPF = re.compile(r'(\d{3}\.\d{3}\.\d{3}-\d{2})')
+_RE_CPF = re.compile(r'(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})')
 _RE_CONTA = re.compile(r'Ag[êe]ncia:\s*(\d+)\s*.\s*Conta:\s*(\d+)', re.IGNORECASE)
 
 #: Descrições do OFX do C6 que não dizem nada — só estas são trocadas.
@@ -69,6 +69,31 @@ def aviso_ofx(banco_id=None, banco_nome=None):
     if cod == BANCO_ID or 'C6' in (banco_nome or '').upper():
         return AVISO_OFX_C6
     return ''
+
+
+#: Pendência do PDF que não abriu (Anderson, 14/09/2026: "teremos que ter um
+#: lembrete, um local que nos mostre os arquivos que contêm senha e que não
+#: estão no nosso cadastro"). Vai para a fila de Financeiro → Contas.
+ROTULO_PDF_SENHA = 'PDF com senha'
+MOTIVO_PDF_SENHA = ('Este PDF tem senha e nenhum CPF/CNPJ do cadastro abriu. '
+                    'Informe abaixo o CPF/CNPJ do titular da conta (o C6 usa os 6 '
+                    'primeiros dígitos), ou cadastre o titular como cliente e '
+                    'clique em Tentar abrir. Renomear o arquivo com o CPF/CNPJ '
+                    'também resolve.')
+SENHAS_INFORMADAS = 'extrato_pdf_senhas'
+
+
+def guardar_senha_pdf(nome_arquivo, documento):
+    """Alguém informou o documento do titular deste arquivo: fica guardado
+    pelo nome do arquivo, para a releitura (Vincular e ler) abrir de novo."""
+    from utils.painel_cache import ler, guardar
+    doc = re.sub(r'\D', '', str(documento or ''))
+    if not doc or not nome_arquivo:
+        return
+    m, _ = ler(SENHAS_INFORMADAS)
+    m = m or {}
+    m[nome_arquivo.lower()] = doc
+    guardar(SENHAS_INFORMADAS, m)
 
 
 class PdfInvalido(Exception):
@@ -378,11 +403,21 @@ def encaixar_ofx_em_pdf(empresa_id, banco, conta, novos):
 
 
 def senhas_candidatas(nome_arquivo):
-    """CPF (ou número do cadastro → CPF) no nome do arquivo primeiro; depois
-    o CPF de cada pessoa física cadastrada. Só os 6 primeiros dígitos."""
+    """Documento (ou número do cadastro → documento) no nome do arquivo
+    primeiro; depois o CPF/CNPJ de cada cliente cadastrado — pessoas físicas
+    antes. Só os 6 primeiros dígitos contam; testar 300 é questão de
+    milissegundos, o PDF está na memória."""
     from utils.db_helper import execute_query
     from utils.extrato_ingest import numero_empresa_do_nome
     out = []
+    try:                                     # documento informado na pendência
+        from utils.painel_cache import ler
+        m, _ = ler(SENHAS_INFORMADAS)
+        d = (m or {}).get((nome_arquivo or '').lower())
+        if d:
+            out.append(d)
+    except Exception:
+        pass
     num = numero_empresa_do_nome(nome_arquivo)
     if num:
         e = execute_query('SELECT cpf_cnpj FROM clientes WHERE numero_cliente = %s',
@@ -390,9 +425,10 @@ def senhas_candidatas(nome_arquivo):
         if e and e.get('cpf_cnpj'):
             out.append(re.sub(r'\D', '', e['cpf_cnpj']))
     so = re.sub(r'\D', ' ', nome_arquivo or '')
-    out += [t for t in so.split() if len(t) == 11]
-    pfs = execute_query(
-        "SELECT REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'-',''),' ','') d "
-        "  FROM clientes WHERE cpf_cnpj IS NOT NULL HAVING LENGTH(d) = 11", fetch=True) or []
-    out += [p['d'] for p in pfs if len(p['d'] or '') == 11]
+    out += [t for t in so.split() if len(t) in (11, 14)]
+    docs = execute_query(
+        "SELECT REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'-',''),'/',''),' ','') d "
+        "  FROM clientes WHERE cpf_cnpj IS NOT NULL HAVING LENGTH(d) IN (11, 14) "
+        " ORDER BY LENGTH(d), id", fetch=True) or []
+    out += [p['d'] for p in docs]
     return out

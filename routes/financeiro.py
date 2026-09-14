@@ -1206,6 +1206,51 @@ def conta_alternar(conta_id):
     return redirect(url_for('financeiro.contas'))
 
 
+@financeiro.route('/financeiro/pendencias/<int:pid>/abrir-pdf', methods=['POST'])
+@permission_required('financeiro.extrato')
+def pendencia_abrir_pdf(pid):
+    """PDF com senha que não abriu: alguém informa o CPF/CNPJ do titular (ou
+    acabou de cadastrar o cliente) e o sistema tenta de novo, só neste
+    arquivo. Abriu e a conta é conhecida → entra. Abriu e a conta é nova →
+    a MESMA pendência vira a pergunta "de quem é esta conta?"."""
+    from models.extrato_lancamento import FinExtratoPendencia
+    from utils.extrato_pdf_c6 import guardar_senha_pdf
+    import cron_extrato
+    p = FinExtratoPendencia.get(pid)
+    if not p:
+        flash('Pendência não encontrada.', 'danger')
+        return redirect(url_for('financeiro.contas'))
+    doc = re.sub(r'\D', '', request.form.get('documento') or '')
+    if doc:
+        guardar_senha_pdf(p['arquivo'], doc)
+    try:
+        r = cron_extrato.processar_um(p['caminho'], usuario_id=current_user.id,
+                                      senha_extra=doc or None)
+    except Exception:
+        logging.getLogger(__name__).exception('[extrato] falha ao reabrir %s', p['caminho'])
+        r = {'ok': False, 'motivo': 'não consegui reler o arquivo agora'}
+    if r.get('ok'):
+        FinExtratoPendencia.resolver(pid)
+        flash(f'O PDF abriu e entrou: {r["novos"]} lançamento(s) novo(s) e '
+              f'{r.get("completadas") or 0} descrição(ões) completada(s) em '
+              f'{r["empresa"]}.', 'success')
+    elif r.get('previa'):
+        pv = r['previa']
+        FinExtratoPendencia.anotar(
+            caminho=p['caminho'], arquivo=p['arquivo'], motivo=r['motivo'],
+            empresa_id=p.get('empresa_id'), numero_no_nome=p.get('numero_no_nome'),
+            banco_id=pv['banco_id'], banco_nome=pv['banco'], conta=pv['conta'],
+            qtd=pv['qtd'], periodo=pv['periodo'])
+        flash('O PDF abriu. A conta dele ainda não está cadastrada: diga de quem '
+              'é logo abaixo e clique em Vincular e ler.', 'info')
+    else:
+        flash(r.get('motivo') or 'Não consegui reler o arquivo agora.', 'warning')
+    registrar('escrita.tentou_abrir_pdf_extrato', 'financeiro',
+              tabela='fin_extrato_pendencias', registro_id=pid,
+              depois={'arquivo': p['arquivo'], 'abriu': bool(r.get('ok') or r.get('previa'))})
+    return redirect(url_for('financeiro.contas'))
+
+
 @financeiro.route('/financeiro/pendencias/<int:pid>/resolver', methods=['POST'])
 @permission_required('financeiro.extrato')
 def pendencia_resolver(pid):

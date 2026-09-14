@@ -73,7 +73,8 @@
         {{ pendencias | length }} arquivo(s) esperando você dizer de quem é a conta</h3>
     <div style="font-size:12.5px; color:#92400e;">
         Eles estão parados na pasta — nada foi lançado. Responda uma vez e os
-        próximos meses entram sozinhos.
+        próximos meses entram sozinhos. PDF com senha que não abriu também
+        aparece aqui: informe o CPF/CNPJ do titular e ele tenta de novo.
         {% if eh_admin %}
         <br><strong>Você é admin:</strong> os marcados como
         <span class="fin-pilula alerta">sem identificação</span> chegaram sem o
@@ -101,6 +102,21 @@
             {% endif %}
             <br><em>{{ p.motivo }}</em>
         </div>
+        {% if p.banco_nome == 'PDF com senha' and not p.conta %}
+        <form method="POST" action="{{ url_for('financeiro.pendencia_abrir_pdf', pid=p.id) }}"
+              class="ct-linha">
+            <div>
+                <label>CPF/CNPJ do titular da conta</label>
+                <input type="text" name="documento" inputmode="numeric"
+                       placeholder="só os números — o C6 usa os 6 primeiros">
+            </div>
+            <div style="flex:0 0 auto;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-unlock"></i> Tentar abrir
+                </button>
+            </div>
+        </form>
+        {% else %}
         <form method="POST" action="{{ url_for('financeiro.pendencia_resolver', pid=p.id) }}"
               class="ct-linha">
             <div>
@@ -131,6 +147,7 @@
                 </button>
             </div>
         </form>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
