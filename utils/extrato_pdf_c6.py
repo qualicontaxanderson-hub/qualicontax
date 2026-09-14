@@ -109,7 +109,7 @@ class PdfOutroBanco(PdfInvalido):
 
 
 ROTULO_PDF_OUTRO = 'PDF de outro banco'
-MOTIVO_PDF_OUTRO = ('É um extrato em PDF, mas não do C6 — em PDF eu só leio o do C6. '
+MOTIVO_PDF_OUTRO = ('É um extrato em PDF de um banco que ainda não leio (hoje: C6 e Nubank). '
                     'Deste banco mande o OFX: ele já vem completo, com o nome de quem '
                     'recebeu. Depois apague este PDF da pasta e o cartão some sozinho.')
 

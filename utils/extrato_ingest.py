@@ -276,20 +276,51 @@ def identificar_empresa(caminho_ou_nome, banco_id=None, conta=None,
 
 
 def processar_ofx(caminho, empresa_id, usuario_id=None):
-    """Lê, grava os lançamentos novos e devolve o resumo — SEM mover nada.
+    """Lê o OFX e grava pelo núcleo comum — SEM mover nada."""
+    from utils.ofx_parser import parse_ofx
+    dados = parse_ofx(open(caminho, 'rb').read())
+    return processar_lancamentos(dados, empresa_id, os.path.basename(caminho),
+                                 usuario_id=usuario_id, origem='ofx')
 
-    Quem move é quem chamou, e só depois de confirmar que gravou.
+
+def fitids_existentes(empresa_id, conta, fitids):
+    """FITIDs já gravados nesta conta (conta comparada normalizada). Existe
+    porque OFX e CSV do mesmo banco podem escrever o NOME do banco diferente
+    e a chave de deduplicação inclui esse nome — o identificador do banco é
+    a verdade final."""
+    from utils.db_helper import execute_query
+    achados = set()
+    fitids = [f for f in fitids if f]
+    if not fitids:
+        return achados
+    alvo = conta_normalizada(conta)
+    for i in range(0, len(fitids), 300):
+        fatia = fitids[i:i + 300]
+        marks = ','.join(['%s'] * len(fatia))
+        rows = execute_query(
+            f'SELECT fitid, conta FROM extrato_lancamentos '
+            f' WHERE empresa_id = %s AND fitid IN ({marks})',
+            (empresa_id, *fatia), fetch=True) or []
+        achados.update(r['fitid'] for r in rows if conta_normalizada(r['conta']) == alvo)
+    return achados
+
+
+def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='ofx'):
+    """Grava os lançamentos novos de um arquivo já lido (OFX ou CSV) e devolve
+    o resumo — SEM mover nada. Quem move é quem chamou, depois de gravar.
+
+    Idempotência em três camadas: a chave de deduplicação (FITID ou
+    data+valor+descrição+repetição), o FITID já gravado na mesma conta
+    (OFX × CSV), e o encaixe em linha que um PDF criou sem FITID.
     """
     from models.extrato_lancamento import ExtratoLancamento, ExtratoMemorizacao
     from utils.db_helper import execute_query
-    from utils.ofx_parser import parse_ofx, chave_dedup
+    from utils.ofx_parser import chave_dedup
 
-    dados = parse_ofx(open(caminho, 'rb').read())
     lancs = dados['lancamentos']
-
     repet, candidatos = {}, []
     for l in lancs:
-        k = (l['data'], str(l['valor']), l['descricao'], l['documento'])
+        k = (l['data'], str(l['valor']), l['descricao'], l.get('documento'))
         n = repet.get(k, 0)
         repet[k] = n + 1
         candidatos.append((chave_dedup(empresa_id, dados['banco'],
@@ -303,10 +334,10 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
         unicos.append((h, l))
 
     ja = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
-    novos = [(h, l) for h, l in unicos if h not in ja]
-    # O PDF do C6 pode ter chegado ANTES e criado a linha (14/09/2026): o
-    # OFX então só encaixa nela o FITID — a descrição do PDF, que tem o
-    # nome de quem recebeu, fica.
+    ja_fitid = fitids_existentes(empresa_id, dados['conta'], [l.get('fitid') for _, l in unicos])
+    novos = [(h, l) for h, l in unicos if h not in ja and not (l.get('fitid') and l['fitid'] in ja_fitid)]
+    # O PDF pode ter chegado ANTES e criado a linha sem FITID: o arquivo com
+    # FITID só encaixa nela — a descrição do PDF, que tem o nome, fica.
     encaixados = 0
     if novos:
         from utils.extrato_pdf_c6 import encaixar_ofx_em_pdf
@@ -315,25 +346,15 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
     auto, par = 0, {}
     if novos:
         ExtratoLancamento.inserir_lote(
-            novos, dados['banco'], dados['conta'], os.path.basename(caminho),
-            usuario_id, empresa_id=empresa_id)
+            novos, dados['banco'], dados['conta'], arquivo,
+            usuario_id, empresa_id=empresa_id, origem=origem)
         marks = ','.join(['%s'] * len(novos))
         ids = execute_query(
             f'SELECT id FROM extrato_lancamentos WHERE hash_dedup IN ({marks})',
             tuple(h for h, _ in novos), fetch=True) or []
 
-        # A ORDEM AQUI É O QUE IMPORTA: primeiro TRAVAR as pontas de
-        # transferência, só depois deixar as regras classificarem. Invertido,
-        # uma regra ampla (a 112 pega 1.433 "Recebimento de cobrança") poderia
-        # classificar a ponta antes de o par ser detectado, e o dinheiro
-        # contaria duas vezes — o defeito que a trava existe para impedir.
-        #
-        # Roda sobre o GRUPO INTEIRO, e não só sobre esta empresa ou sobre os
-        # lançamentos novos. Dois motivos:
-        #  * par ENTRE empresas precisa dos dois lados na mesma consulta —
-        #    filtrar por esta empresa esconderia a outra ponta;
-        #  * quando o arquivo do EFI entra antes do do Sicredi, a ponta do EFI
-        #    está esperando desde o ciclo anterior e só agora ganha par.
+        # A ORDEM IMPORTA: primeiro TRAVAR as pontas de transferência, só
+        # depois deixar as regras classificarem (ver histórico no git).
         try:
             from utils.extrato_par import marcar
             par = marcar(dry=False)
@@ -341,7 +362,6 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
             logger.exception('[extrato] detector de pares falhou; os '
                              'lançamentos VALEM e ficam sem trava nesta rodada.')
             par = {}
-
         auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids])
 
     return {
@@ -349,8 +369,45 @@ def processar_ofx(caminho, empresa_id, usuario_id=None):
         'banco_bruto': dados['banco'], 'conta': dados['conta'],
         'saldo': dados.get('saldo'),
         'total': len(lancs), 'novos': len(novos),
-        'repetidos': len(unicos) - len(novos), 'classificados': auto,
+        'repetidos': len(unicos) - len(novos) - encaixados, 'classificados': auto,
         'encaixados': encaixados,
         'travados': (par or {}).get('gravados', 0),
         'datas': [l['data'] for l in lancs],
     }
+
+
+def conta_da_empresa_no_banco(empresa_id, banco_id):
+    """A conta cadastrada da empresa nesse banco, se for UMA só (CSV não diz a
+    conta: o número no nome do arquivo diz a empresa, o layout diz o banco).
+    Devolve (registro, quantas)."""
+    from utils.db_helper import execute_query
+    cod = re.sub(r'\D', '', str(banco_id or '')).lstrip('0')
+    rows = execute_query(
+        "SELECT * FROM fin_contas WHERE empresa_id = %s AND ativo = 1 "
+        "  AND TRIM(LEADING '0' FROM COALESCE(banco_id, '')) = %s",
+        (empresa_id, cod), fetch=True) or []
+    return (rows[0] if len(rows) == 1 else None), len(rows)
+
+
+def identificar_empresa_csv(nome_arquivo, banco_id, banco_nome=None):
+    """(cliente, conta_str, motivo) para um CSV: empresa pelo número/CPF no
+    nome do arquivo; conta = a única da empresa nesse banco."""
+    from utils.db_helper import execute_query
+    num = numero_empresa_do_nome(nome_arquivo)
+    if not num:
+        return None, None, (f'CSV do {banco_nome or "banco"}: o arquivo não diz de que conta é. '
+                            'Coloque o número da empresa (ou o CPF/CNPJ) no nome do arquivo.')
+    cli = execute_query(
+        'SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes '
+        ' WHERE numero_cliente = %s', (num,), fetch=True, fetch_one=True)
+    if not cli:
+        return None, None, f'o nome do arquivo diz empresa {num}, que não existe no cadastro.'
+    reg, n = conta_da_empresa_no_banco(cli['id'], banco_id)
+    if not reg:
+        if n == 0:
+            return None, None, (f'CSV do {banco_nome or "banco"} da empresa {num}: a conta ainda '
+                                'não está cadastrada. Diga qual é UMA vez e o sistema lê.')
+        return None, None, (f'a empresa {num} tem {n} contas no {banco_nome or "banco"} e o CSV '
+                            'não diz qual é. Cadastre só uma como ativa ou mande o OFX.')
+    conta_str = f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta']
+    return cli, conta_str, f'CSV: empresa {num} pelo nome do arquivo, conta {conta_str} do cadastro'

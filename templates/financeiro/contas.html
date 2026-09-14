@@ -282,6 +282,51 @@
         </form>
     </div>
 </div>
+{# ── Formatos por banco: o que cada arquivo entrega (utils/extrato_formatos) ── #}
+<div class="fin-caixa" style="margin-top:16px;">
+    <h3 style="margin:0 0 4px; font-size:15px;"><i class="fas fa-file-invoice"></i> Formatos por banco</h3>
+    <div style="font-size:12.5px; color:#64748b; margin-bottom:12px;">
+        OFX é o padrão para todo banco. PDF e CSV só onde o OFX é incompleto (C6) ou onde o
+        cliente só tem esse arquivo. O que chega na pasta é reconhecido pelo conteúdo.
+    </div>
+    <div class="fmt-grade">
+        <div class="fmt-cab">Banco</div><div class="fmt-cab">OFX</div><div class="fmt-cab">PDF</div><div class="fmt-cab">CSV</div>
+        {% for f in formatos %}
+        <div class="fmt-banco"><strong>{{ f.nome }}</strong> <small>{{ f.banco_id }}</small></div>
+        {% for k in ('ofx', 'pdf', 'csv') %}
+        {% set c = f[k] %}
+        <div class="fmt-cel">
+            <span class="fmt-rot">{{ k|upper }}</span>
+            <span class="fmt-selo fmt-{{ c.status }}">{{ c.rotulo }}</span>
+            <div class="fmt-nota">{{ c.nota }}</div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+<style>
+.fmt-grade { display:grid; grid-template-columns: 110px repeat(3, 1fr); gap:0; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
+.fmt-cab { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; background:#f8fafc; padding:8px 12px; border-bottom:1px solid #e2e8f0; }
+.fmt-banco, .fmt-cel { padding:10px 12px; border-bottom:1px solid #f1f5f9; min-width:0; }
+.fmt-banco small { color:#94a3b8; display:block; }
+.fmt-rot { display:none; }
+.fmt-selo { display:inline-block; font-size:11px; font-weight:700; border-radius:99px; padding:2px 9px; letter-spacing:.02em; }
+.fmt-ok { background:#dcfce7; color:#166534; }
+.fmt-irregular { background:#fef3c7; color:#92400e; }
+.fmt-igual { background:#e0f2fe; color:#075985; }
+.fmt-nao { background:#f1f5f9; color:#64748b; }
+.fmt-nota { font-size:11.5px; color:#64748b; margin-top:4px; line-height:1.35; }
+@media (max-width: 760px) {
+  .fmt-grade { display:block; border:0; }
+  .fmt-cab { display:none; }
+  .fmt-banco { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px 10px 0 0; margin-top:12px; padding:8px 12px; }
+  .fmt-banco small { display:inline; margin-left:6px; }
+  .fmt-cel { border:1px solid #e2e8f0; border-top:0; padding:8px 12px; display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+  .fmt-cel:nth-child(4n) { border-radius:0 0 10px 10px; }
+  .fmt-rot { display:inline-block; width:34px; font-size:11px; font-weight:700; color:#475569; }
+  .fmt-nota { flex-basis:100%; margin-top:0; }
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}

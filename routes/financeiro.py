@@ -1023,26 +1023,57 @@ def extrato_importar():
         flash('Escolha ao menos um arquivo OFX (ou o PDF do C6).', 'warning')
         return _volta_extrato()
 
-    from utils.extrato_pdf_c6 import (parse_pdf_c6, processar_pdf, senhas_candidatas,
-                                      encaixar_ofx_em_pdf, aviso_ofx, PdfInvalido)
+    from utils.extrato_pdf_c6 import (processar_pdf, senhas_candidatas,
+                                      encaixar_ofx_em_pdf, aviso_ofx)
+    from utils.extrato_formatos import ler_arquivo, ArquivoDesconhecido
+    from utils.extrato_ingest import processar_lancamentos, conta_da_empresa_no_banco
     for arq in arquivos:
-        if (arq.filename or '').lower().endswith('.pdf'):
-            # PDF do C6: o arquivo completo. Abre com o CPF da empresa
-            # escolhida (ou o que estiver no nome), completa e cria.
+        ext = (arq.filename or '').lower().rsplit('.', 1)[-1]
+        if ext in ('pdf', 'csv'):
+            # PDF (C6, Nubank) e CSV (Nubank) passam pelo despachante. O PDF
+            # abre com o CPF da empresa escolhida (ou o que estiver no nome).
             try:
                 from utils.db_helper import execute_query as _q
                 dono = _q('SELECT cpf_cnpj FROM clientes WHERE id = %s',
                           (empresa_id,), fetch=True, fetch_one=True) or {}
-                senhas = senhas_candidatas(arq.filename)
+                senhas = senhas_candidatas(arq.filename) if ext == 'pdf' else []
                 if dono.get('cpf_cnpj'):
                     senhas.insert(0, dono['cpf_cnpj'])
-                dados = parse_pdf_c6(arq.read(), senhas)
-            except PdfInvalido as e:
-                flash(f'{arq.filename}: {e}', 'danger')
+                dados, formato = ler_arquivo(arq.filename, arq.read(), senhas)
+            except ArquivoDesconhecido:
+                flash(f'{arq.filename}: não é um extrato que eu saiba ler.', 'danger')
                 continue
             except Exception:
-                flash(f'{arq.filename}: não consegui ler este PDF — me mande '
+                flash(f'{arq.filename}: não consegui ler este arquivo — me mande '
                       'ele que eu ajusto o leitor.', 'danger')
+                continue
+            if formato in ('pdf-senha', 'pdf-outro', 'csv-outro'):
+                flash(f'{arq.filename}: ' + ((dados or {}).get('motivo') or
+                      'PDF com senha que não abriu com o CPF/CNPJ desta empresa.'), 'warning')
+                continue
+            if formato == 'csv':
+                reg, n = conta_da_empresa_no_banco(empresa_id, dados.get('banco_id'))
+                if not reg:
+                    flash(f'{arq.filename}: o CSV não diz de que conta é, e esta empresa tem '
+                          f'{n} conta(s) cadastrada(s) nesse banco. Cadastre a conta (uma só, '
+                          'ativa) em Contas e mande de novo — ou mande o OFX.', 'warning')
+                    continue
+                dados['conta'] = (f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta'])
+                r = processar_lancamentos(dados, empresa_id, arq.filename,
+                                          usuario_id=current_user.id, origem='csv')
+                msg = (f"{arq.filename}: {r['novos']} lançamento(s) novo(s), "
+                       f"{r['repetidos']} já estavam")
+                if r.get('encaixados'):
+                    msg += f"; {r['encaixados']} encaixado(s) em lançamento(s) que o PDF já tinha criado"
+                if r['classificados']:
+                    msg += f"; {r['classificados']} já chegaram CLASSIFICADOS pela memorização"
+                flash(msg, 'success' if r['novos'] else 'warning')
+                registrar('escrita.importou_extrato', 'financeiro',
+                          tabela='extrato_lancamentos',
+                          depois={'empresa_id': empresa_id, 'arquivo': arq.filename,
+                                  'banco': dados['banco'], 'conta': dados['conta'],
+                                  'formato': 'csv', 'novos': r['novos'],
+                                  'repetidos': r['repetidos']})
                 continue
             r = processar_pdf(empresa_id, dados, arquivo=arq.filename,
                               usuario_id=current_user.id, dry=False)
@@ -1151,7 +1182,7 @@ def contas():
         'financeiro/contas.html',
         contas=FinContaBancaria.listar(empresa_ids=sel, apenas_ativas=False),
         pendencias=FinExtratoPendencia.listar(empresa_ids=sel, ver_orfas=admin),
-        eh_admin=admin,
+        eh_admin=admin, formatos=__import__('utils.extrato_formatos', fromlist=['catalogo']).catalogo(),
         fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
 
 

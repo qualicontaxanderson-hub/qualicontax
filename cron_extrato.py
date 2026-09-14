@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger('cron_extrato')
 
 PASTA_ORIGEM = '_ENTRADA'
-EXTENSOES = ('.ofx', '.pdf')   # whitelist — ver REGRA DE FERRO no topo
+EXTENSOES = ('.ofx', '.pdf', '.csv')   # whitelist — ver REGRA DE FERRO no topo
 _ATOR_NOME = 'ROTEADOR (extrato)'
 _ATOR_LOGIN = 'roteador_extrato'
 
@@ -53,27 +53,22 @@ def _tmp(nome):
 
 
 def _ler_previa(nome, dados, senhas_extra=()):
-    """(previa, formato) — ``formato`` 'ofx' ou 'pdf'. (None, 'pdf-senha')
-    quando é um PDF protegido que nenhum documento abriu: vira pendência na
-    tela de Contas. (None, None) quando o arquivo não é nosso (PDF que não
-    é extrato do C6): fica onde está, intocado."""
+    """(previa, formato) via ``utils.extrato_formatos.ler_arquivo`` — 'ofx',
+    'csv' ou 'pdf' quando leu; 'pdf-senha', 'pdf-outro', 'csv-outro' quando
+    vira pendência (a previa traz o motivo); (None, None) quando o arquivo
+    não é extrato: fica onde está, intocado."""
+    from utils.extrato_formatos import ler_arquivo, ArquivoDesconhecido
+    senhas = list(x for x in (senhas_extra or ()) if x)
     if (nome or '').lower().endswith('.pdf'):
-        from utils.extrato_pdf_c6 import (parse_pdf_c6, senhas_candidatas,
-                                          PdfInvalido, PdfProtegido, PdfOutroBanco)
-        try:
-            senhas = [x for x in (senhas_extra or ()) if x] + senhas_candidatas(nome)
-            return parse_pdf_c6(dados, senhas), 'pdf'
-        except PdfProtegido:
-            return None, 'pdf-senha'
-        except PdfOutroBanco:
-            return None, 'pdf-outro'
-        except PdfInvalido:
-            return None, None
-    from utils.ofx_parser import parse_ofx
-    return parse_ofx(dados), 'ofx'
+        from utils.extrato_pdf_c6 import senhas_candidatas
+        senhas += senhas_candidatas(nome)
+    try:
+        return ler_arquivo(nome, dados, senhas)
+    except ArquivoDesconhecido:
+        return None, None
 
 
-def _pendencia_pdf(origem, nome, seco, formato):
+def _pendencia_pdf(origem, nome, seco, formato, previa=None):
     """PDF que não abriu, ou extrato em PDF de outro banco: entra na fila de
     Contas, na empresa que o nome do arquivo indicar (ou órfã, para o
     admin). Sem o nome no log."""
@@ -83,8 +78,12 @@ def _pendencia_pdf(origem, nome, seco, formato):
     from utils.extrato_ingest import numero_empresa_do_nome
     from utils.extrato_pdf_c6 import (ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA,
                                       ROTULO_PDF_OUTRO, MOTIVO_PDF_OUTRO)
-    rotulo, motivo = ((ROTULO_PDF_OUTRO, MOTIVO_PDF_OUTRO) if formato == 'pdf-outro'
-                      else (ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA))
+    if formato == 'csv-outro':
+        rotulo, motivo = 'CSV de outro layout', (previa or {}).get('motivo') or 'CSV que eu não sei ler.'
+    elif formato == 'pdf-outro':
+        rotulo, motivo = ROTULO_PDF_OUTRO, (previa or {}).get('motivo') or MOTIVO_PDF_OUTRO
+    else:
+        rotulo, motivo = ROTULO_PDF_SENHA, MOTIVO_PDF_SENHA
     num = numero_empresa_do_nome(nome)
     dono = None
     if num:
@@ -100,7 +99,7 @@ def _pendencia_pdf(origem, nome, seco, formato):
 def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
     """Grava o que o arquivo traz. OFX cria lançamentos (e encaixa no que o
     PDF já criou); PDF do C6 completa o que existe e cria o que falta."""
-    from utils.extrato_ingest import processar_ofx
+    from utils.extrato_ingest import processar_ofx, processar_lancamentos
     if formato == 'pdf':
         from utils.extrato_pdf_c6 import processar_pdf
         c = processar_pdf(empresa_id, previa, arquivo=os.path.basename(caminho),
@@ -108,6 +107,9 @@ def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
         return {'novos': c['novos'], 'repetidos': c['repetidos'],
                 'classificados': c['classificados'], 'completadas': c['completadas'],
                 'no_pdf': c['no_pdf'], 'ambiguos': c['ambiguos'], 'travados': c['travados']}
+    if formato == 'csv':
+        return processar_lancamentos(previa, empresa_id, os.path.basename(caminho),
+                                     usuario_id=usuario_id, origem='csv')
     return processar_ofx(caminho, empresa_id, usuario_id=usuario_id)
 
 
@@ -172,25 +174,33 @@ def rodar(dryrun=None, limite=None):
 
             # Lê o arquivo ANTES de decidir o dono: é a CONTA que manda.
             previa, formato = _ler_previa(nome, dados)
-            if formato in ('pdf-senha', 'pdf-outro'):
-                _pendencia_pdf(origem, nome, seco, formato)
-                linha['resultado'] = ('PENDENTE: PDF com senha que nenhum documento abriu'
-                                      if formato == 'pdf-senha'
-                                      else 'PENDENTE: extrato em PDF de outro banco (mande o OFX)')
+            if formato in ('pdf-senha', 'pdf-outro', 'csv-outro'):
+                _pendencia_pdf(origem, nome, seco, formato, previa)
+                linha['resultado'] = {'pdf-senha': 'PENDENTE: PDF com senha que nenhum documento abriu',
+                                      'pdf-outro': 'PENDENTE: extrato em PDF de outro banco (mande o OFX)',
+                                      'csv-outro': 'PENDENTE: CSV com colunas que eu não conheço'}[formato]
                 resumo['erros'] += 1
                 resumo['detalhes'].append(linha)
                 logger.warning('[extrato] %s; está na fila de Contas.',
-                               'um PDF com senha não abriu' if formato == 'pdf-senha'
-                               else 'um extrato em PDF de outro banco')
+                               {'pdf-senha': 'um PDF com senha não abriu',
+                                'pdf-outro': 'um extrato em PDF de outro banco',
+                                'csv-outro': 'um CSV de layout desconhecido'}[formato])
                 continue
             if not formato:
                 resumo['lidos'] -= 1
                 resumo['ignorados'] += 1
                 continue
             banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
-            cliente, motivo = identificar_empresa(
-                nome, banco_id=previa.get('banco_id'),
-                conta=previa.get('conta'), banco_nome=banco)
+            if formato == 'csv':
+                from utils.extrato_ingest import identificar_empresa_csv
+                cliente, conta_csv, motivo = identificar_empresa_csv(
+                    nome, previa.get('banco_id'), banco_nome=banco)
+                if conta_csv:
+                    previa['conta'] = conta_csv
+            else:
+                cliente, motivo = identificar_empresa(
+                    nome, banco_id=previa.get('banco_id'),
+                    conta=previa.get('conta'), banco_nome=banco)
             linha['empresa'] = (cliente or {}).get('nome_razao_social')
             linha['motivo'] = motivo
             linha['banco'] = banco
@@ -336,16 +346,20 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
     if formato == 'pdf-senha':
         from utils.extrato_pdf_c6 import MOTIVO_PDF_SENHA
         return {'ok': False, 'motivo': 'Ainda não abriu. ' + MOTIVO_PDF_SENHA, 'pdf_senha': True}
-    if formato == 'pdf-outro':
-        from utils.extrato_pdf_c6 import MOTIVO_PDF_OUTRO
-        return {'ok': False, 'motivo': MOTIVO_PDF_OUTRO}
+    if formato in ('pdf-outro', 'csv-outro'):
+        return {'ok': False, 'motivo': (previa or {}).get('motivo') or 'arquivo que eu não sei ler'}
     if not formato:
-        return {'ok': False, 'motivo': 'O arquivo abriu, mas não é um extrato que eu saiba ler '
-                                       '(em PDF, por enquanto, só o do C6).'}
+        return {'ok': False, 'motivo': 'O arquivo abriu, mas não é um extrato que eu saiba ler.'}
     banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
-    cliente, motivo = identificar_empresa(
-        nome, banco_id=previa.get('banco_id'), conta=previa.get('conta'),
-        banco_nome=banco)
+    if formato == 'csv':
+        from utils.extrato_ingest import identificar_empresa_csv
+        cliente, conta_csv, motivo = identificar_empresa_csv(nome, previa.get('banco_id'), banco_nome=banco)
+        if conta_csv:
+            previa['conta'] = conta_csv
+    else:
+        cliente, motivo = identificar_empresa(
+            nome, banco_id=previa.get('banco_id'), conta=previa.get('conta'),
+            banco_nome=banco)
     if not cliente:
         from utils.extrato_ingest import rotulo_periodo
         return {'ok': False, 'motivo': motivo, 'formato': formato,
