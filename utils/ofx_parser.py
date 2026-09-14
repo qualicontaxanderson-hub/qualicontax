@@ -29,13 +29,24 @@ class OfxInvalido(ValueError):
 
 
 def _decodificar(raw: bytes) -> str:
-    """Decodifica respeitando o cabeçalho; na dúvida, latin-1 nunca estoura."""
-    cabeca = raw[:600].decode('ascii', errors='ignore').upper()
-    if 'UTF-8' in cabeca or 'UNICODE' in cabeca or raw[:3] == b'\xef\xbb\xbf':
+    """Decodifica respeitando o cabeçalho; na dúvida, latin-1 nunca estoura.
+
+    C6 e Sicredi mandam UTF-8 e MENTEM no cabeçalho ("ENCODING:UTF - 8" com
+    espaços, "CHARSET:1252"): 74 lançamentos entraram como "cartÃ£o" e
+    "RogÃ©rio" até 14/09/2026. Por isso (1) o cabeçalho é lido sem espaços e
+    (2) sem cabeçalho confiável tenta-se UTF-8 ESTRITO antes do cp1252 —
+    texto cp1252 com acento quase nunca forma sequência UTF-8 válida, e
+    ASCII puro passa nos dois."""
+    cabeca = re.sub(r'\s+', '', raw[:600].decode('ascii', errors='ignore').upper())
+    if 'UTF-8' in cabeca or 'UTF8' in cabeca or 'UNICODE' in cabeca or raw[:3] == b'\xef\xbb\xbf':
         try:
             return raw.decode('utf-8-sig')
         except UnicodeDecodeError:
             pass
+    try:
+        return raw.decode('utf-8')
+    except UnicodeDecodeError:
+        pass
     try:
         return raw.decode('cp1252')
     except UnicodeDecodeError:
