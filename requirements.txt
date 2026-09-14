@@ -30,3 +30,5 @@ zipstream-ng==1.9.2
 openpyxl==3.1.5
 # Juntar DANFSEs num PDF unico (export da NFS-e)
 pypdf==6.1.1
+# Extrato em PDF do C6 (utils/extrato_pdf_c6.py) — abre PDF com senha e extrai o texto por linha
+PyMuPDF==1.28.2
