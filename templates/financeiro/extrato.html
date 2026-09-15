@@ -631,7 +631,9 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             <span class="ex-caixinha">✓</span>
             <div class="ex-corpo">
                 {# 1 — a descricao do banco, literal, com o nome em negrito #}
-                <div class="ex-desc">{{ q.antes }}{% if q.nome %} <b>{{ q.nome }}</b>{% endif %}</div>
+                {# q.depois existe quando o nome vem ANTES do documento (Cora,
+                   Nubank): sem ele o resto da linha sumiria da tela. #}
+                <div class="ex-desc">{{ q.antes }}{% if q.nome %}<b>{{ q.nome }}</b>{% endif %}{{ q.depois }}</div>
 
                 {# 2 — a empresa, linha inteira, sem cortar #}
                 <div class="ex-emp">

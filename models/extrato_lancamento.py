@@ -225,6 +225,10 @@ class ExtratoLancamento:
     #: CPF (11) ou CNPJ (14) soltos no meio da descricao.
     _DOC = re.compile(r'\b(\d{11}|\d{14})\b')
 
+    #: O mesmo documento PONTUADO, que e como o Cora e o Nubank escrevem.
+    _DOC_PONTUADO = re.compile(
+        r'\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}')
+
     @staticmethod
     def ler_descricao(desc):
         """Quebra a descricao do banco em (documento, nome, antes).
@@ -245,9 +249,24 @@ class ExtratoLancamento:
         d = re.sub(r'\s+', ' ', d or '').strip()
         m = ExtratoLancamento._DOC.search(d)
         if m:
-            return {'doc': m.group(1),
-                    'nome': d[m.end():].strip(),
-                    'antes': d[:m.end()].strip()}
+            return {'doc': m.group(1), 'nome': d[m.end():].strip(),
+                    'antes': d[:m.end()].strip(), 'depois': ''}
+
+        # O OUTRO desenho, e ele e a maioria fora do Sicredi: o nome vem ANTES
+        # do documento, entre travessoes — 'Transf Pix enviada - Anderson
+        # Antunes Vieira - 291.511.418-84' (Cora), 'Transferencia enviada pelo
+        # Pix - NH GTBA - 33.503.987/0001-16 - COOP SICREDI ...' (Nubank).
+        # Sem isto o leitor caia no bloco de numeros la no fim e mostrava '-6'
+        # (o digito da conta) como se fosse o nome de quem recebeu.
+        m = ExtratoLancamento._DOC_PONTUADO.search(d)
+        if m:
+            cabeca = d[:m.start()].rstrip(' -')
+            corte = cabeca.rfind(' - ')
+            if corte > 0:
+                return {'doc': re.sub(r'\D', '', m.group(0)),
+                        'nome': cabeca[corte + 3:].strip(),
+                        'antes': cabeca[:corte + 3],
+                        'depois': ' ' + d[m.start():].strip()}
 
         # Sem CPF/CNPJ ainda pode haver nome: na tarifa de cobranca o codigo
         # do banco tem 9 digitos ("...COB000001 262005312 DISTRIBUIDORA DE
@@ -256,10 +275,11 @@ class ExtratoLancamento:
         ult = None
         for n in re.finditer(r'\b\d{4,}\b', d):
             ult = n
-        if ult and d[ult.end():].strip():
-            return {'doc': '', 'nome': d[ult.end():].strip(),
-                    'antes': d[:ult.end()].strip()}
-        return {'doc': '', 'nome': '', 'antes': d}
+        rabo = d[ult.end():].strip() if ult else ''
+        # '-6', '-22', '-0': digito verificador da conta, nao nome de gente.
+        if rabo and len(re.sub(r'[^A-Za-zÀ-ÿ]', '', rabo)) >= 3:
+            return {'doc': '', 'nome': rabo, 'antes': d[:ult.end()].strip(), 'depois': ''}
+        return {'doc': '', 'nome': '', 'antes': d, 'depois': ''}
 
     @staticmethod
     def corrigir_acento(texto):

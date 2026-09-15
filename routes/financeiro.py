@@ -1547,8 +1547,10 @@ def extrato_classificar(lanc_id):
             (lanc.get('empresa_id'), tipo_prog, nome_prog),
             fetch=True, fetch_one=True)
         if dup:
+            # Aviso, não alerta: nada falhou. A programação que existe é a
+            # que vale, e criar outra faria o gerar_mes duplicar a conta.
             flash(f'Já existe programação ativa para "{nome_prog}" — '
-                  'nenhuma nova foi criada.', 'warning')
+                  'a que existe continua valendo.', 'info')
         else:
             d = lanc['data']
             # inicio no MES SEGUINTE: o titulo deste mes acabou de nascer na
@@ -2018,8 +2020,10 @@ def extrato_lote():
             (rep.get('empresa_id'), tipo_prog, nome_prog),
             fetch=True, fetch_one=True)
         if dup:
+            # Aviso, não alerta: nada falhou. A programação que existe é a
+            # que vale, e criar outra faria o gerar_mes duplicar a conta.
             flash(f'Já existe programação ativa para "{nome_prog}" — '
-                  'nenhuma nova foi criada.', 'warning')
+                  'a que existe continua valendo.', 'info')
         else:
             dt = rep['data']
             inicio = (_date(dt.year + 1, 1, 1) if dt.month == 12
