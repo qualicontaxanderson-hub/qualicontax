@@ -1402,19 +1402,32 @@ function exWizDesenha() {
             ' (' + x.n + ')</button>';
         }).join('') + '</div>';
     }
-    // "Cesta de Relacionamento" de um banco pode nao ser a do outro:
-    // a conta e escolha do usuario, SEM pre-selecao.
+    // "Cesta de Relacionamento" de um banco pode nao ser a do outro, entao a
+    // conta continua sendo escolha do usuario. O que mudou (15/09/2026): a
+    // tela agora DIZ o que cada escolha custa, e quando a regra fala de uma
+    // PESSOA ela ja nasce em "qualquer conta" - 136 das 136 regras existentes
+    // estavam presas a uma conta, e era por isso que o mesmo funcionario pago
+    // por outro banco caia sem categoria. Para regra que fala de PRODUTO do
+    // banco ("pagamento de fatura") a conta continua sendo o significado.
+    var _sg = (W.sugEscolhida !== null && W.sugestoes) ? W.sugestoes[W.sugEscolhida] : null;
+    var _viaja = !!_sg && (_sg.tipo === 'pessoa' || _sg.tipo === 'documento');
+    var _selo = '<span style="font-size:9px;background:#00a85a;color:#fff;border-radius:99px;padding:2px 8px;vertical-align:middle;margin-left:6px">SUGERIDA</span>';
     html += '<span class="ex-rot">e em qual conta?' +
       (W.contaEscolha === null ? ' <b style="color:#b45309">— escolha um</b>' : '') +
       '</span><div class="ex-cartoes">' + [
       ['so', '🏦', 'Só nesta conta',
-       exEsc(W.lanc.banco || '') + ' · ' + exEsc(W.lanc.conta || '')],
-      ['qualquer', '🌐', 'Qualquer conta', 'vale em todos os bancos da empresa']
+       exEsc(W.lanc.banco || '') + ' · ' + exEsc(W.lanc.conta || '') +
+       (_viaja ? '<br><b style="color:#b45309">o mesmo pagamento por outro banco NÃO será pego</b>' : ''),
+       ''],
+      ['qualquer', '🌐', 'Qualquer conta',
+       _viaja ? 'segue a pessoa em todos os bancos da empresa'
+              : 'vale em todos os bancos da empresa',
+       _viaja ? _selo : '']
     ].map(function (o) {
       return '<button type="button" class="ex-cartao' +
         (W.contaEscolha === o[0] ? ' on' : '') +
         '" onclick="exWizConta(\'' + o[0] + '\')"><span class="b">' + o[1] +
-        '</span><span class="t"><b>' + o[2] + '</b><small>' + o[3] +
+        '</span><span class="t"><b>' + o[2] + o[4] + '</b><small>' + o[3] +
         '</small></span><span class="ok">✓</span></button>';
     }).join('') + '</div>';
     html += exCaixaContagem();
@@ -1779,8 +1792,18 @@ function exWizModo(m) {
 }
 function exWizSugestao(k) {
   W.sugEscolhida = k;
-  var alvo = W.sugestoes[k].termos.join(' ').toUpperCase().split(/\s+/);
+  var sg = W.sugestoes[k];
+  var alvo = sg.termos.join(' ').toUpperCase().split(/\s+/);
   W.pedacos.forEach(function (p) { p.on = alvo.indexOf(p.txt.toUpperCase()) >= 0; });
+  // Regra que fala de uma PESSOA (ou do CPF/CNPJ dela) viaja entre bancos: a
+  // conta de origem e acidente, nao identidade.
+  if (sg.tipo === 'pessoa' || sg.tipo === 'documento') {
+    W.contaEscolha = 'qualquer';
+    W.cond.conta = false;
+  }
+  // Pega entrada E saida da mesma contraparte? Entao o sinal nao e detalhe:
+  // ja marco, e a pessoa desmarca se quiser as duas na mesma categoria.
+  if (sg.sinal_sugerido) W.cond.sinal = true;
   exPedePrevia(exWizDesenha);
   exWizDesenha();
 }

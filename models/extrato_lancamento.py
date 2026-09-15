@@ -720,6 +720,44 @@ class RegraExtrato:
             empresa_id or None,
         )
 
+    #: Palavras que o BANCO escreve (o tipo da operação) e palavras que toda
+    #: empresa tem no nome. Nenhuma delas identifica a contraparte, e foi
+    #: exatamente por elas que a primeira tentativa de "regra por nome" saiu
+    #: empatada na medição de 15/09/2026: +111 adotados, -110 roubados.
+    _NAO_IDENTIFICA = {
+        # o jeito de falar de cada banco
+        'PAGAMENTO', 'PAGTO', 'PIX', 'ENVIADO', 'ENVIADA', 'RECEBIDO', 'RECEBIDA',
+        'DES', 'REM', 'TRANSF', 'TRANSFERENCIA', 'CONTAS', 'CONTA', 'TED', 'DOC',
+        'ELET', 'DISP', 'LIQUIDACAO', 'BOLETO', 'TARIFA', 'BANCARIA', 'DEBITO',
+        'CREDITO', 'COBRANCA', 'PARA', 'DEB', 'CRED', 'SALDO', 'RENDIMENTO',
+        # nome de banco
+        'SICREDI', 'BRADESCO', 'CORA', 'NUBANK', 'SANTANDER', 'ITAU', 'CAIXA', 'BANCO',
+        # o que toda empresa tem no nome
+        'LTDA', 'EIRELI', 'EPP', 'MEI', 'SERVICOS', 'SERVICO', 'SERV', 'PRESTACAO',
+        'PREST', 'COMERCIO', 'COMERCIAL', 'INDUSTRIA', 'DISTRIBUIDORA', 'EMPRESA',
+        'SOCIEDADE', 'GESTAO', 'ADMINISTRACAO', 'ADMIN', 'TECNOLOGIA', 'ASSESSORIA',
+    }
+
+    #: CPF/CNPJ na descricao, com ou sem pontuacao. O MESMO documento chega
+    #: escrito de dois jeitos conforme o banco: o Sicredi manda
+    #: '75704250149' e o Cora manda '757.042.501-49'.
+    _DOC_NA_DESC = re.compile(
+        r'(?<!\d)(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}|\d{11}|\d{14})(?!\d)')
+
+    @staticmethod
+    def documentos_em(texto):
+        """Os CPFs e CNPJs de um texto, so digitos."""
+        return {re.sub(r'\D', '', d) for d in RegraExtrato._DOC_NA_DESC.findall(texto or '')}
+
+    @staticmethod
+    def e_documento(termo):
+        """O termo é um CPF/CNPJ (e não um pedaço de texto qualquer)?"""
+        t = (termo or '').strip()
+        so = re.sub(r'\D', '', t)
+        # Só dígitos e a pontuação de documento: '757.042.501-49' vale,
+        # 'PIX 75704250149 FULANO' não — ali o documento é parte de um texto.
+        return len(so) in (11, 14) and not re.search(r'[^\d./\- ]', t)
+
     @staticmethod
     def condicoes(regra):
         """Quantas condicoes a regra impoe alem do texto — o desempate."""
@@ -743,8 +781,17 @@ class RegraExtrato:
         termos = regra.get('termos') or []
         if not termos:
             return False
+        docs = None
         for t in termos:
-            if RegraExtrato._norma(t) not in desc:
+            tn = RegraExtrato._norma(t)
+            if RegraExtrato.e_documento(tn):
+                # Documento casa por DÍGITO: a pontuação é escolha do banco,
+                # não parte da identidade de quem está do outro lado.
+                if docs is None:
+                    docs = RegraExtrato.documentos_em(desc)
+                if re.sub(r'\D', '', tn) not in docs:
+                    return False
+            elif tn not in desc:
                 return False
 
         if regra.get('conta') and str(lanc.get('conta') or '') != str(regra['conta']):
@@ -813,6 +860,42 @@ class RegraExtrato:
         return limpo.strip(' .-/')
 
     @staticmethod
+    def _frequencia(universo):
+        """Em quantas descrições cada palavra aparece.
+
+        Palavra comum não identifica: 'SILVA' está em meio mundo, 'ROCHA'
+        não. É essa conta que decide quais pedaços do nome viram regra.
+        """
+        import collections
+        freq = collections.Counter()
+        for l in universo:
+            vistos = set()
+            for tok in re.split(r'[^A-Z0-9ÁÂÃÀÉÊÍÓÔÕÚÇ]+',
+                                RegraExtrato._norma(l.get('descricao'))):
+                if len(tok) >= 3 and tok not in vistos:
+                    vistos.add(tok)
+                    freq[tok] += 1
+        return freq
+
+    @staticmethod
+    def pedacos_que_identificam(texto, freq, teto, quantos=2):
+        """Os pedaços MAIS RAROS do texto — os que sobrevivem à abreviação.
+
+        O banco corta o nome onde quer ('Guilherme Rocha de So'), então a
+        regra não pode depender do nome inteiro. Pega as palavras menos
+        comuns da base: são as que apontam para uma pessoa só.
+        """
+        cand = []
+        for tok in re.split(r'[^A-Z0-9ÁÂÃÀÉÊÍÓÔÕÚÇ]+', RegraExtrato._norma(texto)):
+            if len(tok) >= 3 and tok not in RegraExtrato._NAO_IDENTIFICA                     and not tok.isdigit() and tok not in cand:
+                cand.append(tok)
+        cand.sort(key=lambda t: freq.get(t, 0))
+        escolha = cand[:quantos]
+        if len(escolha) < 2 or freq.get(escolha[0], 0) > teto:
+            return []                 # sem nada raro o bastante: não arrisca
+        return escolha
+
+    @staticmethod
     def sugestoes(lanc, escopo='empresa', grupo_id=None, empresas=None):
         """Trechos propostos para virar regra, do mais util para o menos.
 
@@ -839,10 +922,11 @@ class RegraExtrato:
         for t in toks:
             numeros.extend(RegraExtrato._NUM_COLADO.findall(t))
         props, vistos = [], set()
-        # UMA leitura para as quatro propostas.
+        # UMA leitura para todas as propostas.
         todos = RegraExtrato.universo(so_sem_categoria=False)
+        freq = RegraExtrato._frequencia(todos)
 
-        def poe(rotulo, termos, porque, posto):
+        def poe(rotulo, termos, porque, posto, tipo='texto'):
             termos = [t.strip() for t in termos if t and t.strip()]
             if not termos:
                 return
@@ -857,12 +941,44 @@ class RegraExtrato:
             achados = RegraExtrato.preve(falso, so_sem_categoria=False,
                                          universo=todos)
             saidas = sum(1 for a in achados if float(a['valor'] or 0) < 0)
+            entradas = len(achados) - saidas
+            # Pega entrada E saida da mesma contraparte? Entao o sinal nao e
+            # detalhe: sem ele, o Pix que a pessoa MANDOU para voce entraria
+            # como despesa (o caso do Guilherme, 19/06, +60,00).
+            este_saiu = float(lanc.get('valor') or 0) < 0
             props.append({
                 'rotulo': rotulo, 'termos': termos, 'porque': porque,
-                'posto': posto, 'n': len(achados),
-                'saidas': saidas, 'entradas': len(achados) - saidas,
+                'posto': posto, 'tipo': tipo, 'n': len(achados),
+                'saidas': saidas, 'entradas': entradas,
+                'sinal_sugerido': ('D' if este_saiu else 'C') if (saidas and entradas) else None,
                 'exemplos': [a['descricao'][:60] for a in achados[:4]],
             })
+
+        # 0. O CPF/CNPJ de quem esta do outro lado. E a PRIMEIRA proposta
+        # porque e a unica identidade que nao abrevia, nao muda de banco para
+        # banco e nao tem xara: o Sicredi escreve '75704250149', o Cora
+        # escreve '757.042.501-49', e para a regra e o mesmo documento.
+        # Medido em 15/09/2026: 18% dos lancamentos trazem documento, e
+        # sozinho ele resolveria 68 dos orfaos da base.
+        for doc in sorted(RegraExtrato.documentos_em(desc)):
+            bonito = ExtratoLancamento.formatar_doc(doc)
+            quem = 'CNPJ' if len(doc) == 14 else 'CPF'
+            poe(f'Pelo {quem} {bonito}', [doc],
+                'o documento é o que não muda: abreviação de nome, jeito de '
+                'escrever de cada banco e conta de origem deixam de importar',
+                -1, tipo='documento')
+
+        # 0b. A PESSOA, escrita de qualquer jeito. Só os pedaços raros do
+        # nome, porque cada banco abrevia onde quer ('Guilherme Rocha de
+        # Sousa' vira 'Guilherme Rocha de So' no Bradesco) e porque pedaço
+        # comum rouba lançamento de outra categoria ('SILVA' pega meio mundo).
+        teto = max(20, len(todos) // 100)
+        identificam = RegraExtrato.pedacos_que_identificam(desc, freq, teto)
+        if identificam:
+            poe('A pessoa, escrita de qualquer jeito', identificam,
+                'os pedaços do nome que aparecem pouco na sua base (' +
+                ', '.join(f'{t} em {freq.get(t, 0)}' for t in identificam) +
+                ') — sobrevivem à abreviação de cada banco', -1, tipo='pessoa')
 
         # 1. sem os numeros que mudam
         if numeros:
