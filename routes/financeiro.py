@@ -1051,16 +1051,27 @@ def extrato_importar():
                 flash(f'{arq.filename}: ' + ((dados or {}).get('motivo') or
                       'PDF com senha que não abriu com o CPF/CNPJ desta empresa.'), 'warning')
                 continue
-            if formato == 'csv':
-                reg, n = conta_da_empresa_no_banco(empresa_id, dados.get('banco_id'))
-                if not reg:
-                    flash(f'{arq.filename}: o CSV não diz de que conta é, e esta empresa tem '
-                          f'{n} conta(s) cadastrada(s) nesse banco. Cadastre a conta (uma só, '
-                          'ativa) em Contas e mande de novo — ou mande o OFX.', 'warning')
-                    continue
-                dados['conta'] = (f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta'])
+            lancs_ = dados.get('lancamentos') or []
+            _com_id = sum(1 for l in lancs_ if l.get('fitid') or l.get('documento'))
+            tem_ids = bool(lancs_) and _com_id >= 0.8 * len(lancs_)
+            if not dados.get('conta'):
+                # sem conta no arquivo: documentos já gravados, senão a única
+                # conta desta empresa nesse banco (a empresa foi escolhida no form)
+                from utils.extrato_ingest import conta_pelos_documentos
+                ach = conta_pelos_documentos(lancs_)
+                if ach and ach[0] == empresa_id:
+                    dados['conta'] = ach[1]
+                else:
+                    reg, n = conta_da_empresa_no_banco(empresa_id, dados.get('banco_id'))
+                    if not reg:
+                        flash(f'{arq.filename}: o arquivo não diz de que conta é, e esta empresa tem '
+                              f'{n} conta(s) cadastrada(s) nesse banco. Cadastre a conta (uma só, '
+                              'ativa) em Contas e mande de novo — ou mande o OFX.', 'warning')
+                        continue
+                    dados['conta'] = (f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta'])
+            if tem_ids:
                 r = processar_lancamentos(dados, empresa_id, arq.filename,
-                                          usuario_id=current_user.id, origem='csv')
+                                          usuario_id=current_user.id, origem=formato)
                 msg = (f"{arq.filename}: {r['novos']} lançamento(s) novo(s), "
                        f"{r['repetidos']} já estavam")
                 if r.get('encaixados'):
@@ -1072,7 +1083,7 @@ def extrato_importar():
                           tabela='extrato_lancamentos',
                           depois={'empresa_id': empresa_id, 'arquivo': arq.filename,
                                   'banco': dados['banco'], 'conta': dados['conta'],
-                                  'formato': 'csv', 'novos': r['novos'],
+                                  'formato': formato, 'novos': r['novos'],
                                   'repetidos': r['repetidos']})
                 continue
             r = processar_pdf(empresa_id, dados, arquivo=arq.filename,

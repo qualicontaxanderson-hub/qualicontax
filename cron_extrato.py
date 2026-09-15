@@ -100,16 +100,25 @@ def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
     """Grava o que o arquivo traz. OFX cria lançamentos (e encaixa no que o
     PDF já criou); PDF do C6 completa o que existe e cria o que falta."""
     from utils.extrato_ingest import processar_ofx, processar_lancamentos
-    if formato == 'pdf':
+    if formato in ('pdf', 'csv'):
+        # Com identificador (fitid ou documento) o arquivo entra pelo núcleo,
+        # que deduplica por id. Sem identificador (PDF do C6/Nubank/Sicredi,
+        # CSV do Cora/C6) entra pelo casamento por data + valor, que completa
+        # o que existe e cria o que falta.
+        lancs = previa.get('lancamentos') or []
+        com_id = sum(1 for l in lancs if l.get('fitid') or l.get('documento'))
+        tem_ids = bool(lancs) and com_id >= 0.8 * len(lancs)
+        if tem_ids:
+            r = processar_lancamentos(previa, empresa_id, os.path.basename(caminho),
+                                      usuario_id=usuario_id, origem=formato)
+            r.setdefault('completadas', 0)
+            return r
         from utils.extrato_pdf_c6 import processar_pdf
         c = processar_pdf(empresa_id, previa, arquivo=os.path.basename(caminho),
                           usuario_id=usuario_id, dry=False)
         return {'novos': c['novos'], 'repetidos': c['repetidos'],
                 'classificados': c['classificados'], 'completadas': c['completadas'],
                 'no_pdf': c['no_pdf'], 'ambiguos': c['ambiguos'], 'travados': c['travados']}
-    if formato == 'csv':
-        return processar_lancamentos(previa, empresa_id, os.path.basename(caminho),
-                                     usuario_id=usuario_id, origem='csv')
     return processar_ofx(caminho, empresa_id, usuario_id=usuario_id)
 
 
@@ -191,16 +200,17 @@ def rodar(dryrun=None, limite=None):
                 resumo['ignorados'] += 1
                 continue
             banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
-            if formato == 'csv':
-                from utils.extrato_ingest import identificar_empresa_csv
-                cliente, conta_csv, motivo = identificar_empresa_csv(
-                    nome, previa.get('banco_id'), banco_nome=banco)
-                if conta_csv:
-                    previa['conta'] = conta_csv
-            else:
+            if formato == 'ofx':
                 cliente, motivo = identificar_empresa(
                     nome, banco_id=previa.get('banco_id'),
                     conta=previa.get('conta'), banco_nome=banco)
+            else:
+                # CSV e PDF: a conta pode vir no arquivo, nos documentos já
+                # gravados ou no nome do arquivo — identificar_arquivo decide.
+                from utils.extrato_ingest import identificar_arquivo
+                cliente, conta_str, motivo = identificar_arquivo(nome, previa)
+                if conta_str:
+                    previa['conta'] = conta_str
             linha['empresa'] = (cliente or {}).get('nome_razao_social')
             linha['motivo'] = motivo
             linha['banco'] = banco
@@ -351,15 +361,15 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
     if not formato:
         return {'ok': False, 'motivo': 'O arquivo abriu, mas não é um extrato que eu saiba ler.'}
     banco = banco_curto(previa.get('banco_id'), previa.get('banco'))
-    if formato == 'csv':
-        from utils.extrato_ingest import identificar_empresa_csv
-        cliente, conta_csv, motivo = identificar_empresa_csv(nome, previa.get('banco_id'), banco_nome=banco)
-        if conta_csv:
-            previa['conta'] = conta_csv
-    else:
+    if formato == 'ofx':
         cliente, motivo = identificar_empresa(
             nome, banco_id=previa.get('banco_id'), conta=previa.get('conta'),
             banco_nome=banco)
+    else:
+        from utils.extrato_ingest import identificar_arquivo
+        cliente, conta_str, motivo = identificar_arquivo(nome, previa)
+        if conta_str:
+            previa['conta'] = conta_str
     if not cliente:
         from utils.extrato_ingest import rotulo_periodo
         return {'ok': False, 'motivo': motivo, 'formato': formato,

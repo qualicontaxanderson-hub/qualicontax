@@ -30,10 +30,10 @@ CATALOGO = [
     {'banco_id': '336', 'nome': 'C6',
      'ofx': ('irregular', 'Pix enviado sem o nome de quem recebeu e boleto sem cedente. Entra, mas o completo é o PDF.'),
      'pdf': ('ok', 'O extrato completo do C6. Vale sozinho; se o OFX vier também, os dois se encaixam.'),
-     'csv': ('nao', 'Mande o PDF.')},
+     'csv': ('igual', 'Igual ao OFX (a mesma descrição curta). Traz a conta no cabeçalho.')},
     {'banco_id': '748', 'nome': 'Sicredi',
      'ofx': ('ok', 'CPF/CNPJ e nome nos dois sentidos.'),
-     'pdf': ('nao', 'Mande o OFX.'),
+     'pdf': ('igual', 'Mesmo conteúdo do OFX, sem o identificador; casa por data e valor. Traz cooperativa e conta na capa.'),
      'csv': ('nao', 'Mande o OFX.')},
     {'banco_id': '260', 'nome': 'Nubank',
      'ofx': ('ok', 'Nome, CNPJ e banco de origem na descrição.'),
@@ -41,16 +41,16 @@ CATALOGO = [
      'csv': ('igual', 'Mesmo conteúdo do OFX, com o mesmo identificador. Precisa do número da empresa no nome do arquivo.')},
     {'banco_id': '364', 'nome': 'Efí',
      'ofx': ('ok', '"Pix enviado via chave: X", "Recebimento de cobrança: N de X".'),
-     'pdf': ('nao', 'Mande o OFX.'),
-     'csv': ('nao', 'Mande o OFX.')},
+     'pdf': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.'),
+     'csv': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.')},
     {'banco_id': '237', 'nome': 'Bradesco',
      'ofx': ('ok', 'Nome nas transferências e no Pix recebido.'),
-     'pdf': ('nao', 'Mande o OFX.'),
-     'csv': ('nao', 'Mande o OFX.')},
+     'pdf': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta na capa.'),
+     'csv': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta no cabeçalho.')},
     {'banco_id': '403', 'nome': 'Cora',
      'ofx': ('ok', 'Nome nos dois sentidos.'),
-     'pdf': ('nao', 'Mande o OFX.'),
-     'csv': ('nao', 'Mande o OFX.')},
+     'pdf': ('nao', 'Os nomes vêm cortados ("Anderson Antunes Vi…"). Mande o OFX ou o CSV.'),
+     'csv': ('igual', 'Mesmo conteúdo do OFX (tipo + nome). Não diz a conta: precisa do nome ou número da empresa no arquivo.')},
 ]
 
 ROTULO = {'ok': 'OK', 'irregular': 'Irregular', 'igual': 'Igual ao OFX', 'nao': 'Não configurado'}
@@ -117,6 +117,15 @@ def _ler_pdf(dados, senhas):
             return parse_pdf_nubank(paginas), 'pdf'
         except PdfNubankInvalido as e:
             return {'motivo': f'Extrato do Nubank que não consegui ler: {e}'}, 'pdf-outro'
+    from utils.extrato_pdf_bancos import (e_sicredi, parse_sicredi, e_efi, parse_efi,
+                                          e_bradesco, parse_bradesco, PdfBancoInvalido)
+    for detecta, ler, nome in ((e_sicredi, parse_sicredi, 'Sicredi'), (e_efi, parse_efi, 'Efí'),
+                               (e_bradesco, parse_bradesco, 'Bradesco')):
+        if detecta(paginas[0]):
+            try:
+                return ler(paginas), 'pdf'
+            except PdfBancoInvalido as e:
+                return {'motivo': f'Extrato do {nome} que não consegui ler: {e}'}, 'pdf-outro'
     if parece_extrato_bancario(paginas[0]):
         return {'motivo': MOTIVO_PDF_OUTRO}, 'pdf-outro'
     raise ArquivoDesconhecido('pdf que não é extrato')

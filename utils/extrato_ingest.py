@@ -206,22 +206,38 @@ def conta_normalizada(conta):
 
 
 def achar_conta(banco_id, conta):
-    """A conta cadastrada (com a empresa dona), ou None se for desconhecida."""
+    """A conta cadastrada (com a empresa dona), ou None se for desconhecida.
+
+    Tolerante à grafia (14/09/2026): o OFX do Bradesco diz '16865', o PDF e
+    o CSV dizem '16865-3' (com o dígito); o OFX do Sicredi diz
+    '39500000000156390', o PDF diz 'Conta: 15639-0'. Mesmo banco e um número
+    terminando no outro (mínimo 5 dígitos) é a mesma conta.
+    """
     from utils.db_helper import execute_query
     cod = re.sub(r'\D', '', str(banco_id or '')).lstrip('0')
     norm = conta_normalizada(conta)
     if not norm:
         return None
-    r = execute_query(
+    sql = """SELECT c.*, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj
+               FROM fin_contas c
+               JOIN clientes cl ON cl.id = c.empresa_id
+              WHERE c.ativo = 1 AND c.conta_norm = %s
+                AND (%s = '' OR c.banco_id IS NULL
+                     OR TRIM(LEADING '0' FROM c.banco_id) = %s)
+              LIMIT 1"""
+    r = execute_query(sql, (norm, cod, cod), fetch=True, fetch_one=True)
+    if r or not cod or len(norm) < 5:
+        return r
+    cands = execute_query(
         """SELECT c.*, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj
              FROM fin_contas c
              JOIN clientes cl ON cl.id = c.empresa_id
-            WHERE c.ativo = 1 AND c.conta_norm = %s
-              AND (%s = '' OR c.banco_id IS NULL
-                   OR TRIM(LEADING '0' FROM c.banco_id) = %s)
-            LIMIT 1""",
-        (norm, cod, cod), fetch=True, fetch_one=True)
-    return r
+            WHERE c.ativo = 1 AND TRIM(LEADING '0' FROM COALESCE(c.banco_id, '')) = %s""",
+        (cod,), fetch=True) or []
+    ok = [c for c in cands if len(c['conta_norm'] or '') >= 5
+          and (norm.endswith(c['conta_norm']) or c['conta_norm'].endswith(norm)
+               or norm[:-1] == c['conta_norm'] or c['conta_norm'][:-1] == norm)]
+    return ok[0] if len(ok) == 1 else None
 
 
 def registrar_conta(empresa_id, banco_id, banco_nome, conta, agencia=None,
@@ -305,6 +321,27 @@ def fitids_existentes(empresa_id, conta, fitids):
     return achados
 
 
+def documentos_existentes(empresa_id, conta, documentos):
+    """Documentos (Dcto do Bradesco, protocolo da Efí) já gravados nesta conta,
+    comparados sem zeros à esquerda — o OFX da Efí grava '000004399469655' e o
+    CSV diz '4399469655'."""
+    from utils.db_helper import execute_query
+    docs = list(dict.fromkeys((d or '').strip().lstrip('0') for d in documentos if d and len((d or '').strip().lstrip('0')) >= 4))
+    achados = set()
+    if not docs:
+        return achados
+    alvo = conta_normalizada(conta)
+    for i in range(0, len(docs), 300):
+        fatia = docs[i:i + 300]
+        marks = ','.join(['%s'] * len(fatia))
+        rows = execute_query(
+            f"SELECT documento, conta FROM extrato_lancamentos "
+            f" WHERE empresa_id = %s AND TRIM(LEADING '0' FROM COALESCE(documento, '')) IN ({marks})",
+            (empresa_id, *fatia), fetch=True) or []
+        achados.update((r['documento'] or '').lstrip('0') for r in rows if conta_normalizada(r['conta']) == alvo)
+    return achados
+
+
 def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='ofx'):
     """Grava os lançamentos novos de um arquivo já lido (OFX ou CSV) e devolve
     o resumo — SEM mover nada. Quem move é quem chamou, depois de gravar.
@@ -335,7 +372,10 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
 
     ja = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
     ja_fitid = fitids_existentes(empresa_id, dados['conta'], [l.get('fitid') for _, l in unicos])
-    novos = [(h, l) for h, l in unicos if h not in ja and not (l.get('fitid') and l['fitid'] in ja_fitid)]
+    ja_doc = documentos_existentes(empresa_id, dados['conta'], [l.get('documento') for _, l in unicos])
+    novos = [(h, l) for h, l in unicos if h not in ja
+             and not (l.get('fitid') and l['fitid'] in ja_fitid)
+             and not (l.get('documento') and (l['documento'] or '').lstrip('0') in ja_doc)]
     # O PDF pode ter chegado ANTES e criado a linha sem FITID: o arquivo com
     # FITID só encaixa nela — a descrição do PDF, que tem o nome, fica.
     encaixados = 0
@@ -387,6 +427,98 @@ def conta_da_empresa_no_banco(empresa_id, banco_id):
         "  AND TRIM(LEADING '0' FROM COALESCE(banco_id, '')) = %s",
         (empresa_id, cod), fetch=True) or []
     return (rows[0] if len(rows) == 1 else None), len(rows)
+
+
+def empresa_pelo_nome_no_arquivo(nome_arquivo):
+    """A empresa do grupo cujo apelido (ou começo da razão) está no nome do
+    arquivo — 'cora qualicontax_...csv' é da Qualicontax. Só o grupo do
+    Financeiro, e só apelidos com 4+ letras, para não casar por acaso."""
+    from utils.extrato_par import empresas_do_grupo
+    nome = re.sub(r'[^a-z0-9]+', ' ', str(nome_arquivo or '').lower())
+    achou = []
+    for e in empresas_do_grupo():
+        for ap in ((e.get('apelido') or ''), (e.get('nome') or '')[:12]):
+            ap = re.sub(r'[^a-z0-9]+', ' ', ap.lower()).strip()
+            if len(ap) >= 4 and ap in nome:
+                achou.append(e['cliente_id'])
+                break
+    return achou[0] if len(set(achou)) == 1 else None
+
+
+def conta_pelos_documentos(lancamentos):
+    """(empresa_id, conta) da conta onde esses documentos/fitids JÁ estão
+    gravados — o Efí não diz a conta no CSV nem no PDF, mas o protocolo de
+    cada lançamento é o mesmo que o OFX gravou em ``documento``."""
+    from utils.db_helper import execute_query
+    ids = []
+    for l in lancamentos:
+        for k in ('fitid', 'documento'):
+            v = (l.get(k) or '').strip().lstrip('0')
+            if len(v) >= 5:
+                ids.append(v)
+    ids = list(dict.fromkeys(ids))[:400]
+    if len(ids) < 3:
+        return None
+    marks = ','.join(['%s'] * len(ids))
+    rows = execute_query(
+        f"SELECT empresa_id, conta, COUNT(*) AS n FROM extrato_lancamentos "
+        f" WHERE TRIM(LEADING '0' FROM COALESCE(documento, '')) IN ({marks}) "
+        f"    OR TRIM(LEADING '0' FROM COALESCE(fitid, '')) IN ({marks}) "
+        f" GROUP BY empresa_id, conta ORDER BY n DESC", tuple(ids) * 2, fetch=True) or []
+    if not rows or int(rows[0]['n']) < 3:
+        return None
+    if len(rows) > 1 and int(rows[1]['n']) * 4 > int(rows[0]['n']):
+        return None                               # ambíguo entre duas contas
+    return rows[0]['empresa_id'], rows[0]['conta']
+
+
+def identificar_arquivo(nome_arquivo, previa):
+    """(cliente, conta_str, motivo) para QUALQUER formato, na ordem de força:
+    1. a conta escrita no arquivo (OFX, C6/Bradesco CSV, PDFs com capa);
+    2. documentos/fitids já gravados (Efí CSV/PDF);
+    3. número ou nome da empresa no arquivo + a única conta dela no banco.
+    Sem nada disso, (None, None, motivo) — vira pendência."""
+    from utils.db_helper import execute_query
+    banco_id = previa.get('banco_id')
+    banco = banco_curto(banco_id, previa.get('banco'))
+    if previa.get('conta'):
+        cli, motivo = identificar_empresa(nome_arquivo, banco_id=banco_id,
+                                          conta=previa.get('conta'), banco_nome=banco)
+        if cli:
+            reg = achar_conta(banco_id, previa.get('conta'))
+            conta_str = (f"{reg['agencia']}/{reg['conta']}" if reg and reg.get('agencia') else (reg or {}).get('conta')) or previa['conta']
+            return cli, conta_str, motivo
+        return None, None, motivo
+    achado = conta_pelos_documentos(previa.get('lancamentos') or [])
+    if achado:
+        emp_id, conta_str = achado
+        cli = execute_query('SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s',
+                            (emp_id,), fetch=True, fetch_one=True)
+        if cli:
+            return cli, conta_str, f'conta {conta_str} reconhecida pelos documentos já lançados'
+    num = numero_empresa_do_nome(nome_arquivo)
+    emp_id = None
+    if num:
+        cli = execute_query('SELECT id FROM clientes WHERE numero_cliente = %s', (num,), fetch=True, fetch_one=True)
+        emp_id = (cli or {}).get('id')
+        if not emp_id:
+            return None, None, f'o nome do arquivo diz empresa {num}, que não existe no cadastro.'
+    else:
+        emp_id = empresa_pelo_nome_no_arquivo(nome_arquivo)
+    if not emp_id:
+        return None, None, (f'{banco}: o arquivo não diz de que conta é. Coloque o número ou o '
+                            'nome da empresa no nome do arquivo — ou mande o OFX.')
+    reg, n = conta_da_empresa_no_banco(emp_id, banco_id)
+    cli = execute_query('SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s',
+                        (emp_id,), fetch=True, fetch_one=True)
+    if not reg:
+        if n == 0:
+            return None, None, (f'{banco} da empresa {cli["numero_cliente"]}: a conta ainda não está '
+                                'cadastrada. Diga qual é UMA vez e o sistema lê.')
+        return None, None, (f'a empresa {cli["numero_cliente"]} tem {n} contas no {banco} e o arquivo '
+                            'não diz qual é. Deixe só uma ativa ou mande o OFX.')
+    conta_str = f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta']
+    return cli, conta_str, f'{banco}: empresa {cli["numero_cliente"]} pelo nome do arquivo, conta {conta_str} do cadastro'
 
 
 def identificar_empresa_csv(nome_arquivo, banco_id, banco_nome=None):

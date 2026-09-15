@@ -166,7 +166,7 @@ def parse_ofx(raw: bytes) -> dict:
         if sv is not None:
             saldo = {'valor': sv, 'data': sd}
 
-    if not lancamentos and saldo is None:
+    if not lancamentos and saldo is None and not conta:
         raise OfxInvalido('OFX sem nenhum lançamento legível.')
     return {'banco': banco, 'banco_id': banco_id, 'conta': conta,
             'saldo': saldo, 'lancamentos': lancamentos}
