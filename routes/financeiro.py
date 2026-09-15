@@ -919,7 +919,8 @@ def extrato():
     filtros = dict(
         data_de=request.args.get('data_de') or '',
         data_ate=request.args.get('data_ate') or '',
-        conta=request.args.get('conta') or '',
+        # Conta agora é MULTI: o mesmo nome de parâmetro, repetido.
+        conta=[c for c in request.args.getlist('conta') if c.strip()],
         busca=(request.args.get('busca') or '').strip(),
         documento=(request.args.get('documento') or '').strip(),
         # Sem categoria e o PADRAO: o objetivo da tela e classificar.
@@ -946,6 +947,10 @@ def extrato():
     if args.get('classif') == 'todos':
         args['classif'] = None
     args['empresa_ids'] = sel
+    # Cada conta escolhida carrega as grafias que existem no extrato: o OFX
+    # escreveu '2505/21921', o PDF '2505/21921-5'. O filtro procura por todas.
+    args['conta_pares'] = ExtratoLancamento.contas_do_filtro(filtros['conta'], empresa_ids=sel)
+    args['conta'] = None
 
     # Quantos filtros o usuário ligou — vira o selo do painel fechado.
     # O padrao (sem categoria) nao conta: selo permanente e ruido.
@@ -970,7 +975,7 @@ def extrato():
                            n_travados=n_travados,
                            dias=ExtratoLancamento.por_dia(lancs),
                            totais=ExtratoLancamento.totais(**args),
-                           contas=ExtratoLancamento.contas(empresa_ids=sel),
+                           contas=ExtratoLancamento.contas_filtro(empresa_ids=sel),
                            # apelido e agência vêm do CADASTRO de contas: o
                            # extrato guarda o nome cru do OFX, e o do Sicredi
                            # chega como "CCPI DO CERRADO DE GO".
@@ -1069,7 +1074,8 @@ def extrato_importar():
                               f'{n} conta(s) cadastrada(s) nesse banco. Cadastre a conta (uma só, '
                               'ativa) em Contas e mande de novo — ou mande o OFX.', 'warning')
                         continue
-                    dados['conta'] = (f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta'])
+                    from utils.extrato_ingest import conta_do_cadastro
+                    dados['conta'] = conta_do_cadastro(reg)
             if tem_ids:
                 r = processar_lancamentos(dados, empresa_id, arq.filename,
                                           usuario_id=current_user.id, origem=formato)

@@ -2,6 +2,10 @@
 
 {% block title %}Extrato Bancário - Qualicontax{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
+{% endblock %}
+
 {% block content %}
 {% set SEMANA = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta',
                  'Sábado', 'Domingo'] %}
@@ -50,6 +54,22 @@
 .ex-selo-filtro { font-size:10px; font-weight:700; background:#dcfce7; color:#15803d;
   border-radius:99px; padding:2px 9px; }
 .ex-grade { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
+/* ---- Tom Select no campo Conta (mesmo ajuste da Conferência de Entradas) ---- */
+.ex-grade .ts-wrapper { width:100%; }
+.ex-grade .ts-control { border:1.5px solid #e2e8f0; border-radius:7px; background:#f8fafc; font-size:13px; padding:3px 8px; min-height:35px; }
+.ex-grade .ts-wrapper.focus .ts-control { border-color:#22c55e; background:#fff; box-shadow:none; }
+.ex-grade .ts-control > input { font-size:13px; }
+.ex-grade .ts-control .item { background:#dcfce7; color:#166534; border-radius:5px; font-size:11.5px; font-weight:700; padding:1px 5px; margin:1px 3px 1px 0; }
+.ex-grade .ts-control .item .remove { border-left-color:rgba(0,0,0,.12); padding:0 4px; }
+.ts-dropdown { font-size:12.5px; border:1.5px solid #e2e8f0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); }
+.ts-dropdown .optgroup-header { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; padding:8px 12px 4px; }
+.ts-dropdown .active { background:#f0fdf4; color:#0f172a; }
+.ts-dropdown .no-results { color:#94a3b8; }
+.ex-opt { display:flex; align-items:baseline; gap:8px; }
+.ex-opt-banco { font-weight:700; color:#0f172a; }
+.ex-opt-num { font-family:'Courier New',monospace; color:#475569; }
+.ex-opt-ag { font-size:11px; color:#94a3b8; }
+.ex-opt-meta { margin-left:auto; font-size:11px; color:#94a3b8; white-space:nowrap; }
 .ex-grade label { font-size:10px; font-weight:700; color:#94a3b8; display:block;
   margin-bottom:3px; text-transform:uppercase; }
 .ex-grade input, .ex-grade select { width:100%; padding:7px 10px; border:1.5px solid #e2e8f0;
@@ -372,7 +392,9 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 
 <!-- ── Escopo: quais empresas estão na conta ─────────────────────── -->
 {% set _outros = {} %}
-{% for k, v in request.args.items() %}{% if k != 'emp' and v %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
+{# .lists(): 'conta' agora pode vir repetido — .items() devolveria só a
+   primeira e trocar de empresa perderia as outras contas escolhidas #}
+{% for k, vs in request.args.lists() %}{% if k != 'emp' and vs %}{% set _ = _outros.update({k: vs}) %}{% endif %}{% endfor %}
 <div class="ex-escopo">
     <span class="ex-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
     <div class="ex-chips-linha">
@@ -458,10 +480,23 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 </div>
                 <div>
                     <label>Conta</label>
-                    <select name="conta">
-                        <option value="">Todas</option>
-                        {% for ct in contas %}
-                        <option value="{{ ct }}" {% if filtros.conta == ct %}selected{% endif %}>{{ ct }}</option>
+                    {# Uma opção por CONTA, não por grafia: o rótulo vem do
+                       cadastro e o value carrega todas as grafias que o
+                       extrato tem dessa conta (ver contas_filtro). #}
+                    <select name="conta" id="exConta" multiple
+                            placeholder="Todas — digite para buscar">
+                        {% for emp, itens in contas | groupby('empresa') %}
+                        <optgroup label="{{ emp }}">
+                            {% for ct in itens %}
+                            {% set _d = {'banco': ct.banco, 'conta': ct.conta, 'ag': ct.agencia,
+                                         'meta': '{:,}'.format(ct.n).replace(',', '.') ~ ' lanç',
+                                         'busca': ct.variantes | join(' ')} %}
+                            {# aspas SIMPLES: o JSON vem cheio de aspas duplas (o tojson
+                               do Jinja escapa &, <, > e ', que é o que fecha aqui) #}
+                            <option value="{{ ct.valor }}" data-data='{{ _d | tojson }}'
+                                    {% if ct.valor in filtros.conta %}selected{% endif %}>{{ ct.banco }} {{ ct.conta }}</option>
+                            {% endfor %}
+                        </optgroup>
                         {% endfor %}
                     </select>
                 </div>
@@ -848,6 +883,37 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script>
+// Filtro de conta: o MESMO componente do filtro de emitente da Conferência de
+// Entradas (Tom Select, 2.4.3). Escolhe várias, busca digitando o nome do
+// banco ou qualquer pedaço do número — inclusive a grafia velha, que continua
+// no extrato e viaja em 'busca'.
+document.addEventListener('DOMContentLoaded', function () {
+    var campo = document.getElementById('exConta');
+    if (!campo || typeof TomSelect === 'undefined') return;
+    new TomSelect(campo, {
+        plugins: ['remove_button'],
+        maxOptions: null,
+        hideSelected: true,
+        searchField: ['text', 'busca'],
+        render: {
+            option: function (d, escape) {
+                return '<div class="ex-opt">'
+                     + '<span class="ex-opt-banco">' + escape(d.banco || d.text) + '</span>'
+                     + '<span class="ex-opt-num">' + escape(d.conta || '') + '</span>'
+                     + (d.ag ? '<span class="ex-opt-ag">ag ' + escape(d.ag) + '</span>' : '')
+                     + '<span class="ex-opt-meta">' + escape(d.meta || '') + '</span>'
+                     + '</div>';
+            },
+            item: function (d, escape) {
+                return '<div>' + escape(d.banco || d.text)
+                     + ' <span class="ex-opt-num">' + escape(d.conta || '') + '</span></div>';
+            }
+        }
+    });
+});
+</script>
 <script>
 var EX_URL_CLAS = "{{ url_for('financeiro.extrato_classificar', lanc_id=0) }}";
 

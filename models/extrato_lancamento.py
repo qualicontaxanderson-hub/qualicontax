@@ -18,6 +18,7 @@ class ExtratoLancamento:
     # história (o cartão fala do filtro inteiro, a tabela mostra a página).
     @staticmethod
     def _where(empresa_ids=None, data_de=None, data_ate=None, conta=None,
+               conta_pares=None,
                busca=None, classif=None, categoria_id=None, centro_id=None,
                tipo=None, documento=None, vmin=None, vmax=None):
         cond, params = ['1=1'], []
@@ -31,7 +32,17 @@ class ExtratoLancamento:
         if data_ate:
             cond.append('e.data <= %s')
             params.append(data_ate)
-        if conta:
+        if conta_pares:
+            # Uma conta escolhida pode ter várias grafias no extrato (o OFX
+            # escreveu de um jeito, o PDF de outro): todas entram no OU.
+            pedacos = []
+            for empresa_id, contas in conta_pares:
+                marks = ','.join(['%s'] * len(contas))
+                pedacos.append(f'(e.empresa_id = %s AND e.conta IN ({marks}))')
+                params.append(empresa_id)
+                params += list(contas)
+            cond.append('(' + ' OR '.join(pedacos) + ')')
+        elif conta:
             cond.append("CONCAT(COALESCE(e.banco,''), ' · ', COALESCE(e.conta,'')) = %s")
             params.append(conta)
         if busca:
@@ -129,6 +140,87 @@ class ExtratoLancamento:
                   FROM extrato_lancamentos WHERE {cond} ORDER BY rotulo""",
             params, fetch=True) or []
         return [r['rotulo'] for r in rows]
+
+    @staticmethod
+    def contas_filtro(empresa_ids=None):
+        """As contas do filtro, do jeito que a pessoa reconhece.
+
+        O extrato guarda o nome que o ARQUIVO escreveu — '0237', 'CCPI DO
+        CERRADO DE GO', 'NU PAGAMENTOS S.A.' — e a mesma conta aparece com
+        grafias diferentes conforme o formato que chegou. Quem sabe o nome
+        bom é o CADASTRO: cada conta cadastrada vira UMA opção, levando
+        junto todas as grafias que existem no extrato (``variantes``), e o
+        filtro procura por todas elas.
+
+        Sobrou lançamento de conta que ninguém cadastrou? Vira opção também,
+        com o rótulo cru — melhor aparecer torto do que sumir da tela.
+        """
+        from utils.extrato_ingest import mesma_conta, banco_curto
+        cond, params = '1=1', ()
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond, params = f'e.empresa_id IN ({marks})', tuple(empresa_ids)
+        grupos = execute_query(
+            f"""SELECT e.empresa_id, e.banco, e.conta, COUNT(*) AS n,
+                       MIN(e.data) AS de, MAX(e.data) AS ate,
+                       cl.numero_cliente, cl.nome_razao_social
+                  FROM extrato_lancamentos e
+                  JOIN clientes cl ON cl.id = e.empresa_id
+                 WHERE {cond}
+                 GROUP BY e.empresa_id, e.banco, e.conta, cl.numero_cliente,
+                          cl.nome_razao_social""",
+            params, fetch=True) or []
+        cadastro = execute_query(
+            'SELECT id, empresa_id, banco_id, banco_nome, agencia, conta, apelido '
+            '  FROM fin_contas WHERE ativo = 1', fetch=True) or []
+
+        opcoes, por_id = [], {}
+        for g in grupos:
+            reg = next((c for c in cadastro
+                        if c['empresa_id'] == g['empresa_id']
+                        and mesma_conta(c['conta'], g['conta'])), None)
+            if reg:
+                chave = f"c{reg['id']}"
+                banco = reg['apelido'] or banco_curto(reg['banco_id'], reg['banco_nome'] or g['banco'])
+                numero = str(reg['conta']).split('/')[-1]
+                # 'ag 1' é ruído: no C6 e no Cora esse 1 é TIPO de conta, não
+                # agência. Agência de verdade tem quatro dígitos.
+                agencia = (reg['agencia'] or '').strip()
+                agencia = agencia if len(re.sub(r'\D', '', agencia)) >= 3 else ''
+            else:
+                chave = f"x{g['empresa_id']}:{g['banco']} · {g['conta']}"
+                banco = banco_curto(None, g['banco']) or (g['banco'] or 'Banco')
+                numero = str(g['conta'] or '').split('/')[-1]
+                agencia = ''
+            o = por_id.get(chave)
+            if not o:
+                o = {'valor': chave, 'banco': banco, 'conta': numero,
+                     'agencia': agencia, 'empresa_id': g['empresa_id'],
+                     'numero_cliente': g['numero_cliente'],
+                     'empresa': g['nome_razao_social'],
+                     'cadastrada': bool(reg), 'n': 0, 'de': None, 'ate': None,
+                     'variantes': []}
+                por_id[chave] = o
+                opcoes.append(o)
+            o['n'] += int(g['n'] or 0)
+            o['variantes'].append(g['conta'])
+            o['de'] = min(x for x in (o['de'], g['de']) if x)
+            o['ate'] = max(x for x in (o['ate'], g['ate']) if x)
+        opcoes.sort(key=lambda o: (str(o['numero_cliente'] or '').zfill(6),
+                                   o['banco'].lower(), o['conta']))
+        return opcoes
+
+    @staticmethod
+    def contas_do_filtro(valores, empresa_ids=None):
+        """Os pares (empresa_id, conta) que os valores escolhidos representam."""
+        if not valores:
+            return []
+        escolhidos = set(valores)
+        pares = []
+        for o in ExtratoLancamento.contas_filtro(empresa_ids=empresa_ids):
+            if o['valor'] in escolhidos:
+                pares.append((o['empresa_id'], o['variantes']))
+        return pares
 
     #: CPF (11) ou CNPJ (14) soltos no meio da descricao.
     _DOC = re.compile(r'\b(\d{11}|\d{14})\b')

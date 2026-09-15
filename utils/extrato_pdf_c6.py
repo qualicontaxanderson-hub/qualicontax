@@ -277,17 +277,20 @@ def casar_por_data_valor(itens, rows):
 
 
 def lancamentos_da_conta(empresa_id, conta, data_ini, data_fim, origem=None):
-    """Linhas já gravadas da conta no período (conta comparada normalizada)."""
+    """Linhas já gravadas da conta no período.
+
+    A conta é comparada com tolerância (``mesma_conta``): o mesmo número
+    aparece com e sem dígito, com e sem agência, conforme o arquivo.
+    """
     from utils.db_helper import execute_query
-    from utils.extrato_ingest import conta_normalizada
+    from utils.extrato_ingest import mesma_conta
     cond = " AND origem = %s" if origem else ''
     params = (empresa_id, data_ini, data_fim) + ((origem,) if origem else ())
     rows = execute_query(
         'SELECT id, conta, data, valor, descricao, origem FROM extrato_lancamentos '
         f' WHERE empresa_id = %s AND data BETWEEN %s AND %s{cond} ORDER BY data, id',
         params, fetch=True) or []
-    alvo = conta_normalizada(conta)
-    return [x for x in rows if conta_normalizada(x['conta']) == alvo]
+    return [x for x in rows if mesma_conta(x['conta'], conta)]
 
 
 # ---------------------------------------------------------------------------

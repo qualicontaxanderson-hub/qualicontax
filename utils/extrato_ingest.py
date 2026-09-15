@@ -59,7 +59,8 @@ BANCOS = {
     '1': 'Banco do Brasil', '33': 'Santander', '41': 'Banrisul',
     '77': 'Inter', '104': 'Caixa', '208': 'BTG', '237': 'Bradesco',
     '260': 'Nubank', '290': 'PagBank', '318': 'BMG', '336': 'C6',
-    '341': 'Itau', '364': 'EFI', '380': 'PicPay', '403': 'Cora',
+    '341': 'Itau', '348': 'XP', '364': 'EFI', '380': 'PicPay',
+    '403': 'Cora',
     '422': 'Safra', '461': 'Asaas', '655': 'Votorantim', '745': 'Citi',
     '748': 'Sicredi', '756': 'Sicoob',
 }
@@ -72,7 +73,7 @@ def banco_curto(banco_id, nome_bruto=None):
         return BANCOS[cod]
     bruto = (nome_bruto or '').strip()
     if bruto and not bruto.isdigit():
-        return re.sub(r'\s+(S\.?A\.?|SCD|LTDA).*$', '', bruto,
+        return re.sub(r'\s+(S\.?A\.?|SCD|LTDA)\b.*$', '', bruto,
                       flags=re.IGNORECASE).strip() or bruto
     return f'Banco {cod}' if cod else 'Banco'
 
@@ -205,6 +206,43 @@ def conta_normalizada(conta):
     return re.sub(r'\D', '', bruta).lstrip('0') or bruta
 
 
+def conta_do_cadastro(reg):
+    """A grafia ÚNICA de uma conta cadastrada: 'agência/conta'.
+
+    Nasceu de um estrago real (15/09/2026): a conta PF do Bradesco foi
+    cadastrada como agência '2505' e conta '2505/21921-5' — a agência já
+    estava dentro do número. Quem colava a agência na frente produzia
+    '2505/2505/21921-5', uma grafia que não existia em lugar nenhum, e os
+    mesmos 53 lançamentos entraram duas vezes. Se o número já traz a barra,
+    ele já está completo.
+    """
+    if not reg:
+        return None
+    conta = (reg.get('conta') or '').strip()
+    ag = (reg.get('agencia') or '').strip()
+    if not conta:
+        return None
+    return f'{ag}/{conta}' if ag and '/' not in conta else conta
+
+
+def mesma_conta(a, b):
+    """A mesma conta escrita de dois jeitos?
+
+    A regra é a do ``achar_conta``, e vale aqui porque a deduplicação compara
+    conta: o OFX do Bradesco diz '2505/21921' (sem dígito), o cadastro diz
+    '21921-5' (com). Comparação estrita fazia o arquivo não enxergar o que já
+    estava gravado e duplicar tudo.
+    """
+    x, y = conta_normalizada(a), conta_normalizada(b)
+    if not x or not y:
+        return x == y
+    if x == y:
+        return True
+    if len(x) < 5 or len(y) < 5:
+        return False
+    return x.endswith(y) or y.endswith(x) or x[:-1] == y or y[:-1] == x
+
+
 def achar_conta(banco_id, conta):
     """A conta cadastrada (com a empresa dona), ou None se for desconhecida.
 
@@ -309,7 +347,7 @@ def fitids_existentes(empresa_id, conta, fitids):
     fitids = [f for f in fitids if f]
     if not fitids:
         return achados
-    alvo = conta_normalizada(conta)
+    alvo = conta
     for i in range(0, len(fitids), 300):
         fatia = fitids[i:i + 300]
         marks = ','.join(['%s'] * len(fatia))
@@ -317,7 +355,7 @@ def fitids_existentes(empresa_id, conta, fitids):
             f'SELECT fitid, conta FROM extrato_lancamentos '
             f' WHERE empresa_id = %s AND fitid IN ({marks})',
             (empresa_id, *fatia), fetch=True) or []
-        achados.update(r['fitid'] for r in rows if conta_normalizada(r['conta']) == alvo)
+        achados.update(r['fitid'] for r in rows if mesma_conta(r['conta'], alvo))
     return achados
 
 
@@ -330,7 +368,7 @@ def documentos_existentes(empresa_id, conta, documentos):
     achados = set()
     if not docs:
         return achados
-    alvo = conta_normalizada(conta)
+    alvo = conta
     for i in range(0, len(docs), 300):
         fatia = docs[i:i + 300]
         marks = ','.join(['%s'] * len(fatia))
@@ -338,8 +376,45 @@ def documentos_existentes(empresa_id, conta, documentos):
             f"SELECT documento, conta FROM extrato_lancamentos "
             f" WHERE empresa_id = %s AND TRIM(LEADING '0' FROM COALESCE(documento, '')) IN ({marks})",
             (empresa_id, *fatia), fetch=True) or []
-        achados.update((r['documento'] or '').lstrip('0') for r in rows if conta_normalizada(r['conta']) == alvo)
+        achados.update((r['documento'] or '').lstrip('0') for r in rows if mesma_conta(r['conta'], alvo))
     return achados
+
+
+def _chave_dv(data, valor):
+    from decimal import Decimal
+    return (str(data)[:10], str(Decimal(str(valor)).quantize(Decimal('0.01'))))
+
+
+def ja_existe_por_data_valor(empresa_id, conta, novos):
+    """Terceira camada: sem identificador, data + valor é o que sobra.
+
+    O Dcto do Bradesco às vezes é curto demais para ser chave ('0000312' vira
+    '312') e a camada do documento o ignora de propósito — número de três
+    dígitos se repete. Mas o lançamento já está gravado, e gravar de novo é
+    duplicar. Conta quantos pares (data, valor) existem na conta e consome um
+    por candidato: se o banco tem dois Pix de R$ 50 no mesmo dia e o arquivo
+    traz três, só o terceiro entra.
+    """
+    from collections import Counter
+    from utils.extrato_pdf_c6 import lancamentos_da_conta
+    sem_id = [l for _h, l in novos if not l.get('fitid')]
+    if not sem_id:
+        return novos, 0
+    datas = sorted(l['data'] for l in sem_id)
+    rows = lancamentos_da_conta(empresa_id, conta, datas[0], datas[-1])
+    disponivel = Counter(_chave_dv(r['data'], r['valor']) for r in rows)
+    restantes, repetidos = [], 0
+    for h, l in novos:
+        if l.get('fitid'):
+            restantes.append((h, l))
+            continue
+        k = _chave_dv(l['data'], l['valor'])
+        if disponivel.get(k):
+            disponivel[k] -= 1
+            repetidos += 1
+            continue
+        restantes.append((h, l))
+    return restantes, repetidos
 
 
 def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='ofx'):
@@ -353,6 +428,18 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
     from models.extrato_lancamento import ExtratoLancamento, ExtratoMemorizacao
     from utils.db_helper import execute_query
     from utils.ofx_parser import chave_dedup
+
+    # UMA GRAFIA POR CONTA. Cada arquivo escreve a conta do seu jeito — o OFX
+    # do Bradesco diz '2505/21921', o PDF diz '2505/21921-5', o do Sicredi diz
+    # '39500000000156390' e o PDF diz '15639-0'. Se cada um gravasse o seu, a
+    # mesma conta viraria várias na tela e a deduplicação não se enxergaria.
+    # Está cadastrada? Então vale o que está no cadastro, e o nome do banco
+    # também ('0237' e 'CCPI DO CERRADO DE GO' não são nome de banco).
+    reg = achar_conta(dados.get('banco_id'), dados.get('conta'))
+    if reg and reg.get('empresa_id') == empresa_id:
+        dados = dict(dados)
+        dados['conta'] = conta_do_cadastro(reg) or dados.get('conta')
+        dados['banco'] = reg.get('banco_nome') or dados.get('banco')
 
     lancs = dados['lancamentos']
     repet, candidatos = {}, []
@@ -376,6 +463,9 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
     novos = [(h, l) for h, l in unicos if h not in ja
              and not (l.get('fitid') and l['fitid'] in ja_fitid)
              and not (l.get('documento') and (l['documento'] or '').lstrip('0') in ja_doc)]
+    # Sem FITID, o que resta é data + valor — e é assim que o PDF e a planilha
+    # do mesmo mês não repetem o que o OFX já lançou.
+    novos, _repetidos_dv = ja_existe_por_data_valor(empresa_id, dados['conta'], novos)
     # O PDF pode ter chegado ANTES e criado a linha sem FITID: o arquivo com
     # FITID só encaixa nela — a descrição do PDF, que tem o nome, fica.
     encaixados = 0
@@ -486,7 +576,7 @@ def identificar_arquivo(nome_arquivo, previa):
                                           conta=previa.get('conta'), banco_nome=banco)
         if cli:
             reg = achar_conta(banco_id, previa.get('conta'))
-            conta_str = (f"{reg['agencia']}/{reg['conta']}" if reg and reg.get('agencia') else (reg or {}).get('conta')) or previa['conta']
+            conta_str = conta_do_cadastro(reg) or previa['conta']
             return cli, conta_str, motivo
         return None, None, motivo
     achado = conta_pelos_documentos(previa.get('lancamentos') or [])
@@ -517,7 +607,7 @@ def identificar_arquivo(nome_arquivo, previa):
                                 'cadastrada. Diga qual é UMA vez e o sistema lê.')
         return None, None, (f'a empresa {cli["numero_cliente"]} tem {n} contas no {banco} e o arquivo '
                             'não diz qual é. Deixe só uma ativa ou mande o OFX.')
-    conta_str = f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta']
+    conta_str = conta_do_cadastro(reg)
     return cli, conta_str, f'{banco}: empresa {cli["numero_cliente"]} pelo nome do arquivo, conta {conta_str} do cadastro'
 
 
@@ -541,5 +631,5 @@ def identificar_empresa_csv(nome_arquivo, banco_id, banco_nome=None):
                                 'não está cadastrada. Diga qual é UMA vez e o sistema lê.')
         return None, None, (f'a empresa {num} tem {n} contas no {banco_nome or "banco"} e o CSV '
                             'não diz qual é. Cadastre só uma como ativa ou mande o OFX.')
-    conta_str = f"{reg['agencia']}/{reg['conta']}" if reg.get('agencia') else reg['conta']
+    conta_str = conta_do_cadastro(reg)
     return cli, conta_str, f'CSV: empresa {num} pelo nome do arquivo, conta {conta_str} do cadastro'
