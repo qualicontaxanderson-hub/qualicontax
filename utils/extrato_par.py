@@ -84,7 +84,18 @@ import re
 import unicodedata
 from collections import defaultdict
 
-JANELA_DIAS = 1
+JANELA_DIAS = 3          # entrada até 3 dias DEPOIS da saída (TED de sexta cai na segunda)
+JANELA_ANTES = 1         # ...ou 1 dia ANTES: a data do OFX é a de lançamento do banco, não a do Pix
+
+# 14/09/2026 — por que a janela cresceu e por que classificado sai da roda:
+# 57 lançamentos ficaram "esperando o extrato de ANDERSON PF" com o extrato
+# já no banco. Medido: 58 suspeitos tinham o par óbvio (mesmo valor, outra
+# empresa) a 1–3 dias, e o par de +R$ 220,00 vinha um dia ANTES da saída —
+# o C6 lança à noite, o Sicredi no dia seguinte. E 7 lançamentos estavam
+# "casados" com um parceiro já classificado à mão, que o marcar pula: meia
+# dupla, e o gêmeo livre (a Qualicontax manda dois de R$ 20.000 no mês)
+# ficava esperando para sempre. Classificado ou decidido não concorre a
+# par novo.
 
 
 def _norm(texto):
@@ -189,6 +200,11 @@ def candidatos(empresa_ids=None, exigir_marca=True):
     # Índice por valor absoluto: o par tem de ter o MESMO módulo.
     por_valor = defaultdict(lambda: {'saidas': [], 'entradas': []})
     for l in linhas:
+        # quem já foi decidido por gente, ou já está classificado, não
+        # concorre a par NOVO — senão vira meia dupla (o marcar pula ele e o
+        # outro lado fica "casado" com quem não casou de volta).
+        if l.get('categoria_id') or (l.get('par_estado') or '') in ESTADOS_DECIDIDOS:
+            continue
         chave = round(abs(float(l['valor'])), 2)
         lado = 'saidas' if float(l['valor']) < 0 else 'entradas'
         por_valor[chave][lado].append(l)
@@ -209,8 +225,8 @@ def candidatos(empresa_ids=None, exigir_marca=True):
                 if str(s['conta']) == str(e['conta']):
                     continue                      # mesma conta não é transferência
                 dias = (e['data'] - s['data']).days
-                if dias < 0 or dias > JANELA_DIAS:
-                    continue                      # entrada antes da saída não existe
+                if dias < -JANELA_ANTES or dias > JANELA_DIAS:
+                    continue                      # fora da janela de lançamento dos bancos
                 cid_e, txt_e = citado[e['id']]
 
                 # Condições 5 e 6 juntas: quem a descrição nomeia tem de ser a
@@ -234,7 +250,7 @@ def candidatos(empresa_ids=None, exigir_marca=True):
                 })
 
     # nota: data exata primeiro, nome confirmado depois, valor maior por último
-    brutos.sort(key=lambda p: (p['dias'], 0 if p['marca'] else 1, -p['valor']))
+    brutos.sort(key=lambda p: (abs(p['dias']), 0 if p['dias'] >= 0 else 1, 0 if p['marca'] else 1, -p['valor']))
     usados, pares = set(), []
     for p in brutos:
         if p['saida']['id'] in usados or p['entrada']['id'] in usados:

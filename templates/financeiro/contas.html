@@ -282,6 +282,55 @@
         </form>
     </div>
 </div>
+{# ── Extratos recebidos: por conta, mês a mês — o que veio e o que falta ── #}
+<div class="fin-caixa" style="margin-top:16px;">
+    <h3 style="margin:0 0 4px; font-size:15px;"><i class="fas fa-calendar-check"></i> Extratos recebidos em {{ ano }}</h3>
+    <div style="font-size:12.5px; color:#64748b; margin-bottom:10px;">
+        Cada célula é quantos lançamentos entraram naquele mês. Vazio até o mês atual é
+        extrato que <strong>falta</strong>. Conta com lançamento e sem cadastro está marcada.
+        <a href="{{ url_for('financeiro.contas', ano=ano-1, emp=request.args.get('emp')) if request.args.get('emp') else url_for('financeiro.contas', ano=ano-1) }}" style="margin-left:8px;">{{ ano-1 }}</a>
+        {% if mes_limite < 12 or ano < 2100 %}· <a href="{{ url_for('financeiro.contas', ano=ano+1, emp=request.args.get('emp')) if request.args.get('emp') else url_for('financeiro.contas', ano=ano+1) }}">{{ ano+1 }}</a>{% endif %}
+    </div>
+    {% if cobertura %}
+    <div class="cob-rolar">
+        <table class="cob-tab">
+            <thead><tr><th class="cob-conta">Conta</th>{% for r in meses_rot %}<th>{{ r }}</th>{% endfor %}<th>Último</th></tr></thead>
+            <tbody>
+            {% for c in cobertura %}
+            <tr>
+                <td class="cob-conta">
+                    <strong>{{ emp_mapa.get(c.empresa_id, c.empresa_id) }}</strong> · {{ c.banco }}
+                    <small>{{ c.conta }}</small>
+                    {% if not c.cadastrada %}<span class="fin-pilula alerta" title="Tem lançamentos mas não está em Contas: cadastre para o roteador reconhecer os próximos extratos">sem cadastro</span>{% endif %}
+                </td>
+                {% for m in range(1, 13) %}
+                {% set n = c.meses.get(m) %}
+                <td class="cob-cel {% if n %}ok{% elif m <= mes_limite %}falta{% else %}futuro{% endif %}">{% if n %}{{ n }}{% elif m <= mes_limite %}—{% endif %}</td>
+                {% endfor %}
+                <td class="cob-ult">{{ c.ultimo.strftime('%d/%m') if c.ultimo else '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="color:#64748b; font-size:13px;">Nenhum extrato em {{ ano }}.</div>
+    {% endif %}
+</div>
+<style>
+.cob-rolar { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.cob-tab { border-collapse:collapse; width:100%; min-width:720px; font-size:12.5px; }
+.cob-tab th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; background:#f8fafc; padding:7px 6px; text-align:center; border-bottom:1px solid #e2e8f0; }
+.cob-tab th.cob-conta, .cob-tab td.cob-conta { text-align:left; padding-left:10px; white-space:nowrap; position:sticky; left:0; background:#fff; z-index:1; }
+.cob-tab th.cob-conta { background:#f8fafc; }
+.cob-tab td { padding:7px 6px; border-bottom:1px solid #f1f5f9; text-align:center; }
+.cob-tab td.cob-conta small { display:block; color:#94a3b8; font-size:11px; }
+.cob-cel.ok { color:#166534; font-weight:700; background:#f0fdf4; }
+.cob-cel.falta { color:#b91c1c; font-weight:800; background:#fef2f2; }
+.cob-cel.futuro { color:#cbd5e1; }
+.cob-ult { color:#64748b; white-space:nowrap; }
+</style>
+
 {# ── Formatos por banco: o que cada arquivo entrega (utils/extrato_formatos) ── #}
 <div class="fin-caixa" style="margin-top:16px;">
     <h3 style="margin:0 0 4px; font-size:15px;"><i class="fas fa-file-invoice"></i> Formatos por banco</h3>

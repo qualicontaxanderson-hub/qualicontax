@@ -74,7 +74,8 @@ class ExtratoLancamento:
             f"""SELECT e.id, e.empresa_id, e.banco, e.conta, e.data, e.valor,
                        e.tipo, e.descricao, e.documento, e.fitid, e.origem,
                        e.arquivo, e.criado_em, e.categoria_id, e.centro_custo_id,
-                       e.memorizacao_id, e.conferir, c.nome AS categoria_nome,
+                       e.memorizacao_id, e.conferir, e.par_estado, e.par_id,
+                       c.nome AS categoria_nome,
                        c.grupo AS categoria_grupo, cc.nome AS centro_nome
                   FROM extrato_lancamentos e
                   LEFT JOIN fin_categorias c ON c.id = e.categoria_id
@@ -1226,6 +1227,51 @@ class FinContaBancaria:
     def get(conta_id):
         return execute_query('SELECT * FROM fin_contas WHERE id = %s',
                              (conta_id,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def cobertura(ano, empresa_ids=None):
+        """Por conta: quantos lançamentos em cada mês do ano e o último dia
+        com lançamento. É a resposta a "quais extratos já vieram e quais
+        faltam" (Anderson, 14/09/2026: "assim não conseguimos finalizar").
+
+        Conta cadastrada sem lançamento aparece com os meses vazios; conta
+        com lançamento mas sem cadastro aparece marcada — as duas situações
+        são as que escondem o extrato que falta.
+        """
+        from utils.extrato_ingest import conta_normalizada, banco_curto
+        cond, params = '', [int(ano)]
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond = f' AND l.empresa_id IN ({marks})'
+            params += list(empresa_ids)
+        rows = execute_query(
+            'SELECT l.empresa_id, l.banco, l.conta, MONTH(l.data) AS m, COUNT(*) AS n, '
+            '       MAX(l.data) AS ult FROM extrato_lancamentos l '
+            f' WHERE YEAR(l.data) = %s{cond} '
+            ' GROUP BY l.empresa_id, l.banco, l.conta, MONTH(l.data)',
+            tuple(params), fetch=True) or []
+        contas = {}
+        for r in rows:
+            k = (r['empresa_id'], conta_normalizada(r['conta']))
+            c = contas.setdefault(k, {'empresa_id': r['empresa_id'],
+                                      'banco': banco_curto(None, r['banco']), 'conta': r['conta'],
+                                      'meses': {}, 'ultimo': None, 'total': 0, 'cadastrada': False})
+            c['meses'][int(r['m'])] = int(r['n'])
+            c['total'] += int(r['n'])
+            if r['ult'] and (c['ultimo'] is None or r['ult'] > c['ultimo']):
+                c['ultimo'] = r['ult']
+        for reg in FinContaBancaria.listar(empresa_ids=empresa_ids, apenas_ativas=True):
+            k = (reg['empresa_id'], conta_normalizada(reg['conta']))
+            c = contas.get(k)
+            if c is None:
+                contas[k] = {'empresa_id': reg['empresa_id'], 'banco': reg.get('banco_nome') or 'Banco',
+                             'conta': reg['conta'], 'meses': {}, 'ultimo': None, 'total': 0,
+                             'cadastrada': True}
+            else:
+                c['cadastrada'] = True
+                if reg.get('banco_nome'):
+                    c['banco'] = reg['banco_nome']
+        return sorted(contas.values(), key=lambda c: (c['empresa_id'], str(c['banco']), str(c['conta'])))
 
     @staticmethod
     def set_ativa(conta_id, ativa):

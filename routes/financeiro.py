@@ -1178,8 +1178,14 @@ def contas():
     # Órfã (chegou sem número no nome e com conta desconhecida) é sinal de
     # funcionário que não seguiu o combinado: só ADMIN vê, para cobrar.
     admin = bool(getattr(current_user, 'is_admin', None) and current_user.is_admin())
+    from datetime import date as _date
+    ano = int(request.args.get('ano') or _date.today().year)
+    hoje = _date.today()
     return render_template(
         'financeiro/contas.html',
+        cobertura=FinContaBancaria.cobertura(ano, sel), ano=ano,
+        mes_limite=(hoje.month if ano == hoje.year else (12 if ano < hoje.year else 0)),
+        meses_rot=['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
         contas=FinContaBancaria.listar(empresa_ids=sel, apenas_ativas=False),
         pendencias=FinExtratoPendencia.listar(empresa_ids=sel, ver_orfas=admin),
         eh_admin=admin, formatos=__import__('utils.extrato_formatos', fromlist=['catalogo']).catalogo(),
@@ -2260,10 +2266,52 @@ def extrato_transferencias():
         d['total'] += abs(float(s['l']['valor']))
 
     _emps, _sel, mapa = _empresas_ctx()
+
+    # O que já chegou de extrato de cada destino: sem isto a lista "esperando
+    # o extrato de X" não diz se falta um mês da conta conhecida ou se o
+    # dinheiro caiu numa conta que ninguém cadastrou (14/09/2026).
+    from datetime import date as _date
+    from models.extrato_lancamento import FinContaBancaria
+    _rot = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    from utils.extrato_ingest import banco_curto as _bc
+    def banco_curto_safe(b):
+        try:
+            return _bc(None, b)
+        except Exception:
+            return b or 'banco'
+    cobertura_dest = {}
+    try:
+        _cob = FinContaBancaria.cobertura(_date.today().year)
+        _cid_por_apelido = {v: k for k, v in apelido.items()}
+        for ap in destinos:
+            cid = _cid_por_apelido.get(ap)
+            linhas = []
+            for c in _cob:
+                if c['empresa_id'] != cid:
+                    continue
+                ms = sorted(c['meses'])
+                faixa = (f"{_rot[ms[0]-1]}–{_rot[ms[-1]-1]}" if len(ms) > 1 else (_rot[ms[0]-1] if ms else 'nada'))
+                faltam = [_rot[m-1] for m in range(ms[0], ms[-1] + 1) if m not in c['meses']] if ms else []
+                linhas.append({'banco': c['banco'], 'conta': c['conta'], 'faixa': faixa,
+                               'faltam': faltam, 'cadastrada': c['cadastrada'], 'total': c['total']})
+            # pista: "TRANSF CC PARA CC" e afins são transferência DENTRO do
+            # mesmo banco — o destino tem conta naquele banco, ainda sem extrato
+            pistas = {}
+            for it in destinos[ap]['itens']:
+                d = (it['l'].get('descricao') or '').upper()
+                if 'CC PARA CC' in d or 'CC PARA CP' in d or 'TRANSF CC' in d or 'TRANSFERENCIA ENTRE CONTAS' in d:
+                    b = banco_curto_safe(it['l'].get('banco'))
+                    pistas[b] = pistas.get(b, 0) + 1
+            cobertura_dest[ap] = linhas
+            if pistas:
+                cobertura_dest[ap + '::pistas'] = pistas
+    except Exception:
+        logging.getLogger(__name__).exception('[transferencias] cobertura dos destinos falhou (segue sem)')
+
     registrar('leitura.transferencias', 'financeiro')
     return render_template(
         'financeiro/extrato_transferencias.html',
-        pares=pares, destinos=destinos,
+        pares=pares, destinos=destinos, cobertura_dest=cobertura_dest,
         total_pares=sum(p['valor'] for p in pares),
         total_suspeitos=sum(abs(float(s['l']['valor'])) for s in suspeitos),
         n_suspeitos=len(suspeitos), mapa=mapa,

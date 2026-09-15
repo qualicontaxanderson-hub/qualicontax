@@ -651,6 +651,16 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                     </button>
                 </form>
                 {% endif %}
+                {% if l.par_estado in ('casado', 'suspeito') and not l.categoria_id %}
+                {# Trava de transferência do grupo: a decisão é em Transferências,
+                   não aqui — classificar um lado contaria o dinheiro duas vezes. #}
+                <a class="ex-btn-tag" style="border-color:#fcd34d; background:#fffbeb; color:#92400e;"
+                   href="{{ url_for('financeiro.extrato_transferencias') }}"
+                   title="{{ 'As duas pontas se acharam: aprove o par em Transferências' if l.par_estado == 'casado' else 'Parece transferência do grupo e a outra ponta ainda não chegou: veja em Transferências' }}">
+                    <i class="fas fa-exchange-alt"></i>
+                    {{ 'Par a aprovar' if l.par_estado == 'casado' else 'Esperando a outra ponta' }}
+                </a>
+                {% else %}
                 <button class="ex-btn-tag {{ '' if l.categoria_id else 'destaque' }}"
                         title="{{ ('Desta vez foi outra coisa — muda só este, a regra continua'
                                    if l.conferir else
@@ -665,6 +675,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                     <i class="fas fa-tag"></i>
                     {{ 'Trocar' if l.categoria_id else 'Classificar' }}
                 </button>
+                {% endif %}
                 {% if l.conferir and l.memorizacao_id %}
                 <a class="ex-btn-tag" title="O chute da regra estava errado — mude o critério dela"
                    href="{{ url_for('financeiro.extrato_memorizacoes') }}">
