@@ -1029,9 +1029,10 @@ def extrato_importar():
     from utils.extrato_ingest import processar_lancamentos, conta_da_empresa_no_banco
     for arq in arquivos:
         ext = (arq.filename or '').lower().rsplit('.', 1)[-1]
-        if ext in ('pdf', 'csv'):
-            # PDF (C6, Nubank) e CSV (Nubank) passam pelo despachante. O PDF
-            # abre com o CPF da empresa escolhida (ou o que estiver no nome).
+        if ext in ('pdf', 'csv', 'xls', 'xlsx'):
+            # PDF, CSV e planilha passam pelo despachante, que reconhece o
+            # banco pelo conteúdo. O PDF abre com o CPF da empresa escolhida
+            # (ou com a senha que estiver no nome do arquivo).
             try:
                 from utils.db_helper import execute_query as _q
                 dono = _q('SELECT cpf_cnpj FROM clientes WHERE id = %s',

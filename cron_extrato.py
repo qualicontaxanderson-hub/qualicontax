@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger('cron_extrato')
 
 PASTA_ORIGEM = '_ENTRADA'
-EXTENSOES = ('.ofx', '.pdf', '.csv')   # whitelist — ver REGRA DE FERRO no topo
+EXTENSOES = ('.ofx', '.pdf', '.csv', '.xls', '.xlsx')   # whitelist — ver REGRA DE FERRO no topo
 _ATOR_NOME = 'ROTEADOR (extrato)'
 _ATOR_LOGIN = 'roteador_extrato'
 
@@ -100,7 +100,7 @@ def _gravar(formato, caminho, previa, empresa_id, usuario_id=None):
     """Grava o que o arquivo traz. OFX cria lançamentos (e encaixa no que o
     PDF já criou); PDF do C6 completa o que existe e cria o que falta."""
     from utils.extrato_ingest import processar_ofx, processar_lancamentos
-    if formato in ('pdf', 'csv'):
+    if formato in ('pdf', 'csv', 'planilha'):
         # Com identificador (fitid ou documento) o arquivo entra pelo núcleo,
         # que deduplica por id. Sem identificador (PDF do C6/Nubank/Sicredi,
         # CSV do Cora/C6) entra pelo casamento por data + valor, que completa
@@ -187,13 +187,13 @@ def rodar(dryrun=None, limite=None):
                 _pendencia_pdf(origem, nome, seco, formato, previa)
                 linha['resultado'] = {'pdf-senha': 'PENDENTE: PDF com senha que nenhum documento abriu',
                                       'pdf-outro': 'PENDENTE: extrato em PDF de outro banco (mande o OFX)',
-                                      'csv-outro': 'PENDENTE: CSV com colunas que eu não conheço'}[formato]
+                                      'csv-outro': 'PENDENTE: ' + (previa or {}).get('motivo', 'colunas que eu não conheço')}[formato]
                 resumo['erros'] += 1
                 resumo['detalhes'].append(linha)
                 logger.warning('[extrato] %s; está na fila de Contas.',
                                {'pdf-senha': 'um PDF com senha não abriu',
                                 'pdf-outro': 'um extrato em PDF de outro banco',
-                                'csv-outro': 'um CSV de layout desconhecido'}[formato])
+                                'csv-outro': 'uma tabela de layout desconhecido'}[formato])
                 continue
             if not formato:
                 resumo['lidos'] -= 1
@@ -264,8 +264,8 @@ def rodar(dryrun=None, limite=None):
                 ano = (max(datas)[:4] if datas else str(__import__('datetime').date.today().year))
                 destino_pasta = pasta_destino(
                     cliente['numero_cliente'], cliente['nome_razao_social'], ano)
-                nome_final = nome_arquivo_final(banco, previa.get('conta'),
-                                                datas, formato)
+                nome_final = nome_arquivo_final(banco, previa.get('conta'), datas,
+                                                nome.lower().rsplit('.', 1)[-1])
                 linha['destino'] = f'{destino_pasta}/{nome_final}'
 
                 if seco:
@@ -394,7 +394,8 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
     destino = pasta_destino(cliente['numero_cliente'],
                             cliente['nome_razao_social'], ano)
     svc.ensure_folder(destino)
-    final = nome_arquivo_final(banco, previa.get('conta'), datas, formato)
+    final = nome_arquivo_final(banco, previa.get('conta'), datas,
+                               nome.lower().rsplit('.', 1)[-1])
     movido = svc.move_file(caminho_dropbox, f'{destino}/{final}')
     FinExtratoPendencia.limpar_resolvidas([caminho_dropbox])
     from utils.extrato_pdf_c6 import aviso_ofx

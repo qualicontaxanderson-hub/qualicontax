@@ -16,9 +16,10 @@ Duas coisas moram aqui:
    e devolve ``(previa, formato)`` no mesmo formato para OFX, PDF e CSV, para
    o roteador e a importação manual não precisarem saber quem leu.
 
-REGRA: OFX é o padrão para todo banco (um leitor serve para todos). PDF e
-CSV só onde o OFX é incompleto (C6) ou onde o cliente só tem esse arquivo
-(Nubank). Layout novo = leitor novo, escrito olhando o arquivo real.
+REGRA: OFX é o padrão para todo banco (um leitor serve para todos). PDF, CSV
+e Excel existem porque o cliente baixa o que o banco deixou baixar — é o
+mesmo extrato em outro invólucro, e quem já entrou por um formato não entra
+de novo por outro. Layout novo = leitor novo, escrito olhando o arquivo real.
 """
 import logging
 
@@ -30,27 +31,33 @@ CATALOGO = [
     {'banco_id': '336', 'nome': 'C6',
      'ofx': ('irregular', 'Pix enviado sem o nome de quem recebeu e boleto sem cedente. Entra, mas o completo é o PDF.'),
      'pdf': ('ok', 'O extrato completo do C6. Vale sozinho; se o OFX vier também, os dois se encaixam.'),
-     'csv': ('igual', 'Igual ao OFX (a mesma descrição curta). Traz a conta no cabeçalho.')},
+     'csv': ('igual', 'Igual ao OFX (a mesma descrição curta). Traz a conta no cabeçalho.'),
+     'xls': ('nao', 'O C6 entrega a planilha COM SENHA, como faz com o PDF. Mande o CSV.')},
     {'banco_id': '748', 'nome': 'Sicredi',
      'ofx': ('ok', 'CPF/CNPJ e nome nos dois sentidos.'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX, sem o identificador; casa por data e valor. Traz cooperativa e conta na capa.'),
-     'csv': ('nao', 'Mande o OFX.')},
+     'csv': ('igual', 'Mesmas colunas da planilha (Data, Descrição, Documento, Valor, Saldo); com outras colunas eu recuso e aviso.'),
+     'xls': ('igual', 'Mesma tabela do PDF, com cooperativa e conta no topo. A coluna Documento traz o TIPO (PIX_DEB), não um número.')},
     {'banco_id': '260', 'nome': 'Nubank',
      'ofx': ('ok', 'Nome, CNPJ e banco de origem na descrição.'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX; lido pela conta na capa (o CPF vem oculto).'),
-     'csv': ('igual', 'Mesmo conteúdo do OFX, com o mesmo identificador. Precisa do número da empresa no nome do arquivo.')},
+     'csv': ('igual', 'Mesmo conteúdo do OFX, com o mesmo identificador. Precisa do número da empresa no nome do arquivo.'),
+     'xls': ('nao', 'Nunca vi uma; mande o OFX ou o CSV.')},
     {'banco_id': '364', 'nome': 'Efí',
      'ofx': ('ok', '"Pix enviado via chave: X", "Recebimento de cobrança: N de X".'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.'),
-     'csv': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.')},
+     'csv': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.'),
+     'xls': ('igual', 'Mesma tabela do CSV, com o protocolo.')},
     {'banco_id': '237', 'nome': 'Bradesco',
      'ofx': ('ok', 'Nome nas transferências e no Pix recebido.'),
-     'pdf': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta na capa.'),
-     'csv': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta no cabeçalho.')},
+     'pdf': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta na capa. Lido pelas coordenadas da tabela: serve para o extrato da empresa e o da pessoa física.'),
+     'csv': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta no cabeçalho. PJ escreve "Lançamento", PF escreve "Histórico" e quebra a descrição em duas linhas.'),
+     'xls': ('igual', 'A mesma tabela do CSV, PJ e PF.')},
     {'banco_id': '403', 'nome': 'Cora',
      'ofx': ('ok', 'Nome nos dois sentidos.'),
      'pdf': ('nao', 'Os nomes vêm cortados ("Anderson Antunes Vi…"). Mande o OFX ou o CSV.'),
-     'csv': ('igual', 'Mesmo conteúdo do OFX (tipo + nome). Não diz a conta: precisa do nome ou número da empresa no arquivo.')},
+     'csv': ('igual', 'Mesmo conteúdo do OFX (tipo + nome). Não diz a conta: precisa do nome ou número da empresa no arquivo.'),
+     'xls': ('nao', 'Nunca vi uma; mande o OFX ou o CSV.')},
 ]
 
 ROTULO = {'ok': 'OK', 'irregular': 'Irregular', 'igual': 'Igual ao OFX', 'nao': 'Não configurado'}
@@ -61,8 +68,8 @@ def catalogo():
     out = []
     for b in CATALOGO:
         linha = {'banco_id': b['banco_id'], 'nome': b['nome']}
-        for f in ('ofx', 'pdf', 'csv'):
-            st, nota = b[f]
+        for f in ('ofx', 'pdf', 'csv', 'xls'):
+            st, nota = b.get(f, ('nao', 'Mande o OFX.'))
             linha[f] = {'status': st, 'rotulo': ROTULO[st], 'nota': nota}
         out.append(linha)
     return out
@@ -78,7 +85,7 @@ class ArquivoDesconhecido(Exception):
 def ler_arquivo(nome, dados, senhas=()):
     """(previa, formato).
 
-    formato: 'ofx' | 'csv' | 'pdf' — leu. Marcadores quando não leu:
+    formato: 'ofx' | 'csv' | 'planilha' | 'pdf' — leu. Marcadores quando não leu:
     'pdf-senha' (protegido, ninguém abriu), 'pdf-outro' (extrato de banco
     sem leitor), 'csv-outro' (CSV com colunas desconhecidas). Levanta
     ``ArquivoDesconhecido`` para o que não é extrato (DANFE, boleto...).
@@ -92,6 +99,12 @@ def ler_arquivo(nome, dados, senhas=()):
         from utils.extrato_csv import parse_csv, CsvInvalido
         try:
             return parse_csv(dados), 'csv'
+        except CsvInvalido as e:
+            return {'motivo': str(e)}, 'csv-outro'
+    if n.endswith(('.xls', '.xlsx')):
+        from utils.extrato_csv import parse_planilha, CsvInvalido
+        try:
+            return parse_planilha(dados, nome), 'planilha'
         except CsvInvalido as e:
             return {'motivo': str(e)}, 'csv-outro'
     if n.endswith('.pdf'):
@@ -119,11 +132,14 @@ def _ler_pdf(dados, senhas):
             return {'motivo': f'Extrato do Nubank que não consegui ler: {e}'}, 'pdf-outro'
     from utils.extrato_pdf_bancos import (e_sicredi, parse_sicredi, e_efi, parse_efi,
                                           e_bradesco, parse_bradesco, PdfBancoInvalido)
-    for detecta, ler, nome in ((e_sicredi, parse_sicredi, 'Sicredi'), (e_efi, parse_efi, 'Efí'),
-                               (e_bradesco, parse_bradesco, 'Bradesco')):
+    # O leitor do Bradesco precisa das COORDENADAS (a tabela dele sai em ordem
+    # diferente no PJ e no PF), por isso recebe o documento aberto.
+    for detecta, ler, nome, quer_doc in ((e_sicredi, parse_sicredi, 'Sicredi', False),
+                                         (e_efi, parse_efi, 'Efí', False),
+                                         (e_bradesco, parse_bradesco, 'Bradesco', True)):
         if detecta(paginas[0]):
             try:
-                return ler(paginas), 'pdf'
+                return (ler(paginas, doc) if quer_doc else ler(paginas)), 'pdf'
             except PdfBancoInvalido as e:
                 return {'motivo': f'Extrato do {nome} que não consegui ler: {e}'}, 'pdf-outro'
     if parece_extrato_bancario(paginas[0]):

@@ -25,7 +25,7 @@ BRADESCO capa 'Extrato de: Ag:' + 'CC:'; linhas [data] / lançamento (1..n)
 import re
 from decimal import Decimal
 
-_RE_DATA = re.compile(r'^(\d{2})/(\d{2})/(\d{4})$')
+_RE_DATA = re.compile(r'^(\d{2})/(\d{2})/(\d{2}|\d{4})$')
 _RE_NUM = re.compile(r'^([+-]?)\s*([\d.]+),(\d{2})$')
 
 
@@ -43,7 +43,12 @@ def _dec(txt):
 
 def _iso(txt):
     m = _RE_DATA.match((txt or '').strip())
-    return f'{m.group(3)}-{m.group(2)}-{m.group(1)}' if m else None
+    if not m:
+        return None
+    ano = m.group(3)
+    if len(ano) == 2:                     # o extrato PF do Bradesco usa 08/01/26
+        ano = ('20' if int(ano) < 70 else '19') + ano
+    return f'{ano}-{m.group(2)}-{m.group(1)}'
 
 
 def _lanc(data, valor, descricao, documento=None):
@@ -145,44 +150,138 @@ def parse_efi(paginas):
 # BRADESCO
 # ---------------------------------------------------------------------------
 def e_bradesco(t):
-    return 'Extrato de: Ag' in t and 'CC:' in t
+    """PJ escreve 'CC:', PF escreve 'Conta:' — os dois dizem 'Extrato de: Ag'."""
+    return 'Extrato de: Ag' in t and ('CC:' in t or 'Conta:' in t)
 
 
-_RE_DOC = re.compile(r'^\d{5,9}$')
+# O Bradesco desenha uma TABELA, e o texto corrido dela sai em ordens
+# diferentes no PJ e no PF (medido em 15/09/2026: no PF a coluna Histórico
+# vem inteira antes do resto). Por isso este leitor não lê linhas de texto:
+# lê PALAVRAS COM COORDENADA, agrupa por altura e distribui por coluna a
+# partir do x de cada título do cabeçalho. Vale para os dois extratos.
+_TITULOS = (('data', ('data',)),
+            ('hist', ('lancamento', 'historico')),
+            ('doc', ('dcto', 'docto')),
+            ('cred', ('credito',)),
+            ('deb', ('debito',)),
+            ('saldo', ('saldo',)))
+_MARGEM = 8.0        # o texto da coluna começa alguns pontos à esquerda do título
+_VIZINHA = 16.0      # distância em y para uma linha só de texto ser do lançamento
 
 
-def parse_bradesco(paginas):
-    cab = paginas[0]
-    m = re.search(r'(\d{4,5})\s*\|\s*(\d{4,}-?\d?)', cab)
+def _slug(t):
+    import unicodedata
+    t = unicodedata.normalize('NFKD', t or '').encode('ascii', 'ignore').decode()
+    return re.sub(r'[^a-z0-9]+', '', t.lower())
+
+
+def _linhas_com_x(pagina, tol=2.5):
+    """As palavras da página agrupadas por altura: [{'y', 'w': [(x, texto)]}]."""
+    linhas = []
+    for x0, y0, _x1, _y1, txt, *_ in sorted(pagina.get_text('words'),
+                                            key=lambda w: (round(w[1], 1), w[0])):
+        if not (txt or '').strip():
+            continue
+        if linhas and abs(linhas[-1]['y'] - y0) <= tol:
+            linhas[-1]['w'].append((x0, txt))
+        else:
+            linhas.append({'y': y0, 'w': [(x0, txt)]})
+    for l in linhas:
+        l['w'].sort()
+    return linhas
+
+
+def _titulos(linha):
+    """{coluna: x} se esta linha for a dos títulos da tabela; senão None."""
+    achado = {}
+    for x, t in linha['w']:
+        n = _slug(t)
+        for chave, nomes in _TITULOS:
+            if n in nomes and chave not in achado:
+                achado[chave] = x
+    if {'data', 'hist', 'saldo'} <= set(achado) and ('cred' in achado or 'deb' in achado):
+        return achado
+    return None
+
+
+def _celulas(linha, cortes):
+    """A linha repartida nas colunas da tabela."""
+    ordem = sorted(cortes.items(), key=lambda kv: kv[1])
+    out = {c: [] for c, _ in ordem}
+    for x, t in linha['w']:
+        col = ordem[0][0]
+        for chave, x0 in ordem:
+            if x >= x0 - _MARGEM:
+                col = chave
+        out[col].append(t)
+    return {c: ' '.join(v).strip() for c, v in out.items()}
+
+
+def parse_bradesco(paginas, doc=None):
+    if doc is None:
+        raise PdfBancoInvalido('extrato do Bradesco precisa das coordenadas da página.')
     conta = None
+    m = re.search(r'Ag:?\s*(\d{4,5})\s*\|\s*(?:CC|C/C|Conta):?\s*(\d{4,}-?\d?)',
+                  ' '.join(' '.join(t for _x, t in l['w']) for l in _linhas_com_x(doc[0])))
     if m:
         conta = f"{int(m.group(1))}/{m.group(2).lstrip('0')}"
+
     lancs = []
-    linhas = [l.strip() for p in paginas for l in p.splitlines()]
-    data, desc = None, []
-    i, n = 0, len(linhas)
-    while i < n:
-        l = linhas[i]
-        d = _iso(l)
-        if d:
-            data, desc = d, []
-            i += 1
-            continue
-        if _RE_DOC.match(l) and i + 2 < n and _dec(linhas[i + 1]) is not None and _dec(linhas[i + 2]) is not None:
-            v = _dec(linhas[i + 1])
-            if data and desc and v != 0:
-                lancs.append(_lanc(data, v, ' '.join(desc), documento=l))
-            desc = []
-            i += 3                      # dcto, valor, saldo
-            continue
-        if l and _dec(l) is None and not l.startswith('SALDO'):
-            if l in ('Data', 'Lançamento', 'Dcto.', 'Crédito (R$)', 'Débito (R$)', 'Saldo (R$)') or 'Extrato de' in l or 'Agência | Conta' in l or 'Total' in l:
-                i += 1
+    cortes = None
+    data = None          # a data só é escrita quando muda — atravessa a página
+    sobra = []           # descrição que ficou no pé da página, sem o valor dela
+    for pagina in doc:
+        cels = []
+        for l in _linhas_com_x(pagina):
+            achado = _titulos(l)
+            if achado:
+                cortes = achado           # a tabela (re)começa aqui
                 continue
-            desc.append(l)
-        elif l.startswith('SALDO'):
-            desc = []
-        i += 1
+            if cortes is None:
+                continue                  # capa/resumo, antes da primeira tabela
+            c = _celulas(l, cortes)
+            c['y'] = l['y']
+            # 'SALDO ANTERIOR' e 'Total 682.468,04 -688.216,41' são resumo,
+            # não lançamento — e o rótulo cai ora na 1ª, ora na 2ª coluna.
+            texto = f"{c.get('data') or ''} {c.get('hist') or ''}".strip().upper()
+            if texto.startswith('SALDO') or texto.startswith('TOTAL'):
+                continue
+            cels.append(c)
+        # Um lançamento é a linha que tem documento ou valor; as linhas só de
+        # texto ao redor dela são a descrição (no PF vêm antes E depois).
+        valor_de = [j for j, c in enumerate(cels)
+                    if c.get('doc') or _dec(c.get('cred')) is not None or _dec(c.get('deb')) is not None]
+        if not valor_de:
+            continue
+        descricao = {j: [] for j in valor_de}
+        soltas = []
+        for j, c in enumerate(cels):
+            if not c.get('hist') or j in descricao:
+                continue
+            perto = min(valor_de, key=lambda k: abs(cels[k]['y'] - c['y']))
+            if abs(cels[perto]['y'] - c['y']) <= _VIZINHA:
+                descricao[perto].append((c['y'], c['hist']))
+            elif j > valor_de[-1]:
+                soltas.append(c['hist'])  # pé da página: o valor vem na próxima
+        if sobra:                         # ... e aqui ele chega
+            descricao[valor_de[0]].insert(0, (-1, ' '.join(sobra)))
+        sobra = soltas
+        for j, c in enumerate(cels):
+            d = _iso(c.get('data'))
+            if d:
+                data = d
+            if j not in descricao:
+                continue
+            v = _dec(c.get('cred'))
+            if v is None:
+                v = _dec(c.get('deb'))
+                if v is not None and v > 0:
+                    v = -v                # o débito às vezes vem sem o sinal
+            if v is None or v == 0 or not data:
+                continue
+            texto = ' '.join(t for _y, t in sorted(descricao[j]))
+            lancs.append(_lanc(data, v, texto, documento=(c.get('doc') or None)))
     if not lancs:
         raise PdfBancoInvalido('extrato do Bradesco sem lançamento legível.')
-    return {'banco': 'Bradesco', 'banco_id': '237', 'conta': conta, 'saldo': None, 'lancamentos': lancs}
+    return {'banco': 'Bradesco', 'banco_id': '237', 'conta': conta,
+            'saldo': None, 'lancamentos': lancs}

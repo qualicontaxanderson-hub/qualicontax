@@ -28,6 +28,7 @@ Pillow==12.2.0
 zipstream-ng==1.9.2
 # Relatório em Excel (utils/relatorio.py) — reportlab/Pillow já pinados acima
 openpyxl==3.1.5
+xlrd==2.0.2            # extrato em .xls (BIFF) — Bradesco e Sicredi
 # Juntar DANFSEs num PDF unico (export da NFS-e)
 pypdf==6.1.1
 # Extrato em PDF do C6 (utils/extrato_pdf_c6.py) — abre PDF com senha e extrai o texto por linha
