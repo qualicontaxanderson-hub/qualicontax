@@ -470,6 +470,69 @@ def categoria_nova():
     return redirect(url_for('financeiro.categorias'))
 
 
+@financeiro.route('/financeiro/categorias/nova-inline', methods=['POST'])
+@permission_required('financeiro.categorias')
+def categoria_nova_inline():
+    """Cria categoria/subcategoria DE DENTRO do assistente e devolve JSON.
+
+    Por que existe: classificar um lançamento e descobrir que a categoria não
+    existe obrigava a sair da tela, ir em CATEGORIAS, criar, voltar e recomeçar
+    o assistente do passo 1 — perdendo o que já tinha sido escolhido. Quem
+    classifica extrato faz isso dezenas de vezes seguidas.
+
+    Mesma regra de ``categoria_nova``: mesmo modelo, mesma trava de duplicata,
+    mesma auditoria. O que muda é só a resposta — JSON em vez de redirect —
+    porque quem chama é o assistente e ele precisa do ID para já usar.
+
+    ``nivel``:
+      'grupo'     -> grupo novo + primeira categoria dele (precisa tipo+grupo+nome)
+      'categoria' -> categoria num grupo que já existe (precisa tipo+grupo+nome)
+      'sub'       -> subcategoria de uma mãe (precisa pai_id+nome)
+    """
+    nivel = (request.form.get('nivel') or '').strip()
+    nome = (request.form.get('nome') or '').strip()
+    if not nome:
+        return jsonify({'ok': False, 'erro': 'Informe o nome.'}), 400
+    if len(nome) > 120:
+        return jsonify({'ok': False, 'erro': 'Nome longo demais.'}), 400
+
+    if nivel == 'sub':
+        pai_raw = (request.form.get('pai_id') or '').strip()
+        if not pai_raw.isdigit():
+            return jsonify({'ok': False, 'erro': 'Categoria mãe inválida.'}), 400
+        novo_id = FinCategoria.criar(None, None, nome, pai_id=int(pai_raw))
+        if not novo_id:
+            return jsonify({'ok': False, 'erro': 'Já existe uma com esse nome aqui '
+                                                 '(ou a mãe já é subcategoria).'}), 409
+        registrar('escrita.criou_categoria_fin', 'financeiro', tabela='fin_categorias',
+                  registro_id=novo_id,
+                  depois={'pai_id': int(pai_raw), 'nome': nome, 'sub': True,
+                          'origem': 'assistente do extrato'})
+    else:
+        tipo = (request.form.get('tipo') or '').strip()
+        grupo = (request.form.get('grupo') or '').strip()
+        if tipo not in FinCategoria.TIPOS or not grupo:
+            return jsonify({'ok': False, 'erro': 'Tipo ou grupo inválido.'}), 400
+        novo_id = FinCategoria.criar(tipo, grupo, nome)
+        if not novo_id:
+            return jsonify({'ok': False, 'erro': f'"{nome}" já existe nesse grupo.'}), 409
+        registrar('escrita.criou_categoria_fin', 'financeiro', tabela='fin_categorias',
+                  registro_id=novo_id,
+                  depois={'tipo': tipo, 'grupo': grupo, 'nome': nome,
+                          'origem': 'assistente do extrato'})
+
+    # Lê do banco o que foi gravado em vez de devolver o que veio no formulário:
+    # a SUBcategoria herda tipo e grupo da mãe, e é com esses valores que o
+    # assistente monta a <option> nova. Devolver o do formulário faria a opção
+    # nascer num grupo que não é o dela e sumir do cartão.
+    nova = execute_query(
+        'SELECT id, tipo, grupo, nome, pai_id FROM fin_categorias WHERE id = %s',
+        (novo_id,), fetch=True, fetch_one=True) or {}
+    return jsonify({'ok': True, 'id': novo_id, 'nome': nova.get('nome') or nome,
+                    'grupo': nova.get('grupo') or '', 'tipo': nova.get('tipo') or '',
+                    'pai_id': nova.get('pai_id') or ''})
+
+
 @financeiro.route('/financeiro/categorias/<int:cat_id>/renomear', methods=['POST'])
 @permission_required('financeiro.categorias')
 def categoria_renomear(cat_id):

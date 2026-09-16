@@ -222,6 +222,25 @@
 .ex-cartao.on { border-color:#00a85a; background:#f0fdf4;
   box-shadow:0 0 0 1px #00a85a inset; }
 .ex-cartao:disabled { opacity:.45; cursor:not-allowed; }
+/* Cartao de CRIAR: tracejado, para nao se confundir com as categorias que
+   ja existem — ele nao e uma escolha, e uma acao. */
+.ex-cartao-novo { border-style:dashed; border-color:#cbd5e1; background:#fcfdfc; }
+.ex-cartao-novo:hover { border-color:#00a85a; background:#f6fbf8; }
+.ex-cartao-novo .b { background:#e8f5ee; color:#00a85a; font-weight:800; }
+.ex-cartao-novo .t b { color:#41695a; }
+/* Campo de nome da categoria nova. Empilha no celular: a regra da casa e que
+   a PAGINA nunca role de lado. */
+.ex-catnova { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px; }
+.ex-catnova-in { flex:1 1 220px; min-width:0; padding:11px 13px; border:1.5px solid #cbd5e1;
+  border-radius:10px; font-size:14px; font-family:inherit; color:#1e293b; }
+.ex-catnova-in:focus { outline:none; border-color:#00a85a; box-shadow:0 0 0 3px #00a85a22; }
+.ex-catnova-ok { padding:11px 16px; border:none; border-radius:10px; background:#00a85a;
+  color:#fff; font-size:13px; font-weight:800; cursor:pointer; font-family:inherit; }
+.ex-catnova-ok:disabled { opacity:.55; cursor:default; }
+.ex-catnova-x { padding:11px 14px; border:1.5px solid #e2e8f0; border-radius:10px;
+  background:#fff; color:#64748b; font-size:13px; font-weight:700; cursor:pointer;
+  font-family:inherit; }
+.ex-catnova-erro { font-size:12.5px; color:#b91c1c; margin:2px 0 8px; line-height:1.5; }
 .ex-cartao .b { flex:0 0 30px; height:30px; border-radius:9px; display:grid;
   place-items:center; font-size:14px; background:#f1f5f9; margin-top:1px; }
 .ex-cartao .t { flex:1 1 auto; min-width:0; }
@@ -1115,6 +1134,13 @@ var EX_URL_SUG = "{{ url_for('financeiro.extrato_sugestoes', lanc_id=0) }}";
 var EX_URL_LOTE = "{{ url_for('financeiro.extrato_lote') }}";
 var EX_URL_PREVIA = "{{ url_for('financeiro.extrato_regra_previa') }}";
 var EX_URL_CANDIDATOS = "{{ url_for('financeiro.extrato_titulos_candidatos', lanc_id=0) }}";
+{% if current_user.has_permission('financeiro.categorias') %}
+var EX_URL_CATNOVA = "{{ url_for('financeiro.categoria_nova_inline') }}";
+{% else %}
+// Sem permissao de mexer no catalogo, o assistente nao oferece criar — o
+// botao sumir e melhor que o botao dar 403 depois do nome digitado.
+var EX_URL_CATNOVA = null;
+{% endif %}
 
 var EX_EMPRESAS = [
 {% for e in fin_empresas %}  { id: {{ e.cliente_id }}, nome: {{ (emp_mapa.get(e.cliente_id) or '?') | tojson }} }{{ ',' if not loop.last }}
@@ -1189,7 +1215,11 @@ function exWizAbrir(dados) {
     aplicar: 'direto', retroagir: null,   // null = ainda nao escolheu
     tituloAcao: null, tituloId: null, tituloComp: null, candidatos: null,
     repete: null,     // null = ainda nao escolheu — sem default, licao da 1a regra
-    grupoCat: null, maeCat: null, previa: null, buscando: false
+    grupoCat: null, maeCat: null, previa: null, buscando: false,
+    // Criacao de categoria DENTRO do assistente. novaCat guarda em que
+    // nivel o campo esta aberto ('grupo'|'categoria'|'sub'); novaErro, a
+    // recusa do servidor (nome repetido) para aparecer ao lado do campo.
+    novaCat: null, novaErro: '', novaSalvando: false
   };
   var form = document.getElementById('exWizForm');
   form.action = W.lote ? EX_URL_LOTE : EX_URL_CLAS.replace('/0/', '/' + W.id + '/');
@@ -1271,8 +1301,9 @@ function exWizAndar(d) {
   var passos = exPassosDe(W.modo);
   if (d < 0 && W.i === 0) return exWizFechar();
   if (d < 0 && passos[W.i] === 'Trecho' && W.manual) { W.manual = false; return exWizDesenha(); }
-  if (d < 0 && passos[W.i] === 'Categoria' && W.maeCat) { W.maeCat = null; W.cat = ''; return exWizDesenha(); }
-  if (d < 0 && passos[W.i] === 'Categoria' && W.grupoCat) { W.grupoCat = null; W.cat = ''; return exWizDesenha(); }
+  if (d < 0 && passos[W.i] === 'Categoria' && W.novaCat) { return exCatNovaFecha(); }
+  if (d < 0 && passos[W.i] === 'Categoria' && W.maeCat) { W.maeCat = null; W.cat = ''; W.novaCat = null; return exWizDesenha(); }
+  if (d < 0 && passos[W.i] === 'Categoria' && W.grupoCat) { W.grupoCat = null; W.cat = ''; W.novaCat = null; return exWizDesenha(); }
   W.i = Math.max(0, Math.min(passos.length - 1, W.i + d));
   exWizDesenha();
 }
@@ -1481,6 +1512,18 @@ function exWizDesenha() {
 
   tela.innerHTML = html;
 
+  // O painel e redesenhado por innerHTML, entao o autofocus do HTML nunca
+  // dispara: o campo nasce depois que o navegador ja passou por ele. Focar
+  // aqui e o que faz "criar categoria" ser digitar, e nao clicar de novo.
+  var campoNovo = document.getElementById('exCatNovaNome');
+  if (campoNovo && !W.novaSalvando) {
+    try { campoNovo.focus(); } catch (e) {}
+    campoNovo.onkeydown = function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); exCatNovaSalva(); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); exCatNovaFecha(); }
+    };
+  }
+
   document.getElementById('exWizVoltar').textContent = W.i === 0 ? 'Cancelar' : 'Voltar';
   var ultimo = W.i === passos.length - 1 && W.modo;
   document.getElementById('exWizSeguir').style.display = ultimo ? 'none' : '';
@@ -1525,6 +1568,10 @@ function exTelaCategoria() {
 
   // NIVEL 1: o grupo (a linha do DRE)
   if (!W.grupoCat) {
+    if (W.novaCat === 'grupo') {
+      return exCatNovaCampo('grupo novo — a linha do DRE',
+                            'ex.: Manutencao de frota');
+    }
     var grupos = {};
     opts.forEach(function (o) {
       if (o.getAttribute('data-pai')) return;      // sub nao conta no cartao
@@ -1537,7 +1584,7 @@ function exTelaCategoria() {
           JSON.stringify(g).replace(/"/g, '&quot;') + ')"><span class="b">≣</span>' +
           '<span class="t"><b>' + exEsc(g) + '</b><small>' + grupos[g] +
           ' categorias</small></span><span class="ok">✓</span></button>';
-      }).join('') + '</div>';
+      }).join('') + exCatNovaBotao('Criar um grupo novo') + '</div>';
   }
 
   var filhasDe = function (id) {
@@ -1548,6 +1595,9 @@ function exTelaCategoria() {
   if (W.maeCat) {
     var mae = document.querySelector('#exCatalogo option[value="' + W.maeCat + '"]');
     var nomeMae = mae ? mae.getAttribute('data-nome') : '?';
+    if (W.novaCat === 'sub') {
+      return exCatNovaCampo('novo tipo de gasto em ' + nomeMae, 'ex.: Pneus');
+    }
     return '<span class="ex-rot" style="margin-top:0">o que foi, em ' + exEsc(nomeMae) +
       '</span><div class="ex-cartoes">' + filhasDe(W.maeCat).map(function (o) {
         return '<button type="button" class="ex-cartao' +
@@ -1560,12 +1610,16 @@ function exTelaCategoria() {
         '" onclick="exWizCat(\'' + W.maeCat + '\')">' +
         '<span class="t"><b>Sem detalhar</b><small>lança direto em ' +
         exEsc(nomeMae) + '</small></span><span class="ok">✓</span></button>' +
+      exCatNovaBotao('Criar um tipo de gasto aqui') +
       '</div>' + exRodapeCentro();
   }
 
   // NIVEL 2: a categoria (a coisa — o veiculo, o fornecedor). So as MAES:
   // era aqui que a lista chapada misturava "Manutencao" de tres caminhoes
   // sem dizer de qual era cada uma.
+  if (W.novaCat === 'categoria') {
+    return exCatNovaCampo('nova categoria em ' + W.grupoCat, 'ex.: Caminhao ABC-1234');
+  }
   var doGrupo = opts.filter(function (o) {
     return o.getAttribute('data-grupo') === W.grupoCat && !o.getAttribute('data-pai');
   });
@@ -1582,7 +1636,7 @@ function exTelaCategoria() {
         (String(W.cat) === o.value ? ' on' : '') + '" onclick="exWizCat(\'' + o.value +
         '\')"><span class="t"><b>' + exEsc(o.getAttribute('data-nome')) +
         '</b></span><span class="ok">✓</span></button>';
-    }).join('') + '</div>' +
+    }).join('') + exCatNovaBotao('Criar categoria em ' + W.grupoCat) + '</div>' +
     exRodapeCentro();
 }
 
@@ -1598,7 +1652,110 @@ function exRodapeCentro() {
       }).join('') + '</div>';
 }
 
-function exWizMaeCat(id) { W.maeCat = id; W.cat = ''; exWizDesenha(); }
+// =====================================================================
+// CRIAR CATEGORIA SEM SAIR DO ASSISTENTE
+// Classificar e descobrir que a categoria nao existe mandava a pessoa para a
+// tela de CATEGORIAS, criar, voltar e recomecar o assistente do zero —
+// perdendo tudo que ja tinha escolhido. Quem classifica extrato faz isso
+// dezenas de vezes seguidas.
+//
+// A <option> nova entra no MESMO #exCatalogo que o assistente le. Nao ha
+// segunda lista para ficar desatualizada, e o resto da tela (inclusive o
+// <select> do formulario) enxerga a categoria nova na hora.
+// =====================================================================
+function exCatNovaAbre(nivel) { W.novaCat = nivel; W.novaErro = ''; exWizDesenha(); }
+function exCatNovaFecha() { W.novaCat = null; W.novaErro = ''; exWizDesenha(); }
+
+function exCatNovaCampo(rotulo, dica) {
+  // Enter e Esc sao ligados em JS (ver exWizDesenha), NAO por onkeydown no
+  // HTML: o handler precisa de aspas dentro de um atributo que ja esta dentro
+  // de uma string JS, e a primeira versao disto fechou a string no meio e
+  // quebrou o arquivo inteiro. Atributo inline aqui e armadilha de escape.
+  return '<span class="ex-rot" style="margin-top:0">' + exEsc(rotulo) + '</span>' +
+    '<div class="ex-catnova">' +
+      '<input type="text" id="exCatNovaNome" class="ex-catnova-in" maxlength="120" ' +
+        'placeholder="' + exEsc(dica) + '">' +
+      '<button type="button" class="ex-catnova-ok" onclick="exCatNovaSalva()"' +
+        (W.novaSalvando ? ' disabled' : '') + '>' +
+        (W.novaSalvando ? 'criando...' : 'criar e usar') + '</button>' +
+      '<button type="button" class="ex-catnova-x" onclick="exCatNovaFecha()">cancelar</button>' +
+    '</div>' +
+    (W.novaErro ? '<div class="ex-catnova-erro">' + exEsc(W.novaErro) + '</div>' : '');
+}
+
+function exCatNovaBotao(texto) {
+  if (!EX_URL_CATNOVA) return '';
+  var nivel = W.maeCat ? 'sub' : (W.grupoCat ? 'categoria' : 'grupo');
+  return '<button type="button" class="ex-cartao ex-cartao-novo" ' +
+    'onclick="exCatNovaAbre(' + JSON.stringify(nivel) + ')">' +
+    '<span class="b">+</span><span class="t"><b>' + exEsc(texto) + '</b>' +
+    '<small>cria e ja usa, sem sair daqui</small></span></button>';
+}
+
+function exCatNovaSalva() {
+  if (W.novaSalvando) return;
+  var campo = document.getElementById('exCatNovaNome');
+  var nome = (campo ? campo.value : '').trim();
+  if (!nome) { W.novaErro = 'Informe o nome.'; return exWizDesenha(); }
+
+  var d = new FormData();
+  d.append('nivel', W.novaCat);
+  d.append('nome', nome);
+  if (W.novaCat === 'sub') {
+    d.append('pai_id', W.maeCat);
+  } else {
+    // O grupo manda o tipo: criar uma despesa dentro de um grupo de
+    // transferencia faria a categoria nascer e sumir do cartao, porque o
+    // filtro do passo olha data-tipo. Quando o grupo e novo, vale o tipo do
+    // lancamento.
+    var irma = W.grupoCat && document.querySelector(
+      '#exCatalogo option[data-grupo="' + W.grupoCat.replace(/"/g, '\\"') + '"]');
+    d.append('tipo', (irma && irma.getAttribute('data-tipo')) || W.tipo);
+    // Grupo novo nasce com a primeira categoria de MESMO nome: grupo vazio nao
+    // aparece em cartao nenhum, e a pessoa ficaria sem entender para onde foi
+    // o que acabou de criar. O 'nome' ja foi anexado la em cima — anexar de
+    // novo so empilharia um segundo valor no FormData.
+    d.append('grupo', W.novaCat === 'grupo' ? nome : W.grupoCat);
+  }
+
+  W.novaSalvando = true; W.novaErro = ''; exWizDesenha();
+  fetch(EX_URL_CATNOVA, { method: 'POST', body: d })
+    .then(function (r) { return r.json().then(function (j) { return { st: r.status, j: j }; }); })
+    .then(function (res) {
+      W.novaSalvando = false;
+      if (!res.j || !res.j.ok) {
+        W.novaErro = (res.j && res.j.erro) || 'Nao deu para criar.';
+        return exWizDesenha();
+      }
+      exCatalogoInsere(res.j);
+      W.novaCat = null; W.novaErro = '';
+      // JA USA: e o ponto todo. Grupo novo tambem entra escolhido.
+      if (res.j.pai_id) { W.maeCat = String(res.j.pai_id); }
+      else { W.grupoCat = res.j.grupo; W.maeCat = null; }
+      W.cat = String(res.j.id);
+      exWizDesenha();
+    })
+    .catch(function () {
+      W.novaSalvando = false;
+      W.novaErro = 'Falhou a conexao. Tente de novo.';
+      exWizDesenha();
+    });
+}
+
+function exCatalogoInsere(c) {
+  var sel = document.getElementById('exCatalogo');
+  if (!sel || sel.querySelector('option[value="' + c.id + '"]')) return;
+  var o = document.createElement('option');
+  o.value = c.id;
+  o.setAttribute('data-tipo', c.tipo);
+  o.setAttribute('data-grupo', c.grupo);
+  o.setAttribute('data-nome', c.nome);
+  o.setAttribute('data-pai', c.pai_id || '');
+  o.textContent = c.nome;
+  sel.appendChild(o);
+}
+
+function exWizMaeCat(id) { W.maeCat = id; W.cat = ''; W.novaCat = null; exWizDesenha(); }
 
 function exTelaTitulo() {
   // CASAR e 1 para 1 — um titulo existente casa com UM lancamento. No lote
@@ -1839,7 +1996,7 @@ function exWizEmpresa(id) {
   exWizDesenha();
 }
 function exWizGrupo(id) { W.grupo = id; exPedePrevia(exWizDesenha); exWizDesenha(); }
-function exWizGrupoCat(g) { W.grupoCat = g; W.maeCat = null; W.cat = ''; exWizDesenha(); }
+function exWizGrupoCat(g) { W.grupoCat = g; W.maeCat = null; W.cat = ''; W.novaCat = null; exWizDesenha(); }
 function exWizCat(id) { W.cat = id; exWizDesenha(); }
 function exWizCentro(id) { W.centro = id; exWizDesenha(); }
 function exWizAplicar(a) { W.aplicar = a; exWizDesenha(); }
