@@ -21,8 +21,13 @@ do ``roteador`` (que já roda a cada 5 min, fora do site). O arquivo chega ao
 Dropbox minutos depois em vez de segundos — e ninguém olha aquela pasta com
 pressa.
 
-**Nada se perde nesse caminho**: ``nfe_importacoes.xml_raw`` já guarda o XML
-inteiro (medido: ~7,5 KB por nota). O Dropbox é a SEGUNDA cópia, não a única.
+**ATENÇÃO — isto mudou em 12/09/2026.** Era verdade que "nada se perde nesse
+caminho, porque ``nfe_importacoes.xml_raw`` já guarda o XML inteiro e o Dropbox
+é a SEGUNDA cópia". Não é mais: com o expurgo de 3 meses (``utils/expurgo_xml``),
+o banco esvazia o ``xml_raw`` de tudo que passa da janela e **o Dropbox vira a
+ÚNICA cópia**. Uma falha de upload aqui não é um atraso, é um documento com uma
+cópia só — e o expurgo não a apaga (exige ``xml_caminho``), mas ela também nunca
+ganha a segunda. Por isso a repescagem abaixo existe.
 
 O CORTE, e por que ele é obrigatório
 ------------------------------------
@@ -74,6 +79,45 @@ LOTE_DROPBOX = max(50, min(1000, int(os.getenv('QROBO_ARQ_LOTE', '500'))))
 #: é um range na chave primária e a consulta volta em milissegundos.
 MARCA_FRONTEIRA = 'arquivador_fronteira'
 
+#: REPESCAGEM — de quantas em quantas horas o arquivador volta ao corte para
+#: reapanhar o que ficou para trás.
+#:
+#: Por que ela precisa existir: a fronteira avança pelo MAIOR id da FATIA
+#: (``_gravar_fronteira(max(...))``), não pelo maior id SUBIDO. Então toda nota
+#: que falha no upload fica ATRÁS da fronteira e nunca mais é olhada. Havia um
+#: reset para o corte quando ``pendentes()`` voltasse vazia, mas ele
+#: praticamente nunca dispara: o Q-Robô alimenta notas novas acima da fronteira
+#: o tempo todo, então a fila nunca chega a zero no horário comercial.
+#:
+#: Medido em 16/09/2026: **6.843 saídas** de postos ATIVOS (Viaduto de Morato,
+#: Pavão Castelinho, Jundiaí Mirim, Pavão 91, Westpark), emissão de janeiro a
+#: junho, ids 684.254..1.683.642, estavam nesse buraco — sem cópia no Dropbox.
+#:
+#: **NÃO volte a fronteira para o corte.** Foi a primeira tentativa de conserto,
+#: em 16/09/2026, e ela DERRUBA o arquivador — provado em produção em 68s:
+#: ``pendentes()`` a partir do corte varre a chave primária inteira, estoura o
+#: teto de 30s do ``db_helper`` (``max_execution_time``), e a consulta cortada
+#: volta ``None`` -> ``[]``. Aí o arquivador conclui "não há nada pendente",
+#: **com a fronteira já gravada no corte** — e como o reset só dispara com
+#: ``fronteira > CORTE_ID``, ele nunca mais sai de lá. Fila parada, calada.
+#: (O mesmo vale para o reset "volta ao corte quando a leva vier vazia" que
+#: existia aqui: era a mesma armadilha, só que nunca chegou a disparar.)
+#:
+#: O conserto que funciona é varrer em JANELA: um pedaço pequeno do intervalo
+#: por rodada, com um cursor próprio que anda do corte até a fronteira e volta
+#: ao começo. Cada consulta é um range curto da chave primária, cabe folgada no
+#: teto, e o custo se dilui em rodadas de 10 min. Também não paralisa em nota
+#: que falhe sempre: a janela anda de qualquer jeito.
+MARCA_REPESCA = 'arquivador_repesca'
+#: Ids varridos por rodada. Medido em 16/09/2026 contra a produção: uma janela
+#: de 50 mil ids leva de 5s (página quente) a 16s (fria) — perto demais do teto
+#: de 30s. 25 mil deixa a margem em 2x. A volta completa (corte..fronteira,
+#: ~1,65 milhão de ids) sai em ~66 rodadas de 10 min, ou seja, ~11h: duas
+#: varreduras por dia, que é de sobra para uma rede de segurança.
+REPESCA_JANELA = max(0, int(os.getenv('QROBO_ARQ_REPESCA_JANELA', '25000')))
+#: Teto de notas que a repescagem sobe por rodada (o grosso é do fluxo normal).
+REPESCA_MAX = max(1, int(os.getenv('QROBO_ARQ_REPESCA_MAX', '2000')))
+
 
 def _fronteira():
     from utils.painel_cache import ler
@@ -81,30 +125,52 @@ def _fronteira():
     return int((v or {}).get('id') or 0)
 
 
+def _repesca_cursor():
+    """Onde a varredura de trás parou. Anda em janelas, do corte à fronteira."""
+    from utils.painel_cache import ler
+    v, _ = ler(MARCA_REPESCA)
+    return int((v or {}).get('id') or 0)
+
+
+def _gravar_repesca_cursor(id_):
+    from utils.painel_cache import guardar
+    guardar(MARCA_REPESCA, {'id': int(id_)})
+
+
 def _gravar_fronteira(id_):
     from utils.painel_cache import guardar
     guardar(MARCA_FRONTEIRA, {'id': int(id_)})
 
 
-def pendentes(limite=None, desde=None):
+def pendentes(limite=None, desde=None, ate=None):
     """As saídas do Q-Robô que ainda não foram arquivadas, mais antigas antes.
 
     ``xml_raw`` vem na consulta porque é o conteúdo a subir — é a coluna mais
     pesada da tabela, então o LIMIT não é conforto, é necessidade.
     ``desde``: id a partir do qual procurar (a fronteira); default = o corte.
+    ``ate``: id final, INCLUSIVE. Sem ele a consulta varre da posição até o fim
+    da tabela; quando não há pendentes no caminho isso é a chave primária
+    INTEIRA, e o teto de 30s do ``db_helper`` corta a consulta — que volta
+    ``None`` e vira ``[]``, indistinguível de "não há nada". A repescagem usa
+    ``ate`` justamente para nunca cair nisso. Ver MARCA_REPESCA.
     """
     from utils.db_helper import execute_query
+    faixa = '' if ate is None else ' AND i.id <= %s'
+    p = [max(CORTE_ID, int(desde or 0))]
+    if ate is not None:
+        p.append(int(ate))
+    p.append(int(limite or MAX_POR_RODADA))
     return execute_query(
-        """SELECT i.id, i.chave_acesso, i.data_emissao, i.xml_raw,
-                  c.numero_cliente, c.nome_razao_social
+        f"""SELECT i.id, i.chave_acesso, i.data_emissao, i.xml_raw,
+                   c.numero_cliente, c.nome_razao_social
              FROM nfe_importacoes i FORCE INDEX (PRIMARY)
              JOIN clientes c ON c.id = i.cliente_id
-            WHERE i.id > %s
+            WHERE i.id > %s{faixa}
               AND i.origem = 'Q-ROBO' AND i.tipo = 'saida'
               AND (i.xml_caminho IS NULL OR i.xml_caminho = '')
             ORDER BY i.id
             LIMIT %s""",
-        (max(CORTE_ID, int(desde or 0)), int(limite or MAX_POR_RODADA)), fetch=True) or []
+        tuple(p), fetch=True) or []
 
 
 def _subir_um(linha):
@@ -185,30 +251,21 @@ def arquivar_pendentes(limite=None, dry=True, prazo_seg=None):
             pass
 
 
-def _arquivar(limite, dry, prazo, fim, execute_query):
-    fronteira = _fronteira()
-    linhas = pendentes(limite, desde=fronteira)
-    if not linhas and fronteira > CORTE_ID and not dry:
-        # Chegou ao fim a partir da fronteira: volta ao corte para reapanhar o
-        # que falhou no meio do caminho. A varredura lenta só acontece aqui.
-        _gravar_fronteira(CORTE_ID)
-        linhas = pendentes(limite, desde=CORTE_ID)
-    r = {'pendentes_nesta_leva': len(linhas), 'subidos': 0, 'falhas': 0,
-         'dry': dry, 'corte_id': CORTE_ID, 'paralelo': PARALELO}
-    if dry or not linhas:
-        total = execute_query(
-            """SELECT COUNT(*) n FROM nfe_importacoes
-                WHERE origem = 'Q-ROBO' AND tipo = 'saida' AND id > %s
-                  AND (xml_caminho IS NULL OR xml_caminho = '')""",
-            (CORTE_ID,), fetch=True, fetch_one=True) or {}
-        r['fila_total'] = total.get('n') or 0
-        return r
+def _subir_fatias(linhas, r, dry, fim, prazo, execute_query, marcar=None):
+    """Sobe ``linhas`` em fatias e grava ``xml_caminho``.
 
+    Usado pelo fluxo normal E pela repescagem — uma implementação só, para as
+    duas não divergirem com o tempo (foi assim que as duas listas de ``cStat``
+    do cancelamento divergiram).
+
+    ``marcar``: callable(id) chamado com o maior id da fatia, para quem quiser
+    avançar um cursor. A repescagem NÃO avança a fronteira principal.
+    """
+    from utils import dropbox_sync
+    svc = dropbox_sync._service
     # Fatias de PARALELO em vez de mandar a leva inteira ao pool: assim o prazo
     # suave E o freio do 429 são conferidos entre as fatias, e a rodada para de
     # verdade em vez de enfileirar tudo de uma vez num pool que não olha mais.
-    from utils import dropbox_sync
-    svc = dropbox_sync._service
     for i in range(0, len(linhas), LOTE_DROPBOX):
         if time.monotonic() > fim:
             logger.info('[arq-saidas] prazo (%ss) atingido; resto no próximo tick.',
@@ -234,15 +291,21 @@ def _arquivar(limite, dry, prazo, fim, execute_query):
             caminho = f"{pasta}/{linha['chave_acesso']}.xml"
             dados = linha.get('xml_raw') or ''
             if not dados:
-                r['falhas'] += 1
+                # Sem XML no banco E sem caminho no Dropbox: o arquivador não
+                # tem o que subir e a repescagem vai reencontrar esta linha para
+                # sempre. Conta à parte para não se disfarçar de falha de rede.
+                r['sem_xml'] = r.get('sem_xml', 0) + 1
+                amostra = r.setdefault('sem_xml_ids', [])
+                if len(amostra) < 20:      # o resumo vai para app_config: amostra, não lista
+                    amostra.append(linha['id'])
                 continue
             if isinstance(dados, str):
                 dados = dados.encode('utf-8')
             itens.append((caminho, dados))
             por_caminho[caminho] = linha['id']
-        resultado = svc.upload_lote(itens, paralelo=PARALELO)
+        resultado = svc.upload_lote(itens, paralelo=PARALELO) if itens else {}
         subidos = [(caminho[:255], por_caminho[caminho]) for caminho, ok in resultado.items() if ok]
-        if subidos:
+        if subidos and not dry:
             # UM UPDATE para o lote inteiro (CASE por id): 64 UPDATEs soltos
             # levavam 13s de ida e volta; um só, uma ida.
             casos = ' '.join(['WHEN %s THEN %s'] * len(subidos))
@@ -251,7 +314,74 @@ def _arquivar(limite, dry, prazo, fim, execute_query):
                 f"UPDATE nfe_importacoes SET xml_caminho = CASE id {casos} END "
                 f" WHERE id IN ({','.join(['%s'] * len(subidos))})", tuple(params), fetch=False)
         r['subidos'] += len(subidos)
-        r['falhas'] += len(itens) - len(subidos)
-        if not dry:
-            _gravar_fronteira(max(l['id'] for l in fatia))
+        recusados = len(itens) - len(subidos)
+        if recusados:
+            # Quem falha aqui fica ATRÁS do cursor que avança — e só a
+            # repescagem o traz de volta. Sem este log a falha virava um número
+            # no card e ninguém descobria QUAIS notas ficaram sem segunda
+            # cópia: foi o que escondeu 6.843 delas até 16/09/2026.
+            ok = {c for c, v in resultado.items() if v}
+            perdidos = [por_caminho[c] for c in por_caminho if c not in ok]
+            logger.warning('[arq-saidas] %s nota(s) recusadas pelo Dropbox nesta '
+                           'fatia; ficam para a repescagem. ids: %s',
+                           recusados, perdidos[:20])
+            amostra = r.setdefault('recusados_ids', [])
+            amostra.extend(perdidos[:max(0, 20 - len(amostra))])
+        r['falhas'] += recusados
+        if marcar is not None and not dry:
+            marcar(max(l['id'] for l in fatia))
+    return r
+
+
+def _repescar(fronteira, dry, fim, prazo, execute_query):
+    """UMA JANELA de ids atrás da fronteira, por rodada.
+
+    A fronteira avança pelo maior id da FATIA, não pelo id SUBIDO: quem falha
+    fica atrás dela para sempre. Esta varredura é quem os traz de volta. Ela
+    anda em janelas curtas justamente para nunca estourar o teto de 30s do
+    ``db_helper`` — ver MARCA_REPESCA no topo, e o que aconteceu em 16/09/2026
+    quando a primeira versão do conserto tentou varrer do corte de uma vez.
+    """
+    if dry or REPESCA_JANELA <= 0 or fronteira <= CORTE_ID:
+        return None
+    desde = _repesca_cursor()
+    if desde < CORTE_ID or desde >= fronteira:
+        desde = CORTE_ID                      # primeira volta, ou deu a volta
+    ate = min(desde + REPESCA_JANELA, fronteira)
+    linhas = pendentes(limite=REPESCA_MAX, desde=desde, ate=ate)
+    # O cursor avança SEMPRE, ache ou não ache: é o que garante que a janela não
+    # empaque numa nota que falha sempre.
+    _gravar_repesca_cursor(ate)
+    r = {'janela': [desde, ate], 'achadas': len(linhas), 'subidos': 0, 'falhas': 0,
+         # Andamento da volta, em %: é o número honesto que substituiu o
+         # "fila_total" (que vinha sempre cortado pelo teto, publicando 0).
+         'volta_pct': round(100.0 * (ate - CORTE_ID) / max(1, fronteira - CORTE_ID), 1)}
+    if linhas:
+        logger.warning('[arq-saidas] REPESCAGEM: %s nota(s) sem cópia no Dropbox '
+                       'na janela %s..%s; subindo.', len(linhas), desde, ate)
+        _subir_fatias(linhas, r, dry, fim, prazo, execute_query, marcar=None)
+    return r
+
+
+def _arquivar(limite, dry, prazo, fim, execute_query):
+    fronteira = _fronteira()
+    linhas = pendentes(limite, desde=fronteira)
+    r = {'pendentes_nesta_leva': len(linhas), 'subidos': 0, 'falhas': 0,
+         'dry': dry, 'corte_id': CORTE_ID, 'paralelo': PARALELO}
+    # NÃO volte a fronteira para o corte quando a leva vier vazia. Ver
+    # MARCA_REPESCA: a consulta sem limite superior estoura o teto de 30s, volta
+    # vazia, e o arquivador fica preso no corte achando que não há nada. Quem
+    # varre para trás é a repescagem, em janelas.
+    #
+    # Aqui havia um `SELECT COUNT(*) ... WHERE id > CORTE_ID AND xml_caminho
+    # vazio` para publicar "fila_total" no card. Ele era CORTADO pelo teto em
+    # toda rodada (varre a PK inteira) e publicava 0 — fila cheia aparecendo
+    # como zero, que foi parte do que escondeu as 6.843. Ninguém lia esse número
+    # fora daqui, e não há como computá-lo barato; saiu. O andamento honesto é
+    # o da repescagem, abaixo.
+    if not dry and linhas:
+        _subir_fatias(linhas, r, dry, fim, prazo, execute_query, marcar=_gravar_fronteira)
+    repesca = _repescar(fronteira, dry, fim, prazo, execute_query)
+    if repesca:
+        r['repescagem'] = repesca
     return r
