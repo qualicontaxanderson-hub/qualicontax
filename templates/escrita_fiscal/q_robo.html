@@ -87,6 +87,7 @@
 .qr-conf .li b { display:inline-block; min-width:84px; color:#15803d; }
 .qr-perigo { background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:13px 16px; font-size:12.5px; color:#b91c1c; line-height:1.65; margin-bottom:14px; }
 .qr-ok { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:13px 16px; font-size:12.5px; color:#166534; line-height:1.65; margin-bottom:14px; }
+.qr-aviso { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:13px 16px; font-size:12.5px; color:#92400e; line-height:1.65; margin-bottom:14px; }
 .qr-chave-box { background:#0f172a; border-radius:12px; padding:16px 18px; margin:12px 0; }
 .qr-chave-box .rot { font-size:10px; font-weight:800; letter-spacing:.06em; color:#64748b; text-transform:uppercase; margin-bottom:8px; }
 .qr-chave-box .val { font-family:ui-monospace,Consolas,monospace; font-size:13px; color:#4ade80; word-break:break-all; line-height:1.7; user-select:all; }
@@ -241,14 +242,23 @@
             <div class="rot">Chave de acesso do robô</div>
             <div class="val" id="qrChave">{{ chave.token }}</div>
         </div>
+        {% if chave.acao == 'CHAVE_REVELADA' %}
+        <div class="qr-aviso">
+            <b>Nada foi trocado.</b> Esta é a mesma chave que o posto já usa — a máquina
+            que estiver enviando hoje continua funcionando. Cole na máquina nova e as
+            duas trabalham juntas. Quem consultou, quando e de onde ficou na auditoria.
+        </div>
+        {% else %}
         <div class="qr-perigo">
-            <b>Copie agora.</b> A chave aparece uma única vez — não fica visível em
-            nenhuma tela depois.
+            <b>Copie agora.</b> A chave não fica à mostra nas telas. Se precisar dela de
+            novo — outra máquina, PC formatado — não gere outra: confira a empresa e use
+            <b>VER A CHAVE ATUAL</b>, que mostra esta mesma sem derrubar o robô.
             {% if chave.acao == 'CHAVE_REGERADA' %}
             A chave anterior <b>já não vale mais</b>: este cliente não envia nada até o
             robô ser reconfigurado.
             {% endif %}
         </div>
+        {% endif %}
         <button class="qr-btn verde" onclick="qrCopiar()">COPIAR CHAVE</button>
         <a href="{{ url_for('escrita_fiscal.q_robo_painel') }}" class="qr-btn cinza">CONCLUIR</a>
 
@@ -264,12 +274,25 @@
         </div>
 
         {% if confirmacao.robo %}
-        <div class="qr-perigo">
+        <div class="qr-aviso">
             Este cliente <b>já tem chave</b> (versão {{ confirmacao.robo.token_versao }}{% if confirmacao.robo.token_gerado_em %},
             gerada em {{ confirmacao.robo.token_gerado_em.strftime('%d/%m/%Y %H:%M') }}{% if confirmacao.robo.token_gerado_por_nome %}
-            por {{ confirmacao.robo.token_gerado_por_nome }}{% endif %}{% endif %}).
+            por {{ confirmacao.robo.token_gerado_por_nome }}{% endif %}{% endif %}).<br>
+            <b>Vai instalar em outra máquina, ou reinstalar depois de formatar?</b>
+            Então não gere chave nova — use a que já existe. Duas máquinas do mesmo
+            posto podem usar a <b>mesma chave</b>.
+            <form method="POST" action="{{ url_for('escrita_fiscal.q_robo_revelar') }}"
+                  style="margin-top:10px">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="numero" value="{{ confirmacao.cliente.numero_cliente }}">
+                <input type="hidden" name="cliente_id" value="{{ confirmacao.cliente.cliente_id }}">
+                <button type="submit" class="qr-btn cinza">VER A CHAVE ATUAL</button>
+            </form>
+        </div>
+
+        <div class="qr-perigo">
             Gerar outra <b>invalida a atual</b> e o robô instalado <b>para de enviar</b>
-            até ser reconfigurado.
+            até ser reconfigurado. Só siga se quiser mesmo aposentar a chave atual.
         </div>
         {% endif %}
 

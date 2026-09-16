@@ -8007,6 +8007,60 @@ def q_robo_resolver():
                            **_qrobo_painel_contexto(confirmacao=res))
 
 
+@escrita_fiscal.route('/conf-saidas/q-robo/revelar', methods=['POST'])
+@permission_required('escrita_fiscal.q_robo')
+def q_robo_revelar():
+    """Mostra a chave ATUAL, sem trocar nada — segunda máquina / reinstalação.
+
+    Mesmo serviço do Portal do Instalador (``qrobo_chaves.revelar_chave``), com
+    ``origem=ADMIN``. Sem isto, o escritório também só tinha o caminho de
+    GERAR, que derruba o robô que já está enviando.
+    """
+    if not _qrobo_csrf_ok():
+        flash('Formulário expirado. Tente de novo.', 'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+
+    numero = (request.form.get('numero') or '').strip()
+    cliente_id = (request.form.get('cliente_id') or '').strip()
+
+    # Mesma trava do gerar: o cliente tem de continuar sendo o da conferência.
+    # Aqui ela pesa mais — o que sai da tela é uma credencial.
+    res = qrobo_chaves.resolver_cliente_id(cliente_id)
+    if not res['ok'] or (res['cliente']['numero_cliente'] or '') != numero:
+        logger.warning('[q-robo/admin] revelar abortado: cliente_id=%r x numero=%r',
+                       cliente_id, numero)
+        flash('A conferência não bateu com o cadastro. Recomece — nada foi mostrado.',
+              'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+
+    ip, ua = qrobo_chaves.contexto_request()
+    r = qrobo_chaves.revelar_chave(
+        res['cliente']['cliente_id'], current_user.id, current_user.nome,
+        origem=qrobo_chaves.ORIGEM_ADMIN, ip=ip, user_agent=ua)
+
+    if not r['ok']:
+        flash('Este posto ainda não tem chave — não há o que mostrar. Gere a primeira.'
+              if r['erro'] == 'sem_chave' else 'Não foi possível mostrar a chave.',
+              'warning' if r['erro'] == 'sem_chave' else 'danger')
+        return render_template('escrita_fiscal/q_robo.html',
+                               **_qrobo_painel_contexto(confirmacao=res))
+
+    # Queima o token: F5 não grava outra linha dizendo que a chave foi vista.
+    from routes.qrobo import _rotaciona_csrf
+    _rotaciona_csrf()
+    # AUDITORIA (D2): consultar a credencial de um cliente é ato de usuário
+    # logado e entra na trilha do sistema, além da qrobo_auditoria.
+    registrar('escrita.consultou_chave_robo', 'fiscal', tabela='robo_config',
+              registro_id=res['cliente']['cliente_id'],
+              depois={'numero': numero, 'cliente_id': res['cliente']['cliente_id'],
+                      'acao': r.get('acao'), 'versao': r.get('versao'),
+                      **rotulo_empresa(res['cliente']['cliente_id'])})
+    logger.info('[q-robo/admin] chave REVELADA por %s (id=%s) para cliente_id=%s',
+                current_user.nome, current_user.id, res['cliente']['cliente_id'])
+    return render_template('escrita_fiscal/q_robo.html',
+                           **_qrobo_painel_contexto(chave=r))
+
+
 @escrita_fiscal.route('/conf-saidas/q-robo/gerar', methods=['POST'])
 @permission_required('escrita_fiscal.q_robo')
 def q_robo_gerar():
