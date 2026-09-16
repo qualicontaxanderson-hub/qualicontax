@@ -23,6 +23,21 @@ LIMIAR_LARANJA = 180    # 🟠 15 min a 3h · 🔴 acima de 3h
 
 ACOES_CHAVE = ('CHAVE_GERADA', 'CHAVE_REGERADA')
 
+#: Atos que fazem um posto ser "seu" para efeito de ver o status dele.
+#:
+#: Inclui CHAVE_REVELADA de propósito, e a conta fecha assim: quem revela a
+#: chave **já está com a credencial do posto na mão** — comparado a isso, saber
+#: há quanto tempo aquele robô não dá sinal é informação menor. Sem isto, o
+#: técnico que vai instalar a SEGUNDA máquina (e que não foi quem gerou a
+#: chave) tomaria 403 no "Verificar agora" da própria tela que acabou de
+#: mostrar a chave para ele.
+#:
+#: O que se perde, dito por inteiro: antes, bisbilhotar o status de um posto
+#: alheio custava REGERAR a chave dele, ou seja, derrubar o robô de um cliente.
+#: Agora custa uma revelação. O controle deixou de ser o estrago e passou a ser
+#: só o rastro — toda revelação grava nome, IP e hora na qrobo_auditoria.
+ACOES_MEU_POSTO = ACOES_CHAVE + ('CHAVE_REVELADA',)
+
 
 def ha(minutos):
     """'agora' / 'há 12 min' / 'há 6h20' / 'há 3 dias' a partir de minutos."""
@@ -109,34 +124,37 @@ def status_posto(cliente_id):
 
 
 def pode_ver_status(usuario_id, cliente_id):
-    """Só quem gerou a chave daquele posto vê o status dele pelo portal.
+    """Só quem TRABALHOU naquele posto vê o status dele pelo portal.
 
-    Sem esta trava, o portal viraria uma sonda para descobrir qual cliente tem
-    robô e há quanto tempo está parado — informação que o instalador não
-    precisa dos postos que não instalou.
+    Trabalhou = gerou, substituiu ou revelou a chave (ACOES_MEU_POSTO). Sem
+    esta trava, o portal viraria uma sonda para descobrir qual cliente tem robô
+    e há quanto tempo está parado — informação que o instalador não precisa dos
+    postos em que não mexeu.
     """
-    marcas = ','.join(['%s'] * len(ACOES_CHAVE))
+    marcas = ','.join(['%s'] * len(ACOES_MEU_POSTO))
     achou = execute_query(
         "SELECT 1 AS x FROM qrobo_auditoria "
         f" WHERE usuario_id = %s AND cliente_id = %s AND acao IN ({marcas}) LIMIT 1",
-        (usuario_id, cliente_id) + ACOES_CHAVE, fetch=True, fetch_one=True)
+        (usuario_id, cliente_id) + ACOES_MEU_POSTO, fetch=True, fetch_one=True)
     return bool(achou)
 
 
 def meus_postos(usuario_id, limite=20):
-    """Postos em que ESTE colaborador gerou chave, com o status atual.
+    """Postos em que ESTE colaborador mexeu na chave, com o status atual.
 
-    Ordenado pela geração mais recente. Um posto aparece uma vez só, mesmo com
-    várias gerações — a data mostrada é a da última.
+    Gerou, substituiu ou revelou (ACOES_MEU_POSTO) — a revelação entra porque
+    quem foi buscar a chave foi instalar uma máquina ali, e vai querer conferir
+    o posto depois. Ordenado pelo ato mais recente. Um posto aparece uma vez
+    só, mesmo com vários atos — a data mostrada é a do último.
     """
-    marcas = ','.join(['%s'] * len(ACOES_CHAVE))
+    marcas = ','.join(['%s'] * len(ACOES_MEU_POSTO))
     linhas = execute_query(
         "SELECT a.cliente_id, MAX(a.criado_em) AS gerada_em, COUNT(*) AS vezes "
         "  FROM qrobo_auditoria a "
         f" WHERE a.usuario_id = %s AND a.cliente_id IS NOT NULL AND a.acao IN ({marcas}) "
         " GROUP BY a.cliente_id "
         " ORDER BY gerada_em DESC LIMIT %s",
-        (usuario_id,) + ACOES_CHAVE + (int(limite),), fetch=True) or []
+        (usuario_id,) + ACOES_MEU_POSTO + (int(limite),), fetch=True) or []
     if not linhas:
         return []
 

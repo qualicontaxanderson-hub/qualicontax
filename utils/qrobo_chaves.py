@@ -38,6 +38,7 @@ TENTATIVAS_TOKEN = 5
 
 ACAO_GERADA = 'CHAVE_GERADA'
 ACAO_REGERADA = 'CHAVE_REGERADA'
+ACAO_REVELADA = 'CHAVE_REVELADA'
 ACAO_DOWNLOAD = 'DOWNLOAD_INSTALADOR'
 
 ORIGEM_PORTAL = 'PORTAL'
@@ -185,8 +186,76 @@ def _digitos(texto):
     return re.sub(r'\D', '', texto or '')
 
 
+def revelar_chave(cliente_id, usuario_id, usuario_nome,
+                  origem=ORIGEM_PORTAL, ip=None, user_agent=None):
+    """Mostra a chave ATUAL do cliente, sem trocar nada, e registra quem viu.
+
+    Por que isto existe: o ``robo_token`` é a única credencial do robô e um
+    posto pode precisar dela DEPOIS da instalação — segunda máquina no mesmo
+    posto, PC formatado, robô reinstalado. Sem este caminho, a única saída pela
+    tela era **gerar outra chave**, que invalida a atual e derruba a máquina que
+    já estava funcionando: o instalador resolvia um problema criando outro.
+
+    Duas máquinas com a MESMA chave funcionam: a autenticação da API é só o
+    Bearer (``routes/robo_saidas``), sem identidade de máquina, e nota repetida
+    esbarra no UNIQUE (chave_acesso, tipo).
+
+    Por que um clique só, sem segunda confirmação: quem chega aqui já passou
+    pelo login de instalador e **já pode REGERAR** a chave de qualquer cliente,
+    o que é estritamente mais destrutivo. Revelar não estraga nada; o controle
+    é o rastro — toda revelação vira linha na ``qrobo_auditoria``, com nome, IP
+    e hora, ao lado de gerada/regerada.
+
+    Só leitura em ``robo_config``: nunca escreve token, versão nem data.
+
+    Devolve dict:
+      ok=True  -> mesmo formato de ``gerar_chave`` (token/acao/versao/...)
+      ok=False -> {'erro': 'cliente_inexistente'|'sem_chave', ...}
+    """
+    cliente = execute_query(
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj "
+        "  FROM clientes WHERE id = %s",
+        (cliente_id,), fetch=True, fetch_one=True,
+    )
+    if not cliente:
+        return {'ok': False, 'erro': 'cliente_inexistente', 'cliente_id': cliente_id}
+
+    linha = execute_query(
+        "SELECT robo_token, token_versao, ativo, data_inicio_captura "
+        "  FROM robo_config WHERE cliente_id = %s",
+        (cliente_id,), fetch=True, fetch_one=True,
+    )
+    if not linha or not (linha.get('robo_token') or '').strip():
+        # Sem chave não há o que revelar — e a tela tem de mandar GERAR, não
+        # insistir aqui. Cobre também a linha órfã com robo_token NULL.
+        return {'ok': False, 'erro': 'sem_chave', 'cliente': _resumo_cliente(cliente)}
+
+    token = linha['robo_token'].strip()
+    with transacao() as cur:
+        cur.execute(
+            "INSERT INTO qrobo_auditoria "
+            "  (acao, origem, usuario_id, usuario_nome, cliente_id, numero_cliente, "
+            "   razao_social, token_prefixo, ip, user_agent) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (ACAO_REVELADA, origem, usuario_id, (usuario_nome or '?')[:150], cliente_id,
+             cliente['numero_cliente'], cliente['nome_razao_social'],
+             token[:PREFIXO_LEN], ip, (user_agent or None)),
+        )
+        auditoria_id = cur.lastrowid
+
+    return {'ok': True, 'token': token, 'acao': ACAO_REVELADA,
+            'versao': int(linha['token_versao'] or 1),
+            'ativo': bool(linha['ativo']),
+            'data_inicio_captura': linha['data_inicio_captura'],
+            'cliente': _resumo_cliente(cliente), 'auditoria_id': auditoria_id}
+
+
 def estado_robo(cliente_id):
-    """Estado do robô do cliente (ou None). NUNCA devolve o robo_token."""
+    """Estado do robô do cliente (ou None). NUNCA devolve o robo_token.
+
+    Quem precisa da chave inteira usa ``revelar_chave``, que é um ato
+    deliberado e auditado — não um campo que viaja em toda tela por acaso.
+    """
     return execute_query(
         "SELECT r.cliente_id, r.ativo, r.data_inicio_captura, r.robo_reset_seq, "
         "       r.robo_ultimo_contato, r.criado_em, "

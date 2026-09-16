@@ -7881,7 +7881,11 @@ def _qrobo_dt(valor, com_hora=True):
 
 
 _QROBO_AUD_FILTROS = {
+    # 'chaves' é o filtro de quem MEXEU na chave (criou ou trocou). A consulta
+    # tem filtro próprio de propósito: ela não altera nada, e misturá-la aqui
+    # faria o contador de "chaves" inchar com atos que não mudaram o posto.
     'chaves': (qrobo_chaves.ACAO_GERADA, qrobo_chaves.ACAO_REGERADA),
+    'consultas': (qrobo_chaves.ACAO_REVELADA,),
     'downloads': (qrobo_chaves.ACAO_DOWNLOAD,),
 }
 
@@ -7934,6 +7938,7 @@ def _qrobo_painel_contexto(**extra):
         trilha = [t for t in trilha if t['acao'] in acoes]
     aud_resumo = {
         'chaves': sum(1 for t in trilha if t['acao'] in _QROBO_AUD_FILTROS['chaves']),
+        'consultas': sum(1 for t in trilha if t['acao'] == qrobo_chaves.ACAO_REVELADA),
         'downloads': sum(1 for t in trilha if t['acao'] == qrobo_chaves.ACAO_DOWNLOAD),
     }
 

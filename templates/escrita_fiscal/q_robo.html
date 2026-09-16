@@ -100,6 +100,7 @@
 .qr-acao.nova  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
 .qr-acao.troca { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
 .qr-acao.down  { background:#f0f7f3; color:#15803d; border:1px solid #dcfce7; }
+.qr-acao.vista { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
 .qr-org { font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
 .qr-mono { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#94a3b8; }
 .qr-lista { position:absolute; z-index:40; left:0; width:420px; top:100%; background:#fff; border:1px solid #e2e8f0; border-radius:11px; box-shadow:0 12px 28px -8px rgba(0,0,0,.22); max-height:300px; overflow-y:auto; }
@@ -231,7 +232,7 @@
     {% if chave %}
         {# ---- resultado: a chave, uma vez ---- #}
         <div class="qr-ok">
-            <b>{{ 'Chave substituída' if chave.acao == 'CHAVE_REGERADA' else 'Chave gerada' }}</b>
+            <b>{% if chave.acao == 'CHAVE_REGERADA' %}Chave substituída{% elif chave.acao == 'CHAVE_REVELADA' %}Chave consultada{% else %}Chave gerada{% endif %}</b>
             para <b>{{ chave.cliente.numero_cliente }} — {{ chave.cliente.razao_social }}</b>
             · captura a partir de <b>{{ chave.data_inicio_captura.strftime('%d/%m/%Y') }}</b>
             · versão da chave <b>{{ chave.versao }}</b>
@@ -333,7 +334,7 @@
         <div>
             <div class="qr-sec-t"><i class="fas fa-clipboard-list" style="color:#16a34a;"></i> Auditoria do Q-Robô</div>
             <div class="qr-sec-p" style="margin:4px 0 0;">
-                {{ aud_resumo.chaves }} chave(s) · {{ aud_resumo.downloads }} download(s)
+                {{ aud_resumo.chaves }} chave(s) · {{ aud_resumo.consultas }} consulta(s) · {{ aud_resumo.downloads }} download(s)
                 — 300 registros mais recentes.
             </div>
         </div>
@@ -342,6 +343,8 @@
                class="qr-filtro {{ 'on' if aud_filtro == 'todas' else '' }}">Tudo</a>
             <a href="{{ url_for('escrita_fiscal.q_robo_painel', aud='chaves') }}"
                class="qr-filtro {{ 'on' if aud_filtro == 'chaves' else '' }}">Chaves</a>
+            <a href="{{ url_for('escrita_fiscal.q_robo_painel', aud='consultas') }}"
+               class="qr-filtro {{ 'on' if aud_filtro == 'consultas' else '' }}">Consultas</a>
             <a href="{{ url_for('escrita_fiscal.q_robo_painel', aud='downloads') }}"
                class="qr-filtro {{ 'on' if aud_filtro == 'downloads' else '' }}">Downloads</a>
         </div>
@@ -373,7 +376,9 @@
                         {% if t.ip %}<div class="qr-sub qr-mono">{{ t.ip }}</div>{% endif %}
                     </td>
                     <td data-label="O quê">
-                        {% if t.acao == 'CHAVE_GERADA' %}
+                        {% if t.acao == 'CHAVE_REVELADA' %}
+                            <span class="qr-acao vista">CHAVE CONSULTADA</span>
+                        {% elif t.acao == 'CHAVE_GERADA' %}
                             <span class="qr-acao nova">CHAVE GERADA</span>
                         {% elif t.acao == 'CHAVE_REGERADA' %}
                             <span class="qr-acao troca">CHAVE SUBSTITUÍDA</span>

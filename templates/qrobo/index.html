@@ -86,6 +86,7 @@
         .selo-acao.nova  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
         .selo-acao.troca { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
         .selo-acao.down  { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+        .selo-acao.vista { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
         .selo-st { display:inline-flex; align-items:center; gap:6px; padding:4px 11px;
                    border-radius:99px; font-size:11px; font-weight:800; white-space:nowrap; }
         .selo-st .pt { width:7px; height:7px; border-radius:99px; flex:0 0 7px; }
@@ -292,6 +293,8 @@
                                 <span class="selo-acao nova">CHAVE GERADA</span>
                             {% elif h.acao == 'CHAVE_REGERADA' %}
                                 <span class="selo-acao troca">CHAVE SUBSTITUÍDA</span>
+                            {% elif h.acao == 'CHAVE_REVELADA' %}
+                                <span class="selo-acao vista">CHAVE CONSULTADA</span>
                             {% else %}
                                 <span class="selo-acao down">INSTALADOR BAIXADO</span>
                             {% endif %}

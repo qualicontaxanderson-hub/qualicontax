@@ -108,11 +108,24 @@
             <b>{% if robo.data_inicio_captura %}{{ robo.data_inicio_captura.strftime('%d/%m/%Y') }}{% else %}— (sem data){% endif %}</b>
         </div>
 
+        <div class="aviso alerta">
+            <b>Vai instalar em OUTRA máquina, ou reinstalar depois de formatar?</b>
+            Então você não precisa de chave nova — precisa da que já existe. Duas
+            máquinas do mesmo posto podem usar a <b>mesma chave</b>.
+            <form method="POST" action="{{ url_for('qrobo.revelar') }}" style="margin-top:10px">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="numero" value="{{ cliente.numero_cliente }}">
+                <input type="hidden" name="cliente_id" value="{{ cliente.cliente_id }}">
+                <button type="submit" class="btn cinza">VER A CHAVE ATUAL</button>
+            </form>
+        </div>
+
         <div class="aviso perigo">
             <b>Gerar outra chave INVALIDA a atual.</b> O robô que estiver instalado
             neste cliente <b>para de enviar</b> assim que a chave for trocada, e só volta
-            depois de configurado com a chave nova. Só siga se você está reinstalando
-            esta máquina agora.
+            depois de configurado com a chave nova. Só siga se quiser mesmo
+            <b>aposentar a chave atual</b> — para instalar mais uma máquina, use o
+            botão acima.
         </div>
         {% endif %}
 

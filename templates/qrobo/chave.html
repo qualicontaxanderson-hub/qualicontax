@@ -86,8 +86,13 @@
 
 <div class="conteudo">
     <div class="card">
+        {% if revelada %}
+        <div class="passo">Chave atual deste posto</div>
+        <h1>Esta é a chave que já está em uso</h1>
+        {% else %}
         <div class="passo">Passo 3 de 3 — {{ 'chave substituída' if regerada else 'chave gerada' }}</div>
         <h1>{{ 'Chave substituída com sucesso' if regerada else 'Chave gerada com sucesso' }}</h1>
+        {% endif %}
         <div class="sub">Empresa: <b>{{ cliente.razao_social }}</b> · nº {{ cliente.numero_cliente }}</div>
 
         <div class="chave-area">
@@ -96,11 +101,22 @@
         </div>
         <button class="btn-copiar" id="btnCopiar" onclick="copiar()">COPIAR CHAVE</button>
 
+        {% if revelada %}
         <div class="aviso alerta">
-            <b>Copie agora.</b> Esta chave aparece <b>uma única vez</b> — por segurança, ela
-            não fica visível em nenhuma tela depois que você sair daqui. Se perder, é só
-            gerar outra (o cliente volta a precisar de reconfiguração).
+            <b>Nada foi trocado.</b> Esta é a mesma chave que o posto já usa — a máquina
+            que estiver enviando hoje <b>continua funcionando</b>. Cole esta chave na
+            máquina nova e as duas trabalham juntas.<br>
+            Quem viu esta chave, quando e de onde ficou registrado na auditoria do
+            escritório.
         </div>
+        {% else %}
+        <div class="aviso alerta">
+            <b>Copie agora.</b> Esta chave não fica à mostra nas telas do portal. Se
+            precisar dela de novo — outra máquina, PC formatado — não gere outra:
+            procure o posto e use <b>VER A CHAVE ATUAL</b>, que mostra esta mesma
+            sem derrubar o robô que já está instalado.
+        </div>
+        {% endif %}
 
         <div class="resumo">
             Captura a partir de <b>{{ resultado.data_inicio_captura.strftime('%d/%m/%Y') }}</b><br>

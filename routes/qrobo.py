@@ -522,6 +522,57 @@ def gerar():
                            **_contexto_base())
 
 
+@qrobo.route('/revelar', methods=['POST'])
+@instalador_required
+@exige_csrf
+def revelar():
+    """Mostra a chave ATUAL, sem trocar nada. Para segunda máquina / reinstalação.
+
+    Antes disto, o instalador que precisasse da chave depois da instalação só
+    tinha o botão de GERAR — que invalida a atual e derruba a máquina que já
+    estava enviando. Resolvia um problema criando outro.
+    """
+    numero = (request.form.get('numero') or '').strip()
+    cliente_id = (request.form.get('cliente_id') or '').strip()
+
+    # Mesma trava de integridade do gerar: o cliente tem que continuar sendo o
+    # que apareceu na conferência. Aqui ela pesa MAIS, não menos — o que sai da
+    # tela é uma credencial, e revelar a chave do posto errado é entregá-la a
+    # quem não devia.
+    res = qrobo_chaves.resolver_cliente_id(cliente_id)
+    if not res['ok'] or (res['cliente']['numero_cliente'] or '') != numero:
+        logger.warning('[qrobo] revelar abortado: cliente_id=%r não confere com '
+                       'numero=%r (user=%s)', cliente_id, numero, current_user.id)
+        flash('A conferência não bateu com o cadastro. Recomece a busca — '
+              'nada foi mostrado.', 'danger')
+        return redirect(url_for('qrobo.index'))
+
+    cliente = res['cliente']
+    ip, ua = qrobo_chaves.contexto_request()
+    r = qrobo_chaves.revelar_chave(cliente['cliente_id'], current_user.id,
+                                   current_user.nome, origem=qrobo_chaves.ORIGEM_PORTAL,
+                                   ip=ip, user_agent=ua)
+
+    if not r['ok']:
+        if r['erro'] == 'sem_chave':
+            flash('Este posto ainda não tem chave — não há o que mostrar. '
+                  'Gere a primeira chave abaixo.', 'warning')
+        else:
+            flash('Não foi possível mostrar a chave.', 'danger')
+        return render_template('qrobo/confirmar.html', cliente=cliente, robo=res['robo'],
+                               hoje=_hoje_brt().isoformat(), **_contexto_base())
+
+    # Queima o token do formulário: F5 nesta página não gera linha nova de
+    # auditoria dizendo que a chave foi vista de novo.
+    _rotaciona_csrf()
+    logger.info('[qrobo] chave REVELADA por %s (id=%s) para cliente_id=%s',
+                current_user.nome, current_user.id, cliente['cliente_id'])
+    return render_template('qrobo/chave.html', resultado=r, cliente=cliente,
+                           regerada=False, revelada=True,
+                           st=qrobo_status.status_posto(cliente['cliente_id']),
+                           **_contexto_base())
+
+
 @qrobo.route('/sair')
 def sair():
     _encerrar_sessao()
