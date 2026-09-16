@@ -5,6 +5,8 @@ O que roda, nesta ordem, a cada 10 minutos:
   0. arquivador do Q-Robô   (utils.arquivar_saidas.arquivar_pendentes, orçamento grande)
   1. confirmação por pasta  (utils.expurgo_xml.confirmar_pastas)
   2. expurgo do XML de NF-e (expurgar_nfe), eventos (expurgar_eventos) e CT-e (expurgar_cte)
+  3. auditoria de cópias  (utils.auditoria_copias.auditar) — SÓ LEITURA: prova
+     que a nota expurgada tem mesmo o arquivo no Dropbox. Uma volta por mês.
 
 Por que um serviço separado: o tick do roteador já carrega roteamento de XML,
 extrato, arquivador do Q-Robô (2.000 uploads) e três painéis. Isto aqui é
@@ -17,6 +19,8 @@ Variáveis (Railway → serviço manutencao):
   QROBO_ARQ_MAX=12000       notas do Q-Robô por passada do arquivador (duas por rodada)
   QROBO_ARQ_PARALELO=16     uploads simultâneos ao Dropbox
   EXPURGO_MESES=3           meses de XML no banco, pela emissão
+  AUDITORIA_DIAS=30         dias entre uma volta da auditoria e a seguinte
+  AUDITORIA_PASTAS=12       pastas conferidas por rodada durante a volta
 
 Trava: GET_LOCK('manutencao') numa conexão dedicada — duas rodadas nunca se
 atropelam. O resumo de cada rodada vai para app_config (manutencao_status),
@@ -61,6 +65,7 @@ def main() -> int:
             return 0
         from utils import dropbox_sync
         from utils.expurgo_xml import confirmar_pastas, expurgar_nfe, expurgar_eventos, expurgar_cte
+        from utils.auditoria_copias import auditar
         from utils.painel_cache import guardar
 
         t0 = time.monotonic()
@@ -72,7 +77,8 @@ def main() -> int:
         # 13/09/2026, no tick do roteador ele subia ~4.400 notas/hora contra uma
         # fila de 892 mil e ~28 mil/hora entrando à noite — nunca alcançaria.
         # Subir é seguro (nada é apagado), por isso ignora EXPURGO_DRYRUN.
-        # Orçamento: 55% arquivador, 15% confirmação, 20% NF-e, o resto eventos/CT-e.
+        # Orçamento: 55% arquivador, 15% confirmação, 20% NF-e, eventos/CT-e e
+        # 10% auditoria (que só gasta de verdade durante a volta dela).
         from utils.arquivar_saidas import arquivar_pendentes
         for nome, fn, kw in (
             ('arquivador', arquivar_pendentes, dict(limite=int(os.getenv('QROBO_ARQ_MAX', '12000')),
@@ -82,6 +88,14 @@ def main() -> int:
             ('nfe', expurgar_nfe, dict(prazo_seg=int(PRAZO * 0.20), dry=DRY)),
             ('eventos', expurgar_eventos, dict(prazo_seg=int(PRAZO * 0.06), dry=DRY)),
             ('cte', expurgar_cte, dict(prazo_seg=int(PRAZO * 0.04), dry=DRY)),
+            # AUDITORIA: prova que a nota expurgada tem mesmo o arquivo no
+            # Dropbox. Só leitura, orçamento pequeno, e uma volta a cada
+            # AUDITORIA_DIAS (30) — entre uma volta e outra ela sai na hora.
+            # Vem por último de propósito: é a etapa que pode ficar sem tempo
+            # sem prejuízo nenhum, porque não conserta nada, só confere.
+            ('auditoria', auditar, dict(svc=dropbox_sync._service,
+                                        max_pastas=int(os.getenv('AUDITORIA_PASTAS', '12')),
+                                        prazo_seg=int(PRAZO * 0.10))),
         ):
             t1 = time.monotonic()
             try:
