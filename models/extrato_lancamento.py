@@ -129,6 +129,43 @@ class ExtratoLancamento:
         return base
 
     @staticmethod
+    def por_empresa(**f):
+        """Uma linha por empresa do filtro: contagem, sem categoria e contas.
+
+        Alimenta a faixa do topo do extrato, que responde "onde está o meu
+        serviço" antes de a pessoa rolar a tela. Em 17/09/2026 ela mostrava o
+        que a lista sozinha escondia: a PF tinha 93 lançamentos e 51 sem
+        categoria, enquanto o escritório tinha 645 e 38 — o trabalho estava no
+        lado pequeno.
+
+        Usa o MESMO ``_where`` de ``totais``: duas contagens da mesma tela que
+        filtrassem diferente seria a tela se contradizendo. E o sem-categoria
+        ignora o filtro de classificação pela mesma razão que lá — estando na
+        aba "Sem categoria", a faixa repetiria o total da lista.
+        """
+        where, params = ExtratoLancamento._where(**f)
+        linhas = execute_query(
+            f"""SELECT e.empresa_id, COUNT(*) AS n,
+                       COUNT(DISTINCT e.conta) AS contas,
+                       COALESCE(SUM(CASE WHEN e.valor >= 0 THEN e.valor END), 0) AS creditos,
+                       COALESCE(SUM(CASE WHEN e.valor < 0 THEN e.valor END), 0)  AS debitos
+                  FROM extrato_lancamentos e WHERE {where}
+                 GROUP BY e.empresa_id ORDER BY n DESC""",
+            tuple(params), fetch=True)
+        if linhas is None:            # cortada pelo teto: NÃO é "nenhuma empresa"
+            return None
+        f_sem = dict(f)
+        f_sem['classif'] = 'nao'
+        w2, p2 = ExtratoLancamento._where(**f_sem)
+        sem = execute_query(
+            f'SELECT e.empresa_id, COUNT(*) AS n FROM extrato_lancamentos e '
+            f' WHERE {w2} GROUP BY e.empresa_id', tuple(p2), fetch=True)
+        mapa = {r['empresa_id']: int(r['n'] or 0) for r in (sem or [])}
+        for l in linhas:
+            l['sem_cat'] = mapa.get(l['empresa_id'], 0)
+        return linhas
+
+    @staticmethod
     def contas(empresa_ids=None):
         cond, params = '1=1', ()
         if empresa_ids:
@@ -316,11 +353,16 @@ class ExtratoLancamento:
         escritorio usa. Quem sabe o nome que a pessoa reconhece e fin_contas.
         """
         rows = execute_query(
-            'SELECT conta_norm, conta, apelido, banco_nome, agencia '
+            'SELECT conta_norm, conta, apelido, banco_nome, banco_id, agencia '
             '  FROM fin_contas', fetch=True) or []
         mapa = {}
         for r in rows:
+            # banco_id entra aqui porque e a chave da COR da marca
+            # (utils/extrato_formatos.cores). Sem ele a tela sabia o nome do
+            # banco e nao sabia a cor — todo ponto saia cinza.
             dado = {'apelido': r['apelido'] or r['banco_nome'] or '',
+                    'banco_nome': r['banco_nome'] or '',
+                    'banco_id': str(r['banco_id'] or ''),
                     'agencia': r['agencia'] or ''}
             for chave in (r['conta_norm'], r['conta']):
                 if chave:

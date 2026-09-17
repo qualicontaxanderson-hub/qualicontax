@@ -28,32 +28,32 @@ logger = logging.getLogger(__name__)
 # status: 'ok' | 'irregular' | 'igual' (mesmo conteúdo do OFX, não precisa)
 #         | 'nao' (não configurado — mande o OFX)
 CATALOGO = [
-    {'banco_id': '336', 'nome': 'C6',
+    {'banco_id': '336', 'nome': 'C6', 'cor': '#1c1c1e',
      'ofx': ('irregular', 'Pix enviado sem o nome de quem recebeu e boleto sem cedente. Entra, mas o completo é o PDF.'),
      'pdf': ('ok', 'O extrato completo do C6. Vale sozinho; se o OFX vier também, os dois se encaixam.'),
      'csv': ('igual', 'Igual ao OFX (a mesma descrição curta). Traz a conta no cabeçalho.'),
      'xls': ('nao', 'O C6 entrega a planilha COM SENHA, como faz com o PDF. Mande o CSV.')},
-    {'banco_id': '748', 'nome': 'Sicredi',
+    {'banco_id': '748', 'nome': 'Sicredi', 'cor': '#3fa110',
      'ofx': ('ok', 'CPF/CNPJ e nome nos dois sentidos.'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX, sem o identificador; casa por data e valor. Traz cooperativa e conta na capa.'),
      'csv': ('igual', 'Mesmas colunas da planilha (Data, Descrição, Documento, Valor, Saldo); com outras colunas eu recuso e aviso.'),
      'xls': ('igual', 'Mesma tabela do PDF, com cooperativa e conta no topo. A coluna Documento traz o TIPO (PIX_DEB), não um número.')},
-    {'banco_id': '260', 'nome': 'Nubank',
+    {'banco_id': '260', 'nome': 'Nubank', 'cor': '#820ad1',
      'ofx': ('ok', 'Nome, CNPJ e banco de origem na descrição.'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX; lido pela conta na capa (o CPF vem oculto).'),
      'csv': ('igual', 'Mesmo conteúdo do OFX, com o mesmo identificador. Precisa do número da empresa no nome do arquivo.'),
      'xls': ('nao', 'Nunca vi uma; mande o OFX ou o CSV.')},
-    {'banco_id': '364', 'nome': 'Efí',
+    {'banco_id': '364', 'nome': 'Efí', 'cor': '#f5822b',
      'ofx': ('ok', '"Pix enviado via chave: X", "Recebimento de cobrança: N de X".'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.'),
      'csv': ('igual', 'Mesmo conteúdo do OFX, com o protocolo. Não diz a conta: identificado pelo protocolo já gravado.'),
      'xls': ('igual', 'Mesma tabela do CSV, com o protocolo.')},
-    {'banco_id': '237', 'nome': 'Bradesco',
+    {'banco_id': '237', 'nome': 'Bradesco', 'cor': '#cc092f',
      'ofx': ('ok', 'Nome nas transferências e no Pix recebido.'),
      'pdf': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta na capa. Lido pelas coordenadas da tabela: serve para o extrato da empresa e o da pessoa física.'),
      'csv': ('igual', 'Mesmo conteúdo do OFX, com o Dcto. Traz agência e conta no cabeçalho. PJ escreve "Lançamento", PF escreve "Histórico" e quebra a descrição em duas linhas.'),
      'xls': ('igual', 'A mesma tabela do CSV, PJ e PF.')},
-    {'banco_id': '403', 'nome': 'Cora',
+    {'banco_id': '403', 'nome': 'Cora', 'cor': '#fe3e6d',
      'ofx': ('ok', 'Nome nos dois sentidos.'),
      'pdf': ('nao', 'Os nomes vêm cortados ("Anderson Antunes Vi…"). Mande o OFX ou o CSV.'),
      'csv': ('igual', 'Mesmo conteúdo do OFX (tipo + nome). Não diz a conta: precisa do nome ou número da empresa no arquivo.'),
@@ -145,3 +145,11 @@ def _ler_pdf(dados, senhas):
     if parece_extrato_bancario(paginas[0]):
         return {'motivo': MOTIVO_PDF_OUTRO}, 'pdf-outro'
     raise ArquivoDesconhecido('pdf que não é extrato')
+
+
+#: Cor da marca de cada banco, por ``banco_id``. Mora AQUI, junto do catálogo,
+#: e não no template: banco novo entra num lugar só. Quem não está no catálogo
+#: (a XP, com 107 lançamentos em 17/09/2026) cai no cinza — e ficar cinza é a
+#: forma honesta de dizer "este ainda não foi cadastrado".
+def cores():
+    return {b['banco_id']: b.get('cor') for b in CATALOGO if b.get('cor')}

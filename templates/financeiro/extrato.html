@@ -310,13 +310,104 @@
   .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
 }
 
+/* ═══════════ D3: a cor diz O QUE FAZER, nao de onde veio ═══════════════
+   Decisao do Anderson em 17/09/2026, depois de ver tres estrategias de cor
+   lado a lado. As outras duas pintavam o BANCO — bonito e inerte, porque
+   banco nao muda: a tela ficaria igual no comeco e no fim do dia. Aqui a cor
+   e o ESTADO, entao a tela se apaga sozinha conforme o servico anda.
+
+     ambar  falta voce      (sem categoria)
+     ciano  a conferir      (a regra chutou, confirme)
+     azul   esperando o par (par_estado suspeito)
+     roxo   par a aprovar   (par_estado casado — entre empresas)
+     verde  ja classificado
+
+   O banco vira um pontinho colorido: ele nao pede acao. */
+.ex-cards { display:grid; grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:11px; padding:13px 15px; }
+.ex-reg { background:#fff; border:1.5px solid #e6eeea; border-radius:13px;
+  overflow:hidden; display:flex; flex-direction:column; padding:0; gap:0; }
+.ex-reg:hover { border-color:#cbd5e1; }
+.ex-reg .ex-topo { height:4px; background:#cbd5e1; flex:0 0 4px; }
+.ex-reg .ex-corpo { flex:1 1 auto; min-width:0; max-width:none; display:flex;
+  flex-direction:column; gap:8px; padding:11px 13px; }
+.ex-reg .ex-pe { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+  padding:0 13px 11px; margin-top:auto; }
+/* o ponto do banco + a empresa, no alto de cada cartao: numa grade o cartao
+   tem de se explicar sozinho, nao da para confiar na coluna */
+.ex-cab { display:flex; align-items:center; gap:7px; min-width:0; }
+.ex-cab .pt { width:8px; height:8px; border-radius:99px; flex:0 0 8px;
+  background:#94a3b8; }
+.ex-cab .bco { font-size:9.5px; font-weight:800; letter-spacing:.3px;
+  text-transform:uppercase; color:#6f8a7c; white-space:nowrap; }
+.ex-cab .emp { font-size:10px; font-weight:700; color:#4f7263;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+/* #c3d2c9 sobre o ambar do "falta voce" ficou ilegivel no print de 17/09 —
+   cinza claro so funciona sobre branco. */
+.ex-reg .ex-desc { font-family:ui-monospace,Consolas,monospace; font-size:9.5px;
+  color:#8fa89a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* a descricao promovida a heroi: 2 linhas e corta, sem virar paragrafo */
+.ex-reg .ex-quem-crua { font-size:13px; font-weight:600; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; }
+.ex-reg .ex-quem b { display:block; font-size:14px; font-weight:700;
+  color:#0f3d2e; line-height:1.3; }
+.ex-reg .ex-docnum { font-size:10px; color:#9bb0a5; }
+.ex-reg .ex-val { font-size:20px; font-weight:800; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums; }
+/* ── os cinco estados ── */
+.ex-reg.e-falta   { background:#fffcf4; border-color:#fbd88c; }
+.ex-reg.e-falta   .ex-topo { background:#fbbf24; }
+.ex-reg.e-conf    { background:#f2fbfd; border-color:#a5dfe9; }
+.ex-reg.e-conf    .ex-topo { background:#0891b2; }
+.ex-reg.e-espera  { background:#f5f9fd; border-color:#bfd9f0; }
+.ex-reg.e-espera  .ex-topo { background:#3b82f6; }
+.ex-reg.e-par     { background:#faf6ff; border-color:#ddc9f2; }
+.ex-reg.e-par     .ex-topo { background:#8b5cf6; }
+.ex-reg.e-pronto  { background:#f4fdf7; border-color:#a7e8c1; }
+.ex-reg.e-pronto  .ex-topo { background:#00a85a; }
+/* A GRADE ENCOLHE ANTES DA PAGINA. Medido em 17/09/2026: a 1.180px cada
+   coluna fica com 280px e o nome longo corta. Regra da casa — a pagina nunca
+   rola de lado. */
+@media (max-width:1500px) { .ex-cards { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width:1100px) { .ex-cards { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:720px)  { .ex-cards { grid-template-columns:1fr; gap:9px; padding:11px 13px; } }
+
+/* ── A faixa de empresas: onde esta o servico, antes de rolar a tela ── */
+.ex-emps { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:12px; margin:0 0 16px; }
+.ex-empc { background:#fff; border:1px solid #e6eeea; border-left:5px solid #0f3d2e;
+  border-radius:13px; padding:13px 15px; display:flex; align-items:center; gap:13px;
+  text-decoration:none; }
+.ex-empc:hover { border-color:#cbd5e1; border-left-color:#00a85a; }
+.ex-empc .ini { width:34px; height:34px; border-radius:10px; background:#0f3d2e;
+  display:grid; place-items:center; flex:0 0 34px; font-size:13px; font-weight:800;
+  color:#fff; }
+.ex-empc .meio { min-width:0; flex:1 1 auto; }
+.ex-empc .nome { font-size:14.5px; font-weight:800; color:#0f3d2e; line-height:1.2;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ex-empc .sub { font-size:11px; color:#6f8a7c; margin-top:2px;
+  font-variant-numeric:tabular-nums; }
+.ex-empc .falta { text-align:right; flex:0 0 auto; }
+.ex-empc .falta b { display:block; font-size:26px; font-weight:800; line-height:1;
+  color:#b45309; font-variant-numeric:tabular-nums; }
+.ex-empc .falta i { font-style:normal; font-size:8.5px; font-weight:800;
+  letter-spacing:.1em; text-transform:uppercase; color:#b45309; }
+.ex-empc.limpa { border-left-color:#00a85a; }
+.ex-empc.limpa .falta b, .ex-empc.limpa .falta i { color:#15803d; }
+
 /* ================= LOTE: selecionar e classificar de uma vez ========== */
-.ex-reg .ex-caixinha { display:none; flex:0 0 24px; height:24px; border-radius:8px;
-  border:2px solid #cbd5e1; background:#fff; margin-top:2px; align-items:center;
+/* No cartao a caixinha flutua no canto: em coluna ela nao pode ocupar uma
+   linha inteira do fluxo, senao empurra o conteudo quando o modo lote liga. */
+.ex-reg { position:relative; }
+.ex-reg .ex-caixinha { display:none; position:absolute; top:10px; right:11px;
+  z-index:2; width:24px; height:24px; border-radius:8px;
+  border:2px solid #cbd5e1; background:#fff; align-items:center;
   justify-content:center; color:transparent; font-weight:900; font-size:13px; }
 body.ex-selecionando .ex-reg .ex-caixinha { display:flex; }
 body.ex-selecionando .ex-reg { cursor:pointer; }
-body.ex-selecionando .ex-reg.marcado { background:#f0fdf4; }
+body.ex-selecionando .ex-reg.marcado { background:#f0fdf4; border-color:#00a85a;
+  box-shadow:0 0 0 1px #00a85a inset; }
 body.ex-selecionando .ex-reg.marcado .ex-caixinha { background:#00a85a;
   border-color:#00a85a; color:#fff; }
 body.ex-selecionando .ex-pe .ex-btn-tag,
@@ -623,6 +714,35 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 
 <!-- ── Lançamentos ───────────────────────────────────────────────── -->
 <div class="ex-caixa">
+    {# ── Onde está o serviço, antes de rolar a tela ──
+       So aparece com MAIS DE UMA empresa no filtro: com uma so, ela repetiria
+       o cartao de cima e viraria mobilia. por_empresa=None e consulta cortada
+       pelo teto — esconder e melhor que mostrar zero. #}
+    {% if por_empresa and por_empresa | length > 1 %}
+    {# o link da faixa troca empresa E classificacao, entao os dois saem da base #}
+    {% set _base_sem_emp = {} %}
+    {% for k, v in request.args.items() %}{% if k not in ('classif', 'emp') and v %}{% set _ = _base_sem_emp.update({k: v}) %}{% endif %}{% endfor %}
+    <div class="ex-emps">
+        {% for e in por_empresa %}
+        {% set nome = emp_mapa.get(e.empresa_id) or 'sem empresa' %}
+        <a class="ex-empc {{ 'limpa' if not e.sem_cat }}"
+           href="{{ url_for('financeiro.extrato', emp=e.empresa_id, classif='nao', **_base_sem_emp) }}"
+           title="Ver só o que falta classificar em {{ nome }}">
+            <span class="ini">{{ nome[:1] | upper }}</span>
+            <span class="meio">
+                <span class="nome">{{ nome }}</span>
+                <span class="sub">{{ e.n }} lançamento{{ '' if e.n == 1 else 's' }}
+                    · {{ e.contas }} conta{{ '' if e.contas == 1 else 's' }}</span>
+            </span>
+            <span class="falta">
+                <b>{{ e.sem_cat }}</b>
+                <i>{{ 'tudo classificado' if not e.sem_cat else 'a classificar' }}</i>
+            </span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     {% if lancamentos %}
     <div class="ex-lista">
         {# A data aparece UMA vez, no alto do dia. Os dias vem prontos da
@@ -640,48 +760,66 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             </span>
         </div>
 
+        <div class="ex-cards">
         {% for l in d.itens %}
         {% set q = ler(l.descricao) %}
         {% set cc = contas_cad.get(l.conta | string, {}) %}
-        <div class="ex-reg" data-lanc="{{ l.id }}" data-valor="{{ l.valor }}"
+        {# O ESTADO manda na cor (decisao de 17/09/2026). A ordem dos testes e
+           a mesma da barra de acoes la embaixo — se divergirem, o cartao fica
+           de uma cor e o botao oferece outra coisa. #}
+        {% set estado = ('e-par'    if (l.par_estado == 'casado'   and not l.categoria_id) else
+                         'e-espera' if (l.par_estado == 'suspeito' and not l.categoria_id) else
+                         'e-conf'   if (l.categoria_id and l.conferir) else
+                         'e-pronto' if l.categoria_id else 'e-falta') %}
+        <div class="ex-reg {{ estado }}" data-lanc="{{ l.id }}" data-valor="{{ l.valor }}"
              data-conta="{{ l.conta }}" data-banco="{{ cc.get('apelido') or '' }}"
              data-tem-cat="{{ 1 if l.categoria_id else 0 }}"
              onclick="exLoteToca(this, event)">
+            <span class="ex-topo"></span>
             <span class="ex-caixinha">✓</span>
             <div class="ex-corpo">
-                {# 1 — a descricao do banco, literal, com o nome em negrito #}
-                {# q.depois existe quando o nome vem ANTES do documento (Cora,
-                   Nubank): sem ele o resto da linha sumiria da tela. #}
-                <div class="ex-desc">{{ q.antes }}{% if q.nome %}<b>{{ q.nome }}</b>{% endif %}{{ q.depois }}</div>
-
-                {# 2 — a empresa, linha inteira, sem cortar #}
-                <div class="ex-emp">
-                    <i>{{ (emp_mapa.get(l.empresa_id) or '?')[:1] | upper }}</i>
-                    <b>{{ emp_mapa.get(l.empresa_id) or 'sem empresa' }}</b>
+                {# Banco e empresa no alto: numa grade o cartao tem de se
+                   explicar sozinho — nao ha coluna em que confiar. #}
+                <div class="ex-cab">
+                    <span class="pt" style="background:{{ COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"></span>
+                    <span class="bco">{{ cc.apelido or cc.banco_nome or l.banco or '—' }}</span>
+                    <span class="emp">· {{ emp_mapa.get(l.empresa_id) or 'sem empresa' }}</span>
                 </div>
 
-                {# 3 — quem esta do outro lado #}
+                {# O HEROI DO CARTAO.
+                   Quando o banco nao nomeia ninguem, o heroi e a DESCRICAO —
+                   nunca um travessao. O ler_descricao so extrai nome quando ha
+                   CPF/CNPJ na linha, e o C6 escreve "Pix enviado para FULANO"
+                   sem documento nenhum: com "—" no lugar, todo cartao do C6
+                   (a conta com mais pendencia) nasceria sem dizer nada, com o
+                   nome logo abaixo em cinza claro. Ver [D3, 17/09/2026]. #}
                 <div class="ex-quem">
+                    {% if q.nome %}
                     <span class="ex-rot">Quem {{ 'pagou' if l.valor >= 0 else 'recebeu' }}</span>
-                    {% if q.nome %}<b>{{ q.nome }}</b>{% endif %}
+                    <b>{{ q.nome }}</b>
                     {% if q.doc %}
                     <span class="ex-docnum">{{ 'CPF' if q.doc | length == 11 else 'CNPJ' }}
                         {{ doc_fmt(q.doc) }}</span>
-                    {% elif not q.nome %}<b>—</b>{% endif %}
+                    {% endif %}
+                    {% else %}
+                    <span class="ex-rot">o que o banco escreveu</span>
+                    <b class="ex-quem-crua">{{ l.descricao }}</b>
+                    {% endif %}
                 </div>
 
-                {# 4 e 5 — banco e agencia, lado a lado #}
-                <div class="ex-par">
-                    <span class="ex-rot">Banco</span>
-                    <span class="ex-rot">Agência · conta</span>
-                    <span class="ex-v">{{ cc.apelido or l.banco or '—' }}</span>
-                    <span class="ex-v ex-mono {{ '' if cc.agencia else 'ex-falta' }}">
-                        {% if cc.agencia %}ag. {{ cc.agencia }}{% else %}ag. —{% endif %}
-                        · {{ l.conta or '—' }}</span>
-                </div>
+                {# A descricao CRUA, embaixo, so quando ela NAO virou o heroi —
+                   repetir a mesma frase duas vezes no mesmo cartao e ruido.
+                   q.depois existe quando o nome vem ANTES do documento (Cora,
+                   Nubank): sem ele o resto sumiria. #}
+                {% if q.nome %}
+                <div class="ex-desc" title="{{ l.descricao }}">{{ q.antes }}{{ q.nome }}{{ q.depois }}</div>
+                {% endif %}
+
+                <span class="ex-val {{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
+                    {{ l.valor | float | round(2) | format_currency }}</span>
             </div>
 
-            {# 6 — o valor, e a acao #}
+            {# o estado e a acao #}
             <div class="ex-pe">
                 {% if l.categoria_id and l.conferir %}
                 <span class="ex-pil">
@@ -695,8 +833,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 {% else %}
                 <span class="ex-pil">sem categoria</span>
                 {% endif %}
-                <span class="ex-val {{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
-                    {{ l.valor | float | round(2) | format_currency }}</span>
+                {# o valor subiu para o corpo do cartao — aqui ficam so estado
+                   e acao, que e o que a pessoa vem fazer #}
                 {% if l.conferir %}
                 {# As tres saidas: era isso mesmo / muda so este / muda o criterio. #}
                 <form method="POST" style="display:inline;"
@@ -741,6 +879,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             </div>
         </div>
         {% endfor %}
+        </div>{# /ex-cards #}
         {% endfor %}
     </div>
     {% if lancamentos | length >= limite %}
@@ -1028,11 +1167,22 @@ function exLoteToca(reg, ev) {
 }
 
 function exLoteDia(bt) {
-  // marca (ou desmarca) todos os lancamentos entre este cabecalho e o proximo
+  // Marca (ou desmarca) todos os lancamentos do dia.
+  //
+  // ATENCAO: isto andava por IRMAOS (nextElementSibling ate o proximo
+  // .ex-dia) e funcionava porque os .ex-reg eram irmaos do cabecalho. Com a
+  // grade de 17/09/2026 eles passaram a viver DENTRO de um .ex-cards, e o
+  // laco antigo saia vazio — "marcar dia" nao faria nada, sem erro nenhum.
+  // Agora procura a grade do dia e pega os cartoes de dentro dela.
   var el = bt.closest('.ex-dia').nextElementSibling;
   var doDia = [];
   while (el && !el.classList.contains('ex-dia')) {
-    if (el.classList.contains('ex-reg')) doDia.push(el);
+    if (el.classList.contains('ex-cards')) {
+      doDia = doDia.concat(
+        Array.prototype.slice.call(el.querySelectorAll('.ex-reg[data-lanc]')));
+    } else if (el.classList.contains('ex-reg')) {
+      doDia.push(el);          // formato antigo, se algum dia voltar
+    }
     el = el.nextElementSibling;
   }
   var todos = doDia.every(function (r) { return LOTE.marcados[r.getAttribute('data-lanc')]; });

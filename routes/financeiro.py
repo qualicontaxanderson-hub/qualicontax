@@ -968,6 +968,17 @@ def fluxo_saldo():
 # Ordem combinada com o Anderson (20/08/2026): OFX -> Excel -> PDF sólidos
 # primeiro; Pluggy (API agregadora) por último, como aposta com retaguarda.
 # =======================================================================
+def _cores_banco():
+    """Cor da marca por banco_id, do catalogo de formatos. Falha nao derruba a
+    tela: sem o mapa, o ponto do banco fica cinza e a tela segue."""
+    try:
+        from utils.extrato_formatos import cores
+        return cores()
+    except Exception:
+        logger.exception('[extrato] catalogo de cores indisponivel; pontos em cinza.')
+        return {}
+
+
 @financeiro.route('/financeiro/extrato')
 @permission_required('financeiro.extrato')
 def extrato():
@@ -1038,6 +1049,13 @@ def extrato():
                            n_travados=n_travados,
                            dias=ExtratoLancamento.por_dia(lancs),
                            totais=ExtratoLancamento.totais(**args),
+                           # A faixa do topo: onde está o serviço, por empresa.
+                           # None quando a consulta é cortada pelo teto — o
+                           # template esconde a faixa em vez de mostrar zero.
+                           por_empresa=ExtratoLancamento.por_empresa(**args),
+                           # a cor da marca de cada banco vem do CATALOGO, nao
+                           # do template: banco novo entra num lugar so
+                           COR_BANCO=_cores_banco(),
                            contas=ExtratoLancamento.contas_filtro(empresa_ids=sel),
                            # apelido e agência vêm do CADASTRO de contas: o
                            # extrato guarda o nome cru do OFX, e o do Sicredi
