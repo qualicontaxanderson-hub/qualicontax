@@ -1686,8 +1686,13 @@ function exCatNovaCampo(rotulo, dica) {
 function exCatNovaBotao(texto) {
   if (!EX_URL_CATNOVA) return '';
   var nivel = W.maeCat ? 'sub' : (W.grupoCat ? 'categoria' : 'grupo');
+  // &quot; NAO e enfeite: JSON.stringify devolve "sub" com aspas DUPLAS, e a
+  // primeira delas FECHA o onclick="..." no meio. O atributo vira
+  // exCatNovaAbre( — sintaxe invalida — e o clique nao faz nada, calado. Foi
+  // exatamente o que aconteceu em 16/09/2026, nos tres botoes de uma vez. O
+  // cartao de grupo aqui do lado ja fazia esse replace; eu e que nao copiei.
   return '<button type="button" class="ex-cartao ex-cartao-novo" ' +
-    'onclick="exCatNovaAbre(' + JSON.stringify(nivel) + ')">' +
+    'onclick="exCatNovaAbre(' + JSON.stringify(nivel).replace(/"/g, '&quot;') + ')">' +
     '<span class="b">+</span><span class="t"><b>' + exEsc(texto) + '</b>' +
     '<small>cria e ja usa, sem sair daqui</small></span></button>';
 }
