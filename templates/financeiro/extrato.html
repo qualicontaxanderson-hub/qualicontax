@@ -373,28 +373,73 @@
 @media (max-width:1100px) { .ex-cards { grid-template-columns:repeat(2, minmax(0,1fr)); } }
 @media (max-width:720px)  { .ex-cards { grid-template-columns:1fr; gap:9px; padding:11px 13px; } }
 
-/* ── A faixa de empresas: onde esta o servico, antes de rolar a tela ── */
-.ex-emps { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
-  gap:12px; margin:0 0 16px; }
-.ex-empc { background:#fff; border:1px solid #e6eeea; border-left:5px solid #0f3d2e;
-  border-radius:13px; padding:13px 15px; display:flex; align-items:center; gap:13px;
-  text-decoration:none; }
-.ex-empc:hover { border-color:#cbd5e1; border-left-color:#00a85a; }
-.ex-empc .ini { width:34px; height:34px; border-radius:10px; background:#0f3d2e;
-  display:grid; place-items:center; flex:0 0 34px; font-size:13px; font-weight:800;
+/* ── A FAIXA DE CONTAS: onde esta o servico, antes de rolar a tela ──
+   Pedida pelo Anderson em 17/09/2026 apontando o relatorio do posto: numero
+   grande, blocos de metrica com rotulo miudo, minigrafico e link no rodape.
+   A cor e a do BANCO — aqui o assunto E o banco, ao contrario do cartao de
+   lancamento, onde a cor e o estado. */
+.ex-painel { margin:0 0 18px; }
+/* QUEBRA. Sem o wrap, a fila (inicial + nome + risco + total + pilula) nao
+   cabia em 390px e a PAGINA passava a rolar de lado — medido no Chromium em
+   17/09/2026: o span.pil-falta terminava em 401px numa tela de 390. A regra da
+   casa e que a pagina nunca rola; quem encolhe e o conteudo. */
+.ex-emp-cab { display:flex; align-items:center; gap:10px; margin:0 0 10px;
+  flex-wrap:wrap; }
+.ex-emp-cab .nome { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:620px) {
+  /* no celular o total vira detalhe: o que importa e o nome e o que falta */
+  .ex-emp-cab .tot { display:none; }
+  .ex-emp-cab .risco { display:none; }
+}
+.ex-emp-cab .ini { width:26px; height:26px; border-radius:8px; background:#0f3d2e;
+  display:grid; place-items:center; flex:0 0 26px; font-size:11px; font-weight:800;
   color:#fff; }
-.ex-empc .meio { min-width:0; flex:1 1 auto; }
-.ex-empc .nome { font-size:14.5px; font-weight:800; color:#0f3d2e; line-height:1.2;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ex-empc .sub { font-size:11px; color:#6f8a7c; margin-top:2px;
-  font-variant-numeric:tabular-nums; }
-.ex-empc .falta { text-align:right; flex:0 0 auto; }
-.ex-empc .falta b { display:block; font-size:26px; font-weight:800; line-height:1;
-  color:#b45309; font-variant-numeric:tabular-nums; }
-.ex-empc .falta i { font-style:normal; font-size:8.5px; font-weight:800;
-  letter-spacing:.1em; text-transform:uppercase; color:#b45309; }
-.ex-empc.limpa { border-left-color:#00a85a; }
-.ex-empc.limpa .falta b, .ex-empc.limpa .falta i { color:#15803d; }
+.ex-emp-cab .nome { font-size:15px; font-weight:800; color:#0f3d2e;
+  letter-spacing:-.01em; }
+.ex-emp-cab .risco { height:1px; flex:1 1 auto;
+  background:linear-gradient(90deg,#dde7e2,rgba(221,231,226,0)); }
+.ex-emp-cab .tot { font-size:11.5px; color:#6f8a7c; font-variant-numeric:tabular-nums;
+  white-space:nowrap; }
+.pil-falta { font-size:10.5px; font-weight:800; color:#fff; background:#b45309;
+  border-radius:99px; padding:3px 10px; white-space:nowrap; }
+.pil-ok { font-size:10.5px; font-weight:800; color:#15803d; background:#f0fdf4;
+  border:1px solid #bbf7d0; border-radius:99px; padding:2px 10px; white-space:nowrap; }
+
+.ex-contas { display:grid; grid-template-columns:repeat(auto-fit,minmax(275px,1fr));
+  gap:12px; margin-bottom:18px; }
+.ex-contac { background:#fff; border:1px solid #e6eeea; border-radius:15px;
+  overflow:hidden; box-shadow:0 1px 3px rgba(15,61,46,.05); display:flex;
+  flex-direction:column; }
+.ex-contac.atencao { border-color:#f3d7b8; box-shadow:0 2px 10px rgba(180,83,9,.08); }
+.ex-contac .tarja { height:3px; flex:0 0 3px; }
+.ex-contac .corpo { padding:13px 15px 12px; display:flex; flex-direction:column; gap:11px; }
+.ex-contac .topo { display:flex; align-items:center; gap:9px; }
+.ex-contac .chip { width:28px; height:28px; border-radius:9px; display:grid;
+  place-items:center; flex:0 0 28px; font-size:12px; }
+.ex-contac .ident { min-width:0; }
+.ex-contac .ident b { display:block; font-size:13.5px; font-weight:800; color:#0f3d2e;
+  line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ex-contac .ident i { font-style:normal; font-size:10px; color:#9bb0a5; }
+.ex-contac .qtd { margin-left:auto; text-align:right; flex:0 0 auto; }
+.ex-contac .qtd b { display:block; font-size:26px; font-weight:800; color:#0f3d2e;
+  line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.ex-contac .qtd i { font-style:normal; font-size:8.5px; font-weight:800;
+  letter-spacing:.1em; text-transform:uppercase; color:#9bb0a5; }
+.ex-contac .blocos { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.ex-contac .bl { background:#f7faf8; border:1px solid #edf3ef; border-radius:10px;
+  padding:7px 10px; min-width:0; }
+.ex-contac .bl b { display:block; font-size:12.5px; font-weight:700; margin-top:1px;
+  font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; }
+.ex-contac .spark { display:flex; align-items:flex-end; gap:2px; height:30px; }
+.ex-contac .spark i { flex:1 1 auto; border-radius:2px 2px 0 0; min-width:2px; }
+.ex-contac .spark.vazio { align-items:center; font-size:10.5px; color:#c3d2c9; }
+.ex-contac .pe { display:flex; align-items:center; gap:8px; padding-top:10px;
+  border-top:1px solid #f1f5f3; }
+.ex-contac .pe a { margin-left:auto; font-size:10.5px; font-weight:700;
+  color:#00a85a; text-decoration:none; white-space:nowrap; }
+.ex-contac .pe a:hover { color:#0f3d2e; }
+@media (max-width:520px) { .ex-contas { grid-template-columns:1fr; } }
 
 /* ================= LOTE: selecionar e classificar de uma vez ========== */
 /* No cartao a caixinha flutua no canto: em coluna ela nao pode ocupar uma
@@ -718,27 +763,74 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
        So aparece com MAIS DE UMA empresa no filtro: com uma so, ela repetiria
        o cartao de cima e viraria mobilia. por_empresa=None e consulta cortada
        pelo teto — esconder e melhor que mostrar zero. #}
-    {% if por_empresa and por_empresa | length > 1 %}
-    {# o link da faixa troca empresa E classificacao, entao os dois saem da base #}
-    {% set _base_sem_emp = {} %}
-    {% for k, v in request.args.items() %}{% if k not in ('classif', 'emp') and v %}{% set _ = _base_sem_emp.update({k: v}) %}{% endif %}{% endfor %}
-    <div class="ex-emps">
-        {% for e in por_empresa %}
-        {% set nome = emp_mapa.get(e.empresa_id) or 'sem empresa' %}
-        <a class="ex-empc {{ 'limpa' if not e.sem_cat }}"
-           href="{{ url_for('financeiro.extrato', emp=e.empresa_id, classif='nao', **_base_sem_emp) }}"
-           title="Ver só o que falta classificar em {{ nome }}">
-            <span class="ini">{{ nome[:1] | upper }}</span>
-            <span class="meio">
-                <span class="nome">{{ nome }}</span>
-                <span class="sub">{{ e.n }} lançamento{{ '' if e.n == 1 else 's' }}
-                    · {{ e.contas }} conta{{ '' if e.contas == 1 else 's' }}</span>
-            </span>
-            <span class="falta">
-                <b>{{ e.sem_cat }}</b>
-                <i>{{ 'tudo classificado' if not e.sem_cat else 'a classificar' }}</i>
-            </span>
-        </a>
+    {% if por_conta_painel %}
+    {# o link troca conta E classificacao, entao os dois saem da base #}
+    {% set _base_painel = {} %}
+    {% for k, v in request.args.items() %}{% if k not in ('classif', 'conta') and v %}{% set _ = _base_painel.update({k: v}) %}{% endif %}{% endfor %}
+    <div class="ex-painel">
+        {% for e in por_empresa or [] %}
+        {% set nome_emp = emp_mapa.get(e.empresa_id) or 'sem empresa' %}
+        {% set contas_da = por_conta_painel | selectattr('empresa_id', 'equalto', e.empresa_id) | list %}
+        {% if contas_da %}
+        <div class="ex-emp-cab">
+            <span class="ini">{{ nome_emp[:1] | upper }}</span>
+            <span class="nome">{{ nome_emp }}</span>
+            <span class="risco"></span>
+            <span class="tot">{{ e.n }} lançamento{{ '' if e.n == 1 else 's' }}
+                · {{ e.contas }} conta{{ '' if e.contas == 1 else 's' }}</span>
+            {% if e.sem_cat %}<span class="pil-falta">{{ e.sem_cat }} a classificar</span>
+            {% else %}<span class="pil-ok">tudo classificado</span>{% endif %}
+        </div>
+
+        <div class="ex-contas">
+            {% for c in contas_da %}
+            {% set cc = contas_cad.get(c.conta | string, {}) %}
+            {% set cor = COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') %}
+            <div class="ex-contac {{ 'atencao' if c.sem_cat else '' }}">
+                <span class="tarja" style="background:{{ cor }}"></span>
+                <div class="corpo">
+                    <div class="topo">
+                        <span class="chip" style="background:{{ cor }}1f; color:{{ cor }}">
+                            <i class="fas fa-building-columns"></i></span>
+                        <span class="ident">
+                            <b>{{ cc.apelido or cc.banco_nome or c.banco or '—' }}</b>
+                            <i class="ex-mono">{{ c.conta or '—' }}</i>
+                        </span>
+                        <span class="qtd"><b>{{ c.n }}</b><i>lançamentos</i></span>
+                    </div>
+
+                    <div class="blocos">
+                        <div class="bl"><span class="ex-rot">entrou</span>
+                            <b class="ex-cred">{{ c.creditos | float | round(2) | format_currency }}</b></div>
+                        <div class="bl"><span class="ex-rot">saiu</span>
+                            <b class="ex-deb">{{ c.debitos | float | round(2) | format_currency }}</b></div>
+                    </div>
+
+                    {# SO com serie de verdade. Conta com poucos dias de
+                       movimento diz isso, em vez de fingir um grafico. #}
+                    {% if c.serie %}
+                    <div class="spark" title="lançamentos por dia">
+                        {% for h in c.serie %}
+                        <i style="height:{{ h }}%; background:{{ cor }}{{ '' if h > 60 else '66' }}"></i>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="spark vazio">poucos dias com movimento — sem gráfico</div>
+                    {% endif %}
+
+                    <div class="pe">
+                        {% if c.sem_cat %}
+                        <span class="pil-falta">{{ c.sem_cat }} a classificar</span>
+                        {% else %}
+                        <span class="pil-ok">em dia</span>
+                        {% endif %}
+                        <a href="{{ url_for('financeiro.extrato', conta=c.conta, classif='nao', **_base_painel) }}">ver só esta →</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endfor %}
     </div>
     {% endif %}

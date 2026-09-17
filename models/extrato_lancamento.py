@@ -129,6 +129,69 @@ class ExtratoLancamento:
         return base
 
     @staticmethod
+    def por_conta_painel(**f):
+        """Uma linha por CONTA, com o resumo e a série diária do minigráfico.
+
+        É a faixa do topo do extrato — a que o Anderson pediu em 17/09/2026
+        apontando para o relatório do posto: número grande, entrou/saiu, o que
+        falta classificar e um gráfico do movimento. Ela responde "onde está o
+        meu serviço" antes de a pessoa rolar a tela.
+
+        A SÉRIE É LANÇAMENTOS POR DIA, não valor. Medido antes de desenhar: a
+        série de valores do C6 tinha dois picos (19 mil e 12 mil) e o resto
+        rasteiro — um gráfico de duas barras e um fio. Contagem distribui
+        melhor E é o que interessa aqui, que é quanto trabalho cada dia traz.
+
+        Conta com menos de ``MIN_SERIE`` dias de movimento volta sem série: com
+        três barras soltas o gráfico finge ser uma série e não é.
+
+        Usa o MESMO ``_where`` de ``totais`` — duas contagens da mesma tela que
+        filtrassem diferente seria a tela se contradizendo.
+        """
+        where, params = ExtratoLancamento._where(**f)
+        linhas = execute_query(
+            f"""SELECT e.empresa_id, e.conta, MIN(e.banco) AS banco, COUNT(*) AS n,
+                       COALESCE(SUM(CASE WHEN e.valor >= 0 THEN e.valor END), 0) AS creditos,
+                       COALESCE(SUM(CASE WHEN e.valor < 0 THEN -e.valor END), 0) AS debitos
+                  FROM extrato_lancamentos e WHERE {where}
+                 GROUP BY e.empresa_id, e.conta ORDER BY n DESC""",
+            tuple(params), fetch=True)
+        if linhas is None:            # cortada pelo teto: NÃO é "nenhuma conta"
+            return None
+
+        f_sem = dict(f)
+        f_sem['classif'] = 'nao'
+        w2, p2 = ExtratoLancamento._where(**f_sem)
+        sem = execute_query(
+            f'SELECT e.empresa_id, e.conta, COUNT(*) AS n FROM extrato_lancamentos e '
+            f' WHERE {w2} GROUP BY e.empresa_id, e.conta', tuple(p2), fetch=True) or []
+        mapa_sem = {(r['empresa_id'], r['conta']): int(r['n'] or 0) for r in sem}
+
+        dias = execute_query(
+            f"""SELECT e.empresa_id, e.conta, e.data, COUNT(*) AS n
+                  FROM extrato_lancamentos e WHERE {where}
+                 GROUP BY e.empresa_id, e.conta, e.data ORDER BY e.data""",
+            tuple(params), fetch=True) or []
+        series = {}
+        for r in dias:
+            series.setdefault((r['empresa_id'], r['conta']), []).append(int(r['n'] or 0))
+
+        MIN_SERIE = 6
+        for l in linhas:
+            chave = (l['empresa_id'], l['conta'])
+            l['sem_cat'] = mapa_sem.get(chave, 0)
+            serie = series.get(chave) or []
+            if len(serie) < MIN_SERIE:
+                l['serie'] = None     # poucos dias: sem gráfico, e a tela diz isso
+            else:
+                serie = serie[-30:]
+                topo = max(serie) or 1
+                # altura em % da caixa; o piso de 8 existe para o dia de UM
+                # lançamento continuar visível ao lado de um pico de 170
+                l['serie'] = [max(8, round(100.0 * v / topo)) for v in serie]
+        return linhas
+
+    @staticmethod
     def por_empresa(**f):
         """Uma linha por empresa do filtro: contagem, sem categoria e contas.
 

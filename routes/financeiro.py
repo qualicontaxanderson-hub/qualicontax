@@ -1053,6 +1053,9 @@ def extrato():
                            # None quando a consulta é cortada pelo teto — o
                            # template esconde a faixa em vez de mostrar zero.
                            por_empresa=ExtratoLancamento.por_empresa(**args),
+                           # a faixa de CONTAS do topo: numero grande,
+                           # entrou/saiu, a classificar e o minigrafico
+                           por_conta_painel=ExtratoLancamento.por_conta_painel(**args),
                            # a cor da marca de cada banco vem do CATALOGO, nao
                            # do template: banco novo entra num lugar so
                            COR_BANCO=_cores_banco(),
