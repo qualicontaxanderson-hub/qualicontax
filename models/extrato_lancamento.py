@@ -129,6 +129,38 @@ class ExtratoLancamento:
         return base
 
     @staticmethod
+    def conta_resolver():
+        """Devolve ``achar(conta)`` -> dados do cadastro, tolerante à grafia.
+
+        O extrato e o cadastro escrevem a mesma conta de jeitos diferentes, e
+        procurar pela grafia crua deixava a tela mostrando o código do banco
+        ('0237') no lugar do nome. Aqui a busca cai no normalizador antes de
+        desistir. Monta o mapa UMA vez: a tela chama isto por lançamento.
+        """
+        from utils.extrato_ingest import conta_normalizada
+        mapa = ExtratoLancamento.contas_mapa()
+
+        def achar(conta, banco_bruto=None):
+            c = str(conta or '')
+            dado = mapa.get(c) or mapa.get(conta_normalizada(c))
+            if dado:
+                return dado
+            # Última linha: a conta não casou (grafia diferente, cadastro
+            # faltando), mas o extrato pode ter guardado o CÓDIGO do banco.
+            # Melhor "Bradesco" sem agência do que "0237".
+            try:
+                from utils.extrato_formatos import banco_por_codigo
+                b = banco_por_codigo(banco_bruto)
+            except Exception:
+                b = None
+            if b:
+                return {'apelido': b['nome'], 'banco_nome': b['nome'],
+                        'banco_id': '', 'agencia': '', 'cor': b.get('cor'),
+                        'sem_cadastro': True}
+            return {}
+        return achar
+
+    @staticmethod
     def por_conta_painel(**f):
         """Uma linha por CONTA, com o resumo e a série diária do minigráfico.
 
@@ -427,9 +459,25 @@ class ExtratoLancamento:
                     'banco_nome': r['banco_nome'] or '',
                     'banco_id': str(r['banco_id'] or ''),
                     'agencia': r['agencia'] or ''}
-            for chave in (r['conta_norm'], r['conta']):
+            # TODAS as grafias da mesma conta viram chave. O extrato guarda
+            # 'agência/conta' colado ('1/211346179', '2505/21921') e o cadastro
+            # guarda os dois campos separados — chavear só pela grafia do
+            # cadastro deixava 237 lançamentos sem achar o banco, e a tela
+            # mostrava o código cru do arquivo ('0237') no lugar de "Bradesco".
+            # Medido em 17/09/2026: C6 da Qualicontax (148), Bradesco PF (53) e
+            # Cora (33).
+            from utils.extrato_ingest import conta_normalizada
+            chaves = {r['conta_norm'], r['conta']}
+            for base in (r['conta_norm'], r['conta']):
+                if base:
+                    chaves.add(conta_normalizada(base))
+            if r['agencia'] and r['conta']:
+                colada = '%s/%s' % (r['agencia'], r['conta'])
+                chaves.add(colada)
+                chaves.add(conta_normalizada(colada))
+            for chave in chaves:
                 if chave:
-                    mapa[str(chave)] = dado
+                    mapa.setdefault(str(chave), dado)
         return mapa
 
     @staticmethod

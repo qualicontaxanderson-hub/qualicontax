@@ -350,6 +350,16 @@
 .ex-reg .ex-quem-crua { font-size:13px; font-weight:600; line-height:1.35;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   overflow:hidden; }
+/* "o banco nao disse quem" e um AVISO, nao um rotulo neutro — a cor separa a
+   linha que explica uma ausencia da que anuncia um dado */
+.ex-reg .ex-rot-mudo { color:#b45309; }
+/* DE ONDE VEM: agencia e conta, que ate 17/09/2026 nao apareciam em cartao
+   nenhum. Em letra de maquina porque e numero que se confere, nao se le. */
+.ex-reg .ex-conta-linha { font-size:10px; color:#8fa89a; margin-top:-3px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ex-reg .ex-conta-linha em { font-style:normal; font-weight:700; color:#b45309;
+  background:#fffbeb; border:1px solid #fde68a; border-radius:99px;
+  padding:1px 7px; margin-left:5px; font-size:9px; }
 .ex-reg .ex-quem b { display:block; font-size:14px; font-weight:700;
   color:#0f3d2e; line-height:1.3; }
 .ex-reg .ex-docnum { font-size:10px; color:#9bb0a5; }
@@ -784,8 +794,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 
         <div class="ex-contas">
             {% for c in contas_da %}
-            {% set cc = contas_cad.get(c.conta | string, {}) %}
-            {% set cor = COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') %}
+            {% set cc = conta_de(c.conta, c.banco) %}
+            {% set cor = cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') %}
             <div class="ex-contac {{ 'atencao' if c.sem_cat else '' }}">
                 <span class="tarja" style="background:{{ cor }}"></span>
                 <div class="corpo">
@@ -855,7 +865,9 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
         <div class="ex-cards">
         {% for l in d.itens %}
         {% set q = ler(l.descricao) %}
-        {% set cc = contas_cad.get(l.conta | string, {}) %}
+        {# conta_de tolera a grafia e, se nao casar, nomeia o banco pelo
+           codigo do arquivo — era isto que fazia a tela dizer "0237" #}
+        {% set cc = conta_de(l.conta, l.banco) %}
         {# O ESTADO manda na cor (decisao de 17/09/2026). A ordem dos testes e
            a mesma da barra de acoes la embaixo — se divergirem, o cartao fica
            de uma cor e o botao oferece outra coisa. #}
@@ -872,10 +884,17 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             <div class="ex-corpo">
                 {# Banco e empresa no alto: numa grade o cartao tem de se
                    explicar sozinho — nao ha coluna em que confiar. #}
+                {# DE ONDE VEM: banco · empresa em cima, agência·conta embaixo.
+                   Antes a agência não aparecia em cartão nenhum, e o banco
+                   podia sair como "0237". #}
                 <div class="ex-cab">
-                    <span class="pt" style="background:{{ COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"></span>
+                    <span class="pt" style="background:{{ cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"></span>
                     <span class="bco">{{ cc.apelido or cc.banco_nome or l.banco or '—' }}</span>
                     <span class="emp">· {{ emp_mapa.get(l.empresa_id) or 'sem empresa' }}</span>
+                </div>
+                <div class="ex-conta-linha ex-mono">
+                    {% if cc.agencia %}ag. {{ cc.agencia }} · {% endif %}{{ l.conta or '—' }}
+                    {% if cc.sem_cadastro %}<em title="Esta conta não está cadastrada em Contas — o nome do banco veio do código do arquivo">conta não cadastrada</em>{% endif %}
                 </div>
 
                 {# O HEROI DO CARTAO.
@@ -894,8 +913,15 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                         {{ doc_fmt(q.doc) }}</span>
                     {% endif %}
                     {% else %}
-                    <span class="ex-rot">o que o banco escreveu</span>
+                    {# Sem nome extraido, a propria descricao e o heroi — e o
+                       rotulo diz POR QUE, em vez de gastar a linha nobre com
+                       "o que o banco escreveu". Quando nem documento ha, o
+                       cartao assume: o banco nao identificou ninguem. #}
+                    <span class="ex-rot ex-rot-mudo">o banco não disse quem</span>
                     <b class="ex-quem-crua">{{ l.descricao }}</b>
+                    {% if l.documento %}
+                    <span class="ex-docnum ex-mono" title="{{ l.documento }}">id {{ l.documento[:18] }}{% if l.documento | length > 18 %}…{% endif %}</span>
+                    {% endif %}
                     {% endif %}
                 </div>
 

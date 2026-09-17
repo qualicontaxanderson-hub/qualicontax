@@ -1064,6 +1064,9 @@ def extrato():
                            # extrato guarda o nome cru do OFX, e o do Sicredi
                            # chega como "CCPI DO CERRADO DE GO".
                            contas_cad=ExtratoLancamento.contas_mapa(),
+                           # resolve a conta tolerando a grafia e, se nao
+                           # casar, nomeia o banco pelo codigo do arquivo
+                           conta_de=ExtratoLancamento.conta_resolver(),
                            ler=ExtratoLancamento.ler_descricao,
                            doc_fmt=ExtratoLancamento.formatar_doc,
                            categorias=FinCategoria.listar(),

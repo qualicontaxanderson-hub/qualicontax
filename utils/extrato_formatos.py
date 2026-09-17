@@ -153,3 +153,24 @@ def _ler_pdf(dados, senhas):
 #: forma honesta de dizer "este ainda não foi cadastrado".
 def cores():
     return {b['banco_id']: b.get('cor') for b in CATALOGO if b.get('cor')}
+
+
+def banco_por_codigo(bruto):
+    """'0237' -> {'nome': 'Bradesco', 'cor': '#cc092f'}; None se não for código.
+
+    O extrato guarda o que o arquivo disse, e alguns OFX dizem só o NÚMERO do
+    banco. A tela mostrava '0237' como se fosse nome — o Anderson reclamou em
+    17/09/2026: "em alguns não aparece nem de onde vem".
+
+    Serve de última linha: quando a conta não casa com o cadastro, ainda dá
+    para nomear o banco pelo código. Texto que não é só dígito volta None, e aí
+    o nome cru continua sendo a melhor resposta disponível.
+    """
+    t = str(bruto or '').strip()
+    if not t.isdigit():
+        return None
+    codigo = t.lstrip('0') or t
+    for b in CATALOGO:
+        if b['banco_id'] == codigo:
+            return {'nome': b['nome'], 'cor': b.get('cor')}
+    return None
