@@ -701,7 +701,8 @@ def api_opcoes_filtros():
                     'numeros': numeros, 'numeros_trunc': num_trunc,
                     'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
                     'cnpjs_dest': cnpjs_dest,
-                    'estados': _opcoes_estados_nfe(where_sql, params)})
+                    'estados': _opcoes_estados_nfe(where_sql, params),
+                    **_opcoes_produtos(where_sql, params)})
 
 
 def _opcoes_estados_nfe(where_sql, params):
@@ -809,7 +810,8 @@ def api_opcoes_filtros_saidas():
                     'numeros': numeros, 'numeros_trunc': num_trunc,
                     'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
                     'cnpjs_emit': cnpjs_emit,
-                    'estados': _opcoes_estados_nfe(where_sql, params)})
+                    'estados': _opcoes_estados_nfe(where_sql, params),
+                    **_opcoes_produtos(where_sql, params)})
 
 
 @escrita_fiscal.route('/conf-cte/api/opcoes-filtros')
@@ -2023,7 +2025,9 @@ def api_notas():
         ('emit_uf', request.args.get('emit_uf', '').strip()),
         ('dest_cnpj', f_dest_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
         ('origem', f_origem), ('vinc_status', f_vinc_status),
-        ('cancelado', f_cancelado), ('resumo', f_resumo)) if v}
+        ('cancelado', f_cancelado), ('resumo', f_resumo),
+        ('produto_id', request.args.get('produto_id', '').strip()),
+        ('item_desc', request.args.get('item_desc', '').strip())) if v}
     if page == 1 and (_termo or _filtros):
         _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
         registrar('leitura.buscou_entradas', 'fiscal', tabela='nfe_importacoes',
@@ -2087,6 +2091,8 @@ def api_notas():
         where.append(
             "EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
         )
+
+    _aplica_produto(where, request.args.get('produto_id'), request.args.get('item_desc'), params)
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
@@ -2654,6 +2660,8 @@ def _where_lote_entradas(data):
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 'n')
     _aplica_resumo(where, f_resumo, 'n')
+    _aplica_vinc_status(where, data.get('vinc_status'), 'n')
+    _aplica_produto(where, data.get('produto_id'), data.get('item_desc'), params)
     return where, params
 
 
@@ -2714,6 +2722,8 @@ def _where_lote_saidas(data):
         where.append('n.origem = %s')
         params.append(f_origem)
     _aplica_cancelada(where, f_cancelado, 'n')
+    _aplica_vinc_status(where, data.get('vinc_status'), 'n')
+    _aplica_produto(where, data.get('produto_id'), data.get('item_desc'), params)
     return where, params
 
 
@@ -3184,6 +3194,93 @@ def _aplica_resumo(where, valor, alias='n'):
         where.append(c)
 
 
+# Filtro CADASTRO DE PRODUTOS ('vinc_status') — a régua da listagem, num lugar
+# só. Até 19/09/2026 ela vivia copiada em api_notas e api_notas_saidas, e
+# FALTAVA no lote (baixar XML/PDF do filtro, excluir em lote): "todos do
+# filtro" com Cadastro = Sem cadastro apanhava mais do que a tela mostrava.
+def _aplica_vinc_status(where, valor, alias='n'):
+    v = str(valor or '').strip()
+    base = f"SELECT 1 FROM nfe_itens i WHERE i.nfe_id = {alias}.id"
+    if v == 'completo':
+        where.append(f"NOT EXISTS ({base} AND i.produto_catalogo_id IS NULL) AND EXISTS ({base})")
+    elif v == 'parcial':
+        where.append(f"EXISTS ({base} AND i.produto_catalogo_id IS NOT NULL)"
+                     f" AND EXISTS ({base} AND i.produto_catalogo_id IS NULL)")
+    elif v == 'sem':
+        where.append(f"NOT EXISTS ({base} AND i.produto_catalogo_id IS NOT NULL)")
+    elif v == 'incompleto':
+        where.append(f"EXISTS ({base} AND i.produto_catalogo_id IS NULL)")
+
+
+# Filtros por PRODUTO (pedido de 19/09/2026). Os dois olham o ITEM da nota
+# (alias ``i``) e a nota entra quando ALGUM item bate nos dois ao mesmo tempo:
+#   produto_id : ids do catálogo (CSV) e/ou o valor especial 'sem' — item ainda
+#                sem vínculo. É a pergunta "que notas têm o que falta cadastrar?"
+#   item_desc  : descrição do item como veio no XML (CSV). Um valor = contém,
+#                vários = exatos — a mesma régua de _clausula_multi.
+def _condicoes_produto(produto_id, item_desc, params):
+    """Condições sobre ``i`` (nfe_itens). EMPILHA os params na ordem dos %s."""
+    conds = []
+    ids = _filtro_lista(produto_id)
+    sem = 'sem' in ids
+    ids = [int(i) for i in ids if i.isdigit()]
+    if ids or sem:
+        partes = []
+        if ids:
+            partes.append(_clausula_in('i.produto_catalogo_id', ids, params))
+        if sem:
+            partes.append('i.produto_catalogo_id IS NULL')
+        conds.append('(' + ' OR '.join(partes) + ')')
+    cl = _clausula_multi('i.descricao', item_desc, params)
+    if cl:
+        conds.append(cl)
+    return conds
+
+
+def _aplica_produto(where, produto_id, item_desc, params, alias='n'):
+    conds = _condicoes_produto(produto_id, item_desc, params)
+    if conds:
+        where.append(f"EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = {alias}.id AND "
+                     + ' AND '.join(conds) + ')')
+
+
+def _opcoes_produtos(where_sql, params, limite=500):
+    """Opções dos dois filtros de produto no MESMO escopo/período da listagem.
+
+    ``produtos``: catálogo vinculado, com quantos itens cada um tem;
+    ``sem_vinculo``: quantos itens (e quantas descrições distintas) ainda não
+    têm vínculo — vira a opção vermelha "Sem vínculo — falta cadastrar";
+    ``descricoes``: a descrição do item como veio no XML, com contagem, as mais
+    frequentes primeiro; teto de ``limite`` (o campo aceita digitação livre).
+    Três consultas curtas: o WHERE recorta as notas por idx_lista e os itens
+    entram por idx_nfe_pcat."""
+    base = "FROM nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id"
+    produtos = execute_query(
+        f"""SELECT p.id, p.nome, COUNT(*) AS itens
+              {base}
+              JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
+             {where_sql}
+             GROUP BY p.id, p.nome
+             ORDER BY itens DESC, p.nome""", tuple(params), fetch=True) or []
+    sem = execute_query(
+        f"""SELECT COUNT(*) AS itens, COUNT(DISTINCT i.descricao) AS descricoes
+              {base} {where_sql} AND i.produto_catalogo_id IS NULL""",
+        tuple(params), fetch=True, fetch_one=True) or {}
+    descs = execute_query(
+        f"""SELECT i.descricao AS v, COUNT(*) AS n
+              {base} {where_sql} AND COALESCE(i.descricao, '') <> ''
+             GROUP BY i.descricao
+             ORDER BY n DESC, i.descricao
+             LIMIT {int(limite) + 1}""", tuple(params), fetch=True) or []
+    trunc = len(descs) > int(limite)
+    return {
+        'produtos': [{'id': r['id'], 'nome': r['nome'], 'itens': int(r['itens'] or 0)} for r in produtos],
+        'sem_vinculo': {'itens': int(sem.get('itens') or 0), 'descricoes': int(sem.get('descricoes') or 0)},
+        'descricoes': [{'v': r['v'], 'n': int(r['n'] or 0)} for r in descs[:int(limite)]],
+        'descricoes_trunc': trunc,
+    }
+
+
 def _rel_filtro(escopo):
     """WHERE do relatório = o MESMO filtro da listagem (request.args). Replica as
     cláusulas de api_notas (entrada) / api_notas_saidas (saida) / api_ctes (cte) —
@@ -3258,6 +3355,7 @@ def _rel_filtro(escopo):
         cl = _clausula_multi('n.emit_cnpj', a.get('emit_cnpj', ''), p)
         if cl: w.append(cl)
         vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
+        _aplica_produto(w, a.get('produto_id'), a.get('item_desc'), p)
         _aplica_cancelada(w, a.get('cancelado'), 'n')
         return 'WHERE ' + ' AND '.join(w), p
 
@@ -3278,6 +3376,7 @@ def _rel_filtro(escopo):
     cl = _clausula_multi('n.dest_cnpj', a.get('dest_cnpj', ''), p)
     if cl: w.append(cl)
     vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
+    _aplica_produto(w, a.get('produto_id'), a.get('item_desc'), p)
     _aplica_cancelada(w, a.get('cancelado'), 'n')
     _aplica_resumo(w, a.get('resumo'), 'n')
     return 'WHERE ' + ' AND '.join(w), p
@@ -3816,6 +3915,9 @@ def api_por_produto():
     if f_descricao:
         where.append('i.descricao LIKE %s')
         params.append(f'%{f_descricao}%')
+    # produto_id / item_desc são os filtros de produto do painel (19/09/2026):
+    # nesta aba filtram o ITEM direto, não a nota.
+    where.extend(_condicoes_produto(request.args.get('produto_id'), request.args.get('item_desc'), params))
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
@@ -5789,62 +5891,10 @@ def excluir_lote():
         return jsonify({'error': 'Apenas administradores podem excluir notas fiscais.'}), 403
 
     data = request.get_json(silent=True) or {}
-    f_cliente_id = str(data.get('cliente_id', '')).strip()
-    f_grupo_id   = str(data.get('grupo_id', '')).strip()
-    f_emit_cnpj  = _filtro_lista(data.get('emit_cnpj', ''))
-    f_data_ini   = str(data.get('data_ini', '')).strip()
-    f_data_fim   = str(data.get('data_fim', '')).strip()
-    f_chave      = str(data.get('chave', '')).strip()
-    f_num_nota   = str(data.get('num_nota', '')).strip()
-    f_cfop       = str(data.get('cfop', '')).strip()
-    f_emit_uf    = _filtro_lista(data.get('emit_uf', ''))
-    f_dest_cnpj  = str(data.get('dest_cnpj', '')).strip()
-    f_vmin       = str(data.get('vmin', '')).strip()
-    f_vmax       = str(data.get('vmax', '')).strip()
-    f_origem     = str(data.get('origem', '')).strip()
-
-    where, params = ["n.tipo = 'entrada'"], []
-    extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where.extend(extra_clauses)
-
-    if f_emit_cnpj:
-        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
-    if f_data_ini:
-        where.append('n.data_emissao >= %s')
-        params.append(f_data_ini)
-    if f_data_fim:
-        where.append('n.data_emissao <= %s')
-        params.append(f_data_fim)
-    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
-    if cl_chave:
-        where.append(cl_chave)
-    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
-    if cl_num:
-        where.append(cl_num)
-    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
-    if cl_cfop:
-        where.append(cl_cfop)
-    if f_emit_uf:
-        where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
-    cl_dest = _clausula_multi('n.dest_cnpj', f_dest_cnpj, params)
-    if cl_dest:
-        where.append(cl_dest)
-    if f_vmin:
-        where.append('n.valor_total >= %s')
-        params.append(float(f_vmin))
-    if f_vmax:
-        where.append('n.valor_total <= %s')
-        params.append(float(f_vmax))
-    # A MESMA tradução da listagem: MANUAL = UPLOAD+DROPBOX. A coluna nunca
-    # guarda 'MANUAL'; sem isto o botão apaga 0 e a tela mente sobre o total.
-    if f_origem == 'SEFAZ':
-        where.append("n.origem = 'SEFAZ'")
-    elif f_origem == 'MANUAL':
-        where.append("n.origem IN ('UPLOAD','DROPBOX')")
-    elif f_origem:
-        where.append('n.origem = %s')
-        params.append(f_origem)
-
+    # O MESMO WHERE do lote de download (_where_lote_entradas). Até 19/09/2026 esta rota
+    # montava o dela e deixava de fora Situação, Documento e Cadastro de
+    # produtos: "excluir tudo do filtro" apagava MAIS do que a tela listava.
+    where, params = _where_lote_entradas(data)
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     count_row = execute_query(
         f"SELECT COUNT(*) AS total FROM nfe_importacoes n {where_sql}",
@@ -8121,7 +8171,9 @@ def api_notas_saidas():
         ('dest_uf', request.args.get('dest_uf', '').strip()),
         ('emit_cnpj', f_emit_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
         ('origem', f_origem), ('cancelado', f_cancelado),
-        ('vinc_status', f_vinc_status)) if v}
+        ('vinc_status', f_vinc_status),
+        ('produto_id', request.args.get('produto_id', '').strip()),
+        ('item_desc', request.args.get('item_desc', '').strip())) if v}
     if page == 1 and (_termo or _filtros):
         _filtros.update(rotulo_empresa(f_cliente_id, f_grupo_id))
         registrar('leitura.buscou_saidas', 'fiscal', tabela='nfe_importacoes',
@@ -8185,6 +8237,8 @@ def api_notas_saidas():
         where.append(
             "EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
         )
+
+    _aplica_produto(where, request.args.get('produto_id'), request.args.get('item_desc'), params)
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
@@ -8348,6 +8402,9 @@ def api_por_produto_saidas():
     if f_descricao:
         where.append('i.descricao LIKE %s')
         params.append(f'%{f_descricao}%')
+    # produto_id / item_desc são os filtros de produto do painel (19/09/2026):
+    # nesta aba filtram o ITEM direto, não a nota.
+    where.extend(_condicoes_produto(request.args.get('produto_id'), request.args.get('item_desc'), params))
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
@@ -8390,62 +8447,10 @@ def excluir_lote_saidas():
         return jsonify({'error': 'Apenas administradores podem excluir notas fiscais.'}), 403
 
     data = request.get_json(silent=True) or {}
-    f_cliente_id = str(data.get('cliente_id', '')).strip()
-    f_grupo_id   = str(data.get('grupo_id', '')).strip()
-    f_dest_cnpj  = _filtro_lista(data.get('dest_cnpj', ''))
-    f_data_ini   = str(data.get('data_ini', '')).strip()
-    f_data_fim   = str(data.get('data_fim', '')).strip()
-    f_chave      = str(data.get('chave', '')).strip()
-    f_num_nota   = str(data.get('num_nota', '')).strip()
-    f_cfop       = str(data.get('cfop', '')).strip()
-    f_dest_uf    = _filtro_lista(data.get('dest_uf', ''))
-    f_emit_cnpj  = str(data.get('emit_cnpj', '')).strip()
-    f_vmin       = str(data.get('vmin', '')).strip()
-    f_vmax       = str(data.get('vmax', '')).strip()
-    f_origem     = str(data.get('origem', '')).strip()
-
-    where = ["n.tipo = 'saida'"]
-    extra_clauses, params = _empresa_where_saidas(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where.extend(extra_clauses)
-
-    if f_dest_cnpj:
-        where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
-    if f_data_ini:
-        where.append('n.data_emissao >= %s')
-        params.append(f_data_ini)
-    if f_data_fim:
-        where.append('n.data_emissao <= %s')
-        params.append(f_data_fim)
-    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
-    if cl_chave:
-        where.append(cl_chave)
-    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
-    if cl_num:
-        where.append(cl_num)
-    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
-    if cl_cfop:
-        where.append(cl_cfop)
-    if f_dest_uf:
-        where.append(_clausula_in('n.dest_uf', f_dest_uf, params))
-    cl_emit = _clausula_multi('n.emit_cnpj', f_emit_cnpj, params)
-    if cl_emit:
-        where.append(cl_emit)
-    if f_vmin:
-        where.append('n.valor_total >= %s')
-        params.append(float(f_vmin))
-    if f_vmax:
-        where.append('n.valor_total <= %s')
-        params.append(float(f_vmax))
-    # A MESMA tradução da listagem: MANUAL = UPLOAD+DROPBOX. A coluna nunca
-    # guarda 'MANUAL'; sem isto o botão apaga 0 e a tela mente sobre o total.
-    if f_origem == 'SEFAZ':
-        where.append("n.origem = 'SEFAZ'")
-    elif f_origem == 'MANUAL':
-        where.append("n.origem IN ('UPLOAD','DROPBOX')")
-    elif f_origem:
-        where.append('n.origem = %s')
-        params.append(f_origem)
-
+    # O MESMO WHERE do lote de download (_where_lote_saidas). Até 19/09/2026 esta rota
+    # montava o dela e deixava de fora Situação, Documento e Cadastro de
+    # produtos: "excluir tudo do filtro" apagava MAIS do que a tela listava.
+    where, params = _where_lote_saidas(data)
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     count_row = execute_query(
         f"SELECT COUNT(*) AS total FROM nfe_importacoes n {where_sql}",
