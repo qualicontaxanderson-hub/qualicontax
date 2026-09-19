@@ -191,6 +191,47 @@ app.jinja_env.filters['format_date'] = format_date
 app.jinja_env.finalize = lambda v: '' if v is None else v
 
 
+@app.after_request
+def _marcar_consulta_cortada(resposta):
+    """Toda resposta JSON diz se ALGUMA consulta dela foi cortada pelo teto.
+
+    Por que aqui e não em cada rota: ``execute_query`` devolve None quando o
+    teto de 30s corta, e o padrão ``or []`` — presente em 12 lugares — vira
+    "não há nada". Com 161 rotas JSON só no escrita_fiscal, corrigir uma a uma
+    seria consertar o sintoma e deixar a próxima nascer igual. Aqui a resposta
+    carrega o aviso SEMPRE, sem a rota precisar lembrar.
+
+    Nasceu de 19/09/2026: a Conferência de Entradas mostrou "49 notas" nos
+    cartões (o agregado sobreviveu) e "Nenhuma nota encontrada" na tabela (a
+    consulta das linhas foi cortada). O db_helper sabia, tentou avisar por
+    flash, e o flash não tem para onde ir num fetch de JSON.
+
+    Não derruba a resposta: se o corpo não for um objeto JSON, sai como está.
+    """
+    try:
+        from utils.db_helper import consulta_foi_cortada
+        if not consulta_foi_cortada():
+            return resposta
+        if not (resposta.content_type or '').startswith('application/json'):
+            return resposta
+        if resposta.direct_passthrough:       # streaming: não dá para reescrever
+            return resposta
+        import json as _json
+        corpo = _json.loads(resposta.get_data(as_text=True))
+        if isinstance(corpo, dict):
+            corpo['consulta_cortada'] = True
+            corpo.setdefault(
+                'consulta_cortada_msg',
+                'A consulta passou do tempo limite e foi interrompida. '
+                'O que aparece pode estar incompleto — tente de novo ou '
+                'aperte o período.')
+            resposta.set_data(_json.dumps(corpo))
+    except Exception:
+        logger.exception('[db] não consegui marcar a resposta como cortada; '
+                         'a resposta segue intacta.')
+    return resposta
+
+
 # Cache de arquivos estáticos — 1 ano em produção para CSS/JS/imagens.
 # Só é seguro por causa do cache-busting logo abaixo: a URL carrega a versão do
 # arquivo, então "1 ano" vale para o conteúdo daquela versão, não para o caminho.

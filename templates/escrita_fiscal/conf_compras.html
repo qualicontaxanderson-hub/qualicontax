@@ -1750,7 +1750,23 @@ function loadNotas() {
             }
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" class="cc-empty"><i class="fas fa-magnifying-glass"></i><br>Nenhuma nota encontrada</td></tr>';
+                // FALHA e AUSÊNCIA não são a mesma coisa. Quando a consulta é
+                // cortada pelo teto de tempo, o backend devolve None e o
+                // `or []` da rota vira lista vazia — a tela dizia "nenhuma
+                // nota" com toda a confiança. Foi o que aconteceu em
+                // 19/09/2026: os cartões mostravam 49 notas e a tabela, nada.
+                // O contador ao lado (data.total) denuncia o mesmo: se ele é
+                // maior que zero e não veio linha, não é tela vazia, é erro.
+                const falhou = data.consulta_cortada || (data.total > 0);
+                tbody.innerHTML = falhou
+                  ? '<tr><td colspan="13" class="cc-empty" style="color:#b45309">'
+                    + '<i class="fas fa-hourglass-half"></i><br>'
+                    + '<b>A consulta demorou demais e foi interrompida.</b><br>'
+                    + '<span style="font-size:12px">'
+                    + (data.total > 0 ? ('Há <b>' + data.total + '</b> nota(s) neste filtro — elas existem, só não vieram agora.<br>') : '')
+                    + 'Tente de novo (a segunda costuma vir rápida) ou aperte o período.'
+                    + '</span></td></tr>'
+                  : '<tr><td colspan="13" class="cc-empty"><i class="fas fa-magnifying-glass"></i><br>Nenhuma nota encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }

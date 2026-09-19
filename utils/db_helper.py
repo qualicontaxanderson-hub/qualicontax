@@ -140,16 +140,45 @@ def close_pool():
 atexit.register(close_pool)
 
 
-def _avisar_tela_consulta_cortada():
-    """Deixa um aviso claro para o usuário quando estamos numa requisição.
+#: Marca na requisição: alguma consulta desta requisição foi CORTADA pelo teto.
+#: Lida por ``consulta_foi_cortada()`` e injetada nas respostas JSON pelo
+#: ``after_request`` do app.
+_MARCA_CORTADA = '_consulta_cortada'
 
-    Sem isto a tela abriria VAZIA em silêncio (as rotas tratam None como
-    "sem dados"). O flash aparece no próximo HTML renderizado — na própria
-    tela, ou na seguinte se a chamada era um fetch de JSON.
+
+def consulta_foi_cortada() -> bool:
+    """Alguma consulta DESTA requisição foi interrompida pelo teto de tempo?
+
+    Existe porque ``execute_query`` devolve ``None`` quando corta, e o padrão
+    ``execute_query(...) or []`` — que está em 12 lugares do projeto —
+    transforma "não consegui" em "não há nada". A tela então mostra "nenhum
+    registro" com toda a confiança, e ninguém descobre que houve falha.
+
+    Foi o que aconteceu em 19/09/2026 na Conferência de Entradas: os cartões
+    diziam 49 notas (o agregado sobreviveu) e a tabela dizia "Nenhuma nota
+    encontrada" (a consulta das linhas foi cortada). O Anderson tentou quatro
+    vezes e só apareceu quando o cache esquentou.
     """
     try:
-        from flask import has_request_context, flash
+        from flask import g, has_request_context
+        return bool(has_request_context() and getattr(g, _MARCA_CORTADA, False))
+    except Exception:
+        return False
+
+
+def _avisar_tela_consulta_cortada():
+    """Marca a requisição e deixa o flash para quem renderiza HTML.
+
+    O flash sozinho NÃO bastava: ele só aparece no próximo HTML renderizado, e
+    numa chamada de ``fetch`` de JSON isso significa "some" — o aviso ia para a
+    próxima página que a pessoa abrisse, se abrisse. Por isso a marca em ``g``:
+    o ``after_request`` do app a converte num campo da resposta JSON, e a tela
+    consegue dizer "a consulta demorou demais" em vez de "não há nada".
+    """
+    try:
+        from flask import has_request_context, flash, g
         if has_request_context():
+            setattr(g, _MARCA_CORTADA, True)
             flash('Uma consulta desta tela passou de %d segundos e foi interrompida '
                   'para não travar o sistema. Os dados podem estar incompletos — '
                   'avise o suporte informando qual tela.' % (_limite_ms() // 1000),
