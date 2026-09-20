@@ -670,39 +670,49 @@ def _opcoes_cnpjs_ufs(tabela, alias, where_sql, params, cnpj_col, nome_col, uf_c
 @escrita_fiscal.route('/conf-compras/api/opcoes-filtros')
 @login_required
 def api_opcoes_filtros():
-    """Emitentes e UFs de emitente nas ENTRADAS da empresa, dentro do período."""
-    f_cliente_id = request.args.get('cliente_id', '').strip()
-    f_grupo_id = request.args.get('grupo_id', '').strip()
-    if not f_cliente_id and not f_grupo_id:
+    """Opções de cada filtro das ENTRADAS, em CASCATA (pedido de 19/09/2026).
+
+    Cada lista respeita empresa, período E todos os outros filtros marcados —
+    só não o próprio filtro, senão nunca daria para trocar a escolha. Com a
+    Araguaia marcada em Emitente, "Produto vinculado" lista só o que existe
+    nas notas dela; se ela não tem nada vinculado, lista nada. A tela manda o
+    mesmo conjunto de parâmetros da listagem (getFilters()).
+
+    Custo: ~14 consultas curtas por chamada, todas recortadas por idx_lista;
+    os selects fixos (Origem, Situação, Documento, Cadastro) rodam a conta de
+    estados uma vez cada, excluindo a si mesmos.
+    """
+    a = request.args
+    if not a.get('cliente_id', '').strip() and not a.get('grupo_id', '').strip():
         return jsonify({'cnpjs': [], 'ufs': []})
-    extra, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    d_clauses, d_params = _clausulas_data(
-        'n', request.args.get('data_ini', '').strip(),
-        request.args.get('data_fim', '').strip())
-    # A ordem das cláusulas define a ordem dos %s — os params da data vêm depois.
-    where_sql = 'WHERE ' + ' AND '.join(["n.tipo = 'entrada'"] + extra + d_clauses)
-    params = params + d_params
-    cnpjs, ufs = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql, params,
-                                   'emit_cnpj', 'emit_nome', ['emit_uf'])
-    # Pedido dos usuários (20/08/2026): nº da nota, CFOP, chave e CNPJ do
-    # destinatário também oferecem SÓ o que existe nesta consulta. Nº e chave
-    # têm teto (períodos grandes = milhares) — acima dele a caixa avisa e o
-    # campo segue aceitando digitação livre.
+
+    def w(*excluir):
+        where, params = _where_entradas(a, excluir=excluir)
+        return 'WHERE ' + ' AND '.join(where), params
+
+    cnpjs, _nada = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', *w('emit_cnpj'),
+                                     'emit_cnpj', 'emit_nome', [])
+    ufs, _ = _opcoes_valores('nfe_importacoes', 'n', *w('emit_uf'), 'emit_uf')
+    # Nº e chave têm teto (períodos grandes = milhares) — acima dele a caixa
+    # avisa e o campo segue aceitando digitação livre.
     numeros, num_trunc = _opcoes_valores(
-        'nfe_importacoes', 'n', where_sql, params, 'num_nota',
+        'nfe_importacoes', 'n', *w('num_nota'), 'num_nota',
         ordem='CAST(n.num_nota AS UNSIGNED) DESC', limite=3000)
-    cfops, _ = _opcoes_valores('nfe_importacoes', 'n', where_sql, params, 'cfop')
+    cfops, _ = _opcoes_valores('nfe_importacoes', 'n', *w('cfop'), 'cfop')
     chaves, chv_trunc = _opcoes_valores(
-        'nfe_importacoes', 'n', where_sql, params, 'chave_acesso',
+        'nfe_importacoes', 'n', *w('chave'), 'chave_acesso',
         ordem='n.chave_acesso DESC', limite=3000)
-    cnpjs_dest, _nada = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', where_sql,
-                                          params, 'dest_cnpj', 'dest_nome', [])
-    return jsonify({'cnpjs': cnpjs, 'ufs': ufs['emit_uf'],
+    cnpjs_dest, _nada = _opcoes_cnpjs_ufs('nfe_importacoes', 'n', *w('dest_cnpj'),
+                                          'dest_cnpj', 'dest_nome', [])
+    estados = {k: _opcoes_estados_nfe(*w(k))[k]
+               for k in ('origem', 'cancelado', 'resumo', 'vinc_status')}
+    prod = _opcoes_produtos(*w('produto_id'), partes=('produtos',))
+    desc = _opcoes_produtos(*w('item_desc'), partes=('descricoes',))
+    return jsonify({'cnpjs': cnpjs, 'ufs': ufs,
                     'numeros': numeros, 'numeros_trunc': num_trunc,
                     'cfops': cfops, 'chaves': chaves, 'chaves_trunc': chv_trunc,
                     'cnpjs_dest': cnpjs_dest,
-                    'estados': _opcoes_estados_nfe(where_sql, params),
-                    **_opcoes_produtos(where_sql, params)})
+                    'estados': estados, **prod, **desc})
 
 
 def _opcoes_estados_nfe(where_sql, params):
@@ -2033,66 +2043,8 @@ def api_notas():
         registrar('leitura.buscou_entradas', 'fiscal', tabela='nfe_importacoes',
                   depois={'termo': _termo or None, 'filtros': _filtros})
 
-    extra_clauses, params = _empresa_where(f_cliente_id, f_grupo_id, alias='n', params=[])
-    where = ["n.tipo = 'entrada'"] + extra_clauses
-
-    if f_emit_cnpj:
-        where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
-    if f_data_ini:
-        where.append('n.data_emissao >= %s')
-        params.append(f_data_ini)
-    if f_data_fim:
-        where.append('n.data_emissao <= %s')
-        params.append(f_data_fim)
-    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
-    if cl_chave:
-        where.append(cl_chave)
-    cl_num = _clausula_multi('n.num_nota', f_num_nota, params, um='igual')
-    if cl_num:
-        where.append(cl_num)
-    cl_cfop = _clausula_multi('n.cfop', f_cfop, params, um='prefixo')
-    if cl_cfop:
-        where.append(cl_cfop)
-    if f_emit_uf:
-        where.append(_clausula_in('n.emit_uf', f_emit_uf, params))
-    cl_dest = _clausula_multi('n.dest_cnpj', f_dest_cnpj, params)
-    if cl_dest:
-        where.append(cl_dest)
-    if f_vmin:
-        where.append('n.valor_total >= %s')
-        params.append(float(f_vmin))
-    if f_vmax:
-        where.append('n.valor_total <= %s')
-        params.append(float(f_vmax))
-    if f_origem == 'SEFAZ':
-        where.append("n.origem = 'SEFAZ'")
-    elif f_origem == 'MANUAL':
-        where.append("n.origem IN ('UPLOAD','DROPBOX')")
-    elif f_origem:
-        where.append('n.origem = %s')
-        params.append(f_origem)
-    _aplica_cancelada(where, f_cancelado, 'n')
-    _aplica_resumo(where, f_resumo, 'n')
-    if f_vinc_status == 'completo':
-        where.append(
-            "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
-            " AND EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id)"
-        )
-    elif f_vinc_status == 'parcial':
-        where.append(
-            "EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL)"
-            " AND EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
-        )
-    elif f_vinc_status == 'sem':
-        where.append(
-            "NOT EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NOT NULL)"
-        )
-    elif f_vinc_status == 'incompleto':
-        where.append(
-            "EXISTS (SELECT 1 FROM nfe_itens i WHERE i.nfe_id = n.id AND i.produto_catalogo_id IS NULL)"
-        )
-
-    _aplica_produto(where, request.args.get('produto_id'), request.args.get('item_desc'), params)
+    # O MESMO montador das opções de filtro (cascata) e do relatório.
+    where, params = _where_entradas(request.args)
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
@@ -3244,7 +3196,74 @@ def _aplica_produto(where, produto_id, item_desc, params, alias='n'):
                      + ' AND '.join(conds) + ')')
 
 
-def _opcoes_produtos(where_sql, params, limite=500):
+# Filtros da Conferência de ENTRADAS num montador só (19/09/2026). ``a`` é o
+# request.args (ou um dict com as mesmas chaves). ``excluir`` são as FACETAS
+# deixadas de fora — é o que faz as opções de um filtro respeitarem todos os
+# OUTROS filtros marcados (cascata): a lista de Emitente é calculada com tudo
+# menos o próprio Emitente, e assim por diante. Cada cláusula EMPILHA os seus
+# params no ponto em que entra, então a ordem dos %s é a ordem daqui.
+FACETAS_ENTRADA = ('emit_cnpj', 'emit_uf', 'num_nota', 'cfop', 'chave', 'dest_cnpj',
+                   'origem', 'cancelado', 'resumo', 'vinc_status', 'produto_id', 'item_desc')
+
+
+def _where_entradas(a, excluir=()):
+    def g(k):
+        return str(a.get(k, '') or '').strip()
+    excluir = set(excluir)
+    where, params = _empresa_where(g('cliente_id'), g('grupo_id'), alias='n', params=[])
+    where = ["n.tipo = 'entrada'"] + where
+    if 'emit_cnpj' not in excluir:
+        v = _filtro_lista(g('emit_cnpj'))
+        if v:
+            where.append(_clausula_in('n.emit_cnpj', v, params))
+    if g('data_ini'):
+        where.append('n.data_emissao >= %s')
+        params.append(g('data_ini'))
+    if g('data_fim'):
+        where.append('n.data_emissao <= %s')
+        params.append(g('data_fim'))
+    for faceta, col, um in (('chave', 'n.chave_acesso', 'contem'), ('num_nota', 'n.num_nota', 'igual'),
+                            ('cfop', 'n.cfop', 'prefixo')):
+        if faceta not in excluir:
+            cl = _clausula_multi(col, g(faceta), params, um=um)
+            if cl:
+                where.append(cl)
+    if 'emit_uf' not in excluir:
+        v = _filtro_lista(g('emit_uf'))
+        if v:
+            where.append(_clausula_in('n.emit_uf', v, params))
+    if 'dest_cnpj' not in excluir:
+        cl = _clausula_multi('n.dest_cnpj', g('dest_cnpj'), params)
+        if cl:
+            where.append(cl)
+    if g('vmin'):
+        where.append('n.valor_total >= %s')
+        params.append(float(g('vmin')))
+    if g('vmax'):
+        where.append('n.valor_total <= %s')
+        params.append(float(g('vmax')))
+    if 'origem' not in excluir:
+        o = g('origem')
+        if o == 'SEFAZ':
+            where.append("n.origem = 'SEFAZ'")
+        elif o == 'MANUAL':
+            where.append("n.origem IN ('UPLOAD','DROPBOX')")
+        elif o:
+            where.append('n.origem = %s')
+            params.append(o)
+    if 'cancelado' not in excluir:
+        _aplica_cancelada(where, g('cancelado'), 'n')
+    if 'resumo' not in excluir:
+        _aplica_resumo(where, g('resumo'), 'n')
+    if 'vinc_status' not in excluir:
+        _aplica_vinc_status(where, g('vinc_status'), 'n')
+    _aplica_produto(where,
+                    '' if 'produto_id' in excluir else g('produto_id'),
+                    '' if 'item_desc' in excluir else g('item_desc'), params)
+    return where, params
+
+
+def _opcoes_produtos(where_sql, params, limite=500, partes=('produtos', 'descricoes')):
     """Opções dos dois filtros de produto no MESMO escopo/período da listagem.
 
     ``produtos``: catálogo vinculado, com quantos itens cada um tem;
@@ -3255,30 +3274,33 @@ def _opcoes_produtos(where_sql, params, limite=500):
     Três consultas curtas: o WHERE recorta as notas por idx_lista e os itens
     entram por idx_nfe_pcat."""
     base = "FROM nfe_itens i JOIN nfe_importacoes n ON n.id = i.nfe_id"
-    produtos = execute_query(
+    out = {}
+    if 'produtos' not in partes:
+        produtos, sem = [], {}
+    else:
+        produtos = execute_query(
         f"""SELECT p.id, p.nome, COUNT(*) AS itens
               {base}
               JOIN nfe_produtos_catalogo p ON p.id = i.produto_catalogo_id
              {where_sql}
              GROUP BY p.id, p.nome
              ORDER BY itens DESC, p.nome""", tuple(params), fetch=True) or []
-    sem = execute_query(
-        f"""SELECT COUNT(*) AS itens, COUNT(DISTINCT i.descricao) AS descricoes
-              {base} {where_sql} AND i.produto_catalogo_id IS NULL""",
-        tuple(params), fetch=True, fetch_one=True) or {}
-    descs = execute_query(
-        f"""SELECT i.descricao AS v, COUNT(*) AS n
-              {base} {where_sql} AND COALESCE(i.descricao, '') <> ''
-             GROUP BY i.descricao
-             ORDER BY n DESC, i.descricao
-             LIMIT {int(limite) + 1}""", tuple(params), fetch=True) or []
-    trunc = len(descs) > int(limite)
-    return {
-        'produtos': [{'id': r['id'], 'nome': r['nome'], 'itens': int(r['itens'] or 0)} for r in produtos],
-        'sem_vinculo': {'itens': int(sem.get('itens') or 0), 'descricoes': int(sem.get('descricoes') or 0)},
-        'descricoes': [{'v': r['v'], 'n': int(r['n'] or 0)} for r in descs[:int(limite)]],
-        'descricoes_trunc': trunc,
-    }
+        sem = execute_query(
+            f"""SELECT COUNT(*) AS itens, COUNT(DISTINCT i.descricao) AS descricoes
+                  {base} {where_sql} AND i.produto_catalogo_id IS NULL""",
+            tuple(params), fetch=True, fetch_one=True) or {}
+        out['produtos'] = [{'id': r['id'], 'nome': r['nome'], 'itens': int(r['itens'] or 0)} for r in produtos]
+        out['sem_vinculo'] = {'itens': int(sem.get('itens') or 0), 'descricoes': int(sem.get('descricoes') or 0)}
+    if 'descricoes' in partes:
+        descs = execute_query(
+            f"""SELECT i.descricao AS v, COUNT(*) AS n
+                  {base} {where_sql} AND COALESCE(i.descricao, '') <> ''
+                 GROUP BY i.descricao
+                 ORDER BY n DESC, i.descricao
+                 LIMIT {int(limite) + 1}""", tuple(params), fetch=True) or []
+        out['descricoes'] = [{'v': r['v'], 'n': int(r['n'] or 0)} for r in descs[:int(limite)]]
+        out['descricoes_trunc'] = len(descs) > int(limite)
+    return out
 
 
 def _rel_filtro(escopo):
@@ -3359,26 +3381,8 @@ def _rel_filtro(escopo):
         _aplica_cancelada(w, a.get('cancelado'), 'n')
         return 'WHERE ' + ' AND '.join(w), p
 
-    # entrada
-    w, p = _empresa_where(ci, gi, alias='n', params=[])
-    w = ["n.tipo = 'entrada'"] + w
-    emit = _filtro_lista(a.get('emit_cnpj', ''))
-    if emit: w.append(_clausula_in('n.emit_cnpj', emit, p))
-    dt(w, p, 'n')
-    cl = _clausula_multi('n.chave_acesso', a.get('chave', ''), p)
-    if cl: w.append(cl)
-    cl = _clausula_multi('n.num_nota', a.get('num_nota', ''), p, um='igual')
-    if cl: w.append(cl)
-    cl = _clausula_multi('n.cfop', a.get('cfop', ''), p, um='prefixo')
-    if cl: w.append(cl)
-    eu = _filtro_lista(a.get('emit_uf', ''))
-    if eu: w.append(_clausula_in('n.emit_uf', eu, p))
-    cl = _clausula_multi('n.dest_cnpj', a.get('dest_cnpj', ''), p)
-    if cl: w.append(cl)
-    vlr(w, p, 'n.valor_total'); org(w, p, 'n'); vinc(w, p)
-    _aplica_produto(w, a.get('produto_id'), a.get('item_desc'), p)
-    _aplica_cancelada(w, a.get('cancelado'), 'n')
-    _aplica_resumo(w, a.get('resumo'), 'n')
+    # entrada — o mesmo montador da listagem e das opções (19/09/2026)
+    w, p = _where_entradas(a)
     return 'WHERE ' + ' AND '.join(w), p
 
 

@@ -638,7 +638,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     <div><label>CFOP</label><select id="f_cfop" multiple placeholder="Todos"></select></div>
                     <div>
                         <label>Origem</label>
-                        <select id="f_origem">
+                        <select id="f_origem" onchange="filtroMudou()">
                             <option value="">— Todas —</option>
                             <option value="SEFAZ">SEFAZ (DFe)</option>
                             <option value="Q-ROBO">Q-Robô</option>
@@ -648,7 +648,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     </div>
                     <div>
                         <label>Situação</label>
-                        <select id="f_cancelado">
+                        <select id="f_cancelado" onchange="filtroMudou()">
                             <option value="">— Todas —</option>
                             <option value="0">Autorizadas</option>
                             <option value="1">Canceladas</option>
@@ -656,7 +656,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     </div>
                     <div>
                         <label>Documento</label>
-                        <select id="f_resumo" title="Completa = XML inteiro, com itens. Resumo = a SEFAZ entregou só o cabeçalho; falta Capturar.">
+                        <select id="f_resumo" onchange="filtroMudou()" title="Completa = XML inteiro, com itens. Resumo = a SEFAZ entregou só o cabeçalho; falta Capturar.">
                             <option value="">— Todos —</option>
                             <option value="0">Completas (XML inteiro)</option>
                             <option value="1">Só resumo — falta capturar</option>
@@ -675,7 +675,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     <div><label>Produto da nota<span class="cc-novo">novo</span></label><select id="f_item_desc" multiple placeholder="Todos — digite"></select></div>
                     <div>
                         <label>Cadastro</label>
-                        <select id="f_vinc_status">
+                        <select id="f_vinc_status" onchange="filtroMudou()">
                             <option value="">— Todos —</option>
                             <option value="completo">🟢 Tudo cadastrado</option>
                             <option value="incompleto">⚠️ Incompleto (parcial + sem)</option>
@@ -693,9 +693,9 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                     <div>
                         <label>Valor (R$)</label>
                         <div class="cc-valor">
-                            <input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01" title="Valor mínimo">
+                            <input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01" title="Valor mínimo" onchange="filtroMudou()">
                             <span>a</span>
-                            <input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01" title="Valor máximo">
+                            <input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01" title="Valor máximo" onchange="filtroMudou()">
                         </div>
                     </div>
                 </div>
@@ -1481,12 +1481,21 @@ function agendarBusca() {
         if (currentClienteId || currentGrupoId) applyFilters();
     }, 300);
 }
+// CASCATA (19/09/2026): qualquer filtro que mude recalcula as opções dos
+// outros — com a Araguaia marcada, "Produto vinculado" só lista o que existe
+// nas notas dela. O endpoint recebe o mesmo getFilters() da listagem.
+let _opcoesTimer = null;
+function filtroMudou() {
+    agendarBusca();
+    clearTimeout(_opcoesTimer);
+    _opcoesTimer = setTimeout(carregarOpcoesFiltros, 350);
+}
 function _initFiltrosBusca() {
     const base = {
         plugins: ['remove_button'],
         maxOptions: null,        // a lista já vem recortada por empresa + período
         hideSelected: true,
-        onChange: agendarBusca,  // muda o filtro → busca sozinho
+        onChange: filtroMudou,   // muda o filtro → busca sozinho E recalcula os outros filtros
     };
     tsEmit = new TomSelect('#f_emit_cnpj', base);
     tsUf   = new TomSelect('#f_emit_uf', base);
@@ -1513,15 +1522,19 @@ document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
 
 function _preencheTS(ts, opcoes) {
     if (!ts) return;
-    const anteriores = ts.getValue();  // o que estava marcado
+    // CÓPIA, não referência: getValue() do Tom Select devolve a própria lista
+    // interna de itens, e o clear() abaixo a esvazia — o "que estava marcado"
+    // chegava vazio e a seleção sumia calada a cada recarga (medido 19/09/2026).
+    const anteriores = [].concat(ts.getValue() || []);
     ts.clear(true);                    // silent: não dispara busca
     ts.clearOptions();
     ts.addOptions(opcoes.map(o => ({value: String(o.valor), text: String(o.texto),
                                     n: o.n, alerta: !!o.alerta})));
     // Remarca só o que ainda existe no novo escopo/período.
-    const mantidos = (Array.isArray(anteriores) ? anteriores : [anteriores])
-        .filter(v => v && ts.options[v]);
+    const lista = (Array.isArray(anteriores) ? anteriores : [anteriores]).filter(Boolean);
+    const mantidos = lista.filter(v => ts.options[v]);
     if (mantidos.length) ts.setValue(mantidos, true);
+    if (mantidos.length !== lista.length) agendarBusca();  // uma escolha saiu do recorte: a lista acompanha
 }
 // Selects FIXOS (Origem, Situação, Cadastro de Produtos, Documento): oferecem
 // só a opção que tem nota no escopo/período — igual aos Tom Select. A lista
@@ -1563,13 +1576,10 @@ function carregarOpcoesFiltros() {
         _recortaSelectsFixos(null);
         return;
     }
-    // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
-    const p = new URLSearchParams({
-        cliente_id: currentClienteId || '',
-        grupo_id: currentGrupoId || '',
-        data_ini: document.getElementById('f_data_ini').value,
-        data_fim: document.getElementById('f_data_fim').value,
-    });
+    // Leva TODOS os filtros (cascata): cada lista volta recortada pelos outros.
+    const f = getFilters();
+    const p = new URLSearchParams(Object.fromEntries(
+        Object.entries(f).map(([k, v]) => [k, v == null ? '' : String(v)])));
     fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros") }}?' + p)
         .then(r => r.json())
         .then(d => {
