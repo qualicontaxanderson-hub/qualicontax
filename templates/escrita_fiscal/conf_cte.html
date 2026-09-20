@@ -1398,6 +1398,22 @@ function loadCtes() {
             }
             const tbody = document.getElementById('tbodyCtes');
             if (!lastRows.length) {
+                // FALHA e AUSÊNCIA não são a mesma coisa: consulta cortada pelo teto
+                // de tempo volta como lista vazia, e a tela dizia "nenhum" com toda a
+                // confiança (Terra Branca, 19–20/09/2026). O contador denuncia: se
+                // data.total > 0 e não veio linha, não é tela vazia, é erro.
+                const falhou = data.consulta_cortada || (data.total > 0);
+                if (falhou) {
+                    tbody.innerHTML = '<tr><td colspan="14" class="cc-empty" style="color:#b45309">'
+                        + '<i class="fas fa-hourglass-half"></i><br>'
+                        + '<b>A consulta demorou demais e foi interrompida.</b><br>'
+                        + '<span style="font-size:12px">'
+                        + (data.total > 0 ? ('Há <b>' + data.total + '</b> CT-e neste filtro — existem, só não vieram agora.<br>') : '')
+                        + 'Tente de novo (a segunda costuma vir rápida) ou aperte o período.'
+                        + '</span></td></tr>';
+                    document.getElementById('paginationCtes').innerHTML = '';
+                    return;
+                }
                 tbody.innerHTML = '<tr><td colspan="14" class="cc-empty"><i class="fas fa-truck"></i><br>Nenhum CT-e encontrado</td></tr>';
                 document.getElementById('paginationCtes').innerHTML = '';
                 return;
