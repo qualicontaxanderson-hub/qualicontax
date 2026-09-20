@@ -51,6 +51,30 @@
 .cc-filter-grid input:focus, .cc-filter-grid select:focus { border-color:#2563eb; outline:none; background:#fff; }
 .cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
 
+/* ---- Filtros em FAIXAS por assunto (modelo H2, aprovado em 19/09/2026) -----
+   Igual à Conferência de Entradas: 12 colunas, cinco faixas com nome, cada
+   campo com a largura do que carrega. Ver conf_compras.html.                */
+.cc-filter-grid.cc-faixas { grid-template-columns:repeat(12,minmax(0,1fr)); gap:10px 12px; }
+.cc-faixa { background:#f8fafc; border:1px solid #e8eef3; border-radius:10px; padding:8px 10px 10px; min-width:0; }
+.cc-faixa-cap { font-size:8.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#16a34a; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.cc-faixa-cap::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+.cc-faixa-g { display:grid; gap:8px 10px; }
+.cc-faixa-g > div { min-width:0; }
+.cc-faixa input, .cc-faixa select, .cc-faixa .ts-control { background:#fff; }
+.cc-faixa label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cc-novo { background:#fef3c7; color:#b45309; border-radius:4px; padding:0 4px; font-size:8.5px; margin-left:5px; letter-spacing:.06em; }
+.cc-valor { display:flex; align-items:center; gap:6px; }
+.cc-valor span { color:#94a3b8; font-size:12px; flex:0 0 auto; }
+/* opções com contagem (Produto vinculado / Produto da nota); "Sem vínculo" em vermelho */
+.ts-dropdown .option.cc-opt { display:flex; justify-content:space-between; gap:8px; }
+.ts-dropdown .cc-opt-n { color:#94a3b8; font-size:11px; font-variant-numeric:tabular-nums; flex:0 0 auto; }
+.ts-dropdown .option.active .cc-opt-n { color:#dcfce7; }
+.ts-dropdown .option.cc-opt-alerta { color:#b91c1c; font-weight:700; }
+.ts-dropdown .option.cc-opt-alerta .cc-opt-n { color:#b91c1c; }
+.ts-dropdown .option.active.cc-opt-alerta { background:#b91c1c; color:#fff; }
+.ts-dropdown .option.active.cc-opt-alerta .cc-opt-n { color:#fecaca; }
+.cc-filter-grid .ts-control .item.cc-item-alerta { background:#fee2e2; color:#b91c1c; }
+
 /* ---- Tabs ---- */
 .cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; align-items:center; justify-content:space-between; }
 .cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
@@ -247,6 +271,10 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
     .cc-scope-badge { margin-left:0; align-self:flex-start; }
     .cc-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
     .cc-filter-grid { grid-template-columns:1fr; }
+    /* a regra de 12 colunas tem especificidade maior que a linha acima */
+    .cc-filter-grid.cc-faixas { grid-template-columns:1fr; }
+    .cc-faixa { grid-column:span 1 !important; }
+    .cc-faixa-g { grid-template-columns:1fr !important; }
     /* A faixa de abas leva, no fim, um <div style="margin-left:auto"> com os
        botoes de acao. Ele nao quebrava e sozinho jogava o documento para 874px
        numa tela de 390 — medido. No mobile ele vira uma linha inteira. */
@@ -505,67 +533,96 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
         <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
     </div>
     <div id="filterBody" style="display:none;">
-        <div class="cc-filter-grid">
-            <div><label>Data Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
-            <div><label>Data Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
-            {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
-            <div>
-                <label>Período rápido</label>
-                <div style="display:flex;gap:6px;">
-                    <button type="button" class="btn-periodo verde" onclick="setPeriodo('atual')"
-                            title="Do dia 1º do mês corrente até hoje"><i class="fas fa-calendar-day"></i>Atual</button>
-                    <button type="button" class="btn-periodo azul" onclick="setPeriodo('anterior')"
-                            title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
-                    <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
-                            title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+        <div class="cc-filter-grid cc-faixas">
+            <div class="cc-faixa" style="grid-column:span 5;">
+                <div class="cc-faixa-cap">Quando</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1fr 1fr 2.4fr;">
+                    <div><label>Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
+                    <div><label>Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
+                    {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
+                    <div>
+                        <label>Período rápido</label>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <button type="button" class="btn-periodo verde" onclick="setPeriodo('atual')"
+                                    title="Do dia 1º do mês corrente até hoje"><i class="fas fa-calendar-day"></i>Atual</button>
+                            <button type="button" class="btn-periodo azul" onclick="setPeriodo('anterior')"
+                                    title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
+                            <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
+                                    title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            {# Destinatário e UF nascem vazios: carregarOpcoesFiltros() preenche com o
-               que existe na empresa escolhida (ver /conf-saidas/api/opcoes-filtros). #}
-            <div>
-                <label>Destinatário (CNPJ)</label>
-                <select id="f_dest_cnpj_sel" multiple placeholder="Todos — digite para buscar"></select>
+            {# Destinatário, UF, emitente, nº, CFOP, chave e os produtos nascem vazios:
+               carregarOpcoesFiltros() preenche com o que existe na empresa, no
+               período e nos outros filtros (ver /conf-saidas/api/opcoes-filtros). #}
+            <div class="cc-faixa" style="grid-column:span 7;">
+                <div class="cc-faixa-cap">Quem</div>
+                <div class="cc-faixa-g" style="grid-template-columns:3fr .6fr 2fr;">
+                    <div><label>Destinatário (CNPJ)</label><select id="f_dest_cnpj_sel" multiple placeholder="Todos — digite para buscar"></select></div>
+                    <div><label title="UF do destinatário">UF</label><select id="f_dest_uf" multiple placeholder="Todas"></select></div>
+                    <div><label>CNPJ Emitente</label><select id="f_emit_cnpj" multiple placeholder="Todos"></select></div>
+                </div>
             </div>
-            <div>
-                <label>UF Destinatário</label>
-                <select id="f_dest_uf" multiple placeholder="Todas"></select>
+            <div class="cc-faixa" style="grid-column:span 5;">
+                <div class="cc-faixa-cap">A nota</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1.2fr 1.8fr .8fr 1fr 1fr;">
+                    <div><label>Nº da Nota</label><select id="f_num_nota" multiple placeholder="Todos — digite"></select></div>
+                    <div><label>Chave de Acesso</label><select id="f_chave" multiple placeholder="Todas — parte"></select></div>
+                    <div><label>CFOP</label><select id="f_cfop" multiple placeholder="Todos"></select></div>
+                    <div>
+                        <label>Origem</label>
+                        <select id="f_origem" onchange="filtroMudou()">
+                            <option value="">— Todas —</option>
+                            <option value="SEFAZ">SEFAZ (DFe)</option>
+                            <option value="Q-ROBO">Q-Robô</option>
+                            <option value="Q-COLABORE">Q-Colabore</option>
+                            <option value="MANUAL">Manual (Upload/Dropbox)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Situação</label>
+                        <select id="f_cancelado" onchange="filtroMudou()">
+                            <option value="">— Todas —</option>
+                            <option value="0">Autorizadas</option>
+                            <option value="1">Canceladas</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-            <div><label>Nº da Nota</label><select id="f_num_nota" multiple placeholder="Todos — digite para buscar"></select></div>
-            <div><label>CFOP</label><select id="f_cfop" multiple placeholder="Todos"></select></div>
-            <div><label>Chave de Acesso</label><select id="f_chave" multiple placeholder="Todas — digite parte"></select></div>
-            <div><label>CNPJ Emitente</label><select id="f_emit_cnpj" multiple placeholder="Todos"></select></div>
-            <div><label>Valor Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
-            <div><label>Valor Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
-            <div>
-                <label>Origem</label>
-                <select id="f_origem">
-                    <option value="">— Todas —</option>
-                    <option value="SEFAZ">SEFAZ (DFe)</option>
-                    <option value="Q-ROBO">Q-Robô</option>
-                    <option value="Q-COLABORE">Q-Colabore</option>
-                    <option value="MANUAL">Manual (Upload/Dropbox)</option>
-                </select>
+            {# O PRODUTO: os dois olham o ITEM da nota — ver conf_compras.html. #}
+            <div class="cc-faixa" style="grid-column:span 5;">
+                <div class="cc-faixa-cap">O produto</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1.3fr 1.3fr 1fr;">
+                    <div><label>Produto vinculado<span class="cc-novo">novo</span></label><select id="f_produto" multiple placeholder="Todos"></select></div>
+                    <div><label>Produto da nota<span class="cc-novo">novo</span></label><select id="f_item_desc" multiple placeholder="Todos — digite"></select></div>
+                    <div>
+                        <label>Cadastro</label>
+                        <select id="f_vinc_status" onchange="filtroMudou()">
+                            <option value="">— Todos —</option>
+                            <option value="completo">🟢 Tudo cadastrado</option>
+                            <option value="incompleto">⚠️ Incompleto (parcial + sem)</option>
+                            <option value="parcial">🟡 Cadastro parcial</option>
+                            <option value="sem">🔴 Sem cadastro</option>
+                        </select>
+                    </div>
+                    <!-- só na aba Por Produto -->
+                    <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
+                </div>
             </div>
-            <div>
-                <label>Cadastro de Produtos</label>
-                <select id="f_vinc_status">
-                    <option value="">— Todos —</option>
-                    <option value="completo">🟢 Tudo cadastrado</option>
-                    <option value="incompleto">⚠️ Incompleto (parcial + sem)</option>
-                    <option value="parcial">🟡 Cadastro parcial</option>
-                    <option value="sem">🔴 Sem cadastro</option>
-                </select>
+            <div class="cc-faixa" style="grid-column:span 2;">
+                <div class="cc-faixa-cap">Quanto</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1fr;">
+                    <div>
+                        <label>Valor (R$)</label>
+                        <div class="cc-valor">
+                            <input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01" title="Valor mínimo" onchange="filtroMudou()">
+                            <span>a</span>
+                            <input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01" title="Valor máximo" onchange="filtroMudou()">
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div>
-                <label>Situação</label>
-                <select id="f_cancelado">
-                    <option value="">— Todas —</option>
-                    <option value="0">Autorizadas</option>
-                    <option value="1">Canceladas</option>
-                </select>
-            </div>
-            <div id="f_descricao_wrap" style="display:none;"><label>Descrição do Produto</label><input type="text" id="f_descricao" placeholder="Ex: Gasolina"></div>
-            <div id="f_ncm_wrap" style="display:none;"><label>NCM</label><input type="text" id="f_ncm" placeholder="Ex: 2710"></div>
         </div>
         <div class="cc-filter-actions">
             <button onclick="applyFilters()"
@@ -919,7 +976,6 @@ function switchTab(tab) {
     ['notas','destinatario','produto','chaves'].forEach(t => {
         document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
     });
-    document.getElementById('f_descricao_wrap').style.display = tab === 'produto' ? '' : 'none';
     document.getElementById('f_ncm_wrap').style.display = tab === 'produto' ? '' : 'none';
     if (hasSearched && (currentClienteId || currentGrupoId)) loadActiveTab();
 }
@@ -1121,6 +1177,7 @@ function gerarPdfLote(btn) {
 // vários. Sem empresa/grupo, ficam vazios.
 let tsDest = null, tsUf = null;
 let tsNum = null, tsCfop = null, tsChave = null, tsEmit = null;   // instâncias do Tom Select
+let tsProd = null, tsDesc = null;                                   // os dois filtros de produto
 
 // Cada tag adicionada/removida dispara um change; o debounce junta os cliques
 // seguidos numa busca só. O guard evita o alerta de "selecione uma empresa".
@@ -1131,12 +1188,20 @@ function agendarBusca() {
         if (currentClienteId || currentGrupoId) applyFilters();
     }, 300);
 }
+// CASCATA: qualquer filtro que mude recalcula as opções dos outros (o
+// endpoint recebe o mesmo getFilters() da listagem). Ver conf_compras.html.
+let _opcoesTimer = null;
+function filtroMudou() {
+    agendarBusca();
+    clearTimeout(_opcoesTimer);
+    _opcoesTimer = setTimeout(carregarOpcoesFiltros, 350);
+}
 function _initFiltrosBusca() {
     const base = {
         plugins: ['remove_button'],
         maxOptions: null,        // a lista já vem recortada por empresa + período
         hideSelected: true,
-        onChange: agendarBusca,  // muda o filtro → busca sozinho
+        onChange: filtroMudou,   // muda o filtro → busca sozinho E recalcula os outros filtros
     };
     tsDest = new TomSelect('#f_dest_cnpj_sel', base);
     tsUf   = new TomSelect('#f_dest_uf', base);
@@ -1145,19 +1210,32 @@ function _initFiltrosBusca() {
     tsCfop  = new TomSelect('#f_cfop', comCriacao);
     tsChave = new TomSelect('#f_chave', comCriacao);
     tsEmit  = new TomSelect('#f_emit_cnpj', comCriacao);
+    // Os dois filtros de PRODUTO: opção com contagem; "Sem vínculo" em vermelho.
+    const comContagem = {
+        option: (d, esc) => `<div class="cc-opt${d.alerta ? ' cc-opt-alerta' : ''}"><span>${esc(d.text)}</span>`
+                          + (d.n != null && d.n !== '' ? `<span class="cc-opt-n">${esc(String(d.n))}</span>` : '')
+                          + `</div>`,
+        item: (d, esc) => `<div class="${d.alerta ? 'cc-item-alerta' : ''}">${esc(d.text)}</div>`,
+    };
+    tsProd = new TomSelect('#f_produto', Object.assign({}, base, {render: comContagem}));
+    tsDesc = new TomSelect('#f_item_desc', Object.assign({}, comCriacao, {render: comContagem}));
 }
 document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
 
 function _preencheTS(ts, opcoes) {
     if (!ts) return;
-    const anteriores = ts.getValue();  // o que estava marcado
+    // CÓPIA, não referência: getValue() devolve a própria lista interna de itens
+    // e o clear() a esvazia — a seleção sumia calada a cada recarga (19/09/2026).
+    const anteriores = [].concat(ts.getValue() || []);
     ts.clear(true);                    // silent: não dispara busca
     ts.clearOptions();
-    ts.addOptions(opcoes.map(o => ({value: String(o.valor), text: String(o.texto)})));
-    // Remarca só o que ainda existe no novo escopo/período.
-    const mantidos = (Array.isArray(anteriores) ? anteriores : [anteriores])
-        .filter(v => v && ts.options[v]);
+    ts.addOptions(opcoes.map(o => ({value: String(o.valor), text: String(o.texto),
+                                    n: o.n, alerta: !!o.alerta})));
+    // Remarca só o que ainda existe no novo recorte.
+    const lista = anteriores.filter(Boolean);
+    const mantidos = lista.filter(v => ts.options[v]);
     if (mantidos.length) ts.setValue(mantidos, true);
+    if (mantidos.length !== lista.length) agendarBusca();  // uma escolha saiu do recorte: a lista acompanha
 }
 // Selects FIXOS (Origem, Cadastro de Produtos, Situação): oferecem
 // só a opção que tem documento no escopo/período — igual aos Tom Select. A
@@ -1195,17 +1273,14 @@ function _recortaSelectsFixos(estados) {
 }
 function carregarOpcoesFiltros() {
     if (!currentClienteId && !currentGrupoId) {
-        [tsDest, tsUf, tsNum, tsCfop, tsChave, tsEmit].forEach(ts => _preencheTS(ts, []));
+        [tsDest, tsUf, tsNum, tsCfop, tsChave, tsEmit, tsProd, tsDesc].forEach(ts => _preencheTS(ts, []));
         _recortaSelectsFixos(null);
         return;
     }
-    // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
-    const p = new URLSearchParams({
-        cliente_id: currentClienteId || '',
-        grupo_id: currentGrupoId || '',
-        data_ini: document.getElementById('f_data_ini').value,
-        data_fim: document.getElementById('f_data_fim').value,
-    });
+    // Leva TODOS os filtros (cascata): cada lista volta recortada pelos outros.
+    const f = getFilters();
+    const p = new URLSearchParams(Object.fromEntries(
+        Object.entries(f).map(([k, v]) => [k, v == null ? '' : String(v)])));
     fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_saidas") }}?' + p)
         .then(r => r.json())
         .then(d => {
@@ -1217,6 +1292,12 @@ function carregarOpcoesFiltros() {
             _preencheTS(tsChave, (d.chaves || []).map(v => ({valor: v, texto: v})));
             _preencheTS(tsEmit,
                 (d.cnpjs_emit || []).map(o => ({valor: o.cnpj, texto: `${o.nome || o.cnpj} (${o.cnpj})`})));
+            const sv = d.sem_vinculo || {};
+            _preencheTS(tsProd,
+                (sv.itens ? [{valor: 'sem', texto: 'Sem vínculo — falta cadastrar',
+                              n: `${sv.itens} itens · ${sv.descricoes} descrições`, alerta: true}] : [])
+                .concat((d.produtos || []).map(p => ({valor: p.id, texto: p.nome, n: `${p.itens} itens`}))));
+            _preencheTS(tsDesc, (d.descricoes || []).map(o => ({valor: o.v, texto: o.v, n: o.n})));
             _recortaSelectsFixos(d.estados || null);
         })
         .catch(() => {});  // silencioso: os filtros continuam vazios
@@ -1266,7 +1347,7 @@ function toggleFilters() {
     c.className = 'fas ' + (hidden ? 'fa-chevron-up' : 'fa-chevron-down');
 }
 // Campos de filtro desta tela — a MESMA lista que o clearFilters() usa.
-const CAMPOS_FILTRO = ["f_data_ini", "f_data_fim", "f_num_nota", "f_cfop", "f_chave", "f_emit_cnpj", "f_vmin", "f_vmax", "f_descricao", "f_ncm"];
+const CAMPOS_FILTRO = ["f_data_ini", "f_data_fim", "f_num_nota", "f_cfop", "f_chave", "f_emit_cnpj", "f_vmin", "f_vmax", "f_produto", "f_item_desc", "f_ncm"];
 
 // Bloco D1 — o painel de Filtros nasce FECHADO (display:none na marcação).
 // Se a URL trouxer algum parâmetro de filtro, nasce ABERTO, igual à lista de
@@ -1288,10 +1369,10 @@ const CAMPOS_FILTRO = ["f_data_ini", "f_data_fim", "f_num_nota", "f_cfop", "f_ch
     if (c) { c.className = 'fas fa-chevron-up'; }
 })();
 function clearFilters() {
-    ['f_data_ini','f_data_fim','f_vmin','f_vmax','f_descricao','f_ncm'].forEach(id => {
+    ['f_data_ini','f_data_fim','f_vmin','f_vmax','f_ncm'].forEach(id => {
         document.getElementById(id).value = '';
     });
-    [tsDest, tsUf, tsNum, tsCfop, tsChave, tsEmit].forEach(ts => { if (ts) ts.clear(true); });
+    [tsDest, tsUf, tsNum, tsCfop, tsChave, tsEmit, tsProd, tsDesc].forEach(ts => { if (ts) ts.clear(true); });
     document.getElementById('f_origem').value = '';
     document.getElementById('f_vinc_status').value = '';
     document.getElementById('f_cancelado').value = '';
@@ -1321,7 +1402,8 @@ function getFilters() {
         origem:      document.getElementById('f_origem').value,
         vinc_status: document.getElementById('f_vinc_status').value,
         cancelado: document.getElementById('f_cancelado').value,
-        descricao:   document.getElementById('f_descricao').value,
+        produto_id:  tsProd ? tsProd.getValue().join(',') : '',
+        item_desc:   tsDesc ? tsDesc.getValue().join(',') : '',
         ncm:         document.getElementById('f_ncm').value,
     };
 }
