@@ -78,6 +78,20 @@
 .cc-filter-grid input:focus, .cc-filter-grid select:focus { border-color:#0d9488; outline:none; background:#fff; }
 .cc-filter-actions { display:flex; gap:8px; margin-top:10px; }
 
+/* ---- Filtros em FAIXAS por assunto (modelo H2, aprovado em 19/09/2026) -----
+   Igual às Conferências de Entradas/Saídas: 12 colunas, faixas com nome, cada
+   campo com a largura do que carrega. Ver conf_compras.html.                */
+.cc-filter-grid.cc-faixas { grid-template-columns:repeat(12,minmax(0,1fr)); gap:10px 12px; }
+.cc-faixa { background:#f8fafc; border:1px solid #e8eef3; border-radius:10px; padding:8px 10px 10px; min-width:0; }
+.cc-faixa-cap { font-size:8.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#0d9488; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.cc-faixa-cap::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+.cc-faixa-g { display:grid; gap:8px 10px; }
+.cc-faixa-g > div { min-width:0; }
+.cc-faixa input, .cc-faixa select, .cc-faixa .ts-control { background:#fff; }
+.cc-faixa label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cc-valor { display:flex; align-items:center; gap:6px; }
+.cc-valor span { color:#94a3b8; font-size:12px; flex:0 0 auto; }
+
 /* ---- Tabs ---- */
 .cc-tabs { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px; align-items:center; justify-content:space-between; }
 .cc-tab { padding:9px 18px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; border-radius:6px 6px 0 0; }
@@ -240,6 +254,10 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
     .cc-scope-badge { margin-left:0; align-self:flex-start; }
     .cc-kpis { grid-template-columns:repeat(2,1fr); gap:8px; }
     .cc-filter-grid { grid-template-columns:1fr; }
+    /* a regra de 12 colunas tem especificidade maior que a linha acima */
+    .cc-filter-grid.cc-faixas { grid-template-columns:1fr; }
+    .cc-faixa { grid-column:span 1 !important; }
+    .cc-faixa-g { grid-template-columns:1fr !important; }
     /* A faixa de abas leva, no fim, um <div style="margin-left:auto"> com os
        botoes de acao. Ele nao quebrava e sozinho jogava o documento para 874px
        numa tela de 390 — medido. No mobile ele vira uma linha inteira. */
@@ -491,67 +509,84 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
         <i class="fas fa-chevron-down" id="filterChevron" style="font-size:11px;color:#9ca3af;"></i>
     </div>
     <div id="filterBody" style="display:none;">
-        <div class="cc-filter-grid">
-            <div><label>Data Início</label><input type="date" id="f_data_ini" onchange="carregarOpcoesFiltros()"></div>
-            <div><label>Data Fim</label><input type="date" id="f_data_fim" onchange="carregarOpcoesFiltros()"></div>
-            {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
-            <div>
-                <label>Período rápido</label>
-                <div style="display:flex;gap:6px;">
-                    <button type="button" class="btn-periodo verde" onclick="setPeriodo('atual')"
-                            title="Do dia 1º do mês corrente até hoje"><i class="fas fa-calendar-day"></i>Atual</button>
-                    <button type="button" class="btn-periodo azul" onclick="setPeriodo('anterior')"
-                            title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
-                    <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
-                            title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+        <div class="cc-filter-grid cc-faixas">
+            <div class="cc-faixa" style="grid-column:span 5;">
+                <div class="cc-faixa-cap">Quando</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1fr 1fr 2.4fr;">
+                    <div><label>Início</label><input type="date" id="f_data_ini" autocomplete="off" onchange="carregarOpcoesFiltros()"></div>
+                    <div><label>Fim</label><input type="date" id="f_data_fim" autocomplete="off" onchange="carregarOpcoesFiltros()"></div>
+                    {# Períodos rápidos: setam as datas e JÁ buscam, sem passar pelo Buscar. #}
+                    <div>
+                        <label>Período rápido</label>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <button type="button" class="btn-periodo verde" onclick="setPeriodo('atual')"
+                                    title="Do dia 1º do mês corrente até hoje"><i class="fas fa-calendar-day"></i>Atual</button>
+                            <button type="button" class="btn-periodo azul" onclick="setPeriodo('anterior')"
+                                    title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
+                            <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
+                                    title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             {# Transportadora e UFs nascem vazias: carregarOpcoesFiltros() preenche com
-               o que existe na empresa escolhida (ver /conf-cte/api/opcoes-filtros). #}
-            <div>
-                <label>Transportadora (CNPJ)</label>
-                <select id="f_emit_cnpj" multiple placeholder="Todas — digite para buscar"></select>
+               o que existe na empresa, no período e nos outros filtros. #}
+            <div class="cc-faixa" style="grid-column:span 7;">
+                <div class="cc-faixa-cap">Quem</div>
+                <div class="cc-faixa-g" style="grid-template-columns:3fr 2fr .7fr .7fr;">
+                    <div><label>Transportadora (CNPJ)</label><select id="f_emit_cnpj" multiple placeholder="Todas — digite para buscar"></select></div>
+                    <div><label>CNPJ do Tomador</label><input type="text" id="f_tomador_cnpj" placeholder="Parcial ou completo" onchange="filtroMudou()"></div>
+                    <div><label>UF Início</label><select id="f_uf_ini" multiple placeholder="Todas"></select></div>
+                    <div><label>UF Fim</label><select id="f_uf_fim" multiple placeholder="Todas"></select></div>
+                </div>
             </div>
-            <div><label>CNPJ do Tomador</label><input type="text" id="f_tomador_cnpj" placeholder="Parcial ou completo"></div>
-            <div><label>Nº do CT-e</label><input type="text" id="f_num_cte" placeholder="Ex: 000123"></div>
-            <div>
-                <label>Modelo</label>
-                <select id="f_modelo">
-                    <option value="">— Todos —</option>
-                    <option value="57">57 — CT-e</option>
-                    <option value="67">67 — CT-e OS</option>
-                    <option value="64">64 — GTV-e</option>
-                </select>
+            <div class="cc-faixa" style="grid-column:span 9;">
+                <div class="cc-faixa-cap">O CT-e</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1fr 2fr 1.1fr 1.2fr 1fr;">
+                    <div><label>Nº do CT-e</label><input type="text" id="f_num_cte" placeholder="Ex: 000123" onchange="filtroMudou()"></div>
+                    <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa" onchange="filtroMudou()"></div>
+                    <div>
+                        <label>Modelo</label>
+                        <select id="f_modelo" onchange="filtroMudou()">
+                            <option value="">— Todos —</option>
+                            <option value="57">57 — CT-e</option>
+                            <option value="67">67 — CT-e OS</option>
+                            <option value="64">64 — GTV-e</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Origem</label>
+                        <select id="f_origem" onchange="filtroMudou()">
+                            <option value="">— Todas —</option>
+                            <option value="SEFAZ">SEFAZ (DFe)</option>
+                            <option value="Q-ROBO">Q-Robô</option>
+                            <option value="Q-COLABORE">Q-Colabore</option>
+                            <option value="MANUAL">Manual (Upload/Dropbox)</option>
+                        </select>
+                    </div>
+                    {# O papel saiu daqui para a barra acima dos filtros. #}
+                    <div>
+                        <label>Situação</label>
+                        <select id="f_cancelado" onchange="filtroMudou()">
+                            <option value="">— Todas —</option>
+                            <option value="0">Autorizados</option>
+                            <option value="1">Cancelados</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-            <div><label>Chave de Acesso</label><input type="text" id="f_chave" placeholder="Parcial ou completa"></div>
-            <div>
-                <label>UF Início</label>
-                <select id="f_uf_ini" multiple placeholder="Todas"></select>
-            </div>
-            <div>
-                <label>UF Fim</label>
-                <select id="f_uf_fim" multiple placeholder="Todas"></select>
-            </div>
-            <div><label>Frete Mínimo (R$)</label><input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01"></div>
-            <div><label>Frete Máximo (R$)</label><input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01"></div>
-            <div>
-                <label>Origem</label>
-                <select id="f_origem">
-                    <option value="">— Todas —</option>
-                    <option value="SEFAZ">SEFAZ (DFe)</option>
-                    <option value="Q-ROBO">Q-Robô</option>
-                    <option value="Q-COLABORE">Q-Colabore</option>
-                    <option value="MANUAL">Manual (Upload/Dropbox)</option>
-                </select>
-            </div>
-            {# O papel saiu daqui para a barra acima dos filtros. #}
-            <div>
-                <label>Situação</label>
-                <select id="f_cancelado">
-                    <option value="">— Todas —</option>
-                    <option value="0">Autorizados</option>
-                    <option value="1">Cancelados</option>
-                </select>
+            <div class="cc-faixa" style="grid-column:span 3;">
+                <div class="cc-faixa-cap">Quanto</div>
+                <div class="cc-faixa-g" style="grid-template-columns:1fr;">
+                    <div>
+                        <label>Frete (R$)</label>
+                        <div class="cc-valor">
+                            <input type="number" id="f_vmin" placeholder="0,00" min="0" step="0.01" title="Frete mínimo" onchange="filtroMudou()">
+                            <span>a</span>
+                            <input type="number" id="f_vmax" placeholder="0,00" min="0" step="0.01" title="Frete máximo" onchange="filtroMudou()">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="cc-filter-actions">
@@ -1052,12 +1087,20 @@ function agendarBusca() {
         if (currentClienteId || currentGrupoId) applyFilters();
     }, 300);
 }
+// CASCATA (20/09/2026): qualquer filtro que mude busca E recalcula as opções
+// dos outros — o endpoint recebe o getFilters() inteiro. Ver conf_compras.html.
+let _opcoesTimer = null;
+function filtroMudou() {
+    agendarBusca();
+    clearTimeout(_opcoesTimer);
+    _opcoesTimer = setTimeout(carregarOpcoesFiltros, 350);
+}
 function _initFiltrosBusca() {
     const base = {
         plugins: ['remove_button'],
         maxOptions: null,        // a lista já vem recortada por empresa + período
         hideSelected: true,
-        onChange: agendarBusca,  // muda o filtro → busca sozinho
+        onChange: filtroMudou,   // muda o filtro → busca sozinho E recalcula os outros filtros
     };
     tsEmit  = new TomSelect('#f_emit_cnpj', base);
     tsUfIni = new TomSelect('#f_uf_ini', base);
@@ -1067,14 +1110,17 @@ document.addEventListener('DOMContentLoaded', _initFiltrosBusca);
 
 function _preencheTS(ts, opcoes) {
     if (!ts) return;
-    const anteriores = ts.getValue();  // o que estava marcado
+    // CÓPIA, não referência: getValue() devolve a própria lista interna de itens
+    // e o clear() a esvazia — a seleção sumia calada a cada recarga (19/09/2026).
+    const anteriores = [].concat(ts.getValue() || []);
     ts.clear(true);                    // silent: não dispara busca
     ts.clearOptions();
     ts.addOptions(opcoes.map(o => ({value: String(o.valor), text: String(o.texto)})));
-    // Remarca só o que ainda existe no novo escopo/período.
-    const mantidos = (Array.isArray(anteriores) ? anteriores : [anteriores])
-        .filter(v => v && ts.options[v]);
+    // Remarca só o que ainda existe no novo recorte.
+    const lista = anteriores.filter(Boolean);
+    const mantidos = lista.filter(v => ts.options[v]);
     if (mantidos.length) ts.setValue(mantidos, true);
+    if (mantidos.length !== lista.length) agendarBusca();  // uma escolha saiu do recorte: a lista acompanha
 }
 // Selects FIXOS (Modelo, Origem, Situação): oferecem
 // só a opção que tem documento no escopo/período — igual aos Tom Select. A
@@ -1118,13 +1164,10 @@ function carregarOpcoesFiltros() {
         _recortaSelectsFixos(null);
         return;
     }
-    // Leva TAMBÉM o período: as opções acompanham a data que está na tela.
-    const p = new URLSearchParams({
-        cliente_id: currentClienteId || '',
-        grupo_id: currentGrupoId || '',
-        data_ini: document.getElementById('f_data_ini').value,
-        data_fim: document.getElementById('f_data_fim').value,
-    });
+    // Leva TODOS os filtros (cascata): cada lista volta recortada pelos outros.
+    const f = getFilters();
+    const p = new URLSearchParams(Object.fromEntries(
+        Object.entries(f).map(([k, v]) => [k, v == null ? '' : String(v)])));
     fetch('{{ url_for("escrita_fiscal.api_opcoes_filtros_cte") }}?' + p)
         .then(r => r.json())
         .then(d => {
@@ -1194,6 +1237,7 @@ function setPapel(p) {
     chavesCurrentPage = 1;
     desmarcarTodos();
     loadActiveTab();
+    carregarOpcoesFiltros();        // cascata: o papel também recorta as opções
 }
 const _CNT = {todos:'cntTodos', emitente:'cntEmitente', tomador:'cntTomador',
               remetente:'cntRemetente', destinatario:'cntDestinatario',

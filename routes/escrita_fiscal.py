@@ -831,24 +831,25 @@ def api_opcoes_filtros_saidas():
 @escrita_fiscal.route('/conf-cte/api/opcoes-filtros')
 @login_required
 def api_opcoes_filtros_cte():
-    """Transportadoras e UFs de início/fim nos CT-e da empresa, no período."""
-    f_cliente_id = request.args.get('cliente_id', '').strip()
-    f_grupo_id = request.args.get('grupo_id', '').strip()
-    if not f_cliente_id and not f_grupo_id:
+    """Opções de cada filtro dos CT-e, em CASCATA (mesmo contrato das notas):
+    cada lista respeita empresa, período, papel e todos os outros filtros
+    marcados — menos o próprio."""
+    a = request.args
+    if not a.get('cliente_id', '').strip() and not a.get('grupo_id', '').strip():
         return jsonify({'cnpjs': [], 'ufs_ini': [], 'ufs_fim': []})
-    extra, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
-    # cte_documentos também tem data_emissao — é a coluna que api_ctes filtra.
-    d_clauses, d_params = _clausulas_data(
-        't', request.args.get('data_ini', '').strip(),
-        request.args.get('data_fim', '').strip())
-    # Diferente das notas, aqui não há cláusula de tipo; sem escopo o WHERE
-    # ficaria vazio — mas o early-return acima garante que extra nunca é vazio.
-    where_sql = 'WHERE ' + ' AND '.join(extra + d_clauses)
-    params = params + d_params
-    cnpjs, ufs = _opcoes_cnpjs_ufs('cte_documentos', 't', where_sql, params,
-                                   'emit_cnpj', 'emit_nome', ['uf_ini', 'uf_fim'])
-    return jsonify({'cnpjs': cnpjs, 'ufs_ini': ufs['uf_ini'], 'ufs_fim': ufs['uf_fim'],
-                    'estados': _opcoes_estados_cte(where_sql, params)})
+
+    def w(*excluir):
+        where, params = _where_ctes(a, excluir=excluir)
+        # o early-return acima garante escopo: o WHERE nunca fica vazio
+        return 'WHERE ' + ' AND '.join(where), params
+
+    cnpjs, _nada = _opcoes_cnpjs_ufs('cte_documentos', 't', *w('emit_cnpj'),
+                                     'emit_cnpj', 'emit_nome', [])
+    ufs_ini, _ = _opcoes_valores('cte_documentos', 't', *w('uf_ini'), 'uf_ini')
+    ufs_fim, _ = _opcoes_valores('cte_documentos', 't', *w('uf_fim'), 'uf_fim')
+    estados = {k: _opcoes_estados_cte(*w(k))[k] for k in ('modelo', 'origem', 'cancelado')}
+    return jsonify({'cnpjs': cnpjs, 'ufs_ini': ufs_ini, 'ufs_fim': ufs_fim,
+                    'estados': estados})
 
 
 # ---------------------------------------------------------------------------
@@ -3328,6 +3329,119 @@ def _where_saidas(a, excluir=()):
     return where, params
 
 
+# CT-e (20/09/2026): alias ``t``; a empresa entra por _empresa_where_cte. O
+# papel (Emitidos/Tomados) é filtro da barra acima do painel: entra por padrão
+# e sai com ``com_papel=False`` — api_ctes precisa do WHERE sem ele para contar
+# a barra. ``excluir`` são as facetas, como nas entradas.
+FACETAS_CTE = ('emit_cnpj', 'modelo', 'uf_ini', 'uf_fim', 'origem', 'cancelado')
+
+
+def _where_ctes(a, excluir=(), com_papel=True):
+    def g(k):
+        return str(a.get(k, '') or '').strip()
+    excluir = set(excluir)
+    where, params = _empresa_where_cte(g('cliente_id'), g('grupo_id'), alias='t', params=[])
+    if 'emit_cnpj' not in excluir:
+        v = _filtro_lista(g('emit_cnpj'))
+        if v:
+            where.append(_clausula_in('t.emit_cnpj', v, params))
+    if g('tomador_cnpj'):
+        where.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
+        params.append('%' + re.sub(r'\D', '', g('tomador_cnpj')) + '%')
+    if g('data_ini'):
+        where.append('t.data_emissao >= %s')
+        params.append(g('data_ini'))
+    if g('data_fim'):
+        where.append('t.data_emissao <= %s')
+        params.append(g('data_fim'))
+    if g('chave'):
+        where.append('t.chave_acesso LIKE %s')
+        params.append(f"%{g('chave')}%")
+    if g('num_cte'):
+        where.append('t.num_cte = %s')
+        params.append(g('num_cte'))
+    if 'modelo' not in excluir and g('modelo'):
+        where.append('t.modelo = %s')
+        params.append(g('modelo'))
+    for faceta, col in (('uf_ini', 't.uf_ini'), ('uf_fim', 't.uf_fim')):
+        if faceta not in excluir:
+            v = _filtro_lista(g(faceta))
+            if v:
+                where.append(_clausula_in(col, v, params))
+    if g('vmin'):
+        where.append('t.valor_frete >= %s')
+        params.append(float(g('vmin')))
+    if g('vmax'):
+        where.append('t.valor_frete <= %s')
+        params.append(float(g('vmax')))
+    if 'origem' not in excluir:
+        o = g('origem')
+        if o == 'SEFAZ':
+            where.append("t.origem = 'SEFAZ'")
+        elif o == 'MANUAL':
+            where.append("t.origem IN ('UPLOAD','DROPBOX')")
+        elif o:
+            where.append('t.origem = %s')
+            params.append(o)
+    if 'cancelado' not in excluir:
+        _aplica_cancelada(where, g('cancelado'), 't', 'cancelado')
+    if com_papel and g('papel'):
+        where.append('t.papel_cliente = %s')
+        params.append(g('papel'))
+    return where, params
+
+
+# NFS-e (20/09/2026): alias ``n`` em nfse_capturadas; data_emissao é DATETIME
+# (o fim ganha 23:59:59). Serve a listagem, o lote e as opções em cascata.
+FACETAS_NFSE = ('prestador_doc', 'municipio', 'situacao')
+
+
+def _where_nfse(a, excluir=(), com_papel=True):
+    def g(k):
+        return str(a.get(k, '') or '').strip()
+    excluir = set(excluir)
+    where, params = _empresa_where_nfse(g('cliente_id'), g('grupo_id'), alias='n', params=[])
+    if 'prestador_doc' not in excluir:
+        v = _filtro_lista(g('prestador_doc'))
+        if v:
+            where.append(_clausula_in('n.prestador_doc', v, params))
+    if 'municipio' not in excluir:
+        v = _filtro_lista(g('municipio'))
+        if v:
+            where.append(_clausula_in('n.municipio_ibge', v, params))
+    if g('tomador_doc'):
+        where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
+        params.append('%' + re.sub(r'\D', '', g('tomador_doc')) + '%')
+    cl = _clausula_multi('n.chave_acesso', g('chave'), params)
+    if cl:
+        where.append(cl)
+    if g('numero'):
+        where.append('n.numero = %s')
+        params.append(g('numero'))
+    if g('codigo_servico'):
+        where.append('n.codigo_servico LIKE %s')
+        params.append(f"{g('codigo_servico')}%")
+    if g('vmin'):
+        where.append('n.valor_servicos >= %s')
+        params.append(float(g('vmin')))
+    if g('vmax'):
+        where.append('n.valor_servicos <= %s')
+        params.append(float(g('vmax')))
+    if 'situacao' not in excluir and g('situacao'):
+        where.append('n.situacao = %s')
+        params.append(g('situacao'))
+    if g('data_ini'):
+        where.append('n.data_emissao >= %s')
+        params.append(g('data_ini'))
+    if g('data_fim'):
+        where.append('n.data_emissao <= %s')
+        params.append(g('data_fim') + ' 23:59:59')
+    if com_papel and g('papel'):
+        where.append('n.papel = %s')
+        params.append(g('papel'))
+    return where, params
+
+
 def _opcoes_produtos(where_sql, params, limite=500, partes=('produtos', 'descricoes')):
     """Opções dos dois filtros de produto no MESMO escopo/período da listagem.
 
@@ -3407,22 +3521,8 @@ def _rel_filtro(escopo):
             w.append(f"EXISTS ({base} AND i.produto_catalogo_id IS NULL)")
 
     if escopo == 'cte':
-        w, p = _empresa_where_cte(ci, gi, alias='t', params=[])
-        emit = _filtro_lista(a.get('emit_cnpj', ''))
-        if emit: w.append(_clausula_in('t.emit_cnpj', emit, p))
-        if a.get('tomador_cnpj', '').strip():
-            w.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
-            p.append('%' + re.sub(r'\D', '', a.get('tomador_cnpj')) + '%')
-        dt(w, p, 't')
-        if a.get('chave', '').strip(): w.append('t.chave_acesso LIKE %s'); p.append('%' + a.get('chave').strip() + '%')
-        if a.get('num_cte', '').strip(): w.append('t.num_cte = %s'); p.append(a.get('num_cte').strip())
-        if a.get('modelo', '').strip(): w.append('t.modelo = %s'); p.append(a.get('modelo').strip())
-        ui, uf = _filtro_lista(a.get('uf_ini', '')), _filtro_lista(a.get('uf_fim', ''))
-        if ui: w.append(_clausula_in('t.uf_ini', ui, p))
-        if uf: w.append(_clausula_in('t.uf_fim', uf, p))
-        vlr(w, p, 't.valor_frete'); org(w, p, 't')
-        _aplica_cancelada(w, a.get('cancelado'), 't', 'cancelado')
-        if a.get('papel', '').strip(): w.append('t.papel_cliente = %s'); p.append(a.get('papel').strip())
+        # o mesmo montador da listagem e das opções (20/09/2026)
+        w, p = _where_ctes(a)
         return 'WHERE ' + ' AND '.join(w), p
 
     if escopo == 'saida':
@@ -8528,46 +8628,8 @@ def api_ctes():
         registrar('leitura.buscou_ctes', 'fiscal', tabela='cte_documentos',
                   depois={'termo': _termo or None, 'filtros': _filtros})
 
-    where, params = _empresa_where_cte(f_cliente_id, f_grupo_id, alias='t', params=[])
-
-    if f_emit_cnpj:
-        where.append(_clausula_in('t.emit_cnpj', f_emit_cnpj, params))
-    if f_tomador:
-        where.append("REPLACE(REPLACE(REPLACE(t.tomador_cnpj,'.',''),'/',''),'-','') LIKE %s")
-        params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
-    if f_data_ini:
-        where.append('t.data_emissao >= %s')
-        params.append(f_data_ini)
-    if f_data_fim:
-        where.append('t.data_emissao <= %s')
-        params.append(f_data_fim)
-    if f_chave:
-        where.append('t.chave_acesso LIKE %s')
-        params.append(f'%{f_chave}%')
-    if f_num_cte:
-        where.append('t.num_cte = %s')
-        params.append(f_num_cte)
-    if f_modelo:
-        where.append('t.modelo = %s')
-        params.append(f_modelo)
-    if f_uf_ini:
-        where.append(_clausula_in('t.uf_ini', f_uf_ini, params))
-    if f_uf_fim:
-        where.append(_clausula_in('t.uf_fim', f_uf_fim, params))
-    if f_vmin:
-        where.append('t.valor_frete >= %s')
-        params.append(float(f_vmin))
-    if f_vmax:
-        where.append('t.valor_frete <= %s')
-        params.append(float(f_vmax))
-    if f_origem == 'SEFAZ':
-        where.append("t.origem = 'SEFAZ'")
-    elif f_origem == 'MANUAL':
-        where.append("t.origem IN ('UPLOAD','DROPBOX')")
-    elif f_origem:
-        where.append('t.origem = %s')
-        params.append(f_origem)
-    _aplica_cancelada(where, f_cancelado, 't', 'cancelado')
+    # O MESMO montador das opções (cascata) e do relatório; o papel entra abaixo.
+    where, params = _where_ctes(request.args, com_papel=False)
 
     # O PAPEL entra POR ÚLTIMO e o WHERE sem ele fica guardado: a contagem que
     # alimenta a barra de botões precisa do mesmo filtro SEM o recorte de papel.
@@ -8739,10 +8801,12 @@ def _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=None):
     if params is None:
         params = []
     clauses = []
-    if f_cliente_id:
+    # str(x).isdigit(): 'null'/'undefined' vindos de um JS descuidado viravam 500
+    # (medido em 20/09/2026 num harness); parâmetro que não é número é 'sem escopo'.
+    if f_cliente_id and str(f_cliente_id).isdigit():
         clauses.append(f'{alias}.empresa_id = %s')
         params.append(int(f_cliente_id))
-    if f_grupo_id:
+    if f_grupo_id and str(f_grupo_id).isdigit():
         clauses.append(
             f'{alias}.empresa_id IN (SELECT cliente_id FROM cliente_grupo_relacao'
             f'                        WHERE grupo_id = %s)')
@@ -8766,40 +8830,33 @@ def conf_nfse():
 @escrita_fiscal.route('/conf-nfse/api/opcoes-filtros')
 @login_required
 def api_opcoes_filtros_nfse():
-    """Prestadores e municípios que EXISTEM no escopo escolhido.
-
-    Mesma ideia da de CT-e: sem escopo devolve vazio, para não varrer a base
-    inteira montando um combo que ninguém pediu.
-    """
-    f_cliente_id = request.args.get('cliente_id', '').strip()
-    f_grupo_id = request.args.get('grupo_id', '').strip()
-    if not f_cliente_id and not f_grupo_id:
+    """Prestadores, municípios e situações em CASCATA (20/09/2026): cada lista
+    respeita empresa, período, papel e os outros filtros — menos o próprio.
+    Sem escopo devolve vazio, para não varrer a base montando combo que
+    ninguém pediu."""
+    a = request.args
+    if not a.get('cliente_id', '').strip() and not a.get('grupo_id', '').strip():
         return jsonify({'prestadores': [], 'municipios': []})
 
-    where, params = _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=[])
-    for campo, arg in (('n.data_emissao >= %s', 'data_ini'),
-                       ('n.data_emissao <= %s', 'data_fim')):
-        v = request.args.get(arg, '').strip()
-        if v:
-            where.append(campo)
-            params.append(v if arg == 'data_ini' else v + ' 23:59:59')
-    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    def w(*excluir):
+        where, params = _where_nfse(a, excluir=excluir)
+        return ('WHERE ' + ' AND '.join(where)) if where else '', params
 
+    ws, ps = w('prestador_doc')
     prest = execute_query(
         f"""SELECT n.prestador_doc AS doc, MAX(n.prestador_nome) AS nome
-              FROM nfse_capturadas n {where_sql}
+              FROM nfse_capturadas n {ws}
              GROUP BY n.prestador_doc
             HAVING doc IS NOT NULL AND doc <> ''
-             ORDER BY nome LIMIT 500""", tuple(params), fetch=True) or []
+             ORDER BY nome LIMIT 500""", tuple(ps), fetch=True) or []
+    ws, ps = w('municipio')
     muni = execute_query(
-        f"""SELECT DISTINCT n.municipio_ibge AS m FROM nfse_capturadas n {where_sql}
-            HAVING m IS NOT NULL AND m <> '' ORDER BY m""",
-        tuple(params), fetch=True) or []
-    # Situação: só a que existe no escopo (mesma regra das outras três telas).
-    # Sem o papel, pela mesma razão da barra Emitidas/Tomadas.
+        f"""SELECT DISTINCT n.municipio_ibge AS m FROM nfse_capturadas n {ws}
+            HAVING m IS NOT NULL AND m <> '' ORDER BY m""", tuple(ps), fetch=True) or []
+    ws, ps = w('situacao')
     sit = execute_query(
-        f"""SELECT n.situacao AS s, COUNT(*) AS n FROM nfse_capturadas n {where_sql}
-            GROUP BY n.situacao""", tuple(params), fetch=True) or []
+        f"""SELECT n.situacao AS s, COUNT(*) AS n FROM nfse_capturadas n {ws}
+            GROUP BY n.situacao""", tuple(ps), fetch=True) or []
     return jsonify({'prestadores': prest, 'municipios': [r['m'] for r in muni],
                     'estados': {'situacao': {str(r['s']): int(r['n']) for r in sit if r['s']}}})
 
@@ -8839,51 +8896,9 @@ def api_nfse():
         registrar('leitura.buscou_nfse', 'fiscal', tabela='nfse_capturadas',
                   depois={'termo': _termo or None, 'filtros': _filtros})
 
-    where, params = _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=[])
-
-    if f_prestador:
-        where.append(_clausula_in('n.prestador_doc', f_prestador, params))
-    if f_tomador:
-        where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
-        params.append('%' + re.sub(r'\D', '', f_tomador) + '%')
-    cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
-    if cl_chave:
-        where.append(cl_chave)
-    if f_numero:
-        where.append('n.numero = %s')
-        params.append(f_numero)
-    if f_municipio:
-        where.append(_clausula_in('n.municipio_ibge', f_municipio, params))
-    if f_servico:
-        where.append('n.codigo_servico LIKE %s')
-        params.append(f'{f_servico}%')
-    if f_vmin:
-        where.append('n.valor_servicos >= %s')
-        params.append(float(f_vmin))
-    if f_vmax:
-        where.append('n.valor_servicos <= %s')
-        params.append(float(f_vmax))
-    if f_situacao:
-        where.append('n.situacao = %s')
-        params.append(f_situacao)
-
-    # O PAPEL entra POR ÚLTIMO e fica guardado à parte de propósito: a contagem
-    # por papel que alimenta o seletor da tela precisa do mesmo filtro SEM ele.
-    # Se contasse já filtrada, "Tomados" mostraria zero sempre que "Prestados"
-    # estivesse selecionado — o seletor apagaria a informação que existe para
-    # ajudar a escolher.
-    # TRÊS recortes do MESMO filtro, porque três consultas precisam de conjuntos
-    # diferentes: a lista (tudo), a contagem por papel (sem papel) e a contagem
-    # fora do período (sem data — para a tela dizer "nenhuma NO PERÍODO, mas
-    # existem N fora dele" em vez do "nenhuma encontrada" que esconde o dado).
+    # O MESMO montador das opções (cascata) e do lote — datas já dentro.
+    where, params = _where_nfse(request.args, com_papel=False)
     d_cl, d_par = [], []
-    if f_data_ini:
-        d_cl.append('n.data_emissao >= %s')
-        d_par.append(f_data_ini)
-    if f_data_fim:
-        # data_emissao é DATETIME: sem o 23:59:59 o último dia ficaria de fora.
-        d_cl.append('n.data_emissao <= %s')
-        d_par.append(f_data_fim + ' 23:59:59')
     p_cl, p_par = [], []
     if f_papel:
         p_cl.append('n.papel = %s')
@@ -9172,59 +9187,9 @@ def nfse_pdf(nfse_id):
 
 
 def _where_lote_nfse(data):
-    """Mesmas cláusulas da listagem, a partir do corpo JSON do lote."""
-    where, params = _empresa_where_nfse(str(data.get('cliente_id', '')).strip(),
-                                        str(data.get('grupo_id', '')).strip(),
-                                        alias='n', params=[])
-    f_prestador = _filtro_lista(data.get('prestador_doc', ''))
-    if f_prestador:
-        where.append(_clausula_in('n.prestador_doc', f_prestador, params))
-    f_mun = _filtro_lista(data.get('municipio', ''))
-    if f_mun:
-        where.append(_clausula_in('n.municipio_ibge', f_mun, params))
-
-    v = str(data.get('tomador_doc', '')).strip()
-    if v:
-        where.append("REPLACE(REPLACE(REPLACE(n.tomador_doc,'.',''),'/',''),'-','') LIKE %s")
-        params.append('%' + re.sub(r'\D', '', v) + '%')
-    v = str(data.get('chave', '')).strip()
-    if v:
-        where.append('n.chave_acesso LIKE %s')
-        params.append(f'%{v}%')
-    v = str(data.get('numero', '')).strip()
-    if v:
-        where.append('n.numero = %s')
-        params.append(v)
-    v = str(data.get('codigo_servico', '')).strip()
-    if v:
-        where.append('n.codigo_servico LIKE %s')
-        params.append(f'{v}%')
-    v = str(data.get('papel', '')).strip()
-    if v:
-        where.append('n.papel = %s')
-        params.append(v)
-    v = str(data.get('situacao', '')).strip()
-    if v:
-        where.append('n.situacao = %s')
-        params.append(v)
-    v = str(data.get('data_ini', '')).strip()
-    if v:
-        where.append('n.data_emissao >= %s')
-        params.append(v)
-    v = str(data.get('data_fim', '')).strip()
-    if v:
-        # data_emissao é DATETIME: sem o 23:59:59 o último dia ficaria de fora.
-        where.append('n.data_emissao <= %s')
-        params.append(v + ' 23:59:59')
-    v = str(data.get('vmin', '')).strip()
-    if v:
-        where.append('n.valor_servicos >= %s')
-        params.append(float(v))
-    v = str(data.get('vmax', '')).strip()
-    if v:
-        where.append('n.valor_servicos <= %s')
-        params.append(float(v))
-    return where, params
+    """Mesmas cláusulas da listagem, a partir do corpo JSON do lote (ou de
+    request.args no relatório) — é o montador único das NFS-e."""
+    return _where_nfse(data)
 
 
 def _xmls_nfse(rows):
