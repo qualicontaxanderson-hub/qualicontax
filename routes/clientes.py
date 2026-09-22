@@ -99,6 +99,13 @@ def index():
         result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
         grupos = GrupoCliente.get_all(situacao='ATIVO')
         ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+        # Vigias de CNPJ que acharam mudança na Receita e ninguém tratou ainda.
+        try:
+            from utils import cnpj_vigia as VG
+            vigias_mudou = VG.com_novidade()
+        except Exception:
+            logger.exception('[clientes] vigias com novidade falhou')
+            vigias_mudou = []
 
         # Verificar se houve erro na obtenção dos dados
         if result is None:
@@ -125,6 +132,7 @@ def index():
                              total_pages=result['total_pages'],
                               total=result['total'],
                               stats=stats,
+                              vigias_mudou=vigias_mudou,
                               grupos=grupos,
                               ramos_atividade=ramos_atividade,
                               sort_by=sort_by,
@@ -224,6 +232,10 @@ def novo():
         data = limpar_form(data)
 
         cliente_id = Cliente.create(data)
+        if cliente_id:
+            # vigia de CNPJ armada no formulário ANTES de salvar ganha o dono
+            from utils import cnpj_vigia as VG
+            VG.vincular_cliente(cpf_cnpj, cliente_id)
 
         if cliente_id:
             # AUDITORIA (D2): quem criou este cadastro.
@@ -1595,151 +1607,78 @@ def buscar_cep(cep):
 @clientes.route('/api/consultar-cnpj/<cnpj>')
 @login_required
 def consultar_cnpj(cnpj):
-    """
-    Consulta CNPJ na Receita Federal via Brasil API
-    Retorna dados da empresa para preenchimento automático
-    """
-    import requests
-    import re
-    
+    """Consulta o CNPJ na base pública da Receita (utils.cnpj_receita: BrasilAPI
+    e, se ela cair, ReceitaWS) e devolve os campos para o formulário.
+
+    ``base_em`` é a DATA da foto que as fontes servem (a Receita publica a
+    base uma vez por mês): a tela mostra, para ninguém tomar a réplica por
+    dado do dia — foi o que aconteceu em 22/09/2026 com um CNPJ que mudou
+    depois de 15/09. ``vigia`` é o estado da vigia deste CNPJ, se houver."""
+    from utils import cnpj_receita as RF
+    from utils import cnpj_vigia as VG
+    cnpj_limpo = RF.so_digitos(cnpj)
+    if len(cnpj_limpo) != 14:
+        return jsonify({'success': False, 'message': 'CNPJ deve ter 14 dígitos'}), 400
     try:
-        # Remover caracteres não numéricos
-        cnpj_limpo = re.sub(r'\D', '', cnpj)
-        
-        # Validar tamanho
-        if len(cnpj_limpo) != 14:
-            return jsonify({
-                'success': False,
-                'message': 'CNPJ deve ter 14 dígitos'
-            }), 400
-        
-        # Consultar Brasil API
-        url = f'https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}'
-        response = requests.get(url, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            # DEBUG: Log para verificar dados completos
-            print(f"=== DADOS RETORNADOS PELA BRASIL API ===")
-            print(f"Email: {data.get('email')}")
-            print(f"Correio Eletrônico: {data.get('correio_eletronico')}")
-            print(f"Endereço Eletrônico: {data.get('endereco_eletronico')}")
-            print(f"DDD Telefone 1: {data.get('ddd_telefone_1')}")
-            print(f"DDD Telefone 2: {data.get('ddd_telefone_2')}")
-            print(f"Razão Social: {data.get('razao_social')}")
-            print(f"Data Início Atividade: {data.get('data_inicio_atividade')}")
-            print(f"Inscrições Estaduais (raw): {data.get('inscricoes_estaduais')}")
-            print(f"CNAE Fiscal: {data.get('cnae_fiscal')}")
-            print(f"CNAEs Secundários: {data.get('cnaes_secundarios')}")
-            print(f"CEP: {data.get('cep')}")
-            print(f"Logradouro: {data.get('logradouro')}")
-            print(f"Número: {data.get('numero')}")
-            print(f"UF: {data.get('uf')}")
-            
-            # Extrair inscrição estadual (IE)
-            inscricao_estadual = ''
-            if 'inscricoes_estaduais' in data and isinstance(data['inscricoes_estaduais'], list):
-                print(f"DEBUG: Total de IEs: {len(data['inscricoes_estaduais'])}")
-                # Pegar a primeira IE ativa
-                for idx, ie_obj in enumerate(data['inscricoes_estaduais']):
-                    print(f"DEBUG: IE[{idx}] = {ie_obj} (tipo: {type(ie_obj)})")
-                    if isinstance(ie_obj, dict):
-                        ie_numero = ie_obj.get('inscricao_estadual', '')
-                        ie_ativo = ie_obj.get('ativo', False)
-                        print(f"DEBUG: IE número: {ie_numero}, ativo: {ie_ativo}")
-                        if ie_ativo and ie_numero:
-                            inscricao_estadual = ie_numero
-                            print(f"DEBUG: IE ativa encontrada: {inscricao_estadual}")
-                            break
-                # Se não encontrou ativa, pega a primeira disponível
-                if not inscricao_estadual and len(data['inscricoes_estaduais']) > 0:
-                    ie_obj = data['inscricoes_estaduais'][0]
-                    if isinstance(ie_obj, dict):
-                        inscricao_estadual = ie_obj.get('inscricao_estadual', '')
-                        print(f"DEBUG: IE primeira disponível: {inscricao_estadual}")
-            elif 'inscricao_estadual' in data and data['inscricao_estadual']:
-                # Às vezes vem direto como string
-                inscricao_estadual = data['inscricao_estadual']
-                print(f"DEBUG: IE como string direta: {inscricao_estadual}")
-            
-            print(f"Inscrição Estadual extraída: '{inscricao_estadual}'")
-            
-            # Extrair e-mail - tentar múltiplos campos possíveis
-            # Brasil API pode retornar em diferentes formatos
-            email = (data.get('email') or 
-                    data.get('correio_eletronico') or 
-                    data.get('endereco_eletronico') or  # NOVO: Campo "ENDEREÇO ELETRÔNICO"
-                    data.get('email_principal') or 
-                    '')
-            if email:
-                print(f"DEBUG: Email encontrado: {email}")
-            
-            # Extrair CNAEs secundários
-            cnaes_secundarios = data.get('cnaes_secundarios', [])
-            print(f"DEBUG: CNAEs Secundários encontrados: {len(cnaes_secundarios)}")
-            if cnaes_secundarios:
-                for idx, cnae in enumerate(cnaes_secundarios[:3]):  # Mostrar só primeiros 3 no log
-                    print(f"DEBUG: CNAE Secundário[{idx}]: {cnae}")
-            
-            # Extrair dados relevantes
-            resultado = {
-                'success': True,
-                'data': {
-                    'cnpj': data.get('cnpj', ''),
-                    'razao_social': data.get('razao_social', ''),
-                    'nome_fantasia': data.get('nome_fantasia', ''),
-                    'situacao_cadastral': data.get('descricao_situacao_cadastral', ''),
-                    'porte': data.get('porte', ''),
-                    'natureza_juridica': data.get('natureza_juridica', ''),
-                    'data_inicio_atividade': data.get('data_inicio_atividade', ''),
-                    'inscricao_estadual': inscricao_estadual,
-                    'cnae_fiscal': data.get('cnae_fiscal', ''),
-                    'cnae_fiscal_descricao': data.get('cnae_fiscal_descricao', ''),
-                    'cnaes_secundarios': cnaes_secundarios,  # NOVO: CNAEs secundários
-                    # Endereço
-                    'logradouro': data.get('logradouro', ''),
-                    'numero': data.get('numero', ''),
-                    'complemento': data.get('complemento', ''),
-                    'bairro': data.get('bairro', ''),
-                    'municipio': data.get('municipio', ''),
-                    'uf': data.get('uf', ''),
-                    'cep': data.get('cep', ''),
-                    # Contatos
-                    'ddd_telefone_1': data.get('ddd_telefone_1', ''),
-                    'ddd_telefone_2': data.get('ddd_telefone_2', ''),
-                    'email': email,  # MELHORADO: tenta múltiplos campos
-                    # QSAs (sócios)
-                    'qsa': data.get('qsa', [])
-                }
-            }
-            
-            return jsonify(resultado), 200
-        
-        elif response.status_code == 404:
-            return jsonify({
-                'success': False,
-                'message': 'CNPJ não encontrado na Receita Federal'
-            }), 404
-        
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Erro ao consultar CNPJ. Tente novamente.'
-            }), 500
-    
-    except requests.Timeout:
-        return jsonify({
-            'success': False,
-            'message': 'Timeout ao consultar CNPJ. Tente novamente.'
-        }), 408
-    
-    except Exception as e:
-        print(f"Erro ao consultar CNPJ: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Erro ao consultar CNPJ: {str(e)}'
-        }), 500
+        dados, fonte = RF.consultar(cnpj_limpo, completar=True)
+    except RF.CnpjNaoEncontrado:
+        return jsonify({'success': False, 'message': 'CNPJ não encontrado na Receita Federal'}), 404
+    except RF.FonteIndisponivel as e:
+        logger.warning('[cnpj] fontes indisponíveis para %s: %s', cnpj_limpo, e)
+        return jsonify({'success': False,
+                        'message': 'As fontes da Receita não responderam agora. Tente de novo em instantes.'}), 503
+    return jsonify({'success': True, 'data': dados, 'fonte': fonte,
+                    'base_em': RF.base_em_br(cnpj_limpo),
+                    'vigia': VG.por_cnpj(cnpj_limpo)}), 200
+
+
+# ---------------------------------------------------------------------------
+# Vigia de CNPJ (22/09/2026) — consulta a Receita a cada 24 h até mudar.
+# Ver utils/cnpj_vigia.py. Quem roda a consulta diária é o cron_manutencao.
+# ---------------------------------------------------------------------------
+@clientes.route('/api/cnpj-vigia/<cnpj>')
+@login_required
+def cnpj_vigia_status(cnpj):
+    from utils import cnpj_vigia as VG
+    return jsonify({'success': True, 'vigia': VG.por_cnpj(cnpj)})
+
+
+@clientes.route('/api/cnpj-vigia/<cnpj>/armar', methods=['POST'])
+@login_required
+def cnpj_vigia_armar(cnpj):
+    from utils import cnpj_receita as RF
+    from utils import cnpj_vigia as VG
+    corpo = request.get_json(silent=True) or {}
+    cid = corpo.get('cliente_id')
+    cid = int(cid) if str(cid or '').isdigit() else None
+    try:
+        vigia, dados, fonte = VG.armar(cnpj, cid, getattr(current_user, 'id', None),
+                                       getattr(current_user, 'nome', None) or getattr(current_user, 'login', ''))
+    except RF.CnpjNaoEncontrado:
+        return jsonify({'success': False, 'message': 'CNPJ não encontrado na Receita Federal'}), 404
+    except RF.FonteIndisponivel:
+        return jsonify({'success': False, 'message': 'As fontes da Receita não responderam agora; a vigia '
+                                                     'precisa de uma primeira consulta para ter a foto de referência.'}), 503
+    registrar('escrita.armou_vigia_cnpj', 'cadastros', tabela='cnpj_vigia', registro_id=cid,
+              depois={'cnpj': RF.so_digitos(cnpj), 'razao_social': dados.get('razao_social'), 'fonte': fonte})
+    return jsonify({'success': True, 'vigia': vigia, 'base_em': RF.base_em_br()})
+
+
+@clientes.route('/api/cnpj-vigia/<cnpj>/<acao>', methods=['POST'])
+@login_required
+def cnpj_vigia_acao(cnpj, acao):
+    """cancelar (parar de vigiar) | aplicada (a pessoa levou os dados novos ao
+    cadastro) | ignorar (viu a mudança e não quer aplicar). As três tiram a
+    vigia da lista de novidades."""
+    from utils import cnpj_receita as RF
+    from utils import cnpj_vigia as VG
+    status = {'cancelar': 'cancelada', 'aplicada': 'aplicada', 'ignorar': 'cancelada'}.get(acao)
+    if not status:
+        return jsonify({'success': False, 'message': 'ação desconhecida'}), 400
+    vigia = VG.mudar_status(cnpj, status)
+    registrar('escrita.vigia_cnpj_' + acao, 'cadastros', tabela='cnpj_vigia',
+              registro_id=(vigia or {}).get('cliente_id'), depois={'cnpj': RF.so_digitos(cnpj)})
+    return jsonify({'success': True, 'vigia': vigia})
 
 
 # ---------------------------------------------------------------------------

@@ -1423,6 +1423,33 @@ def _apply_migrations():
         if _ex.get('cnt', 0) == 0:
             _migrate(f"ALTER TABLE robo_config ADD COLUMN {_col} {_defn}")
 
+    # Vigia de CNPJ (22/09/2026): uma linha por CNPJ vigiado; ver utils/cnpj_vigia.py.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS cnpj_vigia (
+            id                 INT AUTO_INCREMENT PRIMARY KEY,
+            cnpj               VARCHAR(14)  NOT NULL,
+            cliente_id         INT          NULL,
+            pedido_por         INT          NULL,
+            pedido_por_nome    VARCHAR(150) NULL,
+            pedido_em          DATETIME     NULL,
+            foto_json          TEXT         NULL,
+            foto_hash          VARCHAR(64)  NULL,
+            foto_fonte         VARCHAR(20)  NULL,
+            status             VARCHAR(12)  NOT NULL DEFAULT 'vigiando',
+            consultas          INT          NOT NULL DEFAULT 0,
+            ultima_consulta_em DATETIME     NULL,
+            proxima_em         DATETIME     NULL,
+            mudou_em           DATETIME     NULL,
+            novo_json          MEDIUMTEXT   NULL,
+            diff_json          TEXT         NULL,
+            aplicado_em        DATETIME     NULL,
+            erro_ultimo        VARCHAR(255) NULL,
+            UNIQUE KEY uk_vigia_cnpj (cnpj),
+            KEY idx_vigia_status (status, proxima_em),
+            KEY idx_vigia_cliente (cliente_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
     print("✓ Migrations concluídas")
 
 

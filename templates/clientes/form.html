@@ -57,6 +57,10 @@
                     </button>
                 </div>
                 <p class="cf-hint">Digite o CNPJ e busque na Receita Federal para preencher os dados automaticamente.</p>
+                {# Vigia de CNPJ (22/09/2026): a base pública é mensal; quem sabe que a
+                   empresa mudou arma a vigia e o sistema consulta a cada 24 h até
+                   a Receita mudar. O estado vem por /api/cnpj-vigia/<cnpj>. #}
+                <div class="cf-vigia" id="vigiaBox" style="display:none;"></div>
             </div>
 
             <!-- PF: nome + CPF -->
@@ -494,6 +498,26 @@ textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
                   display:flex; align-items:center; justify-content:center; font-size:14px; }
 .cf-receita-tit { font-size:14px; color:#14532d; } .cf-receita-tit strong { color:#0f3d2e; }
 .cf-receita-txt { font-size:12px; color:#3f6b52; margin-top:2px; line-height:1.5; }
+.cf-receita-base { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:99px; background:#fff; border:1px solid #bbf7d0; color:#166534; font-size:11px; font-weight:700; white-space:nowrap; }
+
+/* ---- Vigia de CNPJ ---- */
+.cf-vigia { margin-top:10px; padding:11px 14px; border-radius:11px; font-size:12.5px; line-height:1.5;
+            display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+.cf-vigia.off   { background:#f8fafc; border:1px dashed #cbd5e1; color:#475569; }
+.cf-vigia.on    { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
+.cf-vigia.mudou { background:#fffbeb; border:1px solid #fcd34d; color:#78350f; }
+.cf-vigia .vg-ico { font-size:15px; margin-top:1px; }
+.cf-vigia .vg-txt { flex:1; min-width:220px; }
+.cf-vigia .vg-txt b { font-weight:700; }
+.cf-vigia .vg-acoes { display:flex; gap:6px; flex-wrap:wrap; }
+.cf-vigia button { border:none; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.cf-vigia .vg-b1 { background:#0f3d2e; color:#fff; }
+.cf-vigia .vg-b1:hover { background:#12513c; }
+.cf-vigia .vg-b2 { background:#fff; border:1px solid #cbd5e1 !important; color:#334155; }
+.cf-vigia .vg-diff { width:100%; margin:6px 0 0; padding:0; list-style:none; font-size:12px; }
+.cf-vigia .vg-diff li { padding:3px 0; border-top:1px dashed #fde68a; }
+.cf-vigia .vg-diff s { color:#9a3412; opacity:.75; }
+.cf-vigia .vg-diff strong { color:#0f3d2e; }
 
 .cf-check { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:12.5px; color:#64748b; }
 .cf-check input { width:15px; height:15px; }
@@ -548,6 +572,8 @@ textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
 <script>
 // Variável global para armazenar o último CNPJ consultado
 let ultimoCNPJConsultado = '';
+let ultimaConsultaMeta = {};          // {fonte, base_em} da última busca na Receita
+const VIGIA_CLIENTE_ID = {{ cliente.id if cliente else 'null' }};
 
 // Toggle fields based on tipo_pessoa — via classes .pf-only / .pj-only (layout em
 // vários cards). Mesma REGRA de antes: mostra os campos do tipo e marca required.
@@ -732,7 +758,9 @@ function consultarCNPJ() {
         .then(data => {
             if (data.success) {
                 ultimoCNPJConsultado = cnpj;
+                ultimaConsultaMeta = {fonte: data.fonte, base_em: data.base_em};
                 setTimeout(() => { preencherDadosCNPJ(data.data); }, 100);
+                vigiaDesenha(data.vigia || null, cnpj);
             } else {
                 alert(data.message || 'Erro ao consultar CNPJ. Verifique o número e tente novamente.');
             }
@@ -872,13 +900,93 @@ function preencherDadosCNPJ(data) {
     var card = document.getElementById('receitaResult');
     if (card) {
         document.getElementById('receitaRazao').textContent = data.razao_social || 'empresa localizada';
+        // A DATA da foto: a Receita publica a base uma vez por mês; sem isto a
+        // réplica passa por dado do dia (22/09/2026).
+        const base = ultimaConsultaMeta.base_em
+            ? ' <span class="cf-receita-base" title="A Receita Federal publica a base de CNPJ uma vez por mês; '
+              + 'esta é a data da foto que está sendo servida' + (ultimaConsultaMeta.fonte === 'receitaws' ? ' (fonte reserva: ReceitaWS)' : '') + '">'
+              + 'dados da Receita de ' + ultimaConsultaMeta.base_em + '</span>'
+            : ' <span class="cf-receita-base" title="A Receita publica a base uma vez por mês">base mensal da Receita</span>';
         document.getElementById('receitaResumo').innerHTML =
-            '<strong>' + preenchidos.length + '</strong> campo(s) preenchido(s) com dados da Receita. '
-            + 'Confira e complete o que faltar antes de salvar.';
+            '<strong>' + preenchidos.length + '</strong> campo(s) preenchido(s) com dados da Receita.'
+            + base + '<br>Confira e complete o que faltar antes de salvar.';
         card.style.display = 'flex';
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
+
+// ---- Vigia de CNPJ (22/09/2026) -------------------------------------------
+// A base pública é MENSAL. Quem sabe que a empresa mudou (e a Receita ainda
+// mostra o antigo) arma a vigia: o servidor consulta a cada 24 h e, quando a
+// foto mudar, para e avisa aqui e na lista de clientes. Aplicar é sempre ato
+// da pessoa: "Aplicar no formulário" preenche os campos e ela salva.
+function vigiaCnpjAtual() {
+    const el = document.getElementById('cpf_cnpj_pj');
+    return el ? el.value.replace(/\D/g, '') : '';
+}
+function vigiaCarrega() {
+    const cnpj = vigiaCnpjAtual();
+    if (cnpj.length !== 14) return;
+    fetch('/api/cnpj-vigia/' + cnpj).then(r => r.json())
+        .then(d => { if (d.success) vigiaDesenha(d.vigia, cnpj); }).catch(() => {});
+}
+function vigiaDesenha(v, cnpj) {
+    const box = document.getElementById('vigiaBox');
+    if (!box) return;
+    box.style.display = '';
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    if (!v || v.status === 'cancelada' || v.status === 'aplicada') {
+        box.className = 'cf-vigia off';
+        box.innerHTML = '<i class="fas fa-binoculars vg-ico"></i><div class="vg-txt">'
+            + '<b>A empresa mudou e a Receita ainda mostra o antigo?</b> A base pública é atualizada uma vez por mês. '
+            + 'Arme a vigia: o sistema consulta <b>a cada 24 h</b> até a Receita mudar, e avisa aqui e na lista de clientes.'
+            + '</div><div class="vg-acoes"><button type="button" class="vg-b1" onclick="vigiaArmar()"><i class="fas fa-binoculars"></i> Vigiar mudanças na Receita</button></div>';
+        return;
+    }
+    if (v.status === 'vigiando') {
+        box.className = 'cf-vigia on';
+        box.innerHTML = '<i class="fas fa-binoculars vg-ico"></i><div class="vg-txt">'
+            + '<b>Vigiando este CNPJ na Receita</b> desde ' + esc(v.pedido_em) + (v.pedido_por_nome ? ' (' + esc(v.pedido_por_nome) + ')' : '') + '. '
+            + 'Consultas feitas: <b>' + esc(v.consultas) + '</b>' + (v.ultima_consulta_em ? ', última em ' + esc(v.ultima_consulta_em) : '')
+            + (v.proxima_em ? ', próxima em ' + esc(v.proxima_em) : '') + '. Nada mudou ainda.'
+            + (v.erro_ultimo ? '<br><span style="color:#b45309">Última consulta falhou: ' + esc(v.erro_ultimo) + ' — tenta de novo em 6 h.</span>' : '')
+            + '</div><div class="vg-acoes"><button type="button" class="vg-b2" onclick="vigiaAcao(\'cancelar\')">Parar de vigiar</button></div>';
+        return;
+    }
+    // mudou
+    const itens = (v.diff || []).map(d => '<li><b>' + esc(d.rotulo) + ':</b> <s>' + esc(d.de || '—') + '</s> → <strong>' + esc(d.para || '—') + '</strong></li>').join('');
+    box.className = 'cf-vigia mudou';
+    box.innerHTML = '<i class="fas fa-bell vg-ico"></i><div class="vg-txt">'
+        + '<b>A Receita mudou os dados desta empresa</b> (visto em ' + esc(v.mudou_em) + '). '
+        + (v.diff || []).length + ' campo(s) diferente(s) da foto de ' + esc(v.pedido_em) + ':'
+        + '<ul class="vg-diff">' + itens + '</ul></div>'
+        + '<div class="vg-acoes"><button type="button" class="vg-b1" onclick="vigiaAplicar()"><i class="fas fa-file-import"></i> Aplicar no formulário</button>'
+        + '<button type="button" class="vg-b2" onclick="vigiaAcao(\'ignorar\')">Ignorar</button></div>';
+    window._vigiaNovo = v.novo || null;
+}
+function vigiaArmar() {
+    const cnpj = vigiaCnpjAtual();
+    if (cnpj.length !== 14) { alert('Digite o CNPJ completo antes de armar a vigia.'); return; }
+    const box = document.getElementById('vigiaBox');
+    box.innerHTML = '<i class="fas fa-spinner fa-spin vg-ico"></i><div class="vg-txt">Tirando a foto de referência na Receita…</div>';
+    fetch('/api/cnpj-vigia/' + cnpj + '/armar', {method: 'POST', headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify({cliente_id: VIGIA_CLIENTE_ID})})
+        .then(r => r.json())
+        .then(d => { if (d.success) vigiaDesenha(d.vigia, cnpj); else { alert(d.message || 'Não foi possível armar a vigia.'); vigiaDesenha(null, cnpj); } })
+        .catch(() => { alert('Não foi possível armar a vigia agora.'); vigiaDesenha(null, cnpj); });
+}
+function vigiaAcao(acao) {
+    const cnpj = vigiaCnpjAtual();
+    fetch('/api/cnpj-vigia/' + cnpj + '/' + acao, {method: 'POST'}).then(r => r.json())
+        .then(d => { if (d.success) vigiaDesenha(d.vigia, cnpj); }).catch(() => {});
+}
+function vigiaAplicar() {
+    if (!window._vigiaNovo) return;
+    ultimaConsultaMeta = {fonte: 'vigia', base_em: null};
+    preencherDadosCNPJ(window._vigiaNovo);
+    vigiaAcao('aplicada');
+}
+document.addEventListener('DOMContentLoaded', vigiaCarrega);
 
 // Município (modal) — preservado
 function buscarMunicipio() {

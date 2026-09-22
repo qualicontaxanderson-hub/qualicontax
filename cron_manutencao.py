@@ -7,7 +7,9 @@ O que roda, nesta ordem, a cada 10 minutos:
   1. arquivador do Q-Robô   (utils.arquivar_saidas.arquivar_pendentes, orçamento grande)
   2. confirmação por pasta  (utils.expurgo_xml.confirmar_pastas)
   3. expurgo do XML de NF-e (expurgar_nfe), eventos (expurgar_eventos) e CT-e (expurgar_cte)
-  4. auditoria de cópias  (utils.auditoria_copias.auditar) — SÓ LEITURA: prova
+  4. auditoria de cópias  (utils.auditoria_copias.auditar)
+  5. vigia de CNPJ        (utils.cnpj_vigia.vigiar) — consulta a Receita para os
+     CNPJs vigiados cuja hora chegou (a cada 24 h) e marca os que mudaram. — SÓ LEITURA: prova
      que a nota expurgada tem mesmo o arquivo no Dropbox. Uma volta por mês.
 
 Por que um serviço separado: o tick do roteador já carrega roteamento de XML,
@@ -69,6 +71,7 @@ def main() -> int:
         from utils.expurgo_xml import confirmar_pastas, expurgar_nfe, expurgar_eventos, expurgar_cte
         from utils.auditoria_copias import auditar
         from utils.vincular_orfas import vincular
+        from utils.cnpj_vigia import vigiar
         from utils.painel_cache import guardar
 
         t0 = time.monotonic()
@@ -105,6 +108,9 @@ def main() -> int:
             ('auditoria', auditar, dict(svc=dropbox_sync._service,
                                         max_pastas=int(os.getenv('AUDITORIA_PASTAS', '12')),
                                         prazo_seg=int(PRAZO * 0.10))),
+            # VIGIA DE CNPJ: no máximo 20 consultas por rodada, ~1 s cada; entre
+            # uma rodada e outra a maioria não venceu (24 h) e sai na hora.
+            ('vigia_cnpj', vigiar, dict(prazo_seg=max(15, int(PRAZO * 0.05)))),
         ):
             t1 = time.monotonic()
             try:
