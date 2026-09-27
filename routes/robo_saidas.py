@@ -6,6 +6,8 @@ O robô é burro; toda a inteligência (titularidade, filtro de data, idempotên
 gravação) fica nesta nuvem. Autenticação por robo_token (Bearer), NÃO por sessão.
 
   POST /api/saidas         multipart, campo 'arquivo' = XML → grava a saída.
+                           procEventoNFe (cancelamento) também entra por aqui
+                           desde 26/09/2026 — ver _receber_evento_qrobo.
   GET  /api/saidas/config  → data_inicio_captura, ativo, reset_seq.
 
 A página HUMANA de configuração (conf-saidas/q-robo) é separada; aqui é só a API.
@@ -144,6 +146,130 @@ def _receber_cte_qrobo(xml_str, robo, cliente_id):
                     'chave': chave, 'modelo': '57'}), 200
 
 
+# ---------------------------------------------------------------------------
+# EVENTO da NF-e/NFC-e (cancelamento) — 26/09/2026
+# ---------------------------------------------------------------------------
+# Medido em 26/09/2026: 3,7 milhões de NFC-e do Q-Robô e NENHUMA marcada como
+# cancelada. Posto cancela NFC-e todo dia; o que faltava era o caminho. O robô
+# achava o procEventoNFe "incompleto" (não termina em </nfeProc>) e esta rota
+# respondia xml_invalido — a venda cancelada ficava contando como venda.
+#
+# A regra é a MESMA da captura SEFAZ e do fiscal_ingest, lida das MESMAS
+# constantes: o evento é sempre registrado em dfe_eventos, e a nota só é marcada
+# quando o retEvento traz cStat de cancelamento ACEITO (135/136/155).
+#
+# Diferença para o fiscal_ingest.importar_evento: lá, evento de nota que o
+# sistema não tem é recusado. Aqui ele é GUARDADO — o robô varre a pasta em
+# qualquer ordem, e o cancelamento pode chegar antes da nota. Quem aplica o
+# guardado é _aplicar_cancelamento_guardado, chamado quando a nota entra.
+_RAIZES_EVENTO = ('procEventoNFe', 'evento')
+
+
+def _nome_local(el):
+    tag = el.tag if isinstance(el.tag, str) else ''
+    return tag.rsplit('}', 1)[-1]
+
+
+def _receber_evento_qrobo(root, xml_str, robo, cliente_id):
+    from utils.db_helper import transacao
+    from utils.integrations.dfe_captura import (
+        CSTAT_CANCELAMENTO_OK, SQL_CANCELA_NOTA, SQL_EVENTO_UPSERT,
+        TP_CANCELAMENTO, _MAX_XML_EVENTO, extrair_evento)
+
+    try:
+        ev = extrair_evento(root)
+    except ValueError as exc:
+        return jsonify({'status': 'xml_invalido', 'erro': str(exc)}), 422
+
+    ch = ev.get('ch_nfe')
+    if not ch or ch[20:22] not in ('55', '65'):
+        # Evento de CT-e (procEventoCTe) não chega aqui: a raiz é outra.
+        return jsonify({'status': 'xml_invalido',
+                        'erro': 'evento sem chNFe de NF-e/NFC-e'}), 422
+
+    cliente = Cliente.get_by_id(cliente_id)
+    if not cliente:
+        return jsonify({'status': 'nao_autorizado'}), 401
+
+    # Titularidade pela NOTA do evento: o emitente está na própria chave
+    # (posições 7-20). Mesmo casamento por raiz da saída — o robô de um posto
+    # não cancela nota de outro.
+    if not _mesmo_titular(ch[6:20], cliente.get('cpf_cnpj')):
+        return jsonify({'status': 'emitente_nao_confere'}), 422
+
+    nota = execute_query(
+        "SELECT id FROM nfe_importacoes WHERE chave_acesso=%s AND tipo='saida' LIMIT 1",
+        (ch,), fetch=True, fetch_one=True)
+
+    # Filtro de data só quando a nota NÃO está aqui: nota de antes do início da
+    # captura nunca vai entrar, e o evento dela ficaria guardado para sempre.
+    # Cancelamento de NFC-e sai em até 30 min da emissão, então a data do
+    # evento serve como a da nota.
+    di = robo.get('data_inicio_captura')
+    if not nota and di and ev.get('dh_txt') and ev['dh_txt'][:10] < di.isoformat():
+        return jsonify({'status': 'ignorado_data'}), 200
+
+    ja = execute_query(
+        "SELECT id FROM dfe_eventos WHERE chave_evento=%s LIMIT 1",
+        (ev['chave_evento'],), fetch=True, fetch_one=True)
+
+    cancela = (ev['tp_evento'] == TP_CANCELAMENTO
+               and ev.get('c_stat') in CSTAT_CANCELAMENTO_OK)
+    cancelou = 0
+    try:
+        with transacao() as cur:
+            cur.execute(SQL_EVENTO_UPSERT, (
+                cliente_id, ev['chave_evento'], ch, ev['tp_evento'],
+                ev['n_seq'], ev['descricao'], ev['dh_txt'], None, None,
+                ev['org_cnpj'], None, xml_str[:_MAX_XML_EVENTO],
+            ))
+            if cancela and nota:
+                cur.execute(SQL_CANCELA_NOTA, (ch,))
+                cancelou = int(cur.rowcount or 0)
+    except Exception as exc:
+        logger.exception('[q-robo] falha ao gravar evento %s', ev['chave_evento'])
+        return jsonify({'status': 'erro', 'erro': str(exc)}), 500
+
+    if cancela:
+        logger.info('[q-robo] cancelamento %s (cStat=%s) da nota %s: %s.',
+                    ev['chave_evento'], ev.get('c_stat'), ch,
+                    f'{cancelou} linha(s) marcada(s)' if nota
+                    else 'nota ainda não chegou — guardado')
+
+    # 'salvo'/'duplicado' de propósito: são os status que o robô já sabe
+    # marcar como ENVIADO (runner._MARCA_ENVIADO).
+    return jsonify({'status': 'duplicado' if ja else 'salvo', 'tipo': 'evento',
+                    'chave': ch, 'tp_evento': ev['tp_evento'],
+                    'cancelada': bool(cancela and nota),
+                    'guardado': bool(cancela and not nota)}), 200
+
+
+def _aplicar_cancelamento_guardado(chave):
+    """A nota acabou de entrar: havia cancelamento guardado para ela?
+
+    Uma consulta pelo índice ix_ev_chnfe por nota salva — quase sempre volta
+    vazia. O cStat não tem coluna em dfe_eventos, então se relê do XML guardado:
+    é o mesmo extrair_evento, a mesma guarda.
+    """
+    from utils.integrations.dfe_captura import (
+        CSTAT_CANCELAMENTO_OK, SQL_CANCELA_NOTA, TP_CANCELAMENTO, extrair_evento)
+
+    evs = execute_query(
+        "SELECT chave_evento, xml_raw FROM dfe_eventos WHERE ch_nfe=%s AND tp_evento=%s",
+        (chave, TP_CANCELAMENTO), fetch=True) or []
+    for e in evs:
+        try:
+            ev = extrair_evento(fromstring_seguro((e['xml_raw'] or '').encode('utf-8')))
+        except Exception:
+            continue
+        if ev.get('c_stat') in CSTAT_CANCELAMENTO_OK:
+            execute_query(SQL_CANCELA_NOTA, (chave,))
+            logger.info('[q-robo] nota %s chegou depois do cancelamento %s — '
+                        'marcada como cancelada.', chave, e['chave_evento'])
+            return True
+    return False
+
+
 @robo_saidas.route('/api/saidas', methods=['POST'])
 def receber_saida():
     # (1) token → cliente
@@ -166,10 +292,15 @@ def receber_saida():
 
     # (3) leitura SEGURA (XXE off) — comum aos dois modelos.
     try:
-        fromstring_seguro(xml_bytes)             # gate anti-XXE (recusa DTD/entidade)
+        root = fromstring_seguro(xml_bytes)      # gate anti-XXE (recusa DTD/entidade)
     except XmlInseguroError as exc:
         return jsonify({'status': 'xml_invalido', 'erro': str(exc)}), 422
     xml_str = xml_bytes.decode('utf-8', 'replace')
+
+    # (3a) EVENTO (cancelamento) — ANTES de rotear pelo modelo: o Id do evento
+    #      ("ID110111<chave>01") engana o _modelo_do_xml.
+    if _nome_local(root) in _RAIZES_EVENTO:
+        return _receber_evento_qrobo(root, xml_str, robo, cliente_id)
 
     # (3b) CT-e (modelo 57) tem parser/gravação próprios (reaproveita a Parte 1 do
     #      upload). Roteia pelos dígitos 21-22 da chave; 55/65 seguem o fluxo abaixo,
@@ -218,6 +349,14 @@ def receber_saida():
     except Exception as exc:
         logger.exception('[q-robo] falha ao gravar saída chave=%s', dados['chave'])
         return jsonify({'status': 'erro', 'erro': str(exc)}), 500
+
+    # (7a) O cancelamento pode ter chegado ANTES da nota (ver _receber_evento_qrobo).
+    #      Falhar aqui não desfaz a nota já gravada — só loga.
+    try:
+        _aplicar_cancelamento_guardado(dados['chave'])
+    except Exception:
+        logger.exception('[q-robo] falha ao aplicar cancelamento guardado da nota %s',
+                         dados['chave'])
 
     # (7b) O ARQUIVAMENTO NO DROPBOX SAIU DAQUI em 12/09/2026, e não é detalhe.
     #
