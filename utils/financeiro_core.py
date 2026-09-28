@@ -65,8 +65,8 @@ def registrar_baixa(titulo_id, valor, data_baixa, origem, referencia=None,
         raise BaixaInvalida(f'baixa por {origem} exige referência '
                             '(nosso_numero / hash do lançamento)')
     valor = _dec(valor)
-    if valor <= 0:
-        raise BaixaInvalida('valor da baixa deve ser positivo')
+    if valor == 0:
+        raise BaixaInvalida('valor da baixa não pode ser zero')
 
     t = execute_query(
         'SELECT id, status, valor FROM fin_titulos WHERE id = %s',
@@ -75,6 +75,19 @@ def registrar_baixa(titulo_id, valor, data_baixa, origem, referencia=None,
         raise BaixaInvalida(f'título {titulo_id} não existe')
     if t['status'] == 'cancelado':
         raise BaixaInvalida('título cancelado não recebe baixa')
+
+    # SINAL (18/09/2026). Até aqui a regra era "valor da baixa deve ser
+    # positivo", porque título só existia positivo. O ESTORNO mudou isso: o
+    # Anderson decidiu que devolução não cancela o original — ela entra como
+    # título NEGATIVO na mesma categoria, no mês em que o dinheiro voltou
+    # ("pagou a Monica agosto 1000, Monica devolveu setembro −1.000, total 0").
+    #
+    # A trava NÃO virou "aceita qualquer coisa": baixa negativa num título
+    # positivo seria um jeito silencioso de desfazer pagamento. A regra nova é
+    # mais apertada que a antiga — a baixa tem de ter o MESMO sinal do título.
+    if (valor < 0) != (_dec(t['valor']) < 0):
+        raise BaixaInvalida('baixa e título precisam ter o mesmo sinal — '
+                            'baixa negativa só liquida título negativo')
 
     # A chave de idempotência, com NULL tratado à mão (UNIQUE do MySQL deixa
     # NULLs repetirem; aqui até baixa manual sem referência é conferida).
@@ -141,9 +154,17 @@ def recalcular_status(titulo_id):
         (titulo_id,), fetch=True, fetch_one=True)
     baixado, descontos = _dec(soma['v']), _dec(soma['d'])
 
-    if baixado + descontos <= 0:
+    # A DIREÇÃO VEM DO SINAL DO TÍTULO (18/09/2026). A comparação antiga era
+    # contra zero e contra o valor como se ambos fossem positivos — e com
+    # título −1.000 e baixa −1.000, 'baixado <= 0' era VERDADEIRO: o estorno
+    # ficava 'aberto' para sempre, aparecendo como conta a pagar. Num título
+    # negativo, quem liquida é a baixa negativa que o alcança.
+    valor = _dec(t['valor'])
+    total = baixado + descontos
+    negativo = valor < 0
+    if (total >= 0) if negativo else (total <= 0):
         status = 'aberto'
-    elif baixado + descontos >= _dec(t['valor']):
+    elif (total <= valor) if negativo else (total >= valor):
         status = 'liquidado'
     else:
         status = 'parcial'
