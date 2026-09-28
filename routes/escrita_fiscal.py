@@ -8338,25 +8338,62 @@ def api_notas_saidas():
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     offset = (page - 1) * per_page
 
-    all_rows = execute_query(
-        f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
-                   n.emit_cnpj, n.emit_nome, n.emit_uf,
-                   n.dest_cnpj, n.dest_nome, n.dest_uf,
-                   n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
-                   n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
-                   n.nome_arquivo,
-                   n.importado_em, n.cliente_id, n.grupo_id,
-                   c.nome_razao_social AS empresa_nome,
-                   g.nome AS grupo_nome
-              FROM nfe_importacoes n
-              LEFT JOIN clientes c ON c.id = n.cliente_id
-              LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
+    # PÁGINA EM DOIS PASSOS (27/09/2026). Antes era uma consulta só, com as
+    # colunas todas e os JOINs, e o MySQL às vezes a resolvia descendo o
+    # idx_data de TODOS os clientes e lendo a linha inteira (com os 8 KB de
+    # xml_raw) até juntar 50 do filtro. Medido em 27/09 com o banco quieto:
+    # grupo no ano 53-90 s, Westpark pág. 2 98 s, Novo Horizonte pág. 10 6,9 s —
+    # acima do teto de 30 s, a tela dizia "a consulta demorou demais".
+    #
+    # Passo 1 escolhe só os ids (o mesmo WHERE, o mesmo ORDER BY, o mesmo
+    # LIMIT/OFFSET — a ordem é decidida AQUI e não muda). Passo 2 lê as 50
+    # linhas pela chave primária. Mesmas consultas nos mesmos casos: 0,4-2,2 s,
+    # e as páginas idênticas nota a nota (16 comparações, período fechado).
+    #
+    # FORCE INDEX quando há empresa/grupo: com filtro que casa pouca coisa
+    # ("Canceladas" no Terra Branca = 1 nota no ano) o otimizador ESTIMA 1.397
+    # linhas pelo idx_data, desce o ano de todos os clientes e levou 859 s. Pelo
+    # idx_lista (cliente_id, tipo, data_emissao, cancelada, valores) a mesma
+    # consulta leva 0,6 s. Sem empresa não há gaveta de cliente — fica o plano livre.
+    #
+    # E SÓ quando todo filtro está DENTRO do idx_lista. Filtro de coluna que o
+    # índice não tem (CFOP, destinatário, chave...) obriga a ler a linha inteira
+    # de cada nota do cliente: medido na Westpark com CFOP 5656, 4,6 s no plano
+    # livre e 102 s forçado. Nesses casos o plano continua sendo o de antes.
+    _fora_do_indice = ('dest_cnpj', 'chave', 'num_nota', 'cfop', 'dest_uf', 'emit_cnpj',
+                       'origem', 'vinc_status', 'produto_id', 'item_desc')
+    _so_indice = not any(request.args.get(k, '').strip() for k in _fora_do_indice)
+    _hint = ('FORCE INDEX (idx_lista)'
+             if (f_cliente_id or f_grupo_id) and _so_indice else '')
+    ids_pagina = [r['id'] for r in (execute_query(
+        f"""SELECT n.id
+              FROM nfe_importacoes n {_hint}
               {where_sql}
              ORDER BY n.data_emissao DESC, n.id DESC
              LIMIT %s OFFSET %s""",
         tuple(params) + (per_page, offset),
         fetch=True,
-    ) or []
+    ) or [])]
+    all_rows = []
+    if ids_pagina:
+        _ph = ','.join(['%s'] * len(ids_pagina))
+        all_rows = execute_query(
+            f"""SELECT n.id, n.chave_acesso, n.num_nota, n.serie, n.data_emissao,
+                       n.emit_cnpj, n.emit_nome, n.emit_uf,
+                       n.dest_cnpj, n.dest_nome, n.dest_uf,
+                       n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
+                       n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
+                       n.nome_arquivo,
+                       n.importado_em, n.cliente_id, n.grupo_id,
+                       c.nome_razao_social AS empresa_nome,
+                       g.nome AS grupo_nome
+                  FROM nfe_importacoes n
+                  LEFT JOIN clientes c ON c.id = n.cliente_id
+                  LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
+                 WHERE n.id IN ({_ph})""",
+            tuple(ids_pagina), fetch=True) or []
+        _pos = {i: k for k, i in enumerate(ids_pagina)}
+        all_rows.sort(key=lambda r: _pos[r['id']])
 
     # Totais e KPIs numa consulta de AGREGADO, separada da pagina. Ate 13/09/2026
     # eram COUNT(*)/SUM() OVER() na mesma consulta: para devolver 50 linhas o
