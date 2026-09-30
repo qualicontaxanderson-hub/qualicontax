@@ -738,7 +738,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
         </button>
         <button class="btn-lote pdf" onclick="gerarPdfLote(this)"
                 title="Só os marcados, no máximo 10 por vez">
-            <i class="fas fa-file-pdf"></i> Gerar PDF (até 10)
+            <i class="fas fa-file-pdf"></i> Gerar PDF (até 500)
         </button>
         <div class="exp-drop">
             <button class="btn-lote exp" onclick="toggleExp(event)" title="Relatório (PDF/Excel) do filtro atual">
@@ -1456,10 +1456,16 @@ function baixarXmlLote(btn) {
     _baixarZip('/escrita-fiscal/conf-compras/export/xml-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 function gerarPdfLote(btn) {
-    const ids = idsMarcados();
-    if (!ids.length) { alert('Marque o que você quer em PDF (no máximo 10).'); return; }
-    if (ids.length > 10) { alert('Máximo 10 PDFs por vez (você marcou ' + ids.length + ').'); return; }
+    // Até 500 (30/09/2026): o relatório mensal de um posto é de 100 a 200 notas.
+    // Sem nada marcado — ou com "todas do filtro" — vão TODAS as notas do filtro
+    // (ids vazios; o backend conta e recusa acima de 500). O servidor manda o zip
+    // em streaming: 500 PDFs levam ~1 min, o botão fica em "Gerando..." até lá.
+    const pageIds = idsMarcados();
+    if (!selTudoFiltro && !pageIds.length &&
+        !confirm('Nada marcado — gerar o PDF de TODAS as notas do filtro atual (até 500)?')) return;
+    if (!selTudoFiltro && pageIds.length > 500) { alert('Máximo 500 PDFs por vez (você marcou ' + pageIds.length + ').'); return; }
     if (!_confirmaCanceladas()) return;
+    const ids = selTudoFiltro ? [] : pageIds;
     _baixarZip('/escrita-fiscal/conf-compras/export/pdf-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 

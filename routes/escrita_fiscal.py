@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify, send_file, Response,
+    flash, jsonify, send_file, Response, stream_with_context,
 )
 from io import BytesIO
 from flask_login import current_user
@@ -2463,6 +2463,16 @@ _INVALIDOS_NOME = {ord(c): None for c in '/\\:*?"<>|'}
 # do Dropbox. Mesmo em paralelo, 1000 arquivos estouraria o tempo da requisição.
 _LOTE_MAX_XML_CTE = 200
 _LOTE_MAX_PDF = 10
+# NF-e/NFC-e (entradas e saídas): 500, pedido do escritório em 30/09/2026 — o
+# relatório mensal de um posto é de 100 a 200 notas e 10 por vez fazia o
+# funcionário repetir o botão 20 vezes. Medido: ~0,12 s por DANFE (mediana
+# 110 ms, pior 300 ms), então 500 dá ~1 min — por isso esse caminho sai em
+# STREAMING (_stream_pdf_lote_nfe), nunca montando o zip antes de responder.
+# CT-e e NFS-e continuam em _LOTE_MAX_PDF: o XML deles vem do Dropbox, um a um.
+_LOTE_MAX_PDF_NFE = 500
+# Quantas notas o streaming resolve por vez (banco + Dropbox). Pequeno de
+# propósito: o primeiro PDF sai logo e o download começa na hora.
+_LOTE_PDF_CHUNK = 50
 
 
 def _ids_do_lote(data):
@@ -2890,58 +2900,121 @@ def _lote_xml_nfe(escopo, permissao):
     return _stream_xml_lote_nfe(where_sql, params, nome)
 
 
+def _stream_pdf_lote_nfe(where_sql, params, nome_zip):
+    """Zip de PDFs (DANFE/DANFCE) em STREAMING: cada PDF é gerado e já vai para
+    a resposta. Com 500 notas a geração passa de 1 minuto — montar o zip antes
+    de responder estouraria o --timeout do gunicorn; assim o download começa no
+    primeiro PDF e os bytes não param de correr.
+
+    O zipfile escreve num buffer que é esvaziado a cada arquivo (zip em saída
+    não-pesquisável usa descritor de dados — o formato é padrão). Nota que não
+    gera PDF não vira arquivo vazio: fica de fora e entra no
+    NAO_GERADOS.txt no fim do zip, com a chave e o motivo."""
+    from utils.nfe_xml_fonte import COLUNAS, JOIN_CLIENTE, resolver_lote
+
+    meta = execute_query(
+        f"SELECT n.id FROM nfe_importacoes n {where_sql} "
+        "ORDER BY n.data_emissao, n.id", tuple(params), fetch=True) or []
+    ids = [m['id'] for m in meta]
+
+    class _Saida:
+        """Arquivo só-escrita que o zipfile enche e o gerador esvazia."""
+        def __init__(self):
+            self.partes, self.pos = [], 0
+        def write(self, b):
+            self.partes.append(bytes(b))
+            self.pos += len(b)
+            return len(b)
+        def tell(self):
+            return self.pos
+        def flush(self):
+            pass
+        def tirar(self):
+            dados, self.partes = b''.join(self.partes), []
+            return dados
+
+    def gerar():
+        log = logging.getLogger(__name__)
+        saida = _Saida()
+        falhas = []
+        with zipfile.ZipFile(saida, 'w', zipfile.ZIP_DEFLATED) as z:
+            for i in range(0, len(ids), _LOTE_PDF_CHUNK):
+                lote = ids[i:i + _LOTE_PDF_CHUNK]
+                ph = ','.join(['%s'] * len(lote))
+                rows = execute_query(
+                    f"SELECT {COLUNAS} FROM nfe_importacoes n {JOIN_CLIENTE} "
+                    f"WHERE n.id IN ({ph})", tuple(lote), fetch=True) or []
+                porid = {r['id']: r for r in rows}
+                xmls = resolver_lote(rows)      # banco, senão Dropbox em paralelo
+                for _id in lote:
+                    r = porid.get(_id) or {}
+                    chave = r.get('chave_acesso') or ''
+                    modelo = chave[20:22] if len(chave) >= 22 else ''
+                    xml = xmls.get(_id)
+                    if not xml:
+                        falhas.append((chave or str(_id), 'XML não encontrado (banco nem Dropbox)'))
+                        continue
+                    try:
+                        pdf = _gerar_pdf_documento(xml, modelo)
+                    except Exception:
+                        log.exception('[export-lote] falha no PDF da nfe_id=%s', _id)
+                        pdf = None
+                    if not pdf:
+                        falhas.append((chave or str(_id), 'XML fora do padrão do DANFE'))
+                        continue
+                    z.writestr((chave or str(_id)) + '.pdf', pdf)
+                    yield saida.tirar()
+            if falhas:
+                z.writestr('NAO_GERADOS.txt', (
+                    f'{len(falhas)} nota(s) sem PDF neste zip — baixe o XML delas:\r\n\r\n'
+                    + ''.join(f'{c}  {m}\r\n' for c, m in falhas)).encode('utf-8-sig'))  # BOM: acento certo no Bloco de Notas
+        yield saida.tirar()
+        log.info('[export-lote] PDF em streaming: %s notas, %s sem PDF',
+                 len(ids), len(falhas))
+
+    resp = Response(stream_with_context(gerar()), mimetype='application/zip')
+    resp.headers['Content-Disposition'] = _cd_attachment_zip(nome_zip)
+    return resp
+
+
 def _lote_pdf_nfe(escopo, permissao):
     if not current_user.has_permission(permissao):
         return jsonify({'error': 'Você não tem permissão para exportar estas notas.'}), 403
     data = request.get_json(silent=True) or {}
     ids = _ids_do_lote(data)
-    if not ids:
-        return jsonify({'error': 'Marque as notas que quer em PDF '
-                                 f'(no máximo {_LOTE_MAX_PDF}).'}), 400
-    if len(ids) > _LOTE_MAX_PDF:
-        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
+    if len(ids) > _LOTE_MAX_PDF_NFE:
+        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF_NFE} PDFs por vez '
                                  f'(você marcou {len(ids)}).'}), 413
 
+    # Sem ids = TODAS as notas do filtro (mesmo contrato do XML em lote); com ids
+    # = só as marcadas. Em ambos o escopo de empresa entra no WHERE.
     where, params = _where_lote(escopo, data)
+    # XML vazio no banco não exclui mais (12/09/2026): o resolvedor busca no
+    # Dropbox o que a nota antiga não tem mais em xml_raw.
+    where = list(where) + ["n.incompleta = 0"]
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
+    per = execute_query(
+        f"SELECT COUNT(*) AS t, MIN(n.data_emissao) AS mn, MAX(n.data_emissao) AS mx "
+        f"FROM nfe_importacoes n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+    total = int(per.get('t') or 0)
+    if total == 0:
+        return jsonify({'error': 'Nenhuma nota com XML disponível na seleção/filtro '
+                                 '(resumos da SEFAZ não têm XML).'}), 404
+    if total > _LOTE_MAX_PDF_NFE:
+        return jsonify({'error': f'{total} notas no filtro — o PDF vai até '
+                                 f'{_LOTE_MAX_PDF_NFE} por vez. Refine o período '
+                                 f'ou marque as notas que quer.'}), 413
 
     # AUDITORIA (D2): exportação de arquivo (PDF em lote) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfe_importacoes',
               depois={'escopo': escopo, 'formato': 'pdf', 'marcadas': len(ids),
+                      'total': total,
                       'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
                                   **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
-    from utils.nfe_xml_fonte import COLUNAS, JOIN_CLIENTE, resolver_lote
-    # XML vazio no banco não exclui mais (12/09/2026): o resolvedor busca no
-    # Dropbox o que a nota antiga não tem mais em xml_raw.
-    where = list(where) + ["n.incompleta = 0"]
-    rows = execute_query(
-        f"SELECT {COLUNAS} FROM nfe_importacoes n {JOIN_CLIENTE} "
-        "WHERE " + ' AND '.join(where), tuple(params), fetch=True) or []
-    xmls = resolver_lote(rows)
-
-    arquivos, ignorados = [], 0
-    for r in rows:
-        chave = r['chave_acesso'] or ''
-        modelo = chave[20:22] if len(chave) >= 22 else ''
-        xml = xmls.get(r['id'])
-        if not xml:
-            ignorados += 1
-            continue
-        try:
-            pdf = _gerar_pdf_documento(xml, modelo)
-        except Exception:
-            logging.getLogger(__name__).exception(
-                '[export-lote] falha no PDF da nfe_id=%s', r['id'])
-            pdf = None
-        if pdf:
-            arquivos.append(((chave or str(r['id'])) + '.pdf', pdf))
-        else:
-            ignorados += 1
-    if not arquivos:
-        return jsonify({'error': 'Nenhuma das notas marcadas gerou PDF (o XML pode estar '
-                                 'fora do padrão esperado). Baixe o XML por enquanto.'}), 404
-    return _zip_download(arquivos, _nome_zip_lote(
-        data, [r['data_emissao'] for r in rows], _prefixo_lote(escopo, 'PDF')))
+    nome = _nome_zip_lote(data, [per.get('mn'), per.get('mx')], _prefixo_lote(escopo, 'PDF'))
+    return _stream_pdf_lote_nfe(where_sql, params, nome)
 
 
 @escrita_fiscal.route('/conf-compras/export/xml-lote', methods=['POST'])
