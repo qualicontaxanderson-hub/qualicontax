@@ -1183,8 +1183,8 @@ function colabInstalador() {
         // mais um PDF na pasta do Dropbox que envelhecia sozinho. Por isso o
         // botão não depende de tem_manual/tem_leiame: ele existe sempre.
         linhas += '<a class="btn btn-sm btn-secondary colab-inst-btn" target="_blank" ' +
-            'href="{{ url_for("manuais.qcolabore") }}">' +
-            '<i class="fas fa-book"></i> Manual de instalação</a>';
+            'href="{{ url_for("manuais.qcolabore", pdf=1) }}">' +
+            '<i class="fas fa-file-pdf"></i> Manual de instalação (PDF)</a>';
         if (ehAdmin) {
             linhas += '<button type="button" class="btn btn-sm btn-secondary colab-inst-btn" ' +
                 'onclick="progAbrir()"><i class="fas fa-link"></i> ' +

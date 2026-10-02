@@ -91,6 +91,16 @@ strong { font-weight:700; }
     h2 { break-after:avoid; page-break-after:avoid; }
     .nao-imprime { display:none; }
 }
+
+/* Botão "Baixar PDF": gera o arquivo no navegador (html2pdf) e baixa direto,
+   sem a janela de impressão — no celular o Ctrl+P não existe. */
+.btn-pdf { margin-top:18px; display:inline-flex; align-items:center; gap:8px;
+    background:#fff; color:var(--verde-esc); border:0; border-radius:999px;
+    padding:10px 20px; font:700 14px/1 inherit; cursor:pointer; }
+.btn-pdf:hover { background:#dcfce7; }
+.btn-pdf:focus-visible { outline:3px solid #86efac; outline-offset:2px; }
+.btn-pdf[disabled] { opacity:.7; cursor:wait; }
+.gerando-pdf .nao-imprime { display:none !important; }
 </style>
 </head>
 <body>
@@ -105,6 +115,9 @@ strong { font-weight:700; }
         <h1>{% block cabecalho %}{% endblock %}</h1>
         <p class="capa-sub">{% block subtitulo %}{% endblock %}</p>
         {% block selo %}{% endblock %}
+        <button type="button" class="btn-pdf nao-imprime" id="btn-pdf" onclick="baixarPdf()">
+            ⬇ Baixar PDF
+        </button>
     </div>
 
     <div class="corpo">
@@ -113,9 +126,47 @@ strong { font-weight:700; }
 
     <div class="rodape">
         <span>Qualicontax — {% block rodape %}manual de instalação{% endblock %}</span>
-        <span class="nao-imprime">Para salvar em PDF: <strong>Ctrl+P</strong> → Salvar como PDF</span>
+        <span class="nao-imprime"><a href="#" onclick="baixarPdf(); return false;">Baixar este manual em PDF</a></span>
     </div>
 
 </div>
+<script>
+// PDF gerado AQUI, no navegador: a página continua sendo a única fonte do
+// manual (nada de PDF solto que envelhece). ?pdf=1 na URL baixa ao abrir —
+// é o que o botão "Manual de instalação" da tela de Usuários usa.
+var PDF_NOME = '{% block arquivo_pdf %}Manual-Qualicontax{% endblock %}' + '.pdf';
+var PDF_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+function _carregarLib(ok, erro) {
+    if (window.html2pdf) return ok();
+    var s = document.createElement('script');
+    s.src = PDF_LIB; s.onload = ok; s.onerror = erro;
+    document.head.appendChild(s);
+}
+function baixarPdf() {
+    var btn = document.getElementById('btn-pdf');
+    var rotulo = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Gerando PDF…'; }
+    function fim() { document.body.classList.remove('gerando-pdf');
+                     if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } }
+    _carregarLib(function () {
+        document.body.classList.add('gerando-pdf');
+        window.scrollTo(0, 0);
+        html2pdf().set({
+            margin: [10, 10, 12, 10],
+            filename: PDF_NOME,
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['.bloco', 'ol.passos > li', 'h2', 'h3'] }
+        }).from(document.querySelector('.folha')).save().then(fim, fim);
+    }, function () {
+        fim();
+        alert('Não consegui gerar o PDF agora. Use Ctrl+P → Salvar como PDF.');
+    });
+}
+if (new URLSearchParams(location.search).get('pdf') === '1') {
+    window.addEventListener('load', function () { baixarPdf(); });
+}
+</script>
 </body>
 </html>
