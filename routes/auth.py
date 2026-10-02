@@ -37,7 +37,7 @@ def login():
             return render_template('login.html')
 
         if user and verify_password(user.senha_hash, password):
-            if not user.is_active():
+            if not user.is_active:
                 flash('Sua conta está desativada. Entre em contato com o administrador.', 'warning')
                 return render_template('login.html')
             

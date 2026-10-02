@@ -239,7 +239,7 @@ def login():
             logger.info('[qrobo] login recusado para %r (credencial).', nome)
             flash('Login ou senha incorretos.', 'danger')
             return render_template('qrobo/login.html'), 401
-        if not user.is_active():
+        if not user.is_active:
             flash('Sua conta está desativada. Fale com o administrador.', 'warning')
             return render_template('qrobo/login.html'), 403
         if not user.has_permission(PERMISSAO):

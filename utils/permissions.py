@@ -53,9 +53,17 @@ PERMISSION_CATALOG = {
         'clientes.index':                 'Listar Clientes',
         'clientes.create':                'Criar Clientes',
         'clientes.edit':                  'Editar Clientes',
+        # Nasceram em 02/10/2026 com o portão central (utils/acesso.py), SEM
+        # perfil nenhum: até o admin marcar, só admin faz. Antes eram rotas
+        # que qualquer logado abria pela URL.
+        'clientes.delete':                'Excluir Clientes',
+        'clientes.dfe_captura':           'Captura manual na SEFAZ (NF-e/CT-e)',
         'contratos.list_contratos':       'Listar Contratos',
         'contratos.create_contrato':      'Criar Contratos',
         'grupos.index':                   'Grupos de Clientes',
+    },
+    'Processos': {
+        'processos.index':                'Processos',
     },
     'Relatórios': {
         'relatorios.index':               'Acessar Relatórios',

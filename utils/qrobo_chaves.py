@@ -29,6 +29,8 @@ import re
 import secrets
 from datetime import date
 
+from utils.acesso import filtrar_lista, pode_ver_empresa
+
 from utils.db_helper import execute_query, transacao
 
 # 32 bytes -> 64 chars hex, exatamente o VARCHAR(64) UNIQUE de robo_config.
@@ -92,6 +94,7 @@ def resolver_numero(numero):
         "  FROM clientes WHERE numero_cliente = %s ORDER BY id",
         (numero,), fetch=True,
     ) or []
+    linhas = filtrar_lista(linhas)           # empresa reservada: "não encontrado"
 
     if not linhas:
         return {'ok': False, 'erro': 'nao_encontrado', 'numero': numero}
@@ -125,7 +128,7 @@ def resolver_cliente_id(cliente_id):
     cli = execute_query(
         "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, situacao "
         "  FROM clientes WHERE id = %s", (cid,), fetch=True, fetch_one=True)
-    if not cli:
+    if not cli or not pode_ver_empresa(cid):
         return {'ok': False, 'erro': 'cliente_inexistente', 'cliente_id': cid}
 
     return {'ok': True,
@@ -165,7 +168,8 @@ def buscar_clientes(termo, limite=LIMITE_BUSCA):
     padrao = f'%{seguro}%'
     limite = max(1, min(int(limite or LIMITE_BUSCA), 50))
 
-    return execute_query(
+    # Empresa reservada some da busca do instalador (utils/acesso.py).
+    return filtrar_lista(execute_query(
         "SELECT id AS cliente_id, numero_cliente, nome_razao_social AS razao_social, "
         "       cpf_cnpj, situacao, "
         "       (SELECT COUNT(*) FROM robo_config r WHERE r.cliente_id = c.id) AS tem_robo "
@@ -179,7 +183,7 @@ def buscar_clientes(termo, limite=LIMITE_BUSCA):
         " LIMIT %s",
         (termo, padrao, padrao, f'%{so_digitos}%' if so_digitos else '\x00',
          termo, limite),
-        fetch=True) or []
+        fetch=True) or [], 'cliente_id')
 
 
 def _digitos(texto):
@@ -217,7 +221,7 @@ def revelar_chave(cliente_id, usuario_id, usuario_nome,
         "  FROM clientes WHERE id = %s",
         (cliente_id,), fetch=True, fetch_one=True,
     )
-    if not cliente:
+    if not cliente or not pode_ver_empresa(cliente_id):
         return {'ok': False, 'erro': 'cliente_inexistente', 'cliente_id': cliente_id}
 
     linha = execute_query(
@@ -336,7 +340,7 @@ def gerar_chave(cliente_id, usuario_id, usuario_nome, *, regerar=False,
         "  FROM clientes WHERE id = %s",
         (cliente_id,), fetch=True, fetch_one=True,
     )
-    if not cliente:
+    if not cliente or not pode_ver_empresa(cliente_id):
         return {'ok': False, 'erro': 'cliente_inexistente', 'cliente_id': cliente_id}
 
     try:

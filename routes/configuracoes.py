@@ -1881,10 +1881,18 @@ def usuario_editar(uid):
         flash(f'Usuário "{nome}" atualizado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
+    # Empresas RESERVADAS em que esta pessoa é exceção (utils/acesso.py) — a
+    # marcação é feita na ficha da empresa; aqui só se mostra.
+    excecoes_reservadas = execute_query(
+        "SELECT c.id, c.numero_cliente, c.nome_razao_social, c.acesso_reservado "
+        "  FROM cliente_acesso_excecao e JOIN clientes c ON c.id = e.cliente_id "
+        " WHERE e.usuario_id = %s ORDER BY c.nome_razao_social",
+        (uid,), fetch=True) or []
     return render_template('configuracoes/usuario_form.html',
                            perfis=perfis, clientes=clientes, usuario=usuario,
                            perfis_usuario=perfis_usuario,
-                           empresas_usuario=empresas_usuario)
+                           empresas_usuario=empresas_usuario,
+                           excecoes_reservadas=excecoes_reservadas)
 
 
 @configuracoes.route('/usuarios/<int:uid>/toggle', methods=['POST'])

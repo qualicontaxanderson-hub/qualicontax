@@ -173,6 +173,15 @@ app.register_blueprint(qrobo)
 # para escapar. Sessão sem o escopo não é tocada — o app segue igual para todos.
 app.before_request(gate_escopo_instalador)
 
+# Portão central de PERFIL e EMPRESA RESERVADA — também DENY BY DEFAULT: rota
+# que não está classificada em utils/acesso.py é só admin. Roda depois do gate
+# do instalador (aquele é mais restrito e responde primeiro). 02/10/2026: havia
+# 148 rotas que só conferiam login; o menu escondia, a URL digitada abria.
+from utils.acesso import portao as _portao_acesso, pode_rota as _pode_rota
+app.before_request(_portao_acesso)
+# Nos templates: {% if pode_rota('clientes.editar') %} — a mesma regra do portão.
+app.jinja_env.globals['pode_rota'] = _pode_rota
+
 
 # Template filters
 from utils.formatters import format_cpf, format_cnpj, format_phone, format_currency, format_date

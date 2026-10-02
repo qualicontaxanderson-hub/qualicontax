@@ -42,6 +42,9 @@ def login_required(f):
             flash('Por favor, faça login para acessar esta página.', 'warning')
             return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
+    # A marca diz ao portão central (utils/acesso.py) o que esta rota exige.
+    # Só login NÃO basta para ele: rota só-login precisa estar no mapa.
+    decorated_function._acesso = ('login', None)
     return decorated_function
 
 
@@ -58,6 +61,7 @@ def admin_required(f):
             flash('Você não tem permissão para acessar esta página.', 'danger')
             return redirect(url_for('dashboard.index'))
         return f(*args, **kwargs)
+    decorated_function._acesso = ('admin', None)
     return decorated_function
 
 
@@ -78,5 +82,6 @@ def permission_required(codigo):
                 flash('Você não tem permissão para acessar esta página.', 'danger')
                 return redirect(url_for('dashboard.index'))
             return f(*args, **kwargs)
+        decorated_function._acesso = ('perm', codigo)
         return decorated_function
     return decorator

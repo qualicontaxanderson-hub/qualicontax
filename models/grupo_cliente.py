@@ -2,6 +2,7 @@
 import time
 import threading
 from utils.db_helper import execute_query
+from utils.acesso import filtrar_lista
 
 _CACHE_TTL_SECONDS = 60
 _cache_ativos = None
@@ -199,4 +200,5 @@ class GrupoCliente:
             WHERE cgr.grupo_id = %s
             ORDER BY c.nome_razao_social
         """
-        return execute_query(query, (grupo_id,), fetch=True) or []
+        # Empresa reservada não aparece como membro para quem não a vê.
+        return filtrar_lista(execute_query(query, (grupo_id,), fetch=True) or [])

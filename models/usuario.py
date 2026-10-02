@@ -87,8 +87,17 @@ class Usuario(UserMixin):
         """
         return self.classe_conta == 'CLIENTE'
 
+    @property
     def is_active(self):
-        """Verifica se o usuário está ativo (requerido pelo Flask-Login)"""
+        """Verifica se o usuário está ativo (requerido pelo Flask-Login).
+
+        PROPRIEDADE, não método: o Flask-Login lê ``user.is_active`` sem
+        chamar. Como método, o valor era a função — sempre verdadeira — e o
+        ``is_authenticated`` herdado do UserMixin (que devolve is_active)
+        deixava o usuário DESATIVADO navegar com a sessão ou o "lembrar-me"
+        que já tinha. Corrigido em 02/10/2026: desativou, cai na requisição
+        seguinte.
+        """
         return self.situacao == 'ATIVO'
     
     def get_id(self):

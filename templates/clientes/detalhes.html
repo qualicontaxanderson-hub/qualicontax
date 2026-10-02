@@ -180,6 +180,20 @@
     border-radius:8px; font-size:13px; cursor:pointer; }
 .hist-pg[disabled] { opacity:.45; cursor:default; }
 .hist-pg-info { font-size:12px; color:#64748b; }
+
+/* ── Aba Acesso (empresa reservada; só admin) ───────────────────────────── */
+.acesso-form { display:flex; flex-direction:column; gap:16px; max-width:640px; }
+.acesso-opcao { display:flex; gap:10px; align-items:flex-start; cursor:pointer; font-size:14px; }
+.acesso-opcao input { margin-top:3px; flex:0 0 auto; }
+.acesso-opcao small, .acesso-ajuda { color:var(--text-secondary, #64748b); font-size:12px; line-height:1.5; }
+.acesso-excecoes { border:1px solid var(--border-color, #e2e8f0); border-radius:10px; padding:12px 14px;
+    display:flex; flex-direction:column; gap:8px; min-width:0; }
+.acesso-excecoes legend { font-size:13px; font-weight:700; padding:0 6px; }
+.acesso-excecoes .acesso-ajuda { margin:0 0 4px; }
+.acesso-pessoa { display:flex; gap:8px; align-items:center; font-size:14px; cursor:pointer; word-break:break-word; }
+.acesso-pessoa small { color:var(--text-secondary, #64748b); }
+.acesso-excecoes[disabled] { opacity:.5; }
+.acesso-form .btn { align-self:flex-start; }
 </style>
 {% endblock %}
 
@@ -209,12 +223,15 @@
                     <span class="ef-hero-badge">{{ 'PF' if cliente.tipo_pessoa == 'PF' else 'PJ' }}</span>
                     {% if cliente.regime_tributario %}<span class="ef-hero-badge">{{ cliente.regime_tributario }}</span>{% endif %}
                     {% if cliente.porte_empresa %}<span class="ef-hero-badge">{{ cliente.porte_empresa }}</span>{% endif %}
+                    {% if reserva and reserva.reservado %}<span class="ef-hero-badge" title="Só administradores e as exceções veem esta empresa"><i class="fas fa-lock"></i> Reservada</span>{% endif %}
                 </div>
             </div>
             <div class="ef-hero-actions">
                 <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Voltar</a>
+                {% if pode_rota('clientes.editar') %}
                 <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="ef-btn ef-btn-primary"><i class="fas fa-edit"></i> Editar</a>
-                {% if cliente.situacao == 'ATIVO' %}
+                {% endif %}
+                {% if cliente.situacao == 'ATIVO' and pode_rota('clientes.inativar') %}
                 <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST">
                     <button type="submit" class="ef-btn ef-btn-danger" onclick="return confirm('Deseja realmente inativar este cliente?')">
                         <i class="fas fa-ban"></i> Inativar
@@ -291,6 +308,14 @@
                     Histórico
                 </a>
             </li>
+            {% if reserva is not none %}
+            <li class="tabs-item">
+                <a href="#acesso" class="tabs-link nff-tab">
+                    <i class="fas fa-lock"></i>
+                    Acesso
+                </a>
+            </li>
+            {% endif %}
         </ul>
     </div><!-- /fv-hero -->
 
@@ -1317,6 +1342,9 @@
                                 (distribuição por NSU). <strong>Só leitura</strong> — o sistema nunca manifesta.
                                 Use "Consultar (teste)" primeiro para ver o que viria sem gravar nada.
                             </p>
+                            {# Consultar/capturar gasta a cota do CNPJ na SEFAZ: permissão
+                               própria (clientes.dfe_captura), conferida também no portão. #}
+                            {% if pode_rota('dfe.dfe_capturar') %}
                             <button type="button" class="btn" style="background:#64748b; color:#fff;"
                                     id="btnDfeConsultar" onclick="dfeConsultar({{ cliente.id }})">
                                 <i class="fas fa-vial"></i> Consultar (teste)
@@ -1325,6 +1353,10 @@
                                     id="btnDfeCapturar" onclick="dfeCapturar({{ cliente.id }})">
                                 <i class="fas fa-cloud-download-alt"></i> Capturar agora
                             </button>
+                            {% else %}
+                            <p style="color:#64748b; font-size:13px;"><i class="fas fa-lock"></i>
+                                A captura manual é feita por quem tem a permissão "Captura manual na SEFAZ".</p>
+                            {% endif %}
                             <div id="dfeMsg" style="margin-top:14px; display:none;"></div>
 
                             {% if current_user.is_admin() and dfe_cursor %}
@@ -1394,6 +1426,48 @@
                     <div class="hist-vazio">Carregando…</div>
                 </div>
             </div>
+
+            {% if reserva is not none %}
+            {# Aba só do ADMIN: empresa reservada + exceções (utils/acesso.py). #}
+            <div id="acesso" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Quem vê esta empresa</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('clientes.acesso_reservado', id=cliente.id) }}" class="acesso-form">
+                            <input type="hidden" name="csrf_token" value="{{ reserva_csrf }}">
+                            <label class="acesso-opcao">
+                                <input type="checkbox" name="reservado" value="1" id="acesso-reservado"
+                                       {% if reserva.reservado %}checked{% endif %}>
+                                <span>
+                                    <strong>Empresa reservada</strong><br>
+                                    <small>Só administradores veem: some da lista de clientes, das buscas, dos seletores,
+                                    das notas, dos downloads e do Q-Robô, mesmo para quem tem o perfil do departamento.</small>
+                                </span>
+                            </label>
+
+                            <fieldset class="acesso-excecoes" id="acesso-excecoes">
+                                <legend>Exceções: estas pessoas também veem</legend>
+                                <p class="acesso-ajuda">Vale só para esta empresa e só no que o perfil da pessoa já permite
+                                    (quem não tem Financeiro continua sem Financeiro).</p>
+                                {% for u in reserva.usuarios %}
+                                <label class="acesso-pessoa">
+                                    <input type="checkbox" name="excecao" value="{{ u.id }}"
+                                           {% if u.id in reserva.excecoes %}checked{% endif %}>
+                                    {{ u.nome }} <small>({{ u.login }})</small>
+                                </label>
+                                {% else %}
+                                <p class="acesso-ajuda">Nenhum usuário além dos administradores.</p>
+                                {% endfor %}
+                            </fieldset>
+
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar acesso</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -1643,6 +1717,16 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+(function () {
+    var chk = document.getElementById('acesso-reservado');
+    var box = document.getElementById('acesso-excecoes');
+    if (!chk || !box) return;
+    function sync() { box.disabled = !chk.checked; }
+    chk.addEventListener('change', sync);
+    sync();
+})();
+</script>
 <script>
 // Tabs functionality
 document.querySelectorAll('.tabs-link').forEach(link => {

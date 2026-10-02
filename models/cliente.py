@@ -1,5 +1,6 @@
 """Modelo de Cliente"""
 from utils.db_helper import execute_query
+from utils.acesso import filtrar_lista, sql_sem_ocultas
 
 
 class Cliente:
@@ -62,7 +63,7 @@ class Cliente:
             cond.append('(c.nome_razao_social LIKE %s OR c.cpf_cnpj LIKE %s '
                         'OR c.email LIKE %s)')
             params += [like, like, like]
-        return execute_query(
+        rows = execute_query(
             f"""SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
                        c.email, c.telefone, c.celular, c.situacao, c.avulso_em,
                        u.nome AS criado_por_nome,
@@ -91,6 +92,8 @@ class Cliente:
                           c.avulso_em, u.nome, cert.cert_validade
                  ORDER BY c.avulso_em DESC, c.nome_razao_social""",
             tuple(params), fetch=True) or []
+        rows = filtrar_lista(rows)                # empresa reservada
+        return rows
 
     @staticmethod
     def avulso_por_documento(cpf_cnpj):
@@ -162,6 +165,11 @@ class Cliente:
         # contagem passam — nao ha como uma tela nova esquecer.
         conditions = ['c.avulso = 0']
         params = []
+        # Empresa RESERVADA (utils/acesso.py), pelo mesmo motivo: aqui passam a
+        # lista e a contagem; para o admin a cláusula não existe.
+        _oculta = sql_sem_ocultas('c.id', params)
+        if _oculta:
+            conditions.append(_oculta)
         need_ramo_join = False  # only True when filtering by ramo de atividade
 
         if filters.get('tipo_pessoa'):
@@ -490,11 +498,15 @@ class Cliente:
               AND (nome_razao_social LIKE %s
                OR cpf_cnpj LIKE %s
                OR email LIKE %s)
+              {reservada}
             ORDER BY nome_razao_social
             LIMIT 50
         """
         search_pattern = f"%{query_text}%"
-        return execute_query(query, (search_pattern, search_pattern, search_pattern), fetch=True) or []
+        params = [search_pattern, search_pattern, search_pattern]
+        _oculta = sql_sem_ocultas('id', params)      # empresa reservada
+        query = query.format(reservada=f'AND {_oculta}' if _oculta else '')
+        return execute_query(query, tuple(params), fetch=True) or []
     
     @staticmethod
     def get_stats():

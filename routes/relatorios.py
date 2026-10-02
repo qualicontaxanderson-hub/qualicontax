@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, request
 from utils.auth_helper import login_required, permission_required
 from utils.db_helper import execute_query
+from utils.acesso import sql_sem_ocultas
 from collections import defaultdict
 from datetime import datetime
 
@@ -135,6 +136,9 @@ def clientes_report():
         conditions.append("situacao = %s")
         params.append(situacao)
     
+    _oculta = sql_sem_ocultas('id', params)      # empresa reservada
+    if _oculta:
+        conditions.append(_oculta)
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     
     # Relatório de clientes

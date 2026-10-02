@@ -29,7 +29,7 @@
 
 <nav class="nav-fiscal" aria-label="Navegação de Cadastros">
     <div class="nav-fiscal-track">
-        {% for _ep, _pref, _label in _abas %}
+        {% for _ep, _pref, _label in _abas if pode_rota(_ep) %}
         <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
            href="{{ url_for(_ep) }}"
            {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>

@@ -6,11 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import current_user
 from decimal import Decimal, InvalidOperation
-from utils.auth_helper import login_required, permission_required
+from utils.auth_helper import admin_required, login_required, permission_required
 from utils.atividade import registrar, rotulo_empresa
 from utils.auditoria_fmt import AUDITORIA_INICIO, hist_preparar
 from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
+from utils.acesso import filtrar_lista
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
@@ -391,7 +392,16 @@ def detalhes(id):
         dfe_cursor['travado'] = bool(
             (dfe_cursor.get('ult_status') or '').startswith('656') and atraso > 0)
 
+    # Aba "Acesso" (empresa reservada) — só o admin a vê e só ele a grava.
+    reserva, reserva_csrf = None, None
+    if current_user.is_admin():
+        from utils.acesso import dados_reserva
+        from routes.qrobo import csrf_token
+        reserva, reserva_csrf = dados_reserva(id), csrf_token()
+
     return render_template('clientes/detalhes.html',
+                         reserva=reserva,
+                         reserva_csrf=reserva_csrf,
                          dfe_cursor=dfe_cursor,
                          cliente=cliente,
                          enderecos=enderecos,
@@ -410,6 +420,35 @@ def detalhes(id):
                          contadores_disponiveis=contadores_disponiveis,
                          socios_total_percentual=socios_total_percentual,
                           areas_atendimento=AREAS_ATENDIMENTO)
+
+
+@clientes.route('/clientes/<int:id>/acesso-reservado', methods=['POST'])
+@admin_required
+def acesso_reservado(id):
+    """Marca/desmarca a empresa como RESERVADA e grava quem é exceção.
+
+    Reservada = só admin vê; a exceção libera uma pessoa para ESTA empresa
+    (utils/acesso.py aplica a regra em todo o sistema)."""
+    from routes.qrobo import csrf_valido
+    from utils.acesso import salvar_reserva
+    destino = url_for('clientes.detalhes', id=id) + '#acesso'
+    if not csrf_valido():
+        flash('Formulário expirado. Abra a aba Acesso de novo e salve.', 'danger')
+        return redirect(destino)
+    if not Cliente.get_by_id(id):
+        flash('Cliente não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+    reservado = request.form.get('reservado') == '1'
+    antes, depois = salvar_reserva(id, reservado, request.form.getlist('excecao'))
+    registrar('escrita.alterou_acesso_reservado', 'cadastros', tabela='clientes',
+              registro_id=id, antes=antes, depois=depois)
+    if reservado:
+        n = len(depois['excecoes'])
+        flash('Empresa RESERVADA: só administradores a veem'
+              + (f', mais {n} pessoa(s) na exceção.' if n else '.'), 'success')
+    else:
+        flash('Empresa liberada: todos com o perfil certo voltam a vê-la.', 'success')
+    return redirect(destino)
 
 
 # ---------------------------------------------------------------------------
@@ -1397,7 +1436,7 @@ def socios_buscar_pf(cliente_id):
             ORDER BY nome_razao_social
             LIMIT 10""",
         (f'%{q}%', f'%{dig}%' if dig else q, cliente_id), fetch=True) or []
-    return jsonify(rows)
+    return jsonify(filtrar_lista(rows))           # empresa reservada
 
 
 @clientes.route('/clientes/<int:cliente_id>/socios/novo', methods=['POST'])

@@ -2,6 +2,7 @@
 import time
 import threading
 from utils.db_helper import execute_query
+from utils.acesso import filtrar_lista
 
 _CACHE_TTL_SECONDS = 60
 _cache_ativos = None
@@ -196,7 +197,8 @@ class RamoAtividade:
             WHERE crar.ramo_atividade_id = %s
             ORDER BY c.nome_razao_social
         """
-        return execute_query(query, (ramo_id,), fetch=True) or []
+        # Empresa reservada não aparece para quem não a vê.
+        return filtrar_lista(execute_query(query, (ramo_id,), fetch=True) or [])
     
     @staticmethod
     def get_by_cliente(cliente_id):

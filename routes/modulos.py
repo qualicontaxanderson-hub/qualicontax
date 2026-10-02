@@ -10,6 +10,7 @@ from routes.adicionais import TIPOS_CADASTROS
 from utils.auth_helper import permission_required
 from utils.home_atividade import card_participacoes, card_trabalhando_agora
 from utils.db_helper import execute_query
+from utils.acesso import filtrar_lista, pode_ver_empresa, sql_sem_ocultas
 
 logger = logging.getLogger(__name__)
 modulos = Blueprint('modulos', __name__)
@@ -18,11 +19,11 @@ PRODUTO_CARDS_AUTO_OPEN_DEFAULT = 2
 
 
 def _get_empresas_analise():
-    return execute_query(
+    return filtrar_lista(execute_query(
         "SELECT id, numero_cliente, nome_razao_social FROM clientes "
         "WHERE avulso = 0 AND situacao='ATIVO' ORDER BY nome_razao_social",
         fetch=True,
-    ) or []
+    ) or [])
 
 
 def _get_grupos_analise():
@@ -75,6 +76,15 @@ def _empresa_where_analise(f_cliente_id, f_grupo_id, alias='n', params=None):
         )
         params.append(gid)
         params.append(gid)
+    # Empresa reservada (utils/acesso.py) fora da análise de quem não a vê.
+    # Com empresa escolhida basta saber se ela pode; sem, tira as ocultas.
+    if f_cliente_id:
+        if not pode_ver_empresa(f_cliente_id):
+            clauses.append('1 = 0')
+    else:
+        oculta = sql_sem_ocultas(f"{alias}.cliente_id", params)
+        if oculta:
+            clauses.append(oculta)
     return clauses, params
 
 

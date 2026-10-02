@@ -93,27 +93,32 @@
     </div>
 </div>
 
+{# A antiga "Empresas Permitidas" (usuario_empresas_permitidas) nunca foi
+   aplicada por rota nenhuma — a tela prometia uma restrição que não existia.
+   Saiu em 02/10/2026. A regra que vale é a EMPRESA RESERVADA, marcada na
+   ficha da empresa (aba Acesso) e aplicada por utils/acesso.py. #}
 <div class="card mb-4">
     <div class="card-header">
-        <strong>Empresas Permitidas</strong>
-        <small class="text-muted ms-2">— se nenhuma for marcada, o usuário vê TODAS as empresas</small>
+        <strong>Empresas reservadas</strong>
     </div>
     <div class="card-body">
-        <div class="mb-2 d-flex gap-2">
-            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(true)">Marcar todas</button>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(false)">Desmarcar todas</button>
-        </div>
-        <div class="checkbox-grid-empresas">
-            {% for c in clientes %}
-            <label class="checkbox-item">
-                <input type="checkbox" name="empresas" value="{{ c.id }}" class="emp-check"
-                       {{ 'checked' if c.id in empresas_usuario }}>
-                <span>{{ c.nome_razao_social }}</span>
-            </label>
-            {% else %}
-            <span class="text-muted">Nenhum cliente/empresa cadastrado.</span>
+        <p class="text-muted mb-2">
+            Por padrão a pessoa vê todas as empresas, dentro do que o perfil dela permite.
+            Uma empresa marcada como <strong>reservada</strong> (na ficha da empresa, aba <em>Acesso</em>)
+            some para todos que não são administradores, salvo as exceções escolhidas lá.
+        </p>
+        {% if usuario and usuario.tipo_usuario == 'ADMIN' %}
+        <p class="mb-0"><i class="fas fa-shield-halved"></i> Administrador: vê todas, inclusive as reservadas.</p>
+        {% elif excecoes_reservadas %}
+        <p class="mb-1"><strong>Esta pessoa é exceção em:</strong></p>
+        <ul class="mb-0">
+            {% for c in excecoes_reservadas %}
+            <li><a href="{{ url_for('clientes.detalhes', id=c.id) }}#acesso">{% if c.numero_cliente %}{{ c.numero_cliente }} - {% endif %}{{ c.nome_razao_social }}</a>{% if not c.acesso_reservado %} <small class="text-muted">(empresa não está reservada no momento)</small>{% endif %}</li>
             {% endfor %}
-        </div>
+        </ul>
+        {% elif usuario %}
+        <p class="mb-0">Não é exceção em nenhuma empresa reservada.</p>
+        {% endif %}
     </div>
 </div>
 

@@ -35,6 +35,8 @@ from utils.nfe_import import (
 # empresa/papel pelo próprio XML (papel_do_cliente) e grava via _save_cte.
 from utils.cte_parser import parse_cte_xml, papel_do_cliente
 from utils.cte_import import _save_cte
+# Empresa RESERVADA (só admin + exceções) — regra central em utils/acesso.py.
+from utils.acesso import filtrar_lista, pode_ver_empresa, sql_sem_ocultas
 # Núcleo de LANÇAMENTO de um .xml (extraído para utils/fiscal_ingest.py para o
 # cron_roteador.py poder importar sem arrastar Flask). Reexportado aqui — os
 # chamadores antigos deste blueprint continuam usando os mesmos nomes.
@@ -135,13 +137,15 @@ def _get_empresas():
     # escritório se refere às empresas, e o seletor mostra "número - nome".
     # numero_cliente é varchar, então o CAST evita 10 vir antes de 9; o nome
     # entra como desempate para o caso de número vazio/repetido.
-    return execute_query(
+    empresas = execute_query(
         # avulso NAO entra no seletor de empresa do Fiscal
         "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
         "WHERE avulso = 0 AND situacao='ATIVO' "
         "ORDER BY CAST(numero_cliente AS UNSIGNED), nome_razao_social",
         fetch=True,
     ) or []
+    # Empresa reservada não aparece no seletor de quem não pode vê-la.
+    return filtrar_lista(empresas)
 
 
 # ---------------------------------------------------------------------------
@@ -561,15 +565,23 @@ def _escopo_empresa(tabela, col_doc, f_cliente_id, f_grupo_id, alias, params):
     if params is None:
         params = []
     clauses = []
-    if not (f_cliente_id or f_grupo_id):
-        return clauses, params
     if f_cliente_id:
+        if not pode_ver_empresa(f_cliente_id):
+            clauses.append('1 = 0')        # empresa reservada: nada, nem o total
+            return clauses, params
         clauses.append(f"{alias}.cliente_id = %s")
         params.append(int(f_cliente_id))
-    else:
+        return clauses, params
+    if f_grupo_id:
         clauses.append(f"{alias}.cliente_id IN (SELECT cgr.cliente_id FROM cliente_grupo_relacao cgr "
                        f"JOIN clientes c ON c.id = cgr.cliente_id WHERE c.avulso = 0 AND cgr.grupo_id = %s)")
         params.append(int(f_grupo_id))
+    # Empresa reservada (utils/acesso.py): sem empresa escolhida, ou num grupo
+    # que a contém, as notas dela saem da lista para quem não pode vê-la. Para
+    # o admin a cláusula não existe — a consulta dele é a de sempre.
+    oculta = sql_sem_ocultas(f"{alias}.cliente_id", params)
+    if oculta:
+        clauses.append(oculta)
     return clauses, params
 
 
@@ -1357,11 +1369,36 @@ def status_sefaz():
     except Exception:
         logging.getLogger(__name__).exception('[status-sefaz] chaves ao vivo falharam; '
                                               'fica o estado do cron.')
+    _status_sem_reservadas(dados)
     return render_template(
         'escrita_fiscal/status_sefaz.html',
         dados_json=_json_para_tela(dados),
         cert_alerta=dados.get('cert_alerta'),
     )
+
+
+# Em cada lista do JSON do Status SEFAZ, a chave que diz de qual empresa é a
+# linha. O JSON é montado pelo cron para TODOS; o corte da empresa reservada
+# acontece aqui, na hora de entregar a quem não pode vê-la. Os totais do topo
+# continuam somando tudo — são números, não nomes.
+_STATUS_CHAVE_EMPRESA = {
+    'empresas': 'cliente_id', 'certificados': 'cliente_id', 'ult656': 'cliente_id',
+    'travadas': 'id', 'capturas': 'id', 'hist_ev': 'cid', 'emp_dia': 'cid',
+}
+
+
+def _status_sem_reservadas(dados):
+    from utils.acesso import empresas_ocultas
+    ocultas = empresas_ocultas()
+    if not ocultas:
+        return dados
+    for chave, campo in _STATUS_CHAVE_EMPRESA.items():
+        if isinstance(dados.get(chave), list):
+            dados[chave] = [r for r in dados[chave]
+                            if not (isinstance(r, dict) and r.get(campo) in ocultas)]
+    if isinstance(dados.get('baixadas'), list):        # linhas [dia, cid, ...]
+        dados['baixadas'] = [r for r in dados['baixadas'] if r[1] not in ocultas]
+    return dados
 
 
 def _status_sefaz_dados():
@@ -3994,7 +4031,7 @@ def api_vincular_produto():
             WHERE i.id = %s""",
         (item_id,), fetch=True, fetch_one=True,
     )
-    if not item:
+    if not item or not pode_ver_empresa(item.get('cliente_id')):
         return jsonify({'error': 'Item não encontrado'}), 404
 
     cli = item.get('cliente_id')
@@ -6168,6 +6205,8 @@ def produtos_catalogo():
             ORDER BY p.categoria, p.nome""",
         fetch=True,
     ) or []
+    # Produto próprio de empresa reservada sai junto com ela.
+    todos = filtrar_lista(todos, 'cliente_id')
 
     # Opções dos selects, tiradas do conjunto completo (nunca do filtrado).
     unidades = sorted({(p.get('unidade') or '').strip()
@@ -6445,7 +6484,7 @@ def api_vincular_todos():
         "SELECT id, tipo, emit_cnpj, cliente_id, grupo_id FROM nfe_importacoes WHERE id = %s",
         (nfe_id,), fetch=True, fetch_one=True,
     )
-    if not nota:
+    if not nota or not pode_ver_empresa(nota.get('cliente_id')):
         return jsonify({'error': 'NF-e não encontrada'}), 404
 
     emit_cnpj = nota['emit_cnpj']
@@ -6544,6 +6583,8 @@ def memorizacoes():
             ORDER BY v.emit_cnpj, v.codigo_produto_xml""",
         fetch=True,
     ) or []
+    # Empresa reservada: as memorizações dela somem junto com ela.
+    rows = filtrar_lista(rows, 'cliente_id')
 
     for r in rows:
         if r.get('criado_em') and hasattr(r['criado_em'], 'isoformat'):
@@ -6574,6 +6615,7 @@ def memorizacoes():
             ORDER BY c.nome_razao_social""",
         fetch=True,
     ) or []
+    empresas_clone = filtrar_lista(empresas_clone)
 
     # ------------------------------------------------------------------
     # Bloco D3 — agrupamento por empresa e depois por categoria.
@@ -6943,6 +6985,11 @@ def _clone_resolver_membros(cliente_ids):
             (set_id,), fetch=True,
         ) or []
         membros |= {r['cliente_id'] for r in atuais}
+    # Empresa reservada (utils/acesso.py): quem não a vê não clona com ela —
+    # nem escolhendo, nem por ela já estar no set de uma empresa escolhida.
+    if any(not pode_ver_empresa(m) for m in membros):
+        raise ValueError('O conjunto inclui empresa a que você não tem acesso. '
+                         'Peça ao administrador.')
 
     nomes = {c['id']: c for c in validos}
     faltam = [m for m in membros if m not in nomes]
@@ -8138,7 +8185,8 @@ def _qrobo_painel_contexto(**extra):
     postos = []
     resumo = {'total': 0, 'verde': 0, 'amarelo': 0, 'vermelho': 0, 'cinza': 0,
               'saidas': 0, 'desligados': 0}
-    for r in RoboConfig.listar_painel():
+    # Empresa reservada não aparece no painel de quem não pode vê-la.
+    for r in filtrar_lista(RoboConfig.listar_painel(), 'cliente_id'):
         cls, rotulo = _qrobo_status(r.get('min_sem_contato'))
         total_saidas = int(r.get('total_saidas') or 0)
         ativo = bool(r.get('ativo'))
@@ -8914,6 +8962,8 @@ def _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=None):
     # str(x).isdigit(): 'null'/'undefined' vindos de um JS descuidado viravam 500
     # (medido em 20/09/2026 num harness); parâmetro que não é número é 'sem escopo'.
     if f_cliente_id and str(f_cliente_id).isdigit():
+        if not pode_ver_empresa(f_cliente_id):
+            return ['1 = 0'], params       # empresa reservada
         clauses.append(f'{alias}.empresa_id = %s')
         params.append(int(f_cliente_id))
     if f_grupo_id and str(f_grupo_id).isdigit():
@@ -8921,6 +8971,9 @@ def _empresa_where_nfse(f_cliente_id, f_grupo_id, alias='n', params=None):
             f'{alias}.empresa_id IN (SELECT cliente_id FROM cliente_grupo_relacao'
             f'                        WHERE grupo_id = %s)')
         params.append(int(f_grupo_id))
+    oculta = sql_sem_ocultas(f'{alias}.empresa_id', params)
+    if oculta:
+        clauses.append(oculta)
     return clauses, params
 
 
