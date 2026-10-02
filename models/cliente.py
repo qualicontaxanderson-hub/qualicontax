@@ -28,19 +28,22 @@ class Cliente:
         self.observacoes = observacoes
 
     @staticmethod
-    def index_cpf_cnpj():
+    def index_cpf_cnpj(com_avulsos=False):
         """Mapa {cpf_cnpj_só_dígitos: id} de todos os clientes.
 
         Usado pela captura SEFAZ para resolver o EMITENTE de uma nota contra a base
         de clientes UMA vez por rodada (evita 1 query por nota). Ignora CPF/CNPJ
         vazios ou com menos de 11 dígitos.
+
+        ``com_avulsos=True`` é o da captura fiscal: o avulso captura como
+        qualquer cadastro (Anderson, 01/10/2026). O extrato chama sem ele.
         """
         rows = execute_query(
             "SELECT id, "
             "  REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'/',''),'-',''),' ','') AS d "
-            "FROM clientes WHERE avulso = 0 "
+            "FROM clientes WHERE (avulso = 0 OR %s) "
             "  AND cpf_cnpj IS NOT NULL AND cpf_cnpj <> ''",
-            fetch=True,
+            (1 if com_avulsos else 0,), fetch=True,
         ) or []
         return {r['d']: r['id'] for r in rows if r.get('d') and len(r['d']) >= 11}
 

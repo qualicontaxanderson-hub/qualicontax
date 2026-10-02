@@ -20,7 +20,7 @@ Regras:
 * o documento que manda é o do PAPEL da linha: entrada → dest_cnpj,
   saída → emit_cnpj, CT-e → tomador_cnpj — as mesmas colunas que o escopo da
   tela usava no fallback;
-* só clientes ``avulso = 0``; um CNPJ que case com MAIS de um cliente NÃO
+* avulso entra como qualquer cliente (01/10/2026); um CNPJ que case com MAIS de um cliente NÃO
   vincula (fica para decisão humana e sai no resumo como ``ambiguas``);
 * o UPDATE é por id, com ``AND cliente_id IS NULL`` — nunca troca um vínculo
   que outro processo tenha dado no meio do caminho;
@@ -52,8 +52,8 @@ def _candidatas(tabela, col_doc, limite):
     rows = execute_query(
         f"SELECT n.id, c.id AS cliente_id"
         f"  FROM {tabela} n"
-        f"  JOIN clientes c ON c.avulso = 0"
-        f"   AND {_DIGITOS.format(c='c.cpf_cnpj')} = {_DIGITOS.format(c=col_doc)}"
+        f"  JOIN clientes c"
+        f"    ON {_DIGITOS.format(c='c.cpf_cnpj')} = {_DIGITOS.format(c=col_doc)}"
         f" WHERE n.cliente_id IS NULL"
         f" ORDER BY n.id"
         f" LIMIT %s", (limite,), fetch=True)

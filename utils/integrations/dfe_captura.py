@@ -1442,7 +1442,7 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
            'cooldown_656': False, 'cortar': False, 'motivo_corte': None,
            # Índice CNPJ→cliente_id da base, montado 1x por rodada: resolve o
            # emitente (saída entre clientes) sem 1 query por nota.
-           'cli_index': Cliente.index_cpf_cnpj()}
+           'cli_index': Cliente.index_cpf_cnpj(com_avulsos=True)}
 
     tot = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0}
     nsu_ok = ult_nsu
@@ -1621,7 +1621,7 @@ def _recuperar_buraco(sess, empresa, cuf, nsu_de, nsu_ate, ret_max, status_txt, 
     ctx = {'sess': sess, 'cnpj': cnpj, 'cuf': cuf,
            'chnfe_usadas': 0, 'chnfe_max': _MAX_CHNFE_CICLO,
            'cooldown_656': False, 'cortar': False, 'motivo_corte': None,
-           'cli_index': Cliente.index_cpf_cnpj()}
+           'cli_index': Cliente.index_cpf_cnpj(com_avulsos=True)}
     tot = {'n_nota': 0, 'n_resumo': 0, 'n_evento': 0, 'n_outro': 0, 'n_itens': 0}
     nsu_ok = nsu_de
     parada = None
