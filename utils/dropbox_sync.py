@@ -98,17 +98,6 @@ def _sanitize_folder_name(name: str) -> str:
     return re.sub(r'[/\\:*?"<>|]', '_', name).strip() or 'SEM_NOME'
 
 
-def pasta_avulso(cpf_cnpj: str) -> str:
-    """Pasta do AVULSO: ``AVULSO/{CNPJ}`` (só dígitos).
-
-    O avulso não tem número de cliente — o CNPJ é o que ele tem de único, e é
-    o que sobrevive quando ele virar cliente (aí a pasta migra inteira para
-    ``EMPRESAS/{nº - razão}``).
-    """
-    dig = re.sub(r'\D', '', str(cpf_cnpj or '')) or 'SEM_CNPJ'
-    return _service._build_path('AVULSO', dig)
-
-
 def _build_empresa_folder(numero: Optional[str], nome: str) -> str:
     """Constrói o nome da pasta da empresa para o Dropbox.
 
@@ -540,8 +529,8 @@ class DropboxService:
     def renomear_pasta(self, rel_de: str, rel_para: str):
         """Renomeia/move uma pasta pelo caminho RELATIVO à raiz configurada.
 
-        É o motor por trás de ``renomear_pasta_empresa`` (troca de número) e
-        de ``renomear_pasta_avulso`` (avulso virando cliente): mesmo cuidado —
+        É o motor por trás de ``renomear_pasta_empresa`` (troca de número e
+        avulso virando cliente): mesmo cuidado —
         nunca sobrescreve destino existente e devolve 'erro' quando o Dropbox
         está fora, para quem chamou RECUSAR a operação em vez de desencontrar
         pasta e cadastro.
@@ -1060,17 +1049,6 @@ def list_xml_files(folder: str = None) -> list:
 
 def renomear_pasta_empresa(pasta_antiga: str, pasta_nova: str):
     return _service.renomear_pasta_empresa(pasta_antiga, pasta_nova)
-
-
-def renomear_pasta_avulso(de: str, para: str):
-    """Move ``AVULSO/{cnpj}`` para ``EMPRESAS/{nº - razão}`` — o avulso virou
-    cliente. Devolve (status, caminho_de, caminho_para), igual ao de empresa.
-
-    Existe separado porque a origem NÃO está em EMPRESAS: o ``de`` já vem com
-    a pasta-mãe embutida ('AVULSO/123...') e o ``para`` é o nome da pasta
-    dentro de EMPRESAS.
-    """
-    return _service.renomear_pasta(de, 'EMPRESAS/' + para)
 
 
 def download_xml(path: str) -> str:

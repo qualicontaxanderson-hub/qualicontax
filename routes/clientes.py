@@ -1116,7 +1116,7 @@ def converter_avulso(id):
 
     Ordem de propósito: renomeia a pasta ANTES de gravar. Com o Dropbox fora
     do ar a conversão é recusada, em vez de deixar cliente novo com o
-    histórico preso na pasta AVULSO — mesma regra da troca de número.
+    histórico preso na pasta sem número — mesma regra da troca de número.
     """
     from utils import dropbox_sync
     c = Cliente.get_by_id(id)
@@ -1135,12 +1135,12 @@ def converter_avulso(id):
         flash(f'O número {numero} já está em uso por outro cliente.', 'danger')
         return redirect(url_for('clientes.avulsos'))
 
-    # 1) a pasta primeiro: AVULSO/{cnpj} -> EMPRESAS/{nº - razão}
-    import re as _re
-    dig = _re.sub(r'\D', '', c.get('cpf_cnpj') or '') or 'SEM_CNPJ'
-    de = f'AVULSO/{dig}'
+    # 1) a pasta primeiro: EMPRESAS/{razão} -> EMPRESAS/{nº - razão}. O avulso
+    #    não tem número, então tudo dele (certificado, XML) já nasce na pasta só
+    #    com a razão; virar cliente é renomear, igual à troca de número.
+    de = dropbox_sync._build_empresa_folder(None, c.get('nome_razao_social') or '')
     para = dropbox_sync._build_empresa_folder(numero, c.get('nome_razao_social') or '')
-    st, cam_de, cam_para = dropbox_sync.renomear_pasta_avulso(de, para)
+    st, cam_de, cam_para = dropbox_sync.renomear_pasta_empresa(de, para)
     if st in ('conflito', 'erro'):
         flash(('Já existe uma pasta com esse número no Dropbox — junte ou '
                'renomeie lá e tente de novo. Nada foi alterado.'
@@ -1153,7 +1153,7 @@ def converter_avulso(id):
     if not Cliente.converter_em_cliente(id, numero):
         # desfaz o movimento: pasta e cadastro não podem desencontrar
         if st == 'movida':
-            dropbox_sync.renomear_pasta_avulso(para, de)
+            dropbox_sync.renomear_pasta_empresa(para, de)
         flash('Erro ao converter o cadastro. Nada foi alterado.', 'danger')
         return redirect(url_for('clientes.avulsos'))
 
