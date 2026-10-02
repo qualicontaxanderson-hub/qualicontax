@@ -189,15 +189,69 @@ def nome_arquivo_final(banco, conta, datas, extensao):
     return ' - '.join(partes) + '.' + ext
 
 
-def pasta_destino(numero_cliente, razao_social, ano):
-    """EMPRESAS/{nº - razão}/FINANCEIRO/EXTRATOS/{ano}.
+def pasta_destino(numero_cliente, razao_social, ano, mes=None):
+    """EMPRESAS/{nº - razão}/FINANCEIRO/EXTRATOS/{ano}/{mês}.
 
-    Ano só (sem mês): um extrato costuma atravessar meses, e o período já
-    está no NOME do arquivo — pasta por mês espalharia o mesmo extrato.
+    Mesmo padrão do Fiscal (ano/mês com dois dígitos), pedido do Anderson em
+    02/10/2026: a pasta só do ano virou uma pilha onde não se achava nada. Um
+    extrato que atravessa meses vai COPIADO em cada um — ver arquivar_extrato.
     """
     from utils.dropbox_sync import _service, _build_empresa_folder
     pasta = _build_empresa_folder(numero_cliente, razao_social)
-    return _service._build_path('EMPRESAS', pasta, 'FINANCEIRO', 'EXTRATOS', str(ano))
+    partes = ['EMPRESAS', pasta, 'FINANCEIRO', 'EXTRATOS', str(ano)]
+    if mes:
+        partes.append(f'{int(mes):02d}')
+    return _service._build_path(*partes)
+
+
+def meses_do_periodo(datas):
+    """['2026-08-30', '2026-10-02'] -> [(2026, 8), (2026, 9), (2026, 10)].
+
+    TODOS os meses do primeiro ao último lançamento, inclusive os do meio sem
+    movimento: quem procura setembro tem de achar o extrato de ago-out lá.
+    """
+    ds = sorted(d for d in datas if d)
+    if not ds:
+        return []
+    a, m = int(ds[0][:4]), int(ds[0][5:7])
+    fim = (int(ds[-1][:4]), int(ds[-1][5:7]))
+    meses = []
+    while (a, m) <= fim:
+        meses.append((a, m))
+        a, m = (a + 1, 1) if m == 12 else (a, m + 1)
+    return meses
+
+
+def arquivar_extrato(svc, origem, numero_cliente, razao_social, datas, nome_final,
+                     mover=True):
+    """Guarda o extrato em EXTRATOS/{ano}/{mês} de CADA mês que ele cobre.
+
+    O primeiro mês recebe o arquivo pelo MOVE (uma operação só: nunca fica nos
+    dois lugares nem em nenhum); os demais recebem CÓPIA dele. Sem datas, vai
+    para o mês corrente. ``mover=False`` copia também o primeiro (o original
+    fica onde está) — é o que a reorganização usa antes de apagar a raiz.
+
+    Devolve {'ok': o primeiro foi gravado, 'destinos': [...], 'falhas': [...]}.
+    Falha numa cópia não desfaz o resto: o lançamento já existe e o arquivo
+    está guardado ao menos no primeiro mês.
+    """
+    import datetime as _dt
+    meses = meses_do_periodo(datas)
+    if not meses:
+        hoje = _dt.date.today()
+        meses = [(hoje.year, hoje.month)]
+    pastas = [pasta_destino(numero_cliente, razao_social, a, m) for a, m in meses]
+    principal = f'{pastas[0]}/{nome_final}'
+    svc.ensure_folder(pastas[0])
+    ok = (svc.move_file(origem, principal) if mover
+          else svc.copy_file(origem, principal))
+    destinos, falhas = ([principal] if ok else []), ([] if ok else [principal])
+    if ok:
+        for pasta in pastas[1:]:
+            alvo = f'{pasta}/{nome_final}'
+            svc.ensure_folder(pasta)
+            (destinos if svc.copy_file(principal, alvo) else falhas).append(alvo)
+    return {'ok': ok, 'destinos': destinos, 'falhas': falhas}
 
 
 def conta_normalizada(conta):

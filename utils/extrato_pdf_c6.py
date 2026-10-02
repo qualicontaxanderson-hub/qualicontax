@@ -54,6 +54,25 @@ _RE_CONTA = re.compile(r'Ag[êe]ncia:\s*(\d+)\s*.\s*Conta:\s*(\d+)', re.IGNORECA
 #: Descrições do OFX do C6 que não dizem nada — só estas são trocadas.
 _GENERICAS = ('TRANSF ENVIADA PIX', 'BOLETO', 'ENVIO DE TED', 'TRANSF ENVIADA')
 
+#: O caminho inverso (02/10/2026): o PDF do C6 também tem linhas mudas que o
+#: OFX completa. Medido na conta 174024789: o PDF diz "RENDIMENTOS" e o OFX
+#: diz "DEVA11" (o fundo que pagou); o PDF diz "PIX RECEBIDO" e o OFX diz
+#: "ANDERSON ANTUNES VIEIRA" (quem mandou). Cada lado tem o que falta no outro.
+_GENERICAS_PDF = ('PIX RECEBIDO', 'RENDIMENTOS', 'PIX ENVIADO')
+
+
+def descricao_com_ofx(desc_pdf, memo_ofx):
+    """A descrição da linha do PDF depois que o OFX encaixa nela, ou None.
+
+    Só mexe quando o PDF é mudo e o OFX diz algo: junta os dois
+    ("PIX RECEBIDO · ANDERSON ANTUNES VIEIRA"), para não perder o tipo que o
+    PDF dava. Texto digitado à mão nunca é mudo, então nunca é trocado.
+    """
+    d, m = (desc_pdf or '').strip(), (memo_ofx or '').strip()
+    if not m or _generica(m) or d.upper() not in _GENERICAS_PDF or m.upper() == d.upper():
+        return None
+    return f'{d} · {m}'[:500]
+
 
 #: O padrão (Anderson, 14/09/2026): OFX do C6 entra normalmente, mas a
 #: pessoa fica sabendo que o arquivo completo é o PDF. Nunca bloqueia.
@@ -416,10 +435,11 @@ def encaixar_ofx_em_pdf(empresa_id, banco, conta, novos):
         if not x:
             restantes.append((h, l))
             continue
+        nova = descricao_com_ofx(x.get('descricao'), l.get('descricao'))
         execute_query(
             'UPDATE extrato_lancamentos SET fitid = %s, documento = %s, hash_dedup = %s, '
-            "       origem = 'ofx' WHERE id = %s",
-            (l.get('fitid'), l.get('documento'), h, x['id']), fetch=False)
+            "       origem = 'ofx', descricao = COALESCE(%s, descricao) WHERE id = %s",
+            (l.get('fitid'), l.get('documento'), h, nova, x['id']), fetch=False)
         n += 1
     return restantes, n
 

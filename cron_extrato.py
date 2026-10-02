@@ -52,6 +52,77 @@ def _tmp(nome):
     return os.path.join(tempfile.gettempdir(), 'qc_extrato_' + nome)
 
 
+PASTA_ZIPS_ABERTOS = '_ZIPS_ABERTOS'
+
+
+def _abrir_zips(svc, itens, seco, resumo):
+    """ZIP na _ENTRADA com extrato dentro: tira os extratos para a _ENTRADA.
+
+    O C6 manda o OFX dentro de um .zip com senha (os 6 primeiros dígitos do
+    CPF, a mesma do PDF) — o "5000 c6.zip" de 01/10/2026 ficou parado porque
+    ninguém abria .zip. Aqui cada .ofx/.pdf/.csv/.xls de dentro sobe para a
+    _ENTRADA como "{nome do zip} - {nome de dentro}" e é lançado no PRÓXIMO
+    tick pelo caminho de sempre. O .zip sai para _ZIPS_ABERTOS (fica como
+    prova; não é apagado).
+
+    Só é aberto o ZIP em que TODOS os arquivos são extratos que este cron lê;
+    qualquer outro fica intocado (REGRA DE FERRO).
+    ZIP que nenhuma senha abre também fica, e aparece no resumo.
+    """
+    import io
+    import zipfile
+    from utils.extrato_pdf_c6 import senhas_candidatas
+    for item in itens:
+        nome = item.get('name') or ''
+        if not item.get('is_file') or not nome.lower().endswith('.zip'):
+            continue
+        try:
+            dados = svc.download_file(item.get('path'))
+            z = zipfile.ZipFile(io.BytesIO(dados))
+            membros = [m for m in z.infolist() if not m.is_dir()]
+            # Só é NOSSO o zip em que TUDO é extrato: um zip de contrato social
+            # com PDFs dentro é do Legal, e fica intocado.
+            if not membros or not all(m.filename.lower().endswith(EXTENSOES) for m in membros):
+                continue
+            conteudo = None
+            for senha in [None] + [d[:6] for d in senhas_candidatas(nome)] + senhas_candidatas(nome):
+                try:
+                    conteudo = [(m, z.read(m, pwd=senha.encode() if senha else None))
+                                for m in membros]
+                    break
+                except (RuntimeError, zipfile.BadZipFile, zipfile.LargeZipFile, ValueError):
+                    continue                              # senha errada (ou falso acerto do CRC)
+            linha = {'arquivo': nome}
+            if conteudo is not None and not all(
+                    _ler_previa(os.path.basename(m.filename), raw)[1] in ('ofx', 'csv', 'pdf')
+                    for m, raw in conteudo):
+                continue                                  # abriu, mas não é (todo) extrato: não é nosso
+            if conteudo is None:
+                linha['resultado'] = 'ZIP com senha que nenhum documento abriu — ficou na _ENTRADA'
+                resumo['erros'] += 1
+                resumo['detalhes'].append(linha)
+                logger.warning('[extrato] um .zip com extrato não abriu com nenhuma senha.')
+                continue
+            base = nome[:-4]
+            nomes = [f'{base} - {os.path.basename(m.filename)}' for m, _ in conteudo]
+            if seco:
+                linha['resultado'] = f'SIMULACAO — abriria o zip: {len(nomes)} extrato(s)'
+                resumo['detalhes'].append(linha)
+                continue
+            for (m, raw), novo in zip(conteudo, nomes):
+                svc.upload_bytes(svc._build_path(PASTA_ORIGEM, novo), raw)
+            destino = svc._build_path(PASTA_ZIPS_ABERTOS)
+            svc.ensure_folder(destino)
+            svc.move_file(item.get('path'), f'{destino}/{nome}')
+            linha['resultado'] = f'zip aberto: {len(nomes)} extrato(s) na _ENTRADA, lançados no próximo ciclo'
+            resumo['detalhes'].append(linha)
+            logger.info('[extrato] zip aberto: %d extrato(s) extraído(s).', len(nomes))
+        except zipfile.BadZipFile:
+            continue                                      # .zip corrompido/não-zip: não é nosso
+        except Exception:
+            logger.exception('[extrato] falha ao abrir um .zip (segue).')
+
+
 def _ler_previa(nome, dados, senhas_extra=()):
     """(previa, formato) via ``utils.extrato_formatos.ler_arquivo`` — 'ofx',
     'csv' ou 'pdf' quando leu; 'pdf-senha', 'pdf-outro', 'csv-outro' quando
@@ -136,6 +207,7 @@ def rodar(dryrun=None, limite=None):
     from utils.dropbox_sync import _service
     from utils.extrato_ingest import (identificar_empresa,
                                       nome_arquivo_final, pasta_destino,
+                                      arquivar_extrato, meses_do_periodo,
                                       banco_curto, numero_empresa_do_nome)
     from utils.ofx_parser import OfxInvalido
     from utils.extrato_pdf_c6 import PdfInvalido
@@ -163,6 +235,7 @@ def rodar(dryrun=None, limite=None):
 
     resumo = {'lidos': 0, 'lancados': 0, 'novos': 0, 'repetidos': 0,
               'classificados': 0, 'ignorados': 0, 'erros': 0, 'detalhes': []}
+    _abrir_zips(svc, itens, seco, resumo)
 
     for item in itens:
         if time.monotonic() > prazo or resumo['lidos'] >= teto:
@@ -261,12 +334,12 @@ def rodar(dryrun=None, limite=None):
                 fh.write(dados)
             try:
                 datas = [l['data'] for l in previa['lancamentos']]
-                ano = (max(datas)[:4] if datas else str(__import__('datetime').date.today().year))
-                destino_pasta = pasta_destino(
-                    cliente['numero_cliente'], cliente['nome_razao_social'], ano)
                 nome_final = nome_arquivo_final(banco, previa.get('conta'), datas,
                                                 nome.lower().rsplit('.', 1)[-1])
-                linha['destino'] = f'{destino_pasta}/{nome_final}'
+                _meses = meses_do_periodo(datas)
+                if _meses:
+                    linha['destino'] = (f"{pasta_destino(cliente['numero_cliente'], cliente['nome_razao_social'], *_meses[0])}/{nome_final}"
+                                        + (f' (+{len(_meses) - 1} mês(es) em cópia)' if len(_meses) > 1 else ''))
 
                 if seco:
                     linha['resultado'] = 'SIMULACAO — nada gravado, nada movido'
@@ -296,9 +369,14 @@ def rodar(dryrun=None, limite=None):
                 # seria perda silenciosa. MOVER (e não subir+apagar) é uma
                 # operação só — não existe instante em que o arquivo esteja
                 # nos dois lugares nem em nenhum.
-                svc.ensure_folder(destino_pasta)
-                if svc.move_file(origem, f'{destino_pasta}/{nome_final}'):
-                    linha['resultado'] = 'lançado e arquivado'
+                arq = arquivar_extrato(svc, origem, cliente['numero_cliente'],
+                                       cliente['nome_razao_social'], datas, nome_final)
+                if arq['ok']:
+                    linha['resultado'] = ('lançado e arquivado'
+                                          + (f" em {len(arq['destinos'])} meses" if len(arq['destinos']) > 1 else ''))
+                    if arq['falhas']:
+                        linha['resultado'] += f" ({len(arq['falhas'])} cópia(s) falharam)"
+                        logger.warning('[extrato] %d cópia(s) por mês falharam', len(arq['falhas']))
                 else:
                     linha['resultado'] = ('lançado; ARQUIVAMENTO FALHOU — '
                                           'o arquivo ficou na _ENTRADA')
@@ -343,6 +421,7 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
     from utils.dropbox_sync import _service
     from utils.extrato_ingest import (identificar_empresa,
                                       nome_arquivo_final, pasta_destino,
+                                      arquivar_extrato, meses_do_periodo,
                                       banco_curto)
     from models.extrato_lancamento import FinExtratoPendencia
 
@@ -390,13 +469,11 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
             pass
 
     datas = [l['data'] for l in previa['lancamentos']]
-    ano = max(datas)[:4] if datas else str(__import__('datetime').date.today().year)
-    destino = pasta_destino(cliente['numero_cliente'],
-                            cliente['nome_razao_social'], ano)
-    svc.ensure_folder(destino)
     final = nome_arquivo_final(banco, previa.get('conta'), datas,
                                nome.lower().rsplit('.', 1)[-1])
-    movido = svc.move_file(caminho_dropbox, f'{destino}/{final}')
+    arq = arquivar_extrato(svc, caminho_dropbox, cliente['numero_cliente'],
+                           cliente['nome_razao_social'], datas, final)
+    movido = arq['ok']
     FinExtratoPendencia.limpar_resolvidas([caminho_dropbox])
     from utils.extrato_pdf_c6 import aviso_ofx
     aviso = aviso_ofx(previa.get('banco_id'), previa.get('banco')) if formato == 'ofx' else ''
@@ -404,7 +481,9 @@ def processar_um(caminho_dropbox, usuario_id=None, senha_extra=None):
             'banco': banco, 'novos': r['novos'], 'repetidos': r['repetidos'],
             'classificados': r['classificados'], 'arquivado': movido,
             'formato': formato, 'completadas': r.get('completadas'),
-            'encaixados': r.get('encaixados'), 'destino': f'{destino}/{final}'}
+            'encaixados': r.get('encaixados'),
+            'destino': arq['destinos'][0] if arq['destinos'] else None,
+            'copias_por_mes': len(arq['destinos'])}
 
 
 def _conectar_lock():
