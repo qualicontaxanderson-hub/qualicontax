@@ -1602,6 +1602,33 @@ def usuario_colabore_gerar(uid):
                    data_inicio_captura=di.isoformat() if hasattr(di, 'isoformat') else di)
 
 
+@configuracoes.route('/usuarios/<int:uid>/colabore/revelar', methods=['POST'])
+@admin_required
+def usuario_colabore_revelar(uid):
+    """Mostra a chave ATUAL (sem gerar outra) para instalar a mesma chave em
+    mais uma máquina do funcionário. Só admin; cada revelação fica na auditoria."""
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='Formulário expirado. Recarregue a página.'), 400
+    res = colabore_chaves.revelar_chave(uid)
+    if not res.get('ok'):
+        mapa = {
+            'sem_chave': ('Este funcionário ainda não tem chave.', 404),
+            'revogada': ('A chave está revogada. Gere uma nova.', 409),
+            'sem_copia': ('Esta chave foi gerada antes de 02/10/2026, quando o sistema '
+                          'ainda não guardava cópia: não há como mostrá-la. Gere uma nova '
+                          'UMA última vez e coloque-a em todas as máquinas; a partir daí '
+                          'este botão funciona.', 409),
+            'falha_cifra': ('Não consegui abrir a cópia guardada da chave. Gere uma nova.', 500),
+        }
+        msg, cod = mapa.get(res.get('erro'), ('Não foi possível mostrar a chave agora.', 500))
+        return jsonify(ok=False, erro=res.get('erro'), msg=msg), cod
+    # AUDITORIA: quem revelou a chave de quem. NUNCA o segredo.
+    registrar('leitura.revelou_chave_colabore', 'colabore',
+              tabela='colabore_config', registro_id=uid,
+              depois={'versao': res['versao'], 'prefixo': res['prefixo']})
+    return jsonify(ok=True, token=res['token'], prefixo=res['prefixo'], versao=res['versao'])
+
+
 @configuracoes.route('/usuarios/<int:uid>/colabore/revogar', methods=['POST'])
 @admin_required
 def usuario_colabore_revogar(uid):

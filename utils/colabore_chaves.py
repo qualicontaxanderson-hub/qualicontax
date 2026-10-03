@@ -20,6 +20,7 @@ e compara-se com ``token_hash`` (a chave em claro nunca é comparada nem guardad
 ela. NUNCA fica NULL na prática (padrão = hoje).
 """
 import hashlib
+import logging
 import secrets
 from datetime import date
 
@@ -28,6 +29,21 @@ from utils.db_helper import execute_query, transacao
 # régua de data de corte (recusa data futura pelo relógio do banco, em BRT).
 from utils.qrobo_chaves import (TOKEN_BYTES, PREFIXO_LEN, TENTATIVAS_TOKEN,
                                 _normaliza_data_inicio, contexto_request)
+
+logger = logging.getLogger(__name__)
+
+
+def _cifrar(token):
+    """Cópia CIFRADA da chave (Fernet, a ``DFE_CRYPTO_KEY`` das senhas de
+    certificado) para o admin poder revelá-la — decisão de 02/10/2026: quem
+    trabalha em 2-3 máquinas precisa da MESMA chave em todas. Sem a chave de
+    cifra no ambiente devolve None: a chave funciona, só não pode ser revelada."""
+    try:
+        from utils.certificado_digital import cifrar_senha
+        return cifrar_senha(token).decode('ascii')
+    except Exception:
+        logger.warning('[colabore] sem DFE_CRYPTO_KEY: chave gerada sem cópia revelável.')
+        return None
 
 
 def _hash_token(token):
@@ -60,6 +76,7 @@ def estado_colabore(usuario_id):
         "       c.token_gerado_em, c.token_gerado_por, "
         "       u.nome AS token_gerado_por_nome, "
         "       (c.token_hash IS NOT NULL AND c.token_hash <> '') AS tem_chave, "
+        "       (c.token_cifrado IS NOT NULL) AS tem_copia, "
         "       TIMESTAMPDIFF(MINUTE, c.ultimo_contato, NOW()) AS min_sem_contato "
         "  FROM colabore_config c "
         "  LEFT JOIN usuarios u ON u.id = c.token_gerado_por "
@@ -74,7 +91,8 @@ def estado_por_usuario():
     linhas = execute_query(
         "SELECT usuario_id, ativo, versao, token_prefixo, data_inicio_captura, "
         "       ultimo_contato, "
-        "       (token_hash IS NOT NULL AND token_hash <> '') AS tem_chave "
+        "       (token_hash IS NOT NULL AND token_hash <> '') AS tem_chave, "
+        "       (token_cifrado IS NOT NULL) AS tem_copia "
         "  FROM colabore_config",
         fetch=True) or []
     return {r['usuario_id']: r for r in linhas}
@@ -121,6 +139,7 @@ def gerar_chave(usuario_id, admin_id, *, regerar=False, data_inicio=None,
 
     token, token_hash = _token_unico()
     prefixo = token[:PREFIXO_LEN]
+    cifrado = _cifrar(token)
     acao = 'regerada' if atual else 'gerada'
 
     with transacao() as cur:
@@ -129,19 +148,19 @@ def gerar_chave(usuario_id, admin_id, *, regerar=False, data_inicio=None,
             # rotaciona a versão e RE-ATIVA (ativo=1).
             cur.execute(
                 "UPDATE colabore_config "
-                "   SET token_hash = %s, token_prefixo = %s, ativo = 1, "
+                "   SET token_hash = %s, token_prefixo = %s, token_cifrado = %s, ativo = 1, "
                 "       versao = COALESCE(versao, 0) + 1, "
                 "       token_gerado_em = NOW(), token_gerado_por = %s, "
                 "       data_inicio_captura = COALESCE(%s, data_inicio_captura, CURDATE()) "
                 " WHERE usuario_id = %s",
-                (token_hash, prefixo, admin_id, data_txt, usuario_id))
+                (token_hash, prefixo, cifrado, admin_id, data_txt, usuario_id))
         else:
             cur.execute(
                 "INSERT INTO colabore_config "
-                "  (usuario_id, token_hash, token_prefixo, versao, ativo, "
+                "  (usuario_id, token_hash, token_prefixo, token_cifrado, versao, ativo, "
                 "   token_gerado_em, token_gerado_por, data_inicio_captura) "
-                "VALUES (%s, %s, %s, 1, 1, NOW(), %s, COALESCE(%s, CURDATE()))",
-                (usuario_id, token_hash, prefixo, admin_id, data_txt))
+                "VALUES (%s, %s, %s, %s, 1, 1, NOW(), %s, COALESCE(%s, CURDATE()))",
+                (usuario_id, token_hash, prefixo, cifrado, admin_id, data_txt))
 
         cur.execute(
             "SELECT versao, ativo, data_inicio_captura "
@@ -152,6 +171,40 @@ def gerar_chave(usuario_id, admin_id, *, regerar=False, data_inicio=None,
             'versao': int(gravado['versao'] or 1),
             'ativo': bool(gravado['ativo']),
             'data_inicio_captura': gravado['data_inicio_captura']}
+
+
+def revelar_chave(usuario_id):
+    """A chave ATUAL do funcionário, em claro — para instalar a MESMA chave em
+    outra máquina sem gerar nova (gerar invalida a de todas as máquinas).
+
+    Só revela chave ATIVA, e só depois de conferir que a cópia decifrada bate
+    com o hash que autentica: cópia que não confere nunca é mostrada.
+
+    Devolve ``{'ok': True, 'token', 'prefixo', 'versao'}`` ou ``{'ok': False,
+    'erro': 'sem_chave'|'revogada'|'sem_copia'|'falha_cifra'}``. ``sem_copia`` =
+    chave gerada antes de 02/10/2026: não existe cópia, só gerando outra.
+    """
+    r = execute_query(
+        "SELECT token_hash, token_prefixo, token_cifrado, versao, ativo "
+        "  FROM colabore_config WHERE usuario_id = %s",
+        (usuario_id,), fetch=True, fetch_one=True)
+    if not r or not r.get('token_hash'):
+        return {'ok': False, 'erro': 'sem_chave'}
+    if not r.get('ativo'):
+        return {'ok': False, 'erro': 'revogada'}
+    if not r.get('token_cifrado'):
+        return {'ok': False, 'erro': 'sem_copia'}
+    try:
+        from utils.certificado_digital import decifrar_senha
+        token = decifrar_senha(r['token_cifrado'])
+    except Exception:
+        logger.warning('[colabore] cópia cifrada da chave não abriu (usuario_id=%s).', usuario_id)
+        return {'ok': False, 'erro': 'falha_cifra'}
+    if _hash_token(token) != r['token_hash']:
+        logger.warning('[colabore] cópia cifrada não confere com o hash (usuario_id=%s).', usuario_id)
+        return {'ok': False, 'erro': 'falha_cifra'}
+    return {'ok': True, 'token': token, 'prefixo': r['token_prefixo'],
+            'versao': int(r.get('versao') or 1)}
 
 
 def definir_corte(usuario_id, data_inicio):

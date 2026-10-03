@@ -170,6 +170,7 @@
                 data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
                 data-tem="{{ '1' if cc and cc.tem_chave else '0' }}"
                 data-ativo="{{ '1' if cc and cc.ativo else '0' }}"
+                data-copia="{{ '1' if cc and cc.tem_copia else '0' }}"
                 data-prefixo="{{ cc.token_prefixo if cc else '' }}"
                 data-versao="{{ cc.versao if cc else '' }}"
                 data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
@@ -482,11 +483,19 @@
       <h3 class="qc-modal-tit">Chave do Q-Colabore</h3>
       <p class="qc-modal-sub">Funcionário <strong id="colabNome"></strong>. Esta chave
          autentica o <strong>agente</strong> instalado na máquina dele — é o que deixa o
-         agente enviar arquivos para a caixa de entrada. O segredo aparece
-         <strong>uma única vez</strong>, ao gerar.</p>
+         agente enviar arquivos para a caixa de entrada. Para usar em <strong>mais
+         de uma máquina</strong>, use <strong>Ver chave atual</strong> e cole a mesma
+         chave em todas; gerar nova invalida a de todas as máquinas.</p>
 
       <div class="qc-aviso" id="colabEstado" style="display:none; background:#f8fafc; border-color:#e2e8f0; color:#334155"></div>
       <div id="colabErro" class="qa-erro" style="display:none"></div>
+      {# Revelar a chave atual: o mesmo agente em 2-3 máquinas do funcionário
+         precisa da MESMA chave (02/10/2026). Chave gerada antes disso não tem
+         cópia guardada — o servidor explica e a saída é gerar uma última vez. #}
+      <button type="button" class="btn btn-sm btn-success" id="colabBtnRevelar"
+              style="display:none; margin-bottom:10px" onclick="colabRevelar()">
+        <i class="fas fa-eye"></i> Ver chave atual
+      </button>
 
       <label class="qc-label" for="colabCorte" style="margin-top:6px">Data de corte
         <span class="text-muted" style="font-weight:400">(o agente não manda nada anterior a ela)</span></label>
@@ -523,7 +532,7 @@
 
     {# Passo 2: o segredo, uma única vez #}
     <div id="colabPasso2" style="display:none">
-      <h3 class="qc-modal-tit">Chave gerada</h3>
+      <h3 class="qc-modal-tit" id="colabTit2">Chave gerada</h3>
       <div class="qc-url-area">
         <div class="qc-url-rot">Chave do Q-Colabore — versão <span id="colabVersao"></span></div>
         <div class="qc-url" id="colabToken"></div>
@@ -532,9 +541,10 @@
         COPIAR CHAVE
       </button>
       <div class="qc-aviso">
-        Guarde agora: ao fechar, só o prefixo <code id="colabPrefixo"></code> continua
-        visível. Cole esta chave na configuração do agente do funcionário. Se ela vazar,
-        volte aqui e gere uma nova (a antiga para de valer).
+        Cole esta chave na configuração do agente em <strong>cada máquina</strong> do
+        funcionário (prefixo <code id="colabPrefixo"></code>). Para outra máquina depois,
+        volte aqui em <strong>Ver chave atual</strong>. Se ela vazar, gere uma nova (a
+        antiga para de valer em todas as máquinas).
       </div>
     </div>
   </div>
@@ -1095,6 +1105,10 @@ function colabAbrir(btn) {
     box.style.display = colabTem ? '' : 'none';
     document.getElementById('colabBtnRevogar').style.display =
         (colabTem && d.ativo === '1') ? '' : 'none';
+    // Ver chave atual: toda chave ativa. A de antes de 02/10/2026 não tem cópia
+    // — o clique explica o porquê e o que fazer, em vez de o botão sumir calado.
+    document.getElementById('colabBtnRevelar').style.display =
+        (colabTem && d.ativo === '1') ? '' : 'none';
     document.getElementById('colabBtnGerarTxt').textContent =
         colabTem ? 'Gerar nova chave' : 'Gerar chave';
     // A data de corte já vem preenchida com a atual do funcionário, e o botão
@@ -1297,11 +1311,7 @@ function colabGerar() {
     .then(function (res) {
         if (res.ok && res.d.ok) {
             colabMudou = true;
-            document.getElementById('colabToken').textContent = res.d.token;
-            document.getElementById('colabPrefixo').textContent = res.d.prefixo + '…';
-            document.getElementById('colabVersao').textContent = res.d.versao;
-            document.getElementById('colabPasso1').style.display = 'none';
-            document.getElementById('colabPasso2').style.display = '';
+            colabMostrarChave(res.d, 'Chave gerada');
             return;
         }
         err.textContent = res.d.msg || 'Não foi possível gerar a chave.';
@@ -1309,6 +1319,32 @@ function colabGerar() {
         colabAtualizaBotao();
     })
     .catch(function () { err.textContent = 'Sem resposta do servidor.'; err.style.display = ''; colabAtualizaBotao(); });
+}
+
+function colabMostrarChave(d, titulo) {
+    document.getElementById('colabTit2').textContent = titulo;
+    document.getElementById('colabToken').textContent = d.token;
+    document.getElementById('colabPrefixo').textContent = d.prefixo + '…';
+    document.getElementById('colabVersao').textContent = d.versao;
+    document.getElementById('colabPasso1').style.display = 'none';
+    document.getElementById('colabPasso2').style.display = '';
+}
+
+function colabRevelar() {
+    if (!colabUid) { return; }
+    var dados = new FormData(); dados.append('csrf_token', QC_CSRF);
+    var btn = document.getElementById('colabBtnRevelar'); btn.disabled = true;
+    var err = document.getElementById('colabErro'); err.style.display = 'none';
+    fetch('/configuracoes/usuarios/' + colabUid + '/colabore/revelar',
+          { method: 'POST', body: dados, headers: { 'X-CSRF-Token': QC_CSRF } })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+        btn.disabled = false;
+        if (res.ok && res.d.ok) { colabMostrarChave(res.d, 'Chave atual'); return; }
+        err.textContent = res.d.msg || 'Não foi possível mostrar a chave.';
+        err.style.display = '';
+    })
+    .catch(function () { btn.disabled = false; err.textContent = 'Sem resposta do servidor.'; err.style.display = ''; });
 }
 
 function colabRevogar() {
