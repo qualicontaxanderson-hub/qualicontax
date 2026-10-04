@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Extratos em PDF de Sicredi, Efí e Bradesco (14/09/2026).
+"""Extratos em PDF de Sicredi, Efí, Bradesco e Mercado Pago (14/09/2026).
 
 Cada banco desenha o PDF de um jeito; cada leitor abaixo foi escrito olhando
 o arquivo real e reconhece o SEU layout pela capa. Todos devolvem o mesmo
@@ -21,6 +21,11 @@ EFÍ      capa 'Extrato financeiro' + 'Protocolo'; linhas
          capa: a identificação é pelo protocolo já gravado.
 BRADESCO capa 'Extrato de: Ag:' + 'CC:'; linhas [data] / lançamento (1..n)
          / dcto / valor / saldo — a data só aparece quando muda.
+MERCADO  capa 'EXTRATO DE CONTA' + 'Mercado Pago' + 'ID da operação';
+PAGO     agência e conta vêm ANTES dos rótulos ('1' / '46623357374' /
+         'Agência:' / 'Conta:'); linhas data dd-mm-aaaa / descrição (1..n) /
+         ID da operação / 'R$ -5.000,00' / saldo. O ID é único por operação
+         e vai como documento (04/10/2026, arquivo real da empresa 5000).
 """
 import re
 from decimal import Decimal
@@ -285,3 +290,61 @@ def parse_bradesco(paginas, doc=None):
         raise PdfBancoInvalido('extrato do Bradesco sem lançamento legível.')
     return {'banco': 'Bradesco', 'banco_id': '237', 'conta': conta,
             'saldo': None, 'lancamentos': lancs}
+
+
+# ---------------------------------------------------------------------------
+# MERCADO PAGO
+# ---------------------------------------------------------------------------
+def e_mercadopago(t):
+    return 'EXTRATO DE CONTA' in t and 'Mercado Pago' in t and 'ID da operação' in t
+
+
+_RE_DATA_MP = re.compile(r'^(\d{2})-(\d{2})-(\d{4})$')
+_RE_ID_MP = re.compile(r'^\d{9,20}$')
+
+
+def _valor_mp(txt):
+    t = (txt or '').strip()
+    if not t.startswith('R$'):
+        return None
+    return _dec(t[2:])
+
+
+def parse_mercadopago(paginas):
+    cab = [l.strip() for l in paginas[0].splitlines()]
+    try:
+        k_cpf = next(k for k, l in enumerate(cab) if l.startswith('CPF/CNPJ:'))
+        k_ag = next(k for k, l in enumerate(cab) if l.startswith('Agência:'))
+    except StopIteration:
+        raise PdfBancoInvalido('extrato do Mercado Pago sem agência e conta na capa.')
+    numeros = [l for l in cab[k_cpf + 1:k_ag] if l.isdigit()]
+    if len(numeros) < 2:
+        raise PdfBancoInvalido('extrato do Mercado Pago sem agência e conta na capa.')
+    conta = f'{numeros[0]}/{numeros[1]}'
+    cpf = re.sub(r'\D', '', cab[k_cpf].split(':', 1)[1]) or None
+    titular = cab[k_cpf - 1] if k_cpf else None
+
+    lancs = []
+    linhas = [l.strip() for p in paginas for l in p.splitlines()]
+    i, n = 0, len(linhas)
+    while i < n:
+        m = _RE_DATA_MP.match(linhas[i])
+        if not m:
+            i += 1
+            continue
+        d = f'{m.group(3)}-{m.group(2)}-{m.group(1)}'
+        desc, j = [], i + 1
+        while j < n and not _RE_ID_MP.match(linhas[j]) and not _RE_DATA_MP.match(linhas[j])                 and len(desc) < 6:
+            desc.append(linhas[j])
+            j += 1
+        if j + 1 < n and _RE_ID_MP.match(linhas[j]):
+            v = _valor_mp(linhas[j + 1])
+            if v is not None and desc:
+                lancs.append(_lanc(d, v, ' '.join(desc), documento=linhas[j]))
+                i = j + 3                   # pula o saldo
+                continue
+        i += 1
+    if not lancs:
+        raise PdfBancoInvalido('extrato do Mercado Pago sem lançamento legível.')
+    return {'banco': 'Mercado Pago', 'banco_id': '323', 'conta': conta, 'cpf': cpf,
+            'titular': titular, 'saldo': None, 'lancamentos': lancs}

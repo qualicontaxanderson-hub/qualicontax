@@ -58,7 +58,7 @@ FATIAS_SENHA = (
 BANCOS = {
     '1': 'Banco do Brasil', '33': 'Santander', '41': 'Banrisul',
     '77': 'Inter', '104': 'Caixa', '208': 'BTG', '237': 'Bradesco',
-    '260': 'Nubank', '290': 'PagBank', '318': 'BMG', '336': 'C6',
+    '260': 'Nubank', '290': 'PagBank', '318': 'BMG', '323': 'Mercado Pago', '336': 'C6',
     '341': 'Itau', '348': 'XP', '364': 'EFI', '380': 'PicPay',
     '403': 'Cora',
     '422': 'Safra', '461': 'Asaas', '655': 'Votorantim', '745': 'Citi',

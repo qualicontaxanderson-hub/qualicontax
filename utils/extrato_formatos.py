@@ -58,6 +58,11 @@ CATALOGO = [
      'pdf': ('nao', 'Os nomes vêm cortados ("Anderson Antunes Vi…"). Mande o OFX ou o CSV.'),
      'csv': ('igual', 'Mesmo conteúdo do OFX (tipo + nome). Não diz a conta: precisa do nome ou número da empresa no arquivo.'),
      'xls': ('nao', 'Nunca vi uma; mande o OFX ou o CSV.')},
+    {'banco_id': '323', 'nome': 'Mercado Pago', 'cor': '#00b1ea',
+     'ofx': ('nao', 'O Mercado Pago não exporta OFX.'),
+     'pdf': ('ok', 'Traz agência, conta, CPF e o ID de cada operação (vira o documento). Vale sozinho.'),
+     'csv': ('nao', 'Nunca vi um; mande o PDF.'),
+     'xls': ('nao', 'Nunca vi uma; mande o PDF.')},
 ]
 
 ROTULO = {'ok': 'OK', 'irregular': 'Irregular', 'igual': 'Igual ao OFX', 'nao': 'Não configurado'}
@@ -131,12 +136,14 @@ def _ler_pdf(dados, senhas):
         except PdfNubankInvalido as e:
             return {'motivo': f'Extrato do Nubank que não consegui ler: {e}'}, 'pdf-outro'
     from utils.extrato_pdf_bancos import (e_sicredi, parse_sicredi, e_efi, parse_efi,
-                                          e_bradesco, parse_bradesco, PdfBancoInvalido)
+                                          e_bradesco, parse_bradesco, e_mercadopago,
+                                          parse_mercadopago, PdfBancoInvalido)
     # O leitor do Bradesco precisa das COORDENADAS (a tabela dele sai em ordem
     # diferente no PJ e no PF), por isso recebe o documento aberto.
     for detecta, ler, nome, quer_doc in ((e_sicredi, parse_sicredi, 'Sicredi', False),
                                          (e_efi, parse_efi, 'Efí', False),
-                                         (e_bradesco, parse_bradesco, 'Bradesco', True)):
+                                         (e_bradesco, parse_bradesco, 'Bradesco', True),
+                                         (e_mercadopago, parse_mercadopago, 'Mercado Pago', False)):
         if detecta(paginas[0]):
             try:
                 return (ler(paginas, doc) if quer_doc else ler(paginas)), 'pdf'
