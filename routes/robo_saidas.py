@@ -25,7 +25,7 @@ from flask import Blueprint, request, jsonify
 
 from models.robo_config import RoboConfig
 from models.cliente import Cliente
-from utils import dropbox_sync
+from utils import dropbox_sync, qrobo_maquinas
 from utils.db_helper import execute_query
 from utils.nfe_parser import parse_nfe_xml
 from utils.nfe_import import _save_nfe_dual
@@ -280,6 +280,8 @@ def receber_saida():
 
     # (2) todo contato marca robo_ultimo_contato (inclusive se estiver desligado).
     RoboConfig.touch_ultimo_contato(cliente_id)
+    # (2b) e o contato DESTA máquina (robô 0.4.0+; à prova de falha).
+    qrobo_maquinas.registrar(cliente_id, request.headers, envio=True)
     if not robo['ativo']:
         return jsonify({'status': 'desligado'}), 403
 
@@ -385,6 +387,7 @@ def config_saida():
     if err:
         return err
     RoboConfig.touch_ultimo_contato(robo['cliente_id'])
+    qrobo_maquinas.registrar(robo['cliente_id'], request.headers)
     cliente = Cliente.get_by_id(robo['cliente_id'])
     di = robo.get('data_inicio_captura')
 

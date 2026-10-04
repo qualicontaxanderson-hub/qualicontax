@@ -48,7 +48,7 @@ from utils.fiscal_ingest import (
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
 from models.robo_config import RoboConfig
-from utils import qrobo_chaves, qrobo_status
+from utils import qrobo_chaves, qrobo_status, qrobo_maquinas
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -8207,10 +8207,25 @@ def _qrobo_painel_contexto(**extra):
             'min_sem_contato': r.get('min_sem_contato'),
             'contato_ha':      _qrobo_ha(r.get('min_sem_contato')),
         })
+
+    # Máquinas (robô 0.4.0+). A chave é do posto e 2-3 PCs usam a mesma: o
+    # contato do posto fica verde enquanto QUALQUER um fala. Com as máquinas,
+    # o posto passa a ser pintado pela PIOR delas — um caixa parado aparece.
+    # Posto sem máquina registrada (robô antigo) segue só com o semáforo dele.
+    maquinas = qrobo_maquinas.listar([p['cliente_id'] for p in postos])
+    _peso = {'verde': 0, 'cinza': 1, 'amarelo': 2, 'vermelho': 3}
+    for p in postos:
+        p['maquinas'] = maquinas.get(p['cliente_id'], [])
+        pior = qrobo_maquinas.pior_status(p['maquinas'])
+        if pior and _peso.get(pior, 0) > _peso.get(p['status_cls'], 0):
+            paradas = sum(1 for m in p['maquinas'] if m['status'] == pior)
+            p['status_cls'] = pior
+            p['status_txt'] = (f'{paradas} de {len(p["maquinas"])} máquina(s) '
+                               + ('sem sinal' if pior == 'vermelho' else 'em atenção'))
         resumo['total']  += 1
-        resumo[cls]      += 1
-        resumo['saidas'] += total_saidas
-        if not ativo:
+        resumo[p['status_cls']] += 1
+        resumo['saidas'] += p['total_saidas']
+        if not p['ativo']:
             resumo['desligados'] += 1
 
     # Bloco D4 — quem exige ação primeiro. Parado e sem-contato no topo, depois
@@ -8268,6 +8283,31 @@ def _qrobo_csrf_token():
 def _qrobo_csrf_ok():
     from routes.qrobo import csrf_valido
     return csrf_valido()
+
+
+@escrita_fiscal.route('/conf-saidas/q-robo/maquina', methods=['POST'])
+@permission_required('escrita_fiscal.q_robo')
+def q_robo_maquina():
+    """Renomear ("Caixa 1") ou remover da tela uma máquina do posto.
+
+    Remover só OCULTA: PC formatado ou desativado para de pintar o posto de
+    vermelho. Se aquela máquina falar de novo, ela reaparece sozinha."""
+    if not _qrobo_csrf_ok():
+        flash('Formulário expirado. Tente de novo.', 'danger')
+        return redirect(url_for('escrita_fiscal.q_robo_painel'))
+    try:
+        pk = int(request.form.get('maquina') or 0)
+        cid = int(request.form.get('cliente_id') or 0)
+    except ValueError:
+        pk = cid = 0
+    acao = request.form.get('acao')
+    if pk and cid and acao == 'renomear':
+        qrobo_maquinas.renomear(pk, cid, request.form.get('apelido'))
+        flash('Nome da máquina atualizado.', 'success')
+    elif pk and cid and acao == 'ocultar':
+        qrobo_maquinas.ocultar(pk, cid)
+        flash('Máquina removida da tela. Se ela voltar a falar, reaparece.', 'success')
+    return redirect(url_for('escrita_fiscal.q_robo_painel'))
 
 
 @escrita_fiscal.route('/conf-saidas/q-robo/resolver', methods=['POST'])

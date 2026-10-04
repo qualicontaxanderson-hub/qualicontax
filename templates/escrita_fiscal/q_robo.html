@@ -57,6 +57,18 @@
 .qr-sub { font-size:11px; color:#94a3b8; margin-top:2px; }
 .qr-num { font-variant-numeric:tabular-nums; font-weight:700; color:#0f3d2e; }
 .qr-muted { color:#94a3b8; }
+/* Máquinas do posto (robô 0.4.0+): uma linha por PC, a pior pinta o cartão */
+.qrc-maq { list-style:none; margin:10px 0 0; padding:8px 0 0; border-top:1px dashed #e3ece7;
+           display:flex; flex-direction:column; gap:5px; }
+.qrc-maq li { display:flex; align-items:center; gap:8px; font-size:12px; color:#334155; min-width:0; }
+.qrc-maq .m-nome { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.qrc-maq .m-info { color:#7d968a; font-size:11px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.qrc-maq .m-info.vermelho { color:#b91c1c; font-weight:700; } .qrc-maq .m-info.amarelo { color:#b45309; }
+.qrc-maq .m-acoes { margin-left:auto; display:flex; gap:2px; flex:0 0 auto; }
+.qrc-maq .m-acoes button { border:0; background:none; color:#94a3b8; cursor:pointer; padding:2px 5px; font-size:11px; }
+.qrc-maq .m-acoes button:hover { color:#334155; }
+.qrc-maq-tit { font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#7d968a; }
+@media (max-width: 600px) { .qrc-maq li { flex-wrap:wrap; } .qrc-maq .m-info { white-space:normal; } }
 .qr-empty { text-align:center; padding:30px; color:#94a3b8; font-size:13px; }
 .qr-posto-num { color:#15803d; font-weight:800; }
 .qr-posto-nome { font-weight:700; color:#0f3d2e; text-transform:uppercase; font-size:12.5px; }
@@ -207,6 +219,25 @@
             </dd>
         </dl>
 
+        {% if p.maquinas %}
+        <ul class="qrc-maq">
+            <li class="qrc-maq-tit">{{ p.maquinas|length }} máquina{{ 's' if p.maquinas|length > 1 }}</li>
+            {% for m in p.maquinas %}
+            <li>
+                <span class="qr-dot {{ m.status }}"></span>
+                <span class="m-nome" title="PC: {{ m.nome_pc }}">{{ m.nome }}</span>
+                <span class="m-info {{ m.status }}">{{ m.ha }} · {{ m.envios_hoje }} hoje{% if m.versao %} · {{ m.versao }}{% endif %}</span>
+                <span class="m-acoes">
+                    <button type="button" title="Renomear (ex.: Caixa 1)"
+                            onclick='qrMaq({{ m.id }}, {{ p.cliente_id }}, "renomear", {{ m.apelido|tojson }}, {{ m.nome_pc|tojson }})' ><i class="fas fa-pen"></i></button>
+                    <button type="button" title="Remover da tela (PC formatado / desativado)"
+                            onclick='qrMaq({{ m.id }}, {{ p.cliente_id }}, "ocultar", "", {{ m.nome|tojson }})' ><i class="fas fa-xmark"></i></button>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
         <div class="qrc-pe">
             <span class="qrc-saidas"><b>{{ '{:,}'.format(p.total_saidas).replace(',', '.') }}</b> saídas</span>
             <span class="qr-onoff {{ 'on' if p.ativo else 'off' }}">
@@ -223,6 +254,29 @@
     Nenhum cliente com robô cadastrado.
 </div>
 {% endif %}
+
+<form id="qrMaqForm" method="post" action="{{ url_for('escrita_fiscal.q_robo_maquina') }}" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="maquina"><input type="hidden" name="cliente_id">
+    <input type="hidden" name="acao"><input type="hidden" name="apelido">
+</form>
+<script>
+// Renomear / remover uma máquina do posto (robô 0.4.0+). Remover só oculta:
+// se aquele PC voltar a falar com a nuvem, ele reaparece sozinho.
+function qrMaq(id, cliente, acao, atual, nome) {
+    const f = document.getElementById('qrMaqForm');
+    if (acao === 'renomear') {
+        const novo = prompt('Nome desta máquina (ex.: Caixa 1). Vazio volta ao nome do PC: ' + nome, atual || '');
+        if (novo === null) return;
+        f.apelido.value = novo;
+    } else if (!confirm('Remover "' + nome + '" da tela?\n\nUse para PC formatado ou desativado. '
+                        + 'Se ele voltar a falar com a nuvem, reaparece sozinho.')) {
+        return;
+    }
+    f.maquina.value = id; f.cliente_id.value = cliente; f.acao.value = acao;
+    f.submit();
+}
+</script>
 
 {# ------------------------------------------------------------------ #}
 <div class="qr-sec">
