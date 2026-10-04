@@ -1641,15 +1641,26 @@ class FinContaBancaria:
             c['total'] += int(r['n'])
             if r['ult'] and (c['ultimo'] is None or r['ult'] > c['ultimo']):
                 c['ultimo'] = r['ult']
+        # O cadastro casa pela MESMA regra do roteador (mesma_conta), não pela
+        # chave estrita: o OFX do Bradesco PF diz '2505/21921' e o cadastro
+        # '2505/21921-5'. Com a chave estrita a mesma conta aparecia duas vezes
+        # (04/10/2026): uma "sem cadastro" cheia e outra cadastrada vazia.
+        from utils.extrato_ingest import mesma_conta
         for reg in FinContaBancaria.listar(empresa_ids=empresa_ids, apenas_ativas=True):
             k = (reg['empresa_id'], conta_normalizada(reg['conta']))
             c = contas.get(k)
             if c is None:
+                k, c = next(((kk, cc) for kk, cc in contas.items()
+                             if cc['empresa_id'] == reg['empresa_id'] and not cc.get('conta_id')
+                             and mesma_conta(cc['conta'], reg['conta'])), (k, None))
+            if c is None:
                 contas[k] = {'empresa_id': reg['empresa_id'], 'banco': reg.get('banco_nome') or 'Banco',
                              'conta': reg['conta'], 'meses': {}, 'ultimo': None, 'total': 0,
-                             'cadastrada': True}
+                             'cadastrada': True, 'conta_id': reg['id']}
             else:
                 c['cadastrada'] = True
+                c['conta_id'] = reg['id']
+                c['conta'] = reg['conta']
                 if reg.get('banco_nome'):
                     c['banco'] = reg['banco_nome']
         return sorted(contas.values(), key=lambda c: (c['empresa_id'], str(c['banco']), str(c['conta'])))

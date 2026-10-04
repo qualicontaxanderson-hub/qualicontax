@@ -1286,15 +1286,43 @@ def contas():
     from datetime import date as _date
     ano = int(request.args.get('ano') or _date.today().year)
     hoje = _date.today()
+    from utils.extrato_formatos import catalogo, cores
+    contas = FinContaBancaria.listar(empresa_ids=sel, apenas_ativas=False)
+    cobertura = FinContaBancaria.cobertura(ano, sel)
+    pendencias = FinExtratoPendencia.listar(empresa_ids=sel, ver_orfas=admin)
+
+    # A tela é desenhada no navegador (abas, filtros, cartões — o mesmo
+    # modelo do Status SEFAZ, aprovado em 04/10/2026). Daqui sai só o dado,
+    # já pronto para JSON: data vira texto e nada de caminho do Dropbox.
+    def _d(v):
+        return v.isoformat() if hasattr(v, 'isoformat') else v
+    dados = {
+        'ano': ano,
+        # 1º mês ainda NÃO fechado: no ano corrente é o mês de hoje; ano
+        # passado tem os 12 fechados; ano futuro, nenhum.
+        'mes_aberto': hoje.month if ano == hoje.year else (13 if ano < hoje.year else 1),
+        'emps': [{'cliente_id': e['cliente_id'], 'apelido': e['apelido'],
+                  'numero_cliente': e['numero_cliente'], 'tipo_pessoa': e.get('tipo_pessoa'),
+                  'nome': e['nome_razao_social']} for e in emps],
+        'contas': [{'id': c['id'], 'empresa_id': c['empresa_id'], 'banco_id': c['banco_id'],
+                    'banco_nome': c['banco_nome'], 'agencia': c['agencia'], 'conta': c['conta'],
+                    'apelido': c['apelido'], 'ativo': bool(c['ativo'])} for c in contas],
+        'cobertura': [{'empresa_id': c['empresa_id'], 'banco': c['banco'], 'conta': c['conta'],
+                       'conta_id': c.get('conta_id'), 'cadastrada': c['cadastrada'],
+                       'meses': c['meses'], 'total': c['total'], 'ultimo': _d(c['ultimo'])}
+                      for c in cobertura],
+        'pend': [{'id': p['id'], 'arquivo': p['arquivo'], 'empresa_id': p['empresa_id'],
+                  'numero_no_nome': p['numero_no_nome'], 'nome_razao_social': p.get('nome_razao_social'),
+                  'banco_id': p['banco_id'], 'banco_nome': p['banco_nome'], 'agencia': p['agencia'],
+                  'conta': p['conta'], 'qtd_lancamentos': p['qtd_lancamentos'], 'periodo': p['periodo'],
+                  'motivo': p['motivo'], 'criado_em': _d(p['criado_em'])} for p in pendencias],
+        'formatos': catalogo(),
+        'cores': cores(),
+        'eh_admin': admin,
+    }
     return render_template(
-        'financeiro/contas.html',
-        cobertura=FinContaBancaria.cobertura(ano, sel), ano=ano,
-        mes_limite=(hoje.month if ano == hoje.year else (12 if ano < hoje.year else 0)),
-        meses_rot=['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
-        contas=FinContaBancaria.listar(empresa_ids=sel, apenas_ativas=False),
-        pendencias=FinExtratoPendencia.listar(empresa_ids=sel, ver_orfas=admin),
-        eh_admin=admin, formatos=__import__('utils.extrato_formatos', fromlist=['catalogo']).catalogo(),
-        fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
+        'financeiro/contas.html', dados=dados, ano=ano,
+        contas=contas, fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
 
 
 @financeiro.route('/financeiro/contas/nova', methods=['POST'])

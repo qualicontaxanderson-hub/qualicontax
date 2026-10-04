@@ -5,20 +5,145 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 <style>
-.ct-inativa { opacity:.55; }
-.ct-pend { background:#fffbeb; border:1.5px solid #fde68a; border-radius:12px;
-  padding:14px 18px; margin-bottom:14px; }
-.ct-pend h3 { margin:0 0 4px; font-size:14px; font-weight:800; color:#92400e; }
-.ct-pend-item { background:#fff; border:1px solid #fde68a; border-radius:10px;
-  padding:12px 14px; margin-top:10px; }
-.ct-pend-arq { font-weight:700; color:#0f3d2e; }
-.ct-pend-info { font-size:12.5px; color:#92400e; margin:3px 0 10px; }
-.ct-linha { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
-.ct-linha > div { flex:1; min-width:130px; }
-.ct-linha label { font-size:10px; font-weight:700; color:#94a3b8; display:block;
-  margin-bottom:3px; text-transform:uppercase; }
-.ct-linha input, .ct-linha select { width:100%; padding:7px 10px;
-  border:1.5px solid #e2e8f0; border-radius:7px; font-size:13px; min-height:33px; }
+/* Contas Bancárias em abas (desenho aprovado em 04/10/2026, mesmo modelo do
+   Status SEFAZ): Painel, A configurar, Contas, Extratos recebidos e Formatos.
+   Tudo escopado em #ctb para não brigar com o identidade.css. Cartão para o
+   que tem estado (pendência, conta); tabela para a grade e os formatos. */
+#ctb{
+  --verde:#15803d; --verde-esc:#0f3d2e; --verde-claro:#dcfce7; --verde-borda:#bbf7d0;
+  --borda:#e3ece7; --borda-forte:#d7e3dc; --muted:#7d968a; --apagado:#94a3b8;
+  --ambar:#b45309; --ambar-fundo:#fef3c7; --ambar-borda:#fde68a; --ambar-suave:#fffdf5;
+  --verm:#b91c1c; --verm-fundo:#fee2e2; --verm-borda:#fecaca; --verm-suave:#fff7f7;
+  --cinza-fundo:#eef2f0; --cinza:#64748b; --azul-fundo:#e0f2fe; --azul:#075985; --azul-borda:#bae6fd;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color:#334155;
+}
+#ctb .ct-btn:focus-visible,#ctb .chip:focus-visible,#ctb .aba:focus-visible,#ctb .kpi:focus-visible{outline:2px solid var(--verde);outline-offset:2px}
+
+/* abas: grudam logo abaixo da testeira do Financeiro (igual ao Status SEFAZ) */
+#ctb .abas{position:sticky;top:calc(var(--top-bar-height) + 49px);z-index:50;background:var(--page-bg,#f3f7f5);padding-top:6px;margin-bottom:12px;border-bottom:1px solid var(--borda)}
+#ctb .abas-track{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+#ctb .abas-track::-webkit-scrollbar{display:none}
+#ctb .aba{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:0;background:transparent;border-bottom:3px solid transparent;margin-bottom:-1px;font:inherit;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+#ctb .aba:hover{color:var(--verde-esc)}
+#ctb .aba.on{color:var(--verde-esc);border-bottom-color:var(--verde)}
+#ctb .n{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px;background:var(--cinza-fundo);color:var(--cinza);font-variant-numeric:tabular-nums}
+#ctb .n.amb{background:var(--ambar-fundo);color:var(--ambar)} #ctb .n.verm{background:var(--verm-fundo);color:var(--verm)} #ctb .n.verde{background:var(--verde-claro);color:var(--verde)}
+#ctb .painel{display:none} #ctb .painel.on{display:block}
+
+/* barra de filtro */
+#ctb .filtro{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:#fff;border:1px solid var(--borda);border-radius:13px;padding:10px 12px;margin-bottom:12px}
+#ctb .busca{display:flex;align-items:center;gap:7px;border:1px solid var(--borda-forte);border-radius:9px;padding:0 10px;height:34px;flex:1 1 220px;max-width:340px;min-width:0;background:#fff;color:var(--apagado)}
+#ctb .busca input{border:0;outline:0;font:inherit;width:100%;background:transparent;color:#0f172a;box-shadow:none;padding:0;min-height:0}
+#ctb .busca:focus-within{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+#ctb .chips{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+#ctb .chips .rot{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-right:2px}
+#ctb .chip{border:1px solid var(--borda-forte);background:#fff;color:#475569;border-radius:99px;padding:5px 11px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;gap:5px;align-items:center;font-variant-numeric:tabular-nums;text-decoration:none}
+#ctb .chip:hover{border-color:var(--verde);color:var(--verde)}
+#ctb .chip.on{background:var(--verde-esc);border-color:var(--verde-esc);color:#fff}
+#ctb .chip .q{font-size:10px;opacity:.75}
+#ctb .filtro .contador{margin-left:auto;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* indicadores */
+#ctb .grupo{font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--verde);display:flex;align-items:center;gap:10px;margin:18px 0 9px}
+#ctb .grupo::after{content:'';flex:1;height:1px;background:#e8f1ec}
+#ctb .grupo:first-child{margin-top:4px}
+#ctb .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+#ctb .kpi{background:#fff;border:1px solid var(--borda);border-radius:15px;padding:14px 16px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+#ctb .kpi:hover{border-color:var(--verde)}
+#ctb .kpi-l{font-size:11.5px;font-weight:600;color:var(--muted)}
+#ctb .kpi-v{font-size:24px;font-weight:800;color:var(--verde-esc);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
+#ctb .kpi-s{font-size:11px;color:var(--apagado);margin-top:4px}
+#ctb .kpi.alerta{border-color:var(--ambar-borda);background:var(--ambar-suave)} #ctb .kpi.alerta .kpi-v{color:var(--ambar)}
+#ctb .kpi.ruim{border-color:var(--verm-borda);background:var(--verm-suave)} #ctb .kpi.ruim .kpi-v{color:var(--verm)}
+
+/* selos */
+#ctb .sit{display:inline-block;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:800;white-space:nowrap;letter-spacing:.2px}
+#ctb .sit.verde{background:var(--verde-claro);color:var(--verde);border:1px solid var(--verde-borda)}
+#ctb .sit.amb{background:var(--ambar-fundo);color:var(--ambar);border:1px solid var(--ambar-borda)}
+#ctb .sit.verm{background:var(--verm-fundo);color:var(--verm);border:1px solid var(--verm-borda)}
+#ctb .sit.cinza{background:var(--cinza-fundo);color:var(--cinza);border:1px solid var(--borda)}
+#ctb .sit.azul{background:var(--azul-fundo);color:var(--azul);border:1px solid var(--azul-borda)}
+#ctb .banco{display:inline-flex;align-items:center;gap:6px;font-weight:800;color:#0f172a}
+#ctb .banco i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:0 0 auto}
+
+/* A CONFIGURAR */
+#ctb .admin-aviso{font-size:12px;color:#78350f;background:var(--ambar-suave);border:1px solid var(--ambar-borda);border-radius:10px;padding:8px 12px;margin-bottom:12px}
+#ctb .pend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+#ctb .pend{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+#ctb .pend.amb{border-color:var(--ambar-borda)} #ctb .pend.cinza{border-style:dashed}
+#ctb .pend-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#ctb .pend-top .sit{margin-left:auto}
+#ctb .pend-arq{font-family:var(--mono);font-size:11.5px;color:#0f172a;overflow-wrap:anywhere}
+#ctb .pend-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+#ctb .pend-meta b{color:#334155}
+#ctb .pend-msg{font-size:12px;line-height:1.4}
+#ctb .pend-form{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin:0}
+#ctb .pend-form label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:2px}
+#ctb .pend-form select,#ctb .pend-form input{width:100%;font:inherit;font-size:12px;border:1px solid var(--borda-forte);border-radius:8px;padding:6px 8px;background:#fff;color:#0f172a;min-width:0;min-height:32px}
+#ctb .pend-form .larga{grid-column:1 / -1}
+#ctb .pend-form.doc{grid-template-columns:1fr auto}
+#ctb .ct-btn{font:inherit;font-size:12px;font-weight:700;border-radius:9px;padding:7px 12px;border:1px solid var(--verde);background:var(--verde);color:#fff;cursor:pointer;white-space:nowrap;min-height:32px}
+#ctb .pend-pe{font-size:11.5px;color:var(--muted)}
+
+/* CONTAS: cartão por empresa, linha por conta */
+#ctb .leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin:0 0 10px}
+#ctb .leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+#ctb .emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start}
+#ctb .emp{background:#fff;border:1px solid var(--borda);border-radius:15px;overflow:hidden;min-width:0}
+#ctb .emp-h{display:flex;align-items:baseline;gap:8px;padding:12px 14px 10px;border-bottom:1px solid var(--borda);flex-wrap:wrap}
+#ctb .emp-h .e-num{color:var(--verde);font-weight:800}
+#ctb .emp-h .e-nome{font-weight:800;color:#0f3d2e;text-transform:uppercase;font-size:12.5px}
+#ctb .emp-h .e-tp{font-size:10.5px;color:var(--muted);font-weight:700}
+#ctb .emp-h .e-tot{margin-left:auto;font-size:11px;color:var(--muted)}
+#ctb .cc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 14px;border-bottom:1px solid var(--borda)}
+#ctb .cc:last-child{border-bottom:0}
+#ctb .cc.inativa{opacity:.55}
+#ctb .cc.sem-cad{background:var(--ambar-suave);border-top:1px dashed var(--ambar-borda)}
+#ctb .cc-num{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
+#ctb .cc-dir{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+#ctb .cc-ult{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+#ctb .tira,#ctb .tira-rot{grid-column:1 / -1;display:grid;grid-template-columns:repeat(12,1fr);gap:2px}
+#ctb .tira{margin-top:2px}
+#ctb .tira span{height:16px;border-radius:3px;font-size:9px;line-height:16px;text-align:center;font-weight:800;font-variant-numeric:tabular-nums;color:var(--verde);overflow:hidden}
+#ctb .tira .ok{background:var(--verde-claro)} #ctb .tira .falta{background:var(--verm-fundo);color:var(--verm)} #ctb .tira .fut{background:var(--cinza-fundo);color:transparent}
+#ctb .tira-rot{font-size:8.5px;color:var(--apagado);text-align:center;text-transform:uppercase}
+#ctb .cc-acoes{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;align-items:center}
+#ctb .cc-acoes form{margin:0;display:inline}
+#ctb .lnk{background:none;border:0;padding:0;font:inherit;font-size:11.5px;font-weight:700;color:var(--verde);cursor:pointer;text-decoration:none}
+#ctb .lnk.cinza{color:var(--muted)}
+#ctb .lnk:hover{text-decoration:underline}
+
+/* TABELAS */
+#ctb .tbl-card{background:#fff;border:1px solid var(--borda);border-radius:14px;overflow:hidden}
+#ctb .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#ctb table.ct-tab{border-collapse:collapse;width:100%;font-size:12.5px;margin:0}
+#ctb .ct-tab th{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#f6f9f7;padding:8px;text-align:center;border-bottom:1px solid var(--borda);white-space:nowrap}
+#ctb .ct-tab td{padding:8px;border-bottom:1px solid var(--borda);text-align:center;font-variant-numeric:tabular-nums}
+#ctb .g-conta{text-align:left!important;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1}
+#ctb th.g-conta{background:#f6f9f7}
+#ctb .g-conta small{display:block;color:var(--apagado);font-size:11px;font-family:var(--mono)}
+#ctb .cel-ok{color:#166534;font-weight:700;background:#f0fdf4}
+#ctb .cel-falta{color:var(--verm);font-weight:800;background:#fef2f2}
+#ctb .cel-fut{color:#cbd5e1}
+#ctb .grade{min-width:760px}
+#ctb .fmt td,#ctb .fmt th{text-align:left;vertical-align:top}
+#ctb .fnota{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.35;max-width:34ch}
+#ctb .ct-vazio{padding:28px;text-align:center;color:var(--apagado);background:#fff;border:1px dashed var(--borda);border-radius:14px}
+
+@media (max-width:640px){
+  #ctb .pend-grid,#ctb .emp-grid{grid-template-columns:1fr}
+  #ctb .pend-form{grid-template-columns:1fr 1fr}
+  #ctb .pend-form .ct-btn{grid-column:1 / -1}
+  #ctb .pend-form.doc{grid-template-columns:1fr}
+  #ctb .filtro .contador{margin-left:0;width:100%}
+  #ctb .busca{max-width:none}
+  #ctb .fmt thead{display:none}
+  #ctb .fmt tr{display:block;border-bottom:8px solid var(--page-bg,#f3f7f5)}
+  #ctb .fmt td{display:block;border-bottom:1px solid var(--borda)}
+  #ctb .fmt td::before{content:attr(data-label);display:block;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+  #ctb .fmt td:first-child::before{display:none}
+}
 </style>
 
 <div class="page-header">
@@ -29,7 +154,7 @@
         </h1>
         <p class="page-subtitle">
             A conta é a impressão digital da empresa: cadastrada aqui, o extrato dela
-            entra sozinho — não importa o nome do arquivo
+            entra sozinho, com qualquer nome de arquivo
         </p>
     </div>
     <div class="page-actions">
@@ -66,152 +191,26 @@
     </span>
 </div>
 
-{# ── A fila: arquivo que chegou e não se identificou ───────────────── #}
-{% if pendencias %}
-<div class="ct-pend">
-    <h3><i class="fas fa-triangle-exclamation"></i>
-        {{ pendencias | length }} arquivo(s) esperando você dizer de quem é a conta</h3>
-    <div style="font-size:12.5px; color:#92400e;">
-        Eles estão parados na pasta — nada foi lançado. Responda uma vez e os
-        próximos meses entram sozinhos. PDF com senha que não abriu também
-        aparece aqui: informe o CPF/CNPJ do titular e ele tenta de novo.
-        {% if eh_admin %}
-        <br><strong>Você é admin:</strong> os marcados como
-        <span class="fin-pilula alerta">sem identificação</span> chegaram sem o
-        número da empresa no nome <em>e</em> com conta desconhecida — quem mandou
-        não seguiu o combinado.
-        {% endif %}
-    </div>
-    {% for p in pendencias %}
-    <div class="ct-pend-item">
-        <div class="ct-pend-arq">
-            {{ p.arquivo }}
-            {% if not p.empresa_id %}
-            <span class="fin-pilula alerta" title="Sem número da empresa no nome e conta desconhecida">
-                sem identificação</span>
-            {% endif %}
-        </div>
-        <div class="ct-pend-info">
-            {{ p.banco_nome or 'banco não identificado' }}
-            {% if p.conta %}· conta <strong>{{ p.conta }}</strong>{% endif %}
-            {% if p.qtd_lancamentos %}· {{ p.qtd_lancamentos }} lançamento(s){% endif %}
-            {% if p.periodo %}· {{ p.periodo }}{% endif %}
-            {% if p.numero_no_nome %}
-            <br>O nome do arquivo diz empresa <strong>{{ p.numero_no_nome }}</strong>
-                {%- if p.nome_razao_social %} ({{ p.nome_razao_social }}){% endif %}.
-            {% endif %}
-            <br><em>{{ p.motivo }}</em>
-        </div>
-        {% if p.banco_nome == 'PDF de outro banco' and not p.conta %}
-        <div class="ct-linha" style="color:#6b7280; font-size:12.5px;">
-            <i class="fas fa-file-pdf"></i>&nbsp; Nada a responder aqui: mande o OFX deste
-            banco e apague o PDF da pasta.
-        </div>
-        {% elif p.banco_nome == 'PDF com senha' and not p.conta %}
-        <form method="POST" action="{{ url_for('financeiro.pendencia_abrir_pdf', pid=p.id) }}"
-              class="ct-linha">
-            <div>
-                <label>CPF/CNPJ do titular da conta</label>
-                <input type="text" name="documento" inputmode="numeric"
-                       placeholder="só os números — o C6 usa os 6 primeiros">
-            </div>
-            <div style="flex:0 0 auto;">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-unlock"></i> Tentar abrir
-                </button>
-            </div>
-        </form>
-        {% else %}
-        <form method="POST" action="{{ url_for('financeiro.pendencia_resolver', pid=p.id) }}"
-              class="ct-linha">
-            <div>
-                <label>De qual empresa é esta conta? *</label>
-                <select name="empresa_id" required>
-                    <option value="">Escolha</option>
-                    {% for e in fin_empresas %}
-                    <option value="{{ e.cliente_id }}"
-                            {% if p.empresa_id == e.cliente_id %}selected{% endif %}>
-                        {{ e.apelido }} — {{ e.nome_razao_social }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label>Conta</label>
-                <input type="text" name="conta" value="{{ p.conta or '' }}"
-                       placeholder="número da conta" required>
-            </div>
-            <div>
-                <label>Agência</label>
-                <input type="text" name="agencia" value="{{ p.agencia or '' }}"
-                       placeholder="opcional">
-            </div>
-            <div style="flex:0 0 auto;">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-check"></i> Vincular e ler
-                </button>
-            </div>
-        </form>
-        {% endif %}
-    </div>
-    {% endfor %}
+<div id="ctb">
+    <nav class="abas" aria-label="Seções de Contas"><div class="abas-track" id="ctAbas"></div></nav>
+    <section class="painel" id="p-painel"></section>
+    <section class="painel" id="p-config"></section>
+    <section class="painel" id="p-contas"></section>
+    <section class="painel" id="p-extratos"></section>
+    <section class="painel" id="p-formatos"></section>
 </div>
-{% endif %}
 
-<div class="fin-caixa">
-    {% if contas %}
-    <div class="fin-rolar">
-        <table class="fin-tab">
-            <thead>
-                <tr>
-                    <th>Empresa</th>
-                    <th>Banco</th>
-                    <th>Agência</th>
-                    <th>Conta</th>
-                    <th>Apelido</th>
-                    <th>Situação</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in contas %}
-                <tr class="{{ 'ct-inativa' if not c.ativo }}">
-                    <td class="fin-td-meta">{{ c.numero_cliente }} · {{ emp_mapa.get(c.empresa_id, c.nome_razao_social) }}</td>
-                    <td class="fin-td-oculta">{{ c.banco_nome or c.banco_id or '—' }}</td>
-                    <td class="fin-td-oculta">{{ c.agencia or '—' }}</td>
-                    <td class="fin-td-titulo">
-                        {{ c.banco_nome or c.banco_id }} · {{ c.conta }}
-                    </td>
-                    <td class="fin-td-oculta">{{ c.apelido or '—' }}</td>
-                    <td class="fin-td-extra">
-                        <span class="fin-pilula {{ 'liquidado' if c.ativo else 'cancelado' }}">
-                            {{ 'Ativa' if c.ativo else 'Desativada' }}</span>
-                    </td>
-                    <td class="fin-td-acao">
-                        <form method="POST"
-                              action="{{ url_for('financeiro.conta_alternar', conta_id=c.id) }}">
-                            <button class="fin-btn-tag"
-                                    title="{{ 'Desativar (extratos dela voltam a ficar pendentes)' if c.ativo else 'Reativar' }}">
-                                <i class="fas fa-{{ 'toggle-on' if c.ativo else 'toggle-off' }}"
-                                   style="color:{{ '#16a34a' if c.ativo else '#9ca3af' }};"></i>
-                                {{ 'Desativar' if c.ativo else 'Reativar' }}
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="fin-vazio">
-        <i class="fas fa-landmark" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-        Nenhuma conta cadastrada{% if sel_empresas %} nessas empresas{% endif %}.
-        Cadastre no botão acima — ou deixe o primeiro extrato chegar e responda
-        aqui de quem é a conta.
-    </div>
-    {% endif %}
-</div>
+{# Urls das ações; o JS troca o 0 pelo id. Ano vizinho mantém o filtro de empresa. #}
+{% set _emp = request.args.get('emp') %}
+<script id="ctDados" type="application/json">{{ dados | tojson }}</script>
+<script id="ctUrls" type="application/json">{{ {
+    'resolver': url_for('financeiro.pendencia_resolver', pid=0),
+    'abrir_pdf': url_for('financeiro.pendencia_abrir_pdf', pid=0),
+    'alternar': url_for('financeiro.conta_alternar', conta_id=0),
+    'extrato': url_for('financeiro.extrato'),
+    'ano_ant': url_for('financeiro.contas', ano=ano-1, emp=_emp) if _emp else url_for('financeiro.contas', ano=ano-1),
+    'ano_prox': url_for('financeiro.contas', ano=ano+1, emp=_emp) if _emp else url_for('financeiro.contas', ano=ano+1),
+} | tojson }}</script>
 
 <!-- ── Modal: nova conta ─────────────────────────────────────────── -->
 <div id="ctModalNova" class="modal" style="display:none;">
@@ -224,7 +223,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Empresa *</label>
-                    <select name="empresa_id" class="form-control" required>
+                    <select name="empresa_id" id="ctNovaEmp" class="form-control" required>
                         {% for e in fin_empresas %}
                         <option value="{{ e.cliente_id }}"
                                 {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
@@ -236,7 +235,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Banco (código) *</label>
-                        <select name="banco_id" class="form-control" required>
+                        <select name="banco_id" id="ctNovaBanco" class="form-control" required>
                             <option value="237">237 — Bradesco</option>
                             <option value="336">336 — C6</option>
                             <option value="341">341 — Itaú</option>
@@ -249,6 +248,8 @@
                             <option value="364">364 — EFí</option>
                             <option value="077">077 — Inter</option>
                             <option value="260">260 — Nubank</option>
+                            <option value="323">323 — Mercado Pago</option>
+                            <option value="348">348 — XP</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -260,7 +261,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Conta *</label>
-                        <input type="text" name="conta" class="form-control" required
+                        <input type="text" name="conta" id="ctNovaConta" class="form-control" required
                                placeholder="como aparece no extrato">
                     </div>
                     <div class="form-group">
@@ -270,9 +271,8 @@
                     </div>
                 </div>
                 <small style="color:#6b7280;">
-                    Com a conta cadastrada, o extrato dela entra sozinho — o nome do
-                    arquivo deixa de importar. Se o nome trouxer um número de empresa
-                    que <strong>discorde</strong> desta conta, o sistema recusa e avisa.
+                    Com a conta cadastrada, o extrato dela entra sozinho e o nome do
+                    arquivo deixa de importar.
                 </small>
             </div>
             <div class="modal-footer">
@@ -282,110 +282,314 @@
         </form>
     </div>
 </div>
-{# ── Extratos recebidos: por conta, mês a mês — o que veio e o que falta ── #}
-<div class="fin-caixa" style="margin-top:16px;">
-    <h3 style="margin:0 0 4px; font-size:15px;"><i class="fas fa-calendar-check"></i> Extratos recebidos em {{ ano }}</h3>
-    <div style="font-size:12.5px; color:#64748b; margin-bottom:10px;">
-        Cada célula é quantos lançamentos entraram naquele mês. Vazio até o mês atual é
-        extrato que <strong>falta</strong>. Conta com lançamento e sem cadastro está marcada.
-        <a href="{{ url_for('financeiro.contas', ano=ano-1, emp=request.args.get('emp')) if request.args.get('emp') else url_for('financeiro.contas', ano=ano-1) }}" style="margin-left:8px;">{{ ano-1 }}</a>
-        {% if mes_limite < 12 or ano < 2100 %}· <a href="{{ url_for('financeiro.contas', ano=ano+1, emp=request.args.get('emp')) if request.args.get('emp') else url_for('financeiro.contas', ano=ano+1) }}">{{ ano+1 }}</a>{% endif %}
-    </div>
-    {% if cobertura %}
-    <div class="cob-rolar">
-        <table class="cob-tab">
-            <thead><tr><th class="cob-conta">Conta</th>{% for r in meses_rot %}<th>{{ r }}</th>{% endfor %}<th>Último</th></tr></thead>
-            <tbody>
-            {% for c in cobertura %}
-            <tr>
-                <td class="cob-conta">
-                    <strong>{{ emp_mapa.get(c.empresa_id, c.empresa_id) }}</strong> · {{ c.banco }}
-                    <small>{{ c.conta }}</small>
-                    {% if not c.cadastrada %}<span class="fin-pilula alerta" title="Tem lançamentos mas não está em Contas: cadastre para o roteador reconhecer os próximos extratos">sem cadastro</span>{% endif %}
-                </td>
-                {% for m in range(1, 13) %}
-                {% set n = c.meses.get(m) %}
-                <td class="cob-cel {% if n %}ok{% elif m <= mes_limite %}falta{% else %}futuro{% endif %}">{% if n %}{{ n }}{% elif m <= mes_limite %}—{% endif %}</td>
-                {% endfor %}
-                <td class="cob-ult">{{ c.ultimo.strftime('%d/%m') if c.ultimo else '—' }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div style="color:#64748b; font-size:13px;">Nenhum extrato em {{ ano }}.</div>
-    {% endif %}
-</div>
-<style>
-.cob-rolar { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.cob-tab { border-collapse:collapse; width:100%; min-width:720px; font-size:12.5px; }
-.cob-tab th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; background:#f8fafc; padding:7px 6px; text-align:center; border-bottom:1px solid #e2e8f0; }
-.cob-tab th.cob-conta, .cob-tab td.cob-conta { text-align:left; padding-left:10px; white-space:nowrap; position:sticky; left:0; background:#fff; z-index:1; }
-.cob-tab th.cob-conta { background:#f8fafc; }
-.cob-tab td { padding:7px 6px; border-bottom:1px solid #f1f5f9; text-align:center; }
-.cob-tab td.cob-conta small { display:block; color:#94a3b8; font-size:11px; }
-.cob-cel.ok { color:#166534; font-weight:700; background:#f0fdf4; }
-.cob-cel.falta { color:#b91c1c; font-weight:800; background:#fef2f2; }
-.cob-cel.futuro { color:#cbd5e1; }
-.cob-ult { color:#64748b; white-space:nowrap; }
-</style>
-
-{# ── Formatos por banco: o que cada arquivo entrega (utils/extrato_formatos) ── #}
-<div class="fin-caixa" style="margin-top:16px;">
-    <h3 style="margin:0 0 4px; font-size:15px;"><i class="fas fa-file-invoice"></i> Formatos por banco</h3>
-    <div style="font-size:12.5px; color:#64748b; margin-bottom:12px;">
-        OFX é o padrão para todo banco. PDF, CSV e Excel são para quem baixou o extrato assim —
-        o mesmo conteúdo, outro invólucro. O que chega na pasta é reconhecido pelo conteúdo, não
-        pela extensão, e o que já entrou por um formato não entra de novo por outro.
-    </div>
-    <div class="fmt-grade">
-        <div class="fmt-cab">Banco</div><div class="fmt-cab">OFX</div><div class="fmt-cab">PDF</div><div class="fmt-cab">CSV</div><div class="fmt-cab">Excel</div>
-        {% for f in formatos %}
-        <div class="fmt-banco"><strong>{{ f.nome }}</strong> <small>{{ f.banco_id }}</small></div>
-        {% for k in ('ofx', 'pdf', 'csv', 'xls') %}
-        {% set c = f[k] %}
-        <div class="fmt-cel">
-            <span class="fmt-rot">{{ 'EXCEL' if k == 'xls' else k|upper }}</span>
-            <span class="fmt-selo fmt-{{ c.status }}">{{ c.rotulo }}</span>
-            <div class="fmt-nota">{{ c.nota }}</div>
-        </div>
-        {% endfor %}
-        {% endfor %}
-    </div>
-</div>
-<style>
-.fmt-grade { display:grid; grid-template-columns: 104px repeat(4, 1fr); gap:0; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
-.fmt-cab { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; background:#f8fafc; padding:8px 12px; border-bottom:1px solid #e2e8f0; }
-.fmt-banco, .fmt-cel { padding:10px 12px; border-bottom:1px solid #f1f5f9; min-width:0; }
-.fmt-banco small { color:#94a3b8; display:block; }
-.fmt-rot { display:none; }
-.fmt-selo { display:inline-block; font-size:11px; font-weight:700; border-radius:99px; padding:2px 9px; letter-spacing:.02em; }
-.fmt-ok { background:#dcfce7; color:#166534; }
-.fmt-irregular { background:#fef3c7; color:#92400e; }
-.fmt-igual { background:#e0f2fe; color:#075985; }
-.fmt-nao { background:#f1f5f9; color:#64748b; }
-.fmt-nota { font-size:11.5px; color:#64748b; margin-top:4px; line-height:1.35; }
-@media (max-width: 760px) {
-  .fmt-grade { display:block; border:0; }
-  .fmt-cab { display:none; }
-  .fmt-banco { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px 10px 0 0; margin-top:12px; padding:8px 12px; }
-  .fmt-banco small { display:inline; margin-left:6px; }
-  .fmt-cel { border:1px solid #e2e8f0; border-top:0; padding:8px 12px; display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
-  .fmt-cel:nth-child(5n) { border-radius:0 0 10px 10px; }
-  .fmt-rot { display:inline-block; width:42px; font-size:11px; font-weight:700; color:#475569; }
-  .fmt-nota { flex-basis:100%; margin-top:0; }
-}
-</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function ctAbrirNova() {
+function ctAbrirNova(empresaId, conta) {
+    if (empresaId) document.getElementById('ctNovaEmp').value = empresaId;
+    if (conta) document.getElementById('ctNovaConta').value = conta;
     document.getElementById('ctModalNova').style.display = 'block';
 }
 function ctFecharNova() {
     document.getElementById('ctModalNova').style.display = 'none';
 }
+
+(function () {
+const D = JSON.parse(document.getElementById('ctDados').textContent);
+const U = JSON.parse(document.getElementById('ctUrls').textContent);
+const ANO = D.ano, MES_ABERTO = D.mes_aberto;          // 1º mês ainda não fechado
+const ultimoMesFechado = Math.min(12, MES_ABERTO - 1);  // 0 = nenhum fechado
+const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const url = (u, id) => u.replace(/\/0(\/|$)/, '/' + id + '$1');
+const ID_POR_NOME = Object.fromEntries(D.contas.map(c => [c.banco_nome, c.banco_id]));
+const corDe = (id, nome) => D.cores[String(id || ID_POR_NOME[nome] || '').replace(/^0+/, '')] || '#94a3b8';
+const apel = Object.fromEntries(D.emps.map(e => [e.cliente_id, e]));
+const dm = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '';
+const COB_POR_CONTA = Object.fromEntries(D.cobertura.filter(c => c.conta_id).map(c => [c.conta_id, c]));
+// mês antes do primeiro extrato da conta não é falta: a conta ainda não existia no sistema
+const primeiroMes = meses => { const ks = Object.keys(meses || {}).map(Number).filter(m => meses[m]); return ks.length ? Math.min(...ks) : MES_ABERTO; };
+const nomeMes = m => MESES[m - 1] || '';
+
+function estadoConta(c) {
+  if (!c.ativo) return {k:'off', t:'Desativada', cls:'cinza'};
+  const cb = COB_POR_CONTA[c.id];
+  if (!cb || !cb.total) return {k:'nunca', t:'Nenhum extrato em ' + ANO, cls:'verm'};
+  if (!ultimoMesFechado || cb.meses[ultimoMesFechado]) return {k:'dia', t:'Em dia', cls:'verde'};
+  return {k:'atraso', t:'Falta ' + nomeMes(ultimoMesFechado), cls:'amb'};
+}
+function tipoPend(p) {
+  if (p.banco_nome === 'PDF com senha' && !p.conta) return {k:'senha', t:'PDF com senha', cls:'amb'};
+  if (p.banco_nome === 'PDF de outro banco' || p.banco_nome === 'CSV de outro layout')
+    return {k:'formato', t:'Formato que não leio', cls:'cinza'};
+  if (!p.conta) return {k:'semconta', t:'Arquivo sem a conta', cls:'amb'};
+  return {k:'empresa', t:'Dizer de quem é', cls:'verde'};
+}
+
+/* ---------- abas (a aba fica no endereço: #config, #contas...) ---------- */
+const ABAS = ['painel', 'config', 'contas', 'extratos', 'formatos'];
+let abaOn = ABAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'painel';
+function abas(nPend, nContas, nFalta) {
+  const L = [['painel','Painel',''], ['config','A configurar',`<span class="n ${nPend?'amb':''}">${nPend}</span>`],
+             ['contas','Contas',`<span class="n">${nContas}</span>`],
+             ['extratos','Extratos recebidos',`<span class="n ${nFalta?'verm':'verde'}">${nFalta ? nFalta + ' faltando' : 'em dia'}</span>`],
+             ['formatos','Formatos por banco','']];
+  const t = document.getElementById('ctAbas');
+  t.innerHTML = L.map(([k, r, n]) => `<button class="aba ${abaOn===k?'on':''}" data-a="${k}" type="button">${r} ${n}</button>`).join('');
+  t.querySelectorAll('.aba').forEach(b => b.onclick = () => abrir(b.dataset.a));
+  document.querySelectorAll('#ctb .painel').forEach(p => p.classList.toggle('on', p.id === 'p-' + abaOn));
+}
+function abrir(k, filtro) {
+  abaOn = k;
+  if (filtro) Object.assign(F[k], filtro);
+  try { history.replaceState(null, '', '#' + k); } catch (e) {}
+  tudo();
+  document.getElementById('ctb').scrollIntoView({block:'start'});
+}
+
+/* ---------- filtros ---------- */
+const F = { config:{tipo:'', q:''}, contas:{sit:'', banco:'', q:''}, extratos:{so:'', q:''}, formatos:{banco:''} };
+function chips(grupo, rot, opcoes, atual) {
+  return `<div class="chips" data-g="${grupo}"><span class="rot">${rot}</span>` +
+    opcoes.map(o => o.href
+      ? `<a class="chip ${atual===o.v?'on':''}" href="${esc(o.href)}">${esc(o.t)}</a>`
+      : `<button class="chip ${atual===o.v?'on':''}" data-v="${esc(o.v)}" type="button">${esc(o.t)}${o.q!==undefined?` <span class="q">${o.q}</span>`:''}</button>`).join('') + '</div>';
+}
+function ligar(painel, grupo, fn) {
+  painel.querySelectorAll(`.chips[data-g="${grupo}"] button.chip`).forEach(b => b.onclick = () => fn(b.dataset.v));
+}
+function busca(painel, id, alvo, redesenha) {
+  const inp = painel.querySelector('#' + id);
+  inp.oninput = () => { alvo.q = inp.value; redesenha();
+    const i = document.getElementById(id); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+}
+const caixaBusca = (id, ph, v) => `<label class="busca"><i class="fas fa-search"></i><input id="${id}" placeholder="${ph}" value="${esc(v)}" autocomplete="off"></label>`;
+
+/* ---------- PAINEL ---------- */
+function painel() {
+  const est = D.contas.map(estadoConta);
+  const ativas = D.contas.filter(c => c.ativo).length;
+  const dia = est.filter(e => e.k==='dia').length, atraso = est.filter(e => e.k==='atraso').length, nunca = est.filter(e => e.k==='nunca').length;
+  const semCad = D.cobertura.filter(c => !c.cadastrada).length;
+  const tp = D.pend.map(tipoPend);
+  const q = k => tp.filter(t => t.k===k).length;
+  const lancMes = ultimoMesFechado ? D.cobertura.reduce((s, c) => s + (c.meses[ultimoMesFechado] || 0), 0) : 0;
+  const m = nomeMes(ultimoMesFechado);
+  const p = document.getElementById('p-painel');
+  p.innerHTML = `
+   <div class="grupo">O que precisa de você</div>
+   <div class="kpis">
+     <button class="kpi ${D.pend.length?'alerta':''}" data-ir="config" type="button"><div class="kpi-l">Arquivos esperando</div><div class="kpi-v">${D.pend.length}</div><div class="kpi-s">${q('empresa')} só falta dizer de quem é · ${q('semconta')} sem a conta · ${q('formato')} formato que não leio${q('senha')?' · '+q('senha')+' com senha':''}</div></button>
+     ${ultimoMesFechado ? `<button class="kpi ${atraso+nunca?'ruim':''}" data-ir="contas" data-sit="atraso" type="button"><div class="kpi-l">Contas sem o extrato de ${m}</div><div class="kpi-v">${atraso+nunca}</div><div class="kpi-s">${atraso} atrasada(s) · ${nunca} sem nenhum extrato em ${ANO}</div></button>` : ''}
+     <button class="kpi ${semCad?'alerta':''}" data-ir="extratos" data-so="semcad" type="button"><div class="kpi-l">Contas com extrato e sem cadastro</div><div class="kpi-v">${semCad}</div><div class="kpi-s">o próximo extrato delas fica parado esperando</div></button>
+   </div>
+   <div class="grupo">Situação das contas</div>
+   <div class="kpis">
+     <button class="kpi" data-ir="contas" type="button"><div class="kpi-l">Contas ativas</div><div class="kpi-v">${ativas}</div><div class="kpi-s">em ${new Set(D.contas.map(c => c.empresa_id)).size} empresa(s) · ${D.contas.length - ativas} desativada(s)</div></button>
+     ${ultimoMesFechado ? `<button class="kpi" data-ir="contas" data-sit="dia" type="button"><div class="kpi-l">Em dia com ${m}</div><div class="kpi-v">${dia}</div><div class="kpi-s">de ${ativas} ativas</div></button>
+     <button class="kpi" data-ir="extratos" type="button"><div class="kpi-l">Lançamentos em ${m}</div><div class="kpi-v">${lancMes.toLocaleString('pt-BR')}</div><div class="kpi-s">somando todas as contas</div></button>` : ''}
+   </div>`;
+  p.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => {
+    const k = b.dataset.ir;
+    if (k==='contas') abrir('contas', {sit: b.dataset.sit || ''});
+    else if (k==='extratos') abrir('extratos', {so: b.dataset.so || ''});
+    else abrir(k);
+  });
+}
+
+/* ---------- A CONFIGURAR ---------- */
+function config() {
+  const f = F.config;
+  const tp = D.pend.map(p => [p, tipoPend(p)]);
+  const lista = tp.filter(([p, t]) => (!f.tipo || t.k===f.tipo) &&
+    (!f.q || (p.arquivo + ' ' + (p.banco_nome||'') + ' ' + (p.conta||'')).toLowerCase().includes(f.q.toLowerCase())));
+  const q = k => tp.filter(([, t]) => t.k===k).length;
+  const opcoes = [{v:'', t:'Todos', q:tp.length}, {v:'empresa', t:'Dizer de quem é', q:q('empresa')},
+                  {v:'semconta', t:'Arquivo sem a conta', q:q('semconta')}];
+  if (q('senha')) opcoes.push({v:'senha', t:'PDF com senha', q:q('senha')});
+  opcoes.push({v:'formato', t:'Formato que não leio', q:q('formato')});
+  const orfas = D.pend.filter(p => !p.empresa_id).length;
+  const p = document.getElementById('p-config');
+  p.innerHTML = `
+   <div class="filtro">
+     ${caixaBusca('ctQConfig', 'arquivo, banco ou conta', f.q)}
+     ${chips('tipo', 'O que falta', opcoes, f.tipo)}
+     <span class="contador">${lista.length} de ${tp.length} arquivo(s)</span>
+   </div>
+   ${D.eh_admin && orfas ? `<div class="admin-aviso"><b>Você é admin:</b> ${orfas} arquivo(s) <span class="sit amb">sem identificação</span> chegaram sem o número da empresa no nome e com conta desconhecida. Nada foi lançado: eles esperam na pasta.</div>` : ''}
+   ${lista.length ? `<div class="pend-grid">${lista.map(([x, t]) => cartaoPend(x, t)).join('')}</div>`
+                  : '<div class="ct-vazio">Nenhum arquivo esperando. Extrato de conta nova aparece aqui para você dizer de quem é.</div>'}`;
+  ligar(p, 'tipo', v => { f.tipo = v; config(); });
+  busca(p, 'ctQConfig', f, config);
+}
+function msgCurta(p, t) {
+  if (t.k==='empresa') return 'Conta nova. Diga uma vez de quem é e os próximos extratos dela entram sozinhos.';
+  if (t.k==='semconta') return `Este ${esc(p.banco_nome)} não traz o número da conta. Informe a conta e a empresa, ou mande o OFX.`;
+  if (t.k==='senha') return 'O PDF tem senha e nenhum CPF/CNPJ cadastrado abriu. Informe o documento do titular e eu tento de novo.';
+  return esc(p.motivo);
+}
+function cartaoPend(p, t) {
+  const orfa = !p.empresa_id;
+  const opts = '<option value="">Escolha a empresa</option>' + D.emps.map(e =>
+    `<option value="${e.cliente_id}" ${p.empresa_id===e.cliente_id?'selected':''}>${esc(e.numero_cliente)} · ${esc(e.apelido)}</option>`).join('');
+  const cab = `<div class="pend-top">
+      <span class="banco"><i style="background:${p.banco_id ? corDe(p.banco_id, p.banco_nome) : 'var(--apagado)'}"></i>${esc(p.banco_nome || 'Banco não identificado')}</span>
+      <span class="sit ${t.cls}">${t.t}</span></div>
+    <div class="pend-arq">${esc(p.arquivo)}</div>
+    <div class="pend-meta">
+      ${p.conta ? `<span>conta <b>${esc(p.conta)}</b></span>` : ''}
+      ${p.qtd_lancamentos ? `<span><b>${p.qtd_lancamentos}</b> lançamento(s)</span>` : ''}
+      ${p.periodo ? `<span>${esc(p.periodo)}</span>` : ''}
+      ${orfa ? '<span class="sit amb" title="Chegou sem o número da empresa no nome e com conta desconhecida">sem identificação</span>'
+             : `<span>o nome diz empresa <b>${esc(p.numero_no_nome || '')}</b>${p.nome_razao_social ? ' (' + esc(p.nome_razao_social.trim()) + ')' : ''}</span>`}
+      ${p.criado_em ? `<span>chegou ${new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>` : ''}
+    </div>
+    <div class="pend-msg">${msgCurta(p, t)}</div>`;
+  if (t.k==='formato')
+    return `<div class="pend cinza">${cab}<div class="pend-pe"><i class="fas fa-file-pdf"></i>&nbsp; Nada a responder aqui. Apague o arquivo da pasta e o cartão some sozinho.</div></div>`;
+  if (t.k==='senha')
+    return `<div class="pend amb">${cab}
+      <form class="pend-form doc" method="POST" action="${esc(url(U.abrir_pdf, p.id))}">
+        <div><label for="ctd${p.id}">CPF/CNPJ do titular</label><input id="ctd${p.id}" name="documento" inputmode="numeric" placeholder="só os números" required></div>
+        <button class="ct-btn" type="submit"><i class="fas fa-unlock"></i> Tentar abrir</button>
+      </form></div>`;
+  return `<div class="pend ${t.k==='semconta'?'amb':''}">${cab}
+    <form class="pend-form" method="POST" action="${esc(url(U.resolver, p.id))}">
+      <div class="larga"><label for="cte${p.id}">De qual empresa é *</label><select id="cte${p.id}" name="empresa_id" required>${opts}</select></div>
+      <div><label for="ctc${p.id}">Conta *</label><input id="ctc${p.id}" name="conta" value="${esc(p.conta || '')}" placeholder="número da conta" required></div>
+      <div><label for="cta${p.id}">Agência</label><input id="cta${p.id}" name="agencia" value="${esc(p.agencia || '')}" placeholder="opcional"></div>
+      <button class="ct-btn" type="submit"><i class="fas fa-check"></i> Vincular e ler</button>
+    </form></div>`;
+}
+
+/* ---------- CONTAS ---------- */
+function contas() {
+  const f = F.contas;
+  const linhas = D.contas.map(c => ({c, e: estadoConta(c), cb: COB_POR_CONTA[c.id]}));
+  const bancos = [...new Set(linhas.map(x => x.c.banco_nome || x.c.banco_id))].sort();
+  const casaSit = (k, e) => k==='atraso' ? (e.k==='atraso' || e.k==='nunca') : e.k===k;
+  const ok = x => (!f.sit || casaSit(f.sit, x.e)) && (!f.banco || (x.c.banco_nome || x.c.banco_id)===f.banco)
+     && (!f.q || [x.c.conta, x.c.banco_nome, x.c.apelido, x.c.agencia, apel[x.c.empresa_id]?.apelido].join(' ').toLowerCase().includes(f.q.toLowerCase()));
+  const lista = linhas.filter(ok);
+  const qs = k => linhas.filter(x => casaSit(k, x.e)).length;
+  // conta com extrato e sem cadastro entra no cartão da empresa, marcada
+  const semCad = D.cobertura.filter(c => !c.cadastrada && !f.banco && (!f.sit || f.sit==='atraso')
+     && (!f.q || [c.conta, c.banco].join(' ').toLowerCase().includes(f.q.toLowerCase())));
+  const sits = [{v:'', t:'Todas', q:linhas.length}, {v:'dia', t:'Em dia', q:qs('dia')}];
+  if (ultimoMesFechado) sits.push({v:'atraso', t:'Sem ' + nomeMes(ultimoMesFechado), q:qs('atraso')});
+  sits.push({v:'off', t:'Desativadas', q:qs('off')});
+  const cartoes = D.emps.map(e => cartaoEmp(e, lista.filter(x => x.c.empresa_id===e.cliente_id),
+                                            semCad.filter(s => s.empresa_id===e.cliente_id))).filter(Boolean).join('');
+  const p = document.getElementById('p-contas');
+  p.innerHTML = `
+   <div class="filtro">
+     ${caixaBusca('ctQContas', 'conta, banco ou apelido', f.q)}
+     ${chips('sit', 'Situação', sits, f.sit)}
+     ${bancos.length > 1 ? chips('banco', 'Banco', [{v:'', t:'Todos'}].concat(bancos.map(b => ({v:b, t:b}))), f.banco) : ''}
+     <span class="contador">${lista.length} de ${linhas.length} conta(s)</span>
+   </div>
+   <div class="leg"><span><i style="background:var(--verde-claro)"></i>mês com extrato (nº de lançamentos)</span><span><i style="background:var(--verm-fundo)"></i>mês fechado sem extrato</span><span><i style="background:var(--cinza-fundo)"></i>mês futuro ou antes do primeiro extrato</span></div>
+   ${cartoes ? `<div class="emp-grid">${cartoes}</div>`
+             : `<div class="ct-vazio">${D.contas.length ? 'Nenhuma conta com esse filtro.' : 'Nenhuma conta cadastrada. Cadastre no botão Nova Conta, ou deixe o primeiro extrato chegar e responda em A configurar de quem é a conta.'}</div>`}`;
+  ligar(p, 'sit', v => { f.sit = v; contas(); });
+  ligar(p, 'banco', v => { f.banco = v; contas(); });
+  busca(p, 'ctQContas', f, contas);
+}
+function tira(meses) {
+  const p0 = primeiroMes(meses);
+  let h = '<div class="tira">';
+  for (let m = 1; m <= 12; m++) {
+    const n = meses?.[m];
+    h += n ? `<span class="ok" title="${nomeMes(m)}: ${n} lançamento(s)">${n}</span>`
+           : (m < MES_ABERTO && m > p0) ? `<span class="falta" title="${nomeMes(m)}: sem extrato">—</span>` : '<span class="fut">·</span>';
+  }
+  return h + '</div><div class="tira-rot">' + MESES.map(x => `<span>${x[0]}</span>`).join('') + '</div>';
+}
+function cartaoEmp(e, itens, semCad) {
+  if (!itens.length && !semCad.length) return '';
+  const cc = itens.map(({c, e: st, cb}) => {
+    const nome = c.apelido && c.apelido !== c.banco_nome ? c.apelido : (c.banco_nome || c.banco_id);
+    return `
+    <div class="cc ${c.ativo ? '' : 'inativa'}">
+      <div style="min-width:0">
+        <span class="banco" title="${esc(c.banco_nome || '')}"><i style="background:${corDe(c.banco_id, c.banco_nome)}"></i>${esc(nome)}</span>
+        <div class="cc-num">${c.agencia ? 'ag ' + esc(c.agencia) + ' · ' : ''}cc ${esc(c.conta)}</div>
+      </div>
+      <div class="cc-dir"><span class="sit ${st.cls}">${st.t}</span><span class="cc-ult">${cb?.ultimo ? 'último ' + dm(cb.ultimo) : 'sem extrato'}</span></div>
+      ${tira(cb?.meses)}
+      <div class="cc-acoes">
+        ${cb?.total ? `<a class="lnk" href="${esc(U.extrato)}?conta=c${c.id}">Ver extrato</a>` : ''}
+        <form method="POST" action="${esc(url(U.alternar, c.id))}">
+          <button class="lnk cinza" type="submit" title="${c.ativo ? 'Desativar (extratos dela voltam a ficar pendentes)' : 'Reativar'}">${c.ativo ? 'Desativar' : 'Reativar'}</button>
+        </form>
+      </div>
+    </div>`; }).join('');
+  const sc = semCad.map(s => `
+    <div class="cc sem-cad">
+      <div style="min-width:0"><span class="banco"><i style="background:var(--ambar)"></i>${esc(s.banco)}</span><div class="cc-num">cc ${esc(s.conta)}</div></div>
+      <div class="cc-dir"><span class="sit amb">Sem cadastro</span><span class="cc-ult">${s.ultimo ? 'último ' + dm(s.ultimo) : ''}</span></div>
+      ${tira(s.meses)}
+      <div class="cc-acoes"><button class="lnk" type="button" data-cad-emp="${s.empresa_id}" data-cad-conta="${esc(s.conta)}">Cadastrar esta conta</button></div>
+    </div>`).join('');
+  return `<article class="emp"><header class="emp-h"><span class="e-num">${esc(e.numero_cliente)}</span><span class="e-nome">${esc(e.apelido)}</span>${e.tipo_pessoa ? `<span class="e-tp">${esc(e.tipo_pessoa)}</span>` : ''}<span class="e-tot">${itens.length} conta(s)</span></header>${cc}${sc}</article>`;
+}
+
+/* ---------- EXTRATOS RECEBIDOS ---------- */
+function faltas(c) { let n = 0; for (let m = primeiroMes(c.meses) + 1; m < MES_ABERTO && m <= 12; m++) if (!c.meses[m]) n++; return n; }
+function extratos() {
+  const f = F.extratos;
+  const ok = c => (!f.so || (f.so==='falta' ? faltas(c) > 0 : f.so==='semcad' ? !c.cadastrada : true))
+     && (!f.q || [apel[c.empresa_id]?.apelido, c.banco, c.conta].join(' ').toLowerCase().includes(f.q.toLowerCase()));
+  const lista = D.cobertura.filter(ok);
+  const nFalta = D.cobertura.filter(c => faltas(c) > 0).length, nSem = D.cobertura.filter(c => !c.cadastrada).length;
+  const p = document.getElementById('p-extratos');
+  p.innerHTML = `
+   <div class="filtro">
+     ${caixaBusca('ctQExt', 'empresa, banco ou conta', f.q)}
+     ${chips('so', 'Mostrar', [{v:'', t:'Todas', q:D.cobertura.length}, {v:'falta', t:'Com mês faltando', q:nFalta}, {v:'semcad', t:'Sem cadastro', q:nSem}], f.so)}
+     ${chips('ano', 'Ano', [{v:'a', t:String(ANO - 1), href:U.ano_ant}, {v:'b', t:String(ANO)}, {v:'c', t:String(ANO + 1), href:U.ano_prox}], 'b')}
+     <span class="contador">${lista.length} de ${D.cobertura.length} conta(s)</span>
+   </div>
+   <div class="leg"><span>Cada célula é quantos lançamentos entraram naquele mês.</span><span><i style="background:var(--verm-fundo)"></i>mês fechado sem extrato = falta</span></div>
+   ${lista.length ? `<div class="tbl-card"><div class="tbl-scroll"><table class="ct-tab grade"><thead><tr><th class="g-conta">Conta</th>${MESES.map(m => `<th>${m}</th>`).join('')}<th>Último</th></tr></thead><tbody>
+   ${lista.map(c => { const p0 = primeiroMes(c.meses); return `<tr><td class="g-conta"><span class="banco"><i style="background:${corDe(null, c.banco)}"></i>${esc(apel[c.empresa_id]?.apelido || c.empresa_id)} · ${esc(c.banco)}</span>${!c.cadastrada ? ' <span class="sit amb">sem cadastro</span>' : ''}<small>${esc(c.conta)}</small></td>
+      ${MESES.map((_, i) => { const m = i + 1, n = c.meses[m]; return n ? `<td class="cel-ok">${n}</td>` : (m < MES_ABERTO && m > p0) ? '<td class="cel-falta">—</td>' : '<td class="cel-fut"></td>'; }).join('')}
+      <td>${c.ultimo ? dm(c.ultimo) : '—'}</td></tr>`; }).join('')}
+   </tbody></table></div></div>` : `<div class="ct-vazio">Nenhum extrato em ${ANO}${f.so || f.q ? ' com esse filtro' : ''}.</div>`}`;
+  ligar(p, 'so', v => { f.so = v; extratos(); });
+  busca(p, 'ctQExt', f, extratos);
+  return nFalta;
+}
+
+/* ---------- FORMATOS ---------- */
+function formatos() {
+  const f = F.formatos;
+  const cls = {ok:'verde', irregular:'amb', igual:'azul', nao:'cinza'};
+  const lista = D.formatos.filter(b => !f.banco || b.nome===f.banco);
+  const p = document.getElementById('p-formatos');
+  p.innerHTML = `
+   <div class="filtro">
+     ${chips('banco', 'Banco', [{v:'', t:'Todos'}].concat(D.formatos.map(b => ({v:b.nome, t:b.nome}))), f.banco)}
+     <span class="contador">OFX é o padrão. PDF, CSV e Excel são o mesmo extrato em outro formato; o que já entrou por um não entra de novo por outro.</span>
+   </div>
+   <div class="tbl-card"><div class="tbl-scroll"><table class="ct-tab fmt"><thead><tr><th>Banco</th><th>OFX</th><th>PDF</th><th>CSV</th><th>Excel</th></tr></thead><tbody>
+   ${lista.map(b => `<tr><td><span class="banco"><i style="background:${corDe(b.banco_id)}"></i>${esc(b.nome)}</span><div class="fnota">${esc(b.banco_id)}</div></td>
+     ${['ofx', 'pdf', 'csv', 'xls'].map(k => `<td data-label="${k==='xls' ? 'Excel' : k.toUpperCase()}"><span class="sit ${cls[b[k].status]}">${esc(b[k].rotulo)}</span><div class="fnota">${esc(b[k].nota)}</div></td>`).join('')}</tr>`).join('')}
+   </tbody></table></div></div>`;
+  ligar(p, 'banco', v => { f.banco = v; formatos(); });
+}
+
+function tudo() {
+  painel(); config(); contas(); const nFalta = extratos(); formatos();
+  abas(D.pend.length, D.contas.length, nFalta);
+}
+// "Cadastrar esta conta" (conta com extrato e sem cadastro): abre o modal já preenchido
+document.getElementById('ctb').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-cad-emp]');
+  if (b) ctAbrirNova(b.dataset.cadEmp, b.dataset.cadConta);
+});
+tudo();
+})();
 </script>
 {% endblock %}
