@@ -594,7 +594,8 @@ function ssRestaurar(){
   Object.keys(F).forEach(fid => { const q = LS.get('ss.q.'+fid); if(q){ F[fid].q = q; const i = document.querySelector(`#${fid} input`); if(i) i.value = q; RENDER[fid](); } });
   if(D.abrir_empresa){ const e = D.empresas.find(x => String(x.numero)===String(D.abrir_empresa)); if(e){ abrirEmpresa(e.cliente_id); return; } }
   const emp = +LS.get('ss.emp'); if(emp && D.empresas.some(x => x.cliente_id===emp)) abrirEmpresa(emp);
-  const aba = LS.get('ss.aba'); if(aba && document.querySelector(`.aba[data-aba="${aba}"]`) && !(aba==='empresa' && $('#aba-emp').hidden)) abrir(aba);
+  // #certificados no link (o botão dos e-mails de aviso) vence a aba lembrada.
+  const aba = (location.hash || '').slice(1) || LS.get('ss.aba'); if(aba && document.querySelector(`.aba[data-aba="${aba}"]`) && !(aba==='empresa' && $('#aba-emp').hidden)) abrir(aba);
   try{ const sy = sessionStorage.getItem('ss.scroll'); if(sy!==null){ sessionStorage.removeItem('ss.scroll'); window.scrollTo(0, parseInt(sy,10)||0); } }catch(e){}
 }
 ssRestaurar();

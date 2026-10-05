@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Departamentos – Configurações{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
+        <h1 class="page-title">Departamentos</h1>
+        <p class="page-subtitle">Cada departamento tem a sua caixa de e-mail. É para ela que vão os avisos automáticos.</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="{{ url_for('configuracoes.emails_automaticos') }}" class="btn btn-secondary">
+            <i class="fas fa-envelope"></i> E-mails automáticos
+        </a>
+        <a href="{{ url_for('configuracoes.departamento_novo') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo departamento
+        </a>
+    </div>
+</div>
+
+{% if sem_departamento %}
+<div style="margin:0 0 16px;padding:12px 16px;border-radius:10px;background:#fef3c7;border-left:4px solid #d97706;color:#92400e;font-size:13.5px;overflow-wrap:anywhere;">
+    <div><strong>{{ sem_departamento|length }} usuário{{ '' if sem_departamento|length == 1 else 's' }} sem departamento:</strong>
+    {% for u in sem_departamento %}<a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}">{{ u.nome }}</a>{{ ', ' if not loop.last }}{% endfor %}.
+    Abra o usuário e escolha o departamento.</div>
+</div>
+{% endif %}
+
+{# Departamento é "coisa com estado" (ativo, e-mail, quantos usuários, quantos
+   avisos recebe) — pelo critério da casa é CARTÃO. Componente .ficha-*
+   compartilhado com Usuários e Perfis. #}
+<div class="ficha-grid">
+{% for d in departamentos %}
+<article class="ficha">
+    <header class="ficha-top">
+        <span class="ficha-ini">{{ (d.nome or '?')[:1]|upper }}</span>
+        <div class="ficha-id">
+            <strong class="ficha-nome">{{ d.nome }}</strong>
+            <span class="ficha-sub">{{ d.email or 'sem e-mail: não recebe avisos' }}</span>
+        </div>
+    </header>
+
+    <div class="ficha-selos">
+        <span class="status-badge status-{{ 'ativo' if d.ativo else 'inativo' }}">{{ 'ATIVO' if d.ativo else 'INATIVO' }}</span>
+        <span class="badge badge-{{ 'info' if d.qtd_usuarios else 'secondary' }}" title="{{ d.usuarios_nomes or 'Nenhum usuário' }}">
+            <i class="fas fa-users"></i>
+            {% if d.qtd_usuarios %}{{ d.qtd_usuarios }} usuário{{ '' if d.qtd_usuarios == 1 else 's' }}{% else %}sem usuários{% endif %}
+        </span>
+        <span class="badge badge-{{ 'success' if d.qtd_avisos else 'secondary' }}" title="Avisos por e-mail que este departamento recebe">
+            <i class="fas fa-envelope"></i>
+            {% if d.qtd_avisos %}{{ d.qtd_avisos }} aviso{{ '' if d.qtd_avisos == 1 else 's' }}{% else %}nenhum aviso{% endif %}
+        </span>
+    </div>
+
+    {% if d.usuarios_nomes %}
+    <p class="ficha-sub" style="margin:0;">{{ d.usuarios_nomes }}</p>
+    {% endif %}
+
+    <footer class="ficha-acoes">
+        <a href="{{ url_for('configuracoes.departamento_editar', did=d.id) }}" class="btn btn-sm btn-secondary">
+            <i class="fas fa-edit"></i> Editar
+        </a>
+    </footer>
+</article>
+{% else %}
+<p class="ficha-vazio">
+    Nenhum departamento cadastrado.
+    <a href="{{ url_for('configuracoes.departamento_novo') }}">Criar o primeiro</a>.
+</p>
+{% endfor %}
+</div>
+{% endblock %}

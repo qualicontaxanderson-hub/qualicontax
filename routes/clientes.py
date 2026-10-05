@@ -22,7 +22,7 @@ from models.ramo_atividade import RamoAtividade
 from models.cadastro_anp import CadastroAnp
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
-from utils import dropbox_sync
+from utils import certificado_autoria, dropbox_sync
 from utils.certificado_digital import (
     abrir_certificado, cifrar_senha,
     SenhaInvalidaError, DocumentoNaoEncontradoError, CertificadoError,
@@ -854,6 +854,14 @@ def vincular_certificado_arquivo(cliente, senha, procuracao_pedida=False):
     if anterior:
         _antes_cert = {'cnpj': anterior.get('cnpj'), 'validade': anterior.get('validade'),
                        'senha_cifrada': '(anterior)', 'dropbox_path': anterior.get('dropbox_path')}
+    # TRILHA COM AUTOR (05/10/2026): o registrar() acima só grava com usuário
+    # logado; o vínculo automático do roteador não tem. Esta trilha acha o autor
+    # também pelo Q-Colabore (utils/certificado_autoria.py) e alimenta o e-mail
+    # "Certificados recebidos hoje". Nunca estoura.
+    certificado_autoria.registrar_vinculo(
+        id, doc_cert, info['validade'],
+        anterior.get('validade') if anterior else None, raw)
+
     registrar('escrita.vinculou_certificado', 'cadastros', tabela='dfe_certificados',
               registro_id=id, antes=_antes_cert,
               depois={'cnpj': doc_cert, 'tipo_doc': info['tipo_doc'],

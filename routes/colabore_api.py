@@ -29,7 +29,7 @@ import unicodedata
 from flask import Blueprint, request, jsonify
 
 from models.colabore_config import ColaboreConfig
-from utils import dropbox_sync
+from utils import certificado_autoria, dropbox_sync
 from utils.atividade import registrar_agente
 
 logger = logging.getLogger(__name__)
@@ -210,6 +210,13 @@ def enviar():
                      tabela=None,
                      depois={'ext': ext, 'tamanho_bytes': tamanho,
                              'renomeado': nome_final != nome})
+
+    # (5b) CERTIFICADO: guarda QUEM mandou, pela impressão digital do conteúdo
+    #      (nunca pelo nome). O vínculo automático, minutos depois, acha o autor
+    #      por ela — é o que põe o nome no e-mail "Certificados recebidos hoje".
+    if ext in certificado_autoria.EXT_CERT:
+        certificado_autoria.registrar_envio(conteudo, cfg['usuario_id'],
+                                            cfg.get('usuario_nome'), ext)
 
     # (6) ok — devolve o nome FINAL gravado (pode ter ganho sufixo).
     return jsonify({'status': 'recebido', 'nome': nome_final}), 200

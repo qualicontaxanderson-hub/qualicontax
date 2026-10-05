@@ -1012,6 +1012,12 @@ def _perfis_ativos():
         fetch=True) or []
 
 
+def _dep_id_do_form():
+    """Departamento escolhido no formulário de usuário, ou None (05/10/2026)."""
+    v = (request.form.get('departamento_id') or '').strip()
+    return int(v) if v.isdigit() else None
+
+
 def _departamentos_ativos():
     return execute_query(
         'SELECT id, nome FROM departamentos WHERE ativo = 1 ORDER BY nome',
@@ -1728,10 +1734,12 @@ def usuario_novo():
         telefone = request.form.get('telefone', '').strip()
         perfis_sel = request.form.getlist('perfis')
         empresas_sel = request.form.getlist('empresas')
+        departamento_id = _dep_id_do_form()
+        situacao = 'ATIVO'      # o registrar() abaixo usava sem definir (NameError -> 500)
 
         if not nome or not login or not email or not senha:
             flash('Nome, login, e-mail e senha são obrigatórios.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
+            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
@@ -1741,21 +1749,22 @@ def usuario_novo():
         )
         if existe_login:
             flash('Já existe um usuário com este login.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
+            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
         # E-mail repetido é permitido (18/08/2026) — identidade é o login.
 
         uid = execute_query(
-            """INSERT INTO usuarios (nome, login, email, senha_hash, tipo_usuario, situacao, cargo, telefone)
-               VALUES (%s, %s, %s, %s, %s, 'ATIVO', %s, %s)""",
-            (nome, login, email, hash_password(senha), tipo, cargo, telefone),
+            """INSERT INTO usuarios (nome, login, email, senha_hash, tipo_usuario, situacao, cargo, telefone,
+                                   departamento_id)
+               VALUES (%s, %s, %s, %s, %s, 'ATIVO', %s, %s, %s)""",
+            (nome, login, email, hash_password(senha), tipo, cargo, telefone, departamento_id),
         )
 
         if not uid:
             flash('Erro ao criar o usuário. Verifique os dados e tente novamente.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
+            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
@@ -1777,12 +1786,13 @@ def usuario_novo():
                   tabela='usuarios', registro_id=uid,
                   depois={'nome': nome, 'login': login, 'email': email,
                           'tipo': tipo, 'situacao': situacao, 'cargo': cargo,
+                          'departamento_id': departamento_id,
                           'perfis': sorted(int(p) for p in perfis_sel),
                           'empresas': sorted(int(c) for c in empresas_sel)})
         flash(f'Usuário "{nome}" criado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
-    return render_template('configuracoes/usuario_form.html',
+    return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                            perfis=perfis, clientes=clientes, usuario=None,
                            perfis_usuario=set(), empresas_usuario=set())
 
@@ -1829,12 +1839,13 @@ def usuario_editar(uid):
         telefone = request.form.get('telefone', '').strip()
         situacao = request.form.get('situacao', 'ATIVO')
         nova_senha = request.form.get('nova_senha', '').strip()
+        departamento_id = _dep_id_do_form()
         perfis_sel   = request.form.getlist('perfis')
         empresas_sel = request.form.getlist('empresas')
 
         if not nome or not login or not email:
             flash('Nome, login e e-mail são obrigatórios.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
+            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=usuario,
                                    perfis_usuario=perfis_usuario,
                                    empresas_usuario=empresas_usuario)
@@ -1846,7 +1857,7 @@ def usuario_editar(uid):
         )
         if existe_login:
             flash('Já existe outro usuário com este login.', 'danger')
-            return render_template('configuracoes/usuario_form.html',
+            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=usuario,
                                    perfis_usuario=perfis_usuario,
                                    empresas_usuario=empresas_usuario)
@@ -1856,17 +1867,18 @@ def usuario_editar(uid):
         if nova_senha:
             execute_query(
                 """UPDATE usuarios SET nome=%s, login=%s, email=%s, senha_hash=%s, tipo_usuario=%s,
-                                       situacao=%s, cargo=%s, telefone=%s
+                                       situacao=%s, cargo=%s, telefone=%s, departamento_id=%s
                     WHERE id=%s""",
-                (nome, login, email, hash_password(nova_senha), tipo, situacao, cargo, telefone, uid),
+                (nome, login, email, hash_password(nova_senha), tipo, situacao, cargo, telefone,
+                 departamento_id, uid),
                 fetch=False,
             )
         else:
             execute_query(
                 """UPDATE usuarios SET nome=%s, login=%s, email=%s, tipo_usuario=%s,
-                                       situacao=%s, cargo=%s, telefone=%s
+                                       situacao=%s, cargo=%s, telefone=%s, departamento_id=%s
                     WHERE id=%s""",
-                (nome, login, email, tipo, situacao, cargo, telefone, uid),
+                (nome, login, email, tipo, situacao, cargo, telefone, departamento_id, uid),
                 fetch=False,
             )
 
@@ -1897,11 +1909,13 @@ def usuario_editar(uid):
                   antes={'nome': usuario.get('nome'), 'login': usuario.get('login'),
                          'email': usuario.get('email'), 'tipo': usuario.get('tipo_usuario'),
                          'situacao': usuario.get('situacao'), 'cargo': usuario.get('cargo'),
+                         'departamento_id': usuario.get('departamento_id'),
                          'perfis': sorted(perfis_usuario),
                          'empresas': sorted(empresas_usuario),
                          'senha_trocada': False},
                   depois={'nome': nome, 'login': login, 'email': email, 'tipo': tipo,
                           'situacao': situacao, 'cargo': cargo,
+                          'departamento_id': departamento_id,
                           'perfis': sorted(int(p) for p in perfis_sel),
                           'empresas': sorted(int(c) for c in empresas_sel),
                           'senha_trocada': bool(nova_senha)})
@@ -1915,7 +1929,7 @@ def usuario_editar(uid):
         "  FROM cliente_acesso_excecao e JOIN clientes c ON c.id = e.cliente_id "
         " WHERE e.usuario_id = %s ORDER BY c.nome_razao_social",
         (uid,), fetch=True) or []
-    return render_template('configuracoes/usuario_form.html',
+    return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
                            perfis=perfis, clientes=clientes, usuario=usuario,
                            perfis_usuario=perfis_usuario,
                            empresas_usuario=empresas_usuario,
@@ -2073,3 +2087,187 @@ def perfil_excluir(pid):
               depois={'nome': None})
     flash(f'Perfil "{p["nome"]}" excluído.', 'success')
     return redirect(url_for('configuracoes.perfis'))
+
+
+# ===========================================================================
+# DEPARTAMENTOS (05/10/2026)
+#
+# A tabela existia desde nov/2025, sem tela. Ganhou o E-MAIL: é para a caixa
+# do departamento (legalizacao@, dp@...) que vão os avisos automáticos — o
+# e-mail do usuário não serve, o pessoal cadastra gmail e alias.
+# ===========================================================================
+
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+@configuracoes.route('/departamentos/')
+@admin_required
+def departamentos():
+    rows = execute_query(
+        """SELECT d.id, d.nome, d.descricao, d.email, d.ativo,
+                  r.nome AS responsavel_nome,
+                  (SELECT COUNT(*) FROM usuarios u
+                    WHERE u.departamento_id = d.id AND u.situacao = 'ATIVO') AS qtd_usuarios,
+                  (SELECT GROUP_CONCAT(u.nome ORDER BY u.nome SEPARATOR ', ') FROM usuarios u
+                    WHERE u.departamento_id = d.id AND u.situacao = 'ATIVO') AS usuarios_nomes,
+                  (SELECT COUNT(*) FROM email_relatorio_destino x
+                    WHERE x.departamento_id = d.id) AS qtd_avisos
+             FROM departamentos d
+             LEFT JOIN usuarios r ON r.id = d.responsavel_id
+            ORDER BY d.ativo DESC, d.nome""",
+        fetch=True) or []
+    sem_dep = execute_query(
+        "SELECT id, nome FROM usuarios WHERE situacao = 'ATIVO' AND classe_conta = 'FUNCIONARIO' "
+        "   AND departamento_id IS NULL ORDER BY nome", fetch=True) or []
+    return render_template('configuracoes/departamentos_lista.html',
+                           departamentos=rows, sem_departamento=sem_dep)
+
+
+def _usuarios_ativos():
+    return execute_query(
+        "SELECT id, nome FROM usuarios WHERE situacao = 'ATIVO' AND classe_conta = 'FUNCIONARIO' "
+        " ORDER BY nome", fetch=True) or []
+
+
+def _dep_do_form():
+    nome = (request.form.get('nome') or '').strip()
+    email = (request.form.get('email') or '').strip().lower()
+    descricao = (request.form.get('descricao') or '').strip() or None
+    resp = request.form.get('responsavel_id') or None
+    ativo = 1 if request.form.get('ativo', '1') == '1' else 0
+    erro = None
+    if not nome:
+        erro = 'Dê um nome ao departamento.'
+    elif email and not _EMAIL_RE.match(email):
+        erro = 'O e-mail do departamento não parece válido. Confira e tente de novo.'
+    return {'nome': nome, 'email': email or None, 'descricao': descricao,
+            'responsavel_id': int(resp) if resp else None, 'ativo': ativo}, erro
+
+
+@configuracoes.route('/departamentos/novo', methods=['GET', 'POST'])
+@admin_required
+def departamento_novo():
+    if request.method == 'POST':
+        d, erro = _dep_do_form()
+        if not erro and execute_query("SELECT id FROM departamentos WHERE nome = %s",
+                                      (d['nome'],), fetch=True, fetch_one=True):
+            erro = f'Já existe um departamento chamado "{d["nome"]}".'
+        if erro:
+            flash(erro, 'danger')
+            return render_template('configuracoes/departamento_form.html', dep=d,
+                                   usuarios=_usuarios_ativos())
+        did = execute_query(
+            "INSERT INTO departamentos (nome, email, descricao, responsavel_id, ativo) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (d['nome'], d['email'], d['descricao'], d['responsavel_id'], d['ativo']))
+        registrar('escrita.criou_departamento', 'configuracoes', tabela='departamentos',
+                  registro_id=did, depois=d)
+        flash(f'Departamento "{d["nome"]}" criado.', 'success')
+        return redirect(url_for('configuracoes.departamentos'))
+    return render_template('configuracoes/departamento_form.html', dep=None,
+                           usuarios=_usuarios_ativos())
+
+
+@configuracoes.route('/departamentos/<int:did>/editar', methods=['GET', 'POST'])
+@admin_required
+def departamento_editar(did):
+    atual = execute_query("SELECT * FROM departamentos WHERE id = %s", (did,),
+                          fetch=True, fetch_one=True)
+    if not atual:
+        flash('Departamento não encontrado.', 'danger')
+        return redirect(url_for('configuracoes.departamentos'))
+    if request.method == 'POST':
+        d, erro = _dep_do_form()
+        if not erro and execute_query("SELECT id FROM departamentos WHERE nome = %s AND id <> %s",
+                                      (d['nome'], did), fetch=True, fetch_one=True):
+            erro = f'Já existe outro departamento chamado "{d["nome"]}".'
+        if erro:
+            flash(erro, 'danger')
+            return render_template('configuracoes/departamento_form.html',
+                                   dep=dict(d, id=did), usuarios=_usuarios_ativos())
+        execute_query(
+            "UPDATE departamentos SET nome=%s, email=%s, descricao=%s, responsavel_id=%s, ativo=%s "
+            " WHERE id=%s",
+            (d['nome'], d['email'], d['descricao'], d['responsavel_id'], d['ativo'], did), fetch=False)
+        registrar('escrita.alterou_departamento', 'configuracoes', tabela='departamentos',
+                  registro_id=did,
+                  antes={k: atual.get(k) for k in d}, depois=d)
+        flash(f'Departamento "{d["nome"]}" atualizado.', 'success')
+        return redirect(url_for('configuracoes.departamentos'))
+    return render_template('configuracoes/departamento_form.html', dep=atual,
+                           usuarios=_usuarios_ativos())
+
+
+# ===========================================================================
+# E-MAILS AUTOMÁTICOS (05/10/2026)
+#
+# Grade departamento × relatório. O envio é do cron_emails.py; aqui só se
+# escolhe quem recebe, se manda um TESTE e se vê o último envio de cada um.
+# ===========================================================================
+
+@configuracoes.route('/emails/', methods=['GET', 'POST'])
+@admin_required
+def emails_automaticos():
+    from utils import email_envio, relatorios_email as R
+    deps = execute_query(
+        "SELECT id, nome, email FROM departamentos WHERE ativo = 1 ORDER BY nome", fetch=True) or []
+    if request.method == 'POST':
+        if not _qrobo_csrf_ok():
+            flash('A página expirou. Recarregue e salve de novo.', 'danger')
+            return redirect(url_for('configuracoes.emails_automaticos'))
+        antes = sorted(f"{r['relatorio']}:{r['departamento_id']}" for r in (execute_query(
+            "SELECT relatorio, departamento_id FROM email_relatorio_destino", fetch=True) or []))
+        ids_dep = {d['id'] for d in deps}
+        marcados = []
+        for v in request.form.getlist('destino'):
+            rel, _, did = v.partition(':')
+            if rel in R.RELATORIOS and did.isdigit() and int(did) in ids_dep:
+                marcados.append((rel, int(did)))
+        try:
+            with transacao() as cur:
+                cur.execute("DELETE FROM email_relatorio_destino")
+                for rel, did in marcados:
+                    cur.execute("INSERT INTO email_relatorio_destino (relatorio, departamento_id, criado_por) "
+                                "VALUES (%s, %s, %s)", (rel, did, current_user.id))
+        except Exception:
+            logger.exception('[emails] falha ao salvar a grade de destinatários.')
+            flash('Não consegui salvar. Nada foi alterado; tente de novo.', 'danger')
+            return redirect(url_for('configuracoes.emails_automaticos'))
+        registrar('escrita.alterou_destinos_email', 'configuracoes', tabela='email_relatorio_destino',
+                  antes={'destinos': antes},
+                  depois={'destinos': sorted(f'{r}:{d}' for r, d in marcados)})
+        flash('Destinatários salvos.', 'success')
+        return redirect(url_for('configuracoes.emails_automaticos'))
+
+    marc = {(r['relatorio'], r['departamento_id']) for r in (execute_query(
+        "SELECT relatorio, departamento_id FROM email_relatorio_destino", fetch=True) or [])}
+    meu_dep = execute_query(
+        "SELECT d.email FROM usuarios u JOIN departamentos d ON d.id = u.departamento_id "
+        " WHERE u.id = %s", (current_user.id,), fetch=True, fetch_one=True) or {}
+    return render_template('configuracoes/emails_automaticos.html',
+                           relatorios=R.RELATORIOS, departamentos=deps, marcados=marc,
+                           ultimos=R.ultimos_envios(), smtp_ok=email_envio.configurado(),
+                           teste_para=meu_dep.get('email') or '',
+                           csrf_token=_qrobo_csrf_token())
+
+
+@configuracoes.route('/emails/teste', methods=['POST'])
+@admin_required
+def emails_teste():
+    """Manda AGORA um relatório para o endereço digitado, com os dados de hoje.
+    Não conta como o envio do dia e não mexe na janela dos avisos."""
+    from utils import relatorios_email as R
+    if not _qrobo_csrf_ok():
+        return jsonify(ok=False, msg='A página expirou. Recarregue e tente de novo.'), 400
+    rel = request.form.get('relatorio') or ''
+    para = [e.strip().lower() for e in re.split(r'[,;\s]+', request.form.get('para') or '') if e.strip()]
+    if rel not in R.RELATORIOS:
+        return jsonify(ok=False, msg='Relatório desconhecido.'), 400
+    if not para or not all(_EMAIL_RE.match(e) for e in para):
+        return jsonify(ok=False, msg='Digite um e-mail válido para receber o teste.'), 400
+    r = R.enviar(rel, teste_para=para, usuario_id=current_user.id)
+    registrar('escrita.enviou_teste_email', 'configuracoes', tabela='email_envio',
+              depois={'relatorio': rel, 'para': para, 'status': r['status']})
+    if r['status'] == 'ENVIADO':
+        return jsonify(ok=True, msg=f"Teste enviado para {', '.join(para)} ({r['itens']} itens).")
+    return jsonify(ok=False, msg=f"Não enviado: {r['erro'] or r['status']}.")

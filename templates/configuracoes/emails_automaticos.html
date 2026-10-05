@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}E-mails automáticos – Configurações{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
+        <h1 class="page-title">E-mails automáticos</h1>
+        <p class="page-subtitle">Escolha qual departamento recebe cada aviso. O envio sai de app@qualicontax.com.br só nos dias úteis.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('configuracoes.departamentos') }}" class="btn btn-secondary">
+            <i class="fas fa-sitemap"></i> Departamentos
+        </a>
+    </div>
+</div>
+
+{% if not smtp_ok %}
+<div style="margin:0 0 16px;padding:12px 16px;border-radius:10px;background:#fef3c7;border-left:4px solid #d97706;color:#92400e;font-size:13.5px;overflow-wrap:anywhere;">
+    <div><strong>O envio ainda não está ligado.</strong> Falta a senha da caixa
+    app@qualicontax.com.br na variável <code>SMTP_PASSWORD</code> do Railway. Até lá, nem o teste sai.</div>
+</div>
+{% endif %}
+
+{% set sem_email = departamentos|selectattr('email', 'none')|list %}
+
+<form method="POST" id="f-destinos">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+{# Cada aviso é "coisa com estado" (quem recebe, último envio, falhou ou não)
+   — cartão, pelo critério da casa. #}
+<div class="ficha-grid em-grid">
+{% for rel, cfg in relatorios.items() %}
+{% set u = ultimos.get(rel, {}) %}
+<article class="ficha">
+    <header class="ficha-top">
+        <span class="ficha-ini"><i class="fas fa-envelope" style="font-size:15px;"></i></span>
+        <div class="ficha-id">
+            <strong class="ficha-nome">{{ cfg.nome }}</strong>
+            <span class="ficha-sub">{{ cfg.quando }}</span>
+        </div>
+    </header>
+
+    <div>
+        <div class="em-rot">Quem recebe</div>
+        <div class="em-deps">
+        {% for d in departamentos %}
+            <label class="em-dep{{ ' em-dep-off' if not d.email }}" title="{{ d.email or 'Departamento sem e-mail: cadastre o e-mail para ele receber' }}">
+                <input type="checkbox" name="destino" value="{{ rel }}:{{ d.id }}"
+                       {{ 'checked' if (rel, d.id) in marcados }} {{ 'disabled' if not d.email }}>
+                {{ d.nome }}
+            </label>
+        {% endfor %}
+        </div>
+    </div>
+
+    <div class="em-ult">
+        {% if u.real %}
+            {% set r = u.real %}
+            {% if r.status == 'ENVIADO' %}<span class="badge badge-success">enviado</span>
+            {% elif r.status == 'VAZIO' %}<span class="badge badge-secondary">nada a avisar</span>
+            {% elif r.status == 'FALHOU' %}<span class="badge badge-danger">falhou</span>
+            {% else %}<span class="badge badge-warning">{{ r.status|lower }}</span>{% endif %}
+            <span>{{ r.concluido_em.strftime('%d/%m às %H:%M') if r.concluido_em else r.criado_em.strftime('%d/%m às %H:%M') }}
+                {% if r.status == 'ENVIADO' %}· {{ r.itens }} ite{{ 'm' if r.itens == 1 else 'ns' }} · {{ r.destinatarios }}{% endif %}</span>
+            {% if r.erro %}<div class="em-erro">{{ r.erro }}</div>{% endif %}
+        {% else %}
+            <span class="ficha-sub">Ainda não saiu nenhum.</span>
+        {% endif %}
+    </div>
+
+    <footer class="ficha-acoes">
+        <button type="button" class="btn btn-sm btn-secondary em-teste" data-rel="{{ rel }}" data-nome="{{ cfg.nome }}">
+            <i class="fas fa-paper-plane"></i> Enviar teste
+        </button>
+    </footer>
+</article>
+{% endfor %}
+</div>
+
+{% if sem_email %}
+<p class="ficha-sub" style="margin:12px 0 0;">
+    Sem e-mail, não dá para marcar: {{ sem_email|map(attribute='nome')|join(', ') }}.
+    <a href="{{ url_for('configuracoes.departamentos') }}">Cadastrar e-mail</a>.
+</p>
+{% endif %}
+
+<div class="em-salvar">
+    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar quem recebe</button>
+</div>
+</form>
+
+{# Teste: mesmo conteúdo do aviso, com os dados de agora, só para o endereço
+   digitado. Não conta como o envio do dia. #}
+<dialog id="dlg-teste" class="em-dlg">
+    <form method="dialog" id="f-teste">
+        <h3 style="margin:0 0 4px;font-size:16px;">Enviar teste</h3>
+        <p class="ficha-sub" id="t-nome" style="margin:0 0 12px;"></p>
+        <label class="form-label" for="t-para">Para</label>
+        <input type="text" id="t-para" class="form-control" value="{{ teste_para }}" placeholder="anderson@qualicontax.com.br">
+        <small class="form-text text-muted">Sai com os dados de agora e "[TESTE]" no assunto. Não conta como o aviso do dia.</small>
+        <p id="t-msg" class="em-msg" hidden></p>
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="t-fechar">Fechar</button>
+            <button type="button" class="btn btn-primary" id="t-enviar"><i class="fas fa-paper-plane"></i> Enviar</button>
+        </div>
+    </form>
+</dialog>
+
+<style>
+.em-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.em-rot { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; font-weight: 600; margin-bottom: 6px; }
+.em-deps { display: flex; flex-wrap: wrap; gap: 6px; }
+.em-dep { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #e3ece7; border-radius: 999px; font-size: 13px; cursor: pointer; background: #f8faf9; }
+.em-dep:has(input:checked) { background: #e3f4e5; border-color: #9fd3a8; color: #1e4d2b; font-weight: 600; }
+.em-dep-off { opacity: .5; cursor: not-allowed; }
+.em-ult { font-size: 13px; color: #475569; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+.em-erro { flex-basis: 100%; color: #b42318; font-size: 12.5px; }
+.em-salvar { position: sticky; bottom: 0; padding: 12px 0; background: var(--page-bg, #f3f7f5); margin-top: 8px; }
+.em-dlg { border: 1px solid #e3ece7; border-radius: 14px; padding: 20px; width: min(440px, calc(100vw - 32px)); }
+.em-dlg::backdrop { background: rgba(15, 23, 42, .35); }
+.em-msg { margin: 10px 0 0; font-size: 13px; }
+.em-msg.ok { color: #1e6b2c; } .em-msg.erro { color: #b42318; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var dlg = document.getElementById('dlg-teste'), rel = null;
+  var msg = document.getElementById('t-msg'), btn = document.getElementById('t-enviar');
+  document.querySelectorAll('.em-teste').forEach(function (b) {
+    b.addEventListener('click', function () {
+      rel = b.dataset.rel;
+      document.getElementById('t-nome').textContent = b.dataset.nome;
+      msg.hidden = true; btn.disabled = false;
+      dlg.showModal();
+    });
+  });
+  document.getElementById('t-fechar').onclick = function () { dlg.close(); };
+  btn.onclick = function () {
+    var fd = new FormData();
+    fd.append('csrf_token', '{{ csrf_token }}');
+    fd.append('relatorio', rel);
+    fd.append('para', document.getElementById('t-para').value);
+    btn.disabled = true; msg.hidden = false; msg.className = 'em-msg'; msg.textContent = 'Enviando…';
+    fetch('{{ url_for("configuracoes.emails_teste") }}', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { msg.className = 'em-msg ' + (j.ok ? 'ok' : 'erro'); msg.textContent = j.msg; btn.disabled = false; })
+      .catch(function () { msg.className = 'em-msg erro'; msg.textContent = 'Não consegui falar com o servidor. Tente de novo.'; btn.disabled = false; });
+  };
+})();
+</script>
+{% endblock %}

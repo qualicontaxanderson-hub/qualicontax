@@ -40,6 +40,17 @@
                 <input type="text" name="cargo" class="form-control"
                        value="{{ usuario.cargo if usuario else '' }}">
             </div>
+            <div class="form-group">
+                <label class="form-label" for="departamento_id">Departamento</label>
+                <select name="departamento_id" id="departamento_id" class="form-control">
+                    <option value="">Sem departamento</option>
+                    {% for d in departamentos %}
+                    <option value="{{ d.id }}" {{ 'selected' if usuario and usuario.departamento_id == d.id }}>{{ d.nome }}</option>
+                    {% endfor %}
+                </select>
+                <small class="form-text text-muted">Os avisos por e-mail vão para a caixa do departamento, não para o e-mail pessoal.
+                    <a href="{{ url_for('configuracoes.departamentos') }}">Ver departamentos</a></small>
+            </div>
         </div>
     </div>
 </div>
