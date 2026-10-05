@@ -193,6 +193,14 @@ def novo():
         if eh_avulso:
             numero_cliente = ''
 
+        # NÚMERO OU AVULSO (05/10/2026): cliente sem número não existe mais —
+        # a AR Transportes entrou assim e ficou fora da carteira E dos avulsos.
+        if not eh_avulso and not numero_cliente:
+            flash('Digite o número do cliente. Se a empresa ainda não tem número, '
+                  'cadastre como Cliente Avulso.', 'danger')
+            ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
+            return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
+
         # Validar número do cliente se fornecido
         if numero_cliente and Cliente.existe_numero_cliente(numero_cliente):
             flash(f'Número do cliente "{numero_cliente}" já está em uso!', 'danger')
@@ -933,8 +941,14 @@ def editar(id):
             
             # Validar número do cliente se fornecido
             numero_cliente = _numero_inteiro(request.form.get('numero_cliente', ''))
-            if numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
-                flash(f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!', 'danger')
+            # NÚMERO OU AVULSO: só o avulso fica sem número (05/10/2026).
+            _erro_num = None
+            if not numero_cliente and not cliente.get('avulso'):
+                _erro_num = 'Digite o número do cliente.'
+            elif numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
+                _erro_num = f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!'
+            if _erro_num:
+                flash(_erro_num, 'danger')
                 ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
                 cliente_ramos = RamoAtividade.get_by_cliente(id)
                 ramos_cliente = [ramo['id'] for ramo in cliente_ramos]

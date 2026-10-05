@@ -97,10 +97,10 @@
 
             <div class="cf-grid2">
                 <div class="cf-fg" id="boxNumero">
-                    <label class="cf-lbl" for="numero_cliente">Número do cliente <span class="cf-opt">(opcional)</span></label>
+                    <label class="cf-lbl" for="numero_cliente">Número do cliente{% if not (cliente and cliente.avulso) %} <span style="color:#b42318;">*</span>{% endif %}</label>
                     <input type="text" id="numero_cliente" name="numero_cliente" class="cf-ctrl"
                            placeholder="ex: 102" maxlength="20" value="{{ cliente.numero_cliente if cliente else '' }}">
-                    <p class="cf-hint">Em branco usa o ID automático; ou digite um número personalizado.</p>
+                    <p class="cf-hint">{% if cliente %}Obrigatório para cliente.{% else %}Obrigatório. Ainda não tem número? Clique em <b>Cliente Avulso</b>.{% endif %}</p>
                 </div>
                 {# CLIENTE AVULSO: empresa que ainda NÃO é da carteira (serviço
                    pontual, orçamento do Comercial, legalização). Ato explícito
@@ -728,6 +728,22 @@ function toggleAbertaCasa(cb) {
     }
     contrato.value = atividade.value;
 }
+
+// NÚMERO OU AVULSO (05/10/2026): cliente sem número não existe mais. Ou tem
+// número, ou é avulso — o servidor confere de novo (routes/clientes.py).
+document.querySelector('form').addEventListener('submit', function(e) {
+    var num = document.getElementById('numero_cliente');
+    var av = document.getElementById('campoAvulso');
+    var ehAvulso = {{ 'true' if (cliente and cliente.avulso) else 'false' }} || (av && av.value === '1');
+    if (!ehAvulso && num && !num.value.trim()) {
+        e.preventDefault();
+        alert({% if cliente %}'Digite o número do cliente.'{% else %}'Digite o número do cliente.
+
+Se a empresa ainda não tem número, clique em "Cliente Avulso".'{% endif %});
+        num.focus();
+        return false;
+    }
+});
 
 // Validate dates
 document.querySelector('form').addEventListener('submit', function(e) {
