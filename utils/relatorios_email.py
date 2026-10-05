@@ -9,7 +9,7 @@ Nada de SEFAZ, captura, _ENTRADA: dizer por que importa e o que fazer.
   cert_semana     segunda 07:30     vencem nesta semana e na próxima
   cert_mes        1º dia útil 07:30 vencem no mês, vencidos, sem certificado
   cert_recebidos  dias úteis 18:30  certificados recebidos desde o último aviso
-  cadastros       dias úteis 18:30  empresas novas desde o último aviso
+  cadastros       dias úteis 18:30  empresas cadastradas desde o último aviso
 
 QUEM RECEBE: o e-mail do DEPARTAMENTO (``departamentos.email``), marcado na
 grade Config › E-mails automáticos (``email_relatorio_destino``). Nunca o
@@ -42,7 +42,7 @@ RELATORIOS = {
     'cert_semana':    {'nome': 'Certificados da semana',            'quando': 'segunda, 07:30',    'hora': time(7, 30)},
     'cert_mes':       {'nome': 'Certificados do mês',               'quando': '1º dia útil do mês, 07:30', 'hora': time(7, 30)},
     'cert_recebidos': {'nome': 'Certificados recebidos hoje',       'quando': 'dias úteis, 18:30', 'hora': time(18, 30)},
-    'cadastros':      {'nome': 'Empresas novas no Qualicontax',     'quando': 'dias úteis, 18:30', 'hora': time(18, 30)},
+    'cadastros':      {'nome': 'Empresas cadastradas hoje',         'quando': 'dias úteis, 18:30', 'hora': time(18, 30)},
 }
 
 DIAS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
@@ -378,11 +378,18 @@ def dados_cadastros(hoje, momento=None, rel='cadastros', **_):
     l2 = [linha(r, r['avulso_em'], r['criado_por_nome'], 'avulso', 'n') for r in avulsos]
     l3 = [linha(r, r['virou_cliente_em'], quem_conv.get(r['id']), 'virou cliente', 'g') for r in conv]
     n = len(l1) + len(l2) + len(l3)
+    # O assunto separa o avulso (pedido do Anderson, 05/10): quem lê a caixa de
+    # entrada já sabe se é cliente de verdade ou só avulso.
+    #   "Empresas cadastradas hoje: 5 clientes, 2 avulsos e 1 avulso virou cliente"
+    partes = [f"{q} {s1 if q == 1 else s2}" for q, s1, s2 in [
+        (len(l1), 'cliente', 'clientes'), (len(l2), 'avulso', 'avulsos'),
+        (len(l3), 'avulso virou cliente', 'avulsos viraram clientes')] if q]
+    resumo = ' e '.join([', '.join(partes[:-1]), partes[-1]]) if len(partes) > 1 else (partes[0] if partes else 'nenhuma')
+    titulo = 'Empresas cadastradas hoje' if um_dia else 'Empresas cadastradas'
     return {
         'itens': n, 'janela': (ini, fim),
-        'assunto': f"{n} empresa{'s' if n != 1 else ''} nova{'s' if n != 1 else ''} no Qualicontax"
-                   + (' hoje' if um_dia else ''),
-        'titulo': 'Empresas novas no Qualicontax',
+        'assunto': f'{titulo}: {resumo}',
+        'titulo': titulo,
         'data_txt': _desde_txt(ini, fim),
         'intro': ('Empresas que entraram no sistema' + (' hoje' if um_dia else '') + '. Se alguma vai '
                   'ficar com você, confira o cadastro e já peça ao cliente o certificado digital.'),
