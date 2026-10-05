@@ -45,7 +45,7 @@
         <div class="em-deps">
         {% for d in departamentos %}
             <label class="em-dep{{ ' em-dep-off' if not d.email }}" title="{{ d.email or 'Departamento sem e-mail: cadastre o e-mail para ele receber' }}">
-                <input type="checkbox" name="destino" value="{{ rel }}:{{ d.id }}"
+                <input type="checkbox" name="destino" value="{{ rel }}:{{ d.id }}" data-email="{{ d.email or '' }}"
                        {{ 'checked' if (rel, d.id) in marcados }} {{ 'disabled' if not d.email }}>
                 {{ d.nome }}
             </label>
@@ -128,10 +128,19 @@
 (function () {
   var dlg = document.getElementById('dlg-teste'), rel = null;
   var msg = document.getElementById('t-msg'), btn = document.getElementById('t-enviar');
+  var PADRAO = document.getElementById('t-para').value;
   document.querySelectorAll('.em-teste').forEach(function (b) {
     b.addEventListener('click', function () {
       rel = b.dataset.rel;
       document.getElementById('t-nome').textContent = b.dataset.nome;
+      // Sugere a caixa dos departamentos marcados NESTE cartão (sem repetir);
+      // nenhum marcado, fica o e-mail de quem está logado. Dá para trocar à mão.
+      var marcados = [];
+      b.closest('.ficha').querySelectorAll('input[name="destino"]:checked').forEach(function (c) {
+        var e = (c.dataset.email || '').trim().toLowerCase();
+        if (e && marcados.indexOf(e) < 0) marcados.push(e);
+      });
+      document.getElementById('t-para').value = marcados.length ? marcados.join(', ') : PADRAO;
       msg.hidden = true; btn.disabled = false;
       dlg.showModal();
     });
