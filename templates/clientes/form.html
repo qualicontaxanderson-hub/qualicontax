@@ -737,9 +737,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
     var ehAvulso = {{ 'true' if (cliente and cliente.avulso) else 'false' }} || (av && av.value === '1');
     if (!ehAvulso && num && !num.value.trim()) {
         e.preventDefault();
-        alert({% if cliente %}'Digite o número do cliente.'{% else %}'Digite o número do cliente.
-
-Se a empresa ainda não tem número, clique em "Cliente Avulso".'{% endif %});
+        alert({% if cliente %}'Digite o número do cliente.'{% else %}'Digite o número do cliente.\n\nSe a empresa ainda não tem número, clique em "Cliente Avulso".'{% endif %});
         num.focus();
         return false;
     }
