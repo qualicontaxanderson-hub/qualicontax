@@ -137,13 +137,19 @@ def _get_empresas():
     # escritório se refere às empresas, e o seletor mostra "número - nome".
     # numero_cliente é varchar, então o CAST evita 10 vir antes de 9; o nome
     # entra como desempate para o caso de número vazio/repetido.
+    # AVULSO ENTRA (05/10/2026, Anderson: "todos têm que ver os avulsos"). A
+    # regra de 01/10 deixava as notas do avulso guardadas mas invisíveis até a
+    # conversão. Agora ele vem no FIM da lista, com "AVULSO ·" no nome — o
+    # avulso não tem número, e os seletores mostram "número - nome".
     empresas = execute_query(
-        # avulso NAO entra no seletor de empresa do Fiscal
-        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
-        "WHERE avulso = 0 AND situacao='ATIVO' "
-        "ORDER BY CAST(numero_cliente AS UNSIGNED), nome_razao_social",
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, avulso FROM clientes "
+        "WHERE situacao='ATIVO' "
+        "ORDER BY avulso, CAST(numero_cliente AS UNSIGNED), nome_razao_social",
         fetch=True,
     ) or []
+    for e in empresas:
+        if e.get('avulso'):
+            e['nome_razao_social'] = f"AVULSO · {e['nome_razao_social']}"
     # Empresa reservada não aparece no seletor de quem não pode vê-la.
     return filtrar_lista(empresas)
 
