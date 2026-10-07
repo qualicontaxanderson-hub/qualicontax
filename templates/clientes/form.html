@@ -18,317 +18,326 @@
 </div>
 
 <div class="ef-body">
-    <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}" class="form-container cf-form">
+    {# LAYOUT (07/10/2026): passos à esquerda (1 tipo → 2 cliente ou avulso → 3 CNPJ/CPF)
+       e o painel "Antes de salvar" fixo à direita; no celular o painel vira barra no
+       rodapé. Antes de escolher o tipo só o passo 1 aparece (.cf-sem-tipo). #}
+    <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}"
+          class="form-container cf-form{% if not (cliente and cliente.tipo_pessoa) %} cf-sem-tipo{% endif %}" id="cfForm">
         {% set endereco = endereco_principal if endereco_principal else None %}
+        <div class="cf-layout">
+        <div class="cf-main">
 
-        <!-- ── CARD 1: Comece pelo CNPJ (destaque) ─────────────────────── -->
+        <!-- ── CARD 1: tipo → cliente ou avulso → documento ───────────── -->
         <div class="cf-card cf-card-hi">
-            <p class="cf-seclabel">Comece pelo CNPJ</p>
-
-            <div class="cf-grid2">
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="tipo_pessoa">Tipo de pessoa *</label>
-                    <select id="tipo_pessoa" name="tipo_pessoa" class="cf-ctrl" required onchange="toggleTipoFields()">
-                        <option value="">Selecione…</option>
-                        <option value="PF" {% if cliente and cliente.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa Física</option>
-                        <option value="PJ" {% if cliente and cliente.tipo_pessoa == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
-                    </select>
-                </div>
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="situacao">Situação *</label>
-                    <select id="situacao" name="situacao" class="cf-ctrl" required>
-                        <option value="ATIVO"     {% if not cliente or cliente.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
-                        <option value="INATIVO"   {% if cliente and cliente.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
-                        <option value="SUSPENSO"  {% if cliente and cliente.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
-                        <option value="CANCELADO" {% if cliente and cliente.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
-                    </select>
-                </div>
+            <p class="cf-seclabel"><span class="cf-step">1</span> Tipo de pessoa <span class="cf-req">*</span></p>
+            <div class="cf-seg" role="radiogroup" aria-label="Tipo de pessoa">
+                <label class="cf-seg-op">
+                    <input type="radio" name="tipo_pessoa" value="PJ" required onchange="toggleTipoFields()"
+                           {% if cliente and cliente.tipo_pessoa == 'PJ' %}checked{% endif %}>
+                    <i class="fas fa-building"></i>
+                    <span><b>Pessoa Jurídica</b><small>empresa, com CNPJ</small></span>
+                </label>
+                <label class="cf-seg-op">
+                    <input type="radio" name="tipo_pessoa" value="PF" required onchange="toggleTipoFields()"
+                           {% if cliente and cliente.tipo_pessoa == 'PF' %}checked{% endif %}>
+                    <i class="fas fa-user"></i>
+                    <span><b>Pessoa Física</b><small>pessoa, com CPF</small></span>
+                </label>
             </div>
 
-            <!-- PJ: CNPJ grande + Buscar na Receita -->
-            <div class="pj-only" style="margin-top:14px;">
-                <label class="cf-lbl" for="cpf_cnpj_pj">CNPJ *</label>
-                <div class="cf-cnpj-row">
-                    <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="cf-ctrl cf-ctrl-big cnpj-mask"
-                           placeholder="00.000.000/0000-00"
-                           value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
-                    <button type="button" id="btnConsultarCNPJ" class="cf-btn-receita" onclick="consultarCNPJ()">
-                        <i class="fas fa-search"></i> Buscar na Receita
-                    </button>
-                </div>
-                <p class="cf-hint">Digite o CNPJ e busque na Receita Federal para preencher os dados automaticamente.</p>
-                {# Vigia de CNPJ (22/09/2026): a base pública é mensal; quem sabe que a
-                   empresa mudou arma a vigia e o sistema consulta a cada 24 h até
-                   a Receita mudar. O estado vem por /api/cnpj-vigia/<cnpj>. #}
-                <div class="cf-vigia" id="vigiaBox" style="display:none;"></div>
-            </div>
-
-            <!-- PF: nome + CPF -->
-            <div class="pf-only cf-grid2" style="margin-top:14px;">
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="nome_razao_social_pf">Nome completo *</label>
-                    <input type="text" id="nome_razao_social_pf" name="nome_razao_social" class="cf-ctrl"
-                           placeholder="Nome completo"
-                           value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
-                </div>
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="cpf_cnpj_pf">CPF *</label>
-                    <input type="text" id="cpf_cnpj_pf" name="cpf_cnpj" class="cf-ctrl cpf-mask"
-                           placeholder="000.000.000-00"
-                           value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
-                </div>
-            </div>
-        </div>
-
-        <!-- ── Card verde de resultado da Receita (aparece após buscar) ── -->
-        <div class="cf-receita" id="receitaResult" style="display:none;">
-            <span class="cf-receita-ico"><i class="fas fa-check"></i></span>
-            <div>
-                <div class="cf-receita-tit">Encontramos: <strong id="receitaRazao"></strong></div>
-                <div class="cf-receita-txt" id="receitaResumo">
-                    Preenchemos os dados abaixo com o que veio da Receita. <strong>Confira</strong> antes de salvar.
-                </div>
-            </div>
-        </div>
-
-        <!-- ── CARD 2: Identificação (PJ) ──────────────────────────────── -->
-        <div class="cf-card">
-            <p class="cf-seclabel">Identificação</p>
-
-            <div class="cf-grid2">
-                <div class="cf-fg" id="boxNumero">
-                    <label class="cf-lbl" for="numero_cliente">Número do cliente{% if not (cliente and cliente.avulso) %} <span style="color:#b42318;">*</span>{% endif %}</label>
-                    <input type="text" id="numero_cliente" name="numero_cliente" class="cf-ctrl"
-                           placeholder="ex: 102" maxlength="20" value="{{ cliente.numero_cliente if cliente else '' }}">
-                    <p class="cf-hint">{% if cliente %}Obrigatório para cliente.{% else %}Obrigatório. Ainda não tem número? Clique em <b>Cliente Avulso</b>.{% endif %}</p>
-                </div>
-                {# CLIENTE AVULSO: empresa que ainda NÃO é da carteira (serviço
-                   pontual, orçamento do Comercial, legalização). Ato explícito
-                   com confirmação — nunca deduzido de "número em branco". #}
+            <div class="cf-after-tipo">
+                {# CLIENTE OU AVULSO: logo depois do tipo (pedido do Anderson, 07/10/2026).
+                   Cliente sem número não existe (05/10): ou tem número, ou é avulso —
+                   ato explícito com confirmação, nunca deduzido de número em branco.
+                   O servidor confere de novo (routes/clientes.py). #}
+                <p class="cf-seclabel cf-seclabel-sub"><span class="cf-step">2</span> {{ 'Número' if cliente else 'Cliente ou avulso' }} {% if not cliente %}<span class="cf-req">*</span>{% endif %}</p>
                 {% if not cliente %}
-                <div class="cf-fg" style="display:flex; align-items:flex-end;">
-                    <input type="hidden" name="avulso" id="campoAvulso" value="">
-                    <button type="button" class="btn btn-outline" id="btnAvulso"
-                            onclick="marcarAvulso()" style="width:100%;">
-                        <i class="fas fa-user-clock"></i> Cliente Avulso
-                    </button>
+                <div class="cf-modo">
+                    <label class="cf-modo-op" id="opCliente">
+                        <span class="cf-modo-head">
+                            <input type="radio" name="avulso" value="0" id="modoCliente" required onchange="escolherModo(this)">
+                            <i class="fas fa-briefcase"></i> <b>Cliente da carteira</b>
+                        </span>
+                        <span class="cf-modo-txt">Já tem número no escritório. Entra na lista de clientes, nos relatórios e no Fiscal.</span>
+                        <span class="cf-fg cf-modo-num" id="boxNumero">
+                            <span class="cf-lbl">Número do cliente <span class="cf-req">*</span></span>
+                            <input type="text" id="numero_cliente" name="numero_cliente" class="cf-ctrl"
+                                   placeholder="ex: 102" maxlength="20" value="" disabled>
+                        </span>
+                    </label>
+                    <label class="cf-modo-op cf-modo-av" id="opAvulso">
+                        <span class="cf-modo-head">
+                            <input type="radio" name="avulso" value="1" id="campoAvulso" required onchange="escolherModo(this)">
+                            <i class="fas fa-user-clock"></i> <b>Avulso</b> <small>ainda sem número</small>
+                        </span>
+                        <span class="cf-modo-txt">Serviço pontual, orçamento ou legalização. Fica na aba <b>Avulsos</b>,
+                            não entra na lista de clientes e aparece no Fiscal como "AVULSO".
+                            Quando virar cliente, é só converter na aba Avulsos e dar o número — tudo vai junto.</span>
+                    </label>
+                </div>
+                {% else %}
+                <div class="cf-g12">
+                    <div class="cf-fg cf-s3" id="boxNumero">
+                        <label class="cf-lbl" for="numero_cliente">Número do cliente{% if not cliente.avulso %} <span class="cf-req">*</span>{% endif %}</label>
+                        <input type="text" id="numero_cliente" name="numero_cliente" class="cf-ctrl"
+                               placeholder="ex: 102" maxlength="20" value="{{ cliente.numero_cliente or '' }}">
+                    </div>
+                    <p class="cf-hint cf-s9 cf-hint-mid">{% if cliente.avulso %}Este cadastro é <b>avulso</b>. Para virar cliente, converta na aba <b>Avulsos</b>.{% else %}Obrigatório para cliente.{% endif %}</p>
                 </div>
                 {% endif %}
+
+                <!-- PJ: CNPJ grande + Buscar na Receita -->
+                <div class="pj-only">
+                    <p class="cf-seclabel cf-seclabel-sub"><span class="cf-step">3</span> CNPJ <span class="cf-req">*</span></p>
+                    <div class="cf-cnpj-row">
+                        <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="cf-ctrl cf-ctrl-big cnpj-mask"
+                               placeholder="00.000.000/0000-00" aria-label="CNPJ"
+                               value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                        <button type="button" id="btnConsultarCNPJ" class="cf-btn-receita" onclick="consultarCNPJ()">
+                            <i class="fas fa-search"></i> Buscar na Receita
+                        </button>
+                    </div>
+                    <p class="cf-hint">A busca preenche razão social, endereço, CNAE e inscrição estadual. Depois é só conferir.</p>
+                    {# Vigia de CNPJ (22/09/2026): a base pública é mensal; quem sabe que a
+                       empresa mudou arma a vigia e o sistema consulta a cada 24 h até
+                       a Receita mudar. O estado vem por /api/cnpj-vigia/<cnpj>. #}
+                    <div class="cf-vigia" id="vigiaBox" style="display:none;"></div>
+                </div>
+
+                <!-- PF: CPF + nome -->
+                <div class="pf-only">
+                    <p class="cf-seclabel cf-seclabel-sub"><span class="cf-step">3</span> CPF e nome</p>
+                    <div class="cf-g12">
+                        <div class="cf-fg cf-s4">
+                            <label class="cf-lbl" for="cpf_cnpj_pf">CPF <span class="cf-req">*</span></label>
+                            <input type="text" id="cpf_cnpj_pf" name="cpf_cnpj" class="cf-ctrl cpf-mask"
+                                   placeholder="000.000.000-00"
+                                   value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                        </div>
+                        <div class="cf-fg cf-s8">
+                            <label class="cf-lbl" for="nome_razao_social_pf">Nome completo <span class="cf-req">*</span></label>
+                            <input type="text" id="nome_razao_social_pf" name="nome_razao_social" class="cf-ctrl"
+                                   placeholder="Nome completo"
+                                   value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resultado da Receita (aparece após buscar) -->
+                <div class="cf-receita" id="receitaResult" style="display:none;">
+                    <span class="cf-receita-ico"><i class="fas fa-check"></i></span>
+                    <div>
+                        <div class="cf-receita-tit">Encontramos: <strong id="receitaRazao"></strong></div>
+                        <div class="cf-receita-txt" id="receitaResumo">
+                            Preenchemos os dados abaixo com o que veio da Receita. <strong>Confira</strong> antes de salvar.
+                        </div>
+                    </div>
+                </div>
             </div>
-            {% if not cliente %}
-            <div id="avisoAvulso" style="display:none; margin-top:10px; padding:12px 16px;
-                 border-radius:10px; background:#fffbeb; border:1.5px solid #fde68a; color:#92400e;">
-                <strong><i class="fas fa-user-clock"></i> Cadastro AVULSO.</strong>
-                Esta empresa <strong>não entra na carteira de clientes</strong> — não aparece
-                nas listas, nos relatórios nem no Fiscal. Os arquivos dela ficam guardados
-                pelo CNPJ. Quando virar cliente, é só converter na aba
-                <strong>Avulsos</strong> e tudo vai junto.
-                <button type="button" class="btn btn-sm btn-outline" onclick="desmarcarAvulso()"
-                        style="margin-left:10px;">Cancelar avulso</button>
+        </div>
+
+        <!-- ── CARD 2: Dados da empresa (PJ) ──────────────────────────── -->
+        <div class="cf-card cf-after-tipo pj-only">
+            <p class="cf-seclabel">Dados da empresa <span class="cf-seclabel-note">os marcados <span class="cf-rf">Receita</span> vêm da busca do CNPJ</span></p>
+            <div class="cf-g12">
+                <div class="cf-fg cf-s7">
+                    <label class="cf-lbl" for="nome_razao_social_pj">Razão social <span class="cf-req">*</span> <span class="cf-rf">Receita</span></label>
+                    <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="cf-ctrl"
+                           placeholder="Razão social da empresa"
+                           value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                </div>
+                <div class="cf-fg cf-s5">
+                    <label class="cf-lbl" for="nome_fantasia">Nome fantasia <span class="cf-rf">Receita</span></label>
+                    <input type="text" id="nome_fantasia" name="nome_fantasia" class="cf-ctrl"
+                           placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
+                </div>
+
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="inscricao_estadual">Inscrição estadual <span class="cf-rf">Receita</span></label>
+                    <div class="cf-field-btn">
+                        <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="cf-ctrl"
+                               placeholder="Preenchido automaticamente via CNPJ"
+                               value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}">
+                        <button type="button" class="cf-inline-btn" onclick="consultarSintegra()"
+                                title="Copia o CNPJ e abre o Sintegra para validar a IE">
+                            <i class="fas fa-external-link-alt"></i> Sintegra
+                        </button>
+                    </div>
+                    <div class="cf-check" id="isento-ie-container">
+                        <input type="checkbox" id="inscricao_estadual_isento" name="inscricao_estadual_isento" value="1"
+                               {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
+                               onchange="toggleIsentoIE(this)">
+                        <label for="inscricao_estadual_isento">Isento de inscrição estadual (prestador de serviços)</label>
+                    </div>
+                </div>
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="inscricao_municipal">Inscrição municipal</label>
+                    <div class="cf-field-btn">
+                        <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="cf-ctrl"
+                               placeholder="Inscrição municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
+                        <button type="button" class="cf-inline-btn" onclick="buscarMunicipio()"
+                                title="Consulta municípios e abre o portal da prefeitura (CNPJ copiado)">
+                            <i class="fas fa-map-marked-alt"></i> Município
+                        </button>
+                    </div>
+                    <p class="cf-hint">Abre o portal da prefeitura com o CNPJ copiado.</p>
+                </div>
+
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="regime_tributario">Regime tributário</label>
+                    <select id="regime_tributario" name="regime_tributario" class="cf-ctrl">
+                        <option value="">Selecione…</option>
+                        <option value="SIMPLES"         {% if cliente and cliente.regime_tributario == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
+                        <option value="LUCRO_PRESUMIDO" {% if cliente and cliente.regime_tributario == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
+                        <option value="LUCRO_REAL"      {% if cliente and cliente.regime_tributario == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
+                        <option value="MEI"             {% if cliente and cliente.regime_tributario == 'MEI' %}selected{% endif %}>MEI</option>
+                    </select>
+                </div>
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="porte_empresa">Porte da empresa <span class="cf-rf">Receita</span></label>
+                    <select id="porte_empresa" name="porte_empresa" class="cf-ctrl">
+                        <option value="">Selecione…</option>
+                        <option value="MEI"   {% if cliente and cliente.porte_empresa == 'MEI' %}selected{% endif %}>MEI</option>
+                        <option value="ME"    {% if cliente and cliente.porte_empresa == 'ME' %}selected{% endif %}>Microempresa (ME)</option>
+                        <option value="EPP"   {% if cliente and cliente.porte_empresa == 'EPP' %}selected{% endif %}>Empresa de Pequeno Porte (EPP)</option>
+                        <option value="MEDIO" {% if cliente and cliente.porte_empresa == 'MEDIO' %}selected{% endif %}>Médio Porte</option>
+                        <option value="GRANDE"{% if cliente and cliente.porte_empresa == 'GRANDE' %}selected{% endif %}>Grande Porte</option>
+                    </select>
+                </div>
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="data_inicio_atividade">Início da atividade <span class="cf-rf">Receita</span></label>
+                    <input type="date" id="data_inicio_atividade" name="data_inicio_atividade" class="cf-ctrl"
+                           value="{{ cliente.data_inicio_atividade if cliente else '' }}">
+                </div>
             </div>
-            {% endif %}
+        </div>
 
-            <div class="pj-only">
-                <div class="cf-grid2">
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="nome_razao_social_pj">Razão social *</label>
-                        <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="cf-ctrl"
-                               placeholder="Razão social da empresa"
-                               value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
-                    </div>
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="nome_fantasia">Nome fantasia</label>
-                        <input type="text" id="nome_fantasia" name="nome_fantasia" class="cf-ctrl"
-                               placeholder="Nome fantasia" value="{{ cliente.nome_fantasia if cliente else '' }}">
-                    </div>
-                </div>
-
-                <div class="cf-grid2">
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="inscricao_estadual">Inscrição estadual <span class="cf-star" title="preenchido via CNPJ">★</span></label>
-                        <div class="cf-field-btn">
-                            <input type="text" id="inscricao_estadual" name="inscricao_estadual" class="cf-ctrl"
-                                   placeholder="Preenchido automaticamente via CNPJ"
-                                   value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual != 'ISENTO' else '' }}"
-                                   aria-describedby="ie-help-text">
-                            <button type="button" class="cf-inline-btn" onclick="consultarSintegra()"
-                                    title="Copia o CNPJ e abre o Sintegra para validar a IE">
-                                <i class="fas fa-external-link-alt"></i> Sintegra
-                            </button>
-                        </div>
-                        <div class="cf-check" id="isento-ie-container">
-                            <input type="checkbox" id="inscricao_estadual_isento" name="inscricao_estadual_isento" value="1"
-                                   {% if cliente and cliente.inscricao_estadual == 'ISENTO' %}checked{% endif %}
-                                   onchange="toggleIsentoIE(this)">
-                            <label for="inscricao_estadual_isento">
-                                <i class="fas fa-ban" style="color:#e67e22;"></i>
-                                Isento de Inscrição Estadual (Prestador de Serviços)
-                            </label>
-                        </div>
-                        <p id="ie-help-text" class="cf-hint">✅ Preenchido ao buscar o CNPJ. Use <strong>Sintegra</strong> para validar a IE no estado.</p>
-                    </div>
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="data_inicio_atividade">Início da atividade <span class="cf-star">★</span></label>
-                        <input type="date" id="data_inicio_atividade" name="data_inicio_atividade" class="cf-ctrl"
-                               value="{{ cliente.data_inicio_atividade if cliente else '' }}">
-                        <p class="cf-hint">✅ Data de fundação (preenchida ao buscar o CNPJ).</p>
-                    </div>
-                </div>
-
-                <div class="cf-grid2">
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="inscricao_municipal">Inscrição municipal</label>
-                        <div class="cf-field-btn">
-                            <input type="text" id="inscricao_municipal" name="inscricao_municipal" class="cf-ctrl"
-                                   placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else '' }}">
-                            <button type="button" class="cf-inline-btn" onclick="buscarMunicipio()"
-                                    title="Consulta municípios e abre o portal da prefeitura (CNPJ copiado)">
-                                <i class="fas fa-map-marked-alt"></i> Município
-                            </button>
-                        </div>
-                        <p class="cf-hint">Consulte o município cadastrado e o portal da prefeitura.</p>
-                    </div>
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="regime_tributario">Regime tributário</label>
-                        <select id="regime_tributario" name="regime_tributario" class="cf-ctrl">
-                            <option value="">Selecione…</option>
-                            <option value="SIMPLES"         {% if cliente and cliente.regime_tributario == 'SIMPLES' %}selected{% endif %}>Simples Nacional</option>
-                            <option value="LUCRO_PRESUMIDO" {% if cliente and cliente.regime_tributario == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
-                            <option value="LUCRO_REAL"      {% if cliente and cliente.regime_tributario == 'LUCRO_REAL' %}selected{% endif %}>Lucro Real</option>
-                            <option value="MEI"             {% if cliente and cliente.regime_tributario == 'MEI' %}selected{% endif %}>MEI</option>
+        <!-- ── CARD 3: Grupo e atividade (PJ e PF) ──────────────────────── -->
+        {# GRUPO, E-MAIL, CELULAR E RAMO obrigatórios (07/10/2026) para todo
+           cadastro — cliente e avulso, novo e edição. O servidor confere de
+           novo em _obrigatorios_faltando (routes/clientes.py). #}
+        <div class="cf-card cf-after-tipo">
+            <p class="cf-seclabel">Grupo e atividade</p>
+            <div class="cf-g12">
+                {% set grupo_atual = (grupos_cliente[0].id if grupos_cliente else None) %}
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="grupo_id">Grupo de empresas <span class="cf-req">*</span></label>
+                    <div class="cf-field-btn">
+                        <select id="grupo_id" name="grupo_id" class="cf-ctrl" required>
+                            <option value="">Selecione o grupo…</option>
+                            {% for g in grupos or [] %}
+                            <option value="{{ g.id }}" {% if g.id == grupo_atual %}selected{% endif %}>{{ g.nome }}</option>
+                            {% endfor %}
                         </select>
+                        <button type="button" class="cf-inline-btn" onclick="novoGrupo()" title="Cria um grupo novo sem sair desta tela">
+                            <i class="fas fa-plus"></i> Novo grupo
+                        </button>
                     </div>
+                    <p class="cf-hint">Empresas do mesmo dono ficam no mesmo grupo. A empresa ainda não tem grupo? Clique em <b>Novo grupo</b>.</p>
                 </div>
+                <div class="cf-s6"></div>
 
-                <div class="cf-grid2">
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="porte_empresa">Porte da empresa</label>
-                        <select id="porte_empresa" name="porte_empresa" class="cf-ctrl">
-                            <option value="">Selecione…</option>
-                            <option value="MEI"   {% if cliente and cliente.porte_empresa == 'MEI' %}selected{% endif %}>MEI</option>
-                            <option value="ME"    {% if cliente and cliente.porte_empresa == 'ME' %}selected{% endif %}>Microempresa (ME)</option>
-                            <option value="EPP"   {% if cliente and cliente.porte_empresa == 'EPP' %}selected{% endif %}>Empresa de Pequeno Porte (EPP)</option>
-                            <option value="MEDIO" {% if cliente and cliente.porte_empresa == 'MEDIO' %}selected{% endif %}>Médio Porte</option>
-                            <option value="GRANDE"{% if cliente and cliente.porte_empresa == 'GRANDE' %}selected{% endif %}>Grande Porte</option>
-                        </select>
-                    </div>
+                <div class="cf-fg cf-s3 pj-only">
+                    <label class="cf-lbl" for="cnae_fiscal">CNAE principal <span class="cf-rf">Receita</span></label>
+                    <input type="text" id="cnae_fiscal" name="cnae_fiscal" class="cf-ctrl" placeholder="ex: 4711-3/02"
+                           value="{{ cliente.cnae_fiscal if cliente else '' }}" readonly>
                 </div>
-
-                <div class="cf-grid2">
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="cnae_fiscal">CNAE fiscal <span class="cf-star">★</span></label>
-                        <input type="text" id="cnae_fiscal" name="cnae_fiscal" class="cf-ctrl" placeholder="ex: 4711-3/02"
-                               value="{{ cliente.cnae_fiscal if cliente else '' }}" readonly aria-describedby="cnae-help-text">
-                        <p id="cnae-help-text" class="cf-hint">✅ Preenchido ao buscar o CNPJ.</p>
-                    </div>
-                    <div class="cf-fg">
-                        <label class="cf-lbl" for="cnae_fiscal_descricao">Descrição do CNAE <span class="cf-star">★</span></label>
-                        <input type="text" id="cnae_fiscal_descricao" name="cnae_fiscal_descricao" class="cf-ctrl"
-                               placeholder="Descrição da atividade principal"
-                               value="{{ cliente.cnae_fiscal_descricao if cliente else '' }}" readonly>
-                    </div>
+                <div class="cf-fg cf-s9 pj-only">
+                    <label class="cf-lbl" for="cnae_fiscal_descricao">Descrição do CNAE <span class="cf-rf">Receita</span></label>
+                    <input type="text" id="cnae_fiscal_descricao" name="cnae_fiscal_descricao" class="cf-ctrl"
+                           placeholder="Descrição da atividade principal"
+                           value="{{ cliente.cnae_fiscal_descricao if cliente else '' }}" readonly>
                 </div>
 
                 <!-- CNAEs Secundários (preenchidos via JS) -->
-                <div id="cnaes_secundarios_container" style="display:none; margin-top:4px;">
-                    <label class="cf-lbl">CNAEs secundários <span class="cf-star">★</span></label>
+                <div class="cf-fg cf-s12" id="cnaes_secundarios_container" style="display:none;">
+                    <label class="cf-lbl">CNAEs secundários <span class="cf-rf">Receita</span></label>
                     <div id="cnaes_secundarios_list" class="cf-cnaes-box"></div>
-                    <p class="cf-hint">Atividades econômicas secundárias da empresa.</p>
                 </div>
 
                 <!-- Ramos de atividade -->
-                <div style="margin-top:6px;">
+                <div class="cf-fg cf-s12">
                     <div class="cf-ramos-head">
-                        <label class="cf-lbl" style="margin:0;">Ramos de atividade</label>
-                        <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" class="cf-ramos-novo">
+                        <label class="cf-lbl" style="margin:0;">Ramo de atividade <span class="cf-req">*</span> <span class="cf-opt">— marque um ou mais</span></label>
+                        <button type="button" class="cf-ramos-novo" onclick="novoRamo()" title="Cria um ramo novo sem sair desta tela">
                             <i class="fas fa-plus"></i> Novo ramo
-                        </a>
+                        </button>
                     </div>
-                    <div class="cf-ramos-box">
-                        {% if ramos_atividade %}
-                        <div class="cf-ramos-grid">
-                            {% for ramo in ramos_atividade %}
-                            <label class="cf-ramo" for="ramo_{{ ramo.id }}">
-                                <input class="form-check-input" type="checkbox" name="ramos_atividade_ids"
-                                       value="{{ ramo.id }}" id="ramo_{{ ramo.id }}"
-                                       {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                                <span>{{ ramo.nome }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <p class="cf-hint" style="text-align:center; padding:12px;">
-                            Nenhum ramo cadastrado.
-                            <a href="{{ url_for('ramos_atividade.novo') }}" target="_blank" style="color:#15803d; font-weight:600;">Criar o primeiro</a>.
-                        </p>
-                        {% endif %}
+                    <div class="cf-ramos-grid" id="ramosGrid">
+                        {% for ramo in ramos_atividade or [] %}
+                        <label class="cf-ramo" for="ramo_{{ ramo.id }}">
+                            <input type="checkbox" name="ramos_atividade_ids"
+                                   value="{{ ramo.id }}" id="ramo_{{ ramo.id }}"
+                                   {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
+                            <span>{{ ramo.nome }}</span>
+                        </label>
+                        {% endfor %}
                     </div>
-                    <p class="cf-hint">Selecione um ou mais. Não achou? Clique em "Novo ramo".</p>
+                    {% if not ramos_atividade %}
+                    <p class="cf-hint" id="ramosVazio">Nenhum ramo cadastrado ainda. Clique em <b>Novo ramo</b> para criar o primeiro.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- ── CARD 3: Contato ─────────────────────────────────────────── -->
-        <div class="cf-card">
+        <!-- ── CARD 4: Contato e endereço ──────────────────────────────── -->
+        <div class="cf-card cf-after-tipo">
             <p class="cf-seclabel">Contato</p>
-            <div class="cf-grid2">
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="email">E-mail</label>
-                    <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com"
+            <div class="cf-g12">
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="email">E-mail <span class="cf-req">*</span> <span class="cf-rf pj-only">Receita</span></label>
+                    <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com" required
                            value="{{ cliente.email if cliente else '' }}">
                 </div>
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="telefone">Telefone</label>
+                <div class="cf-fg cf-s3">
+                    <label class="cf-lbl" for="telefone">Telefone <span class="cf-opt">(fixo)</span> <span class="cf-rf pj-only">Receita</span></label>
                     <input type="text" id="telefone" name="telefone" class="cf-ctrl phone-mask" placeholder="(00) 0000-0000"
                            value="{{ cliente.telefone if cliente else '' }}">
                 </div>
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="celular">Celular</label>
-                    <input type="text" id="celular" name="celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000"
+                <div class="cf-fg cf-s3">
+                    <label class="cf-lbl" for="celular">Celular <span class="cf-req">*</span></label>
+                    <input type="text" id="celular" name="celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000" required
                            value="{{ cliente.celular if cliente else '' }}">
                 </div>
             </div>
-        </div>
 
-        <!-- ── CARD 4: Endereço ────────────────────────────────────────── -->
-        <div class="cf-card">
-            <p class="cf-seclabel">Endereço <span class="cf-seclabel-note">— veio da Receita, confira</span></p>
-            <div class="cf-grid2">
-                <div class="cf-fg">
+            <p class="cf-seclabel cf-seclabel-sep">Endereço <span class="cf-seclabel-note">digite o CEP ou busque o CNPJ</span></p>
+            <div class="cf-g12">
+                <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="cep">CEP</label>
                     <input type="text" id="cep" name="cep" class="cf-ctrl" placeholder="00000-000" maxlength="9"
                            value="{{ endereco.cep if endereco else '' }}">
-                    <p class="cf-hint" id="cepAviso">&nbsp;</p>
+                    <p class="cf-hint" id="cepAviso"></p>
                 </div>
-                <div class="cf-fg">
+                <div class="cf-fg cf-s7">
                     <label class="cf-lbl" for="logradouro">Logradouro</label>
-                    <input type="text" id="logradouro" name="logradouro" class="cf-ctrl" placeholder="Rua, Avenida, etc."
+                    <input type="text" id="logradouro" name="logradouro" class="cf-ctrl" placeholder="Rua, avenida…"
                            value="{{ endereco.logradouro if endereco else '' }}">
                 </div>
-                <div class="cf-fg">
+                <div class="cf-fg cf-s2">
                     <label class="cf-lbl" for="numero">Número</label>
-                    <input type="text" id="numero" name="numero" class="cf-ctrl" placeholder="Número"
+                    <input type="text" id="numero" name="numero" class="cf-ctrl" placeholder="Nº"
                            value="{{ endereco.numero if endereco else '' }}">
                 </div>
-                <div class="cf-fg">
+                <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="complemento">Complemento</label>
-                    <input type="text" id="complemento" name="complemento" class="cf-ctrl" placeholder="Apto, Sala, etc."
+                    <input type="text" id="complemento" name="complemento" class="cf-ctrl" placeholder="Apto, sala…"
                            value="{{ endereco.complemento if endereco else '' }}">
                 </div>
-                <div class="cf-fg">
+                <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="bairro">Bairro</label>
                     <input type="text" id="bairro" name="bairro" class="cf-ctrl" placeholder="Bairro"
                            value="{{ endereco.bairro if endereco else '' }}">
                 </div>
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="cidade">Cidade / Município</label>
-                    <input type="text" id="cidade" name="cidade" class="cf-ctrl" placeholder="Digite o nome da cidade"
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="cidade">Cidade</label>
+                    <input type="text" id="cidade" name="cidade" class="cf-ctrl" placeholder="Nome da cidade"
                            value="{{ endereco.cidade if endereco else '' }}">
                 </div>
-                <div class="cf-fg">
-                    <label class="cf-lbl" for="estado">Estado (UF) *</label>
+                <div class="cf-fg cf-s2">
+                    <label class="cf-lbl" for="estado">UF <span class="cf-req">*</span></label>
                     <select id="estado" name="estado" class="cf-ctrl" data-selected-uf="{{ endereco.estado if endereco else '' }}">
-                        <option value="">Selecione…</option>
+                        <option value="">UF</option>
                         {% for sg, nm in [('AC','Acre'),('AL','Alagoas'),('AP','Amapá'),('AM','Amazonas'),('BA','Bahia'),
                                           ('CE','Ceará'),('DF','Distrito Federal'),('ES','Espírito Santo'),('GO','Goiás'),
                                           ('MA','Maranhão'),('MT','Mato Grosso'),('MS','Mato Grosso do Sul'),('MG','Minas Gerais'),
@@ -336,7 +345,7 @@
                                           ('RJ','Rio de Janeiro'),('RN','Rio Grande do Norte'),('RS','Rio Grande do Sul'),
                                           ('RO','Rondônia'),('RR','Roraima'),('SC','Santa Catarina'),('SP','São Paulo'),
                                           ('SE','Sergipe'),('TO','Tocantins')] %}
-                        <option value="{{ sg }}">{{ sg }} - {{ nm }}</option>
+                        <option value="{{ sg }}" title="{{ nm }}">{{ sg }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -344,42 +353,51 @@
         </div>
 
         <!-- ── CARD 5: Contrato e observações ──────────────────────────── -->
-        <div class="cf-card">
+        <div class="cf-card cf-after-tipo">
             <p class="cf-seclabel">Contrato e observações</p>
-            <div class="cf-grid2">
-                <div class="cf-fg">
+            <div class="cf-g12">
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="situacao">Situação <span class="cf-req">*</span></label>
+                    <select id="situacao" name="situacao" class="cf-ctrl" required>
+                        <option value="ATIVO"     {% if not cliente or cliente.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
+                        <option value="INATIVO"   {% if cliente and cliente.situacao == 'INATIVO' %}selected{% endif %}>Inativo</option>
+                        <option value="SUSPENSO"  {% if cliente and cliente.situacao == 'SUSPENSO' %}selected{% endif %}>Suspenso</option>
+                        <option value="CANCELADO" {% if cliente and cliente.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                    </select>
+                </div>
+                <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="data_inicio_contrato">Início do contrato</label>
                     <input type="date" id="data_inicio_contrato" name="data_inicio_contrato" class="cf-ctrl"
                            value="{{ cliente.data_inicio_contrato if cliente else '' }}">
                 </div>
-                <div class="cf-fg">
+                <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="data_fim_contrato">Fim do contrato</label>
                     <input type="date" id="data_fim_contrato" name="data_fim_contrato" class="cf-ctrl"
                            value="{{ cliente.data_fim_contrato if cliente else '' }}">
                 </div>
-            </div>
 
-            {# "Aberta pela casa": só PJ (data de PF é sempre manual). Marcar copia a
-               data de início da atividade — vinda do CNPJ — para o início do contrato. #}
-            <label class="cf-check pj-only" id="abertaCasaWrap" style="margin-top:12px;">
-                <input type="checkbox" id="aberta_pela_casa" name="aberta_pela_casa" value="1"
-                       onchange="toggleAbertaCasa(this)"
-                       {% if cliente and cliente.aberta_pela_casa %}checked{% endif %}>
-                <span>Empresa aberta pela Qualicontax
-                    <small style="color:#7d968a;">— copia a data de início da atividade para o início do contrato</small></span>
-            </label>
+                {# "Aberta pela casa": só PJ (data de PF é sempre manual). Marcar copia a
+                   data de início da atividade — vinda do CNPJ — para o início do contrato. #}
+                <label class="cf-check cf-s12 pj-only" id="abertaCasaWrap">
+                    <input type="checkbox" id="aberta_pela_casa" name="aberta_pela_casa" value="1"
+                           onchange="toggleAbertaCasa(this)"
+                           {% if cliente and cliente.aberta_pela_casa %}checked{% endif %}>
+                    <span>Empresa aberta pela Qualicontax
+                        <small style="color:#7d968a;">— copia a data de início da atividade para o início do contrato</small></span>
+                </label>
 
-            <div class="cf-fg" style="margin-top:12px;">
-                <label class="cf-lbl" for="observacoes">Observações</label>
-                <textarea id="observacoes" name="observacoes" class="cf-ctrl" rows="4"
-                          placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+                <div class="cf-fg cf-s12">
+                    <label class="cf-lbl" for="observacoes">Observações</label>
+                    <textarea id="observacoes" name="observacoes" class="cf-ctrl" rows="3"
+                              placeholder="Observações adicionais sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+                </div>
             </div>
 
             <label class="cf-contador">
                 <input type="checkbox" id="is_contador" name="is_contador" value="1"
                        {% if cliente and cliente.is_contador %}checked{% endif %}>
                 <span>
-                    <strong>Este cadastro é um Contador</strong><br>
+                    <strong>Este cadastro é um contador</strong><br>
                     <small>Marque para que este cadastro possa ser <strong>vinculado como contador responsável</strong>
                     de outros clientes. O certificado digital continua sendo vinculado normalmente aqui,
                     com o titular igual a este cadastro.</small>
@@ -387,26 +405,26 @@
             </label>
         </div>
 
-        <!-- Grupos (apenas em edição) -->
-        {% if cliente and grupos %}
-        <div class="cf-card">
-            <p class="cf-seclabel">Grupos</p>
-            <p class="cf-hint">Para gerenciar grupos, acesse a aba "Grupos" na página de detalhes do cliente.</p>
-            {% if grupos_cliente %}
-            <div class="cf-tags">
-                {% for grupo in grupos_cliente %}<span class="cf-tag">{{ grupo.nome }}</span>{% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
+        </div>{# /cf-main #}
 
-        <!-- Rodapé -->
-        <div class="cf-actions">
-            <a href="{{ url_for('clientes.index') }}" class="cf-btn-ghost"><i class="fas fa-times"></i> Cancelar</a>
-            <button type="submit" class="cf-btn-save">
-                <i class="fas fa-check"></i> {{ 'Atualizar cliente' if cliente else 'Cadastrar cliente' }}
-            </button>
-        </div>
+        <!-- ── Painel "Antes de salvar" (direita; rodapé no celular) ───── -->
+        <aside class="cf-side">
+            <div class="cf-side-card cf-side-check">
+                <p class="cf-side-tit">Antes de salvar</p>
+                <ul class="cf-falta" id="cfFalta"></ul>
+            </div>
+            <div class="cf-side-card cf-side-como">
+                <span class="cf-como-lbl">{{ 'Cadastro' if cliente else 'Vai ser cadastrado como' }}</span>
+                <span class="cf-como-val" id="cfComo">—</span>
+            </div>
+            <div class="cf-actions">
+                <button type="submit" class="cf-btn-save">
+                    <i class="fas fa-check"></i> {{ 'Atualizar cliente' if cliente else 'Cadastrar cliente' }}
+                </button>
+                <a href="{{ url_for('clientes.index') }}" class="cf-btn-ghost"><i class="fas fa-times"></i> Cancelar</a>
+            </div>
+        </aside>
+        </div>{# /cf-layout #}
     </form>
 </div>
 
@@ -449,59 +467,108 @@
 
 {% block extra_js %}
 <style>
-/* topo (testeira + hero verde + corpo) agora vem de identidade.css. */
-.cf-form { max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
-.cf-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:20px 22px;
-           transition:border-color .15s ease, box-shadow .15s ease; }
-.cf-card:hover { border-color:#cfe6d8; box-shadow:0 4px 14px rgba(16,120,70,.05); }
+/* topo (testeira + hero verde + corpo) vem de identidade.css.
+   Escala do app: texto 13–14px; só rótulo em caixa alta vai a 11,5px. */
+.cf-form { max-width:1640px; margin:0 auto; }
+.cf-layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; align-items:start; }
+.cf-main { display:flex; flex-direction:column; gap:16px; min-width:0; }
+
+.cf-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:22px 24px; }
 .cf-card-hi { border-color:#86efac; box-shadow:0 6px 18px rgba(16,120,70,.10); }
 
-.cf-seclabel { display:flex; align-items:center; gap:12px; margin:0 0 16px;
-               font-size:10px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; color:#15803d; }
+.cf-seclabel { display:flex; align-items:center; gap:10px; margin:0 0 16px;
+               font-size:11.5px; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; color:#15803d; }
 .cf-seclabel::after { content:''; flex:1; height:1px; background:#e8f1ec; }
-.cf-seclabel-note { color:#94a3b8; font-weight:600; letter-spacing:.3px; text-transform:none; }
+.cf-seclabel-sub { margin-top:22px; }
+.cf-seclabel-sep { margin-top:24px; }
+.cf-seclabel-note { color:#94a3b8; font-weight:600; letter-spacing:.2px; text-transform:none; font-size:12px; }
+.cf-step { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%;
+           background:#15803d; color:#fff; font-size:12px; letter-spacing:0; flex-shrink:0; }
+.cf-req { color:#b42318; font-weight:700; }
+.cf-rf { display:inline-block; padding:0 6px; border-radius:5px; background:#ecfdf5; border:1px solid #bbf7d0;
+         color:#15803d; font-size:10.5px; font-weight:700; letter-spacing:.2px; text-transform:none; line-height:16px; vertical-align:1px; }
 
-.cf-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.cf-fg { display:flex; flex-direction:column; gap:5px; min-width:0; }
-.cf-lbl { font-size:12px; font-weight:600; color:#334155; }
+/* grade de 12 colunas: cada campo ocupa a largura que o conteúdo pede */
+.cf-g12 { display:grid; grid-template-columns:repeat(12, minmax(0,1fr)); gap:16px 16px; align-items:start; }
+.cf-s2 { grid-column:span 2; } .cf-s3 { grid-column:span 3; } .cf-s4 { grid-column:span 4; }
+.cf-s5 { grid-column:span 5; } .cf-s6 { grid-column:span 6; } .cf-s7 { grid-column:span 7; }
+.cf-s8 { grid-column:span 8; } .cf-s9 { grid-column:span 9; } .cf-s12 { grid-column:1 / -1; }
+
+.cf-fg { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.cf-lbl { font-size:13px; font-weight:600; color:#334155; }
 .cf-opt { color:#94a3b8; font-weight:400; }
-.cf-star { color:#eab308; font-size:11px; }
-.cf-ctrl { width:100%; height:38px; border:1px solid #d7e3dc; border-radius:9px; padding:0 11px;
-           font-size:13.5px; color:#0f172a; background:#fff; box-sizing:border-box; font-family:inherit; }
-textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
+.cf-ctrl { width:100%; height:40px; border:1px solid #d7e3dc; border-radius:9px; padding:0 12px;
+           font-size:14px; color:#0f172a; background:#fff; box-sizing:border-box; font-family:inherit; }
+textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:vertical; }
 .cf-ctrl:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
 .cf-ctrl[readonly] { background:#f6f8f7; color:#475569; }
-.cf-hint { font-size:11px; color:#7d968a; margin:2px 0 0; line-height:1.45; }
+.cf-ctrl:disabled { background:#f6f8f7; color:#94a3b8; }
+.cf-hint { font-size:12px; color:#7d968a; margin:0; line-height:1.45; }
+.cf-hint:empty { display:none; }
+.cf-hint-mid { align-self:end; padding-bottom:11px; }
 
-/* CNPJ grande + botão escuro Buscar na Receita */
-.cf-ctrl-big { height:46px; font-size:16px; font-variant-numeric:tabular-nums; letter-spacing:.5px; }
-.cf-cnpj-row { display:flex; gap:10px; }
-.cf-cnpj-row .cf-ctrl-big { flex:1; }
+/* 1. tipo de pessoa: dois botões grandes */
+.cf-seg { display:grid; grid-template-columns:repeat(2, minmax(0, 300px)); gap:12px; }
+.cf-seg-op { display:flex; align-items:center; gap:12px; padding:13px 16px; border:1.5px solid #d7e3dc; border-radius:12px;
+             background:#fff; cursor:pointer; transition:border-color .12s, background .12s; }
+.cf-seg-op:hover { border-color:#86efac; background:#f7fdf9; }
+.cf-seg-op input { position:absolute; opacity:0; pointer-events:none; }
+.cf-seg-op > i { width:36px; height:36px; border-radius:10px; background:#f1f5f3; color:#64748b;
+                 display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.cf-seg-op span { display:flex; flex-direction:column; line-height:1.3; }
+.cf-seg-op b { font-size:14px; color:#0f172a; }
+.cf-seg-op small { font-size:12px; color:#7d968a; }
+.cf-seg-op:has(input:checked) { border-color:#16a34a; background:#ecfdf5; box-shadow:0 0 0 3px rgba(34,197,94,.12); }
+.cf-seg-op:has(input:checked) > i { background:#16a34a; color:#fff; }
+.cf-seg-op:has(input:focus-visible) { outline:2px solid #16a34a; outline-offset:2px; }
+
+/* antes de escolher o tipo, só o passo 1 aparece */
+.cf-sem-tipo .cf-after-tipo { display:none !important; }
+
+/* 2. cliente ou avulso: dois cartões de escolha */
+.cf-modo { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.cf-modo-op { display:flex; flex-direction:column; gap:8px; padding:14px 16px; border:1.5px solid #d7e3dc; border-radius:12px;
+              background:#fff; cursor:pointer; transition:border-color .12s, background .12s; }
+.cf-modo-op:hover { border-color:#86efac; }
+.cf-modo-head { display:flex; align-items:center; gap:9px; font-size:14px; color:#0f172a; }
+.cf-modo-head input { width:17px; height:17px; margin:0; accent-color:#16a34a; flex-shrink:0; }
+.cf-modo-head i { color:#15803d; width:16px; text-align:center; }
+.cf-modo-head small { color:#94a3b8; font-size:12px; }
+.cf-modo-txt { font-size:12.5px; color:#64748b; line-height:1.5; }
+.cf-modo-num { margin-top:2px; max-width:260px; }
+.cf-modo-op:has(input:checked) { border-color:#16a34a; background:#f3fcf6; }
+.cf-modo-av:has(input:checked) { border-color:#f59e0b; background:#fffbeb; }
+.cf-modo-av .cf-modo-head i { color:#b45309; }
+
+/* 3. CNPJ grande + botão escuro Buscar na Receita */
+.cf-ctrl-big { height:48px; font-size:17px; font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+.cf-cnpj-row { display:flex; gap:10px; max-width:720px; margin-bottom:6px; }
+.cf-cnpj-row .cf-ctrl-big { flex:1; min-width:0; }
 .cf-btn-receita { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; cursor:pointer;
-                  background:#0f3d2e; color:#eafff3; border:none; border-radius:9px; padding:0 18px;
-                  font-size:13.5px; font-weight:700; font-family:inherit; }
+                  background:#0f3d2e; color:#eafff3; border:none; border-radius:9px; padding:0 20px;
+                  font-size:14px; font-weight:700; font-family:inherit; }
 .cf-btn-receita:hover { background:#12513c; }
 .cf-btn-receita:disabled { opacity:.7; cursor:default; }
 
-/* Botão colado ao campo (Sintegra na IE, Município na IM) — branco, borda verde */
+/* Botão colado ao campo (Sintegra na IE, Município na IM) */
 .cf-field-btn { display:flex; gap:8px; align-items:stretch; }
 .cf-field-btn .cf-ctrl { flex:1; min-width:0; }
 .cf-inline-btn { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; cursor:pointer;
                  background:#fff; color:#15803d; border:1px solid #86efac; border-radius:9px;
-                 padding:0 13px; font-size:12.5px; font-weight:600; font-family:inherit; }
+                 padding:0 13px; font-size:13px; font-weight:600; font-family:inherit; }
 .cf-inline-btn:hover { background:#ecfdf5; }
 
-/* Card verde de resultado da Receita */
-.cf-receita { display:flex; align-items:flex-start; gap:12px; padding:15px 18px; border-radius:13px;
+/* Resultado da Receita */
+.cf-receita { display:flex; align-items:flex-start; gap:12px; margin-top:16px; padding:14px 18px; border-radius:12px;
               background:linear-gradient(135deg,#f0fdf4,#ecfdf5); border:1px solid #86efac; }
 .cf-receita-ico { flex-shrink:0; width:30px; height:30px; border-radius:50%; background:#16a34a; color:#fff;
                   display:flex; align-items:center; justify-content:center; font-size:14px; }
 .cf-receita-tit { font-size:14px; color:#14532d; } .cf-receita-tit strong { color:#0f3d2e; }
-.cf-receita-txt { font-size:12px; color:#3f6b52; margin-top:2px; line-height:1.5; }
-.cf-receita-base { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:99px; background:#fff; border:1px solid #bbf7d0; color:#166534; font-size:11px; font-weight:700; white-space:nowrap; }
+.cf-receita-txt { font-size:13px; color:#3f6b52; margin-top:2px; line-height:1.5; }
+.cf-receita-base { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:99px; background:#fff; border:1px solid #bbf7d0; color:#166534; font-size:11.5px; font-weight:700; white-space:nowrap; }
 
 /* ---- Vigia de CNPJ ---- */
-.cf-vigia { margin-top:10px; padding:11px 14px; border-radius:11px; font-size:12.5px; line-height:1.5;
+.cf-vigia { margin-top:12px; padding:11px 14px; border-radius:11px; font-size:13px; line-height:1.5;
             display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; }
 .cf-vigia.off   { background:#f8fafc; border:1px dashed #cbd5e1; color:#475569; }
 .cf-vigia.on    { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
@@ -510,63 +577,106 @@ textarea.cf-ctrl { height:auto; padding:10px 11px; line-height:1.5; }
 .cf-vigia .vg-txt { flex:1; min-width:220px; }
 .cf-vigia .vg-txt b { font-weight:700; }
 .cf-vigia .vg-acoes { display:flex; gap:6px; flex-wrap:wrap; }
-.cf-vigia button { border:none; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.cf-vigia button { border:none; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
 .cf-vigia .vg-b1 { background:#0f3d2e; color:#fff; }
 .cf-vigia .vg-b1:hover { background:#12513c; }
 .cf-vigia .vg-b2 { background:#fff; border:1px solid #cbd5e1 !important; color:#334155; }
-.cf-vigia .vg-diff { width:100%; margin:6px 0 0; padding:0; list-style:none; font-size:12px; }
+.cf-vigia .vg-diff { width:100%; margin:6px 0 0; padding:0; list-style:none; font-size:12.5px; }
 .cf-vigia .vg-diff li { padding:3px 0; border-top:1px dashed #fde68a; }
 .cf-vigia .vg-diff s { color:#9a3412; opacity:.75; }
 .cf-vigia .vg-diff strong { color:#0f3d2e; }
 
-.cf-check { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:12.5px; color:#64748b; }
-.cf-check input { width:15px; height:15px; }
+.cf-check { display:flex; align-items:center; gap:8px; margin-top:2px; font-size:13px; color:#64748b; }
+.cf-check input { width:15px; height:15px; margin:0; accent-color:#16a34a; flex-shrink:0; }
 .cf-check label { cursor:pointer; }
 
 .cf-cnaes-box { border:1px solid #e2e8f0; border-radius:9px; padding:12px; background:#f9fafb;
                 max-height:200px; overflow-y:auto; }
 
-.cf-ramos-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
-.cf-ramos-novo { font-size:12px; font-weight:600; color:#15803d; text-decoration:none;
+.cf-ramos-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.cf-ramos-novo { font-size:12.5px; font-weight:600; color:#15803d; text-decoration:none; cursor:pointer; font-family:inherit;
                  background:#ecfdf5; border:1px solid #d1fae5; border-radius:7px; padding:4px 10px; }
 .cf-ramos-novo:hover { background:#d1fae5; }
-.cf-ramos-box { border:1px solid #e3ece7; border-radius:11px; padding:12px; background:#fbfdfc; }
-.cf-ramos-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:8px;
-                 max-height:230px; overflow-y:auto; }
-.cf-ramo { display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid #e2e8f0;
-           border-radius:8px; background:#fff; cursor:pointer; font-size:13px; color:#334155; }
+.cf-ramos-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:8px;
+                 max-height:236px; overflow-y:auto; padding:2px; }
+.cf-ramo { display:flex; align-items:center; gap:9px; padding:8px 11px; border:1px solid #e2e8f0;
+           border-radius:9px; background:#fff; cursor:pointer; font-size:13px; color:#334155; }
+.cf-ramo input { width:15px; height:15px; margin:0; accent-color:#16a34a; flex-shrink:0; }
 .cf-ramo:hover { border-color:#86efac; background:#f0faf4; }
 .cf-ramo:has(input:checked) { border-color:#22c55e; background:#ecfdf5; color:#15803d; font-weight:600; }
 
 /* is_contador */
-.cf-contador { display:flex; align-items:flex-start; gap:10px; margin-top:16px; padding-top:16px;
+.cf-contador { display:flex; align-items:flex-start; gap:10px; margin-top:18px; padding-top:16px;
                border-top:1px solid #eef2f0; cursor:pointer; }
-.cf-contador input { margin-top:3px; width:16px; height:16px; flex-shrink:0; }
-.cf-contador strong { font-size:13.5px; color:#0f3d2e; }
-.cf-contador small { color:#64748b; font-size:12px; line-height:1.5; }
+.cf-contador input { margin-top:3px; width:16px; height:16px; flex-shrink:0; accent-color:#16a34a; }
+.cf-contador strong { font-size:14px; color:#0f3d2e; }
+.cf-contador small { color:#64748b; font-size:12.5px; line-height:1.5; }
 
-.cf-tags { display:flex; flex-wrap:wrap; gap:6px; }
-.cf-tag { font-size:12px; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; border-radius:7px; padding:3px 9px; }
+.cf-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.cf-tag { font-size:12.5px; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; border-radius:7px; padding:3px 9px; }
 
-/* Rodapé */
-.cf-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
-.cf-btn-ghost { display:inline-flex; align-items:center; gap:7px; text-decoration:none; cursor:pointer;
+/* Painel "Antes de salvar" */
+.cf-side { position:sticky; top:16px; display:flex; flex-direction:column; gap:12px; }
+.cf-side-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:18px 20px; }
+.cf-side-tit { margin:0 0 12px; font-size:14px; font-weight:800; color:#0f3d2e; }
+.cf-falta { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px; }
+.cf-falta li { display:flex; align-items:center; gap:9px; font-size:13px; color:#334155; }
+.cf-falta li i { width:16px; text-align:center; font-size:14px; }
+.cf-falta li.ok i { color:#16a34a; }
+.cf-falta li.ok { color:#64748b; }
+.cf-falta li.nao i { color:#dc2626; }
+.cf-como-lbl { display:block; font-size:12px; color:#7d968a; margin-bottom:6px; }
+.cf-como-val { display:block; font-size:14px; font-weight:700; color:#0f172a; line-height:1.4; word-break:break-word; }
+.cf-como-val .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:700; margin-bottom:4px; }
+.cf-como-val .pill.cli { background:#dcfce7; color:#166534; }
+.cf-como-val .pill.av  { background:#fef3c7; color:#92400e; }
+.cf-como-val .pill.falta { background:#fee2e2; color:#b42318; }
+.cf-como-val .nome { display:block; font-weight:600; font-size:13px; color:#334155; }
+
+.cf-actions { display:flex; flex-direction:column; gap:8px; }
+.cf-btn-ghost { display:inline-flex; align-items:center; justify-content:center; gap:7px; text-decoration:none; cursor:pointer;
                 background:#fff; color:#64748b; border:1px solid #e3ece7; border-radius:10px;
-                padding:11px 20px; font-size:13.5px; font-weight:600; }
+                padding:11px 20px; font-size:14px; font-weight:600; }
 .cf-btn-ghost:hover { background:#f7faf8; color:#334155; }
-.cf-btn-save { display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:none;
+.cf-btn-save { display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; border:none;
                background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; border-radius:10px;
-               padding:11px 22px; font-size:13.5px; font-weight:800; font-family:inherit; }
+               padding:13px 22px; font-size:14.5px; font-weight:800; font-family:inherit; }
 .cf-btn-save:hover { filter:brightness(1.05); }
 
-/* Nomes em maiúsculas (aplicado via JS ao textTransform) */
-
+/* telas médias: painel mais estreito; a grade de 12 mantém as proporções */
+@media (max-width:1280px) {
+    .cf-layout { grid-template-columns:minmax(0,1fr) 260px; }
+}
+/* tablet e celular: uma coluna; o painel vira barra fixa no rodapé */
+@media (max-width:980px) {
+    .cf-layout { grid-template-columns:minmax(0,1fr); }
+    .cf-side { position:sticky; top:auto; bottom:0; z-index:20; flex-direction:row; align-items:center; gap:10px;
+               margin:0 -16px -32px; padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+               background:rgba(255,255,255,.97); border-top:1px solid #e3ece7; box-shadow:0 -6px 18px rgba(15,61,46,.08); }
+    .cf-side-check { display:none; }
+    .cf-side-como { flex:1; min-width:0; padding:0; border:none; background:none; }
+    .cf-como-lbl { display:none; }
+    .cf-como-val { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cf-como-val .pill { margin:0 6px 0 0; }
+    .cf-como-val .nome { display:inline; }
+    .cf-actions { flex-direction:row; flex-shrink:0; }
+    .cf-btn-ghost { display:none; }
+    .cf-btn-save { padding:11px 16px; }
+}
 @media (max-width:720px) {
-    .cf-grid2 { grid-template-columns:1fr; }
+    .cf-card { padding:18px 16px; }
+    .cf-g12 { grid-template-columns:repeat(6, minmax(0,1fr)); gap:14px 12px; }
+    .cf-s2, .cf-s3 { grid-column:span 3; }
+    .cf-s4, .cf-s5, .cf-s6, .cf-s7, .cf-s8, .cf-s9 { grid-column:1 / -1; }
+    .cf-seg { grid-template-columns:1fr 1fr; gap:8px; }
+    .cf-seg-op { padding:11px 12px; gap:9px; }
+    .cf-seg-op > i { width:30px; height:30px; font-size:14px; }
+    .cf-seg-op small { display:none; }
+    .cf-modo { grid-template-columns:1fr; }
     .cf-cnpj-row { flex-direction:column; }
-    .cf-btn-receita { justify-content:center; padding:11px; }
-    .cf-actions { flex-direction:column-reverse; }
-    .cf-btn-ghost, .cf-btn-save { justify-content:center; }
+    .cf-btn-receita { justify-content:center; padding:12px; }
+    .cf-hint-mid { grid-column:1 / -1; padding:0; }
+    .cf-seclabel-note { display:none; }
 }
 </style>
 <script>
@@ -577,8 +687,13 @@ const VIGIA_CLIENTE_ID = {{ cliente.id if cliente else 'null' }};
 
 // Toggle fields based on tipo_pessoa — via classes .pf-only / .pj-only (layout em
 // vários cards). Mesma REGRA de antes: mostra os campos do tipo e marca required.
+function tipoPessoa() {
+    const r = document.querySelector('input[name="tipo_pessoa"]:checked');
+    return r ? r.value : '';
+}
 function toggleTipoFields() {
-    const tipo = document.getElementById('tipo_pessoa').value;
+    const tipo = tipoPessoa();
+    document.getElementById('cfForm').classList.toggle('cf-sem-tipo', !tipo);
     document.querySelectorAll('.pf-only').forEach(function (el) { el.style.display = (tipo === 'PF') ? '' : 'none'; });
     document.querySelectorAll('.pj-only').forEach(function (el) { el.style.display = (tipo === 'PJ') ? '' : 'none'; });
 
@@ -590,6 +705,7 @@ function toggleTipoFields() {
     if (pfCpf)  pfCpf.required  = (tipo === 'PF');
     if (pjNome) pjNome.required = (tipo === 'PJ');
     if (pjCnpj) pjCnpj.required = (tipo === 'PJ');
+    atualizarResumo();
 }
 
 // Toggle Isento de Inscrição Estadual
@@ -704,7 +820,7 @@ function buscarCepCliente(cep) {
                 if (j.bairro)     document.getElementById('bairro').value = j.bairro;
                 if (j.localidade) document.getElementById('cidade').value = j.localidade;
                 if (j.uf)         document.getElementById('estado').value = j.uf.toUpperCase();
-                if (aviso) { aviso.innerHTML = '&nbsp;'; }
+                if (aviso) { aviso.innerHTML = ''; }
             } else if (aviso) {
                 aviso.innerHTML = 'CEP não encontrado — preencha o endereço à mão.'; aviso.style.color = '#b45309';
             }
@@ -734,14 +850,89 @@ function toggleAbertaCasa(cb) {
 document.querySelector('form').addEventListener('submit', function(e) {
     var num = document.getElementById('numero_cliente');
     var av = document.getElementById('campoAvulso');
-    var ehAvulso = {{ 'true' if (cliente and cliente.avulso) else 'false' }} || (av && av.value === '1');
+    var ehAvulso = {{ 'true' if (cliente and cliente.avulso) else 'false' }} || (av && av.checked);
     if (!ehAvulso && num && !num.value.trim()) {
         e.preventDefault();
-        alert({% if cliente %}'Digite o número do cliente.'{% else %}'Digite o número do cliente.\n\nSe a empresa ainda não tem número, clique em "Cliente Avulso".'{% endif %});
-        num.focus();
+        alert({% if cliente %}'Digite o número do cliente.'{% else %}'Digite o número do cliente.\n\nSe a empresa ainda não tem número, escolha "Avulso".'{% endif %});
+        if (!num.disabled) num.focus();
         return false;
     }
 });
+
+// Ramo (ao menos um) e celular completo — o "required" do HTML não cobre.
+document.querySelector('form').addEventListener('submit', function(e) {
+    if (e.defaultPrevented) return;
+    var cel = document.getElementById('celular');
+    if (cel && cel.value.replace(/\D/g, '').length < 10) {
+        e.preventDefault();
+        alert('Digite o celular completo, com DDD.');
+        cel.focus();
+        return false;
+    }
+    if (!document.querySelector('input[name="ramos_atividade_ids"]:checked')) {
+        e.preventDefault();
+        alert('Marque pelo menos um ramo de atividade. Não achou o ramo da empresa? Clique em "Novo ramo".');
+        var g = document.getElementById('ramosGrid');
+        if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+});
+
+// "Novo grupo": cria sem sair da tela e já deixa escolhido.
+function novoGrupo() {
+    var sug = '';
+    var f = document.getElementById('nome_fantasia');
+    var r = document.getElementById(tipoPessoa() === 'PF' ? 'nome_razao_social_pf' : 'nome_razao_social_pj');
+    sug = (f && f.value.trim()) || (r && r.value.trim()) || '';
+    var nome = prompt('Nome do novo grupo de empresas:', sug);
+    if (nome === null) return;
+    nome = nome.trim();
+    if (!nome) { alert('Digite o nome do grupo.'); return; }
+    fetch('/clientes/api/grupo-rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify({nome: nome})})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!d.success) { alert(d.message || 'Não consegui criar o grupo.'); return; }
+            var sel = document.getElementById('grupo_id');
+            var op = Array.prototype.find.call(sel.options, function (o) { return o.value === String(d.id); });
+            if (!op) { op = new Option(d.nome, d.id); sel.add(op); }
+            sel.value = String(d.id);
+            atualizarResumo();
+            if (d.ja_existia) alert('O grupo "' + d.nome + '" já existia — foi escolhido.');
+        })
+        .catch(function () { alert('Não consegui criar o grupo agora. Tente de novo.'); });
+}
+
+// "Novo ramo": cria sem sair da tela, entra na lista e já vem marcado.
+function novoRamo() {
+    var nome = prompt('Nome do novo ramo de atividade:', '');
+    if (nome === null) return;
+    nome = nome.trim();
+    if (!nome) { alert('Digite o nome do ramo.'); return; }
+    fetch('/clientes/api/ramo-rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify({nome: nome})})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!d.success) { alert(d.message || 'Não consegui criar o ramo.'); return; }
+            var cb = document.getElementById('ramo_' + d.id);
+            if (!cb) {
+                var lb = document.createElement('label');
+                lb.className = 'cf-ramo'; lb.htmlFor = 'ramo_' + d.id;
+                cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.name = 'ramos_atividade_ids'; cb.value = d.id; cb.id = 'ramo_' + d.id;
+                var sp = document.createElement('span'); sp.textContent = d.nome;
+                lb.appendChild(cb); lb.appendChild(sp);
+                document.getElementById('ramosGrid').appendChild(lb);
+                var vazio = document.getElementById('ramosVazio');
+                if (vazio) vazio.style.display = 'none';
+            }
+            cb.checked = true;
+            cb.closest('label').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            atualizarResumo();
+            if (d.ja_existia) alert('O ramo "' + d.nome + '" já existia — foi marcado.');
+        })
+        .catch(function () { alert('Não consegui criar o ramo agora. Tente de novo.'); });
+}
 
 // Validate dates
 document.querySelector('form').addEventListener('submit', function(e) {
@@ -927,6 +1118,7 @@ function preencherDadosCNPJ(data) {
         card.style.display = 'flex';
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    atualizarResumo();
 }
 
 // ---- Vigia de CNPJ (22/09/2026) -------------------------------------------
@@ -1121,31 +1313,102 @@ function consultarSintegra() {
 }
 </script>
 <script>
-function marcarAvulso() {
-    // A mensagem é montada com CRASE (template literal), onde a quebra de
-    // linha de verdade é válida. Entre aspas simples ela seria erro de
-    // sintaxe e mataria o bloco <script> inteiro — foi assim que os botões
-    // da tela de Usuários ficaram mortos em agosto.
-    if (!confirm(`Tem certeza que esta empresa é AVULSA?
+// Passo 2 — cliente da carteira (com número) ou avulso. Só no cadastro novo.
+// O avulso pede confirmação: é ato explícito, nunca deduzido.
+function escolherModo(radio) {
+    var num = document.getElementById('numero_cliente');
+    if (radio.value === '1') {
+        // A mensagem é montada com CRASE (template literal), onde a quebra de
+        // linha de verdade é válida. Entre aspas simples ela seria erro de
+        // sintaxe e mataria o bloco <script> inteiro — foi assim que os botões
+        // da tela de Usuários ficaram mortos em agosto.
+        if (!confirm(`Tem certeza que esta empresa é AVULSA?
 
-Ela NÃO entra na carteira de clientes: não aparece nas listas, nos relatórios nem no Fiscal.
+Ela NÃO entra na carteira de clientes: fica na aba Avulsos, não aparece na lista de clientes nem nos relatórios. No Fiscal aparece no fim da lista, como "AVULSO".
 
-Use para serviço pontual, orçamento ou legalização.`)) return;
-    document.getElementById('campoAvulso').value = '1';
-    document.getElementById('boxNumero').style.display = 'none';
-    document.getElementById('numero_cliente').value = '';
-    document.getElementById('avisoAvulso').style.display = '';
-    var b = document.getElementById('btnAvulso');
-    b.classList.add('btn-primary');
-    b.innerHTML = '<i class="fas fa-check"></i> É avulso';
+Use para serviço pontual, orçamento ou legalização.`)) {
+            radio.checked = false;
+            var cli = document.getElementById('modoCliente');
+            if (cli && window._modoAnterior === '0') cli.checked = true;
+            atualizarResumo();
+            return;
+        }
+        num.value = '';
+        num.disabled = true;
+        num.required = false;
+    } else {
+        num.disabled = false;
+        num.required = true;
+        num.focus();
+    }
+    window._modoAnterior = radio.value;
+    atualizarResumo();
 }
-function desmarcarAvulso() {
-    document.getElementById('campoAvulso').value = '';
-    document.getElementById('boxNumero').style.display = '';
-    document.getElementById('avisoAvulso').style.display = 'none';
-    var b = document.getElementById('btnAvulso');
-    b.classList.remove('btn-primary');
-    b.innerHTML = '<i class="fas fa-user-clock"></i> Cliente Avulso';
+
+// Painel "Antes de salvar": mostra o que o servidor vai exigir, ao vivo.
+function atualizarResumo() {
+    var lista = document.getElementById('cfFalta');
+    var como = document.getElementById('cfComo');
+    if (!lista || !como) return;
+    var tipo = tipoPessoa();
+    var num = document.getElementById('numero_cliente');
+    var cli = document.getElementById('modoCliente');
+    var av = document.getElementById('campoAvulso');
+    var ehAvulsoSalvo = {{ 'true' if (cliente and cliente.avulso) else 'false' }};
+    var ehAvulso = ehAvulsoSalvo || !!(av && av.checked);
+    var numero = num ? num.value.trim() : '';
+    var doc = '', nome = '';
+    if (tipo === 'PJ') {
+        doc = document.getElementById('cpf_cnpj_pj').value.replace(/\D/g, '');
+        nome = document.getElementById('nome_razao_social_pj').value.trim();
+    } else if (tipo === 'PF') {
+        doc = document.getElementById('cpf_cnpj_pf').value.replace(/\D/g, '');
+        nome = document.getElementById('nome_razao_social_pf').value.trim();
+    }
+    var itens = [];
+    itens.push([!!tipo, 'Tipo de pessoa']);
+    {% if cliente %}
+    itens.push([ehAvulso || !!numero, ehAvulso ? 'Avulso (sem número)' : 'Número do cliente']);
+    {% else %}
+    var escolheu = ehAvulso || !!(cli && cli.checked);
+    itens.push([escolheu && (ehAvulso || !!numero),
+                !escolheu ? 'Cliente ou avulso' : (ehAvulso ? 'Avulso' : 'Número do cliente')]);
+    {% endif %}
+    if (tipo === 'PF') {
+        itens.push([doc.length === 11, 'CPF completo']);
+        itens.push([!!nome, 'Nome completo']);
+    } else {
+        itens.push([doc.length === 14, 'CNPJ completo']);
+        itens.push([!!nome, 'Razão social']);
+    }
+    var grp = document.getElementById('grupo_id');
+    var cel = document.getElementById('celular');
+    var eml = document.getElementById('email');
+    itens.push([!!(grp && grp.value), 'Grupo de empresas']);
+    itens.push([!!(eml && eml.value.trim() && eml.checkValidity()), 'E-mail']);
+    itens.push([!!(cel && cel.value.replace(/\D/g, '').length >= 10), 'Celular']);
+    itens.push([!!document.querySelector('input[name="ramos_atividade_ids"]:checked'), 'Ramo de atividade']);
+    lista.innerHTML = itens.map(function (it) {
+        return '<li class="' + (it[0] ? 'ok' : 'nao') + '"><i class="fas ' + (it[0] ? 'fa-circle-check' : 'fa-circle-xmark') + '"></i>' + it[1] + '</li>';
+    }).join('');
+
+    var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+    var pill;
+    if (ehAvulso) pill = '<span class="pill av">Avulso</span>';
+    else if (numero) pill = '<span class="pill cli">Cliente nº ' + esc(numero) + '</span>';
+    {% if cliente %}
+    else pill = '<span class="pill falta">Falta o número</span>';
+    {% else %}
+    else if (cli && cli.checked) pill = '<span class="pill falta">Falta o número</span>';
+    else pill = '<span class="pill falta">Falta: cliente ou avulso</span>';
+    {% endif %}
+    como.innerHTML = pill + '<span class="nome">' + (nome ? esc(nome) : '—') + '</span>';
 }
+document.addEventListener('DOMContentLoaded', function () {
+    var f = document.getElementById('cfForm');
+    f.addEventListener('input', atualizarResumo);
+    f.addEventListener('change', atualizarResumo);
+    atualizarResumo();
+});
 </script>
 {% endblock %}

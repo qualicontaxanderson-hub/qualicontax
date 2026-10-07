@@ -23,6 +23,7 @@ _HIST_LABELS = {
     'porte_empresa': 'Porte', 'cnae_fiscal': 'CNAE', 'cnae_fiscal_descricao': 'CNAE (descrição)',
     'situacao': 'Situação', 'observacoes': 'Observações', 'aberta_pela_casa': 'Aberta pela casa',
     'data_inicio_atividade': 'Início de atividade', 'data_inicio_contrato': 'Início do contrato',
+    'grupos': 'Grupo de empresas',
     # endereço
     'tipo': 'Tipo', 'cep': 'CEP', 'logradouro': 'Logradouro', 'numero': 'Número',
     'complemento': 'Complemento', 'bairro': 'Bairro', 'cidade': 'Cidade', 'estado': 'Estado',
@@ -67,6 +68,8 @@ _HIST_VERBO = {
     'escrita.criou_contrato': 'adicionou um contrato',
     'escrita.criou_grupo': 'criou um grupo',
     'escrita.alterou_grupo': 'alterou um grupo',
+    'escrita.alterou_grupo_cliente': 'trocou o grupo de empresas',
+    'escrita.criou_ramo': 'criou um ramo de atividade',
     'escrita.vinculou_produto': 'vinculou um produto',
     'escrita.desvinculou_produto': 'desvinculou um produto',
     'escrita.importou_manual': 'importou XML',

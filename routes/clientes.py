@@ -61,6 +61,42 @@ def _numero_inteiro(numero):
     return str(int(n)) if n.isdigit() else n
 
 
+def _obrigatorios_faltando(form):
+    """Grupo, e-mail, celular e ramo de atividade (07/10/2026): exigidos de
+    TODO cadastro — cliente e avulso, novo e edição. A tela confere antes de
+    enviar; isto é a rede de segurança do servidor. Devolve o que falta."""
+    falta = []
+    gid = form.get('grupo_id', type=int)
+    grupo = GrupoCliente.get_by_id(gid) if gid else None
+    if not grupo or grupo.get('situacao') != 'ATIVO':
+        falta.append('grupo de empresas')
+    if not (form.get('email') or '').strip():
+        falta.append('e-mail')
+    if len(re.sub(r'\D', '', form.get('celular') or '')) < 10:
+        falta.append('celular')
+    if not [r for r in form.getlist('ramos_atividade_ids') if r.strip()]:
+        falta.append('ramo de atividade')
+    return falta
+
+
+def _msg_faltando(falta):
+    return 'Preencha antes de salvar: ' + ', '.join(falta) + '.'
+
+
+def _salvar_grupo(cliente_id, grupo_id):
+    """Grava o grupo escolhido no formulário. Já está nele: não mexe (e não
+    tira de outro grupo que a ficha tenha posto). Trocou: sai dos antigos e
+    entra no novo. Devolve (antes, depois) em nomes, ou None se não mudou."""
+    atuais = Cliente.get_grupos(cliente_id) or []
+    if any(g['id'] == grupo_id for g in atuais):
+        return None
+    for g in atuais:
+        GrupoCliente.remove_cliente(g['id'], cliente_id)
+    GrupoCliente.add_cliente(grupo_id, cliente_id)
+    novo = GrupoCliente.get_by_id(grupo_id) or {}
+    return [g['nome'] for g in atuais], novo.get('nome')
+
+
 @clientes.route('/clientes')
 @permission_required('clientes.index')
 def index():
@@ -161,6 +197,12 @@ def index():
                                        'busca': '', 'busca_tipo': 'nome'})
 
 
+def _render_novo():
+    return render_template('clientes/form.html', cliente=None,
+                           ramos_atividade=RamoAtividade.get_all(situacao='ATIVO'), ramos_cliente=[],
+                           grupos=GrupoCliente.get_all(situacao='ATIVO'), grupos_cliente=[])
+
+
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])
 @login_required
 def novo():
@@ -198,20 +240,21 @@ def novo():
         if not eh_avulso and not numero_cliente:
             flash('Digite o número do cliente. Se a empresa ainda não tem número, '
                   'cadastre como Cliente Avulso.', 'danger')
-            ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-            return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
+            return _render_novo()
 
         # Validar número do cliente se fornecido
         if numero_cliente and Cliente.existe_numero_cliente(numero_cliente):
             flash(f'Número do cliente "{numero_cliente}" já está em uso!', 'danger')
-            ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-            return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
+            return _render_novo()
         
         # Validação de campos obrigatórios
         if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
             flash('Preencha todos os campos obrigatórios.', 'danger')
-            ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-            return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, cliente_ramo=None)
+            return _render_novo()
+        falta = _obrigatorios_faltando(request.form)
+        if falta:
+            flash(_msg_faltando(falta), 'danger')
+            return _render_novo()
         
         # Criar cliente
         data = {
@@ -263,6 +306,9 @@ def novo():
                     RamoAtividade.add_cliente(int(ramo_id), cliente_id)
                 except:
                     pass  # Ignora erros de duplicação
+
+            # Grupo de empresas (obrigatório desde 07/10/2026)
+            _salvar_grupo(cliente_id, request.form.get('grupo_id', type=int))
             
             # Salvar endereço se fornecido
             cep = request.form.get('cep', '').strip()
@@ -305,8 +351,7 @@ def novo():
         else:
             flash('Erro ao criar cliente!', 'danger')
     
-    ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-    return render_template('clientes/form.html', cliente=None, ramos_atividade=ramos_atividade, ramos_cliente=[])
+    return _render_novo()
 
 
 @clientes.route('/clientes/<int:id>')
@@ -947,6 +992,10 @@ def editar(id):
                 _erro_num = 'Digite o número do cliente.'
             elif numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
                 _erro_num = f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!'
+            if not _erro_num:
+                _falta = _obrigatorios_faltando(request.form)
+                if _falta:
+                    _erro_num = _msg_faltando(_falta)
             if _erro_num:
                 flash(_erro_num, 'danger')
                 ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
@@ -1072,6 +1121,13 @@ def editar(id):
                         RamoAtividade.add_cliente(int(ramo_id), id)
                     except:
                         pass  # Ignora erros de duplicação
+
+                # Grupo de empresas (obrigatório desde 07/10/2026)
+                _mud_grupo = _salvar_grupo(id, request.form.get('grupo_id', type=int))
+                if _mud_grupo:
+                    registrar('escrita.alterou_grupo_cliente', 'cadastros', tabela='clientes',
+                              registro_id=id, antes={'grupos': _mud_grupo[0]},
+                              depois={'grupos': [_mud_grupo[1]]})
 
                 # Atualizar/salvar endereço principal
                 cep = request.form.get('cep', '').strip()
@@ -1592,6 +1648,56 @@ def desvincular_contador(cliente_id, contador_id):
           else (r.get('erro') or 'Falha ao desvincular.'),
           'success' if r.get('ok') else 'danger')
     return redirect(url_for('clientes.detalhes', id=cliente_id) + '#certificado')
+
+
+@clientes.route('/clientes/api/grupo-rapido', methods=['POST'])
+@login_required
+def grupo_rapido():
+    """"Novo grupo" no formulário do cliente (07/10/2026): cria sem sair da
+    tela. Nome igual a um grupo que já existe (sem diferenciar maiúscula)
+    devolve o existente — e o reativa se estava inativo — em vez de duplicar."""
+    nome = re.sub(r'\s+', ' ', ((request.get_json(silent=True) or {}).get('nome') or '')).strip().upper()
+    if not nome:
+        return jsonify(success=False, message='Digite o nome do grupo.'), 400
+    if len(nome) > 100:
+        return jsonify(success=False, message='Nome muito longo (máximo 100 letras).'), 400
+    existe = execute_query("SELECT id, nome, descricao, situacao FROM grupos_clientes "
+                           "WHERE UPPER(TRIM(nome)) = %s LIMIT 1", (nome,), fetch=True, fetch_one=True)
+    if existe:
+        if existe.get('situacao') != 'ATIVO':
+            GrupoCliente.update(existe['id'], existe['nome'], existe.get('descricao'), 'ATIVO')
+        return jsonify(success=True, id=existe['id'], nome=existe['nome'], ja_existia=True)
+    gid = GrupoCliente.create(nome, None, 'ATIVO')
+    if not gid:
+        return jsonify(success=False, message='Não consegui criar o grupo agora. Tente de novo.'), 500
+    registrar('escrita.criou_grupo', 'cadastros', tabela='grupos_clientes', registro_id=gid,
+              depois={'nome': nome, 'situacao': 'ATIVO', 'origem': 'formulario_cliente'})
+    return jsonify(success=True, id=gid, nome=nome, ja_existia=False)
+
+
+@clientes.route('/clientes/api/ramo-rapido', methods=['POST'])
+@login_required
+def ramo_rapido():
+    """"Novo ramo" no formulário do cliente (07/10/2026), como o grupo rápido.
+    O nome fica como foi digitado (os ramos usam maiúscula e minúscula);
+    nome igual, sem diferenciar maiúscula, devolve o ramo que já existe."""
+    nome = re.sub(r'\s+', ' ', ((request.get_json(silent=True) or {}).get('nome') or '')).strip()
+    if not nome:
+        return jsonify(success=False, message='Digite o nome do ramo.'), 400
+    if len(nome) > 100:
+        return jsonify(success=False, message='Nome muito longo (máximo 100 letras).'), 400
+    existe = execute_query("SELECT id, nome, descricao, situacao FROM ramos_atividade "
+                           "WHERE UPPER(TRIM(nome)) = %s LIMIT 1", (nome.upper(),), fetch=True, fetch_one=True)
+    if existe:
+        if existe.get('situacao') != 'ATIVO':
+            RamoAtividade.update(existe['id'], existe['nome'], existe.get('descricao'), 'ATIVO')
+        return jsonify(success=True, id=existe['id'], nome=existe['nome'], ja_existia=True)
+    rid = RamoAtividade.create(nome, None, 'ATIVO')
+    if not rid:
+        return jsonify(success=False, message='Não consegui criar o ramo agora. Tente de novo.'), 500
+    registrar('escrita.criou_ramo', 'cadastros', tabela='ramos_atividade', registro_id=rid,
+              depois={'nome': nome, 'situacao': 'ATIVO', 'origem': 'formulario_cliente'})
+    return jsonify(success=True, id=rid, nome=nome, ja_existia=False)
 
 
 @clientes.route('/clientes/<int:cliente_id>/adicionar-grupo', methods=['POST'])
