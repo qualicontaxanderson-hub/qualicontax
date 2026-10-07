@@ -128,6 +128,11 @@ _MAX_CONSNSU_RODADA = int(os.getenv('DFE_MAX_CONSNSU_RODADA', '20'))
 # e sobram 5 chamadas/hora para o sistema do cliente, se ele rodar de noite.
 _MAX_CONSNSU_COMPARTILHADO = int(os.getenv('DFE_MAX_CONSNSU_COMPARTILHADO', '15'))
 _JANELA_COMPARTILHADO = os.getenv('DFE_JANELA_COMPARTILHADO', '19-7')   # horas de Brasilia, inclusive
+# Seed automático da empresa NOVA (nunca capturou) quando o 656 mostra a SEFAZ
+# muito adiante: começa este tanto de documentos ANTES do ultNSU, para a
+# recuperação trazer os últimos dias. Anderson, 06/10/2026.
+_SEED_AUTO_RECUO = int(os.getenv('DFE_SEED_AUTO_RECUO', '500'))
+_SEED_AUTO_DIAS = int(os.getenv('DFE_SEED_AUTO_DIAS', '30'))   # "nova" = certificado vinculado há até N dias
 
 
 def _na_janela_compartilhado(agora=None):
@@ -1397,6 +1402,25 @@ def capturar_cliente(cliente_id, dry_run=False, origem='manual',
                      'mensagem': 'A SEFAZ pediu para aguardar ~1h (consumo indevido). '
                                  f'Ela informou ultNSU={ret_ult}. O cursor local foi mantido — '
                                  'a próxima consulta retoma daqui.'})
+        # Empresa NOVA cujo CNPJ outro sistema já consumiu: o cursor no começo
+        # nunca alcança a SEFAZ (AR Transportes, 06/10/2026: nós em 145, ela em
+        # 113.258). Semeia sozinho um pouco ANTES do ultNSU, e a recuperação
+        # logo abaixo traz os documentos recentes. Só para quem nunca recebeu
+        # nada: em empresa que já captura, pular é perder nota (seed é manual).
+        if ('ultnsu' in (xMotivo or '').lower() and not dry_run
+                and ret_ult - ult_nsu > _SEED_AUTO_RECUO and _empresa_nunca_capturou(cliente_id)):
+            novo = ret_ult - _SEED_AUTO_RECUO
+            execute_query("UPDATE dfe_nsu SET ult_nsu = %s, ult_status = %s WHERE cliente_id = %s",
+                          (novo, f'seed automatico (empresa nova): ultNSU={novo}', cliente_id),
+                          fetch=False)
+            dfe_log.registrar('seed_auto', cliente_id, cnpj, ult_nsu_env=novo,
+                              ret_ult_nsu=ret_ult, origem=origem,
+                              detalhe=f'empresa nova, cursor em {ult_nsu} e a SEFAZ em {ret_ult}: '
+                                      f'semeado em {novo} ({_SEED_AUTO_RECUO} antes)')
+            logger.warning('[DFe] %s: seed automatico %s -> %s (SEFAZ em %s).',
+                           rotulo, ult_nsu, novo, ret_ult)
+            ult_nsu = novo
+            base.update({'ult_nsu': novo, 'seed_auto': novo})
         # Variante "utilizar o ultNSU": a SEFAZ já entregou (a alguém) além do
         # nosso cursor e não reentrega pelo distNSU. Sem isto a empresa fica
         # presa para sempre — De Paula (254), Cata Preta (347), Harmonia (313),
@@ -1816,6 +1840,25 @@ def capturar_por_chave(cliente_id, chave, origem='manual'):
     completa = (ainda is None) or (int(ainda.get('incompleta') or 0) == 0)
     return {'ok': True, 'completa': completa, 'itens': n_itens,
             'cStat': cStat, 'xMotivo': xMotivo}
+
+
+def _empresa_nunca_capturou(cliente_id):
+    """Empresa NOVA de verdade: certificado vinculado há até _SEED_AUTO_DIAS
+    dias, nenhum sinal de captura de NF-e e nenhum seed anterior. Confere o que é
+    durável (documentos e notas gravados), não só o log — o log pode ter sido
+    podado, e semear empresa que já captura pula nota de verdade."""
+    r = execute_query(
+        "SELECT (SELECT COUNT(*) FROM dfe_documentos WHERE cliente_id = %s) AS docs, "
+        "       (SELECT COUNT(*) FROM nfe_importacoes WHERE cliente_id = %s "
+        "          AND origem = 'SEFAZ') AS notas, "
+        "       (SELECT COUNT(*) FROM dfe_consulta_log WHERE cliente_id = %s "
+        "          AND COALESCE(servico, 'nfe') <> 'cte' "
+        "          AND (c_stat = '138' OR evento IN ('seed_manual', 'seed_auto'))) AS sinais, "
+        "       (SELECT COUNT(*) FROM dfe_certificados WHERE cliente_id = %s "
+        "          AND criado_em >= NOW() - INTERVAL %s DAY) AS cert_novo",
+        (cliente_id, cliente_id, cliente_id, cliente_id, _SEED_AUTO_DIAS),
+        fetch=True, fetch_one=True)
+    return bool(r) and bool(r['cert_novo']) and not (r['docs'] or r['notas'] or r['sinais'])
 
 
 def seed_ult_nsu(cliente_id, nsu, usuario_label='?'):

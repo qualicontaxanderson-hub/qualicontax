@@ -1815,7 +1815,7 @@ def _status_sefaz_dados():
         "FROM dfe_consulta_log WHERE momento >= CURDATE() - INTERVAL 29 DAY "
         "GROUP BY DATE(momento), servico ORDER BY dia", fetch=True) or []
     _importa = ("(COALESCE(l.notas,0) > 0 OR l.evento IN ('erro','ciencia_ok','ciencia_nao',"
-                "'ciencia_erro','seed_manual','cons_nsu') "
+                "'ciencia_erro','seed_manual','seed_auto','cons_nsu') "
                 "OR (l.origem = 'manual' AND l.evento = 'consulta'))")
     hist_ev = execute_query(
         "SELECT l.momento, l.origem, l.evento, l.c_stat, LEFT(l.x_motivo, 100) AS x_motivo, "

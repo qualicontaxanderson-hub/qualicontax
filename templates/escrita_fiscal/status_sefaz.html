@@ -287,7 +287,7 @@ function certSit(dias){ if(dias===null||dias===undefined) return {k:'sem', cor:'
   if(dias<0) return {k:'vencido', cor:'verm', t:`vencido há ${-dias}d`}; if(dias<=D.cert_laranja) return {k:'d30', cor:'amb', t:`vence em ${dias}d`};
   if(dias<=D.cert_amarelo) return {k:'d60', cor:'amb', t:`vence em ${dias}d`}; return {k:'ok', cor:'verde', t:'ok'}; }
 const cstatCls = c => (c==='137'||c==='138'||c==='135') ? 'ok' : c==='656' ? 'bad' : 'err';
-const evNome = {consulta:'consulta', erro:'erro', retry_pendente:'retry de resumo', retry_pulado:'retry pulado', ciencia_ok:'Ciência ✓', ciencia_nao:'Ciência recusada', ciencia_erro:'Ciência — erro', seed_manual:'seed do cursor', cons_nsu:'consulta por NSU', pulado_cota:'pulado (cota)', pulado_lock:'pulado (lock)'};
+const evNome = {consulta:'consulta', erro:'erro', retry_pendente:'retry de resumo', retry_pulado:'retry pulado', ciencia_ok:'Ciência ✓', ciencia_nao:'Ciência recusada', ciencia_erro:'Ciência — erro', seed_manual:'seed do cursor', seed_auto:'seed automático', cons_nsu:'consulta por NSU', pulado_cota:'pulado (cota)', pulado_lock:'pulado (lock)'};
 
 // ── ABAS (a aba aberta e a empresa aberta sobrevivem ao refresh de 60s)
 const LS = {get:k => { try{ return localStorage.getItem(k); }catch(e){ return null; } }, set:(k,v) => { try{ localStorage.setItem(k,v); }catch(e){} }};
