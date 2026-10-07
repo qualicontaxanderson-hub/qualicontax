@@ -855,7 +855,7 @@
                                     <thead>
                                         <tr>
                                             <th>Nome</th>
-                                            <th>CPF</th>
+                                            <th>CPF / CNPJ</th>
                                             <th>Email</th>
                                             <th>Telefone</th>
                                             <th>Participação</th>
@@ -1679,13 +1679,13 @@
         <form action="{{ url_for('clientes.novo_socio', cliente_id=cliente.id) }}" method="POST">
             <div class="modal-body">
                 <div class="form-group" id="socioBuscaBox">
-                    <label for="socio_busca">Pessoa Física já cadastrada *</label>
+                    <label for="socio_busca">Sócio já cadastrado (pessoa física ou empresa) *</label>
                     <input type="text" id="socio_busca" class="form-control" autocomplete="off"
-                           placeholder="Digite o nome ou o CPF para buscar">
+                           placeholder="Digite o nome, CPF, CNPJ ou número do cadastro">
                     <div id="socioResultados"></div>
                     <small style="color:#6b7280; display:block; margin-top:6px;">
-                        O sócio precisa existir no cadastro como Pessoa Física.
-                        Não achou? <a href="{{ url_for('clientes.novo') }}" target="_blank">Cadastre a pessoa física</a> e busque de novo.
+                        O sócio precisa ter cadastro: pessoa física ou empresa, cliente ou avulso.
+                        Não achou? <a href="{{ url_for('clientes.novo') }}" target="_blank">Cadastre o sócio</a> e busque de novo.
                     </small>
                 </div>
                 <div id="socioEscolhido" class="socio-escolhido" style="display:none;">
@@ -1872,7 +1872,7 @@ function socioEscolher(p) {
                     if (!lista.length) {
                         var v = document.createElement('div');
                         v.className = 'socio-res-vazio';
-                        v.textContent = 'Nenhuma pessoa f\u00edsica encontrada para "' + q + '".';
+                        v.textContent = 'Nenhum cadastro encontrado para "' + q + '".';
                         caixa.appendChild(v);
                         return;
                     }
@@ -1881,8 +1881,11 @@ function socioEscolher(p) {
                         b.type = 'button';
                         b.className = 'socio-res-item';
                         var n = document.createElement('strong');
-                        n.textContent = p.nome;
+                        n.textContent = (p.numero ? p.numero + ' · ' : '') + p.nome;
                         b.appendChild(n);
+                        var t = document.createElement('span');
+                        t.textContent = ' (' + (p.tipo === 'PJ' ? 'empresa' : 'pessoa física') + (p.avulso ? ', avulso' : '') + ')';
+                        b.appendChild(t);
                         if (p.cpf) {
                             var d = document.createElement('span');
                             d.textContent = ' \u2014 ' + p.cpf;

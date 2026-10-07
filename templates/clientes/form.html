@@ -1,15 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}{{ 'Editar Cliente' if cliente else 'Novo Cliente' }} - Qualicontax{% endblock %}
+{% block title %}{{ 'Editar Cliente' if cliente else ('Cadastrar sócio' if janela else 'Novo Cliente') }} - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{% if janela %}
+{# Janela do "Cadastrar sócio": só o formulário, sem menu nem barra do app. #}
+<style>
+.nav-rail, .nav-scrim, .top-bar, .ef-hero-actions { display:none !important; }
+.main-area { margin-left:0 !important; }
+</style>
+{% endif %}
+{% endblock %}
 
 {% block content %}
-{% include 'cadastros/_nav_cadastros.html' %}
+{% if not janela %}{% include 'cadastros/_nav_cadastros.html' %}{% endif %}
 
 <div class="ef-hero">
     <div class="ef-hero-inner ef-hero-head">
         <div>
-            <h1 class="ef-hero-title">{{ 'Editar Cliente' if cliente else 'Novo Cliente' }}</h1>
-            <p class="ef-hero-sub">{{ 'Atualize os dados do cliente' if cliente else 'Cadastre um novo cliente no sistema' }}</p>
+            <h1 class="ef-hero-title">{{ 'Editar Cliente' if cliente else ('Cadastrar sócio' if janela else 'Novo Cliente') }}</h1>
+            <p class="ef-hero-sub">{{ 'Atualize os dados do cliente' if cliente else ('Cadastro completo do sócio — ao salvar, esta janela fecha e ele entra na lista de sócios' if janela else 'Cadastre um novo cliente no sistema') }}</p>
         </div>
         <div class="ef-hero-actions">
             <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Clientes</a>
@@ -22,7 +32,8 @@
        e o painel "Antes de salvar" fixo à direita; no celular o painel vira barra no
        rodapé. Antes de escolher o tipo só o passo 1 aparece (.cf-sem-tipo). #}
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}"
-          class="form-container cf-form{% if not (cliente and cliente.tipo_pessoa) %} cf-sem-tipo{% endif %}" id="cfForm">
+          class="form-container cf-form{% if not ((cliente and cliente.tipo_pessoa) or pre.tipo in ('PF', 'PJ')) %} cf-sem-tipo{% endif %}" id="cfForm">
+        {% if janela %}<input type="hidden" name="janela" value="1">{% endif %}
         {% set endereco = endereco_principal if endereco_principal else None %}
         <div class="cf-layout">
         <div class="cf-main">
@@ -33,13 +44,13 @@
             <div class="cf-seg" role="radiogroup" aria-label="Tipo de pessoa">
                 <label class="cf-seg-op">
                     <input type="radio" name="tipo_pessoa" value="PJ" required onchange="toggleTipoFields()"
-                           {% if cliente and cliente.tipo_pessoa == 'PJ' %}checked{% endif %}>
+                           {% if (cliente and cliente.tipo_pessoa == 'PJ') or (not cliente and pre.tipo == 'PJ') %}checked{% endif %}>
                     <i class="fas fa-building"></i>
                     <span><b>Pessoa Jurídica</b><small>empresa, com CNPJ</small></span>
                 </label>
                 <label class="cf-seg-op">
                     <input type="radio" name="tipo_pessoa" value="PF" required onchange="toggleTipoFields()"
-                           {% if cliente and cliente.tipo_pessoa == 'PF' %}checked{% endif %}>
+                           {% if (cliente and cliente.tipo_pessoa == 'PF') or (not cliente and pre.tipo == 'PF') %}checked{% endif %}>
                     <i class="fas fa-user"></i>
                     <span><b>Pessoa Física</b><small>pessoa, com CPF</small></span>
                 </label>
@@ -92,7 +103,7 @@
                     <div class="cf-cnpj-row">
                         <input type="text" id="cpf_cnpj_pj" name="cpf_cnpj" class="cf-ctrl cf-ctrl-big cnpj-mask"
                                placeholder="00.000.000/0000-00" aria-label="CNPJ"
-                               value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                               value="{{ cliente.cpf_cnpj if cliente and cliente.tipo_pessoa == 'PJ' else (pre.doc if not cliente and pre.tipo == 'PJ' else '') }}">
                         <button type="button" id="btnConsultarCNPJ" class="cf-btn-receita" onclick="consultarCNPJ()">
                             <i class="fas fa-search"></i> Buscar na Receita
                         </button>
@@ -118,7 +129,7 @@
                             <label class="cf-lbl" for="nome_razao_social_pf">Nome completo <span class="cf-req">*</span></label>
                             <input type="text" id="nome_razao_social_pf" name="nome_razao_social" class="cf-ctrl"
                                    placeholder="Nome completo"
-                                   value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else '' }}">
+                                   value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PF' else (pre.nome if not cliente and pre.tipo == 'PF' else '') }}">
                         </div>
                     </div>
                 </div>
@@ -144,7 +155,7 @@
                     <label class="cf-lbl" for="nome_razao_social_pj">Razão social <span class="cf-req">*</span> <span class="cf-rf">Receita</span></label>
                     <input type="text" id="nome_razao_social_pj" name="nome_razao_social" class="cf-ctrl"
                            placeholder="Razão social da empresa"
-                           value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else '' }}">
+                           value="{{ cliente.nome_razao_social if cliente and cliente.tipo_pessoa == 'PJ' else (pre.nome if not cliente and pre.tipo == 'PJ' else '') }}">
                 </div>
                 <div class="cf-fg cf-s5">
                     <label class="cf-lbl" for="nome_fantasia">Nome fantasia <span class="cf-rf">Receita</span></label>
@@ -212,31 +223,85 @@
             </div>
         </div>
 
-        <!-- ── CARD 3: Grupo e atividade (PJ e PF) ──────────────────────── -->
-        {# GRUPO, E-MAIL, CELULAR E RAMO obrigatórios (07/10/2026) para todo
-           cadastro — cliente e avulso, novo e edição. O servidor confere de
-           novo em _obrigatorios_faltando (routes/clientes.py). #}
+        <!-- ── CARD 3: Grupo e contador (PJ e PF) ─────────────────────────── -->
+        {# GRUPO, CONTADOR, E-MAIL, CELULAR, RAMO e — na PJ — SÓCIOS obrigatórios
+           (07/10/2026) para todo cadastro: cliente e avulso, novo e edição. O
+           servidor confere de novo (routes/clientes.py: _obrigatorios_faltando e
+           _socios_e_contador_faltando). Modelo aprovado pelo Anderson em 07/10. #}
+        {% set grupo_atual = (grupos_cliente[0].id if grupos_cliente else (pre.grupo_id if pre else None)) %}
         <div class="cf-card cf-after-tipo">
-            <p class="cf-seclabel">Grupo e atividade</p>
+            <p class="cf-seclabel">Grupo, contador e atividade</p>
+            <div class="mk-sug" id="grupoSug" style="display:none;">
+                <i class="fas fa-lightbulb"></i>
+                <div id="grupoSugTxt"></div>
+                <button type="button" class="mk-b1" id="grupoSugBtn"></button>
+            </div>
             <div class="cf-g12">
-                {% set grupo_atual = (grupos_cliente[0].id if grupos_cliente else None) %}
                 <div class="cf-fg cf-s6">
-                    <label class="cf-lbl" for="grupo_id">Grupo de empresas <span class="cf-req">*</span></label>
-                    <div class="cf-field-btn">
-                        <select id="grupo_id" name="grupo_id" class="cf-ctrl" required>
-                            <option value="">Selecione o grupo…</option>
-                            {% for g in grupos or [] %}
-                            <option value="{{ g.id }}" {% if g.id == grupo_atual %}selected{% endif %}>{{ g.nome }}</option>
-                            {% endfor %}
-                        </select>
-                        <button type="button" class="cf-inline-btn" onclick="novoGrupo()" title="Cria um grupo novo sem sair desta tela">
-                            <i class="fas fa-plus"></i> Novo grupo
-                        </button>
+                    <label class="cf-lbl" for="grupoBusca">Grupo de empresas <span class="cf-req">*</span></label>
+                    <input type="hidden" name="grupo_id" id="grupo_id" value="{{ grupo_atual or '' }}">
+                    <div class="mk-combo" id="grupoCombo">
+                        <div class="mk-combo-in">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="grupoBusca" class="cf-ctrl" autocomplete="off"
+                                   placeholder="Digite o nome do grupo ou de uma empresa dele…">
+                            <button type="button" class="cf-inline-btn" onclick="novoGrupo()" title="Cria um grupo novo sem sair desta tela">
+                                <i class="fas fa-plus"></i> Novo grupo
+                            </button>
+                        </div>
+                        <ul class="mk-combo-list" id="grupoLista" style="display:none;"></ul>
                     </div>
+                    <div class="mk-escolhido" id="grupoEscolhido" style="display:none;"></div>
                     <p class="cf-hint">Empresas do mesmo dono ficam no mesmo grupo. A empresa ainda não tem grupo? Clique em <b>Novo grupo</b>.</p>
                 </div>
-                <div class="cf-s6"></div>
+                <div class="cf-fg cf-s6">
+                    <span class="cf-lbl">Contador responsável <span class="cf-req">*</span></span>
+                    <input type="hidden" name="contador_id" id="contador_id" value="{{ contador_atual or '' }}">
+                    <div id="contadorBox"></div>
+                    <div class="mk-combo" id="contadorCombo" style="display:none;">
+                        <div class="mk-combo-in">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="contadorBusca" class="cf-ctrl" autocomplete="off" placeholder="Buscar contador pelo nome ou número…">
+                        </div>
+                        <ul class="mk-combo-list" id="contadorLista"></ul>
+                    </div>
+                    <p class="cf-hint" id="contadorHint">{% if cliente %}Contador que responde por este cadastro.{% else %}Vem marcado o contador que atende a maioria das empresas.{% endif %} Só aparecem cadastros marcados como <b>contador</b>.</p>
+                </div>
+            </div>
+        </div>
 
+        <!-- ── CARD 3b: Sócios (PJ) ──────────────────────────────────────── -->
+        <div class="cf-card cf-after-tipo pj-only" id="cardSocios">
+            <p class="cf-seclabel">Sócios <span class="cf-req">*</span> <span class="cf-seclabel-note">pessoa física ou empresa · a participação tem que somar 100%</span></p>
+            <input type="hidden" name="socios_json" id="socios_json" value="">
+
+            <div id="qsaBox" style="display:none;">
+                <p class="mk-sub"><i class="fas fa-landmark"></i> Quadro de sócios da Receita</p>
+                <div class="mk-qsa" id="qsaLista"></div>
+            </div>
+
+            <p class="mk-sub"><i class="fas fa-users"></i> Sócios vinculados</p>
+            <div class="mk-soc" id="sociosLista"></div>
+            <div class="mk-total" id="sociosTotal"></div>
+
+            <div class="mk-add">
+                <div class="mk-combo" style="flex:1;">
+                    <div class="mk-combo-in">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="socioBusca" class="cf-ctrl" autocomplete="off"
+                               placeholder="Vincular outro sócio: nome, CPF, CNPJ ou número do cadastro…">
+                    </div>
+                    <ul class="mk-combo-list" id="socioLista" style="display:none;"></ul>
+                </div>
+                <button type="button" class="cf-inline-btn" onclick="cadastrarSocio('', 'PF')"><i class="fas fa-user-plus"></i> Cadastrar novo sócio</button>
+            </div>
+            <p class="cf-hint">Sócio pessoa física ou empresa precisa ter cadastro (cliente ou avulso). "Cadastrar" abre a tela completa de Novo Cliente numa janela por cima, já com o nome e o próximo número livre de pessoa física; ao salvar, a janela fecha e o sócio entra aqui.</p>
+        </div>
+
+        <!-- ── CARD 3c: Atividade (PJ e PF) ──────────────────────────────── -->
+        <div class="cf-card cf-after-tipo">
+            <p class="cf-seclabel">Atividade</p>
+            <div class="cf-g12">
                 <div class="cf-fg cf-s3 pj-only">
                     <label class="cf-lbl" for="cnae_fiscal">CNAE principal <span class="cf-rf">Receita</span></label>
                     <input type="text" id="cnae_fiscal" name="cnae_fiscal" class="cf-ctrl" placeholder="ex: 4711-3/02"
@@ -643,6 +708,89 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
                padding:13px 22px; font-size:14.5px; font-weight:800; font-family:inherit; }
 .cf-btn-save:hover { filter:brightness(1.05); }
 
+/* ---- Grupo com busca, contador e sócios (07/10/2026) ---- */
+
+.mk-sug { display:flex; align-items:center; gap:12px; padding:11px 14px; margin-bottom:14px; border-radius:11px; background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; font-size:13px; }
+.mk-sug > i { color:#2563eb; }
+.mk-sug div { flex:1; }
+.mk-b1 { border:none; border-radius:8px; padding:7px 13px; font-size:13px; font-weight:700; cursor:pointer; background:#0f3d2e; color:#fff; white-space:nowrap; font-family:inherit; display:inline-flex; gap:6px; align-items:center; }
+.mk-combo { position:relative; }
+.mk-combo-in { display:flex; gap:8px; position:relative; align-items:stretch; }
+.mk-combo-in > i { position:absolute; left:12px; top:13px; color:#94a3b8; font-size:13px; }
+.mk-combo-in .cf-ctrl { padding-left:34px; flex:1; min-width:0; }
+.mk-combo-list { list-style:none; margin:4px 0 0; padding:6px; border:1px solid #86efac; border-radius:10px; background:#fff; box-shadow:0 10px 24px rgba(15,61,46,.12); }
+.mk-combo-list li { display:flex; gap:10px; align-items:center; padding:8px; border-radius:8px; }
+.mk-combo-list li.on { background:#ecfdf5; }
+.mk-combo-list span { display:flex; flex-direction:column; font-size:13.5px; }
+.mk-combo-list small { color:#64748b; font-size:12px; }
+.mk-ava { width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; display:inline-flex !important; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0; flex-direction:row !important; }
+.mk-ava-c { background:linear-gradient(135deg,#6366f1,#3730a3); }
+.mk-ava-pj { background:linear-gradient(135deg,#0ea5e9,#0369a1); }
+.mk-cont { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1.5px solid #16a34a; border-radius:10px; background:#f3fcf6; }
+.mk-cont-t { flex:1; display:flex; flex-direction:column; font-size:13.5px; min-width:0; }
+.mk-cont-t small, .mk-qsa-t small { color:#64748b; font-size:12px; }
+.mk-ok { font-size:12px; color:#166534; background:#dcfce7; border-radius:99px; padding:2px 9px; white-space:nowrap; }
+.mk-sub { margin:4px 0 10px; font-size:13px; font-weight:700; color:#334155; display:flex; gap:8px; align-items:center; }
+.mk-sub i { color:#15803d; }
+.mk-qsa { display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+.mk-qsa-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid #e3ece7; border-radius:11px; }
+.mk-qsa-row.ok { background:#f7fdf9; border-color:#bbf7d0; }
+.mk-qsa-row.falta { background:#fffbeb; border-color:#fde68a; }
+.mk-qsa-t { flex:1; display:flex; flex-direction:column; font-size:13.5px; min-width:0; }
+.mk-found { font-size:12.5px; color:#166534; font-weight:600; }
+.mk-nf { font-size:12.5px; color:#b45309; font-weight:600; }
+.mk-vinc { font-size:12px; color:#15803d; background:#dcfce7; border-radius:99px; padding:3px 10px; }
+.mk-num { display:inline-block; min-width:40px; font-weight:700; color:#15803d; }
+.mk-tag { margin-left:6px; font-size:11px; color:#15803d; background:#dcfce7; border-radius:99px; padding:1px 8px; }
+.mk-pj { font-size:12px; color:#0369a1; background:#e0f2fe; border-radius:6px; padding:2px 8px; }
+.mk-pf { font-size:12px; color:#7c3aed; background:#f5f3ff; border-radius:6px; padding:2px 8px; }
+.mk-x { width:32px; height:32px; border-radius:8px; border:1px solid #e3ece7; background:#fff; color:#94a3b8; cursor:pointer; }
+.mk-total { display:flex; align-items:center; gap:10px; margin:12px 0 16px; font-size:13px; color:#b42318; }
+.mk-total b { font-size:15px; }
+.mk-total.ok { color:#166534; }
+.mk-bar { width:220px; height:8px; border-radius:99px; background:#fee2e2; overflow:hidden; }
+.mk-total.ok .mk-bar { background:#dcfce7; }
+.mk-bar span { display:block; height:100%; background:#16a34a; }
+.mk-add { display:flex; gap:8px; margin-bottom:6px; } .mk-add .mk-combo-in { flex:1; }
+/* combobox (grupo, contador, sócio) */
+.mk-combo-list { position:absolute; left:0; right:0; z-index:30; max-height:300px; overflow-y:auto; }
+.mk-combo { position:relative; }
+.mk-combo-list li { cursor:pointer; }
+.mk-combo-list li:hover, .mk-combo-list li.on { background:#ecfdf5; }
+.mk-combo-list li.vazio { cursor:default; color:#94a3b8; font-size:13px; }
+.mk-combo-list li.vazio:hover { background:none; }
+.mk-escolhido { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1.5px solid #16a34a; border-radius:10px; background:#f3fcf6; }
+.mk-escolhido .mk-cont-t { flex:1; }
+.mk-warn { font-size:12px; color:#b45309; background:#fef3c7; border-radius:99px; padding:2px 9px; white-space:nowrap; }
+.mk-cont.vazio { border-color:#fca5a5; background:#fef2f2; }
+/* sócios vinculados: uma linha por sócio (no celular vira cartão) */
+.mk-soc { display:flex; flex-direction:column; border-top:1px solid #e3ece7; }
+.mk-soc-row { display:grid; grid-template-columns:minmax(0,1fr) 120px 150px 120px 40px; gap:10px; align-items:center;
+              padding:9px 8px; border-bottom:1px dashed #eef2f0; font-size:13.5px; }
+.mk-soc-row.mk-novo { background:#f7fdf9; }
+.mk-soc-head { font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:#7d968a; font-weight:700; padding:6px 8px; border-bottom:1px solid #e3ece7; }
+.mk-soc-nome { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.mk-pct { display:flex; align-items:center; gap:6px; } .mk-pct .cf-ctrl { height:34px; text-align:right; }
+.mk-rad { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; cursor:pointer; }
+.mk-rad input { accent-color:#16a34a; }
+.mk-soc-vazio { padding:14px 8px; font-size:13px; color:#b42318; }
+@media (max-width:720px) {
+    .mk-sug { flex-wrap:wrap; }
+    .mk-qsa-row { flex-wrap:wrap; }
+    .mk-qsa-t { flex-basis:calc(100% - 50px); }
+    .mk-soc-head { display:none; }
+    .mk-soc-row { grid-template-columns:1fr auto; grid-template-areas:"nome x" "tipo tipo" "pct resp"; gap:8px; }
+    .mk-soc-row .mk-soc-nome { grid-area:nome; white-space:normal; }
+    .mk-soc-row .mk-soc-tipo { grid-area:tipo; }
+    .mk-soc-row .mk-pct { grid-area:pct; }
+    .mk-soc-row .mk-rad { grid-area:resp; justify-self:end; }
+    .mk-soc-row .mk-x { grid-area:x; }
+    .mk-add { flex-direction:column; }
+    .mk-bar { width:120px; }
+    .mk-total { flex-wrap:wrap; }
+    .mk-cont { flex-wrap:wrap; }
+}
+
 /* telas médias: painel mais estreito; a grade de 12 mantém as proporções */
 @media (max-width:1280px) {
     .cf-layout { grid-template-columns:minmax(0,1fr) 260px; }
@@ -705,6 +853,7 @@ function toggleTipoFields() {
     if (pfCpf)  pfCpf.required  = (tipo === 'PF');
     if (pjNome) pjNome.required = (tipo === 'PJ');
     if (pjCnpj) pjCnpj.required = (tipo === 'PJ');
+    if (typeof sugerirNumeroPF === 'function') sugerirNumeroPF();
     atualizarResumo();
 }
 
@@ -862,6 +1011,31 @@ document.querySelector('form').addEventListener('submit', function(e) {
 // Ramo (ao menos um) e celular completo — o "required" do HTML não cobre.
 document.querySelector('form').addEventListener('submit', function(e) {
     if (e.defaultPrevented) return;
+    if (!document.getElementById('grupo_id').value) {
+        e.preventDefault();
+        alert('Escolha o grupo de empresas. A empresa ainda não tem grupo? Clique em "Novo grupo".');
+        document.getElementById('grupoBusca').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+    var ehContador = document.getElementById('is_contador') && document.getElementById('is_contador').checked;
+    if (!ehContador && !document.getElementById('contador_id').value) {
+        e.preventDefault();
+        alert('Escolha o contador responsável.');
+        document.getElementById('contadorBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+    if (tipoPessoa() === 'PJ') {
+        var tot = totalSocios();
+        var semPct = SOCIOS.some(function (s) { return qNum(s.pct) <= 0; });
+        if (!SOCIOS.length || semPct || Math.abs(tot - 100) >= 0.005) {
+            e.preventDefault();
+            alert(!SOCIOS.length ? 'Vincule pelo menos um sócio da empresa.'
+                  : (semPct ? 'Digite a participação de cada sócio.'
+                            : 'A participação dos sócios precisa somar 100%. Hoje soma ' + qPct(tot) + '%.'));
+            document.getElementById('cardSocios').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return false;
+        }
+    }
     var cel = document.getElementById('celular');
     if (cel && cel.value.replace(/\D/g, '').length < 10) {
         e.preventDefault();
@@ -893,11 +1067,11 @@ function novoGrupo() {
         .then(function (r) { return r.json(); })
         .then(function (d) {
             if (!d.success) { alert(d.message || 'Não consegui criar o grupo.'); return; }
-            var sel = document.getElementById('grupo_id');
-            var op = Array.prototype.find.call(sel.options, function (o) { return o.value === String(d.id); });
-            if (!op) { op = new Option(d.nome, d.id); sel.add(op); }
-            sel.value = String(d.id);
-            atualizarResumo();
+            if (!grupoPorId(d.id)) {
+                GRUPOS.push({id: d.id, nome: d.nome, sigla: qIniciais(d.nome), empresas: 0, locais: '', numeros: [],
+                             busca: d.nome.toLowerCase()});
+            }
+            escolherGrupo(d.id);
             if (d.ja_existia) alert('O grupo "' + d.nome + '" já existia — foi escolhido.');
         })
         .catch(function () { alert('Não consegui criar o grupo agora. Tente de novo.'); });
@@ -1118,6 +1292,8 @@ function preencherDadosCNPJ(data) {
         card.style.display = 'flex';
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    // quadro de sócios da Receita: casa com os cadastros e sugere o grupo
+    if (data.qsa && typeof carregarQSA === 'function') carregarQSA(data.qsa);
     atualizarResumo();
 }
 
@@ -1339,10 +1515,21 @@ Use para serviço pontual, orçamento ou legalização.`)) {
     } else {
         num.disabled = false;
         num.required = true;
+        sugerirNumeroPF();
         num.focus();
     }
     window._modoAnterior = radio.value;
     atualizarResumo();
+}
+
+// Pessoa física numera a partir de 5000: sugere o próximo livre (07/10/2026).
+function sugerirNumeroPF() {
+    var num = document.getElementById('numero_cliente');
+    var cli = document.getElementById('modoCliente');
+    if (num && cli && cli.checked && !num.disabled && !num.value.trim() && tipoPessoa() === 'PF' && PROXIMO_PF) {
+        num.value = PROXIMO_PF;
+        atualizarResumo();
+    }
 }
 
 // Painel "Antes de salvar": mostra o que o servidor vai exigir, ao vivo.
@@ -1388,6 +1575,14 @@ function atualizarResumo() {
     itens.push([!!(eml && eml.value.trim() && eml.checkValidity()), 'E-mail']);
     itens.push([!!(cel && cel.value.replace(/\D/g, '').length >= 10), 'Celular']);
     itens.push([!!document.querySelector('input[name="ramos_atividade_ids"]:checked'), 'Ramo de atividade']);
+    var ehContador = document.getElementById('is_contador') && document.getElementById('is_contador').checked;
+    var kid = document.getElementById('contador_id');
+    if (!ehContador) itens.push([!!(kid && kid.value), 'Contador responsável']);
+    if (tipo === 'PJ' && typeof SOCIOS !== 'undefined') {
+        var tot = totalSocios();
+        itens.push([SOCIOS.length > 0 && Math.abs(tot - 100) < 0.005,
+                    SOCIOS.length ? 'Sócios somando 100% (' + qPct(tot) + '%)' : 'Sócios']);
+    }
     lista.innerHTML = itens.map(function (it) {
         return '<li class="' + (it[0] ? 'ok' : 'nao') + '"><i class="fas ' + (it[0] ? 'fa-circle-check' : 'fa-circle-xmark') + '"></i>' + it[1] + '</li>';
     }).join('');
@@ -1409,6 +1604,353 @@ document.addEventListener('DOMContentLoaded', function () {
     f.addEventListener('input', atualizarResumo);
     f.addEventListener('change', atualizarResumo);
     atualizarResumo();
+});
+</script>
+<script>
+// ── Grupo com busca, contador e sócios (07/10/2026, modelo aprovado) ─────
+var GRUPOS = {{ grupos_json|tojson }};
+var CONTADORES = {{ contadores_json|tojson }};
+var SOCIOS = {{ socios_json|tojson }};
+var PROXIMO_PF = {{ proximo_pf|tojson }};
+var CLIENTE_ID = {{ (cliente.id if cliente else None)|tojson }};
+var QSA = [];
+
+function qEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+    });
+}
+function qNorm(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+function qIniciais(nome) {
+    var p = String(nome || '').replace(/[^A-Za-zÀ-ú0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : (p[0] || '?')[1] || '')).toUpperCase();
+}
+function qNum(v) {
+    var s = String(v == null ? '' : v).trim().replace(/\s/g, '');
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+}
+function qPct(n) { return n.toFixed(2).replace('.', ','); }
+
+// Liga uma caixa de busca a uma lista que abre embaixo dela.
+function qCombo(input, lista, desenhar) {
+    function abrir() { lista.style.display = ''; desenhar(input.value); }
+    input.addEventListener('focus', abrir);
+    input.addEventListener('input', abrir);
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { lista.style.display = 'none'; }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            var li = lista.querySelector('li[data-id]');
+            if (li) li.click();
+        }
+    });
+    input.addEventListener('blur', function () { setTimeout(function () { lista.style.display = 'none'; }, 180); });
+}
+
+// ---------------------------------------------------------------- grupo
+function grupoPorId(id) {
+    for (var i = 0; i < GRUPOS.length; i++) if (String(GRUPOS[i].id) === String(id)) return GRUPOS[i];
+    return null;
+}
+function grupoSub(g) {
+    var t = g.empresas + ' empresa' + (g.empresas === 1 ? '' : 's');
+    if (g.locais) t += ' · ' + g.locais;
+    if (g.numeros && g.numeros.length) t += ' · nº ' + g.numeros.join(', ');
+    return t;
+}
+function desenharGrupos(q) {
+    var lista = document.getElementById('grupoLista');
+    var n = qNorm(q);
+    var achados = GRUPOS.filter(function (g) { return !n || qNorm(g.busca).indexOf(n) >= 0; }).slice(0, 30);
+    lista.innerHTML = achados.length ? achados.map(function (g) {
+        return '<li data-id="' + g.id + '"><span class="mk-ava">' + qEsc(g.sigla) + '</span><span><b>' + qEsc(g.nome)
+             + '</b><small>' + qEsc(grupoSub(g)) + '</small></span></li>';
+    }).join('') : '<li class="vazio">Nenhum grupo com esse nome. A empresa não tem grupo? Clique em <b>Novo grupo</b>.</li>';
+    lista.querySelectorAll('li[data-id]').forEach(function (li) {
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); escolherGrupo(li.dataset.id); });
+        li.addEventListener('click', function () { escolherGrupo(li.dataset.id); });
+    });
+}
+function escolherGrupo(id) {
+    var g = grupoPorId(id);
+    document.getElementById('grupo_id').value = g ? g.id : '';
+    var box = document.getElementById('grupoEscolhido');
+    var combo = document.getElementById('grupoCombo');
+    if (g) {
+        box.innerHTML = '<span class="mk-ava">' + qEsc(g.sigla) + '</span><span class="mk-cont-t"><b>' + qEsc(g.nome)
+            + '</b><small>' + qEsc(grupoSub(g)) + '</small></span>'
+            + '<button type="button" class="cf-inline-btn" onclick="trocarGrupo()">Trocar</button>';
+        box.style.display = ''; combo.style.display = 'none';
+        document.getElementById('grupoLista').style.display = 'none';
+    } else {
+        box.style.display = 'none'; combo.style.display = '';
+    }
+    sugerirGrupo();
+    atualizarResumo();
+}
+function trocarGrupo() {
+    document.getElementById('grupoEscolhido').style.display = 'none';
+    document.getElementById('grupoCombo').style.display = '';
+    var i = document.getElementById('grupoBusca'); i.value = ''; i.focus();
+}
+// Sócio que já está num grupo sugere o grupo (o dono é o mesmo).
+function sugerirGrupo() {
+    var box = document.getElementById('grupoSug');
+    var atual = document.getElementById('grupo_id').value;
+    var s = null;
+    for (var i = 0; i < SOCIOS.length; i++) {
+        if (SOCIOS[i].grupo_id && String(SOCIOS[i].grupo_id) !== String(atual)) { s = SOCIOS[i]; break; }
+    }
+    if (!s || !grupoPorId(s.grupo_id)) { box.style.display = 'none'; return; }
+    document.getElementById('grupoSugTxt').innerHTML = '<b>Sugestão pela Receita:</b> o sócio <b>' + qEsc(s.nome) + '</b>'
+        + (s.numero ? ' (nº ' + qEsc(s.numero) + ')' : '') + ' é do grupo <b>' + qEsc(s.grupo_nome) + '</b>.';
+    var b = document.getElementById('grupoSugBtn');
+    b.textContent = 'Usar ' + s.grupo_nome;
+    b.onclick = function () { escolherGrupo(s.grupo_id); };
+    box.style.display = '';
+}
+
+// -------------------------------------------------------------- contador
+function contadorPorId(id) {
+    for (var i = 0; i < CONTADORES.length; i++) if (String(CONTADORES[i].id) === String(id)) return CONTADORES[i];
+    return null;
+}
+function contadorSub(k) {
+    return (k.numero ? 'nº ' + k.numero + ' · ' : '') + k.tipo + ' · contador de ' + k.atende + ' empresa' + (k.atende === 1 ? '' : 's');
+}
+function escolherContador(id) {
+    var k = contadorPorId(id);
+    document.getElementById('contador_id').value = k ? k.id : '';
+    var box = document.getElementById('contadorBox');
+    if (k) {
+        box.innerHTML = '<div class="mk-cont"><span class="mk-ava mk-ava-c">' + qEsc(qIniciais(k.nome)) + '</span>'
+            + '<span class="mk-cont-t"><b>' + qEsc(k.nome) + '</b><small>' + qEsc(contadorSub(k)) + '</small></span>'
+            + (k.cert ? '<span class="mk-ok"><i class="fas fa-certificate"></i> certificado vinculado</span>'
+                      : '<span class="mk-warn"><i class="fas fa-triangle-exclamation"></i> sem certificado</span>')
+            + '<button type="button" class="cf-inline-btn" onclick="trocarContador()">Trocar</button></div>';
+    } else {
+        box.innerHTML = '<div class="mk-cont vazio"><span class="mk-cont-t"><b>Nenhum contador escolhido</b>'
+            + '<small>Escolha quem responde por este cadastro.</small></span>'
+            + '<button type="button" class="cf-inline-btn" onclick="trocarContador()">Escolher</button></div>';
+    }
+    document.getElementById('contadorCombo').style.display = 'none';
+    box.style.display = '';
+    atualizarResumo();
+}
+function trocarContador() {
+    document.getElementById('contadorBox').style.display = 'none';
+    document.getElementById('contadorCombo').style.display = '';
+    var i = document.getElementById('contadorBusca'); i.value = ''; i.focus();
+}
+function desenharContadores(q) {
+    var lista = document.getElementById('contadorLista');
+    var n = qNorm(q);
+    var achados = CONTADORES.filter(function (k) {
+        return k.id !== CLIENTE_ID && (!n || qNorm(k.nome + ' ' + k.numero).indexOf(n) >= 0);
+    }).sort(function (a, b) { return b.atende - a.atende; }).slice(0, 30);
+    lista.style.display = '';
+    lista.innerHTML = achados.length ? achados.map(function (k) {
+        return '<li data-id="' + k.id + '"><span class="mk-ava mk-ava-c">' + qEsc(qIniciais(k.nome)) + '</span><span><b>'
+             + qEsc(k.nome) + '</b><small>' + qEsc(contadorSub(k)) + (k.cert ? '' : ' · sem certificado') + '</small></span></li>';
+    }).join('') : '<li class="vazio">Nenhum contador com esse nome.</li>';
+    lista.querySelectorAll('li[data-id]').forEach(function (li) {
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); escolherContador(li.dataset.id); });
+    });
+}
+
+// ---------------------------------------------------------------- sócios
+function totalSocios() {
+    return SOCIOS.reduce(function (t, s) { return t + qNum(s.pct); }, 0);
+}
+function gravarSociosJson() {
+    document.getElementById('socios_json').value = JSON.stringify(SOCIOS.map(function (s) {
+        return {id: s.id, pct: String(s.pct == null ? '' : s.pct), resp: !!s.resp};
+    }));
+}
+function tipoSocio(s) {
+    return '<span class="' + (s.tipo === 'PJ' ? 'mk-pj' : 'mk-pf') + '">' + (s.tipo === 'PJ' ? 'PJ' : 'PF')
+         + ' · ' + (s.avulso ? 'avulso' : 'cliente') + '</span>';
+}
+function desenharSocios() {
+    var box = document.getElementById('sociosLista');
+    if (!SOCIOS.length) {
+        box.innerHTML = '<div class="mk-soc-vazio"><i class="fas fa-circle-exclamation"></i> Nenhum sócio vinculado. '
+            + 'Toda empresa precisa de pelo menos um.</div>';
+    } else {
+        box.innerHTML = '<div class="mk-soc-row mk-soc-head"><span>Sócio</span><span>Tipo</span><span>Participação</span><span>Responsável</span><span></span></div>'
+            + SOCIOS.map(function (s, i) {
+                return '<div class="mk-soc-row' + (s.novo ? ' mk-novo' : '') + '">'
+                    + '<span class="mk-soc-nome"><span class="mk-num">' + qEsc(s.numero || '—') + '</span> ' + qEsc(s.nome)
+                    + (s.novo ? ' <small class="mk-tag">acabou de ser cadastrado</small>' : '') + '</span>'
+                    + '<span class="mk-soc-tipo">' + tipoSocio(s) + '</span>'
+                    + '<span class="mk-pct"><input class="cf-ctrl" inputmode="decimal" placeholder="0,00" data-i="' + i + '" value="'
+                    + qEsc(s.pct == null ? '' : String(s.pct).replace('.', ',')) + '"><span>%</span></span>'
+                    + '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '') + '> responsável</label>'
+                    + '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio"><i class="fas fa-times"></i></button>'
+                    + '</div>';
+            }).join('');
+        box.querySelectorAll('.mk-pct input').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                SOCIOS[+inp.dataset.i].pct = inp.value; desenharTotal(); gravarSociosJson(); atualizarResumo();
+            });
+        });
+        box.querySelectorAll('input[name="socioResp"]').forEach(function (r) {
+            r.addEventListener('change', function () {
+                SOCIOS.forEach(function (s, i) { s.resp = (i === +r.dataset.i); }); gravarSociosJson();
+            });
+        });
+        box.querySelectorAll('.mk-x').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var s = SOCIOS.splice(+b.dataset.i, 1)[0];
+                if (s && s.resp && SOCIOS.length) SOCIOS[0].resp = true;
+                desenharSocios(); desenharQSA(); sugerirGrupo();
+            });
+        });
+    }
+    desenharTotal();
+    gravarSociosJson();
+    atualizarResumo();
+}
+function desenharTotal() {
+    var t = totalSocios();
+    var ok = Math.abs(t - 100) < 0.005;
+    var el = document.getElementById('sociosTotal');
+    el.className = 'mk-total' + (ok ? ' ok' : '');
+    var txt = ok ? '— participação completa'
+        : (t < 100 ? '— faltam ' + qPct(100 - t) + '%' : '— passou ' + qPct(t - 100) + '% de 100%');
+    if (!ok && SOCIOS.length && t === 0) txt += ' (a Receita não informa a participação: digite do contrato social)';
+    el.innerHTML = '<div class="mk-bar"><span style="width:' + Math.min(100, t) + '%"></span></div><b>' + qPct(t) + '%</b> <span>' + txt + '</span>';
+}
+function socioJa(id) {
+    return SOCIOS.some(function (s) { return String(s.id) === String(id); });
+}
+function addSocio(cad, novo) {
+    if (!cad || !cad.id) return;
+    if (CLIENTE_ID && String(cad.id) === String(CLIENTE_ID)) { alert('A própria empresa não pode ser sócia dela mesma.'); return; }
+    if (socioJa(cad.id)) { alert(cad.nome + ' já está na lista de sócios.'); return; }
+    SOCIOS.push({id: cad.id, numero: cad.numero, nome: cad.nome, doc: cad.doc, tipo: cad.tipo, avulso: cad.avulso,
+                 grupo_id: cad.grupo_id, grupo_nome: cad.grupo_nome, pct: '', resp: SOCIOS.length === 0, novo: !!novo});
+    desenharSocios(); desenharQSA(); sugerirGrupo();
+}
+function cadastrarSocio(nome, tipo, doc) {
+    var u = '/clientes/novo?janela=1&tipo=' + encodeURIComponent(tipo || 'PF')
+          + '&nome=' + encodeURIComponent(nome || '')
+          + (doc ? '&doc=' + encodeURIComponent(doc) : '')
+          + (document.getElementById('grupo_id').value ? '&grupo_id=' + document.getElementById('grupo_id').value : '');
+    var w = window.open(u, 'qcxCadastroSocio', 'width=1280,height=900,scrollbars=yes');
+    if (!w) alert('O navegador bloqueou a janela. Permita janelas (pop-ups) para este site e clique de novo.');
+}
+window.addEventListener('message', function (e) {
+    if (e.origin !== window.location.origin || !e.data || e.data.tipo !== 'qcx-cadastro-criado') return;
+    var cad = e.data.cadastro;
+    if (!cad || socioJa(cad.id)) return;
+    PROXIMO_PF = Math.max(PROXIMO_PF, (parseInt(cad.numero, 10) || 0) + 1);
+    addSocio(cad, true);
+});
+function desenharBuscaSocio(q) {
+    var lista = document.getElementById('socioLista');
+    q = (q || '').trim();
+    if (q.length < 2) { lista.innerHTML = '<li class="vazio">Digite pelo menos 2 letras ou números.</li>'; return; }
+    clearTimeout(desenharBuscaSocio._t);
+    desenharBuscaSocio._t = setTimeout(function () {
+        fetch('/clientes/api/cadastros/buscar?q=' + encodeURIComponent(q) + (CLIENTE_ID ? '&excluir=' + CLIENTE_ID : ''))
+            .then(function (r) { return r.json(); })
+            .then(function (rows) {
+                rows = rows.filter(function (c) { return !socioJa(c.id); });
+                lista.innerHTML = rows.length ? rows.map(function (c, i) {
+                    return '<li data-id="' + c.id + '" data-i="' + i + '"><span class="mk-ava' + (c.tipo === 'PJ' ? ' mk-ava-pj' : '') + '">'
+                         + qEsc(qIniciais(c.nome)) + '</span><span><b>' + qEsc((c.numero ? c.numero + ' · ' : '') + c.nome)
+                         + '</b><small>' + qEsc(c.doc) + ' · ' + (c.tipo === 'PJ' ? 'empresa' : 'pessoa física')
+                         + (c.avulso ? ' · avulso' : '') + (c.grupo_nome ? ' · grupo ' + c.grupo_nome : '') + '</small></span></li>';
+                }).join('') : '<li class="vazio">Ninguém com esse nome ou documento. Use <b>Cadastrar novo sócio</b>.</li>';
+                lista.querySelectorAll('li[data-id]').forEach(function (li) {
+                    li.addEventListener('mousedown', function (ev) {
+                        ev.preventDefault(); addSocio(rows[+li.dataset.i], false);
+                        document.getElementById('socioBusca').value = ''; lista.style.display = 'none';
+                    });
+                });
+            })
+            .catch(function () { lista.innerHTML = '<li class="vazio">Não consegui buscar agora. Tente de novo.</li>'; });
+    }, 250);
+}
+
+// ----------------------------------------------- quadro de sócios da Receita
+function carregarQSA(qsa) {
+    if (!qsa || !qsa.length) return;
+    fetch('/clientes/api/socios/receita', {method: 'POST', headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify({qsa: qsa})})
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            QSA = res || [];
+            // quem a Receita lista e já tem cadastro entra vinculado
+            QSA.forEach(function (q) { if (q.cadastro && !socioJa(q.cadastro.id)) addSocio(q.cadastro, false); });
+            desenharQSA(); sugerirGrupo();
+        })
+        .catch(function () {});
+}
+function desenharQSA() {
+    var box = document.getElementById('qsaBox');
+    if (!QSA.length) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    var lista = document.getElementById('qsaLista');
+    lista.innerHTML = QSA.map(function (q, i) {
+        var c = q.cadastro;
+        // cadastrado agora pela janela: casa pelo nome
+        if (!c) {
+            for (var j = 0; j < SOCIOS.length; j++) if (qNorm(SOCIOS[j].nome) === qNorm(q.nome)) { c = SOCIOS[j]; q.cadastro = c; break; }
+        }
+        var doc = q.tipo === 'PJ' ? 'CNPJ ' + q.doc.replace(/^(\d{2})(\d{3})(\d{3}).*$/, '$1.$2.$3/…') : 'CPF ' + q.doc;
+        var dir;
+        if (c) {
+            dir = '<span class="mk-found"><i class="fas fa-circle-check"></i> encontrado: ' + (c.avulso ? 'avulso' : 'cliente')
+                + (c.numero ? ' nº ' + qEsc(c.numero) : '') + '</span>'
+                + (socioJa(c.id) ? '<span class="mk-vinc"><i class="fas fa-link"></i> vinculado</span>'
+                                 : '<button type="button" class="mk-b1" data-vinc="' + i + '"><i class="fas fa-link"></i> Vincular</button>');
+        } else {
+            dir = '<span class="mk-nf"><i class="fas fa-circle-exclamation"></i> não está cadastrad' + (q.tipo === 'PJ' ? 'a' : 'o') + '</span>'
+                + '<button type="button" class="mk-b1" data-cad="' + i + '"><i class="fas fa-user-plus"></i> '
+                + (q.tipo === 'PJ' ? 'Cadastrar empresa' : 'Cadastrar sócio (nº ' + PROXIMO_PF + ')') + '</button>';
+        }
+        return '<div class="mk-qsa-row ' + (c ? 'ok' : 'falta') + '"><span class="mk-ava' + (q.tipo === 'PJ' ? ' mk-ava-pj' : '') + '">'
+            + qEsc(qIniciais(q.nome)) + '</span><span class="mk-qsa-t"><b>' + qEsc(q.nome) + '</b><small>'
+            + qEsc((q.qualificacao ? q.qualificacao + ' · ' : '') + doc) + '</small></span>' + dir + '</div>';
+    }).join('');
+    lista.querySelectorAll('[data-vinc]').forEach(function (b) {
+        b.addEventListener('click', function () { addSocio(QSA[+b.dataset.vinc].cadastro, false); });
+    });
+    lista.querySelectorAll('[data-cad]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var q = QSA[+b.dataset.cad];
+            cadastrarSocio(q.nome, q.tipo, q.tipo === 'PJ' ? q.doc : '');
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var gb = document.getElementById('grupoBusca');
+    if (gb) {
+        qCombo(gb, document.getElementById('grupoLista'), desenharGrupos);
+        escolherGrupo(document.getElementById('grupo_id').value);
+    }
+    var cb = document.getElementById('contadorBusca');
+    if (cb) {
+        qCombo(cb, document.getElementById('contadorLista'), desenharContadores);
+        escolherContador(document.getElementById('contador_id').value);
+    }
+    var sb = document.getElementById('socioBusca');
+    if (sb) qCombo(sb, document.getElementById('socioLista'), desenharBuscaSocio);
+    desenharSocios();
+    var ic = document.getElementById('is_contador');
+    if (ic) ic.addEventListener('change', atualizarResumo);
+    {% if janela %}
+    // janela do sócio: já vem como cliente da carteira com o próximo número
+    var mc = document.getElementById('modoCliente');
+    if (mc && !mc.checked) { mc.checked = true; escolherModo(mc); }
+    {% endif %}
 });
 </script>
 {% endblock %}

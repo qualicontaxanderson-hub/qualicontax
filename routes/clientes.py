@@ -1,6 +1,7 @@
 """Rotas de Clientes - CRUD completo"""
 import re
 import logging
+import unicodedata
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
@@ -11,7 +12,7 @@ from utils.atividade import registrar, rotulo_empresa
 from utils.auditoria_fmt import AUDITORIA_INICIO, hist_preparar
 from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
-from utils.acesso import filtrar_lista
+from utils.acesso import filtrar_lista, empresas_ocultas
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
@@ -95,6 +96,195 @@ def _salvar_grupo(cliente_id, grupo_id):
     GrupoCliente.add_cliente(grupo_id, cliente_id)
     novo = GrupoCliente.get_by_id(grupo_id) or {}
     return [g['nome'] for g in atuais], novo.get('nome')
+
+
+# ── Sócios e contador (07/10/2026, modelo aprovado pelo Anderson) ─────────
+# Contador responsável: obrigatório em TODO cadastro (PF e PJ), menos no
+# próprio cadastro que é contador. Sócios: obrigatórios em toda PJ (cliente
+# e avulsa, novo e edição); sócio é um CADASTRO (PF ou PJ, cliente ou avulso)
+# e a participação soma 100%. O vínculo usa socios_clientes.pf_cliente_id,
+# que desde aqui aponta para qualquer cadastro — o nome ficou do tempo em que
+# só PF podia ser sócia; mudar a coluna não compensa o DDL.
+
+PRIMEIRO_NUMERO_PF = 5000
+
+
+def _so_digitos(s):
+    return re.sub(r'\D', '', s or '')
+
+
+def _nome_chave(s):
+    s = unicodedata.normalize('NFKD', s or '').encode('ascii', 'ignore').decode()
+    return re.sub(r'[^A-Z0-9]+', ' ', s.upper()).strip()
+
+
+def _proximo_numero_pf():
+    """Pessoa física numera a partir de 5000: o próximo é o maior + 1."""
+    r = execute_query("SELECT MAX(CAST(numero_cliente AS UNSIGNED)) AS mx FROM clientes "
+                      "WHERE numero_cliente REGEXP '^[0-9]+$' AND CAST(numero_cliente AS UNSIGNED) >= %s",
+                      (PRIMEIRO_NUMERO_PF,), fetch=True, fetch_one=True) or {}
+    return max(PRIMEIRO_NUMERO_PF, int(r.get('mx') or 0) + 1)
+
+
+def _contador_padrao():
+    """O contador que atende mais cadastros vem marcado no cadastro novo."""
+    r = execute_query("""SELECT cc.contador_id FROM cliente_contadores cc
+                           JOIN clientes k ON k.id = cc.contador_id
+                          WHERE k.is_contador = 1 AND k.situacao = 'ATIVO'
+                          GROUP BY cc.contador_id ORDER BY COUNT(*) DESC LIMIT 1""",
+                      fetch=True, fetch_one=True)
+    return r['contador_id'] if r else None
+
+
+def _cadastro_resumo(ids):
+    """id -> dados do cadastro para a lista de sócios (nº, nome, doc, tipo, grupo)."""
+    ids = [int(i) for i in ids if str(i).isdigit()]
+    if not ids:
+        return {}
+    marcas = ','.join(['%s'] * len(ids))
+    rows = execute_query(f"""
+        SELECT c.id, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
+               COALESCE(c.avulso, 0) AS avulso, c.situacao,
+               (SELECT g.id FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id
+                 WHERE r.cliente_id = c.id ORDER BY r.id LIMIT 1) AS grupo_id,
+               (SELECT g.nome FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id
+                 WHERE r.cliente_id = c.id ORDER BY r.id LIMIT 1) AS grupo_nome
+          FROM clientes c WHERE c.id IN ({marcas})""", tuple(ids), fetch=True) or []
+    return {r['id']: {'id': r['id'], 'numero': r['numero_cliente'] or '', 'nome': (r['nome_razao_social'] or '').strip(),
+                      'doc': r['cpf_cnpj'] or '', 'tipo': r['tipo_pessoa'], 'avulso': bool(r['avulso']),
+                      'situacao': r['situacao'], 'grupo_id': r['grupo_id'], 'grupo_nome': r['grupo_nome']}
+            for r in rows}
+
+
+def _ler_socios(form):
+    """socios_json do formulário -> [{id, pct (Decimal), resp}] (descarta lixo)."""
+    import json
+    try:
+        bruto = json.loads(form.get('socios_json') or '[]')
+    except ValueError:
+        return None
+    out = []
+    for s in bruto if isinstance(bruto, list) else []:
+        try:
+            sid = int(s.get('id'))
+            pct = _parse_decimal_input(str(s.get('pct') or '0'))
+        except (TypeError, ValueError, InvalidOperation, AttributeError):
+            return None
+        out.append({'id': sid, 'pct': pct, 'resp': bool(s.get('resp'))})
+    return out
+
+
+def _socios_e_contador_faltando(form, cliente_id=None):
+    falta = []
+    # contador: todo cadastro, menos o que é ele mesmo contador
+    if not form.get('is_contador'):
+        kid = form.get('contador_id', type=int)
+        k = execute_query("SELECT id, is_contador, situacao FROM clientes WHERE id = %s",
+                          (kid,), fetch=True, fetch_one=True) if kid else None
+        if not k or not k.get('is_contador') or k.get('situacao') != 'ATIVO' or kid == cliente_id:
+            falta.append('contador responsável')
+    # sócios: toda PJ
+    if form.get('tipo_pessoa') == 'PJ':
+        socios = _ler_socios(form)
+        if not socios:
+            falta.append('sócios')
+        else:
+            ids = [s['id'] for s in socios]
+            existem = _cadastro_resumo(ids)
+            if len(set(ids)) != len(ids) or cliente_id in ids or any(i not in existem for i in ids):
+                falta.append('sócios (confira a lista)')
+            elif any(s['pct'] <= 0 for s in socios):
+                falta.append('participação de cada sócio')
+            elif abs(sum(s['pct'] for s in socios) - Decimal('100')) > Decimal('0.005'):
+                falta.append('participação dos sócios somando 100%')
+    return falta
+
+
+def _salvar_socios(cliente_id, socios):
+    """Deixa socios_clientes igual à lista do formulário: tira quem saiu,
+    acrescenta quem entrou e atualiza participação/responsável."""
+    atuais = {s['pf_cliente_id']: s for s in SocioCliente.get_by_cliente(cliente_id) if s.get('pf_cliente_id')}
+    novos = {s['id']: s for s in socios}
+    dados = _cadastro_resumo(list(novos))
+    for pid, s in atuais.items():
+        if pid not in novos:
+            SocioCliente.delete(s['id'])
+            registrar('escrita.excluiu_socio', 'cadastros', tabela='socios_clientes', registro_id=s['id'],
+                      antes={'cliente_id': cliente_id, 'nome': s.get('nome'), 'cpf': s.get('cpf'),
+                             **rotulo_empresa(cliente_id)})
+    resp_id = None
+    for pid, s in novos.items():
+        d = dados.get(pid) or {}
+        if pid in atuais:
+            a = atuais[pid]
+            if Decimal(str(a.get('percentual_participacao') or 0)) != s['pct']:
+                execute_query("UPDATE socios_clientes SET percentual_participacao = %s WHERE id = %s",
+                              (s['pct'], a['id']))
+            if s['resp']:
+                resp_id = a['id']
+        else:
+            sid = SocioCliente.create(cliente_id=cliente_id, pf_cliente_id=pid, nome=d.get('nome'),
+                                      cpf=d.get('doc'), percentual_participacao=s['pct'],
+                                      responsavel=False, ativo=True)
+            registrar('escrita.criou_socio', 'cadastros', tabela='socios_clientes', registro_id=sid,
+                      depois={'cliente_id': cliente_id, 'pf_cliente_id': pid, 'nome': d.get('nome'),
+                              'cpf': d.get('doc'), 'percentual_participacao': str(s['pct']),
+                              **rotulo_empresa(cliente_id)})
+            if s['resp']:
+                resp_id = sid
+    SocioCliente.set_responsavel(cliente_id, resp_id)
+
+
+def _salvar_contador(cliente_id, contador_id):
+    """Põe o contador escolhido. Os vínculos que já existem ficam (servem à
+    captura pelo certificado do contador)."""
+    if not contador_id:
+        return
+    ja = execute_query("SELECT id FROM cliente_contadores WHERE cliente_id = %s AND contador_id = %s",
+                       (cliente_id, contador_id), fetch=True, fetch_one=True)
+    if not ja:
+        ClienteContador.vincular_contador(cliente_id, contador_id)
+
+
+def _ctx_form(cliente=None):
+    """Tudo o que o formulário (novo, editar e janela de sócio) precisa."""
+    from routes.grupos import _grupos_com_empresas
+    grupos_cards = [g for g in _grupos_com_empresas() if g['situacao'] == 'ATIVO']
+    grupos_json = [{'id': g['id'], 'nome': g['nome'], 'sigla': g['sigla'],
+                    'empresas': len(g['empresas']), 'locais': g['locais'],
+                    'numeros': [e['numero'] for e in g['empresas'] if e['numero']][:8],
+                    'busca': g['busca']} for g in grupos_cards]
+    contadores = [{'id': k['id'], 'numero': k['numero_cliente'] or '', 'nome': (k['nome_razao_social'] or '').strip(),
+                   'tipo': k['tipo_pessoa'], 'cert': bool(k.get('tem_certificado')),
+                   'validade': k['cert_validade'].strftime('%d/%m/%Y') if k.get('cert_validade') else ''}
+                  for k in ClienteContador.listar_contadores()]
+    uso = {r['contador_id']: r['n'] for r in (execute_query(
+        "SELECT contador_id, COUNT(*) n FROM cliente_contadores GROUP BY contador_id", fetch=True) or [])}
+    for k in contadores:
+        k['atende'] = uso.get(k['id'], 0)
+    ctx = {'ramos_atividade': RamoAtividade.get_all(situacao='ATIVO'),
+           'grupos': GrupoCliente.get_all(situacao='ATIVO'), 'grupos_json': grupos_json,
+           'contadores_json': contadores, 'proximo_pf': _proximo_numero_pf(),
+           'janela': request.args.get('janela') == '1' or request.form.get('janela') == '1',
+           'pre': {'tipo': request.args.get('tipo', ''), 'nome': request.args.get('nome', ''),
+                   'grupo_id': request.args.get('grupo_id', type=int), 'doc': request.args.get('doc', '')}}
+    if cliente:
+        cid = cliente['id']
+        ctx['ramos_cliente'] = [r['id'] for r in RamoAtividade.get_by_cliente(cid)]
+        ctx['grupos_cliente'] = Cliente.get_grupos(cid)
+        ks = ClienteContador.contadores_do_cliente(cid)
+        ctx['contador_atual'] = ks[0]['id'] if ks else None
+        soc = SocioCliente.get_by_cliente(cid)
+        resumo = _cadastro_resumo([s['pf_cliente_id'] for s in soc if s.get('pf_cliente_id')])
+        ctx['socios_json'] = [dict(resumo[s['pf_cliente_id']], pct=str(s['percentual_participacao'] or ''),
+                                   resp=bool(s.get('responsavel')))
+                              for s in soc if s.get('pf_cliente_id') in resumo]
+    else:
+        ctx['ramos_cliente'] = []
+        ctx['grupos_cliente'] = []
+        ctx['contador_atual'] = _contador_padrao()
+        ctx['socios_json'] = []
+    return ctx
 
 
 @clientes.route('/clientes')
@@ -198,9 +388,12 @@ def index():
 
 
 def _render_novo():
-    return render_template('clientes/form.html', cliente=None,
-                           ramos_atividade=RamoAtividade.get_all(situacao='ATIVO'), ramos_cliente=[],
-                           grupos=GrupoCliente.get_all(situacao='ATIVO'), grupos_cliente=[])
+    return render_template('clientes/form.html', cliente=None, **_ctx_form())
+
+
+def _render_editar(cliente, endereco_principal):
+    return render_template('clientes/form.html', cliente=cliente,
+                           endereco_principal=endereco_principal, **_ctx_form(cliente))
 
 
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])
@@ -251,7 +444,7 @@ def novo():
         if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
             flash('Preencha todos os campos obrigatórios.', 'danger')
             return _render_novo()
-        falta = _obrigatorios_faltando(request.form)
+        falta = _obrigatorios_faltando(request.form) + _socios_e_contador_faltando(request.form)
         if falta:
             flash(_msg_faltando(falta), 'danger')
             return _render_novo()
@@ -307,8 +500,12 @@ def novo():
                 except:
                     pass  # Ignora erros de duplicação
 
-            # Grupo de empresas (obrigatório desde 07/10/2026)
+            # Grupo de empresas, contador e sócios (obrigatórios desde 07/10/2026)
             _salvar_grupo(cliente_id, request.form.get('grupo_id', type=int))
+            if not request.form.get('is_contador'):
+                _salvar_contador(cliente_id, request.form.get('contador_id', type=int))
+            if request.form.get('tipo_pessoa') == 'PJ':
+                _salvar_socios(cliente_id, _ler_socios(request.form) or [])
             
             # Salvar endereço se fornecido
             cep = request.form.get('cep', '').strip()
@@ -346,6 +543,10 @@ def novo():
                     # Se houver erro no endereço, não impede a criação do cliente
                     print(f"Erro ao salvar endereço: {e}")
             
+            if request.form.get('janela') == '1':
+                # aberto pela lista de sócios: avisa a tela de trás e fecha
+                return render_template('clientes/janela_ok.html',
+                                       cadastro=_cadastro_resumo([cliente_id]).get(cliente_id) or {'id': cliente_id})
             flash('Cliente criado com sucesso!', 'success')
             return redirect(url_for('clientes.detalhes', id=cliente_id))
         else:
@@ -977,12 +1178,7 @@ def editar(id):
             # Validação de campos obrigatórios
             if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
                 flash('Preencha todos os campos obrigatórios.', 'danger')
-                ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-                cliente_ramos = RamoAtividade.get_by_cliente(id)
-                ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
-                grupos = GrupoCliente.get_all(situacao='ATIVO')
-                grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
+                return _render_editar(cliente, endereco_principal)
             
             # Validar número do cliente se fornecido
             numero_cliente = _numero_inteiro(request.form.get('numero_cliente', ''))
@@ -993,17 +1189,12 @@ def editar(id):
             elif numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
                 _erro_num = f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!'
             if not _erro_num:
-                _falta = _obrigatorios_faltando(request.form)
+                _falta = _obrigatorios_faltando(request.form) + _socios_e_contador_faltando(request.form, id)
                 if _falta:
                     _erro_num = _msg_faltando(_falta)
             if _erro_num:
                 flash(_erro_num, 'danger')
-                ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-                cliente_ramos = RamoAtividade.get_by_cliente(id)
-                ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
-                grupos = GrupoCliente.get_all(situacao='ATIVO')
-                grupos_cliente = Cliente.get_grupos(id)
-                return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
+                return _render_editar(cliente, endereco_principal)
             
             data = {
                 'numero_cliente': numero_cliente if numero_cliente else None,
@@ -1051,12 +1242,7 @@ def editar(id):
                         flash('Não consegui renomear a pasta da empresa no Dropbox '
                               'agora. Nada foi alterado — tente novamente em '
                               'instantes.', 'danger')
-                    ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-                    cliente_ramos = RamoAtividade.get_by_cliente(id)
-                    ramos_cliente = [ramo['id'] for ramo in cliente_ramos]
-                    grupos = GrupoCliente.get_all(situacao='ATIVO')
-                    grupos_cliente = Cliente.get_grupos(id)
-                    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
+                    return _render_editar(cliente, endereco_principal)
 
             sucesso = Cliente.update(id, data)
 
@@ -1128,6 +1314,10 @@ def editar(id):
                     registrar('escrita.alterou_grupo_cliente', 'cadastros', tabela='clientes',
                               registro_id=id, antes={'grupos': _mud_grupo[0]},
                               depois={'grupos': [_mud_grupo[1]]})
+                if not request.form.get('is_contador'):
+                    _salvar_contador(id, request.form.get('contador_id', type=int))
+                if request.form.get('tipo_pessoa') == 'PJ':
+                    _salvar_socios(id, _ler_socios(request.form) or [])
 
                 # Atualizar/salvar endereço principal
                 cep = request.form.get('cep', '').strip()
@@ -1184,13 +1374,7 @@ def editar(id):
             flash(f'Erro ao atualizar cliente: {str(e)}', 'danger')
             print(f"Erro ao atualizar cliente {id}: {str(e)}")
     
-    # GET - Buscar ramos de atividade e ramos atuais do cliente
-    ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
-    cliente_ramos = RamoAtividade.get_by_cliente(id)
-    ramos_cliente = [ramo['id'] for ramo in cliente_ramos]  # Lista de IDs para checkboxes
-    grupos = GrupoCliente.get_all(situacao='ATIVO')
-    grupos_cliente = Cliente.get_grupos(id)
-    return render_template('clientes/form.html', cliente=cliente, grupos=grupos, grupos_cliente=grupos_cliente, ramos_atividade=ramos_atividade, ramos_cliente=ramos_cliente, endereco_principal=endereco_principal)
+    return _render_editar(cliente, endereco_principal)
 
 
 @clientes.route('/clientes/avulsos')
@@ -1491,11 +1675,12 @@ def excluir_cadastro_adicional(id):
 @clientes.route('/clientes/<int:cliente_id>/socios/buscar-pf')
 @login_required
 def socios_buscar_pf(cliente_id):
-    """Busca cadastros de Pessoa Física para virarem sócio (por nome ou CPF).
+    """Busca cadastros para virarem sócio (por nome, CPF/CNPJ ou número).
 
-    Só devolve quem pode entrar: PF, não inativo e ainda não sócio DESTA
-    empresa. É a fonte do modal "Adicionar Sócio" — sócio não se digita,
-    escolhe-se do cadastro.
+    Só devolve quem pode entrar: pessoa física OU empresa (desde 07/10/2026),
+    cliente ou avulso, não inativo, que não seja a própria empresa e que
+    ainda não seja sócio DESTA empresa. É a fonte do modal "Adicionar Sócio"
+    — sócio não se digita, escolhe-se do cadastro.
     """
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
@@ -1503,17 +1688,19 @@ def socios_buscar_pf(cliente_id):
     dig = ''.join(ch for ch in q if ch.isdigit())
     rows = execute_query(
         """SELECT id, nome_razao_social AS nome, cpf_cnpj AS cpf, email,
-                  COALESCE(NULLIF(celular, ''), telefone) AS telefone
+                  COALESCE(NULLIF(celular, ''), telefone) AS telefone,
+                  numero_cliente AS numero, tipo_pessoa AS tipo, COALESCE(avulso, 0) AS avulso
              FROM clientes
-            WHERE tipo_pessoa = 'PF'
-              AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'
+            WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO'
+              AND id <> %s
               AND (nome_razao_social LIKE %s
-                   OR REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', '') LIKE %s)
+                   OR REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s
+                   OR numero_cliente = %s)
               AND id NOT IN (SELECT COALESCE(pf_cliente_id, 0)
                                FROM socios_clientes WHERE cliente_id = %s)
-            ORDER BY nome_razao_social
+            ORDER BY (numero_cliente = %s) DESC, nome_razao_social
             LIMIT 10""",
-        (f'%{q}%', f'%{dig}%' if dig else q, cliente_id), fetch=True) or []
+        (cliente_id, f'%{q}%', f'%{dig}%' if dig else q, q, cliente_id, q), fetch=True) or []
     return jsonify(filtrar_lista(rows))           # empresa reservada
 
 
@@ -1521,21 +1708,22 @@ def socios_buscar_pf(cliente_id):
 @login_required
 def novo_socio(cliente_id):
     """Adicionar novo sócio"""
-    # Sócio NÃO se digita: é um cadastro de Pessoa Física escolhido na busca.
-    # Nome/CPF/e-mail/telefone saem do cadastro (fonte única) — decisão do
-    # Anderson em 19/08/2026, no lugar da digitação livre sem vínculo.
+    # Sócio NÃO se digita: é um cadastro escolhido na busca — pessoa física ou,
+    # desde 07/10/2026, empresa (cliente ou avulsa). Nome/documento/e-mail/
+    # telefone saem do cadastro (fonte única) — decisão do Anderson em
+    # 19/08/2026, no lugar da digitação livre sem vínculo.
     pf_raw = (request.form.get('pf_cliente_id') or '').strip()
     percentual_raw = (request.form.get('percentual_participacao') or '').strip()
     responsavel = request.form.get('responsavel') == 'on'
 
     if not pf_raw.isdigit() or not percentual_raw:
-        flash('Escolha uma pessoa física já cadastrada e informe o percentual.', 'danger')
+        flash('Escolha um cadastro (pessoa física ou empresa) e informe o percentual.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
 
     pf = Cliente.get_by_id(int(pf_raw))
-    if not pf or (pf.get('tipo_pessoa') or '').upper() != 'PF':
-        flash('O sócio precisa ser um cadastro de Pessoa Física. '
-              'Cadastre a pessoa primeiro e escolha na busca.', 'danger')
+    if not pf or (pf.get('tipo_pessoa') or '').upper() not in ('PF', 'PJ'):
+        flash('O sócio precisa ter cadastro (pessoa física ou empresa). '
+              'Cadastre primeiro e escolha na busca.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
     if int(pf_raw) == cliente_id:
         flash('A própria empresa não pode ser sócia dela mesma.', 'danger')
@@ -1698,6 +1886,78 @@ def ramo_rapido():
     registrar('escrita.criou_ramo', 'cadastros', tabela='ramos_atividade', registro_id=rid,
               depois={'nome': nome, 'situacao': 'ATIVO', 'origem': 'formulario_cliente'})
     return jsonify(success=True, id=rid, nome=nome, ja_existia=False)
+
+
+@clientes.route('/clientes/api/cadastros/buscar')
+@login_required
+def cadastros_buscar():
+    """Busca de cadastro para virar SÓCIO (07/10/2026): PF ou PJ, cliente ou
+    avulso, não inativo. Acha por nome, CPF/CNPJ ou número do cadastro."""
+    q = (request.args.get('q') or '').strip()
+    excluir = request.args.get('excluir', type=int) or 0
+    if len(q) < 2:
+        return jsonify([])
+    dig = _so_digitos(q)
+    rows = execute_query(
+        """SELECT id FROM clientes
+            WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO' AND id <> %s
+              AND (nome_razao_social LIKE %s
+                   OR (%s <> '' AND REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s)
+                   OR numero_cliente = %s)
+            ORDER BY (numero_cliente = %s) DESC, nome_razao_social
+            LIMIT 12""",
+        (excluir, f'%{q}%', dig, f'%{dig}%', q, q), fetch=True) or []
+    resumo = _cadastro_resumo([r['id'] for r in filtrar_lista(rows)])
+    return jsonify([resumo[r['id']] for r in rows if r['id'] in resumo])
+
+
+@clientes.route('/clientes/api/socios/receita', methods=['POST'])
+@login_required
+def socios_da_receita():
+    """Casa o quadro de sócios (QSA) que a Receita devolve na busca do CNPJ
+    com os cadastros. Empresa sócia: pela raiz do CNPJ (8 dígitos). Pessoa
+    física: a Receita esconde o CPF (***116048**) — casa só quando os 6
+    dígitos do meio E o nome batem; na dúvida, não casa (vira "cadastrar")."""
+    qsa = (request.get_json(silent=True) or {}).get('qsa') or []
+    out = []
+    for s in qsa[:30]:
+        if not isinstance(s, dict):
+            continue
+        nome = (s.get('nome_socio') or s.get('nome') or '').strip()
+        doc = s.get('cnpj_cpf_do_socio') or ''
+        dig = _so_digitos(doc)
+        eh_pj = '*' not in doc and len(dig) >= 8
+        achado = None
+        if eh_pj:
+            r = execute_query(
+                """SELECT id FROM clientes
+                    WHERE tipo_pessoa = 'PJ' AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'
+                      AND REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s
+                    ORDER BY (REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') = %s) DESC,
+                             (SUBSTRING(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', ''), 9, 4) = '0001') DESC
+                    LIMIT 1""", (dig[:8] + '%', dig), fetch=True, fetch_one=True)
+            achado = r['id'] if r else None
+        elif len(dig) == 6:
+            for r in execute_query(
+                    """SELECT id, nome_razao_social FROM clientes
+                        WHERE tipo_pessoa = 'PF' AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'
+                          AND SUBSTRING(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), 4, 6) = %s""",
+                    (dig,), fetch=True) or []:
+                if _nome_chave(r['nome_razao_social']) == _nome_chave(nome):
+                    achado = r['id']
+                    break
+        if achado and achado in empresas_ocultas():
+            achado = None
+        cad = _cadastro_resumo([achado]).get(achado) if achado else None
+        out.append({'nome': nome, 'qualificacao': s.get('qualificacao_socio') or '',
+                    'doc': doc, 'tipo': 'PJ' if eh_pj else 'PF', 'cadastro': cad})
+    return jsonify(out)
+
+
+@clientes.route('/clientes/api/proximo-numero-pf')
+@login_required
+def proximo_numero_pf():
+    return jsonify(numero=_proximo_numero_pf())
 
 
 @clientes.route('/clientes/<int:cliente_id>/adicionar-grupo', methods=['POST'])
