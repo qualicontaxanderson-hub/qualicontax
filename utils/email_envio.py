@@ -57,8 +57,10 @@ def montar(para, assunto, html, texto):
     msg.add_alternative(html, subtype='html')
     try:
         with open(_LOGO, 'rb') as f:
+            # inline, não attachment: imagem "anexada" a pouco texto pesa no
+            # filtro de spam (Cloudmark deu 100 no aviso de 06/10).
             msg.get_payload()[1].add_related(f.read(), 'image', 'png', cid='<logo>',
-                                             filename='logo.png')
+                                             disposition='inline', filename='logo.png')
     except OSError:
         logger.warning('[email] logo não encontrada em %s; segue sem ela.', _LOGO)
     return msg
