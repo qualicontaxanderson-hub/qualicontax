@@ -767,6 +767,9 @@ def _nome_base_pfx(nome):
 # confundir com nome que contenha "senha" por acaso ("Senhas 175.pfx" não
 # casa; "senha1234" colado também não: é "senha 1234", "senha-1234", "senha=1234").
 _RE_SENHA_NO_NOME = re.compile(r'(?:^|[\s_\-.])senha[\s:=_\-]+(.+?)(?:\s+-\s+.*)?$', re.IGNORECASE)
+_RE_SENHA_RABO = re.compile(
+    r'\s+(?:(?:venc|valid|valiad|validade|vencimento|val)\b.*|\(?\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b.*)$',
+    re.IGNORECASE)
 
 
 def _senha_no_nome(nome):
@@ -781,7 +784,10 @@ def _senha_no_nome(nome):
     m = _RE_SENHA_NO_NOME.search(_nome_base_pfx(nome or ''))
     if not m:
         return None
-    senha = m.group(1).strip()
+    # A validade às vezes vem colada, sem " - ": "SENHA abc123 18.06.2027" ou
+    # "senha abc123 Venc 18.06.27". Depois de um espaço, data ou "venc/valid…"
+    # já não é senha (08/10/2026, certificado da 5008 não vinculava).
+    senha = _RE_SENHA_RABO.sub('', m.group(1)).strip()
     return senha or None
 
 
