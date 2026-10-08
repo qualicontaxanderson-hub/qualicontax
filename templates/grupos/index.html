@@ -699,7 +699,9 @@ function gfOpcoes(k) {
         else if (k === 'grp') { v = e.gid; t = e.gnome; }
         else if (k === 'cid') { if (!e.cid) return; v = e.cid; t = e.cidRot; }
         else { if (!e.uf) return; v = e.uf; t = e.uf; }
-        if (!m[v]) m[v] = {value: v, text: t, s: s, n: 0, busca: t + ' ' + (s || '').replace(/\D/g, '')};
+        // ord: número do cliente (Razão social em ordem crescente); sem número vai para o fim
+        var ord = k === 'emp' ? (/^\d+$/.test(e.num) ? parseInt(e.num, 10) : 1e9) : 0;
+        if (!m[v]) m[v] = {value: v, text: t, s: s, n: 0, ord: ord, busca: t + ' ' + (s || '').replace(/\D/g, '')};
         m[v].n++;
     });
     return Object.keys(m).map(function (v) { return m[v]; }).sort(function (a, b) {
@@ -820,6 +822,9 @@ document.querySelectorAll('#gfRegPills .gc-pill').forEach(function (b) {
         GF_TS[p[0]] = new TomSelect('#' + p[1], {
             plugins: ['remove_button'], maxOptions: null, hideSelected: true, hidePlaceholder: true,
             searchField: ['text', 'busca'], options: gfOpcoes(p[0]), render: render,
+            // Razão social pelo número (crescente); Grupo, Município e Estado pelo nome (A-Z)
+            sortField: p[0] === 'emp' ? [{field: 'ord', direction: 'asc'}, {field: 'text', direction: 'asc'}]
+                                      : [{field: 'text', direction: 'asc'}],
             onChange: function () { if (!gfMexendo) gfAplicar(); }
         });
     });
