@@ -121,7 +121,8 @@
                 <div class="gm-lbl"><i class="fas fa-ban"></i> Por que este grupo está sendo desativado?</div>
                 <div class="gm-motivos" id="gmMotivos"></div>
                 <textarea id="gmObs" class="gm-obs" rows="2" maxlength="255" placeholder="Escreva o motivo" hidden></textarea>
-                <p class="gm-nota">Fica registrado quem desativou, quando e o motivo. As empresas continuam no grupo e o grupo pode ser reativado depois.</p>
+                <p class="gm-nota gm-nota-forte" id="gmNotaEmp"></p>
+                <p class="gm-nota">Fica registrado quem desativou, quando e o motivo. O grupo pode ser reativado depois, e as empresas voltam junto.</p>
             </div>
         </div>
 
@@ -254,6 +255,7 @@
           font-family:inherit; font-size:14px; resize:vertical; }
 .gm-obs:focus { outline:none; border-color:#f87171; box-shadow:0 0 0 3px rgba(239,68,68,.12); }
 .gm-nota { font-size:12.5px; color:#64748b; margin:10px 0 0; }
+.gm-nota-forte { color:#991b1b; font-weight:600; font-size:13px; }
 .gm-foot { display:flex; align-items:center; gap:8px; padding:12px 20px; border-top:1px solid #eef2f0; background:#fafcfb; flex-wrap:wrap; }
 .gm-foot .gm-esp { flex:1; }
 @media (max-width:720px) {
@@ -418,6 +420,13 @@ function gmTela(qual) {
     document.getElementById('gmCorpo').hidden = qual !== 'corpo';
     document.getElementById('gmDesat').hidden = qual !== 'desat';
     if (qual !== 'desat') return;
+    var na = GM.n_ativas;
+    document.getElementById('gmNotaEmp').textContent = na
+        ? (na === 1 ? 'A empresa ativa do grupo também fica inativa'
+                    : 'As ' + na + ' empresas ativas do grupo também ficam inativas') +
+          ': saem das listas e das obrigações da equipe. ' +
+          'A captura das notas fiscais continua enquanto o certificado digital estiver válido.'
+        : 'O grupo não tem empresa ativa.';
     var box = document.getElementById('gmMotivos'); box.innerHTML = '';
     var obs = document.getElementById('gmObs'); obs.value = ''; obs.hidden = true;
     GM.motivos.forEach(function (m) {
@@ -449,7 +458,7 @@ function gmDesativar() {
     gmPost('/grupos/' + GM.id + '/desativar', {motivo: m.value, obs: obs}).then(gmRecarregar).catch(gmErro);
 }
 function gmReativar() {
-    if (!confirm('Reativar o grupo ' + GM.nome + '?')) return;
+    if (!confirm('Reativar o grupo ' + GM.nome + '? As empresas que foram desativadas junto com o grupo voltam a ficar ativas.')) return;
     gmPost('/grupos/' + GM.id + '/reativar').then(gmRecarregar).catch(gmErro);
 }
 function gmRenomear() {

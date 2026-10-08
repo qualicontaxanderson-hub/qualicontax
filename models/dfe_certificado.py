@@ -68,7 +68,8 @@ class DfeCertificado:
         """Lista os certificados elegíveis para a captura automática de DFe.
 
         Um registro por empresa com a captura ligada (``modo_automatico = 1`` e
-        ``ativo = 1``) e cliente ATIVO, já com os dados da empresa (número, razão,
+        ``ativo = 1``) e cliente ATIVO — ou inativo com o certificado ainda
+        válido (a captura segue enquanto houver certificado), já com os dados da empresa (número, razão,
         CNPJ) e a UF do endereço principal.
 
         A UF (``uf``) vem ``None`` quando o cliente não tem endereço com estado
@@ -93,7 +94,9 @@ class DfeCertificado:
             LEFT JOIN dfe_nsu n ON n.cliente_id = dc.cliente_id
             WHERE dc.modo_automatico = 1
               AND dc.ativo = 1
-              AND c.situacao = 'ATIVO'
+              -- empresa INATIVA continua capturando enquanto o certificado
+              -- valer (08/10/2026): inativar é para obrigações e listas
+              AND (c.situacao = 'ATIVO' OR dc.validade >= CURDATE())
             ORDER BY COALESCE(n.ult_consulta, '1970-01-01') ASC, c.numero_cliente
         """
         return execute_query(query, fetch=True) or []

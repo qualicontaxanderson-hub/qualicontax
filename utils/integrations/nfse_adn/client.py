@@ -235,7 +235,8 @@ def resolver_certificado(cliente_id: int) -> Certificado:
             WHERE ce.ativo = 1
               AND ce.dropbox_path IS NOT NULL
               AND ce.validade >= CURDATE()
-              AND c.situacao = 'ATIVO'
+              -- sem filtro de situação: empresa inativa segue capturando
+              -- enquanto o certificado valer (08/10/2026)
               AND LEFT(LPAD(REGEXP_REPLACE(ce.cnpj, '[^0-9]', ''), 14, '0'), 8) = %s
          ORDER BY ce.validade DESC
             LIMIT 1""",

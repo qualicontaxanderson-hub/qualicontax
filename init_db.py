@@ -813,6 +813,7 @@ def _apply_migrations():
         ('desativado_por', 'INT NULL'),
         ('motivo_desativacao', 'VARCHAR(40) NULL'),
         ('motivo_desativacao_obs', 'VARCHAR(255) NULL'),
+        ('empresas_desativadas', 'TEXT NULL'),   # JSON: ids que o grupo inativou
     ):
         _c = execute_query(
             "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "

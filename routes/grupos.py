@@ -1,4 +1,5 @@
 """Rotas de Grupos de Clientes - CRUD completo"""
+import json
 import re
 import unicodedata
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
@@ -334,6 +335,7 @@ def painel(id):
     grupo['outros_grupos'] = [{'id': o['id'], 'nome': o['nome']}
                               for o in GrupoCliente.get_all('ATIVO') if o['id'] != id]
     grupo['motivos'] = [{'codigo': k, 'rotulo': v} for k, v in MOTIVOS_DESATIVACAO.items()]
+    grupo['n_ativas'] = sum(1 for e in grupo['empresas'] if e['ativa'])
     return jsonify(success=True, grupo=grupo)
 
 
@@ -434,6 +436,17 @@ def renomear(id):
     return jsonify(success=True, nome=nome)
 
 
+def _mudar_situacao_empresas(ids, situacao, porque):
+    """Ativa/inativa as empresas do grupo, uma linha de log por empresa (fica
+    no histórico da ficha de cada uma)."""
+    for cid in ids:
+        execute_query("UPDATE clientes SET situacao = %s, alterado_por = %s, alterado_em = NOW() WHERE id = %s",
+                      (situacao, current_user.id, cid))
+        registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=cid,
+                  antes={'situacao': 'ATIVO' if situacao != 'ATIVO' else 'INATIVO'},
+                  depois={'situacao': situacao, 'motivo': porque})
+
+
 @grupos.route('/grupos/<int:id>/desativar', methods=['POST'])
 @permission_required('grupos.index')
 def desativar(id):
@@ -452,17 +465,26 @@ def desativar(id):
         return jsonify(success=False, message='Escreva qual é o motivo.'), 400
     if motivo != 'OUTRO':
         obs = ''
+    # As empresas ATIVAS do grupo ficam inativas junto (somem das listas e das
+    # obrigações; a captura segue enquanto o certificado valer). Guarda quais
+    # foram, para a reativação devolver só essas.
+    ativas = [e['id'] for e in (execute_query(
+        "SELECT c.id FROM cliente_grupo_relacao r JOIN clientes c ON c.id = r.cliente_id "
+        "WHERE r.grupo_id = %s AND c.situacao = 'ATIVO'", (id,), fetch=True) or [])]
     r = execute_query("""UPDATE grupos_clientes SET situacao = 'INATIVO', desativado_em = NOW(),
                                 desativado_por = %s, motivo_desativacao = %s, motivo_desativacao_obs = %s,
-                                alterado_por = %s, alterado_em = NOW()
-                          WHERE id = %s""", (current_user.id, motivo, obs or None, current_user.id, id))
+                                empresas_desativadas = %s, alterado_por = %s, alterado_em = NOW()
+                          WHERE id = %s""",
+                      (current_user.id, motivo, obs or None, json.dumps(ativas), current_user.id, id))
     if r is None:
         return jsonify(success=False, message='Não consegui desativar agora. Tente de novo.'), 500
     _invalidate_cache()
+    rotulo = _motivo_rotulo(motivo, obs)
+    _mudar_situacao_empresas(ativas, 'INATIVO', f'grupo {grupo.get("nome")} desativado: {rotulo}')
     registrar('escrita.desativou_grupo', 'cadastros', tabela='grupos_clientes', registro_id=id,
               antes={'situacao': grupo.get('situacao')},
-              depois={'situacao': 'INATIVO', 'motivo': _motivo_rotulo(motivo, obs)})
-    return jsonify(success=True)
+              depois={'situacao': 'INATIVO', 'motivo': rotulo, 'empresas_desativadas': ativas})
+    return jsonify(success=True, empresas=len(ativas))
 
 
 @grupos.route('/grupos/<int:id>/reativar', methods=['POST'])
@@ -473,11 +495,25 @@ def reativar(id):
     grupo = GrupoCliente.get_by_id(id)
     if not grupo:
         return jsonify(success=False, message='Grupo não encontrado.'), 404
-    r = execute_query("UPDATE grupos_clientes SET situacao = 'ATIVO', alterado_por = %s, alterado_em = NOW() "
-                      "WHERE id = %s", (current_user.id, id))
+    linha = execute_query("SELECT empresas_desativadas FROM grupos_clientes WHERE id = %s",
+                          (id,), fetch=True, fetch_one=True) or {}
+    try:
+        ids = [int(x) for x in json.loads(linha.get('empresas_desativadas') or '[]')]
+    except (TypeError, ValueError):
+        ids = []
+    # só volta quem o grupo inativou E ainda está no grupo e inativo
+    if ids:
+        ids = [e['id'] for e in (execute_query(
+            "SELECT c.id FROM cliente_grupo_relacao r JOIN clientes c ON c.id = r.cliente_id "
+            f"WHERE r.grupo_id = %s AND c.situacao <> 'ATIVO' AND c.id IN ({','.join(['%s'] * len(ids))})",
+            (id, *ids), fetch=True) or [])]
+    r = execute_query("UPDATE grupos_clientes SET situacao = 'ATIVO', empresas_desativadas = NULL, "
+                      "alterado_por = %s, alterado_em = NOW() WHERE id = %s", (current_user.id, id))
     if r is None:
         return jsonify(success=False, message='Não consegui reativar agora. Tente de novo.'), 500
     _invalidate_cache()
+    _mudar_situacao_empresas(ids, 'ATIVO', f'grupo {grupo.get("nome")} reativado')
     registrar('escrita.reativou_grupo', 'cadastros', tabela='grupos_clientes', registro_id=id,
-              antes={'situacao': grupo.get('situacao')}, depois={'situacao': 'ATIVO'})
-    return jsonify(success=True)
+              antes={'situacao': grupo.get('situacao')},
+              depois={'situacao': 'ATIVO', 'empresas_reativadas': ids})
+    return jsonify(success=True, empresas=len(ids))
