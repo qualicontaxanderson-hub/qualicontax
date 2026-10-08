@@ -805,6 +805,23 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # ---- Desativação de GRUPO (08/10/2026): quem, quando e por quê ----
+    # A última desativação fica no grupo; o histórico completo vai para o
+    # logs_sistema (escrita.desativou_grupo / escrita.reativou_grupo).
+    for _col, _ddl in (
+        ('desativado_em', 'DATETIME NULL'),
+        ('desativado_por', 'INT NULL'),
+        ('motivo_desativacao', 'VARCHAR(40) NULL'),
+        ('motivo_desativacao_obs', 'VARCHAR(255) NULL'),
+    ):
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grupos_clientes' "
+            "AND COLUMN_NAME = %s", (_col,), fetch=True, fetch_one=True,
+        ) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE grupos_clientes ADD COLUMN {_col} {_ddl}")
+
     # Incremental: coluna telefone em socios_clientes
     try:
         _telefone_socio_exists = execute_query(

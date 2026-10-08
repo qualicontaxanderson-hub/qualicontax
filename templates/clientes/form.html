@@ -1064,10 +1064,9 @@ function novoGrupo() {
     var f = document.getElementById('nome_fantasia');
     var r = document.getElementById(tipoPessoa() === 'PF' ? 'nome_razao_social_pf' : 'nome_razao_social_pj');
     sug = (f && f.value.trim()) || (r && r.value.trim()) || '';
-    var nome = prompt('Nome do novo grupo de empresas:', sug);
-    if (nome === null) return;
-    nome = nome.trim();
-    if (!nome) { alert('Digite o nome do grupo.'); return; }
+    qPedirTexto({titulo: 'Novo grupo de empresas', rotulo: 'Nome do grupo', valor: sug, botao: 'Criar grupo',
+                 ajuda: 'Empresas do mesmo dono ficam no mesmo grupo.'}).then(function (nome) {
+    if (!nome) return;
     fetch('/clientes/api/grupo-rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
            body: JSON.stringify({nome: nome})})
         .then(function (r) { return r.json(); })
@@ -1081,14 +1080,14 @@ function novoGrupo() {
             if (d.ja_existia) alert('O grupo "' + d.nome + '" já existia — foi escolhido.');
         })
         .catch(function () { alert('Não consegui criar o grupo agora. Tente de novo.'); });
+    });
 }
 
 // "Novo ramo": cria sem sair da tela, entra na lista e já vem marcado.
 function novoRamo() {
-    var nome = prompt('Nome do novo ramo de atividade:', '');
-    if (nome === null) return;
-    nome = nome.trim();
-    if (!nome) { alert('Digite o nome do ramo.'); return; }
+    qPedirTexto({titulo: 'Novo ramo de atividade', rotulo: 'Nome do ramo', botao: 'Criar ramo',
+                 placeholder: 'Ex.: Posto de Gasolina'}).then(function (nome) {
+    if (!nome) return;
     fetch('/clientes/api/ramo-rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
            body: JSON.stringify({nome: nome})})
         .then(function (r) { return r.json(); })
@@ -1112,6 +1111,7 @@ function novoRamo() {
             if (d.ja_existia) alert('O ramo "' + d.nome + '" já existia — foi marcado.');
         })
         .catch(function () { alert('Não consegui criar o ramo agora. Tente de novo.'); });
+    });
 }
 
 // Validate dates

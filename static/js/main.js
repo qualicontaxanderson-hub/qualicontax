@@ -299,3 +299,42 @@ function exportToExcel(tableId, filename) {
 function printPage() {
     window.print();
 }
+
+// Caixa CENTRALIZADA para digitar um nome (08/10/2026): substitui o prompt()
+// do navegador, que abre colado no topo da tela. Devolve uma Promise com o
+// texto digitado, ou null se cancelar (Esc, clique fora ou "Cancelar").
+function qPedirTexto(opt) {
+    opt = opt || {};
+    return new Promise(function (resolve) {
+        var fundo = document.createElement('div');
+        fundo.className = 'qpt-fundo';
+        fundo.innerHTML =
+            '<form class="qpt-caixa" role="dialog" aria-modal="true">' +
+            '<h3 class="qpt-tit"></h3><label class="qpt-lbl"></label>' +
+            '<input class="qpt-in" type="text" maxlength="100" autocomplete="off">' +
+            '<p class="qpt-ajuda"></p>' +
+            '<div class="qpt-acoes"><button type="button" class="qpt-btn qpt-nao">Cancelar</button>' +
+            '<button type="submit" class="qpt-btn qpt-sim"></button></div></form>';
+        fundo.querySelector('.qpt-tit').textContent = opt.titulo || 'Novo cadastro';
+        fundo.querySelector('.qpt-lbl').textContent = opt.rotulo || 'Nome';
+        fundo.querySelector('.qpt-sim').textContent = opt.botao || 'Salvar';
+        var ajuda = fundo.querySelector('.qpt-ajuda');
+        if (opt.ajuda) ajuda.textContent = opt.ajuda; else ajuda.remove();
+        var inp = fundo.querySelector('.qpt-in');
+        inp.value = opt.valor || '';
+        if (opt.placeholder) inp.placeholder = opt.placeholder;
+        function fechar(v) { document.removeEventListener('keydown', esc); fundo.remove(); resolve(v); }
+        function esc(e) { if (e.key === 'Escape') fechar(null); }
+        document.addEventListener('keydown', esc);
+        fundo.addEventListener('mousedown', function (e) { if (e.target === fundo) fechar(null); });
+        fundo.querySelector('.qpt-nao').addEventListener('click', function () { fechar(null); });
+        fundo.querySelector('form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var v = inp.value.trim();
+            if (!v) { inp.focus(); inp.classList.add('qpt-erro'); return; }
+            fechar(v);
+        });
+        document.body.appendChild(fundo);
+        inp.focus(); inp.select();
+    });
+}

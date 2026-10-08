@@ -596,3 +596,23 @@ table.fin-tab tbody tr:last-child td { border-bottom:none; }
   table.fin-tab tbody td.fin-td-oculta { display:none; }
   .fin-mob { display:inline; }
 }
+
+/* ── qPedirTexto (main.js): caixa centralizada para digitar um nome ── */
+.qpt-fundo { position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.45);
+  display:flex; align-items:center; justify-content:center; padding:16px; }
+.qpt-caixa { width:100%; max-width:440px; background:#fff; border-radius:16px; padding:22px 22px 18px;
+  box-shadow:0 24px 60px rgba(15,23,42,.28); font-family:inherit; }
+.qpt-tit { margin:0 0 14px; font-size:17px; font-weight:800; color:#0f3d2e; }
+.qpt-lbl { display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:6px; }
+.qpt-in { width:100%; height:42px; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:10px;
+  padding:0 12px; font-size:14px; font-family:inherit; }
+.qpt-in:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+.qpt-in.qpt-erro { border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.14); }
+.qpt-ajuda { margin:8px 0 0; font-size:12.5px; color:#64748b; }
+.qpt-acoes { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.qpt-btn { height:38px; padding:0 18px; border-radius:10px; font-size:13.5px; font-weight:700;
+  cursor:pointer; font-family:inherit; border:1px solid transparent; }
+.qpt-nao { background:#fff; border-color:#d7e3dc; color:#475569; }
+.qpt-nao:hover { background:#f8fafc; }
+.qpt-sim { background:#16a34a; color:#fff; }
+.qpt-sim:hover { background:#15803d; }

@@ -13,7 +13,7 @@
             <p class="ef-hero-sub">{{ grupos|length }} grupo{{ '' if grupos|length == 1 else 's' }} · {{ total_empresas }} empresa{{ '' if total_empresas == 1 else 's' }} · empresas do mesmo dono ficam juntas</p>
         </div>
         <div class="ef-hero-actions">
-            <a href="{{ url_for('grupos.novo') }}" class="ef-btn ef-btn-primary"><i class="fas fa-plus"></i> Novo Grupo</a>
+            <button type="button" class="ef-btn ef-btn-primary" onclick="gcNovoGrupo()"><i class="fas fa-plus"></i> Novo Grupo</button>
         </div>
     </div>
 </div>
@@ -34,48 +34,47 @@
 
     <div class="gc-grid" id="gcGrid">
         {% for g in grupos %}
-        <article class="gc-card" data-sit="{{ 'ATIVO' if g.situacao == 'ATIVO' else 'INATIVO' }}" data-busca="{{ g.busca }}">
+        <article class="gc-card" tabindex="0" role="button" data-id="{{ g.id }}" title="Abrir o grupo" data-sit="{{ 'ATIVO' if g.situacao == 'ATIVO' else 'INATIVO' }}" data-busca="{{ g.busca }}">
             <header class="gc-head">
                 <span class="gc-ava">{{ g.sigla }}</span>
                 <div class="gc-tit">
                     <h3>{{ g.nome }}</h3>
-                    <span class="gc-sub">{{ g.empresas|length }} empresa{{ '' if g.empresas|length == 1 else 's' }}{% if g.locais %} · {{ g.locais }}{% endif %}</span>
+                    <span class="gc-qtd">{{ g.empresas|length }} empresa{{ '' if g.empresas|length == 1 else 's' }}</span>
                 </div>
                 <span class="gc-sit {{ 'on' if g.situacao == 'ATIVO' else 'off' }}">{{ 'Ativo' if g.situacao == 'ATIVO' else 'Inativo' }}</span>
             </header>
 
+            {% if g.motivo %}
+            <div class="gc-motivo"><i class="fas fa-ban"></i> Desativado · {{ g.motivo }}</div>
+            {% endif %}
+
+            {% if g.cidades %}
+            <div class="gc-tags">
+                {% for c in g.cidades %}<span class="gc-cid gc-cid-{{ c.cor }}"><i class="fas fa-location-dot"></i> {{ c.nome }}</span>{% endfor %}
+            </div>
+            {% endif %}
+
             {% if g.regimes %}
             <div class="gc-tags">
-                {% for r in g.regimes %}<span class="gc-tag">{{ r }}</span>{% endfor %}
+                {% for r in g.regimes %}<span class="gc-tag gc-reg-{{ r.classe }}"><b>{{ r.qtd }}</b> {{ r.rotulo }}</span>{% endfor %}
             </div>
             {% endif %}
 
             <ul class="gc-emp">
                 {% for e in g.empresas[:4] %}
                 <li>
-                    <a href="{{ url_for('clientes.detalhes', id=e.id) }}" title="Abrir a ficha da empresa">
-                        <span class="gc-num">{{ e.numero or '—' }}</span>
-                        <span class="gc-nome">{{ e.nome }}</span>
-                        {% if e.tipo == 'PF' %}<span class="gc-pf">PF</span>{% endif %}
-                    </a>
+                    <span class="gc-num">{{ e.numero or '—' }}</span>
+                    <span class="gc-nome">{{ e.nome }}</span>
+                    {% if e.tipo == 'PF' %}<span class="gc-pf">PF</span>{% endif %}
                 </li>
                 {% endfor %}
                 {% if g.empresas|length > 4 %}
-                <li class="gc-mais"><a href="{{ url_for('grupos.detalhes', id=g.id) }}">+ {{ g.empresas|length - 4 }} empresa{{ '' if g.empresas|length - 4 == 1 else 's' }} — ver todas</a></li>
+                <li class="gc-mais">+ {{ g.empresas|length - 4 }} empresa{{ '' if g.empresas|length - 4 == 1 else 's' }} — ver todas</li>
                 {% endif %}
                 {% if not g.empresas %}
                 <li class="gc-vazio">Nenhuma empresa neste grupo ainda.</li>
                 {% endif %}
             </ul>
-
-            <footer class="gc-foot">
-                <a href="{{ url_for('grupos.detalhes', id=g.id) }}" class="gc-btn gc-btn-main"><i class="fas fa-eye"></i> Abrir grupo</a>
-                <a href="{{ url_for('grupos.editar', id=g.id) }}" class="gc-ico" title="Editar"><i class="fas fa-pen"></i></a>
-                <form action="{{ url_for('grupos.deletar', id=g.id) }}" method="POST" style="display:contents;"
-                      onsubmit="return confirm('Excluir o grupo ' + this.dataset.name + '?');" data-name="{{ g.nome }}">
-                    <button type="submit" class="gc-ico gc-del" title="Excluir"><i class="fas fa-trash-alt"></i></button>
-                </form>
-            </footer>
         </article>
         {% endfor %}
     </div>
@@ -83,9 +82,51 @@
     {% if not grupos %}
     <div class="gc-nada">
         <p><i class="fas fa-layer-group"></i> Nenhum grupo cadastrado ainda.</p>
-        <a href="{{ url_for('grupos.novo') }}" class="ef-btn ef-btn-primary"><i class="fas fa-plus"></i> Criar o primeiro grupo</a>
+        <button type="button" class="ef-btn ef-btn-primary" onclick="gcNovoGrupo()"><i class="fas fa-plus"></i> Criar o primeiro grupo</button>
     </div>
     {% endif %}
+</div>
+
+{# Caixa do grupo (08/10/2026): o cartão abre aqui, sem trocar de página #}
+<div class="qpt-fundo gm-fundo" id="gmFundo" hidden>
+    <div class="gm-caixa" role="dialog" aria-modal="true" aria-labelledby="gmNome">
+        <header class="gm-head">
+            <span class="gc-ava" id="gmAva"></span>
+            <div class="gc-tit">
+                <h3 id="gmNome"></h3>
+                <span class="gm-sub" id="gmSub"></span>
+            </div>
+            <span class="gc-sit" id="gmSit"></span>
+            <button type="button" class="gm-x" onclick="gmFechar()" title="Fechar (Esc)"><i class="fas fa-times"></i></button>
+        </header>
+        <div class="gm-aviso" id="gmAviso" hidden></div>
+
+        <div class="gm-corpo" id="gmCorpo">
+            <div class="gm-sec">
+                <label class="gm-lbl" for="gmBusca"><i class="fas fa-plus-circle"></i> Incluir empresa neste grupo</label>
+                <div class="gm-busca">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="gmBusca" autocomplete="off" placeholder="Nome, número ou CNPJ/CPF da empresa…">
+                </div>
+                <ul class="gm-res" id="gmRes" hidden></ul>
+            </div>
+            <div class="gm-sec">
+                <div class="gm-lbl"><i class="fas fa-building"></i> Empresas do grupo</div>
+                <ul class="gm-lista" id="gmLista"></ul>
+            </div>
+        </div>
+
+        <div class="gm-corpo" id="gmDesat" hidden>
+            <div class="gm-sec">
+                <div class="gm-lbl"><i class="fas fa-ban"></i> Por que este grupo está sendo desativado?</div>
+                <div class="gm-motivos" id="gmMotivos"></div>
+                <textarea id="gmObs" class="gm-obs" rows="2" maxlength="255" placeholder="Escreva o motivo" hidden></textarea>
+                <p class="gm-nota">Fica registrado quem desativou, quando e o motivo. As empresas continuam no grupo e o grupo pode ser reativado depois.</p>
+            </div>
+        </div>
+
+        <footer class="gm-foot" id="gmFoot"></footer>
+    </div>
 </div>
 
 <style>
@@ -105,7 +146,7 @@
 
 .gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px; }
 .gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:18px 20px 16px;
-           display:flex; flex-direction:column; gap:12px; transition:border-color .15s, box-shadow .15s; }
+           display:flex; flex-direction:column; gap:12px; transition:border-color .15s, box-shadow .15s; min-width:0; }
 .gc-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
 .gc-head { display:flex; align-items:center; gap:12px; }
 .gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff;
@@ -113,34 +154,115 @@
 .gc-tit { flex:1; min-width:0; }
 .gc-tit h3 { margin:0; font-size:15.5px; font-weight:800; color:#0f172a; letter-spacing:.2px;
              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.gc-sub { font-size:13px; color:#64748b; }
+.gc-qtd { font-size:13px; font-weight:800; color:#0f3d2e; text-decoration:underline;
+          text-underline-offset:3px; text-decoration-thickness:2px; text-decoration-color:#22c55e; }
+.gc-qtd:hover { color:#15803d; }
 .gc-sit { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; flex-shrink:0; }
 .gc-sit.on { background:#dcfce7; color:#166534; }
 .gc-sit.off { background:#f1f5f9; color:#64748b; }
 .gc-tags { display:flex; flex-wrap:wrap; gap:6px; }
-.gc-tag { font-size:12px; background:#f0fdf4; color:#15803d; border:1px solid #d1fae5; border-radius:7px; padding:2px 9px; }
+.gc-tag { font-size:12px; font-weight:600; border:1px solid; border-radius:7px; padding:2px 9px; }
+.gc-tag b { font-weight:800; }
+.gc-reg-lucro_real      { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.gc-reg-lucro_presumido { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.gc-reg-simples         { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.gc-reg-mei             { background:#fefce8; color:#a16207; border-color:#fde68a; }
+.gc-reg-pf              { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+/* municípios: cada cidade com uma cor (a mesma em todos os cartões) */
+.gc-cid { font-size:12px; font-weight:600; border-radius:99px; padding:2px 10px 2px 8px; }
+.gc-cid i { font-size:10.5px; margin-right:2px; opacity:.8; }
+.gc-cid-0 { background:#e0f2fe; color:#0369a1; }
+.gc-cid-1 { background:#fce7f3; color:#be185d; }
+.gc-cid-2 { background:#ede9fe; color:#6d28d9; }
+.gc-cid-3 { background:#ccfbf1; color:#0f766e; }
+.gc-cid-4 { background:#ffedd5; color:#c2410c; }
+.gc-cid-5 { background:#e0e7ff; color:#4338ca; }
+.gc-cid-6 { background:#fef3c7; color:#b45309; }
+.gc-cid-7 { background:#dcfce7; color:#15803d; }
 
 .gc-emp { list-style:none; margin:0; padding:0; border-top:1px solid #eef2f0; flex:1; }
 .gc-emp li { border-bottom:1px dashed #eef2f0; }
 .gc-emp li:last-child { border-bottom:none; }
-.gc-emp a { display:flex; align-items:center; gap:10px; padding:8px 4px; text-decoration:none; color:#334155; font-size:13.5px; border-radius:7px; }
-.gc-emp a:hover { background:#f6fbf8; color:#0f3d2e; }
+
+
 .gc-num { min-width:44px; font-variant-numeric:tabular-nums; font-weight:700; color:#15803d; font-size:13px; }
 .gc-nome { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .gc-pf { font-size:11px; font-weight:700; color:#7c3aed; background:#f5f3ff; border-radius:5px; padding:1px 6px; }
-.gc-mais a { color:#15803d; font-weight:600; font-size:13px; }
+.gc-mais { color:#15803d; font-weight:600; font-size:13px; }
 .gc-vazio { padding:10px 4px; font-size:13px; color:#94a3b8; }
 
-.gc-foot { display:flex; align-items:center; gap:8px; padding-top:4px; }
-.gc-btn { display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 14px; border-radius:9px;
-          font-size:13px; font-weight:700; text-decoration:none; }
-.gc-btn-main { background:#ecfdf5; color:#15803d; border:1px solid #bbf7d0; margin-right:auto; }
-.gc-btn-main:hover { background:#dcfce7; }
-.gc-ico { width:36px; height:36px; border-radius:9px; border:1px solid #e3ece7; background:#fff; color:#64748b;
-          display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; text-decoration:none; }
-.gc-ico:hover { border-color:#86efac; color:#15803d; }
-.gc-del:hover { border-color:#fecaca; color:#dc2626; background:#fef2f2; }
 .gc-nada { text-align:center; color:#94a3b8; padding:40px 0; font-size:14px; }
+
+.gc-card { cursor:pointer; }
+.gc-card:focus-visible { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.gc-emp li { display:flex; align-items:center; gap:10px; padding:8px 4px; color:#334155; font-size:13.5px; }
+.gc-motivo { font-size:12.5px; font-weight:600; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca;
+             border-radius:8px; padding:5px 10px; }
+.gc-motivo i { margin-right:4px; }
+
+/* caixa do grupo */
+.gm-fundo[hidden] { display:none; }
+.gm-caixa { width:100%; max-width:760px; max-height:calc(100vh - 32px); background:#fff; border-radius:16px;
+            box-shadow:0 24px 60px rgba(15,23,42,.28); display:flex; flex-direction:column; overflow:hidden; }
+.gm-head { display:flex; align-items:center; gap:12px; padding:18px 20px 14px; border-bottom:1px solid #eef2f0; }
+.gm-head h3 { margin:0; font-size:17px; font-weight:800; color:#0f172a; }
+.gm-sub { font-size:13px; color:#64748b; }
+.gm-x { width:34px; height:34px; border:none; background:#f1f5f9; border-radius:9px; color:#475569; cursor:pointer; flex-shrink:0; }
+.gm-x:hover { background:#e2e8f0; }
+.gm-aviso { margin:12px 20px 0; padding:10px 12px; border-radius:10px; background:#fef2f2; border:1px solid #fecaca;
+            color:#991b1b; font-size:13px; line-height:1.5; }
+.gm-corpo { padding:14px 20px; overflow-y:auto; flex:1; min-height:0; }
+.gm-sec + .gm-sec { margin-top:16px; }
+.gm-lbl { display:block; font-size:12.5px; font-weight:700; color:#0f3d2e; text-transform:uppercase;
+          letter-spacing:.4px; margin-bottom:8px; }
+.gm-lbl i { color:#16a34a; margin-right:4px; }
+.gm-busca { position:relative; }
+.gm-busca i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
+.gm-busca input { width:100%; height:40px; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:10px;
+                  padding:0 12px 0 34px; font-size:14px; font-family:inherit; }
+.gm-busca input:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.gm-res { list-style:none; margin:6px 0 0; padding:4px; border:1px solid #e3ece7; border-radius:10px; max-height:220px; overflow-y:auto; }
+.gm-res li { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:8px; font-size:13.5px; }
+.gm-res li:hover { background:#f6fbf8; }
+.gm-res .gm-vazio { color:#94a3b8; }
+.gm-lista { list-style:none; margin:0; padding:0; }
+.gm-emp { display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px dashed #eef2f0; flex-wrap:wrap; }
+.gm-emp:last-child { border-bottom:none; }
+.gm-info { flex:1; min-width:0; }
+.gm-info b { display:block; font-size:13.5px; font-weight:600; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gm-info small { font-size:12px; color:#64748b; }
+.gm-inativa { font-size:11px; font-weight:700; color:#b91c1c; background:#fef2f2; border-radius:5px; padding:1px 6px; margin-left:4px; }
+.gm-acts { display:flex; gap:6px; flex-shrink:0; }
+.gm-b { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 11px; border-radius:8px; font-size:12.5px;
+        font-weight:700; cursor:pointer; font-family:inherit; border:1px solid #d7e3dc; background:#fff; color:#334155;
+        text-decoration:none; white-space:nowrap; }
+.gm-b:hover { border-color:#86efac; color:#15803d; }
+.gm-b-ok { background:#16a34a; border-color:#16a34a; color:#fff; }
+.gm-b-ok:hover { background:#15803d; color:#fff; }
+.gm-b-red { color:#b91c1c; border-color:#fecaca; }
+.gm-b-red:hover { background:#fef2f2; color:#991b1b; border-color:#fca5a5; }
+.gm-b-red-full { background:#dc2626; border-color:#dc2626; color:#fff; }
+.gm-b-red-full:hover { background:#b91c1c; color:#fff; border-color:#b91c1c; }
+.gm-mover { flex-basis:100%; display:flex; gap:8px; align-items:center; padding:8px 10px; background:#f6fbf8;
+            border-radius:9px; flex-wrap:wrap; }
+.gm-mover select { flex:1; min-width:180px; height:34px; border:1px solid #d7e3dc; border-radius:8px; font-family:inherit; font-size:13px; padding:0 8px; }
+.gm-motivos { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.gm-motivos label { display:flex; align-items:center; gap:9px; padding:11px 12px; border:1px solid #e3ece7; border-radius:10px;
+                    cursor:pointer; font-size:13.5px; font-weight:600; color:#334155; }
+.gm-motivos label:has(input:checked) { border-color:#f87171; background:#fef2f2; color:#991b1b; }
+.gm-obs { width:100%; box-sizing:border-box; margin-top:10px; border:1px solid #d7e3dc; border-radius:10px; padding:9px 12px;
+          font-family:inherit; font-size:14px; resize:vertical; }
+.gm-obs:focus { outline:none; border-color:#f87171; box-shadow:0 0 0 3px rgba(239,68,68,.12); }
+.gm-nota { font-size:12.5px; color:#64748b; margin:10px 0 0; }
+.gm-foot { display:flex; align-items:center; gap:8px; padding:12px 20px; border-top:1px solid #eef2f0; background:#fafcfb; flex-wrap:wrap; }
+.gm-foot .gm-esp { flex:1; }
+@media (max-width:720px) {
+    .gm-fundo { padding:8px; align-items:flex-end; }
+    .gm-caixa { max-height:calc(100vh - 16px); }
+    .gm-motivos { grid-template-columns:1fr; }
+    .gm-acts { flex-basis:100%; }
+    .gm-acts .gm-b { flex:1; justify-content:center; }
+}
 
 @media (max-width:720px) {
     .gc-grid { grid-template-columns:1fr; }
@@ -168,5 +290,231 @@ function gcFiltrar() {
     document.getElementById('gcNada').style.display = (n || !document.querySelector('.gc-card')) ? 'none' : '';
 }
 gcFiltrar();
+
+// "Novo Grupo" abre a caixa no meio da tela, sem trocar de página (08/10/2026)
+function gcNovoGrupo() {
+    qPedirTexto({titulo: 'Novo grupo de empresas', rotulo: 'Nome do grupo', botao: 'Criar grupo',
+                 placeholder: 'Ex.: MARTHA', ajuda: 'Empresas do mesmo dono ficam no mesmo grupo.'})
+        .then(function (nome) {
+            if (!nome) return;
+            fetch('/clientes/api/grupo-rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                   body: JSON.stringify({nome: nome})})
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d.success) { alert(d.message || 'Não consegui criar o grupo.'); return; }
+                    if (d.ja_existia) alert('O grupo "' + d.nome + '" já existia.');
+                    location.reload();
+                })
+                .catch(function () { alert('Não consegui criar o grupo agora. Tente de novo.'); });
+        });
+}
+
+// ── Caixa do grupo (08/10/2026) ──────────────────────────────────────────
+var GM = null, gmMudou = false, gmTimer = null;
+
+function gmEl(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+}
+function gmPost(url, dados) {
+    return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(dados || {})})
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (!d.success) throw new Error(d.message || 'Não deu certo. Tente de novo.'); return d; });
+}
+function gmErro(e) { alert(e && e.message ? e.message : 'Não consegui falar com o servidor. Tente de novo.'); }
+
+document.querySelectorAll('.gc-card').forEach(function (c) {
+    c.addEventListener('click', function () { gmAbrir(c.dataset.id); });
+    c.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); gmAbrir(c.dataset.id); }
+    });
+});
+document.getElementById('gmFundo').addEventListener('mousedown', function (e) { if (e.target === this) gmFechar(); });
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !document.getElementById('gmFundo').hidden && !document.querySelector('.qpt-fundo:not(.gm-fundo)')) gmFechar();
+});
+
+function gmAbrir(id) {
+    fetch('/grupos/' + id + '/painel').then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.success) { alert(d.message || 'Grupo não encontrado.'); return; }
+        GM = d.grupo;
+        document.getElementById('gmBusca').value = '';
+        document.getElementById('gmRes').hidden = true;
+        gmTela('corpo');
+        gmDesenhar();
+        var f = document.getElementById('gmFundo');
+        f.hidden = false; document.body.style.overflow = 'hidden';
+    }).catch(gmErro);
+}
+function gmRecarregar() { gmMudou = true; return gmAbrir(GM.id); }
+function gmFechar() {
+    document.getElementById('gmFundo').hidden = true;
+    document.body.style.overflow = '';
+    if (gmMudou) location.reload();
+}
+
+function gmDesenhar() {
+    var g = GM, n = g.empresas.length;
+    var pal = g.nome.split(/\s+/).filter(Boolean);
+    document.getElementById('gmAva').textContent = (pal.length > 1 ? pal[0][0] + pal[1][0] : g.nome.slice(0, 2)).toUpperCase();
+    document.getElementById('gmNome').textContent = g.nome;
+    document.getElementById('gmSub').textContent = n + ' empresa' + (n === 1 ? '' : 's');
+    var sit = document.getElementById('gmSit');
+    sit.className = 'gc-sit ' + (g.ativo ? 'on' : 'off'); sit.textContent = g.ativo ? 'Ativo' : 'Inativo';
+    var av = document.getElementById('gmAviso');
+    av.hidden = g.ativo;
+    if (!g.ativo) {
+        av.textContent = 'Grupo desativado' + (g.desativado_em ? ' em ' + g.desativado_em : '') +
+            (g.desativado_por ? ' por ' + g.desativado_por : '') + (g.motivo ? ' — motivo: ' + g.motivo : '') + '.';
+    }
+
+    var ul = document.getElementById('gmLista'); ul.innerHTML = '';
+    if (!n) ul.appendChild(gmEl('li', 'gm-emp gm-vazio', 'Nenhuma empresa neste grupo ainda. Use a busca acima para incluir.'));
+    g.empresas.forEach(function (e) {
+        var li = gmEl('li', 'gm-emp');
+        li.appendChild(gmEl('span', 'gc-num', e.numero || '—'));
+        var info = gmEl('div', 'gm-info');
+        var b = gmEl('b', null, e.nome);
+        if (!e.ativa) b.appendChild(gmEl('span', 'gm-inativa', 'Inativa'));
+        info.appendChild(b);
+        info.appendChild(gmEl('small', null, [e.doc, e.regime, e.local].filter(Boolean).join(' · ')));
+        li.appendChild(info);
+        var acts = gmEl('div', 'gm-acts');
+        var abrir = gmEl('a', 'gm-b'); abrir.href = e.ficha;
+        abrir.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir empresa';
+        var mover = gmEl('button', 'gm-b'); mover.type = 'button';
+        mover.innerHTML = '<i class="fas fa-exchange-alt"></i> Mudar de grupo';
+        mover.addEventListener('click', function () { gmMover(li, e); });
+        acts.appendChild(abrir); acts.appendChild(mover);
+        li.appendChild(acts);
+        ul.appendChild(li);
+    });
+
+    var ft = document.getElementById('gmFoot'); ft.innerHTML = '';
+    var ren = gmEl('button', 'gm-b'); ren.type = 'button';
+    ren.innerHTML = '<i class="fas fa-pen"></i> Renomear';
+    ren.addEventListener('click', gmRenomear);
+    ft.appendChild(ren);
+    if (!n) {
+        var exc = gmEl('button', 'gm-b gm-b-red'); exc.type = 'button';
+        exc.innerHTML = '<i class="fas fa-trash-alt"></i> Excluir grupo';
+        exc.title = 'Só aparece com o grupo vazio';
+        exc.addEventListener('click', gmExcluir);
+        ft.appendChild(exc);
+    }
+    ft.appendChild(gmEl('span', 'gm-esp'));
+    var fechar = gmEl('button', 'gm-b', 'Fechar'); fechar.type = 'button';
+    fechar.addEventListener('click', gmFechar);
+    ft.appendChild(fechar);
+    var est = gmEl('button', g.ativo ? 'gm-b gm-b-red' : 'gm-b gm-b-ok'); est.type = 'button';
+    est.innerHTML = g.ativo ? '<i class="fas fa-ban"></i> Desativar grupo' : '<i class="fas fa-check"></i> Reativar grupo';
+    est.addEventListener('click', g.ativo ? function () { gmTela('desat'); } : gmReativar);
+    ft.appendChild(est);
+}
+
+function gmTela(qual) {
+    document.getElementById('gmCorpo').hidden = qual !== 'corpo';
+    document.getElementById('gmDesat').hidden = qual !== 'desat';
+    if (qual !== 'desat') return;
+    var box = document.getElementById('gmMotivos'); box.innerHTML = '';
+    var obs = document.getElementById('gmObs'); obs.value = ''; obs.hidden = true;
+    GM.motivos.forEach(function (m) {
+        var lb = gmEl('label');
+        var r = gmEl('input'); r.type = 'radio'; r.name = 'gmMotivo'; r.value = m.codigo;
+        r.addEventListener('change', function () {
+            obs.hidden = m.codigo !== 'OUTRO';
+            if (!obs.hidden) obs.focus();
+        });
+        lb.appendChild(r); lb.appendChild(gmEl('span', null, m.rotulo));
+        box.appendChild(lb);
+    });
+    var ft = document.getElementById('gmFoot'); ft.innerHTML = '';
+    var voltar = gmEl('button', 'gm-b', 'Voltar'); voltar.type = 'button';
+    voltar.addEventListener('click', function () { gmTela('corpo'); gmDesenhar(); });
+    ft.appendChild(gmEl('span', 'gm-esp'));
+    ft.appendChild(voltar);
+    var conf = gmEl('button', 'gm-b gm-b-red-full'); conf.type = 'button';
+    conf.innerHTML = '<i class="fas fa-ban"></i> Confirmar desativação';
+    conf.addEventListener('click', gmDesativar);
+    ft.appendChild(conf);
+}
+
+function gmDesativar() {
+    var m = document.querySelector('input[name="gmMotivo"]:checked');
+    var obs = document.getElementById('gmObs').value.trim();
+    if (!m) { alert('Escolha o motivo da desativação.'); return; }
+    if (m.value === 'OUTRO' && obs.length < 3) { alert('Escreva qual é o motivo.'); document.getElementById('gmObs').focus(); return; }
+    gmPost('/grupos/' + GM.id + '/desativar', {motivo: m.value, obs: obs}).then(gmRecarregar).catch(gmErro);
+}
+function gmReativar() {
+    if (!confirm('Reativar o grupo ' + GM.nome + '?')) return;
+    gmPost('/grupos/' + GM.id + '/reativar').then(gmRecarregar).catch(gmErro);
+}
+function gmRenomear() {
+    qPedirTexto({titulo: 'Renomear grupo', rotulo: 'Nome do grupo', valor: GM.nome, botao: 'Salvar'}).then(function (nome) {
+        if (!nome || nome === GM.nome) return;
+        gmPost('/grupos/' + GM.id + '/renomear', {nome: nome}).then(gmRecarregar).catch(gmErro);
+    });
+}
+function gmExcluir() {
+    if (!confirm('Excluir o grupo ' + GM.nome + '? Ele está vazio; isso não pode ser desfeito.')) return;
+    var f = gmEl('form'); f.method = 'POST'; f.action = '/grupos/' + GM.id + '/deletar';
+    document.body.appendChild(f); f.submit();
+}
+
+function gmMover(li, e) {
+    var aberto = li.querySelector('.gm-mover');
+    if (aberto) { aberto.remove(); return; }
+    var box = gmEl('div', 'gm-mover');
+    if (!GM.outros_grupos.length) {
+        box.appendChild(gmEl('span', null, 'Não há outro grupo ativo. Crie o grupo novo antes.'));
+        li.appendChild(box); return;
+    }
+    var sel = gmEl('select');
+    sel.appendChild(gmEl('option', null, 'Mover ' + (e.numero || '') + ' para o grupo…')).value = '';
+    GM.outros_grupos.forEach(function (o) { var op = gmEl('option', null, o.nome); op.value = o.id; sel.appendChild(op); });
+    var ok = gmEl('button', 'gm-b gm-b-ok', 'Mover'); ok.type = 'button';
+    ok.addEventListener('click', function () {
+        if (!sel.value) { sel.focus(); return; }
+        gmPost('/grupos/' + GM.id + '/mover-empresa', {cliente_id: e.id, grupo_id: +sel.value}).then(gmRecarregar).catch(gmErro);
+    });
+    var cancel = gmEl('button', 'gm-b', 'Cancelar'); cancel.type = 'button';
+    cancel.addEventListener('click', function () { box.remove(); });
+    box.appendChild(sel); box.appendChild(ok); box.appendChild(cancel);
+    li.appendChild(box);
+    sel.focus();
+}
+
+document.getElementById('gmBusca').addEventListener('input', function () {
+    var q = this.value.trim();
+    clearTimeout(gmTimer);
+    var res = document.getElementById('gmRes');
+    if (q.length < 2) { res.hidden = true; return; }
+    gmTimer = setTimeout(function () {
+        fetch('/grupos/api/empresas?q=' + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (d) {
+            res.innerHTML = ''; res.hidden = false;
+            var lista = (d.empresas || []).filter(function (e) { return e.grupo_id !== GM.id; });
+            if (!lista.length) { res.appendChild(gmEl('li', 'gm-vazio', 'Nenhuma empresa ativa encontrada fora deste grupo.')); return; }
+            lista.forEach(function (e) {
+                var li = gmEl('li');
+                li.appendChild(gmEl('span', 'gc-num', e.numero || '—'));
+                var info = gmEl('div', 'gm-info');
+                info.appendChild(gmEl('b', null, e.nome));
+                info.appendChild(gmEl('small', null, [e.doc, e.grupo ? 'hoje no grupo ' + e.grupo : 'sem grupo'].filter(Boolean).join(' · ')));
+                li.appendChild(info);
+                var inc = gmEl('button', 'gm-b gm-b-ok'); inc.type = 'button';
+                inc.innerHTML = '<i class="fas fa-plus"></i> Incluir';
+                inc.addEventListener('click', function () {
+                    if (e.grupo && !confirm(e.nome + ' está hoje no grupo ' + e.grupo + '. Tirar de lá e incluir em ' + GM.nome + '?')) return;
+                    gmPost('/grupos/' + GM.id + '/incluir-empresa', {cliente_id: e.id}).then(gmRecarregar).catch(gmErro);
+                });
+                li.appendChild(inc);
+                res.appendChild(li);
+            });
+        }).catch(gmErro);
+    }, 250);
+});
 </script>
 {% endblock %}
