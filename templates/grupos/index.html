@@ -227,7 +227,15 @@
 .gm-res li:hover { background:#f6fbf8; }
 .gm-res .gm-vazio { color:#94a3b8; }
 .gm-lista { list-style:none; margin:0; padding:0; }
-.gm-emp { display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px dashed #eef2f0; flex-wrap:wrap; }
+.gm-emp { display:flex; align-items:center; gap:10px; padding:10px 8px; border-bottom:1px dashed #eef2f0; flex-wrap:wrap;
+          cursor:pointer; border-radius:10px; transition:background .12s; }
+.gm-emp:hover { background:#f2fbf5; }
+.gm-emp:hover .gm-info b { color:#15803d; }
+.gm-emp:focus-visible { outline:3px solid rgba(34,197,94,.4); outline-offset:-2px; }
+.gm-emp.gm-vazio { cursor:default; }
+.gm-emp.gm-vazio:hover { background:none; }
+.gm-meta { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:4px; }
+.gm-meta small { font-size:12px; color:#64748b; margin-right:2px; }
 .gm-emp:last-child { border-bottom:none; }
 .gm-info { flex:1; min-width:0; }
 .gm-info b { display:block; font-size:13.5px; font-weight:600; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -291,6 +299,16 @@ function gcFiltrar() {
     document.getElementById('gcCont').textContent = 'Mostrando ' + n + ' grupo' + (n === 1 ? '' : 's');
     document.getElementById('gcNada').style.display = (n || !document.querySelector('.gc-card')) ? 'none' : '';
 }
+// Voltou da ficha (?abrir=ID&q=...): repõe a busca e reabre o grupo.
+(function () {
+    var p = new URLSearchParams(location.search);
+    if (p.get('q')) document.getElementById('gcBusca').value = p.get('q');
+    try { sessionStorage.removeItem('qcx_volta_grupo'); } catch (e) {}
+    if (/^\d+$/.test(p.get('abrir') || '')) {
+        history.replaceState(null, '', location.pathname + (gcSit ? '?situacao=' + gcSit : ''));
+        window.addEventListener('DOMContentLoaded', function () { gmAbrir(p.get('abrir')); });
+    }
+})();
 gcFiltrar();
 
 // "Novo Grupo" abre a caixa no meio da tela, sem trocar de página (08/10/2026)
@@ -350,6 +368,14 @@ function gmAbrir(id) {
         f.hidden = false; document.body.style.overflow = 'hidden';
     }).catch(gmErro);
 }
+// Link da ficha leva o grupo e a busca da tela, para a ficha saber voltar
+function gmLinkFicha(e) {
+    var u = e.ficha + '?de=grupo&g=' + GM.id;
+    var q = document.getElementById('gcBusca').value.trim();
+    if (q) u += '&q=' + encodeURIComponent(q);
+    if (gcSit) u += '&sit=' + gcSit;
+    return u;
+}
 function gmRecarregar() { gmMudou = true; return gmAbrir(GM.id); }
 function gmFechar() {
     document.getElementById('gmFundo').hidden = true;
@@ -376,20 +402,35 @@ function gmDesenhar() {
     if (!n) ul.appendChild(gmEl('li', 'gm-emp gm-vazio', 'Nenhuma empresa neste grupo ainda. Use a busca acima para incluir.'));
     g.empresas.forEach(function (e) {
         var li = gmEl('li', 'gm-emp');
+        li.tabIndex = 0; li.title = 'Abrir a ficha da empresa';
+        li.addEventListener('click', function (ev) {
+            if (ev.target.closest('.gm-acts, .gm-mover')) return;
+            location.href = gmLinkFicha(e);
+        });
+        li.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' && ev.target === li) location.href = gmLinkFicha(e);
+        });
         li.appendChild(gmEl('span', 'gc-num', e.numero || '—'));
         var info = gmEl('div', 'gm-info');
         var b = gmEl('b', null, e.nome);
         if (!e.ativa) b.appendChild(gmEl('span', 'gm-inativa', 'Inativa'));
         info.appendChild(b);
-        info.appendChild(gmEl('small', null, [e.doc, e.regime, e.local].filter(Boolean).join(' · ')));
+        var meta = gmEl('div', 'gm-meta');
+        if (e.doc) meta.appendChild(gmEl('small', null, e.doc));
+        if (e.regime) meta.appendChild(gmEl('span', 'gc-tag gc-reg-' + e.regime_classe, e.regime));
+        if (e.local) {
+            var cid = gmEl('span', 'gc-cid gc-cid-' + e.cid_cor);
+            cid.innerHTML = '<i class="fas fa-location-dot"></i> ';
+            cid.appendChild(document.createTextNode(e.local));
+            meta.appendChild(cid);
+        }
+        info.appendChild(meta);
         li.appendChild(info);
         var acts = gmEl('div', 'gm-acts');
-        var abrir = gmEl('a', 'gm-b'); abrir.href = e.ficha;
-        abrir.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir empresa';
         var mover = gmEl('button', 'gm-b'); mover.type = 'button';
         mover.innerHTML = '<i class="fas fa-exchange-alt"></i> Mudar de grupo';
         mover.addEventListener('click', function () { gmMover(li, e); });
-        acts.appendChild(abrir); acts.appendChild(mover);
+        acts.appendChild(mover);
         li.appendChild(acts);
         ul.appendChild(li);
     });

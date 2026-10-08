@@ -233,6 +233,10 @@ def _salvar_socios(cliente_id, socios):
             if Decimal(str(a.get('percentual_participacao') or 0)) != s['pct']:
                 execute_query("UPDATE socios_clientes SET percentual_participacao = %s WHERE id = %s",
                               (s['pct'], a['id']))
+                registrar('escrita.alterou_socio', 'cadastros', tabela='socios_clientes', registro_id=a['id'],
+                          antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
+                                 'percentual_participacao': str(a.get('percentual_participacao'))},
+                          depois={'cliente_id': cliente_id, 'percentual_participacao': str(s['pct'])})
             if s['resp']:
                 resp_id = a['id']
         else:
@@ -257,6 +261,8 @@ def _salvar_contador(cliente_id, contador_id):
                        (cliente_id, contador_id), fetch=True, fetch_one=True)
     if not ja:
         ClienteContador.vincular_contador(cliente_id, contador_id)
+        registrar('escrita.vinculou_contador', 'cadastros', tabela='clientes', registro_id=cliente_id,
+                  depois={'contador_id': contador_id})
 
 
 def _ctx_form(cliente=None):
@@ -1321,6 +1327,11 @@ def editar(id):
                         RamoAtividade.add_cliente(int(ramo_id), id)
                     except:
                         pass  # Ignora erros de duplicação
+                _ramos_antes = sorted(r['nome'] for r in cliente_ramos_atuais)
+                _ramos_depois = sorted(r['nome'] for r in RamoAtividade.get_by_cliente(id))
+                if _ramos_antes != _ramos_depois:
+                    registrar('escrita.alterou_ramos_cliente', 'cadastros', tabela='clientes',
+                              registro_id=id, antes={'ramos': _ramos_antes}, depois={'ramos': _ramos_depois})
 
                 # Grupo de empresas (obrigatório desde 07/10/2026)
                 _mud_grupo = _salvar_grupo(id, request.form.get('grupo_id', type=int))
@@ -1344,6 +1355,15 @@ def editar(id):
                 possui_dados_endereco = any([cep, logradouro, numero, complemento, bairro, cidade, estado])
 
                 if possui_dados_endereco:
+                    _end_novo = {'cep': cep, 'logradouro': logradouro, 'numero': numero,
+                                 'complemento': complemento, 'bairro': bairro, 'cidade': cidade,
+                                 'estado': estado}
+                    _end_antes = {k: ((endereco_principal or {}).get(k) or '').strip() for k in _end_novo}
+                    _end_mud = [k for k in _end_novo if _end_novo[k] != _end_antes[k]]
+                    if _end_mud:
+                        registrar('escrita.alterou_endereco', 'cadastros', tabela='clientes',
+                                  registro_id=id, antes={k: _end_antes[k] for k in _end_mud},
+                                  depois={k: _end_novo[k] for k in _end_mud})
                     try:
                         if endereco_principal:
                             EnderecoCliente.update(

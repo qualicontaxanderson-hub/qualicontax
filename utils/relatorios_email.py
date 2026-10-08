@@ -9,7 +9,7 @@ Nada de SEFAZ, captura, _ENTRADA: dizer por que importa e o que fazer.
   cert_semana     segunda 07:30     vencem nesta semana e na próxima
   cert_mes        1º dia útil 07:30 vencem no mês, vencidos, sem certificado
   cert_recebidos  dias úteis 18:30  certificados recebidos desde o último aviso
-  cadastros       dias úteis 18:30  empresas cadastradas desde o último aviso
+  cadastros       dias úteis 18:30  clientes e grupos NOVOS e alterações cadastrais desde o último aviso
 
 QUEM RECEBE: o e-mail do DEPARTAMENTO (``departamentos.email``), marcado na
 grade Config › E-mails automáticos (``email_relatorio_destino``). Nunca o
@@ -42,7 +42,7 @@ RELATORIOS = {
     'cert_semana':    {'nome': 'Certificados da semana',            'quando': 'segunda, 07:30',    'hora': time(7, 30)},
     'cert_mes':       {'nome': 'Certificados do mês',               'quando': '1º dia útil do mês, 07:30', 'hora': time(7, 30)},
     'cert_recebidos': {'nome': 'Certificados recebidos hoje',       'quando': 'dias úteis, 18:30', 'hora': time(18, 30)},
-    'cadastros':      {'nome': 'Empresas cadastradas hoje',         'quando': 'dias úteis, 18:30', 'hora': time(18, 30)},
+    'cadastros':      {'nome': 'Cadastros (novos e alterações)',    'quando': 'dias úteis, 18:30', 'hora': time(18, 30)},
 }
 
 DIAS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
@@ -344,7 +344,106 @@ def _fmt_doc(d):
     return d
 
 
+# O que mudou, em palavras da equipe (08/10/2026). Campo de ``alterou_cliente``
+# fora desta lista não aparece (motivo, origem e afins são detalhe do log).
+_CAMPO_ROTULO = {
+    'numero_cliente': 'número', 'tipo_pessoa': 'tipo de pessoa', 'nome_razao_social': 'razão social',
+    'cpf_cnpj': 'CNPJ/CPF', 'inscricao_estadual': 'inscrição estadual',
+    'inscricao_municipal': 'inscrição municipal', 'email': 'e-mail', 'telefone': 'telefone',
+    'celular': 'celular', 'regime_tributario': 'regime', 'porte_empresa': 'porte',
+    'cnae_fiscal': 'CNAE', 'cnae_fiscal_descricao': 'CNAE', 'situacao': 'situação',
+    'observacoes': 'observações', 'aberta_pela_casa': 'aberta pela Qualicontax',
+    'data_inicio_contrato': 'início do contrato', 'data_fim_contrato': 'fim do contrato',
+}
+# ação do log -> o que mudou (as de alterou_cliente saem dos campos)
+_ACAO_ROTULO = {
+    'escrita.alterou_grupo_cliente': 'grupo', 'escrita.criou_socio': 'sócios',
+    'escrita.excluiu_socio': 'sócios', 'escrita.alterou_socio': 'sócios',
+    'escrita.criou_endereco': 'endereço', 'escrita.excluiu_endereco': 'endereço',
+    'escrita.alterou_endereco': 'endereço', 'escrita.alterou_ramos_cliente': 'ramo de atividade',
+    'escrita.vinculou_contador': 'contador', 'escrita.alterou_acesso_reservado': 'acesso',
+}
+
+
+def _plural(q, um, varios):
+    return f'{q} {um if q == 1 else varios}'
+
+
+def _alteracoes(ini, fim, ignorar):
+    """Empresas alteradas na janela, uma linha por empresa com tudo o que mudou.
+    ``ignorar``: ids que já aparecem como novos (o cadastro novo não é alteração)."""
+    import json
+    acoes = ['escrita.alterou_cliente'] + list(_ACAO_ROTULO)
+    rows = execute_query(
+        "SELECT acao, tabela_afetada, registro_id, dados_anteriores, dados_novos, usuario_nome, data_hora "
+        "  FROM logs_sistema WHERE data_hora >= %s AND data_hora < %s AND acao IN (%s) ORDER BY id"
+        % ('%s', '%s', ','.join(['%s'] * len(acoes))), (ini, fim, *acoes), fetch=True) or []
+    por = {}
+    for r in rows:
+        try:
+            antes = json.loads(r['dados_anteriores'] or '{}') or {}
+            depois = json.loads(r['dados_novos'] or '{}') or {}
+        except (TypeError, ValueError):
+            antes, depois = {}, {}
+        if r['tabela_afetada'] == 'clientes':
+            cid = r['registro_id']
+        else:   # sócio e endereço: o cliente vem dentro do registro
+            cid = depois.get('cliente_id') or antes.get('cliente_id')
+        if not cid or cid in ignorar:
+            continue
+        e = por.setdefault(cid, {'valores': {}, 'fixos': [], 'quem': [], 'quando': r['data_hora']})
+        # O que dá para comparar fica como (valor do início, valor do fim) da
+        # janela: mudou e voltou no mesmo período não é alteração.
+        if r['acao'] == 'escrita.alterou_cliente':
+            pares = {('c', k): (_CAMPO_ROTULO[k], antes.get(k), depois.get(k))
+                     for k in depois if k in _CAMPO_ROTULO}
+        elif r['acao'] == 'escrita.alterou_endereco':
+            pares = {('e', k): ('endereço', antes.get(k), depois.get(k)) for k in depois}
+        elif r['acao'] == 'escrita.alterou_grupo_cliente':
+            pares = {('g',): ('grupo', sorted(antes.get('grupos') or []), sorted(depois.get('grupos') or []))}
+        elif r['acao'] == 'escrita.alterou_ramos_cliente':
+            pares = {('r',): ('ramo de atividade', antes.get('ramos'), depois.get('ramos'))}
+        else:
+            pares = {}
+            if _ACAO_ROTULO[r['acao']] not in e['fixos']:
+                e['fixos'].append(_ACAO_ROTULO[r['acao']])
+        for k, (rot, v0, v1) in pares.items():
+            if k in e['valores']:
+                e['valores'][k][2] = v1
+            else:
+                e['valores'][k] = [rot, v0, v1]
+        if r['usuario_nome'] and r['usuario_nome'] not in e['quem']:
+            e['quem'].append(r['usuario_nome'])
+        e['quando'] = r['data_hora']
+    for e in por.values():
+        o_que = []
+        for rot, v0, v1 in e['valores'].values():
+            if v0 != v1 and rot not in o_que:
+                o_que.append(rot)
+        e['o_que'] = o_que + [f for f in e['fixos'] if f not in o_que]
+    por = {cid: e for cid, e in por.items() if e['o_que']}
+    if not por:
+        return []
+    cad = {c['id']: c for c in execute_query(
+        "SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE id IN (%s)"
+        % ','.join(['%s'] * len(por)), tuple(por), fetch=True) or []}
+    return [(cad[cid], e) for cid, e in por.items() if cid in cad]
+
+
+def _grupos_novos(ini, fim):
+    """Grupos criados na janela que ainda existem (o log diz quem criou)."""
+    return execute_query(
+        "SELECT g.id, g.nome, l.usuario_nome, l.data_hora, "
+        "       (SELECT COUNT(*) FROM cliente_grupo_relacao r WHERE r.grupo_id = g.id) AS n_emp "
+        "  FROM logs_sistema l JOIN grupos_clientes g ON g.id = l.registro_id "
+        " WHERE l.acao = 'escrita.criou_grupo' AND l.data_hora >= %s AND l.data_hora < %s "
+        " ORDER BY l.id", (ini, fim), fetch=True) or []
+
+
 def dados_cadastros(hoje, momento=None, rel='cadastros', **_):
+    """Cadastros do dia (08/10/2026, modelo do Anderson): clientes e grupos
+    NOVOS e as alterações cadastrais, dizendo o que mudou em cada empresa.
+    Assunto: "Cadastros: 1 cliente (NOVO) | 1 Alteração Cadastral | 1 Grupo (NOVO)"."""
     momento = momento or agora()
     ini, fim = _janela(rel, momento)
     um_dia = ini.date() == fim.date()
@@ -368,36 +467,60 @@ def dados_cadastros(hoje, momento=None, rel='cadastros', **_):
                 " WHERE acao = 'escrita.converteu_avulso' AND registro_id IN (%s) ORDER BY id"
                 % ','.join(['%s'] * len(ids)), tuple(ids), fetch=True) or []:
             quem_conv[r['registro_id']] = r['usuario_nome']
+    # quem foi criado na janela não conta como alteração (o cadastro novo já
+    # aparece; o resto do formulário salvo junto é parte de "novo")
+    criados = execute_query("SELECT id FROM clientes WHERE criado_em >= %s AND criado_em < %s",
+                            (ini, fim), fetch=True) or []
+    ignorar = {r['id'] for r in criados} | {r['id'] for r in avulsos} | {r['id'] for r in conv}
+    alter = _alteracoes(ini, fim, ignorar)
+    grupos = _grupos_novos(ini, fim)
 
     def linha(r, quando, quem, pill, tom):
         sub = ' · '.join(x for x in [_fmt_doc(r['cpf_cnpj']), quando.strftime(hfmt) if quando else '',
                                      quem or 'quem cadastrou não foi registrado'] if x)
         return {'n': r['numero_cliente'] or '—', 'emp': r['nome_razao_social'], 'sub': sub, 'dt': '',
                 'pill': pill, 'tom': tom, 'url': f"{APP_URL}/clientes/{r['id']}"}
-    l1 = [linha(r, r['criado_em'], r['criado_por_nome'], 'cliente', 'g') for r in novos]
-    l2 = [linha(r, r['avulso_em'], r['criado_por_nome'], 'avulso', 'n') for r in avulsos]
+    l1 = [linha(r, r['criado_em'], r['criado_por_nome'], 'NOVO', 'g') for r in novos]
+    l2 = [linha(r, r['avulso_em'], r['criado_por_nome'], 'avulso NOVO', 'n') for r in avulsos]
     l3 = [linha(r, r['virou_cliente_em'], quem_conv.get(r['id']), 'virou cliente', 'g') for r in conv]
-    n = len(l1) + len(l2) + len(l3)
-    # O assunto separa o avulso (pedido do Anderson, 05/10): quem lê a caixa de
-    # entrada já sabe se é cliente de verdade ou só avulso.
-    #   "Empresas cadastradas hoje: 5 clientes, 2 avulsos e 1 avulso virou cliente"
-    partes = [f"{q} {s1 if q == 1 else s2}" for q, s1, s2 in [
-        (len(l1), 'cliente', 'clientes'), (len(l2), 'avulso', 'avulsos'),
-        (len(l3), 'avulso virou cliente', 'avulsos viraram clientes')] if q]
-    resumo = ' e '.join([', '.join(partes[:-1]), partes[-1]]) if len(partes) > 1 else (partes[0] if partes else 'nenhuma')
-    titulo = 'Empresas cadastradas hoje' if um_dia else 'Empresas cadastradas'
+    lg = [{'n': '—', 'emp': g['nome'], 'dt': '', 'pill': 'NOVO', 'tom': 'g', 'url': f'{APP_URL}/grupos',
+           'sub': ' · '.join(x for x in [_plural(g['n_emp'], 'empresa', 'empresas'),
+                                         g['data_hora'].strftime(hfmt),
+                                         g['usuario_nome'] or 'quem criou não foi registrado'] if x)}
+          for g in grupos]
+    la = [{'n': c['numero_cliente'] or '—', 'emp': c['nome_razao_social'], 'dt': '',
+           'pill': 'alterado', 'tom': 'a', 'url': f"{APP_URL}/clientes/{c['id']}",
+           'sub': 'mudou: ' + ', '.join(e['o_que']) + ' · ' + e['quando'].strftime(hfmt) + ' · '
+                  + (', '.join(e['quem']) or 'quem alterou não foi registrado')}
+          for c, e in alter]
+    n = len(l1) + len(l2) + len(l3) + len(lg) + len(la)
+    partes = [p for q_, p in [
+        (len(l1), f"{len(l1)} cliente (NOVO)" if len(l1) == 1 else f"{len(l1)} clientes (NOVOS)"),
+        (len(l2), f"{len(l2)} avulso (NOVO)" if len(l2) == 1 else f"{len(l2)} avulsos (NOVOS)"),
+        (len(l3), _plural(len(l3), 'avulso virou cliente', 'avulsos viraram clientes')),
+        (len(la), _plural(len(la), 'Alteração Cadastral', 'Alterações Cadastrais')),
+        (len(lg), f"{len(lg)} Grupo (NOVO)" if len(lg) == 1 else f"{len(lg)} Grupos (NOVOS)"),
+    ] if q_]
+    kpis = [('Clientes novos', len(l1), 'g'), ('Grupos novos', len(lg), 'g'), ('Alterações', len(la), 'a')]
+    if l2:
+        kpis.append(('Avulsos', len(l2), ''))
+    if l3:
+        kpis.append(('Viraram clientes', len(l3), 'g'))
     return {
         'itens': n, 'janela': (ini, fim),
-        'assunto': f'{titulo}: {resumo}',
-        'titulo': titulo,
+        'assunto': 'Cadastros: ' + (' | '.join(partes) or 'nenhum'),
+        'titulo': 'Cadastros',
         'data_txt': _desde_txt(ini, fim),
-        'intro': ('Empresas que entraram no sistema' + (' hoje' if um_dia else '') + '. Se alguma vai '
-                  'ficar com você, confira o cadastro e já peça ao cliente o certificado digital.'),
-        'kpis': [('Clientes', len(l1), 'g'), ('Avulsos', len(l2), ''), ('Convertidos', len(l3), '')],
+        'intro': ('O que entrou e o que mudou nos cadastros' + (' hoje' if um_dia else '') + '. '
+                  'Se alguma empresa nova vai ficar com você, confira o cadastro e já peça ao cliente '
+                  'o certificado digital.'),
+        'kpis': kpis,
         'secoes': [s for s in [
-            {'titulo': 'Clientes novos', 'linhas': l1},
-            {'titulo': 'Avulsos (ainda não são clientes)', 'linhas': l2},
+            {'titulo': 'Clientes NOVOS', 'linhas': l1},
+            {'titulo': 'Grupos NOVOS', 'linhas': lg},
+            {'titulo': 'Avulsos NOVOS (ainda não são clientes)', 'linhas': l2},
             {'titulo': 'Avulsos que viraram clientes', 'linhas': l3},
+            {'titulo': 'Alterações cadastrais', 'linhas': la},
         ] if s['linhas']],
         'como_resolver': False, 'botao': ('Ver clientes no Qualicontax', URL_CLIENTES),
     }

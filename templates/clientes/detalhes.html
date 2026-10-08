@@ -227,7 +227,33 @@
                 </div>
             </div>
             <div class="ef-hero-actions">
-                <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Voltar</a>
+                {# Veio da caixa do grupo (08/10/2026): "Voltar ao grupo" reabre o grupo com a
+                   busca que estava na tela; "Voltar" vira "Clientes". A origem fica na aba
+                   (sessionStorage), então sobrevive a Editar → salvar. #}
+                <a href="#" id="btnVoltarGrupo" class="ef-btn" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
+                <a href="{{ url_for('clientes.index') }}" id="btnVoltar" class="ef-btn"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
+                <script>
+                (function () {
+                    var K = 'qcx_volta_grupo', cid = {{ cliente.id|int }}, v = null;
+                    try {
+                        var p = new URLSearchParams(location.search);
+                        if (p.get('de') === 'grupo' && /^\d+$/.test(p.get('g') || '')) {
+                            var u = '/grupos?abrir=' + p.get('g');
+                            if (p.get('q')) u += '&q=' + encodeURIComponent(p.get('q'));
+                            if (/^(ATIVO|INATIVO)$/.test(p.get('sit') || '')) u += '&situacao=' + p.get('sit');
+                            sessionStorage.setItem(K, JSON.stringify({cid: cid, url: u}));
+                            history.replaceState(null, '', location.pathname + location.hash);
+                        }
+                        v = JSON.parse(sessionStorage.getItem(K) || 'null');
+                    } catch (e) { v = null; }
+                    if (!v || v.cid !== cid || !/^\/grupos\?abrir=\d+/.test(v.url || '')) return;
+                    var g = document.getElementById('btnVoltarGrupo');
+                    g.href = v.url; g.style.display = '';
+                    var b = document.getElementById('btnVoltar');
+                    b.querySelector('i').className = 'fas fa-list';
+                    b.querySelector('span').textContent = 'Clientes';
+                })();
+                </script>
                 {% if pode_rota('clientes.editar') %}
                 <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="ef-btn ef-btn-primary"><i class="fas fa-edit"></i> Editar</a>
                 {% endif %}

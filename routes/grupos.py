@@ -329,6 +329,9 @@ def painel(id):
         'regime': 'Pessoa Física' if e['tipo_pessoa'] == 'PF'
                   else _REGIME_ROTULO.get(e['regime_tributario'] or '', e['regime_tributario'] or ''),
         'local': f"{_cidade_titulo(e['cidade'])}/{e['estado']}" if e['cidade'] else '',
+        # mesmas cores dos cartões: .gc-reg-* e .gc-cid-N
+        'regime_classe': 'pf' if e['tipo_pessoa'] == 'PF' else (e['regime_tributario'] or '').lower(),
+        'cid_cor': _cor_cidade(_sem_acento(f"{_cidade_titulo(e['cidade'])}/{e['estado']}")) if e['cidade'] else 0,
         'ativa': (e['situacao'] or 'ATIVO') == 'ATIVO',
         'ficha': url_for('clientes.detalhes', id=e['id']),
     } for e in empresas if e['id'] not in ocultas]
