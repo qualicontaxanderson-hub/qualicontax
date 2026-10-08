@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Grupos - Qualicontax{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
 {# Grupos em CARTÕES (07/10/2026, modelo aprovado pelo Anderson): grupo é "coisa"
    com estado e empresas dentro — critério cartão x tabela. Busca acha pelo
    grupo OU pela empresa; Ativos/Inativos filtram na tela, sem recarregar. #}
@@ -19,18 +20,57 @@
 </div>
 
 <div class="ef-body">
+    {# Filtros (08/10/2026, pedido do Anderson): Situação e Regime são botões na
+       barra, como os Ativos/Inativos; Razão social, Grupo, Município e Estado
+       ficam no painel "Filtros". Tudo filtra na tela, sem recarregar. #}
     <div class="gc-bar">
-        <div class="gc-busca">
-            <i class="fas fa-search"></i>
-            <input type="text" id="gcBusca" placeholder="Buscar grupo ou empresa (nome ou número)…" oninput="gcFiltrar()">
+        <div class="gc-pills" id="gfSitPills" role="group" aria-label="Situação do grupo">
+            <button type="button" class="gc-pill" data-v="">Todos <b></b></button>
+            <button type="button" class="gc-pill" data-v="ATIVO">Ativos <b></b></button>
+            <button type="button" class="gc-pill" data-v="INATIVO">Inativos <b></b></button>
         </div>
-        <div class="gc-pills" role="tablist">
-            <button type="button" class="gc-pill{{ ' on' if filtro_situacao not in ('ATIVO', 'INATIVO') }}" data-sit="">Todos <b>{{ grupos|length }}</b></button>
-            <button type="button" class="gc-pill{{ ' on' if filtro_situacao == 'ATIVO' }}" data-sit="ATIVO">Ativos <b>{{ grupos|selectattr('situacao','equalto','ATIVO')|list|length }}</b></button>
-            <button type="button" class="gc-pill{{ ' on' if filtro_situacao == 'INATIVO' }}" data-sit="INATIVO">Inativos <b>{{ grupos|rejectattr('situacao','equalto','ATIVO')|list|length }}</b></button>
+        <span class="gc-sep"></span>
+        <div class="gc-pills gc-pills-reg" id="gfRegPills" role="group" aria-label="Regime de tributação">
+            <button type="button" class="gc-pill" data-v="">Todos os regimes</button>
+            <button type="button" class="gc-pill gc-pr-lucro_real" data-v="lucro_real">Lucro Real <b></b></button>
+            <button type="button" class="gc-pill gc-pr-lucro_presumido" data-v="lucro_presumido">Lucro Presumido <b></b></button>
+            <button type="button" class="gc-pill gc-pr-simples" data-v="simples">Simples Nacional <b></b></button>
+            <button type="button" class="gc-pill gc-pr-mei" data-v="mei">MEI <b></b></button>
+            <button type="button" class="gc-pill gc-pr-pf" data-v="pf">Pessoa Física <b></b></button>
         </div>
-        <span class="gc-cont" id="gcCont"></span>
+        <button type="button" class="gc-filtros-btn" id="gfBtn" onclick="gfToggle()" aria-expanded="false" aria-controls="gfPainel">
+            <i class="fas fa-sliders-h"></i> Filtros <span class="gf-n" id="gfN"></span>
+            <i class="fas fa-chevron-down gf-chev"></i>
+        </button>
     </div>
+
+    <div class="gf-painel" id="gfPainel" aria-hidden="true">
+        <div class="gf-painel-in">
+            <div class="gf-campos">
+                <div class="gf-campo gf-c-emp">
+                    <label for="gfEmp"><i class="fas fa-building"></i> Razão social</label>
+                    <select id="gfEmp" multiple placeholder="Nome, número ou CNPJ/CPF"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="gfGrp"><i class="fas fa-layer-group"></i> Grupo</label>
+                    <select id="gfGrp" multiple placeholder="Todos os grupos"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="gfCid"><i class="fas fa-location-dot"></i> Município</label>
+                    <select id="gfCid" multiple placeholder="Todos os municípios"></select>
+                </div>
+                <div class="gf-campo gf-c-uf">
+                    <label for="gfUf"><i class="fas fa-map"></i> Estado</label>
+                    <select id="gfUf" multiple placeholder="Todos"></select>
+                </div>
+            </div>
+            <div class="gf-rodape">
+                <span class="gf-dica"><i class="fas fa-circle-info"></i> Cada campo mostra só o que existe com os outros filtros; o número é de empresas.</span>
+                <button type="button" class="gf-limpar" onclick="gfLimpar()"><i class="fas fa-eraser"></i> Limpar filtros</button>
+            </div>
+        </div>
+    </div>
+    <div class="gf-resumo"><span class="gc-cont" id="gcCont"></span></div>
 
     <div class="gc-grid" id="gcGrid">
         {% for g in grupos %}
@@ -44,6 +84,7 @@
                 <span class="gc-sit {{ 'on' if g.situacao == 'ATIVO' else 'off' }}">{{ 'Ativo' if g.situacao == 'ATIVO' else 'Inativo' }}</span>
             </header>
 
+            <span class="gc-atende" style="display:none;"></span>
             {% if g.motivo %}
             <div class="gc-motivo"><i class="fas fa-ban"></i> Desativado · {{ g.motivo }}</div>
             {% endif %}
@@ -61,8 +102,9 @@
             {% endif %}
 
             <ul class="gc-emp">
-                {% for e in g.empresas[:4] %}
-                <li>
+                {% for e in g.empresas %}
+                <li data-id="{{ e.id }}" data-nome="{{ e.nome }}" data-num="{{ e.numero or '' }}" data-doc="{{ e.doc }}"
+                    data-reg="{{ e.reg }}" data-local="{{ e.local }}"{% if loop.index > 4 %} class="gf-fora"{% endif %}>
                     <span class="gc-num">{{ e.numero or '—' }}</span>
                     <span class="gc-nome">{{ e.nome }}</span>
                     {% if e.tipo == 'PF' %}<span class="gc-pf">PF</span>{% endif %}
@@ -132,11 +174,6 @@
 
 <style>
 .gc-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-.gc-busca { flex:1; min-width:240px; max-width:560px; position:relative; }
-.gc-busca i { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
-.gc-busca input { width:100%; height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px 0 36px;
-                  font-size:14px; font-family:inherit; background:#fff; box-sizing:border-box; }
-.gc-busca input:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
 .gc-pills { display:flex; gap:6px; }
 .gc-pill { border:1px solid #d7e3dc; background:#fff; color:#475569; border-radius:99px; padding:7px 14px;
            font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -274,42 +311,103 @@
     .gm-acts .gm-b { flex:1; justify-content:center; }
 }
 
+/* barra: Situação e Regime em botões; o resto no painel Filtros */
+.gc-sep { width:1px; height:26px; background:#d7e3dc; }
+.gc-pills { flex-wrap:wrap; }
+.gc-pill b:empty { display:none; }
+.gc-pills-reg .gc-pill.on { color:#fff; }
+/* sem escolher: o tom claro das etiquetas do cartão (.gc-reg-*) */
+.gc-pr-lucro_real      { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.gc-pr-lucro_presumido { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.gc-pr-simples         { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.gc-pr-mei             { background:#fefce8; color:#a16207; border-color:#fde68a; }
+.gc-pr-pf              { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+.gc-pills-reg .gc-pill:not(.on) b { color:inherit; opacity:.65; }
+.gc-pills-reg .gc-pill:not(.on):hover { filter:brightness(.97); border-color:currentColor; }
+.gc-pr-lucro_real.on      { background:#1d4ed8; border-color:#1d4ed8; }
+.gc-pr-lucro_presumido.on { background:#c2410c; border-color:#c2410c; }
+.gc-pr-simples.on         { background:#15803d; border-color:#15803d; }
+.gc-pr-mei.on             { background:#a16207; border-color:#a16207; }
+.gc-pr-pf.on              { background:#6d28d9; border-color:#6d28d9; }
+.gc-pills-reg .gc-pill.on b { color:rgba(255,255,255,.8); }
+.gc-pill.gc-pill-zero { opacity:.45; }
+.gc-filtros-btn { margin-left:auto; display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px;
+                  border:1px solid #d7e3dc; background:#fff; color:#0f3d2e; border-radius:10px; font-size:13px;
+                  font-weight:700; cursor:pointer; font-family:inherit; transition:all .15s; }
+.gc-filtros-btn:hover { border-color:#86efac; background:#f6fbf8; }
+.gc-filtros-btn.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gc-filtros-btn .gf-chev { font-size:10px; transition:transform .2s; }
+.gc-filtros-btn.on .gf-chev { transform:rotate(180deg); }
+.gf-n { display:none; min-width:18px; height:18px; padding:0 5px; border-radius:99px; background:#22c55e; color:#fff;
+        font-size:11px; line-height:18px; text-align:center; }
+.gf-painel { display:grid; grid-template-rows:0fr; transition:grid-template-rows .25s ease, margin .25s ease; margin-bottom:0; }
+.gf-painel.on { grid-template-rows:1fr; margin-bottom:14px; }
+.gf-painel-in { overflow:hidden; min-height:0; }
+.gf-painel.on .gf-painel-in { overflow:visible; }
+.gf-campos { display:grid; grid-template-columns:2.2fr 1.3fr 1.6fr .9fr; gap:14px; padding:16px 18px 6px;
+             background:linear-gradient(180deg,#ffffff,#f7fbf8); border:1px solid #e3ece7; border-bottom:none;
+             border-radius:14px 14px 0 0; }
+.gf-campo { min-width:0; }
+.gf-campo label { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:#0f3d2e;
+                  letter-spacing:.3px; text-transform:uppercase; margin-bottom:6px; }
+.gf-campo label i { color:#16a34a; font-size:12px; }
+.gf-rodape { display:flex; align-items:center; gap:12px; padding:10px 18px 12px; background:#f7fbf8;
+             border:1px solid #e3ece7; border-top:1px dashed #e3ece7; border-radius:0 0 14px 14px; flex-wrap:wrap; }
+.gf-dica { flex:1; min-width:200px; font-size:12px; color:#7d968a; }
+.gf-dica i { margin-right:4px; }
+.gf-limpar { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:9px;
+             border:1px solid #d7e3dc; background:#fff; color:#475569; font-size:12.5px; font-weight:700;
+             cursor:pointer; font-family:inherit; }
+.gf-limpar:hover { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; }
+.gf-resumo { display:flex; justify-content:flex-end; margin:-6px 2px 10px; }
+/* Tom Select no visual do sistema */
+.gf-campo .ts-wrapper { width:100%; }
+.gf-campo .ts-control { min-height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:5px 10px;
+                        font-size:13.5px; background:#fff; box-shadow:none; }
+.gf-campo .ts-wrapper.focus .ts-control { border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.gf-campo .ts-wrapper.multi .ts-control > div { background:#dcfce7 !important; color:#166534 !important; border:none !important;
+        background-image:none !important; text-shadow:none !important; box-shadow:none !important; border-radius:6px;
+        font-size:12px; font-weight:700; padding:2px 6px; margin:2px 4px 2px 0; }
+.gf-campo .ts-wrapper.plugin-remove_button .item .remove { border-left:1px solid rgba(0,0,0,.1) !important; padding:0 5px; }
+.ts-dropdown { font-size:13px; border:1px solid #d7e3dc; border-radius:10px; box-shadow:0 12px 28px rgba(15,23,42,.14); margin-top:4px; }
+.ts-dropdown .active { background:#ecfdf5; color:#0f3d2e; }
+.ts-dropdown .no-results { color:#94a3b8; }
+.gf-opt { display:flex; align-items:center; gap:8px; }
+.gf-opt-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gf-opt-s { font-size:11.5px; color:#94a3b8; margin-left:4px; }
+.gf-opt-n { font-size:11px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:99px; padding:0 7px; flex-shrink:0; }
+/* empresa que atende ao filtro, dentro do cartão */
+.gc-emp li.gf-fora { display:none; }
+.gc-emp li.gf-casa { background:#f0fdf4; border-radius:7px; }
+.gc-atende { font-size:12px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:99px; padding:2px 9px; align-self:flex-start; }
+@media (max-width:900px) {
+    .gf-campos { grid-template-columns:1fr 1fr; }
+}
+@media (max-width:600px) {
+    .gf-campos { grid-template-columns:1fr; }
+    .gc-sep { display:none; }
+}
+
 @media (max-width:720px) {
     .gc-grid { grid-template-columns:1fr; }
-    .gc-busca { max-width:none; min-width:0; flex-basis:100%; }
-    .gc-cont { margin-left:0; }
+        .gc-cont { margin-left:0; }
     .ef-hero-head { flex-direction:column; align-items:flex-start; }
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
 var gcSit = '{{ filtro_situacao if filtro_situacao in ('ATIVO', 'INATIVO') else '' }}';
-document.querySelectorAll('.gc-pill').forEach(function (b) {
-    b.addEventListener('click', function () {
-        document.querySelectorAll('.gc-pill').forEach(function (x) { x.classList.remove('on'); });
-        b.classList.add('on'); gcSit = b.dataset.sit; gcFiltrar();
-    });
-});
-function gcFiltrar() {
-    var q = document.getElementById('gcBusca').value.trim().toLowerCase();
-    var n = 0;
-    document.querySelectorAll('.gc-card').forEach(function (c) {
-        var ok = (!q || c.dataset.busca.indexOf(q) >= 0) && (!gcSit || c.dataset.sit === gcSit);
-        c.style.display = ok ? '' : 'none'; if (ok) n++;
-    });
-    document.getElementById('gcCont').textContent = 'Mostrando ' + n + ' grupo' + (n === 1 ? '' : 's');
-    document.getElementById('gcNada').style.display = (n || !document.querySelector('.gc-card')) ? 'none' : '';
-}
-// Voltou da ficha (?abrir=ID&q=...): repõe a busca e reabre o grupo.
+// Voltou da ficha (?abrir=ID): reabre o grupo; os filtros voltam da aba (gfAplicar).
+var GC_ABRIR = null;
 (function () {
     var p = new URLSearchParams(location.search);
-    if (p.get('q')) document.getElementById('gcBusca').value = p.get('q');
     try { sessionStorage.removeItem('qcx_volta_grupo'); } catch (e) {}
     if (/^\d+$/.test(p.get('abrir') || '')) {
-        history.replaceState(null, '', location.pathname + (gcSit ? '?situacao=' + gcSit : ''));
-        window.addEventListener('DOMContentLoaded', function () { gmAbrir(p.get('abrir')); });
+        GC_ABRIR = p.get('abrir');
+        history.replaceState(null, '', location.pathname);
+        window.addEventListener('DOMContentLoaded', function () { gmAbrir(GC_ABRIR); });
     }
 })();
-gcFiltrar();
 
 // "Novo Grupo" abre a caixa no meio da tela, sem trocar de página (08/10/2026)
 function gcNovoGrupo() {
@@ -371,8 +469,6 @@ function gmAbrir(id) {
 // Link da ficha leva o grupo e a busca da tela, para a ficha saber voltar
 function gmLinkFicha(e) {
     var u = e.ficha + '?de=grupo&g=' + GM.id;
-    var q = document.getElementById('gcBusca').value.trim();
-    if (q) u += '&q=' + encodeURIComponent(q);
     if (gcSit) u += '&sit=' + gcSit;
     return u;
 }
@@ -566,5 +662,180 @@ document.getElementById('gmBusca').addEventListener('input', function () {
         }).catch(gmErro);
     }, 250);
 });
+// ── Filtros (08/10/2026) ─────────────────────────────────────────────────
+// Situação e Regime: botões na barra (um de cada vez). Razão social, Grupo,
+// Município e Estado: painel Filtros (vários de cada vez). Cada lugar mostra
+// só o que existe com os outros filtros, contando empresas.
+var REG_ROT = {lucro_real: 'Lucro Real', lucro_presumido: 'Lucro Presumido', simples: 'Simples Nacional',
+               mei: 'MEI', pf: 'Pessoa Física'};
+var GF_EMP = [], GF_TS = {}, gfReg = '', gfMexendo = false, GF_CHAVE = 'qcx_grupos_filtros';
+function gfSemAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+document.querySelectorAll('.gc-card').forEach(function (card) {
+    card.querySelectorAll('.gc-emp li[data-id]').forEach(function (li) {
+        var local = li.dataset.local || '';
+        GF_EMP.push({li: li, card: card, gid: card.dataset.id, gnome: card.querySelector('h3').textContent.trim(),
+                     sit: card.dataset.sit, id: li.dataset.id, nome: li.dataset.nome, num: li.dataset.num,
+                     doc: li.dataset.doc, reg: li.dataset.reg,
+                     cid: gfSemAcento(local), cidRot: local, uf: local ? local.split('/').pop() : ''});
+    });
+});
+function gfVal(k) { return GF_TS[k] ? GF_TS[k].getValue() : []; }
+function gfAtende(e, menos) {
+    if (menos !== 'sit' && gcSit && e.sit !== gcSit) return false;
+    if (menos !== 'reg' && gfReg && e.reg !== gfReg) return false;
+    var ks = ['emp', 'grp', 'cid', 'uf'], campo = {emp: 'id', grp: 'gid', cid: 'cid', uf: 'uf'};
+    for (var i = 0; i < ks.length; i++) {
+        var v = gfVal(ks[i]);
+        if (menos !== ks[i] && v.length && v.indexOf(e[campo[ks[i]]]) < 0) return false;
+    }
+    return true;
+}
+function gfOpcoes(k) {
+    var m = {};
+    GF_EMP.forEach(function (e) {
+        if (!gfAtende(e, k)) return;
+        var v, t, s = '';
+        if (k === 'emp') { v = e.id; t = (e.num ? e.num + ' · ' : '') + e.nome; s = e.doc; }
+        else if (k === 'grp') { v = e.gid; t = e.gnome; }
+        else if (k === 'cid') { if (!e.cid) return; v = e.cid; t = e.cidRot; }
+        else { if (!e.uf) return; v = e.uf; t = e.uf; }
+        if (!m[v]) m[v] = {value: v, text: t, s: s, n: 0, busca: t + ' ' + (s || '').replace(/\D/g, '')};
+        m[v].n++;
+    });
+    return Object.keys(m).map(function (v) { return m[v]; }).sort(function (a, b) {
+        return (k === 'emp' || k === 'grp') ? a.text.localeCompare(b.text) : (b.n - a.n || a.text.localeCompare(b.text));
+    });
+}
+function gfContarBotoes() {
+    // números dos botões respeitam os outros filtros
+    document.querySelectorAll('#gfSitPills .gc-pill').forEach(function (b) {
+        var cards = {};
+        GF_EMP.forEach(function (e) { if (gfAtende(e, 'sit') && (!b.dataset.v || e.sit === b.dataset.v)) cards[e.gid] = 1; });
+        var temEmp = gfReg || ['emp', 'cid', 'uf'].some(function (k) { return gfVal(k).length; });
+        var n = temEmp ? Object.keys(cards).length : Array.prototype.filter.call(document.querySelectorAll('.gc-card'), function (c) {
+            var g = gfVal('grp');
+            return (!b.dataset.v || c.dataset.sit === b.dataset.v) && (!g.length || g.indexOf(c.dataset.id) >= 0);
+        }).length;
+        b.querySelector('b').textContent = n;
+        b.classList.toggle('on', b.dataset.v === gcSit);
+    });
+    document.querySelectorAll('#gfRegPills .gc-pill').forEach(function (b) {
+        if (b.dataset.v) {
+            var n = GF_EMP.filter(function (e) { return e.reg === b.dataset.v && gfAtende(e, 'reg'); }).length;
+            b.querySelector('b').textContent = n;
+            b.classList.toggle('gc-pill-zero', !n && b.dataset.v !== gfReg);
+            b.hidden = !n && b.dataset.v !== gfReg && !GF_EMP.some(function (e) { return e.reg === b.dataset.v; });
+        }
+        b.classList.toggle('on', b.dataset.v === gfReg);
+    });
+}
+function gfRecarregarOpcoes() {
+    gfMexendo = true;
+    Object.keys(GF_TS).forEach(function (k) {
+        var ts = GF_TS[k], sel = ts.getValue();
+        ts.clearOptions(function (o) { return sel.indexOf(o.value) >= 0; });
+        gfOpcoes(k).forEach(function (o) { if (ts.options[o.value]) ts.updateOption(o.value, o); else ts.addOption(o); });
+        ts.refreshOptions(false);
+    });
+    gfMexendo = false;
+}
+function gfSalvar() {
+    var st = {sit: gcSit, reg: gfReg, aberto: document.getElementById('gfPainel').classList.contains('on')};
+    Object.keys(GF_TS).forEach(function (k) { st[k] = gfVal(k); });
+    try { sessionStorage.setItem(GF_CHAVE, JSON.stringify(st)); } catch (e) {}
+}
+function gfAplicar() {
+    var temEmp = gfReg || ['emp', 'cid', 'uf'].some(function (k) { return gfVal(k).length; });
+    var grp = gfVal('grp'), nG = 0, nE = 0;
+    document.querySelectorAll('.gc-card').forEach(function (card) {
+        var lis = card.querySelectorAll('.gc-emp li[data-id]');
+        var casa = GF_EMP.filter(function (e) { return e.card === card && gfAtende(e); });
+        var ok = (!gcSit || card.dataset.sit === gcSit) && (!grp.length || grp.indexOf(card.dataset.id) >= 0)
+                 && (!temEmp || casa.length > 0);
+        card.style.display = ok ? '' : 'none';
+        if (!ok) return;
+        nG++; nE += temEmp ? casa.length : lis.length;
+        var mostradas = 0;
+        lis.forEach(function (li) {
+            var atende = !temEmp || casa.some(function (e) { return e.li === li; });
+            var mostra = atende && mostradas < 4;
+            if (mostra) mostradas++;
+            li.classList.toggle('gf-fora', !mostra);
+            li.classList.toggle('gf-casa', !!temEmp && atende);
+        });
+        var resto = (temEmp ? casa.length : lis.length) - mostradas;
+        var mais = card.querySelector('.gc-mais');
+        if (mais) {
+            mais.style.display = resto > 0 ? '' : 'none';
+            mais.textContent = '+ ' + resto + ' empresa' + (resto === 1 ? '' : 's') +
+                (temEmp ? ' que atende' + (resto === 1 ? '' : 'm') : '') + ' — ver todas';
+        }
+        var tag = card.querySelector('.gc-atende');
+        tag.style.display = temEmp ? '' : 'none';
+        tag.textContent = casa.length + ' de ' + lis.length + ' empresa' + (lis.length === 1 ? '' : 's') +
+            ' atende' + (casa.length === 1 ? '' : 'm') + ' ao filtro';
+    });
+    document.getElementById('gcCont').textContent = 'Mostrando ' + nG + ' grupo' + (nG === 1 ? '' : 's') +
+        ' · ' + nE + ' empresa' + (nE === 1 ? '' : 's');
+    var n = ['emp', 'grp', 'cid', 'uf'].filter(function (k) { return gfVal(k).length; }).length;
+    var badge = document.getElementById('gfN');
+    badge.style.display = n ? 'inline-block' : 'none'; badge.textContent = n;
+    document.getElementById('gcNada').style.display = (nG || !document.querySelector('.gc-card')) ? 'none' : '';
+    gfContarBotoes();
+    if (!gfMexendo) gfRecarregarOpcoes();
+    gfSalvar();
+}
+function gcFiltrar() { gfAplicar(); }
+function gfLimpar() {
+    gfMexendo = true;
+    Object.keys(GF_TS).forEach(function (k) { GF_TS[k].clear(true); });
+    gfMexendo = false;
+    gcSit = ''; gfReg = '';
+    gfAplicar();
+}
+function gfToggle(abrir) {
+    var p = document.getElementById('gfPainel'), b = document.getElementById('gfBtn');
+    var on = typeof abrir === 'boolean' ? abrir : !p.classList.contains('on');
+    p.classList.toggle('on', on); b.classList.toggle('on', on);
+    p.setAttribute('aria-hidden', on ? 'false' : 'true'); b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    gfSalvar();
+}
+document.querySelectorAll('#gfSitPills .gc-pill').forEach(function (b) {
+    b.addEventListener('click', function () { gcSit = b.dataset.v; gfAplicar(); });
+});
+document.querySelectorAll('#gfRegPills .gc-pill').forEach(function (b) {
+    b.addEventListener('click', function () { gfReg = (gfReg === b.dataset.v) ? '' : b.dataset.v; gfAplicar(); });
+});
+(function () {
+    var render = {
+        option: function (d, esc) {
+            return '<div class="gf-opt"><span class="gf-opt-t">' + esc(d.text) +
+                (d.s ? '<span class="gf-opt-s">' + esc(d.s) + '</span>' : '') +
+                '</span><span class="gf-opt-n">' + d.n + '</span></div>';
+        },
+        item: function (d, esc) { return '<div>' + esc(d.text) + '</div>'; },
+        no_results: function () { return '<div class="no-results">Nada com os filtros escolhidos</div>'; }
+    };
+    [['emp', 'gfEmp'], ['grp', 'gfGrp'], ['cid', 'gfCid'], ['uf', 'gfUf']].forEach(function (p) {
+        GF_TS[p[0]] = new TomSelect('#' + p[1], {
+            plugins: ['remove_button'], maxOptions: null, hideSelected: true, hidePlaceholder: true,
+            searchField: ['text', 'busca'], options: gfOpcoes(p[0]), render: render,
+            onChange: function () { if (!gfMexendo) gfAplicar(); }
+        });
+    });
+    // Voltou da ficha pelo "Voltar ao grupo": repõe os filtros da aba
+    var st = null;
+    if (GC_ABRIR) { try { st = JSON.parse(sessionStorage.getItem(GF_CHAVE) || 'null'); } catch (e) {} }
+    if (st) {
+        gcSit = st.sit || ''; gfReg = st.reg || '';
+        gfMexendo = true;
+        ['emp', 'grp', 'cid', 'uf'].forEach(function (k) {
+            (st[k] || []).forEach(function (v) { if (GF_TS[k].options[v]) GF_TS[k].addItem(v, true); });
+        });
+        gfMexendo = false;
+        if (st.aberto) gfToggle(true);
+    }
+    gfAplicar();
+})();
 </script>
 {% endblock %}

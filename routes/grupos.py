@@ -42,7 +42,7 @@ def _grupos_com_empresas():
         SELECT g.id AS gid, g.nome AS gnome, g.situacao AS gsit,
                g.motivo_desativacao AS gmot, g.motivo_desativacao_obs AS gmot_obs,
                c.id, c.numero_cliente, c.nome_razao_social, c.tipo_pessoa, c.regime_tributario,
-               e.cidade, e.estado
+               c.cpf_cnpj, e.cidade, e.estado
           FROM grupos_clientes g
           LEFT JOIN cliente_grupo_relacao r ON r.grupo_id = g.id
           LEFT JOIN clientes c ON c.id = r.cliente_id
@@ -61,7 +61,8 @@ def _grupos_com_empresas():
             g['empresas'].append({
                 'id': r['id'], 'numero': r['numero_cliente'],
                 'nome': (r['nome_razao_social'] or '').strip(), 'tipo': r['tipo_pessoa'],
-                'regime': r['regime_tributario'],
+                'regime': r['regime_tributario'], 'doc': r['cpf_cnpj'] or '',
+                'reg': 'pf' if r['tipo_pessoa'] == 'PF' else (r['regime_tributario'] or '').lower(),
                 'local': f"{_cidade_titulo(r['cidade'])}/{r['estado']}" if r['cidade'] else '',
             })
     for g in grupos_d.values():
