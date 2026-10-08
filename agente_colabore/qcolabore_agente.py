@@ -41,7 +41,7 @@ try:
 except ImportError:                  # noqa: em outra plataforma o autostart vira no-op
     winreg = None
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Assets embutidos no executável (Nuitka --include-data-file) — ver gerar_assets.py.
 # Em produção ficam ao lado do .exe; em desenvolvimento, ao lado deste .py.
@@ -424,6 +424,23 @@ def copiar_para_nao_enviados(raiz_vigiada, caminho, motivo):
         return None
 
 
+def data_do_arquivo(st):
+    """A data que vale para o corte: a MAIS RECENTE entre "modificado" e
+    "criado" (08/10/2026).
+
+    Arquivo COLADO numa pasta mantém a data de modificação original — o
+    certificado emitido em 2025 e colado hoje chegava como 2025 e era ignorado
+    pelo corte (5009 e 428 em 08/10/2026). No Windows, "criado" é o momento em
+    que o arquivo apareceu NESTA pasta (colar/copiar), então o mais recente dos
+    dois diz quando ele chegou. Histórico antigo de verdade tem os dois velhos
+    e continua ignorado.
+    """
+    criado = getattr(st, "st_birthtime", None)
+    if criado is None and os.name == "nt":
+        criado = st.st_ctime            # no Windows, st_ctime é a criação
+    return max(st.st_mtime, criado or 0)
+
+
 def arquivos_para_olhar(pasta):
     """TODOS os arquivos da pasta e das SUBPASTAS, em qualquer profundidade.
 
@@ -453,7 +470,9 @@ def arquivos_para_olhar(pasta):
                 continue
             if not os.path.isfile(cheio):
                 continue
-            if agora - st.st_mtime < MARGEM_ESTABILIDADE:
+            # colado agora tem "modificado" antigo e "criado" recente: a margem
+            # olha a data mais nova, senão leria um arquivo pela metade
+            if agora - data_do_arquivo(st) < MARGEM_ESTABILIDADE:
                 continue
             saida.append((cheio, st))
     return saida
@@ -624,7 +643,7 @@ class Worker(threading.Thread):
                     # aqui. Vem ANTES do caderninho de propósito: numa pasta com
                     # anos de histórico, nem vale calcular hash do que é velho
                     # demais para mandar.
-                    if corte and _dt.date.fromtimestamp(st.st_mtime) < corte:
+                    if corte and _dt.date.fromtimestamp(data_do_arquivo(st)) < corte:
                         if self._ignorados.get(caminho) != st.st_mtime:
                             self._ignorados[caminho] = st.st_mtime
                             log.info("Ignorado (anterior a %s): %s", corte, nome)
