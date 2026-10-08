@@ -458,6 +458,7 @@
                 </div>
             </div>
 
+            {% if current_user.is_admin() %}
             <label class="cf-contador">
                 <input type="checkbox" id="is_contador" name="is_contador" value="1"
                        {% if cliente and cliente.is_contador %}checked{% endif %}>
@@ -468,6 +469,11 @@
                     com o titular igual a este cadastro.</small>
                 </span>
             </label>
+            {% else %}
+            {# só o admin marca contador; o JS ainda lê o estado (desabilitado não vai no POST) #}
+            <input type="checkbox" id="is_contador" hidden disabled
+                   {% if cliente and cliente.is_contador %}checked{% endif %}>
+            {% endif %}
         </div>
 
         </div>{# /cf-main #}

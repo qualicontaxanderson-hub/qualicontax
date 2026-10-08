@@ -174,10 +174,23 @@ def _ler_socios(form):
     return out
 
 
+def _eh_contador(form, cliente_id=None):
+    """A marca de CONTADOR só o ADMIN muda (08/10/2026: a equipe marcava as
+    empresas como contador). Para os demais vale o que já está gravado — a
+    caixa nem aparece, e o que vier no form é ignorado."""
+    if current_user.is_admin():
+        return bool(form.get('is_contador'))
+    if not cliente_id:
+        return False
+    r = execute_query("SELECT is_contador FROM clientes WHERE id = %s",
+                      (cliente_id,), fetch=True, fetch_one=True)
+    return bool(r and r.get('is_contador'))
+
+
 def _socios_e_contador_faltando(form, cliente_id=None):
     falta = []
     # contador: todo cadastro, menos o que é ele mesmo contador
-    if not form.get('is_contador'):
+    if not _eh_contador(form, cliente_id):
         kid = form.get('contador_id', type=int)
         k = execute_query("SELECT id, is_contador, situacao FROM clientes WHERE id = %s",
                           (kid,), fetch=True, fetch_one=True) if kid else None
@@ -489,7 +502,7 @@ def novo():
 
             # Marca de CONTADOR (fora do INSERT: a lista de colunas do create()
             # é explícita e não inclui is_contador).
-            if request.form.get('is_contador'):
+            if _eh_contador(request.form):
                 ClienteContador.marcar_como_contador(cliente_id, 1)
 
             # Adicionar aos ramos de atividade selecionados (múltiplos)
@@ -502,7 +515,7 @@ def novo():
 
             # Grupo de empresas, contador e sócios (obrigatórios desde 07/10/2026)
             _salvar_grupo(cliente_id, request.form.get('grupo_id', type=int))
-            if not request.form.get('is_contador'):
+            if not _eh_contador(request.form):
                 _salvar_contador(cliente_id, request.form.get('contador_id', type=int))
             if request.form.get('tipo_pessoa') == 'PJ':
                 _salvar_socios(cliente_id, _ler_socios(request.form) or [])
@@ -1288,10 +1301,11 @@ def editar(id):
                 # Marca de CONTADOR (fora do UPDATE, que tem lista de colunas
                 # explícita). Desmarcar pode ser RECUSADO se o cadastro ainda
                 # for contador de alguém.
-                r_cont = ClienteContador.marcar_como_contador(
-                    id, 1 if request.form.get('is_contador') else 0)
-                if not r_cont.get('ok') and r_cont.get('erro'):
-                    flash(r_cont['erro'], 'warning')
+                _contador = _eh_contador(request.form, id)
+                if current_user.is_admin():
+                    r_cont = ClienteContador.marcar_como_contador(id, 1 if _contador else 0)
+                    if not r_cont.get('ok') and r_cont.get('erro'):
+                        flash(r_cont['erro'], 'warning')
 
                 # Gerenciar ramos de atividade (múltiplos)
                 ramos_ids_novos = request.form.getlist('ramos_atividade_ids')
@@ -1314,7 +1328,7 @@ def editar(id):
                     registrar('escrita.alterou_grupo_cliente', 'cadastros', tabela='clientes',
                               registro_id=id, antes={'grupos': _mud_grupo[0]},
                               depois={'grupos': [_mud_grupo[1]]})
-                if not request.form.get('is_contador'):
+                if not _contador:
                     _salvar_contador(id, request.form.get('contador_id', type=int))
                 if request.form.get('tipo_pessoa') == 'PJ':
                     _salvar_socios(id, _ler_socios(request.form) or [])
