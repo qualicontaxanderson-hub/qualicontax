@@ -1071,7 +1071,7 @@ function novoGrupo() {
            body: JSON.stringify({nome: nome})})
         .then(function (r) { return r.json(); })
         .then(function (d) {
-            if (!d.success) { alert(d.message || 'Não consegui criar o grupo.'); return; }
+            if (!d.success) { alert(d.message || d.error || 'Não consegui criar o grupo.'); return; }
             if (!grupoPorId(d.id)) {
                 GRUPOS.push({id: d.id, nome: d.nome, sigla: qIniciais(d.nome), empresas: 0, locais: '', numeros: [],
                              busca: d.nome.toLowerCase()});
@@ -1092,7 +1092,7 @@ function novoRamo() {
            body: JSON.stringify({nome: nome})})
         .then(function (r) { return r.json(); })
         .then(function (d) {
-            if (!d.success) { alert(d.message || 'Não consegui criar o ramo.'); return; }
+            if (!d.success) { alert(d.message || d.error || 'Não consegui criar o ramo.'); return; }
             var cb = document.getElementById('ramo_' + d.id);
             if (!cb) {
                 var lb = document.createElement('label');
@@ -1360,7 +1360,7 @@ function vigiaArmar() {
     fetch('/api/cnpj-vigia/' + cnpj + '/armar', {method: 'POST', headers: {'Content-Type': 'application/json'},
            body: JSON.stringify({cliente_id: VIGIA_CLIENTE_ID})})
         .then(r => r.json())
-        .then(d => { if (d.success) vigiaDesenha(d.vigia, cnpj); else { alert(d.message || 'Não foi possível armar a vigia.'); vigiaDesenha(null, cnpj); } })
+        .then(d => { if (d.success) vigiaDesenha(d.vigia, cnpj); else { alert(d.message || d.error || 'Não foi possível armar a vigia.'); vigiaDesenha(null, cnpj); } })
         .catch(() => { alert('Não foi possível armar a vigia agora.'); vigiaDesenha(null, cnpj); });
 }
 function vigiaAcao(acao) {

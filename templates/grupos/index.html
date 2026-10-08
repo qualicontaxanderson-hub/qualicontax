@@ -321,7 +321,7 @@ function gcNovoGrupo() {
                    body: JSON.stringify({nome: nome})})
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
-                    if (!d.success) { alert(d.message || 'Não consegui criar o grupo.'); return; }
+                    if (!d.success) { alert(d.message || d.error || 'Não consegui criar o grupo.'); return; }
                     if (d.ja_existia) alert('O grupo "' + d.nome + '" já existia.');
                     location.reload();
                 })
@@ -341,7 +341,7 @@ function gmEl(tag, cls, txt) {
 function gmPost(url, dados) {
     return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(dados || {})})
         .then(function (r) { return r.json(); })
-        .then(function (d) { if (!d.success) throw new Error(d.message || 'Não deu certo. Tente de novo.'); return d; });
+        .then(function (d) { if (!d.success) throw new Error(d.message || d.error || 'Não deu certo. Tente de novo.'); return d; });
 }
 function gmErro(e) { alert(e && e.message ? e.message : 'Não consegui falar com o servidor. Tente de novo.'); }
 
@@ -358,7 +358,7 @@ document.addEventListener('keydown', function (e) {
 
 function gmAbrir(id) {
     fetch('/grupos/' + id + '/painel').then(function (r) { return r.json(); }).then(function (d) {
-        if (!d.success) { alert(d.message || 'Grupo não encontrado.'); return; }
+        if (!d.success) { alert(d.message || d.error || 'Grupo não encontrado.'); return; }
         GM = d.grupo;
         document.getElementById('gmBusca').value = '';
         document.getElementById('gmRes').hidden = true;

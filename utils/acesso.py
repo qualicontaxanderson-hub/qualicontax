@@ -104,6 +104,13 @@ MAPA = {
     'clientes.cnpj_vigia_armar':       'clientes.edit',
     'clientes.cnpj_vigia_acao':        'clientes.edit',
     'clientes.delete':                 'clientes.delete',
+    # ajudantes do formulário de cliente (07/10/2026) — sem esta linha caíam em
+    # "só admin" e a equipe não conseguia criar grupo/ramo nem buscar sócio
+    'clientes.cadastros_buscar':       ('clientes.create', 'clientes.edit'),
+    'clientes.socios_da_receita':      ('clientes.create', 'clientes.edit'),
+    'clientes.proximo_numero_pf':      ('clientes.create', 'clientes.edit'),
+    'clientes.ramo_rapido':            ('clientes.create', 'clientes.edit'),
+    'clientes.grupo_rapido':           ('clientes.create', 'clientes.edit', 'grupos.index'),
     'adicionais.index':                'clientes.index',
     'adicionais.sync_dropbox_anp':     'clientes.edit',
     'documentos.download':             'clientes.index',
