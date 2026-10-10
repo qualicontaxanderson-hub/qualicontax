@@ -19,7 +19,7 @@ from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente
 from models.grupo_cliente import GrupoCliente
-from models.ramo_atividade import RamoAtividade
+from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
 from models.cadastro_anp import CadastroAnp
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
@@ -73,11 +73,32 @@ def _obrigatorios_faltando(form):
         falta.append('grupo de empresas')
     if not (form.get('email') or '').strip():
         falta.append('e-mail')
-    if len(re.sub(r'\D', '', form.get('celular') or '')) < 10:
+    if not _telefone_valido(form.get('celular')):
         falta.append('celular')
-    if not [r for r in form.getlist('ramos_atividade_ids') if r.strip()]:
+    tel = form.get('telefone') or ''
+    if re.sub(r'\D', '', tel) and not _telefone_valido(tel):
+        falta.append('telefone (número inválido)')
+    ids = [int(r) for r in form.getlist('ramos_atividade_ids') if r.strip().isdigit()]
+    tipo = 'PF' if form.get('tipo_pessoa') == 'PF' else 'PJ'
+    if not ids:
         falta.append('ramo de atividade')
+    else:
+        # Ramo é de PF ou de PJ (10/10/2026): o da outra pessoa não conta.
+        marcas = ','.join(['%s'] * len(ids))
+        ok = execute_query(f"SELECT COUNT(*) n FROM ramos_atividade WHERE id IN ({marcas}) AND tipo_pessoa = %s",
+                           (*ids, tipo), fetch=True, fetch_one=True) or {}
+        if (ok.get('n') or 0) != len(set(ids)):
+            falta.append('ramo de atividade de ' + ('pessoa física' if tipo == 'PF' else 'empresa'))
     return falta
+
+
+def _telefone_valido(valor):
+    """10 ou 11 dígitos (DDD + número) e não um enchimento: a Receita devolve
+    "000000000000" quando a empresa não tem o 2º telefone, e isso passava como
+    celular (10/10/2026: 13 cadastros salvos assim). Mesmo dígito repetido
+    ("(11) 1111-1111") também não é número."""
+    d = re.sub(r'\D', '', valor or '')
+    return len(d) in (10, 11) and len(set(d)) > 1 and not d.startswith('0')
 
 
 def _msg_faltando(falta):
@@ -317,6 +338,7 @@ def index():
         tipo_pessoa = request.args.get('tipo_pessoa', '')
         grupo_id    = request.args.get('grupo_id', '')
         ramo_id     = request.args.get('ramo_id', '')
+        segmento    = request.args.get('segmento', '')
         busca       = request.args.get('busca', '')
         busca_tipo  = request.args.get('busca_tipo', 'nome')   # 'nome' | 'numero' | 'ramo'
         sort_by     = request.args.get('sort_by',  'numero')   # 'nome' | 'numero'
@@ -336,6 +358,8 @@ def index():
             filters['grupo_id'] = grupo_id
         if ramo_id:
             filters['ramo_id'] = ramo_id
+        if segmento in SEGMENTO_NOME:
+            filters['segmento'] = segmento
         if busca:
             filters['busca']      = busca
             filters['busca_tipo'] = busca_tipo
@@ -385,7 +409,8 @@ def index():
                               sort_dir=sort_dir,
                               filtros={'situacao': situacao, 'regime': regime,
                                        'tipo_pessoa': tipo_pessoa, 'grupo_id': grupo_id,
-                                       'ramo_id': ramo_id, 'busca': busca,
+                                       'ramo_id': ramo_id, 'segmento': filters.get('segmento', ''),
+                                       'busca': busca,
                                        'busca_tipo': busca_tipo})
     
     except Exception as e:
@@ -402,7 +427,7 @@ def index():
                               sort_by='numero',
                               sort_dir='asc',
                               filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '',
-                                       'grupo_id': '', 'ramo_id': '',
+                                       'grupo_id': '', 'ramo_id': '', 'segmento': '',
                                        'busca': '', 'busca_tipo': 'nome'})
 
 
@@ -1909,23 +1934,39 @@ def ramo_rapido():
     """"Novo ramo" no formulário do cliente (07/10/2026), como o grupo rápido.
     O nome fica como foi digitado (os ramos usam maiúscula e minúscula);
     nome igual, sem diferenciar maiúscula, devolve o ramo que já existe."""
-    nome = re.sub(r'\s+', ' ', ((request.get_json(silent=True) or {}).get('nome') or '')).strip()
+    dados = request.get_json(silent=True) or {}
+    nome = re.sub(r'\s+', ' ', (dados.get('nome') or '')).strip()
+    tipo = 'PF' if dados.get('tipo_pessoa') == 'PF' else 'PJ'   # ramo nasce no tipo da tela (10/10/2026)
+    # Ramo de empresa nasce dentro do segmento em que foi pedido (10/10/2026).
+    seg = None if tipo == 'PF' else (dados.get('segmento') or '').upper()
     if not nome:
         return jsonify(success=False, message='Digite o nome do ramo.'), 400
+    if tipo == 'PJ' and seg not in SEGMENTO_NOME:
+        return jsonify(success=False, message='Escolha primeiro o segmento (Comércio, Serviços, Locação ou Indústria).'), 400
     if len(nome) > 100:
         return jsonify(success=False, message='Nome muito longo (máximo 100 letras).'), 400
-    existe = execute_query("SELECT id, nome, descricao, situacao FROM ramos_atividade "
+    existe = execute_query("SELECT id, nome, tipo_pessoa, segmento, descricao, situacao FROM ramos_atividade "
                            "WHERE UPPER(TRIM(nome)) = %s LIMIT 1", (nome.upper(),), fetch=True, fetch_one=True)
     if existe:
         if existe.get('situacao') != 'ATIVO':
             RamoAtividade.update(existe['id'], existe['nome'], existe.get('descricao'), 'ATIVO')
-        return jsonify(success=True, id=existe['id'], nome=existe['nome'], ja_existia=True)
-    rid = RamoAtividade.create(nome, None, 'ATIVO')
+        if existe.get('tipo_pessoa') != tipo:
+            outro = 'pessoa física' if existe.get('tipo_pessoa') == 'PF' else 'empresa'
+            return jsonify(success=False, message=f'"{existe["nome"]}" já existe como ramo de {outro}. '
+                                                  'Escolha outro nome ou peça para mudar na tela Ramo de Atividade.'), 400
+        if tipo == 'PJ' and existe.get('segmento') != seg:
+            onde = SEGMENTO_NOME.get(existe.get('segmento'), 'sem segmento')
+            return jsonify(success=False, message=f'"{existe["nome"]}" já existe em {onde}. '
+                                                  f'Marque o segmento {onde} para escolher esse ramo.'), 400
+        return jsonify(success=True, id=existe['id'], nome=existe['nome'], tipo_pessoa=tipo,
+                       segmento=existe.get('segmento'), ja_existia=True)
+    rid = RamoAtividade.create(nome, None, 'ATIVO', tipo, seg)
     if not rid:
         return jsonify(success=False, message='Não consegui criar o ramo agora. Tente de novo.'), 500
     registrar('escrita.criou_ramo', 'cadastros', tabela='ramos_atividade', registro_id=rid,
-              depois={'nome': nome, 'situacao': 'ATIVO', 'origem': 'formulario_cliente'})
-    return jsonify(success=True, id=rid, nome=nome, ja_existia=False)
+              depois={'nome': nome, 'tipo_pessoa': tipo, 'segmento': seg, 'situacao': 'ATIVO',
+                      'origem': 'formulario_cliente'})
+    return jsonify(success=True, id=rid, nome=nome, tipo_pessoa=tipo, segmento=seg, ja_existia=False)
 
 
 @clientes.route('/clientes/api/cadastros/buscar')

@@ -320,27 +320,42 @@
                     <div id="cnaes_secundarios_list" class="cf-cnaes-box"></div>
                 </div>
 
-                <!-- Ramos de atividade -->
+                <!-- Ramos de atividade: 1º o segmento, depois o ramo (10/10/2026). A
+                     empresa conta como "de Comércio" porque o ramo dela é de Comércio. -->
                 <div class="cf-fg cf-s12">
-                    <div class="cf-ramos-head">
-                        <label class="cf-lbl" style="margin:0;">Ramo de atividade <span class="cf-req">*</span> <span class="cf-opt">— marque um ou mais</span></label>
-                        <button type="button" class="cf-ramos-novo" onclick="novoRamo()" title="Cria um ramo novo sem sair desta tela">
-                            <i class="fas fa-plus"></i> Novo ramo
+                    <label class="cf-lbl" style="margin:0;">Ramo de atividade <span class="cf-req">*</span>
+                        <span class="cf-opt pj-only">— 1º o segmento, depois o ramo (pode marcar mais de um)</span>
+                        <span class="cf-opt pf-only">— clique para marcar um ou mais</span></label>
+                    <div class="cf-segs" id="segsBar">
+                        {% for sg, sg_nome in SEGMENTOS_RAMO %}
+                        <button type="button" class="cf-seg" data-seg="{{ sg }}" aria-pressed="false" onclick="toggleSeg('{{ sg }}')">
+                            <i class="fas fa-check"></i>{{ sg_nome }}
                         </button>
-                    </div>
-                    <div class="cf-ramos-grid" id="ramosGrid">
-                        {% for ramo in ramos_atividade or [] %}
-                        <label class="cf-ramo" for="ramo_{{ ramo.id }}">
-                            <input type="checkbox" name="ramos_atividade_ids"
-                                   value="{{ ramo.id }}" id="ramo_{{ ramo.id }}"
-                                   {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
-                            <span>{{ ramo.nome }}</span>
-                        </label>
                         {% endfor %}
                     </div>
-                    {% if not ramos_atividade %}
-                    <p class="cf-hint" id="ramosVazio">Nenhum ramo cadastrado ainda. Clique em <b>Novo ramo</b> para criar o primeiro.</p>
-                    {% endif %}
+                    <p class="cf-seg-sug" id="segSug" hidden></p>
+                    <div id="ramosGrid">
+                        {% for sg, sg_nome in SEGMENTOS_RAMO + [('PF', 'Pessoa física')] %}
+                        <div class="cf-seg-grupo" data-seg="{{ sg }}" hidden>
+                            {% if sg != 'PF' %}<div class="cf-seg-tit">{{ sg_nome }}</div>{% endif %}
+                            <div class="cf-ramos-grid">
+                                {% for ramo in ramos_atividade or [] if (sg == 'PF' and ramo.tipo_pessoa == 'PF') or (ramo.tipo_pessoa != 'PF' and ramo.segmento == sg) %}
+                                <label class="cf-ramo" for="ramo_{{ ramo.id }}" data-tipo="{{ 'PF' if sg == 'PF' else 'PJ' }}">
+                                    <input type="checkbox" name="ramos_atividade_ids"
+                                           value="{{ ramo.id }}" id="ramo_{{ ramo.id }}"
+                                           {% if ramos_cliente and ramo.id in ramos_cliente %}checked{% endif %}>
+                                    <i class="fas fa-check"></i><span>{{ ramo.nome }}</span>
+                                </label>
+                                {% endfor %}
+                                <button type="button" class="cf-ramo-add" onclick="novoRamo('{{ sg }}')"
+                                        title="Cria um ramo novo{{ '' if sg == 'PF' else ' em ' ~ sg_nome }} sem sair desta tela">
+                                    <i class="fas fa-plus"></i> novo ramo
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p class="cf-hint" id="ramosVazio" hidden>Clique no segmento da empresa — Comércio, Prestação de Serviços, Locação ou Indústria — e depois no ramo.</p>
                 </div>
             </div>
         </div>
@@ -686,17 +701,45 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .cf-cnaes-box { border:1px solid #e2e8f0; border-radius:9px; padding:12px; background:#f9fafb;
                 max-height:200px; overflow-y:auto; }
 
-.cf-ramos-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.cf-ramos-novo { font-size:12.5px; font-weight:600; color:#15803d; text-decoration:none; cursor:pointer; font-family:inherit;
-                 background:#ecfdf5; border:1px solid #d1fae5; border-radius:7px; padding:4px 10px; }
-.cf-ramos-novo:hover { background:#d1fae5; }
-.cf-ramos-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:8px;
-                 max-height:236px; overflow-y:auto; padding:2px; }
-.cf-ramo { display:flex; align-items:center; gap:9px; padding:8px 11px; border:1px solid #e2e8f0;
-           border-radius:9px; background:#fff; cursor:pointer; font-size:13px; color:#334155; }
-.cf-ramo input { width:15px; height:15px; margin:0; accent-color:#16a34a; flex-shrink:0; }
-.cf-ramo:hover { border-color:#86efac; background:#f0faf4; }
-.cf-ramo:has(input:checked) { border-color:#22c55e; background:#ecfdf5; color:#15803d; font-weight:600; }
+/* Segmento (10/10/2026): botões grandes acima dos ramos; cada segmento ligado
+   abre o seu grupo de pílulas. */
+.cf-segs { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px; }
+.cf-segs[hidden] { display:none; }
+.cf-seg { display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border:1.5px solid #d7e3dc;
+          border-radius:10px; background:#fff; cursor:pointer; font:inherit; font-size:13.5px; font-weight:700; color:#334155; }
+.cf-seg > i { display:none; font-size:12px; }
+.cf-seg:hover { border-color:#86efac; background:#f0faf4; color:#15803d; }
+.cf-seg.on { background:#ecfdf5; border-color:#16a34a; color:#15803d; }
+.cf-seg.on > i { display:inline; }
+.cf-seg-sug { margin:2px 0 0; font-size:12.5px; color:#92400e; }
+.cf-seg-sug[hidden] { display:none; }
+.cf-seg-grupo { margin-top:10px; padding:10px 12px; border:1px solid #e8efeb; border-radius:11px; background:#fafcfb; }
+.cf-seg-grupo[data-seg="PF"] { padding:0; border:0; background:none; }
+.cf-seg-grupo[hidden] { display:none; }
+.cf-seg-tit { font-size:11.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#64748b; margin-bottom:8px; }
+.cf-ramo-add { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border:1px dashed #a7c4b5;
+               border-radius:99px; background:transparent; cursor:pointer; font:inherit; font-size:13px;
+               font-weight:600; color:#15803d; white-space:nowrap; }
+.cf-ramo-add:hover { background:#ecfdf5; border-style:solid; }
+.cf-seg-grupo[data-seg="PF"] .cf-ramo-add { color:#6d28d9; border-color:#c4b5fd; }
+.cf-seg-grupo[data-seg="PF"] .cf-ramo-add:hover { background:#f5f3ff; }
+#ramosVazio[hidden] { display:none; }
+/* Ramos em pílulas, como os filtros da tela de Grupos (10/10/2026). Só aparecem
+   os ramos do tipo de pessoa escolhido; o checkbox fica escondido na pílula. */
+.cf-ramos-grid { display:flex; flex-wrap:wrap; gap:8px; padding:2px; }
+.cf-ramo { position:relative; display:inline-flex; align-items:center; gap:6px; padding:7px 14px;
+           border:1px solid #d7e3dc; border-radius:99px; background:#fff; cursor:pointer;
+           font-size:13px; font-weight:600; color:#475569; user-select:none; }
+.cf-ramo input { position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }
+.cf-ramo > i { display:none; font-size:11px; }
+.cf-ramo:hover { border-color:#86efac; background:#f0faf4; color:#15803d; }
+.cf-ramo.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.cf-ramo.on > i { display:inline; color:#86efac; }
+.cf-ramo[data-tipo="PF"]:hover { border-color:#ddd6fe; background:#f5f3ff; color:#6d28d9; }
+.cf-ramo[data-tipo="PF"].on { background:#6d28d9; border-color:#6d28d9; color:#fff; }
+.cf-ramo[data-tipo="PF"].on > i { color:#ddd6fe; }
+.cf-ramo:has(input:focus-visible) { outline:2px solid #22c55e; outline-offset:2px; }
+.cf-ramo[hidden] { display:none; }
 
 /* is_contador */
 .cf-contador { display:flex; align-items:flex-start; gap:10px; margin-top:18px; padding-top:16px;
@@ -913,7 +956,85 @@ function toggleTipoFields() {
     if (pjNome) pjNome.required = (tipo === 'PJ');
     if (pjCnpj) pjCnpj.required = (tipo === 'PJ');
     if (typeof sugerirNumeroPF === 'function') sugerirNumeroPF();
+    filtrarRamos(tipo);
     atualizarResumo();
+}
+
+// Ramo é de PF ou de PJ e, na PJ, fica dentro de um segmento (10/10/2026).
+// PF: só o grupo de PF. PJ: a barra de segmentos e o grupo de cada segmento
+// ligado. Ramo que some da tela é desmarcado — senão iria junto no envio.
+var SEG_ON = {};
+function segAlgum() { return Object.keys(SEG_ON).some(function (k) { return SEG_ON[k]; }); }
+function filtrarRamos(tipo) {
+    var pj = tipo === 'PJ';
+    document.getElementById('segsBar').hidden = !pj;
+    if (pj && !segAlgum()) sugerirSegmento(false);
+    var algum = false;
+    document.querySelectorAll('#ramosGrid .cf-seg-grupo').forEach(function (g) {
+        var sg = g.dataset.seg;
+        var mostra = sg === 'PF' ? tipo === 'PF' : (pj && !!SEG_ON[sg]);
+        g.hidden = !mostra;
+        if (mostra && sg !== 'PF') algum = true;
+        g.querySelectorAll('.cf-ramo').forEach(function (lb) {
+            var cb = lb.querySelector('input');
+            if (!mostra) cb.checked = false;
+            lb.classList.toggle('on', cb.checked);
+        });
+    });
+    document.querySelectorAll('#segsBar .cf-seg').forEach(function (b) {
+        b.classList.toggle('on', !!SEG_ON[b.dataset.seg]);
+        b.setAttribute('aria-pressed', SEG_ON[b.dataset.seg] ? 'true' : 'false');
+    });
+    document.getElementById('ramosVazio').hidden = !(pj && !algum);
+    if (!pj) document.getElementById('segSug').hidden = true;
+}
+function toggleSeg(sg) {
+    SEG_ON[sg] = !SEG_ON[sg];
+    document.getElementById('segSug').hidden = true;
+    filtrarRamos(tipoPessoa());
+    atualizarResumo();
+}
+// Sugestão pelo CNAE principal da Receita — o mesmo critério do
+// segmento_do_cnae (models/ramo_atividade.py). Só liga o segmento; o ramo é
+// o usuário quem escolhe. Agro (01-03) e holding (64) ficam sem sugestão.
+function segmentoDoCnae(cnae) {
+    var d = String(cnae || '').replace(/\D/g, '').slice(0, 2);
+    if (d.length < 2) return '';
+    var n = parseInt(d, 10);
+    if ([45, 46, 47, 56].indexOf(n) >= 0) return 'COMERCIO';
+    if (n === 68 || n === 77) return 'LOCACAO';
+    if (n >= 5 && n <= 33) return 'INDUSTRIA';
+    if (n <= 3 || n === 64) return '';
+    return 'SERVICOS';
+}
+function sugerirSegmento(redesenha) {
+    if (tipoPessoa() !== 'PJ' || segAlgum()) return;
+    var cn = document.getElementById('cnae_fiscal'), ds = document.getElementById('cnae_fiscal_descricao');
+    var sg = segmentoDoCnae(cn && cn.value);
+    if (!sg) return;
+    SEG_ON[sg] = true;
+    var sug = document.getElementById('segSug');
+    sug.textContent = 'Segmento sugerido pela atividade na Receita (' + cn.value +
+        (ds && ds.value ? ' – ' + ds.value : '') + '). Confira e escolha o ramo.';
+    sug.hidden = false;
+    if (redesenha) filtrarRamos('PJ');
+}
+// Edição: o segmento já vem ligado pelos ramos marcados.
+document.querySelectorAll('#ramosGrid .cf-seg-grupo input:checked').forEach(function (cb) {
+    var sg = cb.closest('.cf-seg-grupo').dataset.seg;
+    if (sg !== 'PF') SEG_ON[sg] = true;
+});
+document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'ramos_atividade_ids') {
+        e.target.closest('.cf-ramo').classList.toggle('on', e.target.checked);
+    }
+});
+
+// Telefone de verdade: 10 ou 11 dígitos, sem enchimento. A Receita devolve
+// "000000000000" quando a empresa não tem o 2º telefone (10/10/2026).
+function telefoneValido(v) {
+    var d = String(v || '').replace(/\D/g, '');
+    return (d.length === 10 || d.length === 11) && d.charAt(0) !== '0' && new Set(d.split('')).size > 1;
 }
 
 // Toggle Isento de Inscrição Estadual
@@ -1096,16 +1217,22 @@ document.querySelector('form').addEventListener('submit', function(e) {
         }
     }
     var cel = document.getElementById('celular');
-    if (cel && cel.value.replace(/\D/g, '').length < 10) {
+    if (cel && !telefoneValido(cel.value)) {
         e.preventDefault();
-        alert('Digite o celular completo, com DDD.');
+        alert('Digite o celular completo, com DDD. Número só de zeros ou repetido não vale.');
         cel.focus();
         return false;
     }
-    if (!document.querySelector('input[name="ramos_atividade_ids"]:checked')) {
+    var gVazio = [].slice.call(document.querySelectorAll('#ramosGrid .cf-seg-grupo:not([hidden])'))
+        .filter(function (g) { return !g.querySelector('input:checked'); })[0];
+    if (!document.querySelector('input[name="ramos_atividade_ids"]:checked') || gVazio) {
         e.preventDefault();
-        alert('Marque pelo menos um ramo de atividade. Não achou o ramo da empresa? Clique em "Novo ramo".');
-        var g = document.getElementById('ramosGrid');
+        var tit = gVazio && gVazio.querySelector('.cf-seg-tit');
+        alert(tipoPessoa() === 'PJ' && !gVazio
+              ? 'Escolha o segmento da empresa (Comércio, Prestação de Serviços, Locação ou Indústria) e depois o ramo.'
+              : (tit ? 'Você marcou ' + tit.textContent + ': clique no ramo da empresa dentro dele. Não achou? Clique em "+ novo ramo".'
+                     : 'Marque pelo menos um ramo de atividade. Não achou? Clique em "+ novo ramo".'));
+        var g = gVazio || document.getElementById('segsBar');
         if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return false;
     }
@@ -1137,28 +1264,32 @@ function novoGrupo() {
 }
 
 // "Novo ramo": cria sem sair da tela, entra na lista e já vem marcado.
-function novoRamo() {
-    qPedirTexto({titulo: 'Novo ramo de atividade', rotulo: 'Nome do ramo', botao: 'Criar ramo',
-                 placeholder: 'Ex.: Posto de Gasolina'}).then(function (nome) {
+function novoRamo(seg) {
+    var grupo = document.querySelector('#ramosGrid .cf-seg-grupo[data-seg="' + seg + '"]');
+    var tit = grupo.querySelector('.cf-seg-tit');
+    qPedirTexto({titulo: tit ? 'Novo ramo em ' + tit.textContent : 'Novo ramo de pessoa física',
+                 rotulo: 'Nome do ramo', botao: 'Criar ramo',
+                 placeholder: seg === 'PF' ? 'Ex.: Produtor Rural' : 'Ex.: Posto de Gasolina'}).then(function (nome) {
     if (!nome) return;
     fetch('/clientes/api/ramo-rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
-           body: JSON.stringify({nome: nome})})
+           body: JSON.stringify({nome: nome, tipo_pessoa: seg === 'PF' ? 'PF' : 'PJ', segmento: seg === 'PF' ? null : seg})})
         .then(function (r) { return r.json(); })
         .then(function (d) {
             if (!d.success) { alert(d.message || d.error || 'Não consegui criar o ramo.'); return; }
             var cb = document.getElementById('ramo_' + d.id);
             if (!cb) {
                 var lb = document.createElement('label');
-                lb.className = 'cf-ramo'; lb.htmlFor = 'ramo_' + d.id;
+                lb.className = 'cf-ramo'; lb.htmlFor = 'ramo_' + d.id; lb.dataset.tipo = seg === 'PF' ? 'PF' : 'PJ';
                 cb = document.createElement('input');
                 cb.type = 'checkbox'; cb.name = 'ramos_atividade_ids'; cb.value = d.id; cb.id = 'ramo_' + d.id;
+                var ic = document.createElement('i'); ic.className = 'fas fa-check';
                 var sp = document.createElement('span'); sp.textContent = d.nome;
-                lb.appendChild(cb); lb.appendChild(sp);
-                document.getElementById('ramosGrid').appendChild(lb);
-                var vazio = document.getElementById('ramosVazio');
-                if (vazio) vazio.style.display = 'none';
+                lb.appendChild(cb); lb.appendChild(ic); lb.appendChild(sp);
+                var gr = grupo.querySelector('.cf-ramos-grid');
+                gr.insertBefore(lb, gr.querySelector('.cf-ramo-add'));
             }
             cb.checked = true;
+            cb.closest('label').classList.add('on');
             cb.closest('label').scrollIntoView({ behavior: 'smooth', block: 'center' });
             atualizarResumo();
             if (d.ja_existia) alert('O ramo "' + d.nome + '" já existia — foi marcado.');
@@ -1261,6 +1392,7 @@ function preencherDadosCNPJ(data) {
 
     tentarPreencher('cnae_fiscal', data.cnae_fiscal, 'CNAE Fiscal');
     tentarPreencher('cnae_fiscal_descricao', data.cnae_fiscal_descricao, 'Descrição do CNAE');
+    sugerirSegmento(true);
 
     if (data.cnaes_secundarios && Array.isArray(data.cnaes_secundarios) && data.cnaes_secundarios.length > 0) {
         const container = document.getElementById('cnaes_secundarios_container');
@@ -1305,7 +1437,7 @@ function preencherDadosCNPJ(data) {
 
     if (data.ddd_telefone_1) {
         const tel1 = String(data.ddd_telefone_1).replace(/\D/g, '');
-        if (tel1.length >= 10) {
+        if (telefoneValido(tel1)) {
             let t = tel1.length === 10 ? tel1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
                   : tel1.length === 11 ? tel1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : tel1;
             tentarPreencher('telefone', t, 'Telefone');
@@ -1314,7 +1446,7 @@ function preencherDadosCNPJ(data) {
 
     if (data.ddd_telefone_2) {
         const tel2 = String(data.ddd_telefone_2).replace(/\D/g, '');
-        if (tel2.length >= 10) {
+        if (telefoneValido(tel2)) {
             let t = tel2.length === 10 ? tel2.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
                   : tel2.length === 11 ? tel2.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : tel2;
             tentarPreencher('celular', t, 'Celular');
@@ -1608,8 +1740,19 @@ function aplicarModo(radio) {
 function sugerirNumeroPF() {
     var num = document.getElementById('numero_cliente');
     var cli = document.getElementById('modoCliente');
-    if (num && cli && cli.checked && !num.disabled && !num.value.trim() && tipoPessoa() === 'PF' && PROXIMO_PF) {
+    if (!num || !cli) return;
+    // PJ: o número é digitado. Se o que está no campo foi a sugestão da PF,
+    // ele sai (10/10/2026: a PJ herdava o 5010). O digitado à mão fica.
+    if (tipoPessoa() !== 'PF') {
+        if (window._numSugerido && num.value.trim() === String(window._numSugerido)) {
+            num.value = '';
+            atualizarResumo();
+        }
+        return;
+    }
+    if (cli.checked && !num.disabled && !num.value.trim() && PROXIMO_PF) {
         num.value = PROXIMO_PF;
+        window._numSugerido = PROXIMO_PF;
         atualizarResumo();
     }
 }

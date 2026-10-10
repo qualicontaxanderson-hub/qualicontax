@@ -188,6 +188,14 @@ class Cliente:
             conditions.append("cgr.grupo_id = %s")
             params.append(filters['grupo_id'])
 
+        # Segmento (10/10/2026): a empresa é do segmento se UM ramo dela for.
+        # EXISTS para não multiplicar linhas de quem tem dois ramos no mesmo.
+        if filters.get('segmento'):
+            conditions.append("EXISTS (SELECT 1 FROM cliente_ramo_atividade_relacao xs "
+                              "JOIN ramos_atividade rs ON rs.id = xs.ramo_atividade_id "
+                              "WHERE xs.cliente_id = c.id AND rs.segmento = %s)")
+            params.append(filters['segmento'])
+
         if filters.get('ramo_id'):
             need_ramo_join = True
             conditions.append("crar.ramo_atividade_id = %s")

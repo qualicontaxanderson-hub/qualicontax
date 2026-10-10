@@ -1468,6 +1468,45 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # Ramo de atividade por tipo de pessoa e por segmento (10/10/2026, pedido do
+    # Anderson). PF é empresário, produtor rural ou locador — nunca posto de
+    # gasolina. Todo ramo de empresa cai num segmento (Comércio, Prestação de
+    # Serviços, Locação, Indústria): a empresa conta como "de Comércio" porque
+    # o ramo dela é. Medido antes: 56 postos e 25 distribuidoras sem o ramo
+    # "Comércio" marcado, 24 transportadoras sem "Serviços" — a contagem por
+    # ramo genérico saía errada.
+    def _tem_coluna(col):
+        r = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ramos_atividade' "
+            "AND COLUMN_NAME = %s", (col,), fetch=True, fetch_one=True) or {}
+        return r.get('cnt', 0) > 0
+
+    if not _tem_coluna('tipo_pessoa'):
+        _migrate("ALTER TABLE ramos_atividade ADD COLUMN tipo_pessoa ENUM('PJ','PF') NOT NULL DEFAULT 'PJ' AFTER nome")
+    if not _tem_coluna('segmento'):
+        _migrate("ALTER TABLE ramos_atividade ADD COLUMN segmento "
+                 "ENUM('COMERCIO','SERVICOS','LOCACAO','INDUSTRIA') NULL AFTER tipo_pessoa")
+        _migrate("UPDATE ramos_atividade SET nome = TRIM(nome) WHERE CHAR_LENGTH(nome) <> CHAR_LENGTH(TRIM(nome))")
+        _migrate("UPDATE ramos_atividade SET tipo_pessoa = 'PF', segmento = NULL WHERE nome = 'Empresário'")
+        for _seg, _nomes in (
+                ('COMERCIO', ('Comércio', 'Posto de Gasolina', 'Loja de Conveniencia', 'Distribuidora',
+                              'Farmácia', 'Gás Liquefeito de Petróleo', 'Restaurante')),
+                ('SERVICOS', ('Serviços', 'Lava Rápido', 'Transportadoras', 'Construção Civil', 'Consultoria',
+                              'Contabilidade', 'Tecnologia', 'Terceirização')),
+                ('LOCACAO', ('Administradora de Bens',)),
+                ('INDUSTRIA', ('Indústria',))):
+            _migrate("UPDATE ramos_atividade SET segmento = '%s' WHERE tipo_pessoa = 'PJ' AND nome IN (%s)"
+                     % (_seg, ', '.join("'%s'" % n for n in _nomes)))
+        # O ramo genérico vira "em geral" dentro do próprio segmento: quem só
+        # tinha "Comércio" continua contando como Comércio.
+        _migrate("UPDATE ramos_atividade SET nome = 'Comércio em geral' WHERE nome = 'Comércio'")
+        _migrate("UPDATE ramos_atividade SET nome = 'Serviços em geral' WHERE nome = 'Serviços'")
+        for _nome in ('Produtor Rural', 'Locador de Imóveis'):
+            _migrate("INSERT INTO ramos_atividade (nome, tipo_pessoa, situacao) "
+                     "SELECT '%s', 'PF', 'ATIVO' FROM DUAL "
+                     "WHERE NOT EXISTS (SELECT 1 FROM ramos_atividade WHERE nome = '%s')" % (_nome, _nome))
+
     print("✓ Migrations concluídas")
 
 

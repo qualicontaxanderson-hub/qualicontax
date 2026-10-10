@@ -181,6 +181,10 @@ from utils.acesso import portao as _portao_acesso, pode_rota as _pode_rota
 app.before_request(_portao_acesso)
 # Nos templates: {% if pode_rota('clientes.editar') %} — a mesma regra do portão.
 app.jinja_env.globals['pode_rota'] = _pode_rota
+# Segmentos do ramo de atividade (10/10/2026): uma lista só para cadastro,
+# tela de ramos e filtro da lista de clientes.
+from models.ramo_atividade import SEGMENTOS as _SEGMENTOS_RAMO
+app.jinja_env.globals['SEGMENTOS_RAMO'] = _SEGMENTOS_RAMO
 
 
 # Template filters

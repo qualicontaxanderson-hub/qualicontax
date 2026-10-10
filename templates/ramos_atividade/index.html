@@ -85,7 +85,7 @@
             <div class="lst-row ra-row {% if inativo %}lst-row-off{% endif %}">
                 <div class="ra-c-main">
                     <div class="lst-name" title="{{ ramo.nome }}">{{ ramo.nome }}</div>
-                    <div class="lst-meta">{{ ramo.descricao or '—' }}</div>
+                    <div class="lst-meta">{% if ramo.tipo_pessoa == 'PF' %}<span style="color:#6d28d9;font-weight:700;">Pessoa física</span>{% else %}<span style="color:#15803d;font-weight:700;">{{ (SEGMENTOS_RAMO|selectattr(0, 'equalto', ramo.segmento)|map(attribute=1)|first) or 'Empresa — sem segmento' }}</span>{% endif %} · {{ ramo.descricao or '—' }}</div>
                 </div>
 
                 <div class="ra-c-total">

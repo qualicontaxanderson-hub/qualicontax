@@ -2,10 +2,18 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from utils.auth_helper import login_required
-from models.ramo_atividade import RamoAtividade
+from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
 from models.cliente import Cliente
 
 ramos_atividade = Blueprint('ramos_atividade', __name__)
+
+
+def _tipo_e_segmento(form):
+    """O campo "Segmento" da tela traz o segmento da empresa ou "PF" (10/10/2026)."""
+    v = (form.get('segmento') or '').upper()
+    if v == 'PF':
+        return 'PF', None
+    return 'PJ', (v if v in SEGMENTO_NOME else None)
 
 
 @ramos_atividade.route('/ramodeatividade')
@@ -47,14 +55,18 @@ def novo():
             nome = request.form.get('nome')
             descricao = request.form.get('descricao')
             situacao = request.form.get('situacao', 'ATIVO')
+            tipo_pessoa, segmento = _tipo_e_segmento(request.form)
             
             # Validação
             if not nome:
                 flash('Nome do ramo de atividade é obrigatório!', 'danger')
                 return render_template('ramos_atividade/form.html', ramo=None)
+            if tipo_pessoa == 'PJ' and not segmento:
+                flash('Escolha o segmento do ramo.', 'danger')
+                return render_template('ramos_atividade/form.html', ramo=None)
             
             # Criar ramo
-            ramo_id = RamoAtividade.create(nome, descricao, situacao)
+            ramo_id = RamoAtividade.create(nome, descricao, situacao, tipo_pessoa, segmento)
             
             if ramo_id:
                 flash('Ramo de atividade criado com sucesso!', 'success')
@@ -113,14 +125,18 @@ def editar(id):
             nome = request.form.get('nome')
             descricao = request.form.get('descricao')
             situacao = request.form.get('situacao', 'ATIVO')
+            tipo_pessoa, segmento = _tipo_e_segmento(request.form)
             
             # Validação
             if not nome:
                 flash('Nome do ramo de atividade é obrigatório!', 'danger')
                 return render_template('ramos_atividade/form.html', ramo=ramo)
+            if tipo_pessoa == 'PJ' and not segmento:
+                flash('Escolha o segmento do ramo.', 'danger')
+                return render_template('ramos_atividade/form.html', ramo=ramo)
             
             # Atualizar ramo
-            sucesso = RamoAtividade.update(id, nome, descricao, situacao)
+            sucesso = RamoAtividade.update(id, nome, descricao, situacao, tipo_pessoa, segmento)
             
             if sucesso is not None:
                 flash('Ramo de atividade atualizado com sucesso!', 'success')

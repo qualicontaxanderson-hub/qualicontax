@@ -4,6 +4,32 @@ import threading
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista
 
+# Segmento: o nível acima do ramo (10/10/2026, pedido do Anderson). Todo ramo
+# de empresa pertence a um; a empresa é "de Comércio" porque um ramo dela é —
+# ninguém marca "Comércio" à parte. Ramo de pessoa física não tem segmento.
+SEGMENTOS = [('COMERCIO', 'Comércio'), ('SERVICOS', 'Prestação de Serviços'),
+             ('LOCACAO', 'Locação'), ('INDUSTRIA', 'Indústria')]
+SEGMENTO_NOME = dict(SEGMENTOS)
+
+
+def segmento_do_cnae(cnae):
+    """Sugestão de segmento pelo CNAE principal da Receita (só sugestão: o
+    usuário confere). Agro (01-03) e holding (64) ficam sem sugestão."""
+    d = ''.join(ch for ch in str(cnae or '') if ch.isdigit())[:2]
+    if len(d) < 2:
+        return None
+    n = int(d)
+    if n in (45, 46, 47, 56):          # 56 = restaurante: Comércio, por decisão do Anderson
+        return 'COMERCIO'
+    if n in (68, 77):                  # aluguel de imóveis / de bens móveis
+        return 'LOCACAO'
+    if 5 <= n <= 33:
+        return 'INDUSTRIA'
+    if n <= 3 or n == 64:
+        return None
+    return 'SERVICOS'
+
+
 _CACHE_TTL_SECONDS = 60
 _cache_ativos = None
 _cache_ativos_ts = 0.0
@@ -34,7 +60,7 @@ class RamoAtividade:
         global _cache_ativos, _cache_ativos_ts
 
         query = """
-            SELECT id, nome, descricao, situacao
+            SELECT id, nome, tipo_pessoa, segmento, descricao, situacao
             FROM ramos_atividade
         """
         params = []
@@ -66,14 +92,14 @@ class RamoAtividade:
             dict: Dados do ramo ou None
         """
         query = """
-            SELECT id, nome, descricao, situacao
+            SELECT id, nome, tipo_pessoa, segmento, descricao, situacao
             FROM ramos_atividade
             WHERE id = %s
         """
         return execute_query(query, (ramo_id,), fetch=True, fetch_one=True)
     
     @staticmethod
-    def create(nome, descricao=None, situacao='ATIVO'):
+    def create(nome, descricao=None, situacao='ATIVO', tipo_pessoa='PJ', segmento=None):
         """
         Cria novo ramo de atividade.
         
@@ -86,16 +112,17 @@ class RamoAtividade:
             int: ID do ramo criado ou None
         """
         query = """
-            INSERT INTO ramos_atividade (nome, descricao, situacao)
-            VALUES (%s, %s, %s)
+            INSERT INTO ramos_atividade (nome, tipo_pessoa, segmento, descricao, situacao)
+            VALUES (%s, %s, %s, %s, %s)
         """
-        result = execute_query(query, (nome, descricao, situacao))
+        segmento = None if tipo_pessoa == 'PF' else segmento
+        result = execute_query(query, (nome, tipo_pessoa, segmento, descricao, situacao))
         if result is not None:
             _invalidate_cache()
         return result
     
     @staticmethod
-    def update(ramo_id, nome, descricao=None, situacao='ATIVO'):
+    def update(ramo_id, nome, descricao=None, situacao='ATIVO', tipo_pessoa=None, segmento=None):
         """
         Atualiza dados do ramo de atividade.
         
@@ -110,10 +137,13 @@ class RamoAtividade:
         """
         query = """
             UPDATE ramos_atividade
-            SET nome = %s, descricao = %s, situacao = %s
+            SET nome = %s, tipo_pessoa = COALESCE(%s, tipo_pessoa),
+                segmento = IF(COALESCE(%s, tipo_pessoa) = 'PF', NULL, COALESCE(%s, segmento)),
+                descricao = %s, situacao = %s
             WHERE id = %s
         """
-        result = execute_query(query, (nome, descricao, situacao, ramo_id), fetch=False)
+        result = execute_query(query, (nome, tipo_pessoa, tipo_pessoa, segmento, descricao, situacao, ramo_id),
+                               fetch=False)
         if result is not None:
             _invalidate_cache()
         return result
@@ -212,7 +242,7 @@ class RamoAtividade:
             list: Lista de ramos de atividade
         """
         query = """
-            SELECT ra.id, ra.nome, ra.descricao, ra.situacao
+            SELECT ra.id, ra.nome, ra.tipo_pessoa, ra.segmento, ra.descricao, ra.situacao
             FROM ramos_atividade ra
             INNER JOIN cliente_ramo_atividade_relacao crar ON ra.id = crar.ramo_atividade_id
             WHERE crar.cliente_id = %s

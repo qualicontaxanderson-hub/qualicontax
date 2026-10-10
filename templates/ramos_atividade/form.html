@@ -48,6 +48,22 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="segmento">Segmento *</label>
+                    <select id="segmento" name="segmento" class="form-control" required>
+                        <option value="">Escolha…</option>
+                        <optgroup label="Empresa (PJ)">
+                            {% for sg, sg_nome in SEGMENTOS_RAMO %}
+                            <option value="{{ sg }}" {% if ramo and ramo.tipo_pessoa != 'PF' and ramo.segmento == sg %}selected{% endif %}>{{ sg_nome }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Pessoa física (PF)">
+                            <option value="PF" {% if ramo and ramo.tipo_pessoa == 'PF' %}selected{% endif %}>Pessoa física</option>
+                        </optgroup>
+                    </select>
+                    <small class="form-text text-muted">No cadastro de cliente o ramo aparece dentro do segmento escolhido aqui. É pelo segmento que se conta quantas empresas são de Comércio, de Serviços etc.</small>
+                </div>
+
+                <div class="form-group">
                     <label for="situacao">Situação *</label>
                     <select id="situacao" name="situacao" class="form-control" required>
                         <option value="ATIVO" {% if not ramo or ramo.situacao == 'ATIVO' %}selected{% endif %}>Ativo</option>
