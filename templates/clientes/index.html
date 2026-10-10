@@ -3,6 +3,7 @@
 {% block title %}Clientes - Qualicontax{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
 <style>
 .cli-vigias { margin:14px 0 6px; background:#fffbeb; border:1px solid #fcd34d; border-radius:12px; padding:12px 16px; }
 .cli-vigias-cab { font-size:13px; color:#78350f; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
@@ -16,8 +17,6 @@
 .cli-vigia-data { color:#94a3b8; font-size:11.5px; white-space:nowrap; }
 @media (max-width:820px) { .cli-vigia { grid-template-columns:1fr; gap:3px; } }
 </style>
-{# filtros ativos → abre o painel automaticamente (comportamento preservado) #}
-{% set filters_active = filtros.busca or filtros.tipo_pessoa or filtros.situacao or filtros.regime or filtros.grupo_id or filtros.ramo_id or filtros.segmento %}
 
 {% include 'cadastros/_nav_cadastros.html' %}
 
@@ -41,29 +40,29 @@
 </div>
 
 <div class="ef-body">
-    <!-- ── Fita de KPIs (flutua metade sobre o verde) ──────────────────── -->
+    <!-- ── Fita de KPIs (flutua metade sobre o verde). Clicar filtra. ───── -->
     <div class="cli-kpis">
-        <div class="cli-kpi">
+        <button type="button" class="cli-kpi" data-kpi="ativos" title="Mostrar só os clientes ativos">
             <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-circle-check"></i></span>
             <div class="cli-kpi-body">
                 <strong class="cli-kpi-val">{{ stats.ativos or 0 }}</strong>
                 <span class="cli-kpi-lbl">Clientes ativos</span>
             </div>
-        </div>
-        <div class="cli-kpi">
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="cert" title="Mostrar só quem tem certificado válido">
             <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-certificate"></i></span>
             <div class="cli-kpi-body">
                 <strong class="cli-kpi-val">{{ stats.com_certificado or 0 }}</strong>
                 <span class="cli-kpi-lbl">Com certificado</span>
             </div>
-        </div>
-        <div class="cli-kpi">
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="vencendo" title="Mostrar só os certificados que vencem em 30 dias">
             <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-triangle-exclamation"></i></span>
             <div class="cli-kpi-body">
                 <strong class="cli-kpi-val cli-warn">{{ stats.cert_vencendo or 0 }}</strong>
                 <span class="cli-kpi-lbl">Vencendo em 30 dias</span>
             </div>
-        </div>
+        </button>
     </div>
 
     {# Vigia de CNPJ (22/09/2026): empresas cuja foto na Receita mudou desde
@@ -86,201 +85,165 @@
     </div>
     {% endif %}
 
-    <!-- ── Filtros (TODOS preservados) ─────────────────────────────────── -->
-    <div class="card qf-card" id="filters-card">
-        <div class="qf-head" id="filters-toggle" onclick="toggleFilters()">
-            <span class="qf-title">
-                <i class="fas fa-filter"></i> Filtros de pesquisa
-                {% if filters_active %}<span class="qf-badge">filtros ativos</span>{% endif %}
-            </span>
-            <i class="fas fa-chevron-down qf-chev" id="filters-chevron"></i>
+    {# Filtros (10/10/2026, pedido do Anderson): igual à tela de Grupos —
+       Situação, Regime e Segmento em botões; Razão social, Grupo, Ramo,
+       Município, Estado e Certificado no painel "Filtros". Tudo filtra na
+       tela, sem recarregar; cada botão conta com os outros filtros. #}
+    <div class="gc-bar">
+        <div class="gc-pills" id="cfSitPills" role="group" aria-label="Situação do cliente">
+            <button type="button" class="gc-pill" data-v="">Todos <b></b></button>
+            <button type="button" class="gc-pill" data-v="ATIVO">Ativos <b></b></button>
+            <button type="button" class="gc-pill" data-v="INATIVO">Inativos <b></b></button>
         </div>
-        <div class="qf-body" id="filters-body" style="display:none;">
-            <div class="qf-wrap">
-                <form method="GET" id="filter-form">
-                    <input type="hidden" name="sort_by"  value="{{ sort_by }}">
-                    <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
-                    <div class="qf-row">
-                        <div class="qf-group qf-search-group">
-                            <span class="qf-lbl">Buscar</span>
-                            <div class="qf-search-wrap">
-                                <select name="busca_tipo" id="busca_tipo" class="qf-ctrl qf-type-sel">
-                                    <option value="nome"     {% if filtros.busca_tipo == 'nome'     %}selected{% endif %}>Nome</option>
-                                    <option value="numero"   {% if filtros.busca_tipo == 'numero'   %}selected{% endif %}>Nº Cliente</option>
-                                    <option value="ramo"     {% if filtros.busca_tipo == 'ramo'     %}selected{% endif %}>Ramo</option>
-                                    <option value="grupo"    {% if filtros.busca_tipo == 'grupo'    %}selected{% endif %}>Grupo</option>
-                                    <option value="cpf_cnpj" {% if filtros.busca_tipo == 'cpf_cnpj' %}selected{% endif %}>CPF/CNPJ</option>
-                                    <option value="email"    {% if filtros.busca_tipo == 'email'    %}selected{% endif %}>E-mail</option>
-                                </select>
-                                <input type="text" id="busca" name="busca" class="qf-ctrl qf-text"
-                                       placeholder="Digite para buscar…" value="{{ filtros.busca }}">
-                            </div>
-                        </div>
-                        <div class="qf-group">
-                            <span class="qf-lbl">Tipo</span>
-                            <select id="tipo_pessoa" name="tipo_pessoa" class="qf-ctrl">
-                                <option value="">Todos</option>
-                                <option value="PF" {% if filtros.tipo_pessoa == 'PF' %}selected{% endif %}>Pess. Física</option>
-                                <option value="PJ" {% if filtros.tipo_pessoa == 'PJ' %}selected{% endif %}>Pess. Jurídica</option>
-                            </select>
-                        </div>
-                        <div class="qf-group">
-                            <span class="qf-lbl">Situação</span>
-                            <select id="situacao" name="situacao" class="qf-ctrl">
-                                <option value="">Todos</option>
-                                <option value="ATIVO"     {% if filtros.situacao == 'ATIVO'     %}selected{% endif %}>Ativo</option>
-                                <option value="INATIVO"   {% if filtros.situacao == 'INATIVO'   %}selected{% endif %}>Inativo</option>
-                                <option value="SUSPENSO"  {% if filtros.situacao == 'SUSPENSO'  %}selected{% endif %}>Suspenso</option>
-                                <option value="CANCELADO" {% if filtros.situacao == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
-                            </select>
-                        </div>
-                        <div class="qf-group">
-                            <span class="qf-lbl">Regime</span>
-                            <select id="regime" name="regime" class="qf-ctrl">
-                                <option value="">Todos</option>
-                                <option value="SIMPLES"         {% if filtros.regime == 'SIMPLES'         %}selected{% endif %}>Simples Nacional</option>
-                                <option value="LUCRO_PRESUMIDO" {% if filtros.regime == 'LUCRO_PRESUMIDO' %}selected{% endif %}>Lucro Presumido</option>
-                                <option value="LUCRO_REAL"      {% if filtros.regime == 'LUCRO_REAL'      %}selected{% endif %}>Lucro Real</option>
-                                <option value="MEI"             {% if filtros.regime == 'MEI'             %}selected{% endif %}>MEI</option>
-                            </select>
-                        </div>
-                        <div class="qf-group">
-                            <span class="qf-lbl">Grupo</span>
-                            <select id="grupo_id" name="grupo_id" class="qf-ctrl">
-                                <option value="">Todos</option>
-                                {% for grupo in grupos %}
-                                <option value="{{ grupo.id }}" {% if filtros.grupo_id == grupo.id|string %}selected{% endif %}>{{ grupo.nome }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="qf-group">
-                            <span class="qf-lbl">Segmento</span>
-                            <select id="segmento" name="segmento" class="qf-ctrl">
-                                <option value="">Todos</option>
-                                {% for sg, sg_nome in SEGMENTOS_RAMO %}
-                                <option value="{{ sg }}" {% if filtros.segmento == sg %}selected{% endif %}>{{ sg_nome }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="qf-group">
-                            <span class="qf-lbl">Atividade</span>
-                            <select id="ramo_id" name="ramo_id" class="qf-ctrl">
-                                <option value="">Todas</option>
-                                {% for sg, sg_nome in SEGMENTOS_RAMO + [(None, 'Pessoa física')] %}
-                                <optgroup label="{{ sg_nome }}">
-                                {% for ramo in ramos_atividade if ramo.segmento == sg and (sg or ramo.tipo_pessoa == 'PF') %}
-                                <option value="{{ ramo.id }}" {% if filtros.ramo_id == ramo.id|string %}selected{% endif %}>{{ ramo.nome }}</option>
-                                {% endfor %}
-                                </optgroup>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="qf-group qf-actions">
-                            <span class="qf-lbl">&nbsp;</span>
-                            <div class="qf-btns">
-                                <button type="submit" class="btn btn-primary qf-btn">
-                                    <i class="fas fa-search"></i> Filtrar
-                                </button>
-                                {% if filters_active %}
-                                <a href="{{ url_for('clientes.index') }}" class="btn btn-outline qf-btn" title="Limpar filtros">
-                                    <i class="fas fa-times"></i> Limpar
-                                </a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </form>
+        <span class="gc-sep"></span>
+        <div class="gc-pills gc-pills-reg" id="cfRegPills" role="group" aria-label="Regime de tributação">
+            <button type="button" class="gc-pill" data-v="">Todos os regimes</button>
+            <button type="button" class="gc-pill gc-pr-lucro_real" data-v="lucro_real">Lucro Real <b></b></button>
+            <button type="button" class="gc-pill gc-pr-lucro_presumido" data-v="lucro_presumido">Lucro Presumido <b></b></button>
+            <button type="button" class="gc-pill gc-pr-simples" data-v="simples">Simples Nacional <b></b></button>
+            <button type="button" class="gc-pill gc-pr-mei" data-v="mei">MEI <b></b></button>
+            <button type="button" class="gc-pill gc-pr-pf" data-v="pf">Pessoa Física <b></b></button>
+        </div>
+        <button type="button" class="gc-filtros-btn" id="cfBtn" onclick="cfToggle()" aria-expanded="false" aria-controls="cfPainel">
+            <i class="fas fa-sliders-h"></i> Filtros <span class="gf-n" id="cfN"></span>
+            <i class="fas fa-chevron-down gf-chev"></i>
+        </button>
+    </div>
+    <div class="gc-bar cli-segbar">
+        <span class="cli-seg-rot">Segmento</span>
+        <div class="gc-pills cli-pills-seg" id="cfSegPills" role="group" aria-label="Segmento">
+            <button type="button" class="gc-pill" data-v="">Todos</button>
+            <button type="button" class="gc-pill" data-v="COMERCIO"><i class="fas fa-store"></i> Comércio <b></b></button>
+            <button type="button" class="gc-pill" data-v="SERVICOS"><i class="fas fa-screwdriver-wrench"></i> Prestação de Serviços <b></b></button>
+            <button type="button" class="gc-pill" data-v="LOCACAO"><i class="fas fa-key"></i> Locação <b></b></button>
+            <button type="button" class="gc-pill" data-v="INDUSTRIA"><i class="fas fa-industry"></i> Indústria <b></b></button>
+            <button type="button" class="gc-pill cli-seg-sem" data-v="-" title="Cadastros sem ramo de atividade — para completar"><i class="fas fa-circle-exclamation"></i> Sem ramo <b></b></button>
+        </div>
+    </div>
+
+    <div class="gf-painel" id="cfPainel" aria-hidden="true">
+        <div class="gf-painel-in">
+            <div class="gf-campos cli-campos">
+                <div class="gf-campo">
+                    <label for="cfEmp"><i class="fas fa-building"></i> Razão social</label>
+                    <select id="cfEmp" multiple placeholder="Nome, número, CNPJ/CPF ou e-mail"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="cfGrp"><i class="fas fa-layer-group"></i> Grupo</label>
+                    <select id="cfGrp" multiple placeholder="Todos os grupos"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="cfRamo"><i class="fas fa-briefcase"></i> Ramo de atividade</label>
+                    <select id="cfRamo" multiple placeholder="Todos os ramos"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="cfCid"><i class="fas fa-location-dot"></i> Município</label>
+                    <select id="cfCid" multiple placeholder="Todos os municípios"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="cfUf"><i class="fas fa-map"></i> Estado</label>
+                    <select id="cfUf" multiple placeholder="Todos"></select>
+                </div>
+                <div class="gf-campo">
+                    <label for="cfCert"><i class="fas fa-certificate"></i> Certificado</label>
+                    <select id="cfCert" multiple placeholder="Todos"></select>
+                </div>
+            </div>
+            <div class="gf-rodape">
+                <span class="gf-dica"><i class="fas fa-circle-info"></i> Cada campo mostra só o que existe com os outros filtros; o número é de clientes.</span>
+                <button type="button" class="gf-limpar" onclick="cfLimpar()"><i class="fas fa-eraser"></i> Limpar filtros</button>
             </div>
         </div>
     </div>
 
     <!-- ── Barra de informação + ordenação ─────────────────────────────── -->
     <div class="lst-infobar">
-        <span class="lst-count">
-            {% if total > 0 %}
-                {% set start = (page - 1) * 50 + 1 %}
-                {% set end   = [page * 50, total] | min %}
-                Mostrando <strong>{{ start }}–{{ end }}</strong> de <strong>{{ total }}</strong> cliente{{ '' if total == 1 else 's' }}
-            {% else %}
-                Nenhum cliente encontrado
-            {% endif %}
-        </span>
-        <span class="cli-sort">
+        <span class="lst-count" id="cfCont"></span>
+        <span class="cli-sort" role="group" aria-label="Ordem dos cartões">
             Ordenar:
-            {% set num_dir = 'desc' if (sort_by == 'numero' and sort_dir == 'asc') else 'asc' %}
-            <button type="button" class="cli-sortchip {% if sort_by == 'numero' %}on{% endif %}"
-                    onclick="sortBy('numero', '{{ num_dir }}')">
-                Nº {% if sort_by == 'numero' %}{{ '↑' if sort_dir == 'asc' else '↓' }}{% else %}<span class="cli-sort-dim">↕</span>{% endif %}
-            </button>
-            {% set nome_dir = 'desc' if (sort_by == 'nome' and sort_dir == 'asc') else 'asc' %}
-            <button type="button" class="cli-sortchip {% if sort_by == 'nome' %}on{% endif %}"
-                    onclick="sortBy('nome', '{{ nome_dir }}')">
-                Nome {% if sort_by == 'nome' %}{{ '↑' if sort_dir == 'asc' else '↓' }}{% else %}<span class="cli-sort-dim">↕</span>{% endif %}
-            </button>
+            <button type="button" class="cli-sortchip on" data-sort="num-asc" title="Número do cliente, do menor para o maior"><i class="fas fa-arrow-down-1-9"></i> Nº crescente</button>
+            <button type="button" class="cli-sortchip" data-sort="num-desc" title="Número do cliente, do maior para o menor"><i class="fas fa-arrow-down-9-1"></i> Nº decrescente</button>
+            <button type="button" class="cli-sortchip" data-sort="az" title="Razão social de A a Z"><i class="fas fa-arrow-down-a-z"></i> A–Z</button>
+            <button type="button" class="cli-sortchip" data-sort="za" title="Razão social de Z a A"><i class="fas fa-arrow-down-z-a"></i> Z–A</button>
         </span>
     </div>
 
-    <!-- ── Lista em linhas-cartão ──────────────────────────────────────── -->
-    <div class="lst-list">
-        {% if clientes %}
-            {% for cliente in clientes %}
-            {% set inativo = cliente.situacao != 'ATIVO' %}
-            <div class="lst-row cli-row {% if inativo %}lst-row-off{% endif %}"
+    <!-- ── Cartões em grade, como os de Grupos (10/10/2026, pedido do Anderson):
+         razão, CNPJ/CPF, IE, IM, grupo, município colorido, regime e ramos. -->
+    <div class="gc-grid" id="cfLista">
+        {% for cliente in clientes %}
+        {% set inativo = cliente.situacao != 'ATIVO' %}
+        {% set pf = cliente.tipo_pessoa == 'PF' %}
+        <article class="gc-card cli-card {% if inativo %}cli-off{% endif %}"
                  data-open-url="{{ url_for('clientes.detalhes', id=cliente.id) }}"
-                 role="button" tabindex="0" title="Abrir a ficha do cliente">
-
-                <div class="cli-c-num">
-                    <span class="lst-pill {% if inativo %}lst-pill-zero{% endif %}">
-                        {% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}#{{ cliente.id }}{% endif %}
-                    </span>
+                 data-id="{{ cliente.id }}" data-num="{{ cliente.numero_cliente or '' }}"
+                 data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.email or '' }}"
+                 data-sit="{{ cliente.situacao }}" data-reg="{{ cliente.f_reg }}" data-segs="{{ cliente.f_segs }}"
+                 data-ramos="{{ cliente.f_ramos }}" data-grupos="{{ cliente.f_grupos }}" data-cert="{{ cliente.cert_nivel }}"
+                 data-local="{{ cliente.f_local }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
+            <header class="gc-head">
+                <span class="gc-ava cli-ava {% if pf %}cli-ava-pf{% endif %} {% if (cliente.numero_cliente or '')|length > 3 %}cli-ava-4{% endif %}">{{ cliente.numero_cliente or '—' }}</span>
+                <div class="gc-tit">
+                    <h3 title="{{ cliente.nome_razao_social }}">{{ cliente.nome_razao_social }}</h3>
+                    <span class="cli-doc">{{ 'CPF' if pf else 'CNPJ' }} <span class="mono">{{ cliente.cpf_cnpj or '—' }}</span></span>
                 </div>
+                <span class="gc-sit {{ 'on' if cliente.situacao == 'ATIVO' else 'off' }}">{{ cliente.situacao|capitalize }}</span>
+            </header>
 
-                <div class="cli-c-main">
-                    <div class="lst-name" title="{{ cliente.nome_razao_social }}">{{ cliente.nome_razao_social }}</div>
-                    <div class="lst-meta">
-                        <span class="lst-mono">{{ cliente.cpf_cnpj or '—' }}</span>
-                        {% if cliente.end_cidade %}<span class="cli-sep">·</span>{{ cliente.end_cidade | title }}{% if cliente.end_uf %}/{{ cliente.end_uf }}{% endif %}{% endif %}
-                    </div>
-                    <div class="cli-tags">
-                        <span class="cli-tag">{{ cliente.tipo_pessoa }}</span>
-                        {% if cliente.ramo_atividade_nome %}
-                        <span class="cli-tag cli-tag-soft" title="{{ cliente.ramo_atividade_nome }}">
-                            {{ cliente.ramo_atividade_nome | truncate(28, True, '…') }}
-                        </span>
-                        {% endif %}
-                    </div>
+            <div class="gc-tags">
+                {% if cliente.f_local %}<span class="gc-cid gc-cid-{{ cliente.f_cid_cor }}"><i class="fas fa-location-dot"></i> {{ cliente.f_local }}</span>{% endif %}
+                {% if cliente.f_reg %}<span class="gc-tag gc-reg-{{ cliente.f_reg }}">{{ {'lucro_real': 'Lucro Real', 'lucro_presumido': 'Lucro Presumido', 'simples': 'Simples Nacional', 'mei': 'MEI', 'pf': 'Pessoa Física'}.get(cliente.f_reg, cliente.f_reg) }}</span>{% endif %}
+            </div>
+
+            <div class="cli-grade">
+                <div class="cli-campo"><span class="cli-rot">Insc. Estadual</span><b class="cli-val">{{ cliente.inscricao_estadual or '—' }}</b></div>
+                <div class="cli-campo"><span class="cli-rot">Insc. Municipal</span><b class="cli-val">{{ cliente.inscricao_municipal or '—' }}</b></div>
+                <div class="cli-campo"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</span></div>
+                <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val">{{ cliente.celular or cliente.telefone or '—' }}</b></div>
+            </div>
+
+            {% if cliente.f_grupo %}
+            <div class="cli-grupo" title="Grupo de empresas">
+                <span class="cli-grupo-ava">{{ cliente.f_grupo.sigla }}</span>
+                <span class="cli-grupo-txt">
+                    <span class="cli-rot">Grupo</span>
+                    <b>{{ cliente.f_grupo.nome }}</b>
+                </span>
+                <span class="cli-grupo-qtd">{{ cliente.f_grupo.qtd }} empresa{{ '' if cliente.f_grupo.qtd == 1 else 's' }}</span>
+            </div>
+            {% else %}
+            <div class="cli-grupo cli-grupo-sem"><i class="fas fa-layer-group"></i> Sem grupo de empresas</div>
+            {% endif %}
+
+            <div class="cli-ativ">
+                <span class="cli-rot">Atividades</span>
+                <div class="gc-tags">
+                {% if cliente.ramo_atividade_nome %}
+                    {% for r in cliente.ramo_atividade_nome.split(', ') %}<span class="cli-ramo">{{ r }}</span>{% endfor %}
+                {% else %}
+                    <span class="cli-ramo cli-ramo-falta"><i class="fas fa-circle-exclamation"></i> sem ramo</span>
+                {% endif %}
                 </div>
+            </div>
 
-                <div class="cli-c-contact">
-                    <div class="cli-contact-main" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</div>
-                    <div class="cli-contact-sub">{{ cliente.telefone or cliente.celular or '—' }}</div>
-                </div>
-
-                <div class="cli-c-cert">
-                    {% set n = cliente.cert_nivel %}
-                    {% if n == 'ok' %}
-                        <span class="cli-dot" style="background:#22c55e;"></span>
-                        <span class="cli-cert-txt">válido até {{ cliente.cert_validade.strftime('%m/%Y') }}</span>
-                    {% elif n == 'laranja' %}
-                        <span class="cli-dot" style="background:#f59e0b;"></span>
-                        <span class="cli-cert-txt">vence {{ cliente.cert_validade.strftime('%d/%m') }}</span>
-                    {% elif n == 'vencido' %}
-                        <span class="cli-dot" style="background:#ef4444;"></span>
-                        <span class="cli-cert-txt cli-cert-bad">vencido</span>
-                    {% else %}
-                        <span class="cli-dot" style="background:#cbd5e1;"></span>
-                        <span class="cli-cert-txt cli-cert-none">sem certificado</span>
-                    {% endif %}
-                </div>
-
-                <div class="cli-c-sit">
-                    <span class="lst-sit lst-sit-{{ 'on' if cliente.situacao == 'ATIVO' else 'off' if cliente.situacao == 'INATIVO' else 'warn' }}">
-                        {{ cliente.situacao }}
-                    </span>
-                </div>
-
-                <div class="cli-c-act lst-c-act">
-                    {# A linha inteira abre a FICHA; aqui ficam só editar e excluir. #}
+            <footer class="cli-pe">
+                {% set n = cliente.cert_nivel %}
+                {% set dias = cliente.cert_dias %}
+                {% if n == 'ok' %}
+                <span class="cli-selo cli-selo-ok"><i class="fas fa-shield-halved"></i>
+                    <span><b>Certificado válido</b><small>até {{ cliente.cert_validade.strftime('%d/%m/%Y') }}</small></span></span>
+                {% elif n == 'laranja' %}
+                <span class="cli-selo cli-selo-warn"><i class="fas fa-triangle-exclamation"></i>
+                    <span><b>Vence em {{ dias }} dia{{ '' if dias == 1 else 's' }}</b><small>em {{ cliente.cert_validade.strftime('%d/%m/%Y') }}</small></span></span>
+                {% elif n == 'vencido' %}
+                <span class="cli-selo cli-selo-bad"><i class="fas fa-circle-xmark"></i>
+                    <span><b>Certificado vencido</b><small>em {{ cliente.cert_validade.strftime('%d/%m/%Y') }}</small></span></span>
+                {% else %}
+                <span class="cli-selo cli-selo-sem"><i class="fas fa-shield"></i>
+                    <span><b>Sem certificado</b><small>nenhum A1 cadastrado</small></span></span>
+                {% endif %}
+                <span class="lst-c-act">
+                    {# O cartão inteiro abre a FICHA; aqui ficam só editar e excluir. #}
                     <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="lst-act lst-act-edit" title="Editar cadastro">
                         <i class="fas fa-pen"></i>
                     </a>
@@ -291,55 +254,28 @@
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </form>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="lst-empty">
-                <i class="fas fa-users"></i>
-                <p>Nenhum cliente encontrado</p>
-            </div>
-        {% endif %}
+                </span>
+            </footer>
+        </article>
+        {% endfor %}
     </div>
-
-    <!-- ── Paginação (preservada) ──────────────────────────────────────── -->
-    {% if total_pages > 1 %}
-    <div class="pagination-wrapper">
-        <nav class="pagination">
-            {% if page > 1 %}
-            <a href="{{ url_for('clientes.index', page=page-1, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, grupo_id=filtros.grupo_id, ramo_id=filtros.ramo_id, segmento=filtros.segmento, sort_by=sort_by, sort_dir=sort_dir) }}" class="pagination-btn">
-                <i class="fas fa-chevron-left"></i> Anterior
-            </a>
-            {% endif %}
-            <div class="pagination-pages">
-                {% for page_num in range(1, total_pages + 1) %}
-                    {% if page_num == 1 or page_num == total_pages or (page_num >= page - 2 and page_num <= page + 2) %}
-                        <a href="{{ url_for('clientes.index', page=page_num, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, grupo_id=filtros.grupo_id, ramo_id=filtros.ramo_id, segmento=filtros.segmento, sort_by=sort_by, sort_dir=sort_dir) }}"
-                           class="pagination-page {% if page_num == page %}active{% endif %}">{{ page_num }}</a>
-                    {% elif page_num == page - 3 or page_num == page + 3 %}
-                        <span class="pagination-ellipsis">…</span>
-                    {% endif %}
-                {% endfor %}
-            </div>
-            {% if page < total_pages %}
-            <a href="{{ url_for('clientes.index', page=page+1, busca=filtros.busca, busca_tipo=filtros.busca_tipo, tipo_pessoa=filtros.tipo_pessoa, situacao=filtros.situacao, regime=filtros.regime, grupo_id=filtros.grupo_id, ramo_id=filtros.ramo_id, segmento=filtros.segmento, sort_by=sort_by, sort_dir=sort_dir) }}" class="pagination-btn">
-                Próximo <i class="fas fa-chevron-right"></i>
-            </a>
-            {% endif %}
-        </nav>
-        <p class="pagination-info">Página {{ page }} de {{ total_pages }}</p>
+    <div class="gc-nada" id="cfVazio" {% if clientes %}hidden{% endif %}>
+        <i class="fas fa-users"></i>
+        <p>Nenhum cliente com os filtros escolhidos</p>
+        <button type="button" class="gf-limpar" onclick="cfLimpar()"><i class="fas fa-eraser"></i> Limpar filtros</button>
     </div>
-    {% endif %}
 </div>
 
 <style>
-/* hero/corpo agora vêm de identidade.css (.ef-hero / .ef-body — fonte única). */
+/* hero/corpo vêm de identidade.css (.ef-hero / .ef-body — fonte única). */
 
-/* Fita de KPIs — flutua metade sobre o verde (sobre a curva do .ef-body) */
-.cli-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:-14px; position:relative; z-index:2; }
-.cli-kpi { flex:1; min-width:170px; display:flex; align-items:center; gap:12px;
+/* Fita de KPIs — flutua metade sobre o verde; clicar filtra (10/10/2026) */
+.cli-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:-14px; position:relative; z-index:2; margin-bottom:18px; }
+.cli-kpi { flex:1; min-width:170px; display:flex; align-items:center; gap:12px; text-align:left; font:inherit; cursor:pointer;
            background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px;
-           box-shadow:0 8px 22px rgba(16,120,70,.10); }
+           box-shadow:0 8px 22px rgba(16,120,70,.10); transition:border-color .15s, box-shadow .15s; }
+.cli-kpi:hover { border-color:#86efac; }
+.cli-kpi.on { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,.25), 0 8px 22px rgba(16,120,70,.10); }
 .cli-kpi-ico { width:40px; height:40px; border-radius:11px; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; font-size:16px; }
 .cli-kpi-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
@@ -347,63 +283,208 @@
 .cli-kpi-val.cli-warn { color:#b45309; }
 .cli-kpi-lbl { font-size:11.5px; color:#7d968a; }
 
-/* Etiqueta de seção com linha fina */
-.cli-seclabel { display:flex; align-items:center; gap:12px; margin:26px 0 12px;
-                font-size:10px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; color:#15803d; }
-.cli-seclabel::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+/* ── Barra de filtros: o MESMO desenho da tela de Grupos (grupos/index.html) ── */
+.gc-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.gc-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.gc-pill { border:1px solid #d7e3dc; background:#fff; color:#475569; border-radius:99px; padding:7px 14px;
+           font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+.gc-pill b { margin-left:4px; color:#94a3b8; }
+.gc-pill b:empty { display:none; }
+.gc-pill.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gc-pill.on b { color:#86efac; }
+.gc-sep { width:1px; height:26px; background:#d7e3dc; }
+.gc-pills-reg .gc-pill.on { color:#fff; }
+.gc-pr-lucro_real      { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.gc-pr-lucro_presumido { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.gc-pr-simples         { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.gc-pr-mei             { background:#fefce8; color:#a16207; border-color:#fde68a; }
+.gc-pr-pf              { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+.gc-pills-reg .gc-pill:not(.on) b { color:inherit; opacity:.65; }
+.gc-pills-reg .gc-pill:not(.on):hover { filter:brightness(.97); border-color:currentColor; }
+.gc-pr-lucro_real.on      { background:#1d4ed8; border-color:#1d4ed8; }
+.gc-pr-lucro_presumido.on { background:#c2410c; border-color:#c2410c; }
+.gc-pr-simples.on         { background:#15803d; border-color:#15803d; }
+.gc-pr-mei.on             { background:#a16207; border-color:#a16207; }
+.gc-pr-pf.on              { background:#6d28d9; border-color:#6d28d9; }
+.gc-pills-reg .gc-pill.on b { color:rgba(255,255,255,.8); }
+.gc-pill.gc-pill-zero { opacity:.45; }
+.gc-filtros-btn { margin-left:auto; display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px;
+                  border:1px solid #d7e3dc; background:#fff; color:#0f3d2e; border-radius:10px; font-size:13px;
+                  font-weight:700; cursor:pointer; font-family:inherit; transition:all .15s; }
+.gc-filtros-btn:hover { border-color:#86efac; background:#f6fbf8; }
+.gc-filtros-btn.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gc-filtros-btn .gf-chev { font-size:10px; transition:transform .2s; }
+.gc-filtros-btn.on .gf-chev { transform:rotate(180deg); }
+.gf-n { display:none; min-width:18px; height:18px; padding:0 5px; border-radius:99px; background:#22c55e; color:#fff;
+        font-size:11px; line-height:18px; text-align:center; }
+.gf-painel { display:grid; grid-template-rows:0fr; transition:grid-template-rows .25s ease, margin .25s ease; margin-bottom:0; }
+.gf-painel.on { grid-template-rows:1fr; margin-bottom:14px; }
+.gf-painel-in { overflow:hidden; min-height:0; }
+.gf-painel.on .gf-painel-in { overflow:visible; }
+.gf-campos { display:grid; gap:14px; padding:16px 18px 6px;
+             background:linear-gradient(180deg,#ffffff,#f7fbf8); border:1px solid #e3ece7; border-bottom:none;
+             border-radius:14px 14px 0 0; }
+.gf-campo { min-width:0; }
+.gf-campo label { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:#0f3d2e;
+                  letter-spacing:.3px; text-transform:uppercase; margin-bottom:6px; }
+.gf-campo label i { color:#16a34a; font-size:12px; }
+.gf-rodape { display:flex; align-items:center; gap:12px; padding:10px 18px 12px; background:#f7fbf8;
+             border:1px solid #e3ece7; border-top:1px dashed #e3ece7; border-radius:0 0 14px 14px; flex-wrap:wrap; }
+.gf-dica { flex:1; min-width:200px; font-size:12px; color:#7d968a; }
+.gf-dica i { margin-right:4px; }
+.gf-limpar { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:9px;
+             border:1px solid #d7e3dc; background:#fff; color:#475569; font-size:12.5px; font-weight:700;
+             cursor:pointer; font-family:inherit; }
+.gf-limpar:hover { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; }
+.gf-campo .ts-wrapper { width:100%; }
+.gf-campo .ts-control { min-height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:5px 10px;
+                        font-size:13.5px; background:#fff; box-shadow:none; }
+.gf-campo .ts-wrapper.focus .ts-control { border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.gf-campo .ts-wrapper.multi .ts-control > div { background:#dcfce7 !important; color:#166534 !important; border:none !important;
+        background-image:none !important; text-shadow:none !important; box-shadow:none !important; border-radius:6px;
+        font-size:12px; font-weight:700; padding:2px 6px; margin:2px 4px 2px 0; }
+.gf-campo .ts-wrapper.plugin-remove_button .item .remove { border-left:1px solid rgba(0,0,0,.1) !important; padding:0 5px; }
+.ts-dropdown { font-size:13px; border:1px solid #d7e3dc; border-radius:10px; box-shadow:0 12px 28px rgba(15,23,42,.14); margin-top:4px; }
+.ts-dropdown .active { background:#ecfdf5; color:#0f3d2e; }
+.ts-dropdown .no-results { color:#94a3b8; }
+.ts-dropdown .optgroup-header { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
+.gf-opt { display:flex; align-items:center; gap:8px; }
+.gf-opt-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gf-opt-s { font-size:11.5px; color:#94a3b8; margin-left:4px; }
+.gf-opt-n { font-size:11px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:99px; padding:0 7px; flex-shrink:0; }
 
-/* Painel de filtros (.qf-*), barra de contagem (.lst-infobar), linhas-cartão,
-   pílula, etiqueta de situação, ícones de ação e estado vazio (.lst-*) agora
-   vêm do identidade.css — fonte única, compartilhada com as demais telas do
-   Cadastros. Aqui ficou só o que é específico da lista de clientes. */
+/* Só desta tela: linha de Segmento e 6 campos no painel */
+.cli-segbar { margin-top:-6px; }
+.cli-seg-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; }
+.cli-pills-seg .gc-pill { border-radius:10px; }
+.cli-pills-seg .gc-pill i { font-size:12px; margin-right:3px; color:#16a34a; }
+.cli-pills-seg .gc-pill.on i { color:#86efac; }
+.cli-pills-seg .cli-seg-sem:not(.on) { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+.cli-pills-seg .cli-seg-sem i { color:#dc2626; }
+.cli-pills-seg .cli-seg-sem.on { background:#b91c1c; border-color:#b91c1c; }
+.cli-campos { grid-template-columns:2fr 1.4fr 1.4fr; }
 
-/* Ordenação (só esta tela tem) */
+/* Ordenação */
 .cli-sort { font-size:11.5px; color:#7d968a; display:flex; align-items:center; gap:6px; }
 .cli-sortchip { border:1px solid #e3ece7; background:#fff; color:#5b7468; border-radius:99px;
-                padding:4px 11px; font-size:12px; font-weight:600; cursor:pointer; }
+                padding:4px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
 .cli-sortchip:hover { border-color:#86efac; color:#15803d; }
 .cli-sortchip.on { background:#dcfce7; border-color:#86efac; color:#15803d; }
 .cli-sort-dim { opacity:.4; }
 
-/* Colunas desta lista (o cartão em si vem do .lst-row do identidade.css) */
-.cli-row { grid-template-columns:74px minmax(0,1fr) 190px 168px 92px 108px; cursor:pointer; }
+/* ── Cartão: o MESMO da tela de Grupos (grupos/index.html) ── */
+.gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px; }
+.gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:18px 20px 16px;
+           display:flex; flex-direction:column; gap:12px; transition:border-color .15s, box-shadow .15s; min-width:0;
+           cursor:pointer; }
+.gc-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.gc-card:focus-visible { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.gc-head { display:flex; align-items:center; gap:12px; }
+.gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff;
+          display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; letter-spacing:.5px; flex-shrink:0; }
+.gc-tit { flex:1; min-width:0; }
+.gc-tit h3 { margin:0; font-size:15.5px; font-weight:800; color:#0f172a; letter-spacing:.2px;
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gc-sit { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; flex-shrink:0; }
+.gc-sit.on { background:#dcfce7; color:#166534; }
+.gc-sit.off { background:#f1f5f9; color:#64748b; }
+.gc-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.gc-tag { font-size:12px; font-weight:600; border:1px solid; border-radius:7px; padding:2px 9px; }
+.gc-reg-lucro_real      { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.gc-reg-lucro_presumido { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.gc-reg-simples         { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.gc-reg-mei             { background:#fefce8; color:#a16207; border-color:#fde68a; }
+.gc-reg-pf              { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+.gc-cid { font-size:12px; font-weight:600; border-radius:99px; padding:2px 10px 2px 8px; }
+.gc-cid i { font-size:10.5px; margin-right:2px; opacity:.8; }
+.gc-cid-0 { background:#e0f2fe; color:#0369a1; }
+.gc-cid-1 { background:#fce7f3; color:#be185d; }
+.gc-cid-2 { background:#ede9fe; color:#6d28d9; }
+.gc-cid-3 { background:#ccfbf1; color:#0f766e; }
+.gc-cid-4 { background:#ffedd5; color:#c2410c; }
+.gc-cid-5 { background:#e0e7ff; color:#4338ca; }
+.gc-cid-6 { background:#fef3c7; color:#b45309; }
+.gc-cid-7 { background:#dcfce7; color:#15803d; }
+.gc-emp { list-style:none; margin:0; padding:0; border-top:1px solid #eef2f0; }
+.gc-emp li { display:flex; align-items:center; gap:10px; padding:7px 4px; color:#334155; font-size:13.5px;
+             border-bottom:1px dashed #eef2f0; }
+.gc-emp li:last-child { border-bottom:none; }
+.gc-nada { text-align:center; color:#94a3b8; padding:40px 0; font-size:14px; }
+.gc-nada i { font-size:30px; opacity:.4; display:block; margin-bottom:10px; }
+.gc-nada[hidden] { display:none; }
 
-.cli-c-main { min-width:0; }
-.cli-sep { margin:0 5px; opacity:.6; }
-.cli-tags { display:flex; gap:5px; margin-top:5px; flex-wrap:wrap; }
-.cli-tag { font-size:9.5px; font-weight:700; letter-spacing:.3px; background:#eef2f0; color:#5b7468;
-           border-radius:6px; padding:2px 7px; }
-.cli-tag-soft { background:#f0f7f3; color:#15803d; font-weight:600; letter-spacing:0; max-width:220px;
-                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* Só do cartão de cliente — compacto e cheio (10/10/2026) */
+.cli-card { padding:16px 18px 14px; gap:10px; }
+.cli-card.cf-fora { display:none; }
+.cli-card.cli-off { opacity:.65; }
+.cli-ava { font-size:14px; }
+.cli-ava-4 { font-size:12px; letter-spacing:0; }
+.cli-ava-pf { background:linear-gradient(135deg,#8b5cf6,#5b21b6); }
+.cli-card .gc-tit h3 { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+                       line-height:1.25; font-size:14.5px; }
+.cli-doc { font-size:12px; color:#64748b; }
+.cli-doc .mono { font-family:ui-monospace, Consolas, monospace; color:#0f3d2e; font-weight:800; }
+.cli-rot { display:block; font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+           color:#7d968a; line-height:1.2; }
 
-.cli-c-contact { min-width:0; }
-.cli-contact-main { font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.cli-contact-sub { font-size:11px; color:#94a3b8; margin-top:2px; font-variant-numeric:tabular-nums; }
+/* IE | IM e E-mail | Celular em duas colunas, num bloco só */
+.cli-grade { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; padding:10px 12px;
+             background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
+.cli-campo { min-width:0; }
+.cli-val { display:block; margin-top:2px; font-size:13px; color:#0f172a; white-space:nowrap; overflow:hidden;
+           text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+b.cli-val { font-weight:800; color:#0f3d2e; }
+span.cli-val { color:#334155; }
 
-.cli-c-cert { display:flex; align-items:center; gap:7px; font-size:11.5px; color:#475569; }
-.cli-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.cli-cert-txt { font-variant-numeric:tabular-nums; white-space:nowrap; }
-.cli-cert-none { color:#94a3b8; }
-.cli-cert-bad { color:#ef4444; font-weight:600; }
+/* Grupo: a mesma "cara" do cartão de Grupos, em miniatura */
+.cli-grupo { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid #d7ebe0;
+             border-radius:11px; background:linear-gradient(90deg,#ecfdf5,#ffffff); }
+.cli-grupo-ava { width:30px; height:30px; border-radius:9px; flex-shrink:0; display:flex; align-items:center;
+                 justify-content:center; font-size:11.5px; font-weight:800; color:#fff;
+                 background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.cli-grupo-txt { flex:1; min-width:0; }
+.cli-grupo-txt b { display:block; font-size:13px; font-weight:800; color:#0f3d2e; white-space:nowrap;
+                   overflow:hidden; text-overflow:ellipsis; }
+.cli-grupo-qtd { font-size:11.5px; font-weight:800; color:#15803d; background:#dcfce7; border-radius:99px;
+                 padding:2px 9px; white-space:nowrap; }
+.cli-grupo-sem { justify-content:flex-start; gap:8px; background:#fafafa; border-style:dashed; border-color:#e2e8f0;
+                 color:#94a3b8; font-size:12.5px; font-weight:600; padding:9px 12px; }
 
-/* ── MOBILE: cartão empilhado, sem arrasto lateral ───────────────────── */
-@media (max-width:820px) {
-    /* .ef-hero/.ef-body mobile vêm de identidade.css */
-    .cli-row { grid-template-columns:auto 1fr auto; grid-template-areas:
-               "num main act" "cert cert sit" "contact contact contact";
-               gap:8px 10px; }
-    .cli-c-num  { grid-area:num; }
-    .cli-c-main { grid-area:main; }
-    .cli-c-act  { grid-area:act; }
-    .cli-c-cert { grid-area:cert; }
-    .cli-c-sit  { grid-area:sit; justify-self:end; }
-    .cli-c-contact { grid-area:contact; border-top:1px dashed #eef2f0; padding-top:7px; }
-    .cli-c-cert, .cli-c-sit { padding-top:7px; border-top:1px dashed #eef2f0; }
-    .cli-contact-main { white-space:normal; }
+.cli-ativ { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1; align-content:flex-start; }
+.cli-ativ .cli-rot { flex:none; }
+.cli-ramo { font-size:12px; font-weight:700; color:#15803d; background:#f0fdf4; border:1px solid #bbf7d0;
+            border-radius:99px; padding:2px 10px; }
+.cli-ramo-falta { color:#b91c1c; background:#fef2f2; border-color:#fecaca; }
+
+/* Certificado: selo colorido no rodapé */
+.cli-pe { display:flex; align-items:center; justify-content:space-between; gap:10px;
+          border-top:1px solid #eef2f0; padding-top:10px; }
+.cli-selo { display:inline-flex; align-items:center; gap:9px; padding:6px 12px 6px 10px; border-radius:10px;
+            border:1px solid; min-width:0; }
+.cli-selo > i { font-size:16px; }
+.cli-selo b { display:block; font-size:12.5px; font-weight:800; line-height:1.15; }
+.cli-selo small { display:block; font-size:11px; opacity:.85; font-variant-numeric:tabular-nums; }
+.cli-selo-ok   { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
+.cli-selo-warn { background:#fffbeb; border-color:#fcd34d; color:#b45309; }
+.cli-selo-bad  { background:#fef2f2; border-color:#fca5a5; color:#b91c1c; }
+.cli-selo-sem  { background:#f8fafc; border-color:#e2e8f0; color:#94a3b8; }
+.cli-sortchip i { font-size:11px; margin-right:2px; }
+
+@media (max-width:900px) {
+    .cli-campos { grid-template-columns:1fr 1fr; }
+}
+/* ── MOBILE: uma coluna de cartões; a ordem quebra linha ───────────── */
+@media (max-width:720px) {
+    .gc-grid { grid-template-columns:1fr; }
+    .lst-infobar { flex-wrap:wrap; gap:8px; }
+    .cli-sort { flex-wrap:wrap; }
 }
 @media (max-width:600px) {
     .ef-hero-head { flex-direction:column; align-items:flex-start; }
     .ef-hero-title { font-size:21px; }
+    .cli-campos { grid-template-columns:1fr; }
+    .gc-sep { display:none; }
+    .cli-seg-rot { flex-basis:100%; }
     /* KPIs: 3 compactos em linha (ícone/número/label empilhados) — sem cortar label. */
     .cli-kpis { gap:8px; }
     .cli-kpi { min-width:0; flex:1 1 0; padding:11px 10px; flex-direction:column;
@@ -413,47 +494,245 @@
 }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
 function confirmDelete(form) {
     var name = form.getAttribute('data-name') || 'este cliente';
     return confirm('Excluir o cliente ' + name + '?');
 }
 
-function toggleFilters() {
-    var body    = document.getElementById('filters-body');
-    var chevron = document.getElementById('filters-chevron');
-    var isOpen  = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    chevron.classList.toggle('open', !isOpen);
+// ── Filtros (10/10/2026) — o mesmo comportamento da tela de Grupos ───────
+// Situação, Regime e Segmento: botões (um de cada vez). Razão social, Grupo,
+// Ramo, Município, Estado e Certificado: painel Filtros (vários de cada vez).
+// Cada lugar mostra só o que existe com os outros filtros, contando clientes.
+var CF_GRUPO_NOME = { {% for g in grupos or [] %}"{{ g.id }}": {{ g.nome|tojson }}{{ ',' if not loop.last }}{% endfor %} };
+var CF_RAMO = { {% for r in ramos_atividade or [] %}"{{ r.id }}": {n: {{ r.nome|tojson }}, s: {{ (r.segmento or ('PF' if r.tipo_pessoa == 'PF' else ''))|tojson }}}{{ ',' if not loop.last }}{% endfor %} };
+var CF_SEG_ROT = {COMERCIO: 'Comércio', SERVICOS: 'Prestação de Serviços', LOCACAO: 'Locação', INDUSTRIA: 'Indústria', PF: 'Pessoa física', '': 'Sem segmento'};
+var CF_CERT_ROT = {ok: 'Válido', laranja: 'Vence em 30 dias', vencido: 'Vencido', sem_data: 'Sem certificado'};
+var CF_CERT_ORD = {ok: 1, laranja: 2, vencido: 3, sem_data: 4};
+var CF = [], CF_TS = {}, cfSit = '', cfReg = '', cfSeg = '', cfMexendo = false, CF_CHAVE = 'qcx_clientes_filtros';
+var cfOrdem = 'num-asc';
+function cfSemAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+document.querySelectorAll('#cfLista .cli-card').forEach(function (row) {
+    var d = row.dataset, local = d.local || '';
+    CF.push({row: row, id: d.id, num: d.num, nome: d.nome, doc: d.doc, email: d.email, sit: d.sit, reg: d.reg,
+             segs: d.segs ? d.segs.split(',') : [], ramos: d.ramos ? d.ramos.split(',') : [],
+             grupos: d.grupos ? d.grupos.split(',') : [], cert: d.cert || 'sem_data',
+             cid: cfSemAcento(local), cidRot: local, uf: local ? local.split('/').pop() : ''});
+});
+function cfVal(k) { return CF_TS[k] ? CF_TS[k].getValue() : []; }
+function cfTem(lista, escolhidos) { return escolhidos.some(function (v) { return lista.indexOf(v) >= 0; }); }
+function cfAtende(e, menos) {
+    if (menos !== 'sit' && cfSit && e.sit !== cfSit) return false;
+    if (menos !== 'reg' && cfReg && e.reg !== cfReg) return false;
+    if (menos !== 'seg' && cfSeg && (cfSeg === '-' ? e.ramos.length : e.segs.indexOf(cfSeg) < 0)) return false;
+    var v;
+    if (menos !== 'emp' && (v = cfVal('emp')).length && v.indexOf(e.id) < 0) return false;
+    if (menos !== 'grp' && (v = cfVal('grp')).length && !cfTem(e.grupos, v)) return false;
+    if (menos !== 'ramo' && (v = cfVal('ramo')).length && !cfTem(e.ramos, v)) return false;
+    if (menos !== 'cid' && (v = cfVal('cid')).length && v.indexOf(e.cid) < 0) return false;
+    if (menos !== 'uf' && (v = cfVal('uf')).length && v.indexOf(e.uf) < 0) return false;
+    if (menos !== 'cert' && (v = cfVal('cert')).length && v.indexOf(e.cert) < 0) return false;
+    return true;
 }
-
-function sortBy(field, dir) {
-    var form = document.getElementById('filter-form');
-    form.querySelector('[name="sort_by"]').value  = field;
-    form.querySelector('[name="sort_dir"]').value = dir;
-    form.submit();
+function cfOpcoes(k) {
+    var m = {};
+    function soma(v, t, extra) {
+        if (!m[v]) { m[v] = {value: v, text: t, n: 0}; for (var x in extra) m[v][x] = extra[x]; }
+        m[v].n++;
+    }
+    CF.forEach(function (e) {
+        if (!cfAtende(e, k)) return;
+        if (k === 'emp') soma(e.id, (e.num ? e.num + ' · ' : '') + e.nome,
+                              {s: e.doc, ord: /^\d+$/.test(e.num) ? parseInt(e.num, 10) : 1e9,
+                               busca: e.nome + ' ' + e.num + ' ' + e.doc.replace(/\D/g, '') + ' ' + e.email});
+        else if (k === 'grp') e.grupos.forEach(function (g) { if (CF_GRUPO_NOME[g]) soma(g, CF_GRUPO_NOME[g]); });
+        else if (k === 'ramo') e.ramos.forEach(function (r) { if (CF_RAMO[r]) soma(r, CF_RAMO[r].n, {grupo: CF_RAMO[r].s || ''}); });
+        else if (k === 'cid') { if (e.cid) soma(e.cid, e.cidRot); }
+        else if (k === 'uf') { if (e.uf) soma(e.uf, e.uf); }
+        else soma(e.cert, CF_CERT_ROT[e.cert] || e.cert, {ord: CF_CERT_ORD[e.cert] || 9});
+    });
+    return Object.keys(m).map(function (v) { return m[v]; });
 }
-
-document.addEventListener('DOMContentLoaded', function () {
-    {% if filters_active %}
-    document.getElementById('filters-body').style.display = 'block';
-    document.getElementById('filters-chevron').classList.add('open');
-    {% endif %}
-
-    // Linha inteira abre a FICHA (detalhes) — mouse + teclado. Cliques em ações
-    // (lápis/lixeira) são ignorados aqui pelo closest('a,button,form,...'), então
-    // editar/excluir NÃO disparam a abertura da ficha.
-    document.querySelectorAll('.cli-row[data-open-url]').forEach(function (row) {
-        row.addEventListener('click', function (event) {
-            if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
-            window.location.href = row.dataset.openUrl;
+function cfContarBotoes() {
+    [['#cfSitPills', 'sit', function (e, v) { return e.sit === v; }, function () { return cfSit; }],
+     ['#cfRegPills', 'reg', function (e, v) { return e.reg === v; }, function () { return cfReg; }],
+     ['#cfSegPills', 'seg', function (e, v) { return v === '-' ? !e.ramos.length : e.segs.indexOf(v) >= 0; }, function () { return cfSeg; }]
+    ].forEach(function (p) {
+        var atual = p[3]();
+        document.querySelectorAll(p[0] + ' .gc-pill').forEach(function (b) {
+            var v = b.dataset.v, cont = b.querySelector('b');
+            var n = CF.filter(function (e) { return cfAtende(e, p[1]) && (!v || p[2](e, v)); }).length;
+            if (cont) cont.textContent = n;
+            b.classList.toggle('on', v === atual);
+            if (v && p[1] !== 'sit') {
+                b.classList.toggle('gc-pill-zero', !n && v !== atual);
+                if (p[1] === 'reg') b.hidden = !n && v !== atual && !CF.some(function (e) { return p[2](e, v); });
+            }
         });
-        row.addEventListener('keydown', function (event) {
-            if (event.key !== 'Enter' && event.key !== ' ') { return; }
-            if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
-            event.preventDefault();
-            window.location.href = row.dataset.openUrl;
+    });
+    var c = cfVal('cert');
+    document.querySelector('.cli-kpi[data-kpi="ativos"]').classList.toggle('on', cfSit === 'ATIVO');
+    document.querySelector('.cli-kpi[data-kpi="cert"]').classList.toggle('on', c.length === 2 && c.indexOf('ok') >= 0 && c.indexOf('laranja') >= 0);
+    document.querySelector('.cli-kpi[data-kpi="vencendo"]').classList.toggle('on', c.length === 1 && c[0] === 'laranja');
+}
+function cfRecarregarOpcoes() {
+    cfMexendo = true;
+    Object.keys(CF_TS).forEach(function (k) {
+        var ts = CF_TS[k], sel = ts.getValue();
+        ts.clearOptions(function (o) { return sel.indexOf(o.value) >= 0; });
+        cfOpcoes(k).forEach(function (o) { if (ts.options[o.value]) ts.updateOption(o.value, o); else ts.addOption(o); });
+        ts.refreshOptions(false);
+    });
+    cfMexendo = false;
+}
+function cfSalvar() {
+    var st = {sit: cfSit, reg: cfReg, seg: cfSeg, ordem: cfOrdem,
+              aberto: document.getElementById('cfPainel').classList.contains('on')};
+    Object.keys(CF_TS).forEach(function (k) { st[k] = cfVal(k); });
+    try { sessionStorage.setItem(CF_CHAVE, JSON.stringify(st)); } catch (e) {}
+}
+function cfAplicar() {
+    var n = 0;
+    CF.forEach(function (e) {
+        var ok = cfAtende(e);
+        e.row.classList.toggle('cf-fora', !ok);
+        if (ok) n++;
+    });
+    var cont = document.getElementById('cfCont');
+    cont.innerHTML = n === CF.length
+        ? 'Mostrando <strong>' + n + '</strong> cliente' + (n === 1 ? '' : 's')
+        : 'Mostrando <strong>' + n + '</strong> de <strong>' + CF.length + '</strong> clientes';
+    document.getElementById('cfVazio').hidden = n > 0;
+    var nCampos = Object.keys(CF_TS).filter(function (k) { return cfVal(k).length; }).length;
+    var badge = document.getElementById('cfN');
+    badge.textContent = nCampos; badge.style.display = nCampos ? 'inline-block' : 'none';
+    cfContarBotoes();
+    cfRecarregarOpcoes();
+    cfSalvar();
+}
+function cfLimpar() {
+    cfMexendo = true;
+    Object.keys(CF_TS).forEach(function (k) { CF_TS[k].clear(true); });
+    cfMexendo = false;
+    cfSit = ''; cfReg = ''; cfSeg = '';
+    cfAplicar();
+}
+function cfToggle(abrir) {
+    var p = document.getElementById('cfPainel'), b = document.getElementById('cfBtn');
+    var on = typeof abrir === 'boolean' ? abrir : !p.classList.contains('on');
+    p.classList.toggle('on', on); b.classList.toggle('on', on);
+    p.setAttribute('aria-hidden', on ? 'false' : 'true'); b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    cfSalvar();
+}
+// Ordem: Nº crescente/decrescente e razão social A-Z/Z-A (reordena os cartões)
+function cfOrdenar(modo) {
+    if (['num-asc', 'num-desc', 'az', 'za'].indexOf(modo) < 0) modo = 'num-asc';
+    cfOrdem = modo;
+    var lista = document.getElementById('cfLista');
+    function numero(e) { return /^\d+$/.test(e.num) ? parseInt(e.num, 10) : null; }
+    // A-Z pela primeira LETRA: MEI começa com o CNPJ ("49.367.526 LUIZ...") e há nome com aspas
+    function letra(e) { return e.nome.replace(/^[^A-Za-zÀ-ÿ]+/, ''); }
+    CF.slice().sort(function (a, b) {
+        if (modo === 'az' || modo === 'za') return letra(a).localeCompare(letra(b), 'pt-BR') * (modo === 'za' ? -1 : 1);
+        var na = numero(a), nb = numero(b);
+        if (na === null || nb === null) return (na === null) - (nb === null) || a.nome.localeCompare(b.nome, 'pt-BR');
+        return (na - nb) * (modo === 'num-desc' ? -1 : 1);
+    }).forEach(function (e) { lista.appendChild(e.row); });
+    document.querySelectorAll('.cli-sortchip').forEach(function (c) { c.classList.toggle('on', c.dataset.sort === modo); });
+}
+document.querySelectorAll('.cli-sortchip').forEach(function (c) {
+    c.addEventListener('click', function () { cfOrdenar(c.dataset.sort); cfSalvar(); });
+});
+document.querySelectorAll('#cfSitPills .gc-pill').forEach(function (b) {
+    b.addEventListener('click', function () { cfSit = b.dataset.v; cfAplicar(); });
+});
+document.querySelectorAll('#cfRegPills .gc-pill').forEach(function (b) {
+    b.addEventListener('click', function () { cfReg = (cfReg === b.dataset.v) ? '' : b.dataset.v; cfAplicar(); });
+});
+document.querySelectorAll('#cfSegPills .gc-pill').forEach(function (b) {
+    b.addEventListener('click', function () { cfSeg = (cfSeg === b.dataset.v) ? '' : b.dataset.v; cfAplicar(); });
+});
+// KPIs: atalhos de filtro (clicar de novo desfaz)
+document.querySelectorAll('.cli-kpi').forEach(function (k) {
+    k.addEventListener('click', function () {
+        var on = k.classList.contains('on');
+        if (k.dataset.kpi === 'ativos') { cfSit = on ? '' : 'ATIVO'; cfAplicar(); return; }
+        cfMexendo = true;
+        CF_TS.cert.clear(true);
+        if (!on) (k.dataset.kpi === 'cert' ? ['ok', 'laranja'] : ['laranja']).forEach(function (v) {
+            if (!CF_TS.cert.options[v]) CF_TS.cert.addOption({value: v, text: CF_CERT_ROT[v], n: 0, ord: CF_CERT_ORD[v]});
+            CF_TS.cert.addItem(v, true);
         });
+        cfMexendo = false;
+        cfAplicar();
+    });
+});
+(function () {
+    var render = {
+        option: function (d, esc) {
+            return '<div class="gf-opt"><span class="gf-opt-t">' + esc(d.text) +
+                (d.s ? '<span class="gf-opt-s">' + esc(d.s) + '</span>' : '') +
+                '</span><span class="gf-opt-n">' + d.n + '</span></div>';
+        },
+        item: function (d, esc) { return '<div>' + esc(d.text) + '</div>'; },
+        optgroup_header: function (d, esc) { return '<div class="optgroup-header">' + esc(d.label) + '</div>'; },
+        no_results: function () { return '<div class="no-results">Nada com os filtros escolhidos</div>'; }
+    };
+    [['emp', 'cfEmp'], ['grp', 'cfGrp'], ['ramo', 'cfRamo'], ['cid', 'cfCid'], ['uf', 'cfUf'], ['cert', 'cfCert']].forEach(function (p) {
+        var cfg = {
+            plugins: ['remove_button'], maxOptions: null, hideSelected: true, hidePlaceholder: true,
+            searchField: ['text', 'busca'], options: cfOpcoes(p[0]), render: render,
+            // Razão social e Certificado na ordem própria; o resto pelo nome (A-Z)
+            sortField: (p[0] === 'emp' || p[0] === 'cert') ? [{field: 'ord', direction: 'asc'}, {field: 'text', direction: 'asc'}]
+                                                          : [{field: 'text', direction: 'asc'}],
+            onChange: function () { if (!cfMexendo) cfAplicar(); }
+        };
+        if (p[0] === 'ramo') {   // ramos agrupados por segmento, como no cadastro
+            cfg.optgroupField = 'grupo';
+            cfg.optgroups = ['COMERCIO', 'SERVICOS', 'LOCACAO', 'INDUSTRIA', 'PF', ''].map(function (s) {
+                return {value: s, label: CF_SEG_ROT[s]};
+            });
+            cfg.lockOptgroupOrder = true;
+        }
+        CF_TS[p[0]] = new TomSelect('#' + p[1], cfg);
+    });
+    // Estado inicial: voltou da ficha/edição → repõe os filtros da aba;
+    // senão, os parâmetros da URL (?segmento=COMERCIO, ?regime=SIMPLES...).
+    var st = null, q = new URLSearchParams(location.search);
+    if (/\/clientes\/\d+/.test(document.referrer || '')) {
+        try { st = JSON.parse(sessionStorage.getItem(CF_CHAVE) || 'null'); } catch (e) {}
+    }
+    if (!st && Array.from(q.keys()).length) {
+        st = {sit: q.get('situacao') || '', reg: (q.get('regime') || '').toLowerCase(), seg: q.get('segmento') || '',
+              grp: q.get('grupo_id') ? [q.get('grupo_id')] : [], ramo: q.get('ramo_id') ? [q.get('ramo_id')] : []};
+        if (q.get('tipo_pessoa') === 'PF') st.reg = 'pf';
+    }
+    if (st) {
+        cfSit = st.sit || ''; cfReg = st.reg || ''; cfSeg = st.seg || '';
+        cfMexendo = true;
+        Object.keys(CF_TS).forEach(function (k) {
+            (st[k] || []).forEach(function (v) { if (CF_TS[k].options[v]) CF_TS[k].addItem(v, true); });
+        });
+        cfMexendo = false;
+        if (st.aberto) cfToggle(true);
+        if (typeof st.ordem === 'string') cfOrdenar(st.ordem);
+    }
+    cfAplicar();
+})();
+
+// Linha inteira abre a FICHA (detalhes) — mouse + teclado. Cliques em ações
+// (lápis/lixeira) são ignorados pelo closest('a,button,form,...').
+document.querySelectorAll('.cli-card[data-open-url]').forEach(function (row) {
+    row.addEventListener('click', function (event) {
+        if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
+        window.location.href = row.dataset.openUrl;
+    });
+    row.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') { return; }
+        if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
+        event.preventDefault();
+        window.location.href = row.dataset.openUrl;
     });
 });
 </script>

@@ -366,7 +366,49 @@ def index():
         filters['sort_by']  = sort_by
         filters['sort_dir'] = sort_dir
 
-        result = Cliente.get_all(filters=filters, page=page, per_page=per_page)
+        # Filtros na tela, como em Grupos (10/10/2026, pedido do Anderson): a
+        # lista vem inteira (323 em 10/10) e os botões/painel filtram sem
+        # recarregar. Os parâmetros da URL só dizem com que filtro a tela abre.
+        result = Cliente.get_all(filters={'sort_by': 'numero', 'sort_dir': 'asc'}, page=1, per_page=5000)
+        if result and result.get('clientes'):
+            from routes.grupos import (_cor_cidade as _g_cor_cidade, _cidade_titulo as _g_cidade_titulo,
+                                       _sem_acento as _g_sem_acento)
+            rel_ramo, rel_grupo = {}, {}
+            # uma ida ao banco só: ramos (com o segmento) e grupos de cada cliente
+            for r in execute_query("SELECT 'R' AS t, x.cliente_id, x.ramo_atividade_id AS ref, ra.segmento "
+                                   "FROM cliente_ramo_atividade_relacao x "
+                                   "JOIN ramos_atividade ra ON ra.id = x.ramo_atividade_id "
+                                   "UNION ALL SELECT 'G', cliente_id, grupo_id, NULL FROM cliente_grupo_relacao",
+                                   fetch=True) or []:
+                if r['t'] == 'G':
+                    rel_grupo.setdefault(r['cliente_id'], set()).add(str(r['ref']))
+                    continue
+                d = rel_ramo.setdefault(r['cliente_id'], {'ramos': set(), 'segs': set()})
+                d['ramos'].add(str(r['ref']))
+                if r['segmento']:
+                    d['segs'].add(r['segmento'])
+            qtd_grupo = {}
+            for gs in rel_grupo.values():
+                for g in gs:
+                    qtd_grupo[g] = qtd_grupo.get(g, 0) + 1
+            for c in result['clientes']:
+                d = rel_ramo.get(c['id'], {'ramos': set(), 'segs': set()})
+                c['f_ramos'] = ','.join(sorted(d['ramos']))
+                c['f_segs'] = ','.join(sorted(d['segs']))
+                c['f_grupos'] = ','.join(sorted(rel_grupo.get(c['id'], ())))
+                c['f_reg'] = 'pf' if c['tipo_pessoa'] == 'PF' else (c.get('regime_tributario') or '').lower()
+                # Município com a MESMA cor da tela de Grupos (a cidade tem uma cor só)
+                local = f"{_g_cidade_titulo(c['end_cidade'])}/{c.get('end_uf') or ''}" if c.get('end_cidade') else ''
+                c['f_local'] = local.rstrip('/')
+                c['f_cid_cor'] = _g_cor_cidade(_g_sem_acento(local)) if local else 0
+                # Grupo no cartão como em Grupos: sigla, nome e quantas empresas tem
+                gids = sorted(rel_grupo.get(c['id'], ()))
+                if gids:
+                    nome_g = (c.get('grupo_nome') or '').split(', ')[0]
+                    palavras = re.findall(r'\w+', nome_g)
+                    c['f_grupo'] = {'nome': nome_g, 'qtd': qtd_grupo.get(gids[0], 0),
+                                    'sigla': (''.join(w[0] for w in palavras[:2]) if len(palavras) > 1
+                                              else nome_g[:2]).upper()}
         grupos = GrupoCliente.get_all(situacao='ATIVO')
         ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
         # Vigias de CNPJ que acharam mudança na Receita e ninguém tratou ainda.
@@ -392,9 +434,13 @@ def index():
         # única do classificar_validade (verde 'ok' / âmbar 'laranja' / vermelho
         # 'vencido'); 'sem_data' quando não há certificado. A tela nunca mostra
         # vazio: sem cert vira "sem certificado" em cinza.
+        hoje = date.today()
         for c in result['clientes']:
             c['cert_nivel'] = DfeCertificado.classificar_validade(
                 c.get('cert_validade')).get('nivel', 'sem_data')
+            v = c.get('cert_validade')
+            v = v.date() if hasattr(v, 'date') else v
+            c['cert_dias'] = (v - hoje).days if v else None
 
         return render_template('clientes/index.html',
                              clientes=result['clientes'],
