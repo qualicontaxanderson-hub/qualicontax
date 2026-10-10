@@ -534,6 +534,28 @@
         </div>
     </div>
 </div>
+
+{# Confirmação do avulso (10/10/2026): janela no meio da tela no lugar do
+   confirm() do navegador, que aparecia preso no alto e difícil de ler. #}
+{% if not cliente %}
+<div class="av-ov" id="avConfirma" role="dialog" aria-modal="true" aria-labelledby="avTit" hidden>
+    <div class="av-box">
+        <div class="av-ico"><i class="fas fa-user-tag"></i></div>
+        <h3 id="avTit">Cadastrar como avulso?</h3>
+        <p class="av-lead">Avulso é para quem ainda não é cliente do escritório: um serviço pontual, um orçamento ou uma legalização.</p>
+        <ul class="av-list">
+            <li><i class="fas fa-folder-open"></i><span>Fica guardado na aba <b>Avulsos</b>.</span></li>
+            <li><i class="fas fa-eye-slash"></i><span>Não aparece na lista de clientes nem nos relatórios.</span></li>
+            <li><i class="fas fa-file-invoice"></i><span>No Fiscal aparece no fim da lista, marcado como <b>AVULSO</b>.</span></li>
+        </ul>
+        <div class="av-dica"><i class="fas fa-lightbulb"></i><span>Se depois virar cliente, é só converter na aba Avulsos e dar o número. Tudo o que já foi cadastrado vai junto.</span></div>
+        <div class="av-acoes">
+            <button type="button" class="av-nao" id="avNao">Voltar</button>
+            <button type="button" class="av-sim" id="avSim"><i class="fas fa-check"></i> Sim, é avulso</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -831,6 +853,37 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
     .cf-btn-receita { justify-content:center; padding:12px; }
     .cf-hint-mid { grid-column:1 / -1; padding:0; }
     .cf-seclabel-note { display:none; }
+}
+
+/* ---- Confirmação do avulso (10/10/2026) ---- */
+.av-ov { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:16px;
+         background:rgba(15,40,30,.45); backdrop-filter:blur(3px); animation:avFade .15s ease-out; }
+.av-ov[hidden] { display:none; }
+.av-box { width:100%; max-width:460px; max-height:100%; overflow-y:auto; background:#fff; border-radius:16px;
+          box-shadow:0 24px 60px rgba(15,61,46,.28); padding:26px 26px 20px; box-sizing:border-box; animation:avUp .18s ease-out; }
+.av-ico { width:52px; height:52px; border-radius:14px; background:#fef3c7; color:#b45309; display:flex; align-items:center;
+          justify-content:center; font-size:22px; margin-bottom:14px; }
+.av-box h3 { margin:0 0 6px; font-size:18px; font-weight:800; color:#0f172a; }
+.av-lead { margin:0 0 16px; font-size:14px; color:#475569; line-height:1.5; }
+.av-list { list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:10px; }
+.av-list li { display:flex; gap:11px; align-items:flex-start; font-size:13.5px; color:#334155; line-height:1.45; }
+.av-list li i { width:28px; height:28px; flex:none; border-radius:8px; background:#f1f5f3; color:#15803d; display:flex;
+                align-items:center; justify-content:center; font-size:13px; }
+.av-dica { display:flex; gap:10px; align-items:flex-start; padding:11px 13px; border-radius:11px; background:#ecfdf5;
+           border:1px solid #bbf7d0; color:#166534; font-size:13px; line-height:1.45; margin-bottom:20px; }
+.av-dica i { margin-top:2px; }
+.av-acoes { display:flex; gap:10px; justify-content:flex-end; }
+.av-acoes button { border-radius:10px; padding:11px 18px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
+.av-nao { background:#fff; color:#475569; border:1px solid #d7e3dc; }
+.av-nao:hover { background:#f7faf8; }
+.av-sim { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; border:none; display:inline-flex; gap:8px; align-items:center; }
+.av-sim:hover { filter:brightness(1.05); }
+@keyframes avFade { from { opacity:0 } to { opacity:1 } }
+@keyframes avUp { from { opacity:0; transform:translateY(10px) scale(.98) } to { opacity:1; transform:none } }
+@media (max-width:480px) {
+    .av-box { padding:22px 18px 16px; }
+    .av-acoes { flex-direction:column-reverse; }
+    .av-acoes button { width:100%; justify-content:center; }
 }
 </style>
 <script>
@@ -1498,23 +1551,46 @@ function consultarSintegra() {
 // Passo 2 — cliente da carteira (com número) ou avulso. Só no cadastro novo.
 // O avulso pede confirmação: é ato explícito, nunca deduzido.
 function escolherModo(radio) {
+    if (radio.value === '1') {
+        // Confirma na janela #avConfirma (10/10/2026). Enquanto ela está
+        // aberta o rádio do avulso fica marcado; "Voltar", Esc ou clique fora
+        // desmarcam e devolvem a escolha anterior.
+        confirmarAvulso(function (ok) {
+            if (!ok) {
+                radio.checked = false;
+                var cli = document.getElementById('modoCliente');
+                if (cli && window._modoAnterior === '0') cli.checked = true;
+                atualizarResumo();
+                return;
+            }
+            aplicarModo(radio);
+        });
+        return;
+    }
+    aplicarModo(radio);
+}
+
+function confirmarAvulso(fim) {
+    var ov = document.getElementById('avConfirma');
+    var sim = document.getElementById('avSim'), nao = document.getElementById('avNao');
+    function fechar(ok) {
+        ov.hidden = true;
+        sim.onclick = nao.onclick = ov.onclick = null;
+        document.removeEventListener('keydown', tecla);
+        fim(ok);
+    }
+    function tecla(e) { if (e.key === 'Escape') fechar(false); }
+    sim.onclick = function () { fechar(true); };
+    nao.onclick = function () { fechar(false); };
+    ov.onclick = function (e) { if (e.target === ov) fechar(false); };
+    document.addEventListener('keydown', tecla);
+    ov.hidden = false;
+    sim.focus();
+}
+
+function aplicarModo(radio) {
     var num = document.getElementById('numero_cliente');
     if (radio.value === '1') {
-        // A mensagem é montada com CRASE (template literal), onde a quebra de
-        // linha de verdade é válida. Entre aspas simples ela seria erro de
-        // sintaxe e mataria o bloco <script> inteiro — foi assim que os botões
-        // da tela de Usuários ficaram mortos em agosto.
-        if (!confirm(`Tem certeza que esta empresa é AVULSA?
-
-Ela NÃO entra na carteira de clientes: fica na aba Avulsos, não aparece na lista de clientes nem nos relatórios. No Fiscal aparece no fim da lista, como "AVULSO".
-
-Use para serviço pontual, orçamento ou legalização.`)) {
-            radio.checked = false;
-            var cli = document.getElementById('modoCliente');
-            if (cli && window._modoAnterior === '0') cli.checked = true;
-            atualizarResumo();
-            return;
-        }
         num.value = '';
         num.disabled = true;
         num.required = false;
