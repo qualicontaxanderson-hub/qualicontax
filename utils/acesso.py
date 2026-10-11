@@ -77,6 +77,7 @@ MAPA = {
     'clientes.novo':                   'clientes.create',
     'clientes.detalhes':               'clientes.index',
     'clientes.historico':              'clientes.index',
+    'clientes.relatorio':              'clientes.index',   # PDF/Excel dos cartões da tela
     'clientes.socios_buscar_pf':       'clientes.index',
     'clientes.anp_detalhe':            'clientes.index',
     'clientes.cnpj_vigia_status':      'clientes.index',

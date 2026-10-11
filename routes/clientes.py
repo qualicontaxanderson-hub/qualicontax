@@ -327,6 +327,83 @@ def _ctx_form(cliente=None):
     return ctx
 
 
+def _lista_clientes_tela():
+    """Carteira inteira como a tela de Clientes a mostra (cartões, filtros na
+    tela e relatórios): get_all + ramos/segmentos/grupos + nível do certificado.
+    Uma fonte só, para o relatório nunca contar diferente dos cartões."""
+    # Filtros na tela, como em Grupos (10/10/2026, pedido do Anderson): a
+    # lista vem inteira (323 em 10/10) e os botões/painel filtram sem
+    # recarregar. Os parâmetros da URL só dizem com que filtro a tela abre.
+    result = Cliente.get_all(filters={'sort_by': 'numero', 'sort_dir': 'asc'}, page=1, per_page=5000)
+    if result and result.get('clientes'):
+        from routes.grupos import (_cor_cidade as _g_cor_cidade, _cidade_titulo as _g_cidade_titulo,
+                                   _sem_acento as _g_sem_acento)
+        rel_ramo, rel_grupo = {}, {}
+        # uma ida ao banco só: ramos (com o segmento) e grupos de cada cliente
+        for r in execute_query("SELECT 'R' AS t, x.cliente_id, x.ramo_atividade_id AS ref, ra.segmento "
+                               "FROM cliente_ramo_atividade_relacao x "
+                               "JOIN ramos_atividade ra ON ra.id = x.ramo_atividade_id "
+                               "UNION ALL SELECT 'G', cliente_id, grupo_id, NULL FROM cliente_grupo_relacao",
+                               fetch=True) or []:
+            if r['t'] == 'G':
+                rel_grupo.setdefault(r['cliente_id'], set()).add(str(r['ref']))
+                continue
+            d = rel_ramo.setdefault(r['cliente_id'], {'ramos': set(), 'segs': set()})
+            d['ramos'].add(str(r['ref']))
+            if r['segmento']:
+                d['segs'].add(r['segmento'])
+        qtd_grupo = {}
+        for gs in rel_grupo.values():
+            for g in gs:
+                qtd_grupo[g] = qtd_grupo.get(g, 0) + 1
+        for c in result['clientes']:
+            d = rel_ramo.get(c['id'], {'ramos': set(), 'segs': set()})
+            c['f_ramos'] = ','.join(sorted(d['ramos']))
+            c['f_segs'] = ','.join(sorted(d['segs']))
+            c['f_grupos'] = ','.join(sorted(rel_grupo.get(c['id'], ())))
+            c['f_reg'] = 'pf' if c['tipo_pessoa'] == 'PF' else (c.get('regime_tributario') or '').lower()
+            # Município com a MESMA cor da tela de Grupos (a cidade tem uma cor só)
+            local = f"{_g_cidade_titulo(c['end_cidade'])}/{c.get('end_uf') or ''}" if c.get('end_cidade') else ''
+            c['f_local'] = local.rstrip('/')
+            c['f_cid_cor'] = _g_cor_cidade(_g_sem_acento(local)) if local else 0
+            # Grupo no cartão como em Grupos: sigla, nome e quantas empresas tem
+            gids = sorted(rel_grupo.get(c['id'], ()))
+            if gids:
+                nome_g = (c.get('grupo_nome') or '').split(', ')[0]
+                palavras = re.findall(r'\w+', nome_g)
+                c['f_grupo'] = {'nome': nome_g, 'qtd': qtd_grupo.get(gids[0], 0),
+                                'sigla': (''.join(w[0] for w in palavras[:2]) if len(palavras) > 1
+                                          else nome_g[:2]).upper()}
+    if not result:
+        return result
+
+    # Nível do certificado por cliente para a coluna Certificado — MESMA regra
+    # única do classificar_validade (verde 'ok' / âmbar 'laranja' / vermelho
+    # 'vencido'); 'sem_data' quando não há certificado. A tela nunca mostra
+    # vazio: sem cert vira "sem certificado" em cinza.
+    hoje = date.today()
+    for c in result['clientes']:
+        c['cert_nivel'] = DfeCertificado.classificar_validade(
+            c.get('cert_validade')).get('nivel', 'sem_data')
+        v = c.get('cert_validade')
+        v = v.date() if hasattr(v, 'date') else v
+        c['cert_dias'] = (v - hoje).days if v else None
+
+    return result
+
+
+def _kpis_clientes(lista):
+    """Contagem da fita de KPIs (e do relatório) sobre a lista que se mostra."""
+    niveis = [c.get('cert_nivel') for c in lista]
+    return {'ativos': sum(1 for c in lista if c.get('situacao') == 'ATIVO'),
+            'inativos': sum(1 for c in lista if c.get('situacao') == 'INATIVO'),
+            'com_certificado': sum(1 for n in niveis if n in ('ok', 'laranja')),
+            'cert_ok': niveis.count('ok'),
+            'cert_vencendo': niveis.count('laranja'),
+            'cert_vencido': niveis.count('vencido'),
+            'cert_sem': sum(1 for n in niveis if n not in ('ok', 'laranja', 'vencido'))}
+
+
 @clientes.route('/clientes')
 @permission_required('clientes.index')
 def index():
@@ -366,49 +443,7 @@ def index():
         filters['sort_by']  = sort_by
         filters['sort_dir'] = sort_dir
 
-        # Filtros na tela, como em Grupos (10/10/2026, pedido do Anderson): a
-        # lista vem inteira (323 em 10/10) e os botões/painel filtram sem
-        # recarregar. Os parâmetros da URL só dizem com que filtro a tela abre.
-        result = Cliente.get_all(filters={'sort_by': 'numero', 'sort_dir': 'asc'}, page=1, per_page=5000)
-        if result and result.get('clientes'):
-            from routes.grupos import (_cor_cidade as _g_cor_cidade, _cidade_titulo as _g_cidade_titulo,
-                                       _sem_acento as _g_sem_acento)
-            rel_ramo, rel_grupo = {}, {}
-            # uma ida ao banco só: ramos (com o segmento) e grupos de cada cliente
-            for r in execute_query("SELECT 'R' AS t, x.cliente_id, x.ramo_atividade_id AS ref, ra.segmento "
-                                   "FROM cliente_ramo_atividade_relacao x "
-                                   "JOIN ramos_atividade ra ON ra.id = x.ramo_atividade_id "
-                                   "UNION ALL SELECT 'G', cliente_id, grupo_id, NULL FROM cliente_grupo_relacao",
-                                   fetch=True) or []:
-                if r['t'] == 'G':
-                    rel_grupo.setdefault(r['cliente_id'], set()).add(str(r['ref']))
-                    continue
-                d = rel_ramo.setdefault(r['cliente_id'], {'ramos': set(), 'segs': set()})
-                d['ramos'].add(str(r['ref']))
-                if r['segmento']:
-                    d['segs'].add(r['segmento'])
-            qtd_grupo = {}
-            for gs in rel_grupo.values():
-                for g in gs:
-                    qtd_grupo[g] = qtd_grupo.get(g, 0) + 1
-            for c in result['clientes']:
-                d = rel_ramo.get(c['id'], {'ramos': set(), 'segs': set()})
-                c['f_ramos'] = ','.join(sorted(d['ramos']))
-                c['f_segs'] = ','.join(sorted(d['segs']))
-                c['f_grupos'] = ','.join(sorted(rel_grupo.get(c['id'], ())))
-                c['f_reg'] = 'pf' if c['tipo_pessoa'] == 'PF' else (c.get('regime_tributario') or '').lower()
-                # Município com a MESMA cor da tela de Grupos (a cidade tem uma cor só)
-                local = f"{_g_cidade_titulo(c['end_cidade'])}/{c.get('end_uf') or ''}" if c.get('end_cidade') else ''
-                c['f_local'] = local.rstrip('/')
-                c['f_cid_cor'] = _g_cor_cidade(_g_sem_acento(local)) if local else 0
-                # Grupo no cartão como em Grupos: sigla, nome e quantas empresas tem
-                gids = sorted(rel_grupo.get(c['id'], ()))
-                if gids:
-                    nome_g = (c.get('grupo_nome') or '').split(', ')[0]
-                    palavras = re.findall(r'\w+', nome_g)
-                    c['f_grupo'] = {'nome': nome_g, 'qtd': qtd_grupo.get(gids[0], 0),
-                                    'sigla': (''.join(w[0] for w in palavras[:2]) if len(palavras) > 1
-                                              else nome_g[:2]).upper()}
+        result = _lista_clientes_tela()
         grupos = GrupoCliente.get_all(situacao='ATIVO')
         ramos_atividade = RamoAtividade.get_all(situacao='ATIVO')
         # Vigias de CNPJ que acharam mudança na Receita e ninguém tratou ainda.
@@ -430,29 +465,11 @@ def index():
         stats = result.get('stats', {'total': 0, 'ativos': 0, 'inativos': 0, 'pf': 0,
                                      'pj': 0, 'com_certificado': 0, 'cert_vencendo': 0})
 
-        # Nível do certificado por cliente para a coluna Certificado — MESMA regra
-        # única do classificar_validade (verde 'ok' / âmbar 'laranja' / vermelho
-        # 'vencido'); 'sem_data' quando não há certificado. A tela nunca mostra
-        # vazio: sem cert vira "sem certificado" em cinza.
-        hoje = date.today()
-        for c in result['clientes']:
-            c['cert_nivel'] = DfeCertificado.classificar_validade(
-                c.get('cert_validade')).get('nivel', 'sem_data')
-            v = c.get('cert_validade')
-            v = v.date() if hasattr(v, 'date') else v
-            c['cert_dias'] = (v - hoje).days if v else None
-
         # Fita de KPIs contada sobre a MESMA lista dos cartões (11/10/2026): o
         # COUNT global incluía certificado de avulso (246 contra 244 nos cartões).
         # Vencido = tem certificado e a validade passou; sem certificado = nunca
         # vinculou. Os quatro de certificado somam a carteira inteira.
-        niveis = [c['cert_nivel'] for c in result['clientes']]
-        stats = dict(stats,
-                     ativos=sum(1 for c in result['clientes'] if c.get('situacao') == 'ATIVO'),
-                     com_certificado=sum(1 for n in niveis if n in ('ok', 'laranja')),
-                     cert_vencendo=niveis.count('laranja'),
-                     cert_vencido=niveis.count('vencido'),
-                     cert_sem=sum(1 for n in niveis if n not in ('ok', 'laranja', 'vencido')))
+        stats = dict(stats, **_kpis_clientes(result['clientes']))
 
         return render_template('clientes/index.html',
                              clientes=result['clientes'],
@@ -487,6 +504,64 @@ def index():
                               filtros={'situacao': '', 'regime': '', 'tipo_pessoa': '',
                                        'grupo_id': '', 'ramo_id': '', 'segmento': '',
                                        'busca': '', 'busca_tipo': 'nome'})
+
+
+@clientes.route('/clientes/relatorio')
+@permission_required('clientes.index')
+def relatorio():
+    """Relatório de clientes (11/10/2026): resumido ou completo, em PDF ou Excel.
+    Sai com os clientes que estão NA TELA (``ids`` na ordem dos cartões) e com os
+    filtros escritos no cabeçalho; sem ``ids``, a carteira inteira."""
+    import os
+    from io import BytesIO
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from flask import send_file
+    from utils import relatorio_clientes as RC
+
+    tipo = request.args.get('tipo', 'resumido')
+    formato = request.args.get('formato', 'pdf')
+    if tipo not in ('resumido', 'completo') or formato not in ('pdf', 'xlsx'):
+        return jsonify({'error': 'Use tipo=resumido|completo e formato=pdf|xlsx.'}), 400
+
+    lista = (_lista_clientes_tela() or {}).get('clientes') or []
+    ids = [int(x) for x in (request.args.get('ids') or '').split(',') if x.strip().isdigit()]
+    if request.args.get('ids') is not None:
+        por_id = {c['id']: c for c in lista}
+        lista = [por_id[i] for i in ids if i in por_id]   # a ordem da tela
+
+    # Completo: o que o cartão não carrega (fantasia, endereço, CNAE, porte, datas)
+    extra = {}
+    if tipo == 'completo' and lista:
+        marc = ','.join(['%s'] * len(lista))
+        for r in execute_query(
+                f"""SELECT c.id, c.nome_fantasia, c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao,
+                           c.data_inicio_atividade, c.data_inicio_contrato, c.criado_em,
+                           e.cep, e.logradouro, e.numero, e.complemento, e.bairro
+                      FROM clientes c
+                      LEFT JOIN enderecos_clientes e ON e.cliente_id = c.id AND e.principal = 1
+                     WHERE c.id IN ({marc})""", tuple(c['id'] for c in lista), fetch=True) or []:
+            extra.setdefault(r['id'], r)
+
+    registrar('leitura.exportou_arquivo', 'cadastros', tabela='clientes',
+              depois={'relatorio': f'clientes {tipo}', 'formato': formato, 'clientes': len(lista)})
+
+    logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        'static', 'images', 'logo.png')
+    agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    ctx = {'tipo': tipo, 'clientes': lista, 'extra': extra, 'kpis': _kpis_clientes(lista),
+           'segmentos': SEGMENTO_NOME, 'filtros': (request.args.get('filtros') or '').strip()[:300],
+           'gerado_em': agora.strftime('%d/%m/%Y %H:%M'),
+           'gerado_por': getattr(current_user, 'nome', '') or '',
+           'logo_path': logo if os.path.exists(logo) else None}
+    if formato == 'xlsx':
+        dados = RC.gerar_xlsx(ctx)
+        mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        dados = RC.gerar_pdf(ctx)
+        mime = 'application/pdf'
+    nome = f"clientes-{tipo}-{agora.strftime('%Y-%m-%d')}.{formato}"
+    return send_file(BytesIO(dados), as_attachment=True, download_name=nome, mimetype=mime)
 
 
 def _render_novo():

@@ -28,10 +28,24 @@
             <p class="ef-hero-sub">{{ stats.total or 0 }} empresa{{ '' if (stats.total or 0) == 1 else 's' }} cadastrada{{ '' if (stats.total or 0) == 1 else 's' }}</p>
         </div>
         <div class="ef-hero-actions">
-            {# Exportar: botão morto hoje (ação virá em frente própria) — mantido como está #}
-            <button type="button" class="ef-btn" title="Exportar">
-                <i class="fas fa-download"></i> Exportar
-            </button>
+            {# Relatórios (11/10/2026): saem com os clientes que estão NA TELA, na ordem escolhida #}
+            <div class="cli-exp">
+                <button type="button" class="ef-btn" id="cfExpBtn" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-file-export"></i> Relatórios <i class="fas fa-chevron-down cli-exp-chev"></i>
+                </button>
+                <div class="cli-exp-menu" id="cfExpMenu" hidden>
+                    <div class="cli-exp-cab">Sai com os <b id="cfExpN">0</b> clientes da tela, na ordem escolhida</div>
+                    <button type="button" data-tipo="resumido" data-fmt="pdf"><i class="fas fa-file-pdf cli-exp-pdf"></i>
+                        <span><b>Resumido em PDF</b><small>Nº, razão, CNPJ, regime, município, grupo e certificado</small></span></button>
+                    <button type="button" data-tipo="resumido" data-fmt="xlsx"><i class="fas fa-file-excel cli-exp-xls"></i>
+                        <span><b>Resumido em Excel</b><small>As mesmas colunas, com filtro em cada uma</small></span></button>
+                    <div class="cli-exp-sep"></div>
+                    <button type="button" data-tipo="completo" data-fmt="pdf"><i class="fas fa-file-pdf cli-exp-pdf"></i>
+                        <span><b>Completo em PDF</b><small>+ IE e IM, atividades, endereço, contato e CNAE</small></span></button>
+                    <button type="button" data-tipo="completo" data-fmt="xlsx"><i class="fas fa-file-excel cli-exp-xls"></i>
+                        <span><b>Completo em Excel</b><small>Todos os campos do cadastro, uma coluna para cada</small></span></button>
+                </div>
+            </div>
             <a href="{{ url_for('clientes.novo') }}" class="ef-btn ef-btn-primary">
                 <i class="fas fa-plus"></i> Novo Cliente
             </a>
@@ -47,6 +61,13 @@
             <div class="cli-kpi-body">
                 <strong class="cli-kpi-val">{{ stats.ativos or 0 }}</strong>
                 <span class="cli-kpi-lbl">Clientes ativos</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="inativos" title="Mostrar só os clientes inativos">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#475569;"><i class="fas fa-circle-pause"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ stats.inativos or 0 }}</strong>
+                <span class="cli-kpi-lbl">Clientes inativos</span>
             </div>
         </button>
         <button type="button" class="cli-kpi" data-kpi="cert" title="Mostrar só quem tem certificado válido (inclui os que vencem em 30 dias)">
@@ -245,16 +266,19 @@
                 {% set dias = cliente.cert_dias %}
                 {% if n == 'ok' %}
                 <span class="cli-selo cli-selo-ok"><i class="fas fa-shield-halved"></i>
-                    <span><b>Certificado válido</b><small>até {{ cliente.cert_validade.strftime('%d/%m/%Y') }}</small></span></span>
+                    <span class="cli-selo-t"><b>Certificado válido</b><small>faltam {{ dias }} dias</small></span>
+                    <span class="cli-selo-d"><small>vence em</small><b>{{ cliente.cert_validade.strftime('%d/%m/%Y') }}</b></span></span>
                 {% elif n == 'laranja' %}
                 <span class="cli-selo cli-selo-warn"><i class="fas fa-triangle-exclamation"></i>
-                    <span><b>Vence em {{ dias }} dia{{ '' if dias == 1 else 's' }}</b><small>em {{ cliente.cert_validade.strftime('%d/%m/%Y') }}</small></span></span>
+                    <span class="cli-selo-t"><b>Vence em {{ dias }} dia{{ '' if dias == 1 else 's' }}</b><small>renovar o certificado</small></span>
+                    <span class="cli-selo-d"><small>vence em</small><b>{{ cliente.cert_validade.strftime('%d/%m/%Y') }}</b></span></span>
                 {% elif n == 'vencido' %}
                 <span class="cli-selo cli-selo-bad"><i class="fas fa-circle-xmark"></i>
-                    <span><b>Certificado vencido</b><small>em {{ cliente.cert_validade.strftime('%d/%m/%Y') }}</small></span></span>
+                    <span class="cli-selo-t"><b>Certificado vencido</b><small>há {{ -dias }} dia{{ '' if dias == -1 else 's' }}</small></span>
+                    <span class="cli-selo-d"><small>venceu em</small><b>{{ cliente.cert_validade.strftime('%d/%m/%Y') }}</b></span></span>
                 {% else %}
                 <span class="cli-selo cli-selo-sem"><i class="fas fa-shield"></i>
-                    <span><b>Sem certificado</b><small>nenhum A1 cadastrado</small></span></span>
+                    <span class="cli-selo-t"><b>Sem certificado</b><small>nenhum A1 cadastrado</small></span></span>
                 {% endif %}
                 <span class="lst-c-act">
                     {# O cartão inteiro abre a FICHA; aqui ficam só editar e excluir. #}
@@ -284,7 +308,7 @@
 /* hero/corpo vêm de identidade.css (.ef-hero / .ef-body — fonte única). */
 
 /* Fita de KPIs — flutua metade sobre o verde; clicar filtra (10/10/2026) */
-.cli-kpis { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px; margin-top:-14px;
+.cli-kpis { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:12px; margin-top:-14px;
             position:relative; z-index:2; margin-bottom:18px; }
 .cli-kpi { min-width:0; display:flex; align-items:center; gap:12px; text-align:left; font:inherit; cursor:pointer;
            background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px;
@@ -297,11 +321,26 @@
 .cli-kpi-val { font-size:26px; font-weight:800; line-height:1; color:#0f3d2e; font-variant-numeric:tabular-nums; }
 .cli-kpi-val.cli-warn { color:#b45309; }
 .cli-kpi-val.cli-bad { color:#b91c1c; }
-@media (max-width:1100px) {
-    .cli-kpis { grid-template-columns:repeat(6, minmax(0,1fr)); }
-    .cli-kpi { grid-column:span 2; }
-    .cli-kpi[data-kpi="vencido"], .cli-kpi[data-kpi="sem"] { grid-column:span 3; }
-}
+@media (max-width:1100px) { .cli-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+
+/* Menu de relatórios (no hero verde) */
+.cli-exp { position:relative; }
+.cli-exp-chev { font-size:10px; margin-left:2px; opacity:.8; }
+/* fixed e preso ao <body>: dentro do hero ele ficava ATRÁS da fita de KPIs */
+.cli-exp-menu { position:fixed; z-index:1050; width:330px; max-width:calc(100vw - 32px); background:#fff;
+                border:1px solid #e3ece7; border-radius:14px; padding:8px; box-shadow:0 18px 40px rgba(15,61,46,.22); }
+.cli-exp-menu[hidden] { display:none; }
+.cli-exp-cab { font-size:11.5px; color:#7d968a; padding:4px 8px 8px; }
+.cli-exp-cab b { color:#0f3d2e; }
+.cli-exp-menu button { display:flex; align-items:center; gap:12px; width:100%; text-align:left; font:inherit;
+                       background:none; border:0; border-radius:10px; padding:9px 10px; cursor:pointer; color:#0f172a; }
+.cli-exp-menu button:hover, .cli-exp-menu button:focus-visible { background:#f0fdf4; outline:none; }
+.cli-exp-menu button > i { font-size:22px; width:24px; text-align:center; }
+.cli-exp-pdf { color:#dc2626; }
+.cli-exp-xls { color:#15803d; }
+.cli-exp-menu button b { display:block; font-size:13px; font-weight:800; color:#0f3d2e; }
+.cli-exp-menu button small { display:block; font-size:11.5px; color:#64748b; line-height:1.3; }
+.cli-exp-sep { height:1px; background:#eef2f0; margin:4px 8px; }
 .cli-kpi-lbl { font-size:11.5px; color:#7d968a; }
 
 /* ── Barra de filtros: o MESMO desenho da tela de Grupos (grupos/index.html) ── */
@@ -480,8 +519,14 @@ span.cli-val { color:#334155; }
 /* Certificado: selo colorido no rodapé */
 .cli-pe { display:flex; align-items:center; justify-content:space-between; gap:10px;
           border-top:1px solid #eef2f0; padding-top:10px; }
-.cli-selo { display:inline-flex; align-items:center; gap:9px; padding:6px 12px 6px 10px; border-radius:10px;
+.cli-selo { display:flex; flex:1; align-items:center; gap:10px; padding:6px 12px 6px 11px; border-radius:10px;
             border:1px solid; min-width:0; }
+.cli-selo-t { flex:1; min-width:0; }
+.cli-selo-t b, .cli-selo-t small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cli-selo-d { text-align:right; flex-shrink:0; padding-left:10px; border-left:1px solid currentColor;
+              border-left-color:color-mix(in srgb, currentColor 25%, transparent); }
+.cli-selo .cli-selo-d small { font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; opacity:.75; }
+.cli-selo .cli-selo-d b { font-size:15.5px; line-height:1.1; font-variant-numeric:tabular-nums; letter-spacing:.2px; }
 .cli-selo > i { font-size:16px; }
 .cli-selo b { display:block; font-size:12.5px; font-weight:800; line-height:1.15; }
 .cli-selo small { display:block; font-size:11px; opacity:.85; font-variant-numeric:tabular-nums; }
@@ -594,6 +639,7 @@ function cfContarBotoes() {
     });
     var c = cfVal('cert');
     document.querySelector('.cli-kpi[data-kpi="ativos"]').classList.toggle('on', cfSit === 'ATIVO');
+    document.querySelector('.cli-kpi[data-kpi="inativos"]').classList.toggle('on', cfSit === 'INATIVO');
     document.querySelector('.cli-kpi[data-kpi="cert"]').classList.toggle('on', c.length === 2 && c.indexOf('ok') >= 0 && c.indexOf('laranja') >= 0);
     document.querySelector('.cli-kpi[data-kpi="vencendo"]').classList.toggle('on', c.length === 1 && c[0] === 'laranja');
     document.querySelector('.cli-kpi[data-kpi="vencido"]').classList.toggle('on', c.length === 1 && c[0] === 'vencido');
@@ -676,6 +722,55 @@ document.querySelectorAll('#cfRegPills .gc-pill').forEach(function (b) {
 document.querySelectorAll('#cfSegPills .gc-pill').forEach(function (b) {
     b.addEventListener('click', function () { cfSeg = (cfSeg === b.dataset.v) ? '' : b.dataset.v; cfAplicar(); });
 });
+// Relatórios: os clientes VISÍVEIS, na ordem dos cartões, e os filtros por extenso
+function cfDescreverFiltros() {
+    var partes = [];
+    [['#cfSitPills', cfSit], ['#cfRegPills', cfReg], ['#cfSegPills', cfSeg]].forEach(function (p) {
+        if (!p[1]) return;
+        var b = document.querySelector(p[0] + ' .gc-pill[data-v="' + p[1] + '"]');
+        if (b) partes.push(b.childNodes.length ? b.textContent.replace(/\s*\d+\s*$/, '').trim() : p[1]);
+    });
+    var rot = {emp: 'Empresa', grp: 'Grupo', ramo: 'Ramo', cid: 'Município', uf: 'UF', cert: 'Certificado'};
+    Object.keys(CF_TS).forEach(function (k) {
+        var v = cfVal(k);
+        if (v.length) partes.push(rot[k] + ': ' + v.map(function (x) {
+            var o = CF_TS[k].options[x]; return o ? o.text : x;
+        }).join(', '));
+    });
+    var ordem = document.querySelector('.cli-sortchip.on');
+    if (ordem && cfOrdem !== 'num-asc') partes.push('Ordem ' + ordem.textContent.trim());
+    return partes.join(' · ');
+}
+(function () {
+    var btn = document.getElementById('cfExpBtn'), menu = document.getElementById('cfExpMenu');
+    function visiveis() {
+        return [].map.call(document.querySelectorAll('#cfLista .cli-card:not(.cf-fora)'), function (r) { return r.dataset.id; });
+    }
+    document.body.appendChild(menu);
+    function posicionar() {
+        var r = btn.getBoundingClientRect(), w = menu.offsetWidth;
+        menu.style.top = (r.bottom + 8) + 'px';
+        menu.style.left = Math.max(16, Math.min(r.right - w, window.innerWidth - w - 16)) + 'px';
+    }
+    function abrir(on) {
+        menu.hidden = !on; btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+        if (on) { document.getElementById('cfExpN').textContent = visiveis().length; posicionar(); }
+    }
+    window.addEventListener('resize', function () { if (!menu.hidden) posicionar(); });
+    window.addEventListener('scroll', function () { if (!menu.hidden) posicionar(); }, {passive: true});
+    btn.addEventListener('click', function (ev) { ev.stopPropagation(); abrir(menu.hidden); });
+    document.addEventListener('click', function (ev) { if (!menu.hidden && !menu.contains(ev.target)) abrir(false); });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') abrir(false); });
+    menu.querySelectorAll('button[data-tipo]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var q = new URLSearchParams({tipo: b.dataset.tipo, formato: b.dataset.fmt,
+                                         ids: visiveis().join(','), filtros: cfDescreverFiltros()});
+            abrir(false);
+            window.location.href = '{{ url_for('clientes.relatorio') }}?' + q.toString();
+        });
+    });
+})();
+
 // KPIs: atalhos de filtro (clicar de novo desfaz). O quadro mostra a carteira
 // INTEIRA, então o clique começa do zero: sem isso, um "Pessoa Física" já
 // marcado somado ao "Vencendo" dava lista vazia (11/10/2026).
@@ -687,7 +782,10 @@ document.querySelectorAll('.cli-kpi').forEach(function (k) {
         Object.keys(CF_TS).forEach(function (t) { CF_TS[t].clear(true); });
         cfMexendo = false;
         cfSit = ''; cfReg = ''; cfSeg = '';
-        if (k.dataset.kpi === 'ativos') { cfSit = on ? '' : 'ATIVO'; cfAplicar(); return; }
+        if (k.dataset.kpi === 'ativos' || k.dataset.kpi === 'inativos') {
+            cfSit = on ? '' : (k.dataset.kpi === 'ativos' ? 'ATIVO' : 'INATIVO');
+            cfAplicar(); return;
+        }
         cfMexendo = true;
         if (!on) CF_KPI_CERT[k.dataset.kpi].forEach(function (v) {
             if (!CF_TS.cert.options[v]) CF_TS.cert.addOption({value: v, text: CF_CERT_ROT[v], n: 0, ord: CF_CERT_ORD[v]});
