@@ -442,6 +442,18 @@ def index():
             v = v.date() if hasattr(v, 'date') else v
             c['cert_dias'] = (v - hoje).days if v else None
 
+        # Fita de KPIs contada sobre a MESMA lista dos cartões (11/10/2026): o
+        # COUNT global incluía certificado de avulso (246 contra 244 nos cartões).
+        # Vencido = tem certificado e a validade passou; sem certificado = nunca
+        # vinculou. Os quatro de certificado somam a carteira inteira.
+        niveis = [c['cert_nivel'] for c in result['clientes']]
+        stats = dict(stats,
+                     ativos=sum(1 for c in result['clientes'] if c.get('situacao') == 'ATIVO'),
+                     com_certificado=sum(1 for n in niveis if n in ('ok', 'laranja')),
+                     cert_vencendo=niveis.count('laranja'),
+                     cert_vencido=niveis.count('vencido'),
+                     cert_sem=sum(1 for n in niveis if n not in ('ok', 'laranja', 'vencido')))
+
         return render_template('clientes/index.html',
                              clientes=result['clientes'],
                              page=result['page'],

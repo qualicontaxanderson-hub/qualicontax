@@ -49,11 +49,11 @@
                 <span class="cli-kpi-lbl">Clientes ativos</span>
             </div>
         </button>
-        <button type="button" class="cli-kpi" data-kpi="cert" title="Mostrar só quem tem certificado válido">
+        <button type="button" class="cli-kpi" data-kpi="cert" title="Mostrar só quem tem certificado válido (inclui os que vencem em 30 dias)">
             <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-certificate"></i></span>
             <div class="cli-kpi-body">
                 <strong class="cli-kpi-val">{{ stats.com_certificado or 0 }}</strong>
-                <span class="cli-kpi-lbl">Com certificado</span>
+                <span class="cli-kpi-lbl">Com certificado válido</span>
             </div>
         </button>
         <button type="button" class="cli-kpi" data-kpi="vencendo" title="Mostrar só os certificados que vencem em 30 dias">
@@ -61,6 +61,20 @@
             <div class="cli-kpi-body">
                 <strong class="cli-kpi-val cli-warn">{{ stats.cert_vencendo or 0 }}</strong>
                 <span class="cli-kpi-lbl">Vencendo em 30 dias</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="vencido" title="Tinha certificado e a validade já passou">
+            <span class="cli-kpi-ico" style="background:#fee2e2; color:#b91c1c;"><i class="fas fa-circle-xmark"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-bad' if stats.cert_vencido }}">{{ stats.cert_vencido or 0 }}</strong>
+                <span class="cli-kpi-lbl">Certificado vencido</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="sem" title="Empresa cadastrada que nunca recebeu certificado">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#64748b;"><i class="fas fa-shield"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ stats.cert_sem or 0 }}</strong>
+                <span class="cli-kpi-lbl">Sem certificado</span>
             </div>
         </button>
     </div>
@@ -270,8 +284,9 @@
 /* hero/corpo vêm de identidade.css (.ef-hero / .ef-body — fonte única). */
 
 /* Fita de KPIs — flutua metade sobre o verde; clicar filtra (10/10/2026) */
-.cli-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:-14px; position:relative; z-index:2; margin-bottom:18px; }
-.cli-kpi { flex:1; min-width:170px; display:flex; align-items:center; gap:12px; text-align:left; font:inherit; cursor:pointer;
+.cli-kpis { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px; margin-top:-14px;
+            position:relative; z-index:2; margin-bottom:18px; }
+.cli-kpi { min-width:0; display:flex; align-items:center; gap:12px; text-align:left; font:inherit; cursor:pointer;
            background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px;
            box-shadow:0 8px 22px rgba(16,120,70,.10); transition:border-color .15s, box-shadow .15s; }
 .cli-kpi:hover { border-color:#86efac; }
@@ -281,6 +296,12 @@
 .cli-kpi-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
 .cli-kpi-val { font-size:26px; font-weight:800; line-height:1; color:#0f3d2e; font-variant-numeric:tabular-nums; }
 .cli-kpi-val.cli-warn { color:#b45309; }
+.cli-kpi-val.cli-bad { color:#b91c1c; }
+@media (max-width:1100px) {
+    .cli-kpis { grid-template-columns:repeat(6, minmax(0,1fr)); }
+    .cli-kpi { grid-column:span 2; }
+    .cli-kpi[data-kpi="vencido"], .cli-kpi[data-kpi="sem"] { grid-column:span 3; }
+}
 .cli-kpi-lbl { font-size:11.5px; color:#7d968a; }
 
 /* ── Barra de filtros: o MESMO desenho da tela de Grupos (grupos/index.html) ── */
@@ -487,7 +508,7 @@ span.cli-val { color:#334155; }
     .cli-seg-rot { flex-basis:100%; }
     /* KPIs: 3 compactos em linha (ícone/número/label empilhados) — sem cortar label. */
     .cli-kpis { gap:8px; }
-    .cli-kpi { min-width:0; flex:1 1 0; padding:11px 10px; flex-direction:column;
+    .cli-kpi { min-width:0; padding:11px 10px; flex-direction:column;
                align-items:flex-start; gap:7px; }
     .cli-kpi-val { font-size:22px; }
     .cli-kpi-lbl { font-size:10.5px; line-height:1.2; }
@@ -575,6 +596,8 @@ function cfContarBotoes() {
     document.querySelector('.cli-kpi[data-kpi="ativos"]').classList.toggle('on', cfSit === 'ATIVO');
     document.querySelector('.cli-kpi[data-kpi="cert"]').classList.toggle('on', c.length === 2 && c.indexOf('ok') >= 0 && c.indexOf('laranja') >= 0);
     document.querySelector('.cli-kpi[data-kpi="vencendo"]').classList.toggle('on', c.length === 1 && c[0] === 'laranja');
+    document.querySelector('.cli-kpi[data-kpi="vencido"]').classList.toggle('on', c.length === 1 && c[0] === 'vencido');
+    document.querySelector('.cli-kpi[data-kpi="sem"]').classList.toggle('on', c.length === 1 && c[0] === 'sem_data');
 }
 function cfRecarregarOpcoes() {
     cfMexendo = true;
@@ -653,14 +676,20 @@ document.querySelectorAll('#cfRegPills .gc-pill').forEach(function (b) {
 document.querySelectorAll('#cfSegPills .gc-pill').forEach(function (b) {
     b.addEventListener('click', function () { cfSeg = (cfSeg === b.dataset.v) ? '' : b.dataset.v; cfAplicar(); });
 });
-// KPIs: atalhos de filtro (clicar de novo desfaz)
+// KPIs: atalhos de filtro (clicar de novo desfaz). O quadro mostra a carteira
+// INTEIRA, então o clique começa do zero: sem isso, um "Pessoa Física" já
+// marcado somado ao "Vencendo" dava lista vazia (11/10/2026).
+var CF_KPI_CERT = {cert: ['ok', 'laranja'], vencendo: ['laranja'], vencido: ['vencido'], sem: ['sem_data']};
 document.querySelectorAll('.cli-kpi').forEach(function (k) {
     k.addEventListener('click', function () {
         var on = k.classList.contains('on');
+        cfMexendo = true;
+        Object.keys(CF_TS).forEach(function (t) { CF_TS[t].clear(true); });
+        cfMexendo = false;
+        cfSit = ''; cfReg = ''; cfSeg = '';
         if (k.dataset.kpi === 'ativos') { cfSit = on ? '' : 'ATIVO'; cfAplicar(); return; }
         cfMexendo = true;
-        CF_TS.cert.clear(true);
-        if (!on) (k.dataset.kpi === 'cert' ? ['ok', 'laranja'] : ['laranja']).forEach(function (v) {
+        if (!on) CF_KPI_CERT[k.dataset.kpi].forEach(function (v) {
             if (!CF_TS.cert.options[v]) CF_TS.cert.addOption({value: v, text: CF_CERT_ROT[v], n: 0, ord: CF_CERT_ORD[v]});
             CF_TS.cert.addItem(v, true);
         });
