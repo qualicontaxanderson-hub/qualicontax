@@ -358,7 +358,7 @@ _CAMPO_ROTULO = {
 # ação do log -> o que mudou (as de alterou_cliente saem dos campos)
 _ACAO_ROTULO = {
     'escrita.alterou_grupo_cliente': 'grupo', 'escrita.criou_socio': 'sócios',
-    'escrita.excluiu_socio': 'sócios', 'escrita.alterou_socio': 'sócios',
+    'escrita.excluiu_socio': 'sócios', 'escrita.alterou_socio': 'sócios', 'escrita.saida_socio': 'sócios',
     'escrita.criou_endereco': 'endereço', 'escrita.excluiu_endereco': 'endereço',
     'escrita.alterou_endereco': 'endereço', 'escrita.alterou_ramos_cliente': 'ramo de atividade',
     'escrita.vinculou_contador': 'contador', 'escrita.alterou_acesso_reservado': 'acesso',

@@ -838,6 +838,22 @@ def _apply_migrations():
     except Exception:
         pass
 
+    # Incremental (12/10/2026): qualificação e entrada vêm da Receita (QSA) e
+    # eram descartadas; a SAÍDA substitui o "excluir" — ex-sócio fica com
+    # ativo=0 e data_saida, e o histórico de quem já foi sócio não some.
+    for _col_name, _col_def in [
+        ('qualificacao', 'VARCHAR(80) NULL'),
+        ('data_entrada', 'DATE NULL'),
+        ('data_saida',   'DATE NULL'),
+    ]:
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'socios_clientes' "
+            "AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True,
+        ) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE socios_clientes ADD COLUMN {_col_name} {_col_def}")
+
     # ---- Cadastros ANP ----
     _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_anp (

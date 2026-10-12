@@ -177,8 +177,40 @@ def _cadastro_resumo(ids):
             for r in rows}
 
 
+# Sugestões da janela de sócio — os mesmos textos que a Receita devolve no QSA
+# (o campo é livre: o que vier da Receita grava como veio).
+QUALIFICACOES_SOCIO = [
+    'Sócio-Administrador', 'Sócio', 'Administrador', 'Titular Pessoa Física Residente ou Domiciliado no Brasil',
+    'Empresário', 'Sócio Pessoa Jurídica Domiciliado no Brasil', 'Sócio Comanditado', 'Sócio Comanditário',
+    'Presidente', 'Diretor', 'Procurador', 'Sócio Menor (Assistido/Representado)',
+]
+
+
+def _data_iso(v, ate_hoje=True):
+    """'AAAA-MM-DD' (input date / Receita) ou 'DD/MM/AAAA' -> date; inválida,
+    anterior a 1900 ou (ate_hoje) futura -> None."""
+    v = (v or '').strip()
+    m = re.match(r'^(\d{4})-(\d{2})-(\d{2})', v) or re.match(r'^(\d{2})/(\d{2})/(\d{4})$', v)
+    if not m:
+        return None
+    a, b, c = m.groups()
+    ano, mes, dia = (a, b, c) if len(a) == 4 else (c, b, a)
+    try:
+        d = date(int(ano), int(mes), int(dia))
+    except ValueError:
+        return None
+    if d.year < 1900 or (ate_hoje and d > date.today()):
+        return None
+    return d
+
+
+def _qualificacao(v):
+    """Texto da qualificação; tira o código que a ReceitaWS põe na frente ('49-')."""
+    return re.sub(r'^\s*\d+\s*-\s*', '', str(v or '')).strip()[:80]
+
+
 def _ler_socios(form):
-    """socios_json do formulário -> [{id, pct (Decimal), resp}] (descarta lixo)."""
+    """socios_json do formulário -> [{id, pct (Decimal), resp, qual, entrada}] (descarta lixo)."""
     import json
     try:
         bruto = json.loads(form.get('socios_json') or '[]')
@@ -191,7 +223,8 @@ def _ler_socios(form):
             pct = _parse_decimal_input(str(s.get('pct') or '0'))
         except (TypeError, ValueError, InvalidOperation, AttributeError):
             return None
-        out.append({'id': sid, 'pct': pct, 'resp': bool(s.get('resp'))})
+        out.append({'id': sid, 'pct': pct, 'resp': bool(s.get('resp')),
+                    'qual': _qualificacao(s.get('qual')), 'entrada': _data_iso(s.get('entrada'))})
     return out
 
 
@@ -235,17 +268,20 @@ def _socios_e_contador_faltando(form, cliente_id=None):
 
 
 def _salvar_socios(cliente_id, socios):
-    """Deixa socios_clientes igual à lista do formulário: tira quem saiu,
-    acrescenta quem entrou e atualiza participação/responsável."""
+    """Deixa os sócios ATUAIS iguais à lista do formulário: quem saiu da
+    lista ganha data de saída (hoje) e vira ex-sócio — não se apaga —,
+    quem entrou é acrescentado e participação/responsável/qualificação/
+    entrada são atualizados."""
     atuais = {s['pf_cliente_id']: s for s in SocioCliente.get_by_cliente(cliente_id) if s.get('pf_cliente_id')}
     novos = {s['id']: s for s in socios}
     dados = _cadastro_resumo(list(novos))
     for pid, s in atuais.items():
         if pid not in novos:
-            SocioCliente.delete(s['id'])
-            registrar('escrita.excluiu_socio', 'cadastros', tabela='socios_clientes', registro_id=s['id'],
+            SocioCliente.registrar_saida(s['id'], date.today())
+            registrar('escrita.saida_socio', 'cadastros', tabela='socios_clientes', registro_id=s['id'],
                       antes={'cliente_id': cliente_id, 'nome': s.get('nome'), 'cpf': s.get('cpf'),
-                             **rotulo_empresa(cliente_id)})
+                             **rotulo_empresa(cliente_id)},
+                      depois={'cliente_id': cliente_id, 'data_saida': date.today().isoformat()})
     resp_id = None
     for pid, s in novos.items():
         d = dados.get(pid) or {}
@@ -258,15 +294,30 @@ def _salvar_socios(cliente_id, socios):
                           antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
                                  'percentual_participacao': str(a.get('percentual_participacao'))},
                           depois={'cliente_id': cliente_id, 'percentual_participacao': str(s['pct'])})
+            novo_q = s['qual'] if s['qual'] and s['qual'] != (a.get('qualificacao') or '') else None
+            novo_e = s['entrada'] if s['entrada'] and s['entrada'] != a.get('data_entrada') else None
+            if novo_q or novo_e:
+                SocioCliente.atualizar_dados(a['id'], novo_q, novo_e)
+                ent_antes = a.get('data_entrada')
+                registrar('escrita.alterou_socio', 'cadastros', tabela='socios_clientes', registro_id=a['id'],
+                          antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
+                                 'qualificacao': a.get('qualificacao'),
+                                 'data_entrada': ent_antes.isoformat() if ent_antes else None},
+                          depois={'cliente_id': cliente_id,
+                                  'qualificacao': novo_q or a.get('qualificacao'),
+                                  'data_entrada': (novo_e or ent_antes).isoformat() if (novo_e or ent_antes) else None})
             if s['resp']:
                 resp_id = a['id']
         else:
             sid = SocioCliente.create(cliente_id=cliente_id, pf_cliente_id=pid, nome=d.get('nome'),
                                       cpf=d.get('doc'), percentual_participacao=s['pct'],
-                                      responsavel=False, ativo=True)
+                                      responsavel=False, ativo=True,
+                                      qualificacao=s['qual'], data_entrada=s['entrada'])
             registrar('escrita.criou_socio', 'cadastros', tabela='socios_clientes', registro_id=sid,
                       depois={'cliente_id': cliente_id, 'pf_cliente_id': pid, 'nome': d.get('nome'),
                               'cpf': d.get('doc'), 'percentual_participacao': str(s['pct']),
+                              'qualificacao': s['qual'] or None,
+                              'data_entrada': s['entrada'].isoformat() if s['entrada'] else None,
                               **rotulo_empresa(cliente_id)})
             if s['resp']:
                 resp_id = sid
@@ -317,7 +368,8 @@ def _ctx_form(cliente=None):
         soc = SocioCliente.get_by_cliente(cid)
         resumo = _cadastro_resumo([s['pf_cliente_id'] for s in soc if s.get('pf_cliente_id')])
         ctx['socios_json'] = [dict(resumo[s['pf_cliente_id']], pct=str(s['percentual_participacao'] or ''),
-                                   resp=bool(s.get('responsavel')))
+                                   resp=bool(s.get('responsavel')), qual=s.get('qualificacao') or '',
+                                   entrada=s['data_entrada'].isoformat() if s.get('data_entrada') else '')
                               for s in soc if s.get('pf_cliente_id') in resumo]
     else:
         ctx['ramos_cliente'] = []
@@ -756,6 +808,7 @@ def detalhes(id):
         f_obrigacoes = executor.submit(Cliente.get_obrigacoes, id)
         f_cadastros_ad = executor.submit(CadastroAdicionalCliente.get_by_cliente, id)
         f_socios = executor.submit(SocioCliente.get_by_cliente, id)
+        f_ex_socios = executor.submit(SocioCliente.get_by_cliente, id, True)
         f_certificado = executor.submit(DfeCertificado.get_by_cliente, id)
         f_contadores = executor.submit(ClienteContador.contadores_do_cliente, id)
         f_contadores_disp = executor.submit(ClienteContador.listar_contadores)
@@ -769,6 +822,7 @@ def detalhes(id):
     obrigacoes = f_obrigacoes.result()
     cadastros_adicionais = f_cadastros_ad.result()
     socios = f_socios.result()
+    ex_socios = f_ex_socios.result()
     certificado = f_certificado.result()
     contadores = f_contadores.result()
     # Dropdown "adicionar": só is_contador=1, menos os JÁ VINCULADOS e o PRÓPRIO
@@ -846,6 +900,9 @@ def detalhes(id):
                          cadastros_adicionais=cadastros_adicionais,
                          cadastros_anp=cadastros_anp,
                          socios=socios,
+                         ex_socios=ex_socios,
+                         qualificacoes_socio=QUALIFICACOES_SOCIO,
+                         hoje_iso=date.today().isoformat(),
                          certificado=certificado,
                          contadores=contadores,
                          contadores_disponiveis=contadores_disponiveis,
@@ -1895,7 +1952,7 @@ def socios_buscar_pf(cliente_id):
                    OR REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s
                    OR numero_cliente = %s)
               AND id NOT IN (SELECT COALESCE(pf_cliente_id, 0)
-                               FROM socios_clientes WHERE cliente_id = %s)
+                               FROM socios_clientes WHERE cliente_id = %s AND ativo = 1)
             ORDER BY (numero_cliente = %s) DESC, nome_razao_social
             LIMIT 10""",
         (cliente_id, f'%{q}%', f'%{dig}%' if dig else q, q, cliente_id, q), fetch=True) or []
@@ -1913,6 +1970,12 @@ def novo_socio(cliente_id):
     pf_raw = (request.form.get('pf_cliente_id') or '').strip()
     percentual_raw = (request.form.get('percentual_participacao') or '').strip()
     responsavel = request.form.get('responsavel') == 'on'
+    qualificacao = _qualificacao(request.form.get('qualificacao'))
+    entrada_raw = (request.form.get('data_entrada') or '').strip()
+    data_entrada = _data_iso(entrada_raw)
+    if entrada_raw and not data_entrada:
+        flash('Data de entrada inválida (não pode ser no futuro).', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
 
     if not pf_raw.isdigit() or not percentual_raw:
         flash('Escolha um cadastro (pessoa física ou empresa) e informe o percentual.', 'danger')
@@ -1961,7 +2024,9 @@ def novo_socio(cliente_id):
         telefone=telefone,
         percentual_participacao=percentual,
         responsavel=responsavel,
-        ativo=True
+        ativo=True,
+        qualificacao=qualificacao,
+        data_entrada=data_entrada
     )
 
     if socio_id:
@@ -1971,6 +2036,8 @@ def novo_socio(cliente_id):
                           'nome': nome, 'cpf': cpf,
                           'email': email, 'telefone': telefone,
                           'percentual_participacao': str(percentual), 'responsavel': responsavel,
+                          'qualificacao': qualificacao or None,
+                          'data_entrada': data_entrada.isoformat() if data_entrada else None,
                           **rotulo_empresa(cliente_id)})
         total_final = SocioCliente.get_total_percentual(cliente_id)
         if total_final == Decimal('100'):
@@ -1983,10 +2050,49 @@ def novo_socio(cliente_id):
     return redirect(url_for('clientes.detalhes', id=cliente_id))
 
 
+@clientes.route('/socios/<int:id>/saida', methods=['POST'])
+@login_required
+def saida_socio(id):
+    """Sócio saiu da sociedade: grava a data de saída e ele vira ex-sócio.
+    Nada se apaga — o histórico de quem já foi sócio fica na aba."""
+    socio = SocioCliente.get_by_id(id)
+    if not socio:
+        flash('Sócio não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+    cliente_id = socio['cliente_id']
+    if not socio.get('ativo'):
+        flash('Este sócio já tem saída registrada.', 'warning')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+    data_saida = _data_iso(request.form.get('data_saida'))
+    if not data_saida:
+        flash('Informe a data de saída (não pode ser no futuro).', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+    if socio.get('data_entrada') and data_saida < socio['data_entrada']:
+        flash('A data de saída não pode ser antes da data de entrada '
+              f'({socio["data_entrada"].strftime("%d/%m/%Y")}).', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+    if SocioCliente.registrar_saida(id, data_saida):
+        registrar('escrita.saida_socio', 'cadastros', tabela='socios_clientes', registro_id=id,
+                  antes={'cliente_id': cliente_id, 'nome': socio.get('nome'), 'cpf': socio.get('cpf'),
+                         **rotulo_empresa(cliente_id)},
+                  depois={'cliente_id': cliente_id, 'data_saida': data_saida.isoformat()})
+        total_final = SocioCliente.get_total_percentual(cliente_id)
+        msg = (f'Saída de {socio.get("nome")} registrada em {data_saida.strftime("%d/%m/%Y")}; '
+               'o nome passa para Ex-sócios.')
+        if total_final != Decimal('100'):
+            msg += (f' Os sócios atuais somam {total_final:.2f}%: ajuste a participação '
+                    'no Editar para fechar 100%.')
+        flash(msg, 'success')
+    else:
+        flash('Erro ao registrar a saída!', 'danger')
+    return redirect(url_for('clientes.detalhes', id=cliente_id))
+
+
 @clientes.route('/socios/<int:id>/excluir', methods=['POST'])
 @login_required
 def excluir_socio(id):
-    """Excluir sócio"""
+    """Apaga de vez — só para sócio lançado POR ENGANO. Quem saiu da
+    sociedade usa saida_socio (fica no histórico)."""
     socio = SocioCliente.get_by_id(id)
     if not socio:
         flash('Sócio não encontrado!', 'danger')
@@ -2001,7 +2107,7 @@ def excluir_socio(id):
                   antes={'cliente_id': cliente_id, 'nome': socio.get('nome'),
                          'cpf': socio.get('cpf'), **rotulo_empresa(cliente_id)})
         total_final = SocioCliente.get_total_percentual(cliente_id)
-        flash(f'Sócio excluído com sucesso. Total atual de participação: {total_final:.2f}%.', 'success')
+        flash(f'Lançamento apagado. Total atual de participação: {total_final:.2f}%.', 'success')
     else:
         flash('Erro ao excluir sócio!', 'danger')
 
@@ -2163,7 +2269,9 @@ def socios_da_receita():
         if achado and achado in empresas_ocultas():
             achado = None
         cad = _cadastro_resumo([achado]).get(achado) if achado else None
-        out.append({'nome': nome, 'qualificacao': s.get('qualificacao_socio') or '',
+        entrada = _data_iso(s.get('data_entrada_sociedade'))
+        out.append({'nome': nome, 'qualificacao': _qualificacao(s.get('qualificacao_socio') or s.get('qual')),
+                    'entrada': entrada.isoformat() if entrada else '',
                     'doc': doc, 'tipo': 'PJ' if eh_pj else 'PF', 'cadastro': cad})
     return jsonify(out)
 

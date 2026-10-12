@@ -91,6 +91,7 @@ MAPA = {
     'clientes.excluir_contato':        'clientes.edit',
     'clientes.novo_socio':             'clientes.edit',
     'clientes.excluir_socio':          'clientes.edit',
+    'clientes.saida_socio':            'clientes.edit',   # ex-sócio com data de saída
     'clientes.novo_cadastro_adicional':    'clientes.edit',
     'clientes.excluir_cadastro_adicional': 'clientes.edit',
     'clientes.vincular_contador':      'clientes.edit',
@@ -416,6 +417,7 @@ _EMPRESA_POR_ENDPOINT = {
     'clientes.excluir_endereco':     ('id', 'SELECT cliente_id FROM enderecos_clientes WHERE id = %s'),
     'clientes.excluir_contato':      ('id', 'SELECT cliente_id FROM contatos_clientes WHERE id = %s'),
     'clientes.excluir_socio':        ('id', 'SELECT cliente_id FROM socios_clientes WHERE id = %s'),
+    'clientes.saida_socio':          ('id', 'SELECT cliente_id FROM socios_clientes WHERE id = %s'),
     'clientes.excluir_cadastro_adicional':
         ('id', 'SELECT cliente_id FROM cadastros_adicionais_clientes WHERE id = %s'),
     'documentos.download':           ('id', 'SELECT cliente_id FROM documentos WHERE id = %s'),

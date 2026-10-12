@@ -7,13 +7,16 @@ class SocioCliente:
     """Classe para gestão de sócios de clientes"""
 
     @staticmethod
-    def get_by_cliente(cliente_id):
-        """Busca todos os sócios de um cliente.
+    def get_by_cliente(cliente_id, saidas=False):
+        """Busca os sócios ATUAIS de um cliente (saidas=True: os ex-sócios).
 
         O sócio é um VÍNCULO com o cadastro PF (pf_cliente_id): nome, CPF,
         e-mail e telefone saem do cadastro VIVO — corrigiu lá, corrigiu em
         todas as sociedades. As colunas locais ficam de retrato/fallback
         (vínculo apagado do cadastro ainda exibe o que era).
+
+        Desde 12/10/2026 sócio não se apaga: a saída grava ativo=0 e
+        data_saida, e o ex-sócio continua na tabela como histórico.
         """
         query = """
             SELECT s.id, s.cliente_id, s.pf_cliente_id,
@@ -21,19 +24,20 @@ class SocioCliente:
                    COALESCE(pf.cpf_cnpj, s.cpf) AS cpf,
                    COALESCE(NULLIF(pf.email, ''), s.email) AS email,
                    COALESCE(NULLIF(pf.celular, ''), NULLIF(pf.telefone, ''), s.telefone) AS telefone,
-                   s.percentual_participacao, s.responsavel, s.ativo, s.criado_em
+                   s.percentual_participacao, s.responsavel, s.ativo, s.criado_em,
+                   s.qualificacao, s.data_entrada, s.data_saida
             FROM socios_clientes s
             LEFT JOIN clientes pf ON pf.id = s.pf_cliente_id
-            WHERE s.cliente_id = %s
-            ORDER BY s.responsavel DESC, nome ASC
-        """
-        return execute_query(query, (cliente_id,), fetch=True) or []
+            WHERE s.cliente_id = %s AND s.ativo = %s
+            ORDER BY {}
+        """.format('s.data_saida DESC, nome ASC' if saidas else 's.responsavel DESC, nome ASC')
+        return execute_query(query, (cliente_id, 0 if saidas else 1), fetch=True) or []
 
     @staticmethod
     def existe_pf(cliente_id, pf_cliente_id):
-        """True se esta Pessoa Física já é sócia deste cliente."""
+        """True se este cadastro é sócio ATUAL deste cliente (ex-sócio pode voltar)."""
         row = execute_query(
-            'SELECT id FROM socios_clientes WHERE cliente_id = %s AND pf_cliente_id = %s LIMIT 1',
+            'SELECT id FROM socios_clientes WHERE cliente_id = %s AND pf_cliente_id = %s AND ativo = 1 LIMIT 1',
             (cliente_id, pf_cliente_id), fetch=True, fetch_one=True)
         return bool(row)
 
@@ -41,7 +45,8 @@ class SocioCliente:
     def get_by_id(socio_id):
         """Busca sócio por ID."""
         query = """
-            SELECT id, cliente_id, pf_cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo, criado_em
+            SELECT id, cliente_id, pf_cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo, criado_em,
+                   qualificacao, data_entrada, data_saida
             FROM socios_clientes
             WHERE id = %s
         """
@@ -59,16 +64,18 @@ class SocioCliente:
         return Decimal(str(row.get('total') or 0))
 
     @staticmethod
-    def create(cliente_id, nome, cpf, email=None, telefone=None, percentual_participacao=0, responsavel=False, ativo=True, pf_cliente_id=None):
+    def create(cliente_id, nome, cpf, email=None, telefone=None, percentual_participacao=0, responsavel=False, ativo=True,
+               pf_cliente_id=None, qualificacao=None, data_entrada=None):
         """Cria novo sócio (vinculado ao cadastro PF via pf_cliente_id)."""
         if responsavel:
             SocioCliente.set_responsavel(cliente_id, None)
 
         query = """
             INSERT INTO socios_clientes (
-                cliente_id, pf_cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo
+                cliente_id, pf_cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo,
+                qualificacao, data_entrada
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             cliente_id,
@@ -79,13 +86,34 @@ class SocioCliente:
             (telefone or '').strip() or None,
             percentual_participacao,
             responsavel,
-            ativo
+            ativo,
+            (qualificacao or '').strip()[:80] or None,
+            data_entrada or None
         )
         return execute_query(query, params)
 
     @staticmethod
+    def registrar_saida(socio_id, data_saida):
+        """Ex-sócio: sai da sociedade (participação deixa de contar), mas a
+        linha fica — com a data — como histórico de quem já foi sócio."""
+        return execute_query(
+            """UPDATE socios_clientes SET ativo = 0, responsavel = 0, data_saida = %s
+                WHERE id = %s AND ativo = 1""", (data_saida, socio_id))
+
+    @staticmethod
+    def atualizar_dados(socio_id, qualificacao, data_entrada):
+        """Qualificação e data de entrada (o que vier vazio não apaga o gravado)."""
+        return execute_query(
+            """UPDATE socios_clientes
+                  SET qualificacao = COALESCE(%s, qualificacao),
+                      data_entrada = COALESCE(%s, data_entrada)
+                WHERE id = %s""",
+            ((qualificacao or '').strip()[:80] or None, data_entrada or None, socio_id))
+
+    @staticmethod
     def delete(socio_id):
-        """Remove sócio."""
+        """Apaga de vez — só para sócio lançado POR ENGANO (quem saiu da
+        sociedade usa registrar_saida)."""
         query = "DELETE FROM socios_clientes WHERE id = %s"
         return execute_query(query, (socio_id,))
 

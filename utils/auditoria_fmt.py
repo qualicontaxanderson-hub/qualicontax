@@ -29,7 +29,8 @@ _HIST_LABELS = {
     'complemento': 'Complemento', 'bairro': 'Bairro', 'cidade': 'Cidade', 'estado': 'Estado',
     # sócio
     'nome': 'Nome', 'cpf': 'CPF', 'percentual_participacao': 'Participação (%)',
-    'responsavel': 'Responsável',
+    'responsavel': 'Responsável', 'qualificacao': 'Qualificação',
+    'data_entrada': 'Entrada na sociedade', 'data_saida': 'Saída da sociedade',
     # certificado
     'cnpj': 'CNPJ', 'tipo_doc': 'Tipo de documento', 'validade': 'Validade',
     'procuracao': 'Procuração', 'senha_cifrada': 'Senha', 'dropbox_path': 'Arquivo',
@@ -65,6 +66,7 @@ _HIST_VERBO = {
     'escrita.excluiu_endereco': 'excluiu um endereço',
     'escrita.criou_socio': 'adicionou um sócio',
     'escrita.excluiu_socio': 'excluiu um sócio',
+    'escrita.saida_socio': 'registrou a saída de um sócio',
     'escrita.criou_contrato': 'adicionou um contrato',
     'escrita.criou_grupo': 'criou um grupo',
     'escrita.alterou_grupo': 'alterou um grupo',

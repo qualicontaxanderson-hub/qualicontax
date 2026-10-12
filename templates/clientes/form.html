@@ -812,6 +812,7 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .mk-nf { font-size:12.5px; color:#b45309; font-weight:600; }
 .mk-vinc { font-size:12px; color:#15803d; background:#dcfce7; border-radius:99px; padding:3px 10px; }
 .mk-num { display:inline-block; min-width:40px; font-weight:700; color:#15803d; }
+.mk-soc-qual { display:block; color:#64748b; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mk-tag { margin-left:6px; font-size:11px; color:#15803d; background:#dcfce7; border-radius:99px; padding:1px 8px; }
 .mk-pj { font-size:12px; color:#0369a1; background:#e0f2fe; border-radius:6px; padding:2px 8px; }
 .mk-pf { font-size:12px; color:#7c3aed; background:#f5f3ff; border-radius:6px; padding:2px 8px; }
@@ -1991,9 +1992,27 @@ function desenharContadores(q) {
 function totalSocios() {
     return SOCIOS.reduce(function (t, s) { return t + qNum(s.pct); }, 0);
 }
+// qualificação e entrada vêm do quadro da Receita (o que já está gravado fica)
+function dadosReceita(s) {
+    if (s.qual && s.entrada) return;
+    for (var i = 0; i < QSA.length; i++) {
+        var q = QSA[i];
+        if ((q.cadastro && String(q.cadastro.id) === String(s.id)) || qNorm(q.nome) === qNorm(s.nome)) {
+            if (!s.qual && q.qualificacao) s.qual = q.qualificacao;
+            if (!s.entrada && q.entrada) s.entrada = q.entrada;
+            return;
+        }
+    }
+}
+function dataBR(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+}
 function gravarSociosJson() {
     document.getElementById('socios_json').value = JSON.stringify(SOCIOS.map(function (s) {
-        return {id: s.id, pct: String(s.pct == null ? '' : s.pct), resp: !!s.resp};
+        dadosReceita(s);
+        return {id: s.id, pct: String(s.pct == null ? '' : s.pct), resp: !!s.resp,
+                qual: s.qual || '', entrada: s.entrada || ''};
     }));
 }
 function tipoSocio(s) {
@@ -2008,14 +2027,17 @@ function desenharSocios() {
     } else {
         box.innerHTML = '<div class="mk-soc-row mk-soc-head"><span>Sócio</span><span>Tipo</span><span>Participação</span><span>Responsável</span><span></span></div>'
             + SOCIOS.map(function (s, i) {
+                dadosReceita(s);
+                var sub = [s.qual || '', s.entrada ? 'desde ' + dataBR(s.entrada) : ''].filter(Boolean).join(' · ');
                 return '<div class="mk-soc-row' + (s.novo ? ' mk-novo' : '') + '">'
                     + '<span class="mk-soc-nome"><span class="mk-num">' + qEsc(s.numero || '—') + '</span> ' + qEsc(s.nome)
-                    + (s.novo ? ' <small class="mk-tag">acabou de ser cadastrado</small>' : '') + '</span>'
+                    + (s.novo ? ' <small class="mk-tag">acabou de ser cadastrado</small>' : '')
+                    + (sub ? '<small class="mk-soc-qual">' + qEsc(sub) + '</small>' : '') + '</span>'
                     + '<span class="mk-soc-tipo">' + tipoSocio(s) + '</span>'
                     + '<span class="mk-pct"><input class="cf-ctrl" inputmode="decimal" placeholder="0,00" data-i="' + i + '" value="'
                     + qEsc(s.pct == null ? '' : String(s.pct).replace('.', ',')) + '"><span>%</span></span>'
                     + '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '') + '> responsável</label>'
-                    + '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio"><i class="fas fa-times"></i></button>'
+                    + '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio (ao salvar, fica em Ex-sócios com saída hoje)"><i class="fas fa-times"></i></button>'
                     + '</div>';
             }).join('');
         box.querySelectorAll('.mk-pct input').forEach(function (inp) {

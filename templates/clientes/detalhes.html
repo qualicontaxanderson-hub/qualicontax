@@ -882,8 +882,8 @@
                                         <tr>
                                             <th>Nome</th>
                                             <th>CPF / CNPJ</th>
-                                            <th>Email</th>
-                                            <th>Telefone</th>
+                                            <th>Qualificação</th>
+                                            <th>Entrada</th>
                                             <th>Participação</th>
                                             <th>Responsável</th>
                                             <th>Ações</th>
@@ -892,10 +892,11 @@
                                     <tbody>
                                         {% for socio in socios %}
                                         <tr>
-                                            <td>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</td>
+                                            <td>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}
+                                                {% if socio.email or socio.telefone %}<br><small class="soc-contato">{{ socio.email or '' }}{% if socio.email and socio.telefone %} · {% endif %}{{ socio.telefone or '' }}</small>{% endif %}</td>
                                             <td>{{ socio.cpf }}</td>
-                                            <td>{{ socio.email or '-' }}</td>
-                                            <td>{{ socio.telefone or '-' }}</td>
+                                            <td>{{ socio.qualificacao or '—' }}</td>
+                                            <td>{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</td>
                                             <td><strong>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</strong></td>
                                             <td>
                                                 <span class="badge badge-{{ 'success' if socio.responsavel else 'secondary' }}">
@@ -903,11 +904,12 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                <form action="{{ url_for('clientes.excluir_socio', id=socio.id) }}" method="POST" style="display: inline;">
-                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este sócio?')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </form>
+                                                <button type="button" class="btn btn-outline btn-sm soc-saida-btn"
+                                                        data-id="{{ socio.id }}" data-nome="{{ socio.nome }}"
+                                                        data-entrada="{{ socio.data_entrada.isoformat() if socio.data_entrada else '' }}"
+                                                        onclick="abrirSaidaSocio(this)" title="Registrar a saída deste sócio da sociedade">
+                                                    <i class="fas fa-right-from-bracket"></i> Saída
+                                                </button>
                                             </td>
                                         </tr>
                                         {% endfor %}
@@ -918,6 +920,35 @@
                             <div class="empty-state">
                                 <i class="fas fa-user-tie"></i>
                                 <p>Nenhum sócio cadastrado</p>
+                            </div>
+                        {% endif %}
+                        {% if ex_socios %}
+                            <h4 class="soc-ex-tit"><i class="fas fa-clock-rotate-left"></i> Ex-sócios ({{ ex_socios|length }})</h4>
+                            <div class="table-responsive">
+                                <table class="table soc-ex">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>CPF / CNPJ</th>
+                                            <th>Qualificação</th>
+                                            <th>Entrada</th>
+                                            <th>Saída</th>
+                                            <th>Tinha</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for socio in ex_socios %}
+                                        <tr>
+                                            <td>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</td>
+                                            <td>{{ socio.cpf }}</td>
+                                            <td>{{ socio.qualificacao or '—' }}</td>
+                                            <td>{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</td>
+                                            <td><strong>{{ socio.data_saida.strftime('%d/%m/%Y') if socio.data_saida else '—' }}</strong></td>
+                                            <td>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
                             </div>
                         {% endif %}
                     </div>
@@ -1691,6 +1722,16 @@
   border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer;
   margin-top: 4px; font: inherit; }
 .socio-res-item:hover { background: #f0fdf4; border-color: #86efac; }
+.soc-contato { color: #6b7280; font-size: 12px; }
+.soc-saida-btn { white-space: nowrap; }
+.soc-ex-tit { margin: 22px 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; }
+.soc-ex td { color: #4b5563; }
+.soc-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .soc-2col { grid-template-columns: 1fr; } }
+.soc-engano { margin-top: 14px; padding: 10px 12px; border: 1px dashed #e5e7eb; border-radius: 10px;
+              color: #6b7280; font-size: 13px; }
+.soc-engano-btn { background: none; border: 0; padding: 0; color: #b91c1c; text-decoration: underline;
+                  cursor: pointer; font-size: 13px; }
 .socio-res-vazio { padding: 8px 10px; color: #6b7280; margin-top: 4px; }
 .socio-escolhido { display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 10px 12px; border: 1px solid #86efac; background: #f0fdf4;
@@ -1726,6 +1767,20 @@
                     <label for="socio_percentual">Participação (%) *</label>
                     <input type="number" id="socio_percentual" name="percentual_participacao" class="form-control" required min="0.01" max="100" step="0.01" placeholder="Ex.: 50.00">
                 </div>
+                <div class="soc-2col">
+                    <div class="form-group">
+                        <label for="socio_qualificacao">Qualificação</label>
+                        <input type="text" id="socio_qualificacao" name="qualificacao" class="form-control" maxlength="80"
+                               list="socioQualLista" placeholder="Ex.: Sócio-Administrador">
+                        <datalist id="socioQualLista">
+                            {% for q in qualificacoes_socio %}<option value="{{ q }}">{% endfor %}
+                        </datalist>
+                    </div>
+                    <div class="form-group">
+                        <label for="socio_entrada">Entrada na sociedade</label>
+                        <input type="date" id="socio_entrada" name="data_entrada" class="form-control" max="{{ hoje_iso }}">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" name="responsavel" id="socio_responsavel">
@@ -1738,6 +1793,37 @@
                 <button type="submit" class="btn btn-primary" id="socioBtnAdd" disabled>Adicionar</button>
             </div>
         </form>
+    </div>
+</div>
+
+<div id="saidaSocioModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+            <h3>Saída de sócio</h3>
+            <button class="modal-close" onclick="fecharSaidaSocio()">&times;</button>
+        </div>
+        <form id="saidaSocioForm" method="POST">
+            <div class="modal-body">
+                <p style="margin:0 0 12px;"><strong id="saidaSocioNome"></strong> deixa de ser sócio desta empresa.
+                    O nome continua na aba, em <b>Ex-sócios</b>, com a data — nada é apagado.</p>
+                <div class="form-group">
+                    <label for="saida_data">Data de saída *</label>
+                    <input type="date" id="saida_data" name="data_saida" class="form-control" required max="{{ hoje_iso }}">
+                    <small style="color:#6b7280; display:block; margin-top:6px;">
+                        Use a data da alteração contratual registrada. Depois ajuste a participação de quem ficou para fechar 100%.
+                    </small>
+                </div>
+                <div class="soc-engano">
+                    Foi lançado por engano (nunca foi sócio)?
+                    <button type="button" class="soc-engano-btn" onclick="apagarSocioEngano()">Apagar o lançamento</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="fecharSaidaSocio()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Registrar saída</button>
+            </div>
+        </form>
+        <form id="engSocioForm" method="POST" style="display:none;"></form>
     </div>
 </div>
 {% endblock %}
@@ -1852,8 +1938,32 @@ function showAddSocioModal() {
     socioTrocar();
     document.getElementById('socio_percentual').value = '';
     document.getElementById('socio_responsavel').checked = false;
+    document.getElementById('socio_qualificacao').value = '';
+    document.getElementById('socio_entrada').value = '';
     document.getElementById('addSocioModal').style.display = 'block';
     document.getElementById('socio_busca').focus();
+}
+
+var SAIDA_SOCIO_ID = null;
+function abrirSaidaSocio(btn) {
+    SAIDA_SOCIO_ID = btn.dataset.id;
+    document.getElementById('saidaSocioNome').textContent = btn.dataset.nome;
+    var d = document.getElementById('saida_data');
+    d.value = '{{ hoje_iso }}';
+    d.min = btn.dataset.entrada || '';
+    document.getElementById('saidaSocioForm').action = '/socios/' + SAIDA_SOCIO_ID + '/saida';
+    document.getElementById('saidaSocioModal').style.display = 'block';
+}
+function fecharSaidaSocio() {
+    document.getElementById('saidaSocioModal').style.display = 'none';
+}
+function apagarSocioEngano() {
+    var nome = document.getElementById('saidaSocioNome').textContent;
+    if (!confirm('Apagar o lançamento de ' + nome + '?\n\nUse só se ele NUNCA foi sócio desta empresa. '
+                 + 'Se ele saiu da sociedade, use "Registrar saída" para manter o histórico.')) return;
+    var f = document.getElementById('engSocioForm');
+    f.action = '/socios/' + SAIDA_SOCIO_ID + '/excluir';
+    f.submit();
 }
 
 function closeAddSocioModal() {
