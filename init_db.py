@@ -854,6 +854,41 @@ def _apply_migrations():
         if _c.get('cnt', 0) == 0:
             _migrate(f"ALTER TABLE socios_clientes ADD COLUMN {_col_name} {_col_def}")
 
+    # 12/10/2026: sócio EMPRESA (desde 07/10) tem CNPJ formatado de 18
+    # caracteres e a coluna cpf era VARCHAR(14) — o INSERT falhava calado e a
+    # empresa nunca entrava como sócia. Alarga para 20.
+    _cpf_len = execute_query(
+        "SELECT CHARACTER_MAXIMUM_LENGTH AS n FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'socios_clientes' AND COLUMN_NAME = 'cpf'",
+        fetch=True, fetch_one=True) or {}
+    if (_cpf_len.get('n') or 20) < 20:
+        _migrate("ALTER TABLE socios_clientes MODIFY cpf VARCHAR(20) NOT NULL")
+
+    # Fila "Sócios a cadastrar" (12/10/2026): o quadro de sócios da Receita das
+    # empresas sem sócio, uma linha por empresa x sócio. A Receita esconde o
+    # meio do CPF, então a pessoa é completada UMA vez pela equipe e ligada a
+    # todas as empresas dela (chave = mesma pessoa em empresas diferentes).
+    # status: pendente | vinculado | administrador (não é dono de cotas) | ignorado
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS socios_fila (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            chave VARCHAR(120) NOT NULL,
+            tipo CHAR(2) NOT NULL,
+            nome VARCHAR(255) NOT NULL,
+            doc VARCHAR(20) NULL,
+            qualificacao VARCHAR(80) NULL,
+            data_entrada DATE NULL,
+            status VARCHAR(15) NOT NULL DEFAULT 'pendente',
+            socio_id INT NULL,
+            resolvido_por INT NULL,
+            resolvido_em DATETIME NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_socios_fila (cliente_id, chave),
+            INDEX idx_socios_fila_status (status, chave)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
     # ---- Cadastros ANP ----
     _migrate("""
         CREATE TABLE IF NOT EXISTS cadastros_anp (

@@ -92,6 +92,9 @@ MAPA = {
     'clientes.novo_socio':             'clientes.edit',
     'clientes.excluir_socio':          'clientes.edit',
     'clientes.saida_socio':            'clientes.edit',   # ex-sócio com data de saída
+    'clientes.socios_fila':            'clientes.index',  # fila Sócios a cadastrar
+    'clientes.socios_fila_vincular':   'clientes.edit',
+    'clientes.socios_fila_ignorar':    'clientes.edit',
     'clientes.novo_cadastro_adicional':    'clientes.edit',
     'clientes.excluir_cadastro_adicional': 'clientes.edit',
     'clientes.vincular_contador':      'clientes.edit',

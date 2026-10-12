@@ -67,6 +67,7 @@ _HIST_VERBO = {
     'escrita.criou_socio': 'adicionou um sócio',
     'escrita.excluiu_socio': 'excluiu um sócio',
     'escrita.saida_socio': 'registrou a saída de um sócio',
+    'escrita.ignorou_socio_fila': 'tirou uma pessoa da fila de sócios',
     'escrita.criou_contrato': 'adicionou um contrato',
     'escrita.criou_grupo': 'criou um grupo',
     'escrita.alterou_grupo': 'alterou um grupo',

@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Sócios a cadastrar - Qualicontax{% endblock %}
+
+{% block content %}
+{# Fila "Sócios a cadastrar" (12/10/2026). Cartão por PESSOA (o .gc-card de
+   Grupos): a Receita esconde o meio do CPF, então a equipe cadastra a pessoa
+   uma vez e o botão Ligar a põe como sócia em todas as empresas dela. #}
+{% include 'cadastros/_nav_cadastros.html' %}
+
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <h1 class="ef-hero-title">Sócios a cadastrar</h1>
+            <p class="ef-hero-sub">Quadro de sócios da Receita das empresas que ainda estão sem sócio no sistema</p>
+        </div>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-users"></i> Clientes</a>
+        </div>
+    </div>
+</div>
+
+<div class="ef-body">
+    <div class="cli-kpis">
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#f5f3ff; color:#6d28d9;"><i class="fas fa-user-plus"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.pessoas }}</strong>
+                <span class="cli-kpi-lbl">Pessoas a cadastrar</span></div>
+        </div>
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-building"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.empresas_socias }}</strong>
+                <span class="cli-kpi-lbl">Empresas sócias</span></div>
+        </div>
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-hourglass-half"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.empresas }}</strong>
+                <span class="cli-kpi-lbl">Empresas esperando sócio</span></div>
+        </div>
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-link"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.prontos }}</strong>
+                <span class="cli-kpi-lbl">Já têm cadastro: só ligar</span></div>
+        </div>
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#475569;"><i class="fas fa-circle-check"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.vinculados }}</strong>
+                <span class="cli-kpi-lbl">Já ligados</span></div>
+        </div>
+    </div>
+
+    <div class="sf-aviso">
+        <i class="fas fa-circle-info"></i>
+        <div>
+            <b>Como funciona:</b> a Receita mostra o CPF só pela metade, então o sistema não consegue
+            cadastrar a pessoa sozinho. <b>Cadastre a pessoa uma vez</b> (com o CPF completo) e ela é
+            ligada como sócia em <b>todas as empresas do cartão</b>, já com a qualificação e a data de entrada.
+            Quem é o único sócio entra com <b>100%</b>. Quando há mais de um, a participação fica em 0% e
+            precisa ser digitada no <b>Editar</b> da empresa, conforme o contrato social.
+        </div>
+    </div>
+
+    <div class="sf-barra">
+        <div class="sf-pills" id="sfPills">
+            <button type="button" class="gc-pill on" data-f="todos">Todos <b>{{ pessoas|selectattr('status','equalto','pendente')|list|length }}</b></button>
+            <button type="button" class="gc-pill" data-f="prontos">Só ligar <b>{{ stats.prontos }}</b></button>
+            <button type="button" class="gc-pill" data-f="cadastrar">Falta cadastrar <b>{{ stats.pessoas + stats.empresas_socias - stats.prontos }}</b></button>
+            <button type="button" class="gc-pill" data-f="pj">Empresas sócias <b>{{ stats.empresas_socias }}</b></button>
+            <button type="button" class="gc-pill" data-f="adm">Administradores <b>{{ stats.administradores }}</b></button>
+        </div>
+        <div class="sf-busca">
+            <i class="fas fa-search"></i>
+            <input type="text" id="sfBusca" placeholder="Buscar pessoa ou empresa" autocomplete="off">
+        </div>
+        <span class="gc-cont" id="sfCont"></span>
+    </div>
+
+    <div class="sf-adm-nota" id="sfAdmNota" style="display:none;">
+        <i class="fas fa-circle-info"></i>
+        Administradores, diretores e presidentes que <b>não são donos de cotas</b> (por exemplo, numa S.A.).
+        Ficam aqui só para consulta e <b>não entram como sócios</b>.
+    </div>
+
+    <div class="gc-grid" id="sfGrid">
+        {% for p in pessoas %}
+        <div class="gc-card sf-card" data-chave="{{ p.chave }}" data-tipo="{{ p.tipo }}" data-status="{{ p.status }}"
+             data-pronto="{{ '1' if p.cadastro else '0' }}"
+             data-busca="{{ (p.nome ~ ' ' ~ (p.empresas|map(attribute='nome')|join(' ')) ~ ' ' ~ (p.empresas|map(attribute='numero')|join(' ')))|lower }}">
+            <div class="gc-head">
+                <span class="gc-ava {{ 'sf-ava-pj' if p.tipo == 'PJ' else '' }}">{{ p.nome.split()[:2]|map('first')|join }}</span>
+                <div class="gc-tit">
+                    <h3 title="{{ p.nome }}">{{ p.nome }}</h3>
+                    <span class="sf-doc">{{ 'CNPJ ' if p.tipo == 'PJ' else 'CPF ' }}{{ p.doc or 'não informado' }}</span>
+                </div>
+                <span class="sf-qtd">{{ p.empresas|length }} empresa{{ '' if p.empresas|length == 1 else 's' }}</span>
+            </div>
+            <ul class="gc-emp">
+                {% for e in p.empresas %}
+                <li{% if loop.index > 6 %} class="sf-extra"{% endif %}>
+                    <span class="gc-num">{{ e.numero or ('avulso' if e.avulso else '—') }}</span>
+                    <span class="sf-emp-t">
+                        <a class="gc-nome" href="{{ url_for('clientes.detalhes', id=e.id) }}" target="_blank" title="{{ e.nome }}">{{ e.nome }}</a>
+                        <small>{{ e.qual or 'sem qualificação' }}{% if e.entrada %} · desde {{ e.entrada }}{% endif %}</small>
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if p.empresas|length > 6 %}
+            <button type="button" class="sf-mais" data-mais>+ ver mais {{ p.empresas|length - 6 }} empresa{{ '' if p.empresas|length == 7 else 's' }}</button>
+            {% endif %}
+            <div class="sf-acao">
+                {% if p.status == 'administrador' %}
+                    <span class="sf-adm"><i class="fas fa-user-tie"></i> Administrador sem cotas: não entra como sócio</span>
+                {% elif p.cadastro %}
+                    <div class="sf-achado">
+                        <i class="fas fa-circle-check"></i>
+                        <span>Já tem cadastro: <b>{{ p.cadastro.numero or 'avulso' }} · {{ p.cadastro.nome }}</b></span>
+                    </div>
+                    <div class="sf-botoes">
+                        <button type="button" class="sf-b1" data-ligar="{{ p.cadastro.id }}">
+                            <i class="fas fa-link"></i> Ligar {{ 'à empresa' if p.empresas|length == 1 else 'às ' ~ p.empresas|length ~ ' empresas' }}
+                        </button>
+                        <button type="button" class="sf-b2" data-procurar>Não é esta pessoa</button>
+                    </div>
+                {% else %}
+                    <div class="sf-botoes">
+                        <button type="button" class="sf-b1" data-cadastrar>
+                            <i class="fas fa-user-plus"></i> {{ 'Cadastrar empresa' if p.tipo == 'PJ' else 'Cadastrar pessoa' }}
+                        </button>
+                        <button type="button" class="sf-b2" data-procurar><i class="fas fa-search"></i> Já tem cadastro</button>
+                    </div>
+                {% endif %}
+                <div class="sf-proc" style="display:none;">
+                    <input type="text" class="sf-proc-in" placeholder="Nome, CPF/CNPJ ou número do cadastro" autocomplete="off">
+                    <ul class="sf-proc-lista"></ul>
+                </div>
+                {% if p.status == 'pendente' %}
+                <button type="button" class="sf-tirar" data-tirar>Tirar da fila</button>
+                {% endif %}
+                <div class="sf-msg"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="gc-nada" id="sfNada" style="display:none;">Nada por aqui.</div>
+</div>
+
+<style>
+.cli-kpis { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px; margin-top:-14px; position:relative; z-index:2; }
+.cli-kpi { min-width:0; display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e3ece7;
+           border-radius:15px; padding:14px 18px; box-shadow:0 8px 22px rgba(16,120,70,.10); }
+.cli-kpi-ico { width:40px; height:40px; border-radius:11px; flex-shrink:0; display:flex; align-items:center;
+               justify-content:center; font-size:16px; }
+.cli-kpi-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.cli-kpi-val { font-size:26px; font-weight:800; line-height:1; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.cli-kpi-lbl { font-size:11.5px; color:#7d968a; }
+
+.sf-aviso { display:flex; gap:12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:14px;
+            padding:12px 18px; margin:16px 0 0; color:#166534; font-size:13px; line-height:1.55; }
+.sf-aviso > i { margin-top:3px; }
+.sf-adm-nota { background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 16px;
+               margin:0 0 14px; color:#475569; font-size:13px; }
+
+.sf-barra { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:18px 0 14px; }
+.sf-pills { display:flex; gap:8px; flex-wrap:wrap; }
+.gc-pill { font:inherit; font-size:13px; font-weight:600; background:#fff; border:1px solid #e3ece7; color:#334155;
+           border-radius:99px; padding:6px 14px; cursor:pointer; }
+.gc-pill b { margin-left:4px; color:#94a3b8; }
+.gc-pill.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gc-pill.on b { color:#86efac; }
+.sf-busca { position:relative; flex:0 1 280px; min-width:0; }
+.sf-busca i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
+.sf-busca input { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; border:1px solid #e3ece7;
+                  border-radius:10px; padding:8px 12px 8px 34px; background:#fff; }
+.gc-cont { margin-left:auto; font-size:13px; color:#7d968a; }
+
+.gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap:16px; }
+.gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:18px 20px 16px;
+           display:flex; flex-direction:column; gap:12px; min-width:0; }
+.gc-head { display:flex; align-items:center; gap:12px; }
+.gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#7c3aed,#4c1d95); color:#fff;
+          display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
+.gc-ava.sf-ava-pj { background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.gc-tit { flex:1; min-width:0; }
+.gc-tit h3 { margin:0; font-size:15px; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-doc { font-size:12.5px; color:#64748b; font-variant-numeric:tabular-nums; }
+.sf-qtd { font-size:12px; font-weight:700; color:#b45309; background:#fffbeb; border:1px solid #fde68a;
+          border-radius:99px; padding:3px 10px; flex-shrink:0; }
+.gc-emp { list-style:none; margin:0; padding:0; border-top:1px solid #eef2f0; flex:1; }
+.gc-emp li { display:flex; align-items:flex-start; gap:10px; padding:8px 4px; border-bottom:1px dashed #eef2f0;
+             font-size:13.5px; color:#334155; }
+.gc-emp li:last-child { border-bottom:none; }
+.gc-num { min-width:44px; font-variant-numeric:tabular-nums; font-weight:700; color:#15803d; font-size:13px; }
+.sf-emp-t { flex:1; min-width:0; display:flex; flex-direction:column; }
+.gc-nome { color:#0f172a; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gc-nome:hover { color:#15803d; text-decoration:underline; }
+.sf-emp-t small { color:#64748b; font-size:12px; }
+
+.gc-emp li.sf-extra { display:none; }
+.sf-card.aberto .gc-emp li.sf-extra { display:flex; }
+.sf-mais { align-self:flex-start; background:none; border:0; padding:0; font:inherit; font-size:13px; font-weight:600;
+           color:#15803d; cursor:pointer; }
+.sf-card.aberto .sf-mais { display:none; }
+.sf-acao { display:flex; flex-direction:column; gap:8px; border-top:1px solid #eef2f0; padding-top:12px; }
+.sf-achado { display:flex; gap:8px; align-items:flex-start; font-size:13px; color:#166534; background:#f0fdf4;
+             border:1px solid #bbf7d0; border-radius:10px; padding:8px 12px; }
+.sf-achado i { margin-top:2px; }
+.sf-botoes { display:flex; gap:8px; flex-wrap:wrap; }
+.sf-b1 { font:inherit; font-size:13px; font-weight:700; background:#16a34a; color:#fff; border:0; border-radius:10px;
+         padding:8px 14px; cursor:pointer; }
+.sf-b1:hover { background:#15803d; }
+.sf-b2 { font:inherit; font-size:13px; font-weight:600; background:#fff; color:#334155; border:1px solid #e3ece7;
+         border-radius:10px; padding:8px 14px; cursor:pointer; }
+.sf-b2:hover { border-color:#bfe3cc; }
+.sf-tirar { align-self:flex-start; background:none; border:0; padding:0; font:inherit; font-size:12px; color:#94a3b8;
+            text-decoration:underline; cursor:pointer; }
+.sf-tirar:hover { color:#b91c1c; }
+.sf-adm { font-size:13px; color:#475569; }
+.sf-proc-in { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; border:1px solid #e3ece7;
+              border-radius:10px; padding:8px 12px; }
+.sf-proc-lista { list-style:none; margin:6px 0 0; padding:0; max-height:220px; overflow:auto; }
+.sf-proc-lista li { padding:8px 10px; border:1px solid #eef2f0; border-radius:9px; margin-bottom:6px; cursor:pointer;
+                    font-size:13px; display:flex; flex-direction:column; }
+.sf-proc-lista li:hover { background:#f0fdf4; border-color:#86efac; }
+.sf-proc-lista li small { color:#64748b; }
+.sf-proc-lista li.vazio { cursor:default; color:#94a3b8; }
+.sf-msg:empty { display:none; }
+.sf-msg { font-size:13px; border-radius:10px; padding:8px 12px; }
+.sf-msg.ok { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
+.sf-msg.erro { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+.sf-card.feito { opacity:.6; }
+.sf-card.feito .sf-botoes, .sf-card.feito .sf-tirar, .sf-card.feito .sf-proc, .sf-card.feito .sf-achado { display:none !important; }
+.gc-nada { text-align:center; color:#94a3b8; padding:40px 0; font-size:14px; }
+
+@media (max-width:1100px) { .cli-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width:600px) {
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
+    .cli-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+    .cli-kpi { padding:11px 10px; flex-direction:column; align-items:flex-start; gap:7px; }
+    .cli-kpi-val { font-size:22px; }
+    .cli-kpi-lbl { font-size:10.5px; line-height:1.2; }
+    .sf-aviso { font-size:12px; padding:11px 14px; }
+    .sf-busca { flex:1 1 100%; }
+    .gc-cont { margin-left:0; }
+    .gc-card { padding:14px 14px 12px; }
+}
+</style>
+
+<script>
+(function () {
+    var filtro = 'todos', CHAVE_JANELA = null;
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.sf-card'));
+    function norm(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+    function aplicar() {
+        var q = norm(document.getElementById('sfBusca').value.trim()), n = 0;
+        cards.forEach(function (c) {
+            var st = c.dataset.status, ok;
+            if (filtro === 'adm') ok = st === 'administrador';
+            else if (st !== 'pendente') ok = false;
+            else if (filtro === 'prontos') ok = c.dataset.pronto === '1';
+            else if (filtro === 'cadastrar') ok = c.dataset.pronto !== '1';
+            else if (filtro === 'pj') ok = c.dataset.tipo === 'PJ';
+            else ok = true;
+            if (ok && q) ok = norm(c.dataset.busca).indexOf(q) >= 0;
+            c.style.display = ok ? '' : 'none';
+            if (ok) n++;
+        });
+        document.getElementById('sfCont').textContent = n + (n === 1 ? ' cartão' : ' cartões');
+        document.getElementById('sfNada').style.display = n ? 'none' : '';
+        document.getElementById('sfAdmNota').style.display = filtro === 'adm' ? '' : 'none';
+    }
+    document.querySelectorAll('#sfPills .gc-pill').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.querySelectorAll('#sfPills .gc-pill').forEach(function (x) { x.classList.remove('on'); });
+            b.classList.add('on'); filtro = b.dataset.f; aplicar();
+        });
+    });
+    document.getElementById('sfBusca').addEventListener('input', aplicar);
+
+    function msg(card, txt, tipo) {
+        var m = card.querySelector('.sf-msg'); m.className = 'sf-msg ' + tipo; m.innerHTML = txt;
+    }
+    function ligar(card, cadId) {
+        msg(card, 'Ligando…', 'ok');
+        fetch('{{ url_for("clientes.socios_fila_vincular") }}', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({chave: card.dataset.chave, cadastro_id: cadId})
+        }).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j.ok) { msg(card, esc(j.erro || 'Não consegui ligar.'), 'erro'); return; }
+            var t = '<i class="fas fa-circle-check"></i> Ligado a <b>' + j.empresas + ' empresa' + (j.empresas === 1 ? '' : 's') + '</b>';
+            if (j.com_100) t += ' · ' + j.com_100 + ' com 100%';
+            if (j.sem_pct) t += ' · <b>' + j.sem_pct + '</b> precisa' + (j.sem_pct === 1 ? '' : 'm') + ' da participação no Editar';
+            msg(card, t, 'ok');
+            card.classList.add('feito'); card.dataset.status = 'feito';
+        }).catch(function () { msg(card, 'Não consegui ligar agora. Tente de novo.', 'erro'); });
+    }
+
+    var tempo = null;
+    function procurar(card, q) {
+        var lista = card.querySelector('.sf-proc-lista');
+        clearTimeout(tempo);
+        if (q.trim().length < 2) { lista.innerHTML = ''; return; }
+        tempo = setTimeout(function () {
+            fetch('{{ url_for("clientes.cadastros_buscar") }}?q=' + encodeURIComponent(q))
+                .then(function (r) { return r.json(); }).then(function (res) {
+                    res = (res || []).filter(function (c) { return c.tipo === card.dataset.tipo; });
+                    lista.innerHTML = res.length ? res.map(function (c) {
+                        return '<li data-id="' + c.id + '"><b>' + esc((c.numero ? c.numero + ' · ' : '') + c.nome) + '</b><small>'
+                            + esc(c.doc || 'sem documento') + ' · ' + (c.avulso ? 'avulso' : 'cliente') + '</small></li>';
+                    }).join('') : '<li class="vazio">Nenhum cadastro ' + (card.dataset.tipo === 'PJ' ? 'de empresa' : 'de pessoa física') + ' com esse nome.</li>';
+                    lista.querySelectorAll('li[data-id]').forEach(function (li) {
+                        li.addEventListener('click', function () { ligar(card, li.dataset.id); });
+                    });
+                });
+        }, 250);
+    }
+
+    cards.forEach(function (card) {
+        var b;
+        if ((b = card.querySelector('[data-mais]'))) b.addEventListener('click', function () { card.classList.add('aberto'); });
+        if ((b = card.querySelector('[data-ligar]'))) b.addEventListener('click', function () { ligar(card, b.dataset.ligar); });
+        card.querySelectorAll('[data-procurar]').forEach(function (bp) {
+            bp.addEventListener('click', function () {
+                var box = card.querySelector('.sf-proc'), inp = card.querySelector('.sf-proc-in');
+                box.style.display = ''; inp.focus();
+                inp.oninput = function () { procurar(card, inp.value); };
+            });
+        });
+        if ((b = card.querySelector('[data-cadastrar]'))) b.addEventListener('click', function () {
+            var nome = card.querySelector('h3').textContent.trim();
+            var u = '/clientes/novo?janela=1&tipo=' + card.dataset.tipo + '&nome=' + encodeURIComponent(nome);
+            CHAVE_JANELA = card.dataset.chave;
+            var w = window.open(u, 'qcxCadastroSocio', 'width=1280,height=900,scrollbars=yes');
+            if (!w) alert('O navegador bloqueou a janela. Permita janelas (pop-ups) para este site e clique de novo.');
+            else msg(card, 'Complete o cadastro na janela que abriu. Ao salvar, ele é ligado às empresas deste cartão.', 'ok');
+        });
+        if ((b = card.querySelector('[data-tirar]'))) b.addEventListener('click', function () {
+            if (!confirm('Tirar ' + card.querySelector('h3').textContent.trim() + ' da fila?\n\n'
+                         + 'Use quando não é sócio de verdade (homônimo, já saiu da empresa...). Nada é apagado das empresas.')) return;
+            fetch('{{ url_for("clientes.socios_fila_ignorar") }}', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({chave: card.dataset.chave})
+            }).then(function (r) { return r.json(); }).then(function (j) {
+                if (j.ok) { msg(card, 'Tirado da fila.', 'ok'); card.classList.add('feito'); card.dataset.status = 'feito'; }
+            });
+        });
+    });
+
+    // a janela de cadastro avisa quando salvou: liga na hora
+    window.addEventListener('message', function (e) {
+        if (e.origin !== window.location.origin || !e.data || e.data.tipo !== 'qcx-cadastro-criado') return;
+        var cad = e.data.cadastro;
+        if (!cad || !CHAVE_JANELA) return;
+        var card = document.querySelector('.sf-card[data-chave="' + CHAVE_JANELA.replace(/"/g, '\\"') + '"][data-status="pendente"]');
+        CHAVE_JANELA = null;
+        if (card) ligar(card, cad.id);
+    });
+    aplicar();
+})();
+</script>
+{% endblock %}

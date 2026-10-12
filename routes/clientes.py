@@ -2276,6 +2276,87 @@ def socios_da_receita():
     return jsonify(out)
 
 
+@clientes.route('/clientes/socios-pendentes')
+@login_required
+def socios_fila():
+    """Fila "Sócios a cadastrar": o quadro de sócios da Receita das empresas
+    sem sócio, agrupado pela PESSOA (ver utils/socios_fila.py)."""
+    from utils import socios_fila as SF
+    rows = [r for r in SF.linhas_abertas() if r['cliente_id'] not in empresas_ocultas()]
+    achar = SF.mapa_cadastros()
+    pessoas = {}
+    for r in rows:
+        # sócio numa empresa e só administrador em outra: dois cartões
+        k = (r['chave'], r['status'])
+        p = pessoas.get(k)
+        if not p:
+            p = pessoas[k] = {
+                'chave': r['chave'], 'tipo': r['tipo'], 'nome': r['nome'],
+                'doc': SF.doc_mascarado(r['tipo'], r['doc']), 'status': r['status'],
+                'empresas': []}
+        p['empresas'].append({'id': r['cliente_id'], 'numero': r['numero_cliente'] or '',
+                              'nome': (r['empresa'] or '').strip(), 'avulso': bool(r['avulso']),
+                              'qual': r['qualificacao'] or '',
+                              'entrada': r['data_entrada'].strftime('%d/%m/%Y') if r['data_entrada'] else ''})
+    ids_cad = {}
+    for p in pessoas.values():
+        cid = achar(p['chave']) if p['status'] == 'pendente' else None
+        if cid and all(e['id'] != cid for e in p['empresas']):
+            ids_cad[p['chave']] = cid
+    resumo = _cadastro_resumo(list(set(ids_cad.values())))
+    for p in pessoas.values():
+        p['cadastro'] = resumo.get(ids_cad.get(p['chave']))
+        p['empresas'].sort(key=lambda e: e['nome'])
+    lista = sorted(pessoas.values(), key=lambda p: (p['status'] != 'pendente', not p['cadastro'],
+                                                    -len(p['empresas']), _nome_chave(p['nome'])))
+    pend = [p for p in lista if p['status'] == 'pendente']
+    stats = {'pessoas': sum(1 for p in pend if p['tipo'] == 'PF'),
+             'empresas_socias': sum(1 for p in pend if p['tipo'] == 'PJ'),
+             'empresas': len({e['id'] for p in pend for e in p['empresas']}),
+             'prontos': sum(1 for p in pend if p['cadastro']),
+             'administradores': sum(1 for p in lista if p['status'] == 'administrador'),
+             'vinculados': (execute_query("SELECT COUNT(DISTINCT chave) n FROM socios_fila WHERE status = 'vinculado'",
+                                          fetch=True, fetch_one=True) or {}).get('n', 0)}
+    return render_template('clientes/socios_fila.html', pessoas=lista, stats=stats)
+
+
+@clientes.route('/clientes/socios-pendentes/vincular', methods=['POST'])
+@login_required
+def socios_fila_vincular():
+    """Liga um cadastro (que já existe ou acabou de ser criado na janela) a
+    todas as empresas desta pessoa na fila."""
+    from utils import socios_fila as SF
+    dados = request.get_json(silent=True) or {}
+    chave = str(dados.get('chave') or '')[:120]
+    cad_id = dados.get('cadastro_id')
+    if not chave or not str(cad_id).isdigit():
+        return jsonify(ok=False, erro='Escolha o cadastro da pessoa.'), 400
+    cad = Cliente.get_by_id(int(cad_id))
+    if not cad or (cad.get('situacao') or 'ATIVO') == 'INATIVO' or cad['id'] in empresas_ocultas():
+        return jsonify(ok=False, erro='Cadastro não encontrado.'), 404
+    ok, motivo = SF.confere(chave, cad)
+    if not ok:
+        return jsonify(ok=False, erro='Não liguei: ' + motivo), 400
+    feitos = SF.vincular(chave, cad, current_user.id, registrar=registrar, rotulo_empresa=rotulo_empresa,
+                         ocultas=empresas_ocultas())
+    n100 = sum(1 for _, _, pct in feitos if pct == Decimal('100'))
+    return jsonify(ok=True, empresas=len(feitos), com_100=n100, sem_pct=len(feitos) - n100,
+                   cadastro=_cadastro_resumo([cad['id']]).get(cad['id']))
+
+
+@clientes.route('/clientes/socios-pendentes/ignorar', methods=['POST'])
+@login_required
+def socios_fila_ignorar():
+    """Tira a pessoa da fila (homônimo, já saiu da empresa, não é sócio...)."""
+    from utils import socios_fila as SF
+    chave = str((request.get_json(silent=True) or {}).get('chave') or '')[:120]
+    if not chave:
+        return jsonify(ok=False), 400
+    SF.ignorar(chave, current_user.id, ocultas=empresas_ocultas())
+    registrar('escrita.ignorou_socio_fila', 'cadastros', tabela='socios_fila', depois={'chave': chave})
+    return jsonify(ok=True)
+
+
 @clientes.route('/clientes/api/proximo-numero-pf')
 @login_required
 def proximo_numero_pf():
