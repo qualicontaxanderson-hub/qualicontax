@@ -1,0 +1,221 @@
+{# Contabilidade anterior (14/10/2026) — campo de escolha do escritório de onde
+   a empresa veio. MESMO modelo do "Contador responsável": busca, cartão do
+   escolhido com Trocar, e "Novo escritório" cadastrado sem sair da tela.
+   Componente ÚNICO para o formulário do cliente e a janela de converter
+   avulso. Uso:
+     {% from 'clientes/_contab_anterior.html' import campo_contab, contab_js %}
+     {{ campo_contab(id_atual) }}  ... e, no fim da página, {{ contab_js(lista) }}
+   O CSS e o JS vêm junto (sem depender de main.js/identidade.css em cache). #}
+
+{% macro campo_contab(contab_id) %}
+<div class="ca-campo" id="caCampo">
+    <span class="ca-lbl">Contabilidade anterior <span class="ca-req">*</span></span>
+    <input type="hidden" name="contabilidade_anterior_id" id="contabilidade_anterior_id" value="{{ contab_id or '' }}">
+    <div id="caBox"></div>
+    <div class="ca-combo" id="caCombo" style="display:none;">
+        <div class="ca-combo-in">
+            <i class="fas fa-search"></i>
+            <input type="text" id="caBusca" class="ca-ctrl" autocomplete="off"
+                   placeholder="Buscar escritório pelo nome, cidade ou contato…">
+            <button type="button" class="ca-btn" onclick="caNovo()" title="Cadastra o escritório sem sair desta tela">
+                <i class="fas fa-plus"></i> Novo escritório
+            </button>
+        </div>
+        <ul class="ca-lista" id="caLista" style="display:none;"></ul>
+    </div>
+    <p class="ca-hint">Escritório que cuidava da empresa antes da Qualicontax. Não está na lista? Clique em <b>Novo escritório</b>.</p>
+</div>
+{% endmacro %}
+
+{% macro contab_js(lista) %}
+<style>
+.ca-campo { min-width:0; }
+.ca-lbl { display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:6px; }
+.ca-req { color:#dc2626; }
+.ca-hint { margin:6px 0 0; font-size:12px; color:#7d968a; }
+.ca-ctrl { width:100%; height:40px; border:1px solid #d7e3dc; border-radius:9px; padding:0 12px 0 34px;
+           font-size:14px; font-family:inherit; background:#fff; color:#0f172a; box-sizing:border-box; flex:1; min-width:0; }
+.ca-ctrl:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.ca-combo { position:relative; }
+.ca-combo-in { display:flex; gap:8px; position:relative; align-items:stretch; }
+.ca-combo-in > i { position:absolute; left:12px; top:13px; color:#94a3b8; font-size:13px; }
+.ca-btn { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; height:40px; padding:0 13px;
+          border:1px solid #bbf7d0; background:#f0fdf4; color:#15803d; border-radius:9px; font-size:13px;
+          font-weight:700; cursor:pointer; font-family:inherit; }
+.ca-btn:hover { background:#dcfce7; border-color:#86efac; }
+.ca-lista { list-style:none; margin:4px 0 0; padding:6px; border:1px solid #86efac; border-radius:10px; background:#fff;
+            box-shadow:0 10px 24px rgba(15,61,46,.12); position:absolute; left:0; right:0; z-index:40;
+            max-height:300px; overflow-y:auto; }
+.ca-lista li { display:flex; gap:10px; align-items:center; padding:8px; border-radius:8px; cursor:pointer; }
+.ca-lista li:hover, .ca-lista li.on { background:#ecfdf5; }
+.ca-lista li.vazio { cursor:default; color:#94a3b8; font-size:13px; }
+.ca-lista li.vazio:hover { background:none; }
+.ca-lista li > span:last-child { display:flex; flex-direction:column; font-size:13.5px; min-width:0; }
+.ca-lista small { color:#64748b; font-size:12px; }
+.ca-ava { width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg,#f59e0b,#b45309); color:#fff;
+          display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0; }
+.ca-esc { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1.5px solid #16a34a; border-radius:10px;
+          background:#f3fcf6; }
+.ca-esc.vazio { border-color:#fca5a5; background:#fef2f2; }
+.ca-esc-t { flex:1; display:flex; flex-direction:column; font-size:13.5px; min-width:0; }
+.ca-esc-t b { overflow-wrap:anywhere; }
+.ca-esc-t small { color:#64748b; font-size:12px; overflow-wrap:anywhere; }
+.ca-trocar { height:30px; padding:0 12px; border-radius:99px; border:1px solid #bbf7d0; background:#fff; color:#15803d;
+             font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0; }
+.ca-trocar:hover { background:#f0fdf4; }
+/* janela "Novo escritório" (mesmo desenho da caixa de digitar nome) */
+.cad-fundo { position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.45);
+             display:flex; align-items:center; justify-content:center; padding:16px; }
+.cad-caixa { width:100%; max-width:560px; max-height:calc(100vh - 32px); overflow-y:auto; background:#fff;
+             border-radius:16px; padding:22px 22px 18px; box-shadow:0 24px 60px rgba(15,23,42,.28); font-family:inherit; }
+.cad-tit { margin:0 0 14px; font-size:17px; font-weight:800; color:#0f3d2e; }
+.cad-grade { display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; }
+.cad-l { grid-column:1 / -1; }
+.cad-grade label { display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:5px; }
+.cad-grade input, .cad-grade textarea { width:100%; height:40px; box-sizing:border-box; border:1px solid #d7e3dc;
+             border-radius:10px; padding:0 12px; font-size:14px; font-family:inherit; }
+.cad-grade textarea { height:64px; padding:8px 12px; resize:vertical; }
+.cad-grade input:focus, .cad-grade textarea:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+.cad-grade .cad-erro { border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.14); }
+.cad-ajuda { margin:10px 0 0; font-size:12.5px; color:#64748b; }
+.cad-msg { margin:10px 0 0; font-size:12.5px; color:#b91c1c; font-weight:600; }
+.cad-acoes { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.cad-acoes button { height:38px; padding:0 18px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer;
+                    font-family:inherit; border:1px solid transparent; }
+.cad-nao { background:#fff; border-color:#d7e3dc !important; color:#475569; }
+.cad-sim { background:#16a34a; color:#fff; }
+@media (max-width:600px) {
+    .ca-combo-in { flex-wrap:wrap; }
+    .ca-btn { width:100%; justify-content:center; }
+    .cad-grade { grid-template-columns:1fr; }
+}
+</style>
+<script>
+var CA_LISTA = {{ (lista or [])|tojson }};
+function caEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+    });
+}
+function caNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
+function caIniciais(nome) {
+    var p = String(nome || '').replace(/[^A-Za-zÀ-ú0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : (p[0] || '?')[1] || '')).toUpperCase();
+}
+function caPorId(id) {
+    for (var i = 0; i < CA_LISTA.length; i++) if (String(CA_LISTA[i].id) === String(id)) return CA_LISTA[i];
+    return null;
+}
+function caSub(c) {
+    var t = [];
+    if (c.cidade) t.push(c.cidade + (c.uf ? '/' + c.uf : ''));
+    if (c.contato) t.push(c.contato);
+    if (c.telefone) t.push(c.telefone);
+    if (c.email) t.push(c.email);
+    t.push(c.empresas + ' empresa' + (c.empresas === 1 ? '' : 's') + ' vinda' + (c.empresas === 1 ? '' : 's') + ' daqui');
+    return t.join(' · ');
+}
+function caEscolher(id) {
+    var c = caPorId(id);
+    document.getElementById('contabilidade_anterior_id').value = c ? c.id : '';
+    var box = document.getElementById('caBox');
+    if (c) {
+        box.innerHTML = '<div class="ca-esc"><span class="ca-ava">' + caEsc(caIniciais(c.nome)) + '</span>'
+            + '<span class="ca-esc-t"><b>' + caEsc(c.nome) + '</b><small>' + caEsc(caSub(c)) + '</small></span>'
+            + '<button type="button" class="ca-trocar" onclick="caTrocar()">Trocar</button></div>';
+    } else {
+        box.innerHTML = '<div class="ca-esc vazio"><span class="ca-esc-t"><b>Nenhum escritório escolhido</b>'
+            + '<small>Escolha de onde a empresa veio, ou marque "aberta pela Qualicontax".</small></span>'
+            + '<button type="button" class="ca-trocar" onclick="caTrocar()">Escolher</button></div>';
+    }
+    document.getElementById('caCombo').style.display = 'none';
+    box.style.display = '';
+    if (typeof atualizarResumo === 'function') atualizarResumo();
+}
+function caTrocar() {
+    document.getElementById('caBox').style.display = 'none';
+    document.getElementById('caCombo').style.display = '';
+    var i = document.getElementById('caBusca'); i.value = ''; i.focus();
+}
+function caDesenhar(q) {
+    var lista = document.getElementById('caLista');
+    var n = caNorm(q);
+    var achados = CA_LISTA.filter(function (c) {
+        return !n || caNorm([c.nome, c.cidade, c.uf, c.contato, c.email].join(' ')).indexOf(n) >= 0;
+    }).sort(function (a, b) { return b.empresas - a.empresas || a.nome.localeCompare(b.nome); }).slice(0, 30);
+    lista.style.display = '';
+    lista.innerHTML = achados.length ? achados.map(function (c) {
+        return '<li data-id="' + c.id + '"><span class="ca-ava">' + caEsc(caIniciais(c.nome)) + '</span><span><b>'
+             + caEsc(c.nome) + '</b><small>' + caEsc(caSub(c)) + '</small></span></li>';
+    }).join('') : '<li class="vazio">Nenhum escritório com esse nome. Use <b>Novo escritório</b>.</li>';
+    lista.querySelectorAll('li[data-id]').forEach(function (li) {
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); caEscolher(li.dataset.id); });
+    });
+}
+// "Novo escritório": janela com os dados do concorrente, cadastra e já escolhe.
+function caNovo() {
+    var busca = document.getElementById('caBusca');
+    var fundo = document.createElement('div');
+    fundo.className = 'cad-fundo';
+    fundo.innerHTML =
+        '<form class="cad-caixa" role="dialog" aria-modal="true"><h3 class="cad-tit">Novo escritório de contabilidade</h3>'
+      + '<div class="cad-grade">'
+      + '<div class="cad-l"><label>Nome do escritório *</label><input name="nome" maxlength="150" autocomplete="off"></div>'
+      + '<div><label>CNPJ</label><input name="cnpj" maxlength="18" placeholder="00.000.000/0000-00"></div>'
+      + '<div><label>Pessoa de contato</label><input name="contato" maxlength="120"></div>'
+      + '<div><label>Telefone</label><input name="telefone" maxlength="20" placeholder="(00) 00000-0000"></div>'
+      + '<div><label>E-mail</label><input name="email" type="email" maxlength="150"></div>'
+      + '<div><label>Cidade</label><input name="cidade" maxlength="80"></div>'
+      + '<div><label>UF</label><input name="uf" maxlength="2" placeholder="GO"></div>'
+      + '<div class="cad-l"><label>Observações</label><textarea name="observacoes"></textarea></div>'
+      + '</div><p class="cad-ajuda">Fica guardado na aba Contabilidades, para quem precisar ir atrás de informação da empresa no futuro.</p>'
+      + '<p class="cad-msg" hidden></p>'
+      + '<div class="cad-acoes"><button type="button" class="cad-nao">Cancelar</button><button type="submit" class="cad-sim">Cadastrar e escolher</button></div></form>';
+    var f = fundo.querySelector('form');
+    f.nome.value = busca && busca.value.trim() ? busca.value.trim() : '';
+    function fechar() { document.removeEventListener('keydown', esc); fundo.remove(); }
+    function esc(e) { if (e.key === 'Escape') fechar(); }
+    document.addEventListener('keydown', esc);
+    fundo.addEventListener('mousedown', function (e) { if (e.target === fundo) fechar(); });
+    f.querySelector('.cad-nao').addEventListener('click', fechar);
+    f.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var msg = f.querySelector('.cad-msg');
+        if (!f.nome.value.trim()) { f.nome.classList.add('cad-erro'); f.nome.focus(); return; }
+        var dados = {};
+        ['nome', 'cnpj', 'contato', 'telefone', 'email', 'cidade', 'uf', 'observacoes'].forEach(function (k) { dados[k] = f[k].value; });
+        f.querySelector('.cad-sim').disabled = true;
+        fetch('/contabilidades/api/rapido', {method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(dados)})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) { msg.textContent = d.message || d.error || 'Não consegui cadastrar.'; msg.hidden = false;
+                                  f.querySelector('.cad-sim').disabled = false; return; }
+                if (!caPorId(d.item.id)) CA_LISTA.push(d.item);
+                fechar();
+                caEscolher(d.item.id);
+                if (d.ja_existia) alert('O escritório "' + d.item.nome + '" já estava cadastrado — foi escolhido.');
+            })
+            .catch(function () { msg.textContent = 'Não consegui cadastrar agora. Tente de novo.'; msg.hidden = false;
+                                 f.querySelector('.cad-sim').disabled = false; });
+    });
+    document.body.appendChild(fundo);
+    f.nome.focus();
+}
+document.addEventListener('DOMContentLoaded', function () {
+    var b = document.getElementById('caBusca');
+    if (!b) return;
+    var lista = document.getElementById('caLista');
+    function abrir() { lista.style.display = ''; caDesenhar(b.value); }
+    b.addEventListener('focus', abrir);
+    b.addEventListener('input', abrir);
+    b.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') lista.style.display = 'none';
+        if (e.key === 'Enter') { e.preventDefault(); var li = lista.querySelector('li[data-id]');
+            if (li) li.dispatchEvent(new MouseEvent('mousedown')); }
+    });
+    b.addEventListener('blur', function () { setTimeout(function () { lista.style.display = 'none'; }, 180); });
+    caEscolher(document.getElementById('contabilidade_anterior_id').value);
+});
+</script>
+{% endmacro %}

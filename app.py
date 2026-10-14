@@ -109,6 +109,7 @@ from routes.auth import auth
 from routes.dashboard import dashboard
 from routes.clientes import clientes
 from routes.grupos import grupos
+from routes.contabilidades import contabilidades
 from routes.ramos_atividade import ramos_atividade
 from routes.contratos import contratos
 from routes.processos import processos
@@ -158,6 +159,7 @@ app.register_blueprint(modulos)
 app.register_blueprint(escrita_fiscal_bp)
 app.register_blueprint(configuracoes_bp)
 app.register_blueprint(adicionais)
+app.register_blueprint(contabilidades)
 app.register_blueprint(dfe_bp)
 app.register_blueprint(robo_saidas)
 app.register_blueprint(colabore_api)

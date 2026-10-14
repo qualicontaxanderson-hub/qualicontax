@@ -434,6 +434,16 @@
                             <dt>Regime</dt><dd>{{ cliente.regime_tributario or '—' }}</dd>
                             <dt>Porte</dt><dd>{{ cliente.porte_empresa or '—' }}</dd>
                             <dt>Início atividade</dt><dd>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '—' }}</dd>
+                            {% if cliente.tipo_pessoa == 'PJ' %}
+                            <dt>Origem</dt><dd>
+                                {% if cliente.aberta_pela_casa %}Aberta pela Qualicontax
+                                {% elif contab_anterior %}<a href="{{ url_for('contabilidades.index') }}#ca-{{ contab_anterior.id }}">{{ contab_anterior.nome }}</a>
+                                    {% set _ct = [contab_anterior.contato, contab_anterior.telefone, contab_anterior.email]|select|list %}
+                                    {% if _ct %}<br><small>{{ _ct|join(' · ') }}</small>{% endif %}
+                                {% elif cliente.avulso %}—
+                                {% else %}<span style="color:#b91c1c; font-weight:700;">falta informar a contabilidade anterior</span>{% endif %}
+                            </dd>
+                            {% endif %}
                             <dt>Início contrato</dt><dd>{{ cliente.data_inicio_contrato|format_date if cliente.data_inicio_contrato else '—' }}</dd>
                             <dt>Fim contrato</dt><dd>{{ cliente.data_fim_contrato|format_date if cliente.data_fim_contrato else '—' }}</dd>
                             <dt>Situação</dt><dd>{{ cliente.situacao }}</dd>

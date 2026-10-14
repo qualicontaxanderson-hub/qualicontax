@@ -878,6 +878,37 @@ def _apply_migrations():
         if _c.get('cnt', 0) == 0:
             _migrate(f"ALTER TABLE socios_clientes ADD COLUMN {_col_name} {_col_def}")
 
+    # 14/10/2026: CONTABILIDADES — escritórios de onde os clientes vieram
+    # (concorrentes). Serve para alguém, no futuro, ir atrás de informação da
+    # empresa com quem cuidava dela antes. Toda empresa CLIENTE PJ tem
+    # "aberta pela casa" OU a contabilidade anterior (avulso não precisa).
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS contabilidades (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(150) NOT NULL,
+            cnpj VARCHAR(18) NULL,
+            contato VARCHAR(120) NULL,
+            telefone VARCHAR(20) NULL,
+            email VARCHAR(150) NULL,
+            cidade VARCHAR(80) NULL,
+            uf CHAR(2) NULL,
+            observacoes TEXT NULL,
+            situacao VARCHAR(10) NOT NULL DEFAULT 'ATIVO',
+            criado_por INT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            alterado_por INT NULL,
+            alterado_em TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_contabilidades_nome (nome)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    _c = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clientes' "
+        "AND COLUMN_NAME = 'contabilidade_anterior_id'", fetch=True, fetch_one=True) or {}
+    if _c.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE clientes ADD COLUMN contabilidade_anterior_id INT NULL, "
+                 "ADD INDEX idx_clientes_contab_anterior (contabilidade_anterior_id)")
+
     # 14/10/2026 (sócios, passo 3): dados da PESSOA física — os que o contrato
     # social, a Junta e o gov.br pedem. Uma linha por cadastro PF (1:1 com
     # clientes), fora da tabela clientes para não pesar nas 316 PJ.

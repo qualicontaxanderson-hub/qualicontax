@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Contabilidades - Qualicontax{% endblock %}
+
+{% block content %}
+{# Aba CONTABILIDADES (14/10/2026): escritórios de onde os clientes vieram.
+   Cartões no MESMO desenho de Clientes/Grupos (clientes/_cartao_css.html). #}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'cadastros/_nav_cadastros.html' %}
+{% set pode_editar = current_user.has_permission('clientes.edit') %}
+
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <h1 class="ef-hero-title">Contabilidades</h1>
+            <p class="ef-hero-sub">Escritórios de onde os clientes vieram — para ir atrás de informação quando precisar</p>
+        </div>
+        <div class="ef-hero-actions">
+            {% if pode_editar %}
+            <button type="button" class="ef-btn ef-btn-primary" onclick="ctAbrir()"><i class="fas fa-plus"></i> Novo escritório</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="ef-body">
+    <div class="cli-kpis ct-kpis">
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-building-circle-check"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.casa }}</strong><span class="cli-kpi-lbl">Abertas pela Qualicontax</span></div>
+        </div>
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-right-to-bracket"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ stats.anterior }}</strong><span class="cli-kpi-lbl">Vieram de outro escritório</span></div>
+        </div>
+        <a class="cli-kpi ct-kpi-link" href="{{ url_for('clientes.index') }}?origem=sem" title="Abrir a lista de clientes só com estas empresas">
+            <span class="cli-kpi-ico" style="background:#fee2e2; color:#b91c1c;"><i class="fas fa-circle-question"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val{{ ' cli-bad' if stats.sem }}">{{ stats.sem }}</strong><span class="cli-kpi-lbl">Sem a origem informada <i class="fas fa-arrow-right"></i></span></div>
+        </a>
+        <div class="cli-kpi">
+            <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-briefcase"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ contabilidades|length }}</strong><span class="cli-kpi-lbl">Escritórios cadastrados</span></div>
+        </div>
+    </div>
+
+    <div class="ct-bar">
+        <span class="lst-count" id="ctCont"></span>
+        <label class="ct-busca">
+            <i class="fas fa-search"></i>
+            <input type="search" id="ctBusca" placeholder="Escritório, cidade, contato ou empresa…" autocomplete="off">
+        </label>
+    </div>
+
+    <div class="gc-grid" id="ctLista">
+        {% for c in contabilidades %}
+        {% set off = c.situacao != 'ATIVO' %}
+        <article class="gc-card cli-card ct-card {% if off %}cli-off{% endif %}" id="ca-{{ c.id }}"
+                 data-busca="{{ [c.nome, c.cidade, c.uf, c.contato, c.email, c.lista_empresas|map(attribute='nome_razao_social')|join(' ')]|select|join(' ') }}">
+            <header class="gc-head">
+                <span class="gc-ava ct-ava">{{ (c.nome.split()|map('first')|list)[:2]|join }}</span>
+                <div class="gc-tit">
+                    <h3 title="{{ c.nome }}">{{ c.nome }}</h3>
+                    <span class="cli-doc">CNPJ <span class="mono">{{ c.cnpj or '—' }}</span></span>
+                </div>
+                <span class="gc-sit {{ 'off' if off else 'on' }}">{{ 'Inativo' if off else 'Ativo' }}</span>
+            </header>
+            {% if c.cidade %}
+            <div class="gc-tags"><span class="gc-cid gc-cid-0"><i class="fas fa-location-dot"></i> {{ c.cidade }}{% if c.uf %}/{{ c.uf }}{% endif %}</span></div>
+            {% endif %}
+            <div class="cli-grade">
+                <div class="cli-campo"><span class="cli-rot">Contato</span><b class="cli-val">{{ c.contato or '—' }}</b></div>
+                <div class="cli-campo"><span class="cli-rot">Telefone</span><b class="cli-val">{{ c.telefone or '—' }}</b></div>
+                <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val">{{ c.email or '—' }}</span></div>
+            </div>
+            <div class="ct-emp">
+                <span class="cli-rot">Empresas que vieram daqui · {{ c.lista_empresas|length }}</span>
+                {% if c.lista_empresas %}
+                <div class="gc-tags">
+                    {% for e in c.lista_empresas[:8] %}
+                    <a class="ct-chip" href="{{ url_for('clientes.detalhes', id=e.id) }}" title="{{ e.nome_razao_social }}">{% if e.numero_cliente %}<b>{{ e.numero_cliente }}</b> {% endif %}{{ e.nome_razao_social|truncate(28, True, '…') }}</a>
+                    {% endfor %}
+                    {% if c.lista_empresas|length > 8 %}<span class="ct-chip ct-mais">+{{ c.lista_empresas|length - 8 }}</span>{% endif %}
+                </div>
+                {% else %}
+                <span class="ct-nenhuma">nenhuma ainda</span>
+                {% endif %}
+            </div>
+            {% if c.observacoes %}<p class="ct-obs">{{ c.observacoes }}</p>{% endif %}
+            {% if pode_editar %}
+            <footer class="cli-pe ct-pe">
+                <form method="POST" action="{{ url_for('contabilidades.situacao', cid=c.id) }}"
+                      onsubmit="return confirm('{{ 'Reativar' if off else 'Inativar' }} {{ c.nome|e }}? {{ '' if off else 'Ele some da escolha no cadastro; as empresas que vieram dele continuam apontando para ele.' }}');">
+                    <button type="submit" class="ct-btn-sec">{{ 'Reativar' if off else 'Inativar' }}</button>
+                </form>
+                <button type="button" class="lst-act lst-act-edit" title="Editar escritório"
+                        data-c='{{ {"id": c.id, "nome": c.nome, "cnpj": c.cnpj, "contato": c.contato, "telefone": c.telefone, "email": c.email, "cidade": c.cidade, "uf": c.uf, "observacoes": c.observacoes}|tojson|forceescape }}'
+                        onclick="ctAbrir(JSON.parse(this.dataset.c))"><i class="fas fa-pen"></i></button>
+            </footer>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    <div class="gc-nada" id="ctVazio" {% if contabilidades %}hidden{% endif %}>
+        <i class="fas fa-briefcase"></i>
+        {% if contabilidades %}<p>Nenhum escritório com essa busca</p>
+        {% else %}<p>Nenhum escritório cadastrado ainda</p>
+        <p class="ct-sub">Eles também podem ser cadastrados direto no cadastro da empresa, em <b>Contabilidade anterior → Novo escritório</b>.</p>{% endif %}
+    </div>
+</div>
+
+{% if pode_editar %}
+<div class="cad-fundo" id="ctModal" hidden>
+    <form class="cad-caixa" method="POST" action="{{ url_for('contabilidades.salvar') }}" role="dialog" aria-modal="true">
+        <h3 class="cad-tit" id="ctTit">Novo escritório de contabilidade</h3>
+        <input type="hidden" name="id" id="ctId">
+        <div class="cad-grade">
+            <div class="cad-l"><label for="ctNome">Nome do escritório *</label><input name="nome" id="ctNome" maxlength="150" required autocomplete="off"></div>
+            <div><label>CNPJ</label><input name="cnpj" maxlength="18" placeholder="00.000.000/0000-00"></div>
+            <div><label>Pessoa de contato</label><input name="contato" maxlength="120"></div>
+            <div><label>Telefone</label><input name="telefone" maxlength="20" placeholder="(00) 00000-0000"></div>
+            <div><label>E-mail</label><input name="email" type="email" maxlength="150"></div>
+            <div><label>Cidade</label><input name="cidade" maxlength="80"></div>
+            <div><label>UF</label><input name="uf" maxlength="2" placeholder="GO"></div>
+            <div class="cad-l"><label>Observações</label><textarea name="observacoes"></textarea></div>
+        </div>
+        <div class="cad-acoes"><button type="button" class="cad-nao" onclick="ctFechar()">Cancelar</button><button type="submit" class="cad-sim">Salvar</button></div>
+    </form>
+</div>
+{% endif %}
+
+<style>
+.ct-kpis { grid-template-columns:repeat(4, minmax(0,1fr)); margin-bottom:18px; }
+.cli-kpi { cursor:default; }
+.ct-kpi-link { text-decoration:none; color:inherit; cursor:pointer; }
+.ct-kpi-link:hover { border-color:#fca5a5; }
+.ct-kpi-link .cli-kpi-lbl i { font-size:10px; margin-left:3px; }
+.ct-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.ct-busca { margin-left:auto; position:relative; flex:0 1 380px; min-width:0; }
+.ct-busca i { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:12.5px; }
+.ct-busca input { width:100%; height:36px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px 0 36px;
+                  font:inherit; font-size:13px; background:#fff; box-sizing:border-box; }
+.ct-busca input:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.ct-card { cursor:default; }
+.ct-card.ct-fora { display:none; }
+.ct-ava { background:linear-gradient(135deg,#f59e0b,#b45309); font-size:13px; }
+.ct-emp { display:flex; flex-direction:column; gap:6px; flex:1; }
+.ct-chip { font-size:12px; font-weight:600; color:#0f3d2e; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:99px;
+           padding:2px 10px; text-decoration:none; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ct-chip b { color:#15803d; }
+.ct-chip:hover { border-color:#86efac; background:#dcfce7; }
+.ct-mais { color:#64748b; background:#f8fafc; border-color:#e2e8f0; }
+.ct-nenhuma { font-size:12.5px; color:#94a3b8; }
+.ct-obs { margin:0; font-size:12.5px; color:#64748b; background:#f8fafc; border-radius:9px; padding:8px 10px; white-space:pre-line; }
+.ct-pe { justify-content:flex-end; }
+.ct-btn-sec { height:30px; padding:0 12px; border-radius:8px; border:1px solid #e2e8f0; background:#fff; color:#64748b;
+              font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; }
+.ct-btn-sec:hover { border-color:#fca5a5; color:#b91c1c; }
+.ct-sub { font-size:12.5px; color:#7d968a; margin-top:6px; }
+/* janela (mesmo desenho do "Novo escritório" do cadastro) */
+.cad-fundo { position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.45);
+             display:flex; align-items:center; justify-content:center; padding:16px; }
+.cad-fundo[hidden] { display:none; }
+.cad-caixa { width:100%; max-width:560px; max-height:calc(100vh - 32px); overflow-y:auto; background:#fff;
+             border-radius:16px; padding:22px 22px 18px; box-shadow:0 24px 60px rgba(15,23,42,.28); font-family:inherit; }
+.cad-tit { margin:0 0 14px; font-size:17px; font-weight:800; color:#0f3d2e; }
+.cad-grade { display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; }
+.cad-l { grid-column:1 / -1; }
+.cad-grade label { display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:5px; }
+.cad-grade input, .cad-grade textarea { width:100%; height:40px; box-sizing:border-box; border:1px solid #d7e3dc;
+             border-radius:10px; padding:0 12px; font-size:14px; font-family:inherit; }
+.cad-grade textarea { height:72px; padding:8px 12px; resize:vertical; }
+.cad-grade input:focus, .cad-grade textarea:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+.cad-acoes { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.cad-acoes button { height:38px; padding:0 18px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer;
+                    font-family:inherit; border:1px solid transparent; }
+.cad-nao { background:#fff; border-color:#d7e3dc !important; color:#475569; }
+.cad-sim { background:#16a34a; color:#fff; }
+@media (max-width:900px) { .ct-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:600px) {
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
+    .ct-busca { flex-basis:100%; margin-left:0; }
+    .cad-grade { grid-template-columns:1fr; }
+}
+</style>
+
+<script>
+function ctSemAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function ctFiltrar() {
+    var q = ctSemAcento(document.getElementById('ctBusca').value.trim());
+    var cards = document.querySelectorAll('#ctLista .ct-card'), vis = 0;
+    cards.forEach(function (c) {
+        var ok = !q || ctSemAcento(c.dataset.busca).indexOf(q) >= 0;
+        c.classList.toggle('ct-fora', !ok);
+        if (ok) vis++;
+    });
+    document.getElementById('ctCont').innerHTML = cards.length
+        ? 'Mostrando <strong>' + vis + '</strong> de ' + cards.length + ' escritório' + (cards.length === 1 ? '' : 's') : '';
+    document.getElementById('ctVazio').hidden = cards.length > 0 && vis > 0;
+}
+document.getElementById('ctBusca').addEventListener('input', ctFiltrar);
+ctFiltrar();
+
+function ctAbrir(c) {
+    var m = document.getElementById('ctModal');
+    if (!m) return;
+    var f = m.querySelector('form');
+    f.reset();
+    document.getElementById('ctId').value = c ? c.id : '';
+    document.getElementById('ctTit').textContent = c ? 'Editar escritório' : 'Novo escritório de contabilidade';
+    if (c) ['nome', 'cnpj', 'contato', 'telefone', 'email', 'cidade', 'uf', 'observacoes'].forEach(function (k) {
+        f[k].value = c[k] || '';
+    });
+    m.hidden = false;
+    document.getElementById('ctNome').focus();
+}
+function ctFechar() { var m = document.getElementById('ctModal'); if (m) m.hidden = true; }
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') ctFechar(); });
+(function () {
+    var m = document.getElementById('ctModal');
+    if (m) m.addEventListener('mousedown', function (e) { if (e.target === m) ctFechar(); });
+    // chegou por um link "#ca-ID" (da ficha da empresa): destaca o cartão
+    var alvo = location.hash && document.querySelector(location.hash);
+    if (alvo) { alvo.scrollIntoView({block: 'center'}); alvo.style.boxShadow = '0 0 0 3px rgba(245,158,11,.45)'; }
+})();
+</script>
+{% endblock %}

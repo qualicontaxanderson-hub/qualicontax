@@ -13,6 +13,7 @@
 {% endblock %}
 
 {% block content %}
+{% from 'clientes/_contab_anterior.html' import campo_contab, contab_js %}
 {% if not janela %}{% include 'cadastros/_nav_cadastros.html' %}{% endif %}
 
 <div class="ef-hero">
@@ -531,6 +532,13 @@
                         <small style="color:#7d968a;">— copia a data de início da atividade para o início do contrato</small></span>
                 </label>
 
+                {# ORIGEM (14/10/2026): empresa CLIENTE que não foi aberta pela casa
+                   diz de qual escritório veio. Some quando "aberta pela Qualicontax"
+                   está marcada e no avulso (ele informa ao virar cliente). #}
+                <div class="cf-fg cf-s12" id="caWrap" style="display:none;">
+                    {{ campo_contab(cliente.contabilidade_anterior_id if cliente else None) }}
+                </div>
+
                 <div class="cf-fg cf-s12">
                     <label class="cf-lbl" for="observacoes">Observações</label>
                     <textarea id="observacoes" name="observacoes" class="cf-ctrl" rows="3"
@@ -639,6 +647,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{% from 'clientes/_contab_anterior.html' import contab_js %}{# import não cruza bloco #}
 <style>
 /* topo (testeira + hero verde + corpo) vem de identidade.css.
    Escala do app: texto 13–14px; só rótulo em caixa alta vai a 11,5px. */
@@ -1038,6 +1047,7 @@ function toggleTipoFields() {
     if (typeof sugerirNumeroPF === 'function') sugerirNumeroPF();
     filtrarRamos(tipo);
     toggleRegimeBens();
+    caVisivel();
     atualizarResumo();
 }
 
@@ -1255,15 +1265,29 @@ function buscarCepCliente(cep) {
 // (vinda do CNPJ) para o início do contrato. Sem data → avisa e NÃO marca.
 // Desmarcar NÃO apaga a data já preenchida.
 function toggleAbertaCasa(cb) {
+    caVisivel();
     if (!cb.checked) { return; }
     var atividade = document.getElementById('data_inicio_atividade');
     var contrato = document.getElementById('data_inicio_contrato');
     if (!atividade || !atividade.value) {
         alert('Preencha o CNPJ primeiro (para vir a data de início da atividade) ou digite a data manualmente.');
         cb.checked = false;
+        caVisivel();
         return;
     }
     contrato.value = atividade.value;
+}
+
+// Contabilidade anterior: só PJ, só cliente (avulso informa ao converter) e
+// só quando a empresa NÃO foi aberta pela casa.
+function caVisivel() {
+    var w = document.getElementById('caWrap');
+    if (!w) return;
+    var av = document.getElementById('campoAvulso');
+    var ehAvulso = {{ 'true' if (cliente and cliente.avulso) else 'false' }} || !!(av && av.checked);
+    var aberta = document.getElementById('aberta_pela_casa');
+    w.style.display = (tipoPessoa() === 'PJ' && !ehAvulso && !(aberta && aberta.checked)) ? '' : 'none';
+    atualizarResumo();
 }
 
 // NÚMERO OU AVULSO (05/10/2026): cliente sem número não existe mais. Ou tem
@@ -1784,7 +1808,7 @@ function escolherModo(radio) {
                 radio.checked = false;
                 var cli = document.getElementById('modoCliente');
                 if (cli && window._modoAnterior === '0') cli.checked = true;
-                atualizarResumo();
+                caVisivel();
                 return;
             }
             aplicarModo(radio);
@@ -1813,6 +1837,7 @@ function confirmarAvulso(fim) {
 }
 
 function aplicarModo(radio) {
+    setTimeout(caVisivel, 0);   // avulso não pede a contabilidade anterior
     var num = document.getElementById('numero_cliente');
     if (radio.value === '1') {
         num.value = '';
@@ -1895,6 +1920,11 @@ function atualizarResumo() {
     var ehContador = document.getElementById('is_contador') && document.getElementById('is_contador').checked;
     var kid = document.getElementById('contador_id');
     if (!ehContador) itens.push([!!(kid && kid.value), 'Contador responsável']);
+    if (tipo === 'PJ' && !ehAvulso) {
+        var ab = document.getElementById('aberta_pela_casa');
+        var ca = document.getElementById('contabilidade_anterior_id');
+        itens.push([!!((ab && ab.checked) || (ca && ca.value)), 'Contabilidade anterior']);
+    }
     if (tipo === 'PJ' && typeof SOCIOS !== 'undefined') {
         var tot = totalSocios();
         itens.push([SOCIOS.length > 0 && Math.abs(tot - 100) < 0.005,
@@ -2332,4 +2362,5 @@ document.addEventListener('DOMContentLoaded', function () {
     {% endif %}
 });
 </script>
+{{ contab_js(contabilidades_json) }}
 {% endblock %}

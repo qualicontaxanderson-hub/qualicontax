@@ -116,6 +116,7 @@ MAPA = {
     'clientes.proximo_numero_pf':      ('clientes.create', 'clientes.edit'),
     'clientes.ramo_rapido':            ('clientes.create', 'clientes.edit'),
     'clientes.grupo_rapido':           ('clientes.create', 'clientes.edit', 'grupos.index'),
+    'contabilidades.rapido':           ('clientes.create', 'clientes.edit'),  # "Novo escritório" no cadastro
     'adicionais.index':                'clientes.index',
     'adicionais.sync_dropbox_anp':     'clientes.edit',
     'documentos.download':             'clientes.index',

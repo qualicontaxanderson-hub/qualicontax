@@ -4,13 +4,14 @@
 {% macro cartao_cliente(cliente, avulso=False) %}
 {% set inativo = cliente.situacao != 'ATIVO' %}
 {% set pf = cliente.tipo_pessoa == 'PF' %}
+{% set origem = '' if (pf or avulso) else ('casa' if cliente.aberta_pela_casa else ('anterior' if cliente.contabilidade_anterior_id else 'sem')) %}
 <article class="gc-card cli-card {% if inativo and not avulso %}cli-off{% endif %}{% if avulso %} cli-av{% endif %}"
          data-open-url="{{ url_for('clientes.detalhes', id=cliente.id) }}"
          data-id="{{ cliente.id }}" data-num="{{ cliente.numero_cliente or '' }}"
          data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.email or '' }}"
          data-sit="{{ cliente.situacao }}" data-reg="{{ cliente.f_reg }}" data-segs="{{ cliente.f_segs }}"
          data-ramos="{{ cliente.f_ramos }}" data-grupos="{{ cliente.f_grupos }}" data-cert="{{ cliente.cert_nivel }}"
-         data-local="{{ cliente.f_local }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
+         data-local="{{ cliente.f_local }}" data-origem="{{ origem }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
     <header class="gc-head">
         {% if avulso %}<span class="gc-ava cli-ava cli-ava-av" title="Avulso ainda não tem número">AV</span>{% else %}<span class="gc-ava cli-ava {% if pf %}cli-ava-pf{% endif %} {% if (cliente.numero_cliente or '')|length > 3 %}cli-ava-4{% endif %}">{{ cliente.numero_cliente or '—' }}</span>{% endif %}
         <div class="gc-tit">

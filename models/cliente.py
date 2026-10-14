@@ -144,7 +144,7 @@ class Cliente:
             SELECT id, numero_cliente, tipo_pessoa, nome_razao_social, cpf_cnpj, inscricao_estadual,
                    inscricao_municipal, email, telefone, celular, regime_tributario,
                    porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade, data_inicio_contrato,
-                   situacao, observacoes, is_contador, aberta_pela_casa,
+                   situacao, observacoes, is_contador, aberta_pela_casa, contabilidade_anterior_id,
                    avulso, avulso_em, virou_cliente_em
             FROM clientes
             WHERE id = %s
@@ -304,6 +304,7 @@ class Cliente:
             SELECT c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                    c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                    c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
+                   c.aberta_pela_casa, c.contabilidade_anterior_id,
                    cert.cert_validade,
                    MAX(ender.cidade) AS end_cidade, MAX(ender.estado) AS end_uf,
                    GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome SEPARATOR ', ') as ramo_atividade_nome,
@@ -323,7 +324,7 @@ class Cliente:
             GROUP BY c.id, c.numero_cliente, c.tipo_pessoa, c.nome_razao_social, c.cpf_cnpj, c.inscricao_estadual,
                      c.inscricao_municipal, c.email, c.telefone, c.celular, c.regime_tributario,
                      c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
-                     cert.cert_validade
+                     c.aberta_pela_casa, c.contabilidade_anterior_id, cert.cert_validade
             {order_clause}
             LIMIT %s OFFSET %s
         """

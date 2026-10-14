@@ -32,6 +32,7 @@ _HIST_LABELS = {
     'responsavel': 'Responsável', 'qualificacao': 'Qualificação',
     'data_entrada': 'Entrada na sociedade', 'data_saida': 'Saída da sociedade',
     'capital_valor': 'Capital na empresa', 'pro_labore': 'Pró-labore',
+    'contabilidade_anterior': 'Contabilidade anterior', 'contato': 'Contato', 'uf': 'UF',
     # dados da pessoa (PF)
     'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG',
     'estado_civil': 'Estado civil', 'regime_bens': 'Regime de bens', 'nacionalidade': 'Nacionalidade',
@@ -58,6 +59,7 @@ _HIST_META = {'cliente_id', 'cliente_numero', 'cliente_nome', 'grupo_id', 'grupo
               'dropbox_path'}
 
 _HIST_ENTIDADE = {
+    'contabilidades': 'um escritório de contabilidade',
     'clientes': 'o cadastro', 'enderecos_clientes': 'um endereço',
     'socios_clientes': 'um sócio', 'dfe_certificados': 'o certificado',
     'contratos': 'um contrato',
@@ -77,6 +79,9 @@ _HIST_VERBO = {
     'escrita.ignorou_socio_fila': 'tirou uma pessoa da fila de sócios',
     'escrita.criou_contrato': 'adicionou um contrato',
     'escrita.criou_grupo': 'criou um grupo',
+    'escrita.criou_contabilidade': 'cadastrou um escritório de contabilidade',
+    'escrita.alterou_contabilidade': 'alterou um escritório de contabilidade',
+    'escrita.alterou_origem_cliente': 'alterou a origem (contabilidade anterior)',
     'escrita.alterou_grupo': 'alterou um grupo',
     'escrita.alterou_grupo_cliente': 'trocou o grupo de empresas',
     'escrita.criou_ramo': 'criou um ramo de atividade',

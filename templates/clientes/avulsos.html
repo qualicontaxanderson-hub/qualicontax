@@ -8,6 +8,7 @@
    Clientes —, então as duas nunca se desencontram. O avulso só muda no que
    falta nele (número) e no que só ele tem (desde quando, quem, arquivos). #}
 {% from 'clientes/_cartao.html' import cartao_cliente %}
+{% from 'clientes/_contab_anterior.html' import campo_contab, contab_js %}
 {% include 'clientes/_cartao_css.html' %}
 
 {% include 'cadastros/_nav_cadastros.html' %}
@@ -123,6 +124,15 @@
                            class="form-control" required maxlength="20"
                            placeholder="ex: 102">
                 </div>
+                {# Virar cliente pede a ORIGEM da empresa (14/10/2026): aberta pela
+                   casa ou a contabilidade anterior. Pessoa física não pede. #}
+                <div id="avOrigem" class="av-origem">
+                    <label class="av-aberta">
+                        <input type="checkbox" name="aberta_pela_casa" value="1" id="avAberta" onchange="avOrigemVer()">
+                        <span>Empresa aberta pela Qualicontax</span>
+                    </label>
+                    <div id="avContab">{{ campo_contab(None) }}</div>
+                </div>
                 <div class="av-modal-nota">
                     <i class="fas fa-box-archive"></i>
                     Ao converter, a pasta do Dropbox migra de
@@ -168,6 +178,11 @@
 .cli-card.av-fora { display:none; }
 
 .av-empty-sub { font-size:12.5px; color:#7d968a; margin-top:6px; }
+.av-origem { margin:4px 0 14px; padding:12px 14px; border:1px solid #e3ece7; border-radius:12px; background:#f7fbf8; }
+.av-aberta { display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:#0f3d2e;
+             margin-bottom:10px; cursor:pointer; }
+.av-aberta input { width:16px; height:16px; accent-color:#16a34a; }
+#avModal .modal-content { overflow:visible; }
 .av-modal-nota { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px;
                  padding:12px 14px; font-size:12.5px; color:#166534; line-height:1.5; }
 
@@ -188,9 +203,26 @@ function avConverter(el) {
     document.getElementById('avNome').textContent = el.getAttribute('data-nome');
     document.getElementById('avDoc').textContent  = el.getAttribute('data-doc');
     document.getElementById('avNumero').value = '';
+    // origem: zera a cada avulso; só empresa (CNPJ) pede
+    var pj = (el.getAttribute('data-doc') || '').replace(/\D/g, '').length !== 11;
+    document.getElementById('avOrigem').style.display = pj ? '' : 'none';
+    document.getElementById('avAberta').checked = false;
+    caEscolher('');
+    avOrigemVer();
     document.getElementById('avModal').style.display = 'block';
     document.getElementById('avNumero').focus();
 }
+
+function avOrigemVer() {
+    document.getElementById('avContab').style.display = document.getElementById('avAberta').checked ? 'none' : '';
+}
+// sem origem a conversão volta com aviso — melhor avisar antes de enviar
+document.getElementById('avForm').addEventListener('submit', function (e) {
+    if (document.getElementById('avOrigem').style.display === 'none') return;
+    if (document.getElementById('avAberta').checked || document.getElementById('contabilidade_anterior_id').value) return;
+    e.preventDefault();
+    alert('Diga de onde a empresa veio: marque "aberta pela Qualicontax" ou escolha a contabilidade anterior.');
+});
 
 function avFechar() {
     document.getElementById('avModal').style.display = 'none';
@@ -246,4 +278,5 @@ document.querySelectorAll('.cli-card[data-open-url]').forEach(function (row) {
     });
 });
 </script>
+{{ contab_js(contabilidades_json) }}
 {% endblock %}

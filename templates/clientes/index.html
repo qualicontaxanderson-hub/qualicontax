@@ -158,6 +158,18 @@
         </div>
     </div>
 
+    {# ORIGEM (14/10/2026): de onde a empresa cliente veio — a regra pede
+       "aberta pela Qualicontax" OU a contabilidade anterior. #}
+    <div class="gc-bar cli-segbar">
+        <span class="cli-seg-rot">Origem</span>
+        <div class="gc-pills cli-pills-seg" id="cfOriPills" role="group" aria-label="Origem da empresa">
+            <button type="button" class="gc-pill" data-v="">Todas</button>
+            <button type="button" class="gc-pill" data-v="casa"><i class="fas fa-building-circle-check"></i> Aberta pela Qualicontax <b></b></button>
+            <button type="button" class="gc-pill" data-v="anterior"><i class="fas fa-right-to-bracket"></i> Veio de outro escritório <b></b></button>
+            <button type="button" class="gc-pill cli-seg-sem" data-v="sem" title="Empresa cliente sem a origem — falta informar a contabilidade anterior"><i class="fas fa-circle-exclamation"></i> Sem origem <b></b></button>
+        </div>
+    </div>
+
     <div class="gf-painel" id="cfPainel" aria-hidden="true">
         <div class="gf-painel-in">
             <div class="gf-campos cli-campos">
@@ -364,7 +376,7 @@ var CF_RAMO = { {% for r in ramos_atividade or [] %}"{{ r.id }}": {n: {{ r.nome|
 var CF_SEG_ROT = {COMERCIO: 'Comércio', SERVICOS: 'Prestação de Serviços', LOCACAO: 'Locação', INDUSTRIA: 'Indústria', PF: 'Pessoa física', '': 'Sem segmento'};
 var CF_CERT_ROT = {ok: 'Válido', laranja: 'Vence em 30 dias', vencido: 'Vencido', sem_data: 'Sem certificado'};
 var CF_CERT_ORD = {ok: 1, laranja: 2, vencido: 3, sem_data: 4};
-var CF = [], CF_TS = {}, cfSit = '', cfReg = '', cfSeg = '', cfMexendo = false, CF_CHAVE = 'qcx_clientes_filtros';
+var CF = [], CF_TS = {}, cfSit = '', cfReg = '', cfSeg = '', cfOri = '', cfMexendo = false, CF_CHAVE = 'qcx_clientes_filtros';
 var cfOrdem = 'num-asc';
 function cfSemAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
 document.querySelectorAll('#cfLista .cli-card').forEach(function (row) {
@@ -372,7 +384,7 @@ document.querySelectorAll('#cfLista .cli-card').forEach(function (row) {
     CF.push({row: row, id: d.id, num: d.num, nome: d.nome, doc: d.doc, email: d.email, sit: d.sit, reg: d.reg,
              segs: d.segs ? d.segs.split(',') : [], ramos: d.ramos ? d.ramos.split(',') : [],
              grupos: d.grupos ? d.grupos.split(',') : [], cert: d.cert || 'sem_data',
-             cid: cfSemAcento(local), cidRot: local, uf: local ? local.split('/').pop() : ''});
+             cid: cfSemAcento(local), cidRot: local, uf: local ? local.split('/').pop() : '', origem: d.origem || ''});
 });
 function cfVal(k) { return CF_TS[k] ? CF_TS[k].getValue() : []; }
 function cfTem(lista, escolhidos) { return escolhidos.some(function (v) { return lista.indexOf(v) >= 0; }); }
@@ -380,6 +392,7 @@ function cfAtende(e, menos) {
     if (menos !== 'sit' && cfSit && e.sit !== cfSit) return false;
     if (menos !== 'reg' && cfReg && e.reg !== cfReg) return false;
     if (menos !== 'seg' && cfSeg && (cfSeg === '-' ? e.ramos.length : e.segs.indexOf(cfSeg) < 0)) return false;
+    if (menos !== 'ori' && cfOri && e.origem !== cfOri) return false;
     var v;
     if (menos !== 'emp' && (v = cfVal('emp')).length && v.indexOf(e.id) < 0) return false;
     if (menos !== 'grp' && (v = cfVal('grp')).length && !cfTem(e.grupos, v)) return false;
@@ -411,7 +424,8 @@ function cfOpcoes(k) {
 function cfContarBotoes() {
     [['#cfSitPills', 'sit', function (e, v) { return e.sit === v; }, function () { return cfSit; }],
      ['#cfRegPills', 'reg', function (e, v) { return e.reg === v; }, function () { return cfReg; }],
-     ['#cfSegPills', 'seg', function (e, v) { return v === '-' ? !e.ramos.length : e.segs.indexOf(v) >= 0; }, function () { return cfSeg; }]
+     ['#cfSegPills', 'seg', function (e, v) { return v === '-' ? !e.ramos.length : e.segs.indexOf(v) >= 0; }, function () { return cfSeg; }],
+     ['#cfOriPills', 'ori', function (e, v) { return e.origem === v; }, function () { return cfOri; }]
     ].forEach(function (p) {
         var atual = p[3]();
         document.querySelectorAll(p[0] + ' .gc-pill').forEach(function (b) {
@@ -444,7 +458,7 @@ function cfRecarregarOpcoes() {
     cfMexendo = false;
 }
 function cfSalvar() {
-    var st = {sit: cfSit, reg: cfReg, seg: cfSeg, ordem: cfOrdem,
+    var st = {sit: cfSit, reg: cfReg, seg: cfSeg, ori: cfOri, ordem: cfOrdem,
               aberto: document.getElementById('cfPainel').classList.contains('on')};
     Object.keys(CF_TS).forEach(function (k) { st[k] = cfVal(k); });
     try { sessionStorage.setItem(CF_CHAVE, JSON.stringify(st)); } catch (e) {}
@@ -472,7 +486,7 @@ function cfLimpar() {
     cfMexendo = true;
     Object.keys(CF_TS).forEach(function (k) { CF_TS[k].clear(true); });
     cfMexendo = false;
-    cfSit = ''; cfReg = ''; cfSeg = '';
+    cfSit = ''; cfReg = ''; cfSeg = ''; cfOri = '';
     cfAplicar();
 }
 function cfToggle(abrir) {
@@ -509,6 +523,9 @@ document.querySelectorAll('#cfRegPills .gc-pill').forEach(function (b) {
 });
 document.querySelectorAll('#cfSegPills .gc-pill').forEach(function (b) {
     b.addEventListener('click', function () { cfSeg = (cfSeg === b.dataset.v) ? '' : b.dataset.v; cfAplicar(); });
+});
+document.querySelectorAll('#cfOriPills .gc-pill').forEach(function (b) {
+    b.addEventListener('click', function () { cfOri = (cfOri === b.dataset.v) ? '' : b.dataset.v; cfAplicar(); });
 });
 // Relatórios: os clientes VISÍVEIS, na ordem dos cartões, e os filtros por extenso
 function cfDescreverFiltros() {
@@ -569,7 +586,7 @@ document.querySelectorAll('.cli-kpi').forEach(function (k) {
         cfMexendo = true;
         Object.keys(CF_TS).forEach(function (t) { CF_TS[t].clear(true); });
         cfMexendo = false;
-        cfSit = ''; cfReg = ''; cfSeg = '';
+        cfSit = ''; cfReg = ''; cfSeg = ''; cfOri = '';
         if (k.dataset.kpi === 'ativos' || k.dataset.kpi === 'inativos') {
             cfSit = on ? '' : (k.dataset.kpi === 'ativos' ? 'ATIVO' : 'INATIVO');
             cfAplicar(); return;
@@ -620,11 +637,12 @@ document.querySelectorAll('.cli-kpi').forEach(function (k) {
     }
     if (!st && Array.from(q.keys()).length) {
         st = {sit: q.get('situacao') || '', reg: (q.get('regime') || '').toLowerCase(), seg: q.get('segmento') || '',
-              grp: q.get('grupo_id') ? [q.get('grupo_id')] : [], ramo: q.get('ramo_id') ? [q.get('ramo_id')] : []};
+              grp: q.get('grupo_id') ? [q.get('grupo_id')] : [], ramo: q.get('ramo_id') ? [q.get('ramo_id')] : [],
+              ori: q.get('origem') || ''};
         if (q.get('tipo_pessoa') === 'PF') st.reg = 'pf';
     }
     if (st) {
-        cfSit = st.sit || ''; cfReg = st.reg || ''; cfSeg = st.seg || '';
+        cfSit = st.sit || ''; cfReg = st.reg || ''; cfSeg = st.seg || ''; cfOri = st.ori || '';
         cfMexendo = true;
         Object.keys(CF_TS).forEach(function (k) {
             (st[k] || []).forEach(function (v) { if (CF_TS[k].options[v]) CF_TS[k].addItem(v, true); });

@@ -18,6 +18,7 @@ from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente
+from models.contabilidade import Contabilidade
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
                                  REGIMES_BENS, NIVEIS_GOVBR)
 from models.grupo_cliente import GrupoCliente
@@ -64,7 +65,7 @@ def _numero_inteiro(numero):
     return str(int(n)) if n.isdigit() else n
 
 
-def _obrigatorios_faltando(form):
+def _obrigatorios_faltando(form, avulso=False):
     """Grupo, e-mail, celular e ramo de atividade (07/10/2026): exigidos de
     TODO cadastro — cliente e avulso, novo e edição. A tela confere antes de
     enviar; isto é a rede de segurança do servidor. Devolve o que falta."""
@@ -91,6 +92,10 @@ def _obrigatorios_faltando(form):
                            (*ids, tipo), fetch=True, fetch_one=True) or {}
         if (ok.get('n') or 0) != len(set(ids)):
             falta.append('ramo de atividade de ' + ('pessoa física' if tipo == 'PF' else 'empresa'))
+    # ORIGEM (14/10/2026): empresa CLIENTE foi aberta pela casa OU veio de
+    # outro escritório — qual. Avulso não precisa; ao converter, precisa.
+    if tipo == 'PJ' and not avulso and not _origem_ok(form):
+        falta.append('contabilidade anterior (ou marque "aberta pela Qualicontax")')
     if tipo == 'PF' and (form.get('pf_nascimento') or '').strip() and not _data_iso(form.get('pf_nascimento')):
         falta.append('data de nascimento (inválida ou no futuro)')
     return falta
@@ -103,6 +108,32 @@ def _telefone_valido(valor):
     ("(11) 1111-1111") também não é número."""
     d = re.sub(r'\D', '', valor or '')
     return len(d) in (10, 11) and len(set(d)) > 1 and not d.startswith('0')
+
+
+def _origem_ok(form):
+    """Aberta pela casa marcada, ou um escritório que existe na lista."""
+    if form.get('aberta_pela_casa'):
+        return True
+    cid = form.get('contabilidade_anterior_id', type=int)
+    return bool(cid and Contabilidade.get(cid))
+
+
+def _salvar_origem(cliente_id, form, antes_id=None):
+    """Grava de onde a empresa veio. Aberta pela casa zera o escritório (uma
+    coisa ou outra). Registra só quando muda, com o NOME do escritório."""
+    novo_id = None if form.get('aberta_pela_casa') else form.get('contabilidade_anterior_id', type=int)
+    if novo_id and not Contabilidade.get(novo_id):
+        novo_id = None
+    if (antes_id or None) == (novo_id or None):
+        return
+    execute_query("UPDATE clientes SET contabilidade_anterior_id = %s WHERE id = %s", (novo_id, cliente_id))
+
+    def _nome(i):
+        c = Contabilidade.get(i) if i else None
+        return c['nome'] if c else None
+    registrar('escrita.alterou_origem_cliente', 'cadastros', tabela='clientes', registro_id=cliente_id,
+              antes={'contabilidade_anterior': _nome(antes_id)},
+              depois={'contabilidade_anterior': _nome(novo_id)})
 
 
 def _msg_faltando(falta):
@@ -459,6 +490,7 @@ def _ctx_form(cliente=None):
         ctx['contador_atual'] = _contador_padrao()
         ctx['socios_json'] = []
         ctx['pessoa'] = {}
+    ctx['contabilidades_json'] = _contab_combo(cliente.get('contabilidade_anterior_id') if cliente else None)
     ctx.update(ESTADOS_CIVIS=ESTADOS_CIVIS, REGIMES_BENS=REGIMES_BENS, NIVEIS_GOVBR=NIVEIS_GOVBR,
                COM_REGIME=COM_REGIME, hoje_iso=date.today().isoformat())
     return ctx
@@ -522,6 +554,19 @@ def _enfeitar_cartoes(lista):
         v = v.date() if hasattr(v, 'date') else v
         c['cert_dias'] = (v - hoje).days if v else None
 
+    return lista
+
+
+def _contab_combo(atual_id=None):
+    """Escritórios ativos para o campo; o da empresa entra mesmo se inativo
+    (senão o cartão do escolhido sumiria)."""
+    lista = Contabilidade.para_combo()
+    if atual_id and not any(c['id'] == atual_id for c in lista):
+        c = Contabilidade.get(atual_id)
+        if c:
+            lista.append({'id': c['id'], 'nome': c['nome'] + ' (inativo)', 'cidade': c.get('cidade') or '',
+                          'uf': c.get('uf') or '', 'contato': c.get('contato') or '',
+                          'telefone': c.get('telefone') or '', 'email': c.get('email') or '', 'empresas': 0})
     return lista
 
 
@@ -768,7 +813,7 @@ def novo():
         if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
             flash('Preencha todos os campos obrigatórios.', 'danger')
             return _render_novo()
-        falta = _obrigatorios_faltando(request.form) + _socios_e_contador_faltando(request.form)
+        falta = _obrigatorios_faltando(request.form, eh_avulso) + _socios_e_contador_faltando(request.form)
         if falta:
             flash(_msg_faltando(falta), 'danger')
             return _render_novo()
@@ -830,6 +875,7 @@ def novo():
                 _salvar_contador(cliente_id, request.form.get('contador_id', type=int))
             if request.form.get('tipo_pessoa') == 'PJ':
                 _salvar_socios(cliente_id, _ler_socios(request.form) or [])
+                _salvar_origem(cliente_id, request.form)
             else:
                 _salvar_pessoa(cliente_id, request.form)
             
@@ -1001,6 +1047,8 @@ def detalhes(id):
                          qualificacoes_socio=QUALIFICACOES_SOCIO,
                          hoje_iso=date.today().isoformat(),
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
+                         contab_anterior=(Contabilidade.get(cliente['contabilidade_anterior_id'])
+                                          if cliente.get('contabilidade_anterior_id') else None),
                          pessoa_rotulo=PessoaDados.rotulo,
                          certificado=certificado,
                          contadores=contadores,
@@ -1528,7 +1576,8 @@ def editar(id):
             elif numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
                 _erro_num = f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!'
             if not _erro_num:
-                _falta = _obrigatorios_faltando(request.form) + _socios_e_contador_faltando(request.form, id)
+                _falta = (_obrigatorios_faltando(request.form, bool(cliente.get('avulso')))
+                          + _socios_e_contador_faltando(request.form, id))
                 if _falta:
                     _erro_num = _msg_faltando(_falta)
             if _erro_num:
@@ -1663,6 +1712,7 @@ def editar(id):
                     _salvar_contador(id, request.form.get('contador_id', type=int))
                 if request.form.get('tipo_pessoa') == 'PJ':
                     _salvar_socios(id, _ler_socios(request.form) or [])
+                    _salvar_origem(id, request.form, cliente.get('contabilidade_anterior_id'))
                 else:
                     _salvar_pessoa(id, request.form)
 
@@ -1763,7 +1813,7 @@ def avulsos():
         'espera_max': max(idades) if idades else 0,
     }
     return render_template('clientes/avulsos.html', avulsos=lista,
-                           busca=busca, stats=stats)
+                           busca=busca, stats=stats, contabilidades_json=_contab_combo())
 
 
 @clientes.route('/clientes/<int:id>/converter', methods=['POST'])
@@ -1790,6 +1840,12 @@ def converter_avulso(id):
         return redirect(url_for('clientes.avulsos'))
     if Cliente.existe_numero_cliente(numero, id):
         flash(f'O número {numero} já está em uso por outro cliente.', 'danger')
+        return redirect(url_for('clientes.avulsos'))
+    # Virar cliente exige a ORIGEM (14/10/2026): aberta pela casa ou o
+    # escritório de onde veio. Só PJ — pessoa física não tem contabilidade anterior.
+    if c.get('tipo_pessoa') == 'PJ' and not _origem_ok(request.form):
+        flash('Para virar cliente, diga de onde a empresa veio: marque "aberta pela Qualicontax" '
+              'ou escolha a contabilidade anterior.', 'danger')
         return redirect(url_for('clientes.avulsos'))
 
     # 1) a pasta primeiro: EMPRESAS/{razão} -> EMPRESAS/{nº - razão}. O avulso
@@ -1831,6 +1887,11 @@ def converter_avulso(id):
                 f'UPDATE {_t} SET {_c} = CONCAT(%s, SUBSTRING({_c}, %s)) '
                 f'WHERE {_c} LIKE %s', (cam_para, _corte, _like))
             _tot += _n or 0
+
+    if c.get('tipo_pessoa') == 'PJ':
+        if request.form.get('aberta_pela_casa') and not c.get('aberta_pela_casa'):
+            execute_query('UPDATE clientes SET aberta_pela_casa = 1 WHERE id = %s', (id,))
+        _salvar_origem(id, request.form, c.get('contabilidade_anterior_id'))
 
     registrar('escrita.converteu_avulso', 'cadastros', tabela='clientes',
               registro_id=id,
