@@ -1255,8 +1255,21 @@ def status_sefaz_ciencia(cliente_id):
         ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
         (cliente_id,), fetch=True, fetch_one=True)
     if not cert:
-        flash('Esta empresa não tem certificado próprio ativo — a manifestação '
-              'usa o certificado dela, então a chave não se aplica aqui.', 'warning')
+        # Filial pelo certificado da RAIZ (14/10/2026): a SEFAZ aceita a Ciência
+        # assinada por qualquer CNPJ da mesma raiz — a chave é da filial.
+        if DfeCertificado.cert_da_raiz(cliente_id):
+            antes = DfeCertificado.config_raiz(cliente_id)['manifesta_ciencia']
+            DfeCertificado.gravar_config_raiz(cliente_id, getattr(current_user, 'id', None),
+                                              manifesta_ciencia=ligar,
+                                              usuario_nome=getattr(current_user, 'nome', None))
+            registrar('escrita.alterou_ciencia_automatica', 'fiscal', tabela='dfe_captura_raiz',
+                      registro_id=cliente_id, antes={'manifesta_ciencia': antes},
+                      depois={'manifesta_ciencia': ligar, 'cliente_id': cliente_id, 'pela_raiz': True})
+            flash('Ciência da Operação ' + ('LIGADA' if ligar else 'desligada') + ' para esta filial '
+                  '(assinada com o certificado da matriz).', 'success')
+            return redirect(url_for('escrita_fiscal.status_sefaz'))
+        flash('Esta empresa não tem certificado próprio ativo nem certificado na raiz '
+              '(matriz) — a chave não se aplica aqui.', 'warning')
         return redirect(url_for('escrita_fiscal.status_sefaz'))
 
     antes = bool(cert.get('manifesta_ciencia'))
@@ -1298,8 +1311,19 @@ def status_sefaz_captura(cliente_id):
         ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
         (cliente_id,), fetch=True, fetch_one=True)
     if not cert:
-        flash('Esta empresa não tem certificado próprio ativo — não há captura '
-              'para ligar ou desligar.', 'warning')
+        # Filial que captura pelo certificado da RAIZ (14/10/2026): o botão é dela.
+        if DfeCertificado.cert_da_raiz(cliente_id):
+            antes = DfeCertificado.config_raiz(cliente_id)['modo_automatico']
+            DfeCertificado.gravar_config_raiz(cliente_id, getattr(current_user, 'id', None),
+                                              modo_automatico=ligar)
+            registrar('escrita.alterou_captura_automatica', 'fiscal', tabela='dfe_captura_raiz',
+                      registro_id=cliente_id, antes={'modo_automatico': antes},
+                      depois={'modo_automatico': ligar, 'cliente_id': cliente_id, 'pela_raiz': True})
+            flash('Captura de NF-e ' + ('LIGADA' if ligar else 'desligada') + ' para esta filial '
+                  '(pelo certificado da matriz). O CT-e continua.', 'success')
+            return redirect(url_for('escrita_fiscal.status_sefaz'))
+        flash('Esta empresa não tem certificado próprio ativo nem certificado na raiz '
+              '(matriz) — não há captura para ligar ou desligar.', 'warning')
         return redirect(url_for('escrita_fiscal.status_sefaz'))
     antes = bool(cert.get('modo_automatico'))
     execute_query('UPDATE dfe_certificados SET modo_automatico = %s, alterado_por = %s, '
@@ -1369,6 +1393,13 @@ def status_sefaz():
                 e['ciencia_on'] = bool(v.get('manifesta_ciencia'))
                 e['ciencia_por'] = v.get('manifesta_por')
                 me = v.get('manifesta_em')
+                e['ciencia_em'] = me.strftime('%d/%m/%Y %H:%M') if hasattr(me, 'strftime') else None
+            elif e.get('fonte') == 'raiz':
+                cfg = DfeCertificado.config_raiz(cid)
+                e['captura_on'] = cfg['modo_automatico']
+                e['ciencia_on'] = cfg['manifesta_ciencia']
+                e['ciencia_por'] = cfg.get('manifesta_por')
+                me = cfg.get('manifesta_em')
                 e['ciencia_em'] = me.strftime('%d/%m/%Y %H:%M') if hasattr(me, 'strftime') else None
             e['outro_sistema_n'] = int(outros.get(cid) or 0)
             e['outro_sistema'] = e['outro_sistema_n'] >= OUTRO_CONSUMIDOR_MIN
@@ -1535,6 +1566,12 @@ def _status_sefaz_dados():
         "  dc.manifesta_ciencia, dc.manifesta_por, dc.manifesta_em, dc.modo_automatico "
         "FROM ( "
         "    SELECT cliente_id AS id FROM dfe_certificados WHERE ativo = 1 "
+        # filial sem certificado próprio que captura pelo da RAIZ (14/10/2026)
+        "    UNION SELECT c2.id FROM clientes c2 JOIN dfe_certificados ce2 "
+        "          ON ce2.ativo = 1 AND ce2.validade >= CURDATE() AND ce2.cliente_id <> c2.id "
+        "         AND LEFT(LPAD(REGEXP_REPLACE(ce2.cnpj,'[^0-9]',''),14,'0'),8) "
+        "             = LEFT(REGEXP_REPLACE(c2.cpf_cnpj,'[^0-9]',''),8) "
+        "          WHERE c2.tipo_pessoa = 'PJ' "
         "    UNION SELECT cliente_id FROM cliente_contadores "
         "    UNION SELECT DISTINCT cliente_id FROM nfe_importacoes "
         "           WHERE origem='SEFAZ' AND cliente_id IS NOT NULL "
@@ -1606,13 +1643,23 @@ def _status_sefaz_dados():
         # contadores_do_cliente); senão nada. Só consulta contador para quem não
         # tem cert próprio, então são poucas queries extras.
         contador = None
-        if not cert_doc:
+        raiz = None
+        cv = r.get('cert_validade')
+        if not cert_doc or (cv and cv < datetime.now().date()):
+            raiz = DfeCertificado.cert_da_raiz(r['id'])
+        if not cert_doc and not raiz:
             for ctd in ClienteContador.contadores_do_cliente(r['id']):
                 if ctd.get('tem_certificado'):
                     contador = ctd
                     break
 
-        if cert_doc:
+        cfg_raiz = None
+        if raiz:
+            fonte, fonte_icone, fonte_label = 'raiz', '🏢', 'Pelo certificado da matriz'
+            fonte_det = (f"{raiz.get('dono_numero') or ''} - {raiz.get('dono_nome') or ''}").strip(' -')
+            ef_validade = raiz.get('validade')
+            cfg_raiz = DfeCertificado.config_raiz(r['id'], raiz) if not cert_doc else None
+        elif cert_doc:
             fonte, fonte_icone, fonte_label = 'propria', '🔑', 'Captura própria'
             fonte_det = f"{r.get('cert_tipo_doc') or ''} {cert_doc}".strip()
             ef_validade = r.get('cert_validade')          # cert que de fato autentica
@@ -1673,10 +1720,10 @@ def _status_sefaz_dados():
         empresas.append({
             'grupo': grupo, 'resumos_travados': travados,
             'resgataveis': _i(a.get('resgataveis')),
-            'ciencia_on': bool(r.get('manifesta_ciencia')),
-            'ciencia_por': r.get('manifesta_por'),
-            'ciencia_em': _fmt(r.get('manifesta_em')),
-            'captura_on': bool(r.get('modo_automatico')),
+            'ciencia_on': bool((cfg_raiz or r).get('manifesta_ciencia')),
+            'ciencia_por': (cfg_raiz or r).get('manifesta_por'),
+            'ciencia_em': _fmt((cfg_raiz or r).get('manifesta_em')),
+            'captura_on': bool((cfg_raiz or r).get('modo_automatico')),
             'outro_sistema_n': int(outros.get(r['id']) or 0),
             'outro_sistema': int(outros.get(r['id']) or 0) >= OUTRO_CONSUMIDOR_MIN,
             'cliente_id': r['id'],

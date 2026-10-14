@@ -469,10 +469,18 @@ def _preparar(cliente_id, origem, dry_run=False, checar_cota=True):
     rotulo = f"{numero + ' - ' if numero else ''}{razao}"
 
     vinc = DfeCertificado.get_by_cliente(cliente_id)
+    dono_id = cliente_id
+    # MATRIZ E FILIAIS (14/10/2026): sem certificado próprio válido, o da mesma
+    # raiz de CNPJ — o interessado continua sendo o CNPJ da filial (abaixo).
+    if not (vinc and vinc.get('dropbox_path') and vinc.get('validade')
+            and vinc['validade'] >= _hoje_brt().date()):
+        raiz = DfeCertificado.cert_da_raiz(cliente_id)
+        if raiz:
+            vinc, dono_id = raiz, raiz['cliente_id']
     if not vinc or not vinc.get('dropbox_path'):
         return None, {'ok': False,
-                      'erro': f'O cliente {rotulo} não tem certificado digital vinculado. '
-                              f'Vincule o .pfx antes de capturar.'}
+                      'erro': f'O cliente {rotulo} não tem certificado digital vinculado '
+                              f'(nem a matriz/raiz do CNPJ). Vincule o .pfx antes de capturar.'}
     # Interessado = CNPJ da PRÓPRIA empresa (importa quando o cert é da matriz e o
     # cliente é filial). Fallback: o CNPJ do certificado.
     cnpj = _digitos(cliente.get('cpf_cnpj')) or _digitos(vinc.get('cnpj'))
@@ -485,7 +493,7 @@ def _preparar(cliente_id, origem, dry_run=False, checar_cota=True):
                       'erro': f'O cliente {rotulo} está sem UF no endereço principal. '
                               f'Cadastre o estado (UF) no endereço principal para ativar a captura.'}
 
-    senha_cif = DfeCertificado.get_senha_cifrada(cliente_id)
+    senha_cif = DfeCertificado.get_senha_cifrada(dono_id)
     if not senha_cif:
         return None, {'ok': False,
                       'erro': f'Certificado do cliente {rotulo} sem senha armazenada.'}
@@ -863,7 +871,7 @@ def capturar_cte_agendado():
             logger.info('[cte-sched] lock ocupado — pulando este tick.')
             return
 
-        empresas = DfeCertificado.listar_para_captura()
+        empresas = DfeCertificado.listar_para_captura('cte')   # o botão da NF-e não para o CT-e
         if not empresas:
             logger.info('[cte-sched] nenhuma empresa com captura ligada.')
             return

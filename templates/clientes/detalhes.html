@@ -394,6 +394,12 @@
                             <dt>{{ 'Nome' if cliente.tipo_pessoa == 'PF' else 'Razão Social' }}</dt><dd>{{ cliente.nome_razao_social or '—' }}</dd>
                             <dt>Nome Fantasia</dt><dd>{{ cliente.nome_fantasia or '—' }}</dd>
                             <dt>{{ 'CPF' if cliente.tipo_pessoa == 'PF' else 'CNPJ' }}</dt><dd>{{ cliente.cpf_cnpj or '—' }}</dd>
+                            {% if raiz_papel and raiz_papel[0] %}
+                            <dt>Matriz / filial</dt><dd>
+                                {% if raiz_papel[0] == 'matriz' %}<b>Matriz</b> · {{ raiz_papel[1] }} filia{{ 'l' if raiz_papel[1] == 1 else 'is' }} cadastrada{{ '' if raiz_papel[1] == 1 else 's' }}
+                                {% elif raiz_papel[1] %}<b>Filial</b> de <a href="{{ url_for('clientes.detalhes', id=raiz_papel[1].id) }}">{{ raiz_papel[1].numero }} - {{ raiz_papel[1].nome }}</a>
+                                {% else %}<b>Filial</b> — a matriz (0001) não está cadastrada{% endif %}</dd>
+                            {% endif %}
                             {% if cliente.tipo_pessoa == 'PJ' %}
                             <dt>Natureza jurídica</dt><dd>
                                 {% if cliente.natureza_juridica %}<b>{{ natureza[0] }}</b> · {{ natureza[2] }} {{ cliente.natureza_juridica }}

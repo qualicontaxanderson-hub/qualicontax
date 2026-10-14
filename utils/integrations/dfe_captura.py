@@ -874,8 +874,15 @@ def _autorizou_ciencia(cliente_id):
     r = execute_query(
         'SELECT manifesta_ciencia FROM dfe_certificados '
         ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
-        (cliente_id,), fetch=True, fetch_one=True) or {}
-    return bool(r.get('manifesta_ciencia'))
+        (cliente_id,), fetch=True, fetch_one=True)
+    if r:
+        return bool(r.get('manifesta_ciencia'))
+    # Filial que captura pelo certificado da raiz (14/10/2026): a chave é dela;
+    # sem linha, segue a do certificado da matriz. Contador nunca manifesta.
+    dono = DfeCertificado.cert_da_raiz(cliente_id)
+    if not dono:
+        return False
+    return DfeCertificado.config_raiz(cliente_id, dono)['manifesta_ciencia']
 
 
 def _manifestar_e_rebuscar(empresa, ctx, chave):
@@ -893,16 +900,16 @@ def _manifestar_e_rebuscar(empresa, ctx, chave):
 
     cid = empresa["cliente_id"]
     try:
-        cert_row = execute_query(
-            'SELECT id, dropbox_path FROM dfe_certificados '
-            ' WHERE cliente_id = %s AND ativo = 1 LIMIT 1',
-            (cid,), fetch=True, fetch_one=True)
+        # O certificado que autentica a captura (próprio ou o da RAIZ, para a
+        # filial — 14/10/2026). A SEFAZ aceita o evento assinado por qualquer
+        # CNPJ da mesma raiz do autor.
+        cert_row, dono_cert, _rot = _resolver_certificado(cid)
         # get_senha_cifrada recebe o CLIENTE, não o id da linha do certificado.
         # Passar cert_row['id'] devolvia a senha de OUTRA empresa e estourava
         # SenhaInvalidaError — e passou no meu teste porque a Easy Petro é uma
         # das 6 (de 181) em que os dois números coincidem. Testar na empresa
         # errada prova o código por acidente (04/09/2026).
-        senha = decifrar_senha(DfeCertificado.get_senha_cifrada(cid))
+        senha = decifrar_senha(DfeCertificado.get_senha_cifrada(dono_cert))
         pfx = dropbox_sync._service.download_file(cert_row['dropbox_path'])
         chave_priv, cert, _cadeia = carregar_par_chave_cert(pfx, senha)
 
@@ -1237,7 +1244,20 @@ def _resolver_certificado(cliente_id):
     quando não há certificado utilizável.
     """
     vinc = DfeCertificado.get_by_cliente(cliente_id)
-    if vinc and vinc.get('dropbox_path'):
+    if vinc and vinc.get('dropbox_path') and vinc.get('validade') and vinc['validade'] >= _hoje_brt().date():
+        return vinc, cliente_id, None
+
+    # (i-b) MATRIZ E FILIAIS (14/10/2026): sem certificado próprio válido, o
+    # de QUALQUER empresa da mesma raiz (8 dígitos) — a SEFAZ autentica pela
+    # raiz e a consulta continua sendo do CNPJ da filial. Mesmo passo que a
+    # NFS-e ADN já fazia. Vem antes do contador: é a própria empresa.
+    raiz = DfeCertificado.cert_da_raiz(cliente_id)
+    if raiz:
+        rot = (f"raiz: {raiz.get('dono_numero') or raiz['cliente_id']} - "
+               f"{raiz.get('dono_nome') or ''}").strip(' -')
+        return raiz, raiz['cliente_id'], rot
+
+    if vinc and vinc.get('dropbox_path'):          # próprio vencido: comportamento antigo
         return vinc, cliente_id, None
 
     for ct in ClienteContador.contadores_do_cliente(cliente_id):

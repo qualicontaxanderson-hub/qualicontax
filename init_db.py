@@ -909,6 +909,22 @@ def _apply_migrations():
         _migrate("ALTER TABLE clientes ADD COLUMN contabilidade_anterior_id INT NULL, "
                  "ADD INDEX idx_clientes_contab_anterior (contabilidade_anterior_id)")
 
+    # 14/10/2026 (matriz e filiais): filial SEM certificado próprio captura NF-e
+    # e CT-e pelo certificado da raiz (8 dígitos do CNPJ). Os botões dela moram
+    # aqui — cada filial liga/desliga a sua captura e a sua Ciência. Sem linha =
+    # padrão: captura ligada e Ciência igual à do certificado da raiz. NULL = padrão.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS dfe_captura_raiz (
+            cliente_id INT PRIMARY KEY,
+            modo_automatico TINYINT(1) NULL,
+            manifesta_ciencia TINYINT(1) NULL,
+            manifesta_por VARCHAR(120) NULL,   -- NOME de quem ligou, como em dfe_certificados
+            manifesta_em DATETIME NULL,
+            alterado_por INT NULL,
+            alterado_em DATETIME NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
     # 14/10/2026 (tipo jurídico, fase A): a NATUREZA JURÍDICA da Receita —
     # código da tabela (2062 = Ltda, 2054 = S/A Fechada...) e a descrição.
     # A busca do CNPJ já trazia e o formulário descartava. utils/natureza.py

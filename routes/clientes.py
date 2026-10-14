@@ -522,6 +522,7 @@ def _enfeitar_cartoes(lista):
         return lista
     from routes.grupos import (_cor_cidade as _g_cor_cidade, _cidade_titulo as _g_cidade_titulo,
                                _sem_acento as _g_sem_acento)
+    mapa_raiz = _mapa_raiz()
     rel_ramo, rel_grupo = {}, {}
     # uma ida ao banco só: ramos (com o segmento) e grupos de cada cliente
     for r in execute_query("SELECT 'R' AS t, x.cliente_id, x.ramo_atividade_id AS ref, ra.segmento "
@@ -549,6 +550,8 @@ def _enfeitar_cartoes(lista):
         # tipo jurídico (fase A, 14/10/2026): nome curto e família do código da Receita
         c['f_nat'], c['f_nat_fam'] = (natureza_classificar(c.get('natureza_codigo'), c.get('natureza_juridica'))
                                       if c['tipo_pessoa'] == 'PJ' else ('', ''))
+        # matriz e filiais (14/10/2026): pela raiz do CNPJ
+        c['f_raiz_papel'], c['f_raiz_info'] = _papel_raiz(c, mapa_raiz)
         # Município com a MESMA cor da tela de Grupos (a cidade tem uma cor só)
         local = f"{_g_cidade_titulo(c['end_cidade'])}/{c.get('end_uf') or ''}" if c.get('end_cidade') else ''
         c['f_local'] = local.rstrip('/')
@@ -575,6 +578,33 @@ def _enfeitar_cartoes(lista):
         c['cert_dias'] = (v - hoje).days if v else None
 
     return lista
+
+
+def _mapa_raiz():
+    """raiz (8 dígitos) -> {'matriz': {id, numero, nome} | None, 'ids': [...]}
+    de todos os cadastros PJ. Matriz = final 0001 (14/10/2026)."""
+    m = {}
+    for r in execute_query("SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
+                           "WHERE tipo_pessoa = 'PJ'", fetch=True) or []:
+        d = re.sub(r'\D', '', r.get('cpf_cnpj') or '')
+        if len(d) != 14:
+            continue
+        g = m.setdefault(d[:8], {'matriz': None, 'ids': []})
+        g['ids'].append(r['id'])
+        if d[8:12] == '0001':
+            g['matriz'] = {'id': r['id'], 'numero': r['numero_cliente'] or '', 'nome': r['nome_razao_social']}
+    return m
+
+
+def _papel_raiz(c, mapa):
+    """('matriz', n_filiais) | ('filial', matriz) | (None, None) para o cartão e a ficha."""
+    d = re.sub(r'\D', '', c.get('cpf_cnpj') or '')
+    g = mapa.get(d[:8]) if len(d) == 14 else None
+    if not g or len(g['ids']) < 2:
+        return None, None
+    if d[8:12] == '0001':
+        return 'matriz', len(g['ids']) - 1
+    return 'filial', g['matriz']
 
 
 def _contab_combo(atual_id=None):
@@ -1071,6 +1101,7 @@ def detalhes(id):
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
                          natureza=(natureza_classificar(cliente.get('natureza_codigo'), cliente.get('natureza_juridica'))
                                    + (codigo_formatado(cliente.get('natureza_codigo')),)),
+                         raiz_papel=_papel_raiz(cliente, _mapa_raiz()),
                          contab_anterior=(Contabilidade.get(cliente['contabilidade_anterior_id'])
                                           if cliente.get('contabilidade_anterior_id') else None),
                          pessoa_rotulo=PessoaDados.rotulo,

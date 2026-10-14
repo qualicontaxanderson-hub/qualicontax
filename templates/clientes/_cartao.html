@@ -25,6 +25,8 @@
         {% if cliente.f_local %}<span class="gc-cid gc-cid-{{ cliente.f_cid_cor }}"><i class="fas fa-location-dot"></i> {{ cliente.f_local }}</span>{% endif %}
         {% if cliente.f_reg %}<span class="gc-tag gc-reg-{{ cliente.f_reg }}">{{ {'lucro_real': 'Lucro Real', 'lucro_presumido': 'Lucro Presumido', 'simples': 'Simples Nacional', 'mei': 'MEI', 'pf': 'Pessoa Física'}.get(cliente.f_reg, cliente.f_reg) }}</span>{% endif %}
         {% if cliente.f_nat %}<span class="gc-tag gc-nat gc-nat-{{ cliente.f_nat_fam }}" title="{{ cliente.natureza_juridica or '' }}">{{ cliente.f_nat }}</span>{% endif %}
+        {% if cliente.f_raiz_papel == 'matriz' %}<span class="gc-tag gc-raiz" title="Mesma raiz de CNPJ: o quadro e o certificado da matriz valem para as filiais"><i class="fas fa-sitemap"></i> Matriz · {{ cliente.f_raiz_info }} filia{{ 'l' if cliente.f_raiz_info == 1 else 'is' }}</span>
+        {% elif cliente.f_raiz_papel == 'filial' %}<span class="gc-tag gc-raiz gc-raiz-f" title="{% if cliente.f_raiz_info %}Matriz: {{ cliente.f_raiz_info.numero }} - {{ cliente.f_raiz_info.nome }}{% else %}Matriz não cadastrada{% endif %}"><i class="fas fa-code-branch"></i> Filial{% if cliente.f_raiz_info %} de {{ cliente.f_raiz_info.numero or 'avulso' }}{% endif %}</span>{% endif %}
     </div>
 
     <div class="cli-grade">
