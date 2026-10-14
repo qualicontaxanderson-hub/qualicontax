@@ -1013,16 +1013,23 @@ def _home_destaques_payload():
         "WHERE ativo=1 AND validade IS NOT NULL "
         "AND validade BETWEEN CURDATE() AND CURDATE()+INTERVAL 30 DAY")
     prod = _hq1("SELECT COUNT(*) total FROM nfe_produtos_catalogo WHERE ativo=1")
-    semv = _hq1("SELECT COUNT(DISTINCT descricao, unidade) sem_vinc "
-                "FROM nfe_itens WHERE produto_catalogo_id IS NULL")
+    # 14/10/2026: este número varre os 6,8 milhões de itens (62 s, 1,6 GB do
+    # disco) e era refeito a cada 15 min — o maior leitor do banco. Muda
+    # devagar: no máximo de 6 em 6 horas (PAINEL_SEMV_SEG).
+    from utils.painel_cache import com_cache
+    semv = com_cache('painel_home_semv', int(os.getenv('PAINEL_SEMV_SEG', '21600')),
+                     lambda: _hq1("SELECT COUNT(DISTINCT descricao, unidade) sem_vinc "
+                                  "FROM nfe_itens WHERE produto_catalogo_id IS NULL"))
     memo = _hq1(
         "SELECT COUNT(*) ativas, "
         " SUM(YEAR(criado_em)=YEAR(CURDATE()) AND MONTH(criado_em)=MONTH(CURDATE())) aplicadas_mes, "
         " SUM(YEAR(criado_em)=YEAR(CURDATE()-INTERVAL 1 MONTH) "
         "     AND MONTH(criado_em)=MONTH(CURDATE()-INTERVAL 1 MONTH)) aplicadas_prev "
         "FROM nfe_produto_vinculo")
-    cli9 = _hq1("SELECT COUNT(DISTINCT cliente_id) cli FROM nfe_importacoes "
-                "WHERE importado_em>=CURDATE()-INTERVAL 8 DAY")
+    # 14/10/2026: percorre o índice inteiro (7 s, 117 MB) — de hora em hora basta.
+    cli9 = com_cache('painel_home_cli9', int(os.getenv('PAINEL_CLI9_SEG', '3600')),
+                     lambda: _hq1("SELECT COUNT(DISTINCT cliente_id) cli FROM nfe_importacoes "
+                                  "WHERE importado_em>=CURDATE()-INTERVAL 8 DAY"))
 
     # ---- séries (sparklines) ----
     dom = _hqn("SELECT DAY(data_emissao) d, SUM(tipo='entrada') ent, SUM(tipo='saida') sai "

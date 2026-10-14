@@ -83,6 +83,29 @@ def ler(chave):
 CHAVE_PAINEL_QROBO = 'painel_qrobo'
 
 
+def com_cache(chave, idade_max_seg, calcular):
+    """Valor guardado se tiver menos de ``idade_max_seg``; senão recalcula,
+    guarda e devolve. Para número de tela que muda devagar e custa caro
+    (14/10/2026: "produtos sem vínculo" relia 1,6 GB a cada 15 min). Se o
+    cálculo falhar (None), devolve o último valor bom, mesmo velho."""
+    antigo, idade = ler(chave)
+    if antigo and idade is not None and idade < idade_max_seg:
+        return antigo
+    novo = calcular()
+    # Vazio também é falha: uma contagem SEMPRE devolve uma linha; {} é a
+    # consulta cortada pelo teto de tempo. Guardar isso mostraria "0" por horas.
+    if not novo:
+        return antigo or novo
+    guardar(chave, novo)
+    return novo
+
+
+#: Painel do Q-Robô a cada 15 min (era a cada tick de 5): 113 MB lidos do
+#: disco por cálculo (14/10/2026). O "robô vivo" vem de robo_ultimo_contato,
+#: em tempo real — aqui é só total de saídas e última captura.
+QROBO_INTERVALO_SEG = max(60, int(os.getenv('PAINEL_QROBO_INTERVALO_SEG', '900')))
+
+
 def atualizar_painel_qrobo():
     """Total de saídas e última captura POR ROBÔ — para o cron, não para a tela.
 
@@ -110,6 +133,9 @@ def atualizar_painel_qrobo():
         time_zone='-03:00')
     cur = conn.cursor(buffered=True)
     try:
+        _, idade = ler(CHAVE_PAINEL_QROBO)
+        if idade is not None and idade < QROBO_INTERVALO_SEG:
+            return None                      # recente: este tick não recalcula
         cur.execute("SELECT GET_LOCK(%s, 0)", (CHAVE_PAINEL_QROBO,))
         if (cur.fetchone() or [0])[0] != 1:
             return None
