@@ -221,6 +221,16 @@
                     <input type="date" id="data_inicio_atividade" name="data_inicio_atividade" class="cf-ctrl"
                            value="{{ cliente.data_inicio_atividade if cliente else '' }}">
                 </div>
+                {# Tipo jurídico (14/10/2026): vem da busca do CNPJ e só a Receita muda.
+                   S/A tem acionistas e diretoria com mandato; Ltda, sócios e administrador. #}
+                <div class="cf-fg cf-s12">
+                    <label class="cf-lbl" for="natureza_juridica">Natureza jurídica <span class="cf-rf">Receita</span></label>
+                    <input type="hidden" id="natureza_codigo" name="natureza_codigo" value="{{ cliente.natureza_codigo if cliente and cliente.natureza_codigo else '' }}">
+                    <input type="text" id="natureza_juridica" name="natureza_juridica" class="cf-ctrl" readonly
+                           placeholder="Vem da busca do CNPJ (Buscar na Receita)"
+                           value="{{ cliente.natureza_juridica if cliente and cliente.natureza_juridica else '' }}">
+                    <p class="cf-hint" id="naturezaCod">{% if cliente and cliente.natureza_codigo %}Código {{ cliente.natureza_codigo[:3] }}-{{ cliente.natureza_codigo[3:] }} na tabela da Receita.{% else %}Clique em <b>Buscar na Receita</b> para preencher.{% endif %}</p>
+                </div>
             </div>
         </div>
 
@@ -1477,6 +1487,12 @@ function preencherDadosCNPJ(data) {
     }
 
     tentarPreencher('nome_razao_social_pj', data.razao_social, 'Razão Social');
+    if (data.natureza_juridica_codigo) {
+        document.getElementById('natureza_codigo').value = data.natureza_juridica_codigo;
+        tentarPreencher('natureza_juridica', data.natureza_juridica, 'Natureza jurídica');
+        var nc = String(data.natureza_juridica_codigo);
+        document.getElementById('naturezaCod').textContent = 'Código ' + nc.slice(0, 3) + '-' + nc.slice(3) + ' na tabela da Receita.';
+    }
     tentarPreencher('nome_fantasia', data.nome_fantasia, 'Nome Fantasia');
 
     if (data.porte) {

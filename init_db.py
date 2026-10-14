@@ -909,6 +909,22 @@ def _apply_migrations():
         _migrate("ALTER TABLE clientes ADD COLUMN contabilidade_anterior_id INT NULL, "
                  "ADD INDEX idx_clientes_contab_anterior (contabilidade_anterior_id)")
 
+    # 14/10/2026 (tipo jurídico, fase A): a NATUREZA JURÍDICA da Receita —
+    # código da tabela (2062 = Ltda, 2054 = S/A Fechada...) e a descrição.
+    # A busca do CNPJ já trazia e o formulário descartava. utils/natureza.py
+    # transforma o código em família (S/A, Ltda, individual...).
+    for _col_name, _col_def in [
+        ('natureza_codigo',   'CHAR(4) NULL'),
+        ('natureza_juridica', 'VARCHAR(120) NULL'),
+        ('natureza_em',       'DATETIME NULL'),
+    ]:
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clientes' "
+            "AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE clientes ADD COLUMN {_col_name} {_col_def}")
+
     # 14/10/2026 (sócios, passo 3): dados da PESSOA física — os que o contrato
     # social, a Junta e o gov.br pedem. Uma linha por cadastro PF (1:1 com
     # clientes), fora da tabela clientes para não pesar nas 316 PJ.

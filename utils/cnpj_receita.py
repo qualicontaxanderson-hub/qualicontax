@@ -83,6 +83,7 @@ def _normalizar_brasilapi(d):
         'situacao_cadastral': d.get('descricao_situacao_cadastral', '') or '',
         'porte': d.get('porte', '') or '',
         'natureza_juridica': d.get('natureza_juridica', '') or '',
+        'natureza_juridica_codigo': so_digitos(str(d.get('codigo_natureza_juridica') or ''))[:4],
         'data_inicio_atividade': d.get('data_inicio_atividade', '') or '',
         'inscricao_estadual': _ie_brasilapi(d),
         'cnae_fiscal': str(d.get('cnae_fiscal') or ''),
@@ -115,6 +116,9 @@ def _normalizar_receitaws(d):
     ativ = d.get('atividade_principal') or []
     ativ = ativ[0] if isinstance(ativ, list) and ativ else (ativ if isinstance(ativ, dict) else {})
     nat = re.sub(r'^\s*[\d.-]+\s*-\s*', '', str(d.get('natureza_juridica') or ''))
+    # ReceitaWS manda "206-2 - Sociedade Empresária Limitada": o código são os 4 dígitos
+    m = re.match(r'^\s*([\d.-]+)\s*-', str(d.get('natureza_juridica') or ''))
+    nat_cod = so_digitos(m.group(1))[:4] if m else ''
     cap = str(d.get('capital_social') or '')
     if re.match(r'^\d+\.\d+$', cap):
         cap = str(int(float(cap))) if float(cap).is_integer() else cap
@@ -127,6 +131,7 @@ def _normalizar_receitaws(d):
         'situacao_cadastral': d.get('situacao', '') or '',
         'porte': d.get('porte', '') or '',
         'natureza_juridica': nat,
+        'natureza_juridica_codigo': nat_cod,
         'data_inicio_atividade': _data_br_para_iso(d.get('abertura')),
         'inscricao_estadual': '',
         'cnae_fiscal': so_digitos(ativ.get('code', '')),

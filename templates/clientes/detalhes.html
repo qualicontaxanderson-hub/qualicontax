@@ -394,6 +394,11 @@
                             <dt>{{ 'Nome' if cliente.tipo_pessoa == 'PF' else 'Razão Social' }}</dt><dd>{{ cliente.nome_razao_social or '—' }}</dd>
                             <dt>Nome Fantasia</dt><dd>{{ cliente.nome_fantasia or '—' }}</dd>
                             <dt>{{ 'CPF' if cliente.tipo_pessoa == 'PF' else 'CNPJ' }}</dt><dd>{{ cliente.cpf_cnpj or '—' }}</dd>
+                            {% if cliente.tipo_pessoa == 'PJ' %}
+                            <dt>Natureza jurídica</dt><dd>
+                                {% if cliente.natureza_juridica %}<b>{{ natureza[0] }}</b> · {{ natureza[2] }} {{ cliente.natureza_juridica }}
+                                {% else %}— <small>(clique em Editar e em Buscar na Receita)</small>{% endif %}</dd>
+                            {% endif %}
                             <dt>Insc. Estadual</dt><dd>{{ cliente.inscricao_estadual or '—' }}</dd>
                             <dt>Insc. Municipal</dt><dd>{{ cliente.inscricao_municipal or '—' }}</dd>
                             <dt>Ramo</dt><dd>{% if ramos_atividade %}{{ ramos_atividade | map(attribute='nome') | join(', ') }}{% else %}—{% endif %}</dd>

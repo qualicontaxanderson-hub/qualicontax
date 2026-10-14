@@ -32,7 +32,7 @@ _HIST_LABELS = {
     'responsavel': 'Responsável', 'qualificacao': 'Qualificação',
     'data_entrada': 'Entrada na sociedade', 'data_saida': 'Saída da sociedade',
     'capital_valor': 'Capital na empresa', 'pro_labore': 'Pró-labore',
-    'contabilidade_anterior': 'Contabilidade anterior', 'contato': 'Contato', 'uf': 'UF',
+    'contabilidade_anterior': 'Contabilidade anterior', 'natureza_juridica': 'Natureza jurídica', 'contato': 'Contato', 'uf': 'UF',
     # dados da pessoa (PF)
     'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG',
     'estado_civil': 'Estado civil', 'regime_bens': 'Regime de bens', 'nacionalidade': 'Nacionalidade',
@@ -82,6 +82,7 @@ _HIST_VERBO = {
     'escrita.criou_contabilidade': 'cadastrou um escritório de contabilidade',
     'escrita.alterou_contabilidade': 'alterou um escritório de contabilidade',
     'escrita.alterou_origem_cliente': 'alterou a origem (contabilidade anterior)',
+    'escrita.alterou_natureza': 'atualizou a natureza jurídica (Receita)',
     'escrita.alterou_grupo': 'alterou um grupo',
     'escrita.alterou_grupo_cliente': 'trocou o grupo de empresas',
     'escrita.criou_ramo': 'criou um ramo de atividade',

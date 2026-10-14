@@ -11,7 +11,7 @@
          data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.email or '' }}"
          data-sit="{{ cliente.situacao }}" data-reg="{{ cliente.f_reg }}" data-segs="{{ cliente.f_segs }}"
          data-ramos="{{ cliente.f_ramos }}" data-grupos="{{ cliente.f_grupos }}" data-cert="{{ cliente.cert_nivel }}"
-         data-local="{{ cliente.f_local }}" data-origem="{{ origem }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
+         data-local="{{ cliente.f_local }}" data-origem="{{ origem }}" data-nat="{{ '' if pf else (cliente.f_nat_fam or '-') }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
     <header class="gc-head">
         {% if avulso %}<span class="gc-ava cli-ava cli-ava-av" title="Avulso ainda não tem número">AV</span>{% else %}<span class="gc-ava cli-ava {% if pf %}cli-ava-pf{% endif %} {% if (cliente.numero_cliente or '')|length > 3 %}cli-ava-4{% endif %}">{{ cliente.numero_cliente or '—' }}</span>{% endif %}
         <div class="gc-tit">
@@ -24,6 +24,7 @@
     <div class="gc-tags">
         {% if cliente.f_local %}<span class="gc-cid gc-cid-{{ cliente.f_cid_cor }}"><i class="fas fa-location-dot"></i> {{ cliente.f_local }}</span>{% endif %}
         {% if cliente.f_reg %}<span class="gc-tag gc-reg-{{ cliente.f_reg }}">{{ {'lucro_real': 'Lucro Real', 'lucro_presumido': 'Lucro Presumido', 'simples': 'Simples Nacional', 'mei': 'MEI', 'pf': 'Pessoa Física'}.get(cliente.f_reg, cliente.f_reg) }}</span>{% endif %}
+        {% if cliente.f_nat %}<span class="gc-tag gc-nat gc-nat-{{ cliente.f_nat_fam }}" title="{{ cliente.natureza_juridica or '' }}">{{ cliente.f_nat }}</span>{% endif %}
     </div>
 
     <div class="cli-grade">

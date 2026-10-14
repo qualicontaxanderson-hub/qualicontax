@@ -19,6 +19,7 @@ from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente
 from models.contabilidade import Contabilidade
+from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
                                  REGIMES_BENS, NIVEIS_GOVBR)
 from models.grupo_cliente import GrupoCliente
@@ -134,6 +135,22 @@ def _salvar_origem(cliente_id, form, antes_id=None):
     registrar('escrita.alterou_origem_cliente', 'cadastros', tabela='clientes', registro_id=cliente_id,
               antes={'contabilidade_anterior': _nome(antes_id)},
               depois={'contabilidade_anterior': _nome(novo_id)})
+
+
+def _salvar_natureza(cliente_id, form, antes=None):
+    """Natureza jurídica que a busca do CNPJ pôs no formulário (só leitura na
+    tela: quem manda nela é a Receita). Grava quando muda e registra."""
+    cod = ''.join(ch for ch in (form.get('natureza_codigo') or '') if ch.isdigit())[:4]
+    desc = ' '.join((form.get('natureza_juridica') or '').split())[:120]
+    if not cod:
+        return
+    antes = antes or {}
+    if cod == (antes.get('natureza_codigo') or '') and desc == (antes.get('natureza_juridica') or ''):
+        return
+    execute_query("UPDATE clientes SET natureza_codigo = %s, natureza_juridica = %s, natureza_em = NOW() WHERE id = %s",
+                  (cod, desc or None, cliente_id))
+    registrar('escrita.alterou_natureza', 'cadastros', tabela='clientes', registro_id=cliente_id,
+              antes={'natureza_juridica': antes.get('natureza_juridica')}, depois={'natureza_juridica': desc})
 
 
 def _msg_faltando(falta):
@@ -529,6 +546,9 @@ def _enfeitar_cartoes(lista):
         c['f_segs'] = ','.join(sorted(d['segs']))
         c['f_grupos'] = ','.join(sorted(rel_grupo.get(c['id'], ())))
         c['f_reg'] = 'pf' if c['tipo_pessoa'] == 'PF' else (c.get('regime_tributario') or '').lower()
+        # tipo jurídico (fase A, 14/10/2026): nome curto e família do código da Receita
+        c['f_nat'], c['f_nat_fam'] = (natureza_classificar(c.get('natureza_codigo'), c.get('natureza_juridica'))
+                                      if c['tipo_pessoa'] == 'PJ' else ('', ''))
         # Município com a MESMA cor da tela de Grupos (a cidade tem uma cor só)
         local = f"{_g_cidade_titulo(c['end_cidade'])}/{c.get('end_uf') or ''}" if c.get('end_cidade') else ''
         c['f_local'] = local.rstrip('/')
@@ -664,6 +684,7 @@ def index():
         stats = dict(stats, **_kpis_clientes(result['clientes']))
 
         return render_template('clientes/index.html',
+                             nat_familias=NAT_FAMILIAS,
                              clientes=result['clientes'],
                              page=result['page'],
                              total_pages=result['total_pages'],
@@ -876,6 +897,7 @@ def novo():
             if request.form.get('tipo_pessoa') == 'PJ':
                 _salvar_socios(cliente_id, _ler_socios(request.form) or [])
                 _salvar_origem(cliente_id, request.form)
+                _salvar_natureza(cliente_id, request.form)
             else:
                 _salvar_pessoa(cliente_id, request.form)
             
@@ -1047,6 +1069,8 @@ def detalhes(id):
                          qualificacoes_socio=QUALIFICACOES_SOCIO,
                          hoje_iso=date.today().isoformat(),
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
+                         natureza=(natureza_classificar(cliente.get('natureza_codigo'), cliente.get('natureza_juridica'))
+                                   + (codigo_formatado(cliente.get('natureza_codigo')),)),
                          contab_anterior=(Contabilidade.get(cliente['contabilidade_anterior_id'])
                                           if cliente.get('contabilidade_anterior_id') else None),
                          pessoa_rotulo=PessoaDados.rotulo,
@@ -1713,6 +1737,7 @@ def editar(id):
                 if request.form.get('tipo_pessoa') == 'PJ':
                     _salvar_socios(id, _ler_socios(request.form) or [])
                     _salvar_origem(id, request.form, cliente.get('contabilidade_anterior_id'))
+                    _salvar_natureza(id, request.form, cliente)
                 else:
                     _salvar_pessoa(id, request.form)
 
