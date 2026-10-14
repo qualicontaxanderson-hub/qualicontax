@@ -1,0 +1,103 @@
+{# Cartão de cliente — o MESMO em Clientes e Avulsos (14/10/2026).
+   avulso=True: sem número (AV), selo Avulso, faixa com desde/quem/arquivos
+   e o botão Converter no lugar do Excluir. #}
+{% macro cartao_cliente(cliente, avulso=False) %}
+{% set inativo = cliente.situacao != 'ATIVO' %}
+{% set pf = cliente.tipo_pessoa == 'PF' %}
+<article class="gc-card cli-card {% if inativo and not avulso %}cli-off{% endif %}{% if avulso %} cli-av{% endif %}"
+         data-open-url="{{ url_for('clientes.detalhes', id=cliente.id) }}"
+         data-id="{{ cliente.id }}" data-num="{{ cliente.numero_cliente or '' }}"
+         data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.email or '' }}"
+         data-sit="{{ cliente.situacao }}" data-reg="{{ cliente.f_reg }}" data-segs="{{ cliente.f_segs }}"
+         data-ramos="{{ cliente.f_ramos }}" data-grupos="{{ cliente.f_grupos }}" data-cert="{{ cliente.cert_nivel }}"
+         data-local="{{ cliente.f_local }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
+    <header class="gc-head">
+        {% if avulso %}<span class="gc-ava cli-ava cli-ava-av" title="Avulso ainda não tem número">AV</span>{% else %}<span class="gc-ava cli-ava {% if pf %}cli-ava-pf{% endif %} {% if (cliente.numero_cliente or '')|length > 3 %}cli-ava-4{% endif %}">{{ cliente.numero_cliente or '—' }}</span>{% endif %}
+        <div class="gc-tit">
+            <h3 title="{{ cliente.nome_razao_social }}">{{ cliente.nome_razao_social }}</h3>
+            <span class="cli-doc">{{ 'CPF' if pf else 'CNPJ' }} <span class="mono">{{ cliente.cpf_cnpj or '—' }}</span></span>
+        </div>
+        {% if avulso %}<span class="gc-sit av">Avulso</span>{% else %}<span class="gc-sit {{ 'on' if cliente.situacao == 'ATIVO' else 'off' }}">{{ cliente.situacao|capitalize }}</span>{% endif %}
+    </header>
+
+    <div class="gc-tags">
+        {% if cliente.f_local %}<span class="gc-cid gc-cid-{{ cliente.f_cid_cor }}"><i class="fas fa-location-dot"></i> {{ cliente.f_local }}</span>{% endif %}
+        {% if cliente.f_reg %}<span class="gc-tag gc-reg-{{ cliente.f_reg }}">{{ {'lucro_real': 'Lucro Real', 'lucro_presumido': 'Lucro Presumido', 'simples': 'Simples Nacional', 'mei': 'MEI', 'pf': 'Pessoa Física'}.get(cliente.f_reg, cliente.f_reg) }}</span>{% endif %}
+    </div>
+
+    <div class="cli-grade">
+        <div class="cli-campo"><span class="cli-rot">Insc. Estadual</span><b class="cli-val">{{ cliente.inscricao_estadual or '—' }}</b></div>
+        <div class="cli-campo"><span class="cli-rot">Insc. Municipal</span><b class="cli-val">{{ cliente.inscricao_municipal or '—' }}</b></div>
+        <div class="cli-campo"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</span></div>
+        <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val">{{ cliente.celular or cliente.telefone or '—' }}</b></div>
+    </div>
+
+    {% if cliente.f_grupo %}
+    <div class="cli-grupo" title="Grupo de empresas">
+        <span class="cli-grupo-ava">{{ cliente.f_grupo.sigla }}</span>
+        <span class="cli-grupo-txt">
+            <span class="cli-rot">Grupo</span>
+            <b>{{ cliente.f_grupo.nome }}</b>
+        </span>
+        <span class="cli-grupo-qtd">{{ cliente.f_grupo.qtd }} empresa{{ '' if cliente.f_grupo.qtd == 1 else 's' }}</span>
+    </div>
+    {% else %}
+    <div class="cli-grupo cli-grupo-sem"><i class="fas fa-layer-group"></i> Sem grupo de empresas</div>
+    {% endif %}
+
+    <div class="cli-ativ">
+        <span class="cli-rot">Atividades</span>
+        <div class="gc-tags">
+        {% if cliente.ramo_atividade_nome %}
+            {% for r in cliente.ramo_atividade_nome.split(', ') %}<span class="cli-ramo">{{ r }}</span>{% endfor %}
+        {% else %}
+            <span class="cli-ramo cli-ramo-falta"><i class="fas fa-circle-exclamation"></i> sem ramo</span>
+        {% endif %}
+        </div>
+    </div>
+
+    {% if avulso %}<div class="av-info">
+        {% if cliente.avulso_em %}<span title="Cadastrado como avulso em {{ cliente.avulso_em.strftime('%d/%m/%Y') }}"><i class="fas fa-hourglass-half"></i> desde <b>{{ cliente.avulso_em.strftime('%d/%m/%Y') }}</b>{% if cliente.f_dias is not none %} · há {{ cliente.f_dias }} dia{{ '' if cliente.f_dias == 1 else 's' }}{% endif %}</span>{% endif %}
+        {% if cliente.criado_por_nome %}<span title="Quem cadastrou"><i class="fas fa-user"></i> {{ cliente.criado_por_nome }}</span>{% endif %}
+        {% set d = cliente.docs or 0 %}<span title="Arquivos guardados no Dropbox"><i class="fas fa-folder-open"></i> <b>{{ d }}</b> arquivo{{ '' if d == 1 else 's' }}</span>
+    </div>{% endif %}
+
+    <footer class="cli-pe">
+        {% set n = cliente.cert_nivel %}
+        {% set dias = cliente.cert_dias %}
+        {% if n == 'ok' %}
+        <span class="cli-selo cli-selo-ok"><i class="fas fa-shield-halved"></i>
+            <span class="cli-selo-t"><b>Certificado válido</b><small>faltam {{ dias }} dias</small></span>
+            <span class="cli-selo-d"><small>vence em</small><b>{{ cliente.cert_validade.strftime('%d/%m/%Y') }}</b></span></span>
+        {% elif n == 'laranja' %}
+        <span class="cli-selo cli-selo-warn"><i class="fas fa-triangle-exclamation"></i>
+            <span class="cli-selo-t"><b>Vence em {{ dias }} dia{{ '' if dias == 1 else 's' }}</b><small>renovar o certificado</small></span>
+            <span class="cli-selo-d"><small>vence em</small><b>{{ cliente.cert_validade.strftime('%d/%m/%Y') }}</b></span></span>
+        {% elif n == 'vencido' %}
+        <span class="cli-selo cli-selo-bad"><i class="fas fa-circle-xmark"></i>
+            <span class="cli-selo-t"><b>Certificado vencido</b><small>há {{ -dias }} dia{{ '' if dias == -1 else 's' }}</small></span>
+            <span class="cli-selo-d"><small>venceu em</small><b>{{ cliente.cert_validade.strftime('%d/%m/%Y') }}</b></span></span>
+        {% else %}
+        <span class="cli-selo cli-selo-sem"><i class="fas fa-shield"></i>
+            <span class="cli-selo-t"><b>Sem certificado</b><small>nenhum A1 cadastrado</small></span></span>
+        {% endif %}
+        <span class="lst-c-act">
+            {# O cartão inteiro abre a FICHA; aqui ficam editar e excluir (no avulso:
+           converter em cliente e editar). #}
+        {% if avulso %}<button type="button" class="lst-act av-act-conv"
+                data-id="{{ cliente.id }}" data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj }}"
+                onclick="avConverter(this)" title="Converter em cliente"><i class="fas fa-arrow-right-arrow-left"></i></button>{% endif %}
+            <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="lst-act lst-act-edit" title="Editar cadastro">
+                <i class="fas fa-pen"></i>
+            </a>
+            {% if not avulso %}<form action="{{ url_for('clientes.delete', id=cliente.id) }}" method="POST"
+                  style="display:inline;" onsubmit="return confirmDelete(this);"
+                  data-name="{{ cliente.nome_razao_social | e }}">
+                <button type="submit" class="lst-act lst-act-del" title="Excluir cliente">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </form>{% endif %}
+            </span>
+    </footer>
+</article>
+{% endmacro %}

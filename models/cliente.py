@@ -66,7 +66,9 @@ class Cliente:
         rows = execute_query(
             f"""SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
                        c.email, c.telefone, c.celular, c.situacao, c.avulso_em,
+                       c.inscricao_estadual, c.inscricao_municipal, c.regime_tributario,
                        u.nome AS criado_por_nome,
+                       GROUP_CONCAT(DISTINCT g.nome ORDER BY g.nome SEPARATOR ', ') AS grupo_nome,
                        cert.cert_validade,
                        MAX(ender.cidade) AS end_cidade,
                        MAX(ender.estado) AS end_uf,
@@ -76,6 +78,8 @@ class Cliente:
                          WHERE d.cliente_id = c.id) AS docs
                   FROM clientes c
                   LEFT JOIN usuarios u ON u.id = c.criado_por
+                  LEFT JOIN cliente_grupo_relacao cgr ON cgr.cliente_id = c.id
+                  LEFT JOIN grupos_clientes g ON g.id = cgr.grupo_id
                   LEFT JOIN enderecos_clientes ender
                          ON ender.cliente_id = c.id AND ender.principal = 1
                   LEFT JOIN cliente_ramo_atividade_relacao crar
@@ -89,7 +93,8 @@ class Cliente:
                  WHERE {' AND '.join(cond)}
                  GROUP BY c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa,
                           c.email, c.telefone, c.celular, c.situacao,
-                          c.avulso_em, u.nome, cert.cert_validade
+                          c.avulso_em, c.inscricao_estadual, c.inscricao_municipal,
+                          c.regime_tributario, u.nome, cert.cert_validade
                  ORDER BY c.avulso_em DESC, c.nome_razao_social""",
             tuple(params), fetch=True) or []
         rows = filtrar_lista(rows)                # empresa reservada

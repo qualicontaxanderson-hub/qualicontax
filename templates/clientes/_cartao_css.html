@@ -1,0 +1,145 @@
+{# Cartão de cliente e fita de KPIs — fonte ÚNICA para Clientes e Avulsos
+   (14/10/2026). Mudou aqui, muda nas duas telas. #}
+<style>
+/* Fita de KPIs — flutua metade sobre o verde; clicar filtra (10/10/2026) */
+.cli-kpis { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:12px; margin-top:-14px;
+            position:relative; z-index:2; margin-bottom:18px; }
+.cli-kpi { min-width:0; display:flex; align-items:center; gap:12px; text-align:left; font:inherit; cursor:pointer;
+           background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px;
+           box-shadow:0 8px 22px rgba(16,120,70,.10); transition:border-color .15s, box-shadow .15s; }
+.cli-kpi:hover { border-color:#86efac; }
+.cli-kpi.on { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,.25), 0 8px 22px rgba(16,120,70,.10); }
+.cli-kpi-ico { width:40px; height:40px; border-radius:11px; flex-shrink:0;
+               display:flex; align-items:center; justify-content:center; font-size:16px; }
+.cli-kpi-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.cli-kpi-val { font-size:26px; font-weight:800; line-height:1; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.cli-kpi-val.cli-warn { color:#b45309; }
+.cli-kpi-val.cli-bad { color:#b91c1c; }
+@media (max-width:1100px) { .cli-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+
+.cli-kpi-lbl { font-size:11.5px; color:#7d968a; }
+
+/* ── Cartão: o MESMO da tela de Grupos (grupos/index.html) ── */
+.gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px; }
+.gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:18px 20px 16px;
+           display:flex; flex-direction:column; gap:12px; transition:border-color .15s, box-shadow .15s; min-width:0;
+           cursor:pointer; }
+.gc-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.gc-card:focus-visible { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.gc-head { display:flex; align-items:center; gap:12px; }
+.gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff;
+          display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; letter-spacing:.5px; flex-shrink:0; }
+.gc-tit { flex:1; min-width:0; }
+.gc-tit h3 { margin:0; font-size:15.5px; font-weight:800; color:#0f172a; letter-spacing:.2px;
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gc-sit { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; flex-shrink:0; }
+.gc-sit.on { background:#dcfce7; color:#166534; }
+.gc-sit.off { background:#f1f5f9; color:#64748b; }
+.gc-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.gc-tag { font-size:12px; font-weight:600; border:1px solid; border-radius:7px; padding:2px 9px; }
+.gc-reg-lucro_real      { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.gc-reg-lucro_presumido { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.gc-reg-simples         { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.gc-reg-mei             { background:#fefce8; color:#a16207; border-color:#fde68a; }
+.gc-reg-pf              { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+.gc-cid { font-size:12px; font-weight:600; border-radius:99px; padding:2px 10px 2px 8px; }
+.gc-cid i { font-size:10.5px; margin-right:2px; opacity:.8; }
+.gc-cid-0 { background:#e0f2fe; color:#0369a1; }
+.gc-cid-1 { background:#fce7f3; color:#be185d; }
+.gc-cid-2 { background:#ede9fe; color:#6d28d9; }
+.gc-cid-3 { background:#ccfbf1; color:#0f766e; }
+.gc-cid-4 { background:#ffedd5; color:#c2410c; }
+.gc-cid-5 { background:#e0e7ff; color:#4338ca; }
+.gc-cid-6 { background:#fef3c7; color:#b45309; }
+.gc-cid-7 { background:#dcfce7; color:#15803d; }
+.gc-emp { list-style:none; margin:0; padding:0; border-top:1px solid #eef2f0; }
+.gc-emp li { display:flex; align-items:center; gap:10px; padding:7px 4px; color:#334155; font-size:13.5px;
+             border-bottom:1px dashed #eef2f0; }
+.gc-emp li:last-child { border-bottom:none; }
+.gc-nada { text-align:center; color:#94a3b8; padding:40px 0; font-size:14px; }
+.gc-nada i { font-size:30px; opacity:.4; display:block; margin-bottom:10px; }
+.gc-nada[hidden] { display:none; }
+
+/* Só do cartão de cliente — compacto e cheio (10/10/2026) */
+.cli-card { padding:16px 18px 14px; gap:10px; }
+.cli-card.cf-fora { display:none; }
+.cli-card.cli-off { opacity:.65; }
+.cli-ava { font-size:14px; }
+.cli-ava-4 { font-size:12px; letter-spacing:0; }
+.cli-ava-pf { background:linear-gradient(135deg,#8b5cf6,#5b21b6); }
+.cli-card .gc-tit h3 { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+                       line-height:1.25; font-size:14.5px; }
+.cli-doc { font-size:12px; color:#64748b; }
+.cli-doc .mono { font-family:ui-monospace, Consolas, monospace; color:#0f3d2e; font-weight:800; }
+.cli-rot { display:block; font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+           color:#7d968a; line-height:1.2; }
+
+/* IE | IM e E-mail | Celular em duas colunas, num bloco só */
+.cli-grade { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; padding:10px 12px;
+             background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
+.cli-campo { min-width:0; }
+.cli-val { display:block; margin-top:2px; font-size:13px; color:#0f172a; white-space:nowrap; overflow:hidden;
+           text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+b.cli-val { font-weight:800; color:#0f3d2e; }
+span.cli-val { color:#334155; }
+
+/* Grupo: a mesma "cara" do cartão de Grupos, em miniatura */
+.cli-grupo { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid #d7ebe0;
+             border-radius:11px; background:linear-gradient(90deg,#ecfdf5,#ffffff); }
+.cli-grupo-ava { width:30px; height:30px; border-radius:9px; flex-shrink:0; display:flex; align-items:center;
+                 justify-content:center; font-size:11.5px; font-weight:800; color:#fff;
+                 background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.cli-grupo-txt { flex:1; min-width:0; }
+.cli-grupo-txt b { display:block; font-size:13px; font-weight:800; color:#0f3d2e; white-space:nowrap;
+                   overflow:hidden; text-overflow:ellipsis; }
+.cli-grupo-qtd { font-size:11.5px; font-weight:800; color:#15803d; background:#dcfce7; border-radius:99px;
+                 padding:2px 9px; white-space:nowrap; }
+.cli-grupo-sem { justify-content:flex-start; gap:8px; background:#fafafa; border-style:dashed; border-color:#e2e8f0;
+                 color:#94a3b8; font-size:12.5px; font-weight:600; padding:9px 12px; }
+
+.cli-ativ { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1; align-content:flex-start; }
+.cli-ativ .cli-rot { flex:none; }
+.cli-ramo { font-size:12px; font-weight:700; color:#15803d; background:#f0fdf4; border:1px solid #bbf7d0;
+            border-radius:99px; padding:2px 10px; }
+.cli-ramo-falta { color:#b91c1c; background:#fef2f2; border-color:#fecaca; }
+
+/* Certificado: selo colorido no rodapé */
+.cli-pe { display:flex; align-items:center; justify-content:space-between; gap:10px;
+          border-top:1px solid #eef2f0; padding-top:10px; }
+.cli-selo { display:flex; flex:1; align-items:center; gap:10px; padding:6px 12px 6px 11px; border-radius:10px;
+            border:1px solid; min-width:0; }
+.cli-selo-t { flex:1; min-width:0; }
+.cli-selo-t b, .cli-selo-t small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cli-selo-d { text-align:right; flex-shrink:0; padding-left:10px; border-left:1px solid currentColor;
+              border-left-color:color-mix(in srgb, currentColor 25%, transparent); }
+.cli-selo .cli-selo-d small { font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; opacity:.75; }
+.cli-selo .cli-selo-d b { font-size:15.5px; line-height:1.1; font-variant-numeric:tabular-nums; letter-spacing:.2px; }
+.cli-selo > i { font-size:16px; }
+.cli-selo b { display:block; font-size:12.5px; font-weight:800; line-height:1.15; }
+.cli-selo small { display:block; font-size:11px; opacity:.85; font-variant-numeric:tabular-nums; }
+.cli-selo-ok   { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
+.cli-selo-warn { background:#fffbeb; border-color:#fcd34d; color:#b45309; }
+.cli-selo-bad  { background:#fef2f2; border-color:#fca5a5; color:#b91c1c; }
+.cli-selo-sem  { background:#f8fafc; border-color:#e2e8f0; color:#94a3b8; }
+.cli-sortchip i { font-size:11px; margin-right:2px; }
+
+/* Avulso: o que muda é o que falta nele (número) e o que só ele tem */
+.cli-ava-av { background:linear-gradient(135deg,#f59e0b,#b45309); font-size:13px; }
+.gc-sit.av { background:#fef3c7; color:#92400e; }
+.av-info { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:#64748b; padding:8px 12px;
+           background:#fffbeb; border:1px dashed #fcd34d; border-radius:11px; }
+.av-info span { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.av-info i { color:#d97706; font-size:11.5px; }
+.av-info b { color:#92400e; font-weight:800; }
+.av-act-conv { color:#15803d; background:#f0fdf4; border-color:#bbf7d0; }
+.av-act-conv:hover { background:#dcfce7; border-color:#86efac; }
+@media (max-width:720px) { .gc-grid { grid-template-columns:1fr; } }
+@media (max-width:600px) {
+    /* KPIs: 3 compactos em linha (ícone/número/label empilhados) — sem cortar label. */
+    .cli-kpis { gap:8px; }
+    .cli-kpi { min-width:0; padding:11px 10px; flex-direction:column;
+               align-items:flex-start; gap:7px; }
+    .cli-kpi-val { font-size:22px; }
+    .cli-kpi-lbl { font-size:10.5px; line-height:1.2; }
+}
+</style>
