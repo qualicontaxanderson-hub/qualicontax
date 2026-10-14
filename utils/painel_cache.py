@@ -235,6 +235,9 @@ def atualizar_home_fiscal(forcar=False):
 
 
 CHAVE_STATUS_SEFAZ = 'painel_status_sefaz'
+#: Status SEFAZ a cada 10 min (era cada tick de 5): mais de 2 min de banco por
+#: cálculo (14/10/2026). Os botões (captura, Ciência) a tela lê ao vivo.
+STATUS_INTERVALO_SEG = max(60, int(os.getenv('PAINEL_STATUS_INTERVALO_SEG', '600')))
 
 
 def atualizar_status_sefaz():
@@ -261,6 +264,9 @@ def atualizar_status_sefaz():
         time_zone='-03:00')
     cur = conn.cursor(buffered=True)
     try:
+        _, idade = ler(CHAVE_STATUS_SEFAZ)
+        if idade is not None and idade < STATUS_INTERVALO_SEG:
+            return None                      # recente: este tick não recalcula
         cur.execute("SELECT GET_LOCK(%s, 0)", (CHAVE_STATUS_SEFAZ,))
         if (cur.fetchone() or [0])[0] != 1:
             logger.info('[painel] status sefaz: outro processo calculando; pulando.')

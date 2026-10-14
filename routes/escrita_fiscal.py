@@ -1117,9 +1117,11 @@ def _home_destaques_payload():
     # ("#515 PETROGOIAS"); reticências ficam por conta do CSS (300px de card).
     # ---- 7) MAIS ENTRADAS (top 15 empresas) ----
     def _c7():
-        rows = _hqn("SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
+        # Ranking de TODOS os tempos: muda devagar — no máximo de 6 em 6 h (14/10/2026).
+        rows = com_cache('painel_home_top_entradas', int(os.getenv('PAINEL_RANKING_SEG', '21600')), lambda: _hqn(
+                    "SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
                     "FROM nfe_importacoes ni JOIN clientes c ON c.id=ni.cliente_id "
-                    "WHERE ni.tipo='entrada' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 15")
+                    "WHERE ni.tipo='entrada' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 15"))
         if not rows:
             return None
         return {'id': 'top_entradas', 'icone': 'fa-arrow-down-wide-short',
@@ -1131,9 +1133,11 @@ def _home_destaques_payload():
 
     # ---- 8) MAIS SAÍDAS (top 15 empresas) ----
     def _c8():
-        rows = _hqn("SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
+        # 19,9 s e 9 milhões de páginas por cálculo (14/10/2026): 6 em 6 h.
+        rows = com_cache('painel_home_top_saidas', int(os.getenv('PAINEL_RANKING_SEG', '21600')), lambda: _hqn(
+                    "SELECT c.numero_cliente num, c.nome_razao_social nome, COUNT(*) n "
                     "FROM nfe_importacoes ni JOIN clientes c ON c.id=ni.cliente_id "
-                    "WHERE ni.tipo='saida' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 15")
+                    "WHERE ni.tipo='saida' GROUP BY ni.cliente_id ORDER BY n DESC LIMIT 15"))
         if not rows:
             return None
         return {'id': 'top_saidas', 'icone': 'fa-arrow-up-wide-short',
@@ -1145,9 +1149,10 @@ def _home_destaques_payload():
 
     # ---- 9) FORNECEDORES FREQUENTES (top 15 emitentes de entrada) ----
     def _c9():
-        rows = _hqn("SELECT MAX(emit_nome) nome, COUNT(*) n FROM nfe_importacoes "
+        rows = com_cache('painel_home_top_fornecedores', int(os.getenv('PAINEL_RANKING_SEG', '21600')), lambda: _hqn(
+                    "SELECT MAX(emit_nome) nome, COUNT(*) n FROM nfe_importacoes "
                     "WHERE tipo='entrada' AND COALESCE(emit_cnpj,'')<>'' "
-                    "GROUP BY emit_cnpj ORDER BY n DESC LIMIT 15")
+                    "GROUP BY emit_cnpj ORDER BY n DESC LIMIT 15"))
         if not rows:
             return None
         return {'id': 'top_fornecedores', 'icone': 'fa-truck-ramp-box',
@@ -1925,7 +1930,11 @@ def _status_sefaz_dados():
         "  SUM(COALESCE(n.incompleta,0)=1 "
         "      AND DATEDIFF(CURDATE(), n.data_emissao) <= 10) AS resgataveis "
         "FROM nfe_importacoes n "
-        "WHERE n.origem='SEFAZ' AND n.importado_em >= CURDATE() - INTERVAL 29 DAY "
+        # tipo IN (...) não muda o resultado e decide o plano: idx_painel começa
+        # por tipo — sem ele o MySQL varria o índice inteiro (3,2 mi, 111 MB a
+        # cada 5 min, medido em 14/10/2026); com ele vai direto às notas SEFAZ.
+        "WHERE n.tipo IN ('entrada','saida') AND n.origem='SEFAZ' "
+        "  AND n.importado_em >= CURDATE() - INTERVAL 29 DAY "
         "GROUP BY dia, n.cliente_id, servico "
         "UNION ALL "
         "SELECT DATE(t.importado_em), t.cliente_id, 'cte', COUNT(*), 0, COUNT(*), 0 "
