@@ -78,6 +78,10 @@
 .cli-grade { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; padding:10px 12px;
              background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
 .cli-campo { min-width:0; }
+/* E-mail na linha inteira e sem cortar (14/10/2026): o endereço é para ler
+   e copiar; se for maior que o cartão, quebra em vez de virar reticências. */
+.cli-campo-email { grid-column:1 / -1; }
+.cli-campo-email .cli-val { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
 .cli-val { display:block; margin-top:2px; font-size:13px; color:#0f172a; white-space:nowrap; overflow:hidden;
            text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
 b.cli-val { font-weight:800; color:#0f3d2e; }

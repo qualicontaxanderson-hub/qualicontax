@@ -28,7 +28,7 @@
     <div class="cli-grade">
         <div class="cli-campo"><span class="cli-rot">Insc. Estadual</span><b class="cli-val">{{ cliente.inscricao_estadual or '—' }}</b></div>
         <div class="cli-campo"><span class="cli-rot">Insc. Municipal</span><b class="cli-val">{{ cliente.inscricao_municipal or '—' }}</b></div>
-        <div class="cli-campo"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</span></div>
+        <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</span></div>
         <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val">{{ cliente.celular or cliente.telefone or '—' }}</b></div>
     </div>
 
