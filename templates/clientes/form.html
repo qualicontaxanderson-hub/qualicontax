@@ -902,7 +902,7 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .mk-cont.vazio { border-color:#fca5a5; background:#fef2f2; }
 /* sócios vinculados: uma linha por sócio (no celular vira cartão) */
 .mk-soc { display:flex; flex-direction:column; border-top:1px solid #e3ece7; }
-.mk-soc-row { display:grid; grid-template-columns:minmax(0,1fr) 110px 110px 130px 130px 110px 40px; gap:10px; align-items:center;
+.mk-soc-row { display:grid; grid-template-columns:minmax(0,1fr) 110px 110px 150px 150px 110px 40px; gap:10px; align-items:center;
               padding:9px 8px; border-bottom:1px dashed #eef2f0; font-size:13.5px; }
 .mk-soc-row.mk-novo { background:#f7fdf9; }
 .mk-soc-head { font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:#7d968a; font-weight:700; padding:6px 8px; border-bottom:1px solid #e3ece7; }
@@ -911,7 +911,13 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .mk-rad { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; cursor:pointer; }
 .mk-rad input { accent-color:#16a34a; }
 .mk-val { display:flex; align-items:center; gap:5px; font-size:12px; color:#64748b; min-width:0; }
-.mk-val .cf-ctrl { height:34px; text-align:right; min-width:0; flex:1 1 0; width:auto; }
+.mk-money { position:relative; display:block; flex:1 1 0; min-width:0; }
+.mk-money i { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-style:normal;
+              font-size:12px; font-weight:600; color:#94a3b8; pointer-events:none; }
+.mk-money .cf-ctrl { height:34px; padding-left:34px; text-align:right; font-variant-numeric:tabular-nums; }
+.mk-money .cf-ctrl::placeholder { color:#cbd5e1; }
+.mk-money .cf-ctrl.mk-erro { border-color:#f87171; box-shadow:0 0 0 3px rgba(248,113,113,.15); }
+.mk-pct .cf-ctrl { font-variant-numeric:tabular-nums; }
 .mk-val-lbl { display:none; }
 .mk-soc-vazio { padding:14px 8px; font-size:13px; color:#b42318; }
 @media (max-width:720px) {
@@ -2135,6 +2141,15 @@ function desenharSocios() {
         });
         box.querySelectorAll('.mk-val input').forEach(function (inp) {
             inp.addEventListener('input', function () {
+                inp.classList.remove('mk-erro');
+                SOCIOS[+inp.dataset.i][inp.dataset.k] = inp.value; gravarSociosJson();
+            });
+            // ao sair do campo: 4900 -> 4.900,00 (valor que não é número fica vermelho)
+            inp.addEventListener('blur', function () {
+                var n = lerValorBR(inp.value);
+                if (n === null) return;
+                if (isNaN(n)) { inp.classList.add('mk-erro'); return; }
+                inp.value = valorBR(n.toFixed(2));
                 SOCIOS[+inp.dataset.i][inp.dataset.k] = inp.value; gravarSociosJson();
             });
         });
@@ -2165,10 +2180,19 @@ function valorBR(v) {
     }
     return String(v);
 }
+// '4900' / '4.900' / '4900,5' / 'R$ 4.900,00' -> 4900.5; vazio -> null; lixo -> NaN
+function lerValorBR(t) {
+    t = String(t || '').replace(/R\$/g, '').replace(/\s/g, '');
+    if (!t) return null;
+    if (t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+    var n = /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+    return n;
+}
 function campoValor(s, i, k, cls, rotulo) {
-    return '<span class="mk-val ' + cls + '"><small class="mk-val-lbl">' + rotulo + '</small><span>R$</span>'
-         + '<input class="cf-ctrl" inputmode="decimal" placeholder="—" title="' + rotulo + ' (opcional)" data-i="' + i
-         + '" data-k="' + k + '" value="' + qEsc(valorBR(s[k])) + '"></span>';
+    return '<label class="mk-val ' + cls + '"><small class="mk-val-lbl">' + rotulo + '</small>'
+         + '<span class="mk-money"><i>R$</i><input class="cf-ctrl" inputmode="decimal" placeholder="0,00" title="'
+         + rotulo + ' (opcional)" data-i="' + i + '" data-k="' + k + '" value="' + qEsc(valorBR(s[k])) + '"></span></label>';
 }
 function desenharTotal() {
     var t = totalSocios();
