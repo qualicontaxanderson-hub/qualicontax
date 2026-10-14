@@ -223,6 +223,71 @@
             </div>
         </div>
 
+        <!-- ── CARD 2b: Dados pessoais (PF) ──────────────────────────────── -->
+        {# Sócios, passo 3 (14/10/2026): o que o contrato social, a Junta e o
+           gov.br pedem da pessoa. Nada obrigatório — completa-se quando a
+           equipe tiver o documento. Grava em clientes_pf_dados. #}
+        {% set ps = pessoa or {} %}
+        <div class="cf-card cf-after-tipo pf-only">
+            <p class="cf-seclabel">Dados pessoais <span class="cf-seclabel-note">os que o contrato social e a Junta pedem · pode completar depois</span></p>
+            <div class="cf-g12">
+                <div class="cf-fg cf-s3">
+                    <label class="cf-lbl" for="pf_nascimento">Data de nascimento</label>
+                    <input type="date" id="pf_nascimento" name="pf_nascimento" class="cf-ctrl" max="{{ hoje_iso }}"
+                           value="{{ ps.data_nascimento.isoformat() if ps.data_nascimento else '' }}">
+                </div>
+                <div class="cf-fg cf-s3">
+                    <label class="cf-lbl" for="pf_rg">RG</label>
+                    <input type="text" id="pf_rg" name="pf_rg" class="cf-ctrl" maxlength="20"
+                           placeholder="Número do RG" value="{{ ps.rg or '' }}">
+                </div>
+                <div class="cf-fg cf-s3">
+                    <label class="cf-lbl" for="pf_rg_orgao">Órgão emissor / UF</label>
+                    <input type="text" id="pf_rg_orgao" name="pf_rg_orgao" class="cf-ctrl" maxlength="20"
+                           placeholder="Ex.: SSP/SP" value="{{ ps.rg_orgao or '' }}">
+                </div>
+                <div class="cf-fg cf-s3">
+                    <label class="cf-lbl" for="pf_nivel_govbr">Conta gov.br</label>
+                    <select id="pf_nivel_govbr" name="pf_nivel_govbr" class="cf-ctrl">
+                        <option value="">Não sei</option>
+                        {% for v, r in NIVEIS_GOVBR %}<option value="{{ v }}" {% if ps.nivel_govbr == v %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="pf_estado_civil">Estado civil</label>
+                    <select id="pf_estado_civil" name="pf_estado_civil" class="cf-ctrl" onchange="toggleRegimeBens()">
+                        <option value="">Selecione…</option>
+                        {% for v, r in ESTADOS_CIVIS %}<option value="{{ v }}" {% if ps.estado_civil == v %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="cf-fg cf-s4" id="regimeBensWrap">
+                    <label class="cf-lbl" for="pf_regime_bens">Regime de bens</label>
+                    <select id="pf_regime_bens" name="pf_regime_bens" class="cf-ctrl">
+                        <option value="">Selecione…</option>
+                        {% for v, r in REGIMES_BENS %}<option value="{{ v }}" {% if ps.regime_bens == v %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="pf_nacionalidade">Nacionalidade</label>
+                    <input type="text" id="pf_nacionalidade" name="pf_nacionalidade" class="cf-ctrl" maxlength="40"
+                           placeholder="Ex.: Brasileira" value="{{ ps.nacionalidade or '' }}">
+                </div>
+
+                <div class="cf-fg cf-s4">
+                    <label class="cf-lbl" for="pf_profissao">Profissão</label>
+                    <input type="text" id="pf_profissao" name="pf_profissao" class="cf-ctrl" maxlength="80"
+                           placeholder="Ex.: Empresário" value="{{ ps.profissao or '' }}">
+                </div>
+                <div class="cf-fg cf-s8">
+                    <label class="cf-lbl" for="pf_nome_mae">Nome da mãe</label>
+                    <input type="text" id="pf_nome_mae" name="pf_nome_mae" class="cf-ctrl" maxlength="255"
+                           placeholder="Nome completo da mãe" value="{{ ps.nome_mae or '' }}">
+                </div>
+            </div>
+            <p class="cf-hint">O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
+        </div>
+
         <!-- ── CARD 3: Grupo e contador (PJ e PF) ─────────────────────────── -->
         {# GRUPO, CONTADOR, E-MAIL, CELULAR, RAMO e — na PJ — SÓCIOS obrigatórios
            (07/10/2026) para todo cadastro: cliente e avulso, novo e edição. O
@@ -837,7 +902,7 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .mk-cont.vazio { border-color:#fca5a5; background:#fef2f2; }
 /* sócios vinculados: uma linha por sócio (no celular vira cartão) */
 .mk-soc { display:flex; flex-direction:column; border-top:1px solid #e3ece7; }
-.mk-soc-row { display:grid; grid-template-columns:minmax(0,1fr) 120px 150px 120px 40px; gap:10px; align-items:center;
+.mk-soc-row { display:grid; grid-template-columns:minmax(0,1fr) 110px 110px 130px 130px 110px 40px; gap:10px; align-items:center;
               padding:9px 8px; border-bottom:1px dashed #eef2f0; font-size:13.5px; }
 .mk-soc-row.mk-novo { background:#f7fdf9; }
 .mk-soc-head { font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:#7d968a; font-weight:700; padding:6px 8px; border-bottom:1px solid #e3ece7; }
@@ -845,13 +910,21 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .mk-pct { display:flex; align-items:center; gap:6px; } .mk-pct .cf-ctrl { height:34px; text-align:right; }
 .mk-rad { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; cursor:pointer; }
 .mk-rad input { accent-color:#16a34a; }
+.mk-val { display:flex; align-items:center; gap:5px; font-size:12px; color:#64748b; min-width:0; }
+.mk-val .cf-ctrl { height:34px; text-align:right; min-width:0; flex:1 1 0; width:auto; }
+.mk-val-lbl { display:none; }
 .mk-soc-vazio { padding:14px 8px; font-size:13px; color:#b42318; }
 @media (max-width:720px) {
     .mk-sug { flex-wrap:wrap; }
     .mk-qsa-row { flex-wrap:wrap; }
     .mk-qsa-t { flex-basis:calc(100% - 50px); }
     .mk-soc-head { display:none; }
-    .mk-soc-row { grid-template-columns:1fr auto; grid-template-areas:"nome x" "tipo tipo" "pct resp"; gap:8px; }
+    .mk-soc-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:8px;
+                  grid-template-areas:"nome nome x" "tipo tipo tipo" "pct resp resp" "cap pl pl"; }
+    .mk-soc-row .mk-cap { grid-area:cap; }
+    .mk-soc-row .mk-pl { grid-area:pl; }
+    .mk-val { flex-wrap:wrap; }
+    .mk-val-lbl { display:block; flex-basis:100%; }
     .mk-soc-row .mk-soc-nome { grid-area:nome; white-space:normal; }
     .mk-soc-row .mk-soc-tipo { grid-area:tipo; }
     .mk-soc-row .mk-pct { grid-area:pct; }
@@ -958,7 +1031,19 @@ function toggleTipoFields() {
     if (pjCnpj) pjCnpj.required = (tipo === 'PJ');
     if (typeof sugerirNumeroPF === 'function') sugerirNumeroPF();
     filtrarRamos(tipo);
+    toggleRegimeBens();
     atualizarResumo();
+}
+
+// Regime de bens só para casado(a) e união estável; escondido, vai vazio.
+var COM_REGIME = {{ COM_REGIME|list|tojson }};
+function toggleRegimeBens() {
+    var civil = document.getElementById('pf_estado_civil');
+    var wrap = document.getElementById('regimeBensWrap');
+    if (!civil || !wrap) return;
+    var mostra = COM_REGIME.indexOf(civil.value) >= 0;
+    wrap.style.display = mostra ? '' : 'none';
+    if (!mostra) document.getElementById('pf_regime_bens').value = '';
 }
 
 // Ramo é de PF ou de PJ e, na PJ, fica dentro de um segmento (10/10/2026).
@@ -2012,7 +2097,8 @@ function gravarSociosJson() {
     document.getElementById('socios_json').value = JSON.stringify(SOCIOS.map(function (s) {
         dadosReceita(s);
         return {id: s.id, pct: String(s.pct == null ? '' : s.pct), resp: !!s.resp,
-                qual: s.qual || '', entrada: s.entrada || ''};
+                qual: s.qual || '', entrada: s.entrada || '',
+                capital: s.capital == null ? '' : String(s.capital), pl: s.pl == null ? '' : String(s.pl)};
     }));
 }
 function tipoSocio(s) {
@@ -2025,7 +2111,7 @@ function desenharSocios() {
         box.innerHTML = '<div class="mk-soc-vazio"><i class="fas fa-circle-exclamation"></i> Nenhum sócio vinculado. '
             + 'Toda empresa precisa de pelo menos um.</div>';
     } else {
-        box.innerHTML = '<div class="mk-soc-row mk-soc-head"><span>Sócio</span><span>Tipo</span><span>Participação</span><span>Responsável</span><span></span></div>'
+        box.innerHTML = '<div class="mk-soc-row mk-soc-head"><span>Sócio</span><span>Tipo</span><span>Participação</span><span>Capital</span><span>Pró-labore/mês</span><span>Responsável</span><span></span></div>'
             + SOCIOS.map(function (s, i) {
                 dadosReceita(s);
                 var sub = [s.qual || '', s.entrada ? 'desde ' + dataBR(s.entrada) : ''].filter(Boolean).join(' · ');
@@ -2036,6 +2122,8 @@ function desenharSocios() {
                     + '<span class="mk-soc-tipo">' + tipoSocio(s) + '</span>'
                     + '<span class="mk-pct"><input class="cf-ctrl" inputmode="decimal" placeholder="0,00" data-i="' + i + '" value="'
                     + qEsc(s.pct == null ? '' : String(s.pct).replace('.', ',')) + '"><span>%</span></span>'
+                    + campoValor(s, i, 'capital', 'mk-cap', 'Capital na empresa')
+                    + campoValor(s, i, 'pl', 'mk-pl', 'Pró-labore por mês')
                     + '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '') + '> responsável</label>'
                     + '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio (ao salvar, fica em Ex-sócios com saída hoje)"><i class="fas fa-times"></i></button>'
                     + '</div>';
@@ -2043,6 +2131,11 @@ function desenharSocios() {
         box.querySelectorAll('.mk-pct input').forEach(function (inp) {
             inp.addEventListener('input', function () {
                 SOCIOS[+inp.dataset.i].pct = inp.value; desenharTotal(); gravarSociosJson(); atualizarResumo();
+            });
+        });
+        box.querySelectorAll('.mk-val input').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                SOCIOS[+inp.dataset.i][inp.dataset.k] = inp.value; gravarSociosJson();
             });
         });
         box.querySelectorAll('input[name="socioResp"]').forEach(function (r) {
@@ -2061,6 +2154,21 @@ function desenharSocios() {
     desenharTotal();
     gravarSociosJson();
     atualizarResumo();
+}
+// Capital e pró-labore do sócio (14/10/2026): opcionais, em reais. O que vem
+// do banco ('10000.00') aparece como '10.000,00'; o digitado vai como está
+// (o servidor entende 10.000,00, 10000,00 e 10000.00).
+function valorBR(v) {
+    if (v == null || v === '') return '';
+    if (/^\d+(\.\d+)?$/.test(String(v))) {
+        return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    return String(v);
+}
+function campoValor(s, i, k, cls, rotulo) {
+    return '<span class="mk-val ' + cls + '"><small class="mk-val-lbl">' + rotulo + '</small><span>R$</span>'
+         + '<input class="cf-ctrl" inputmode="decimal" placeholder="—" title="' + rotulo + ' (opcional)" data-i="' + i
+         + '" data-k="' + k + '" value="' + qEsc(valorBR(s[k])) + '"></span>';
 }
 function desenharTotal() {
     var t = totalSocios();

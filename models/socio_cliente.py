@@ -25,7 +25,7 @@ class SocioCliente:
                    COALESCE(NULLIF(pf.email, ''), s.email) AS email,
                    COALESCE(NULLIF(pf.celular, ''), NULLIF(pf.telefone, ''), s.telefone) AS telefone,
                    s.percentual_participacao, s.responsavel, s.ativo, s.criado_em,
-                   s.qualificacao, s.data_entrada, s.data_saida
+                   s.qualificacao, s.data_entrada, s.data_saida, s.capital_valor, s.pro_labore
             FROM socios_clientes s
             LEFT JOIN clientes pf ON pf.id = s.pf_cliente_id
             WHERE s.cliente_id = %s AND s.ativo = %s
@@ -46,7 +46,7 @@ class SocioCliente:
         """Busca sócio por ID."""
         query = """
             SELECT id, cliente_id, pf_cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo, criado_em,
-                   qualificacao, data_entrada, data_saida
+                   qualificacao, data_entrada, data_saida, capital_valor, pro_labore
             FROM socios_clientes
             WHERE id = %s
         """
@@ -65,7 +65,7 @@ class SocioCliente:
 
     @staticmethod
     def create(cliente_id, nome, cpf, email=None, telefone=None, percentual_participacao=0, responsavel=False, ativo=True,
-               pf_cliente_id=None, qualificacao=None, data_entrada=None):
+               pf_cliente_id=None, qualificacao=None, data_entrada=None, capital_valor=None, pro_labore=None):
         """Cria novo sócio (vinculado ao cadastro PF via pf_cliente_id)."""
         if responsavel:
             SocioCliente.set_responsavel(cliente_id, None)
@@ -73,9 +73,9 @@ class SocioCliente:
         query = """
             INSERT INTO socios_clientes (
                 cliente_id, pf_cliente_id, nome, cpf, email, telefone, percentual_participacao, responsavel, ativo,
-                qualificacao, data_entrada
+                qualificacao, data_entrada, capital_valor, pro_labore
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             cliente_id,
@@ -88,7 +88,9 @@ class SocioCliente:
             responsavel,
             ativo,
             (qualificacao or '').strip()[:80] or None,
-            data_entrada or None
+            data_entrada or None,
+            capital_valor,
+            pro_labore
         )
         return execute_query(query, params)
 
@@ -109,6 +111,14 @@ class SocioCliente:
                       data_entrada = COALESCE(%s, data_entrada)
                 WHERE id = %s""",
             ((qualificacao or '').strip()[:80] or None, data_entrada or None, socio_id))
+
+    @staticmethod
+    def atualizar_valores(socio_id, capital_valor, pro_labore):
+        """Capital do sócio na empresa e pró-labore mensal (vazio grava NULL:
+        a tela sempre manda os dois, então apagar o campo apaga o valor)."""
+        return execute_query(
+            "UPDATE socios_clientes SET capital_valor = %s, pro_labore = %s WHERE id = %s",
+            (capital_valor, pro_labore, socio_id))
 
     @staticmethod
     def delete(socio_id):

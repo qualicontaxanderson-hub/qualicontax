@@ -864,6 +864,40 @@ def _apply_migrations():
     if (_cpf_len.get('n') or 20) < 20:
         _migrate("ALTER TABLE socios_clientes MODIFY cpf VARCHAR(20) NOT NULL")
 
+    # 14/10/2026 (sócios, passo 3): o que é do VÍNCULO — capital que o sócio
+    # tem na empresa e o pró-labore mensal que ela paga a ele.
+    for _col_name, _col_def in [
+        ('capital_valor', 'DECIMAL(15,2) NULL'),
+        ('pro_labore',    'DECIMAL(12,2) NULL'),
+    ]:
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'socios_clientes' "
+            "AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True,
+        ) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE socios_clientes ADD COLUMN {_col_name} {_col_def}")
+
+    # 14/10/2026 (sócios, passo 3): dados da PESSOA física — os que o contrato
+    # social, a Junta e o gov.br pedem. Uma linha por cadastro PF (1:1 com
+    # clientes), fora da tabela clientes para não pesar nas 316 PJ.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS clientes_pf_dados (
+            cliente_id INT PRIMARY KEY,
+            data_nascimento DATE NULL,
+            rg VARCHAR(20) NULL,
+            rg_orgao VARCHAR(20) NULL,
+            estado_civil VARCHAR(20) NULL,
+            regime_bens VARCHAR(30) NULL,
+            nacionalidade VARCHAR(40) NULL,
+            profissao VARCHAR(80) NULL,
+            nome_mae VARCHAR(255) NULL,
+            nivel_govbr VARCHAR(10) NULL,
+            alterado_por INT NULL,
+            alterado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
     # Fila "Sócios a cadastrar" (12/10/2026): o quadro de sócios da Receita das
     # empresas sem sócio, uma linha por empresa x sócio. A Receita esconde o
     # meio do CPF, então a pessoa é completada UMA vez pela equipe e ligada a

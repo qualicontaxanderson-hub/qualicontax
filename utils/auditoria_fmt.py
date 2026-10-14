@@ -31,6 +31,11 @@ _HIST_LABELS = {
     'nome': 'Nome', 'cpf': 'CPF', 'percentual_participacao': 'Participação (%)',
     'responsavel': 'Responsável', 'qualificacao': 'Qualificação',
     'data_entrada': 'Entrada na sociedade', 'data_saida': 'Saída da sociedade',
+    'capital_valor': 'Capital na empresa', 'pro_labore': 'Pró-labore',
+    # dados da pessoa (PF)
+    'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG',
+    'estado_civil': 'Estado civil', 'regime_bens': 'Regime de bens', 'nacionalidade': 'Nacionalidade',
+    'profissao': 'Profissão', 'nome_mae': 'Nome da mãe', 'nivel_govbr': 'Conta gov.br',
     # certificado
     'cnpj': 'CNPJ', 'tipo_doc': 'Tipo de documento', 'validade': 'Validade',
     'procuracao': 'Procuração', 'senha_cifrada': 'Senha', 'dropbox_path': 'Arquivo',
@@ -67,6 +72,8 @@ _HIST_VERBO = {
     'escrita.criou_socio': 'adicionou um sócio',
     'escrita.excluiu_socio': 'excluiu um sócio',
     'escrita.saida_socio': 'registrou a saída de um sócio',
+    'escrita.alterou_socio': 'alterou um sócio',
+    'escrita.alterou_dados_pessoa': 'alterou os dados pessoais',
     'escrita.ignorou_socio_fila': 'tirou uma pessoa da fila de sócios',
     'escrita.criou_contrato': 'adicionou um contrato',
     'escrita.criou_grupo': 'criou um grupo',

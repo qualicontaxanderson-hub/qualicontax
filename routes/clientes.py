@@ -18,6 +18,8 @@ from models.endereco_cliente import EnderecoCliente
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente
+from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
+                                 REGIMES_BENS, NIVEIS_GOVBR)
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
 from models.cadastro_anp import CadastroAnp
@@ -89,6 +91,8 @@ def _obrigatorios_faltando(form):
                            (*ids, tipo), fetch=True, fetch_one=True) or {}
         if (ok.get('n') or 0) != len(set(ids)):
             falta.append('ramo de atividade de ' + ('pessoa física' if tipo == 'PF' else 'empresa'))
+    if tipo == 'PF' and (form.get('pf_nascimento') or '').strip() and not _data_iso(form.get('pf_nascimento')):
+        falta.append('data de nascimento (inválida ou no futuro)')
     return falta
 
 
@@ -209,8 +213,64 @@ def _qualificacao(v):
     return re.sub(r'^\s*\d+\s*-\s*', '', str(v or '')).strip()[:80]
 
 
+def _valor_opcional(v):
+    """Capital / pró-labore: vazio -> None; número >= 0 -> Decimal; lixo ou
+    negativo -> False (quem chama recusa o salvar)."""
+    v = str(v if v is not None else '').strip().replace('R$', '').strip()
+    if not v:
+        return None
+    if re.fullmatch(r'\d{1,3}(\.\d{3})+', v):    # "10.000" em reais é dez mil, não dez
+        v = v.replace('.', '')
+    try:
+        d = _parse_decimal_input(v)
+    except (InvalidOperation, ValueError):
+        return False
+    return d.quantize(Decimal('0.01')) if Decimal('0') <= d < Decimal('1e12') else False
+
+
+def _ler_pessoa(form):
+    """Quadro "Dados pessoais" (só PF) -> colunas de clientes_pf_dados. O que
+    não é das listas vira vazio; regime de bens só fica para casado(a) e
+    união estável."""
+    def txt(nome, n, upper=False):
+        t = ' '.join((form.get(nome) or '').split())[:n]
+        return (t.upper() if upper else t) or None
+    civil = form.get('pf_estado_civil') or ''
+    civil = civil if civil in dict(ESTADOS_CIVIS) else None
+    regime = form.get('pf_regime_bens') or ''
+    regime = regime if civil in COM_REGIME and regime in dict(REGIMES_BENS) else None
+    nivel = form.get('pf_nivel_govbr') or ''
+    return {
+        'data_nascimento': _data_iso(form.get('pf_nascimento')),
+        'rg': txt('pf_rg', 20, True),
+        'rg_orgao': txt('pf_rg_orgao', 20, True),
+        'estado_civil': civil,
+        'regime_bens': regime,
+        'nacionalidade': txt('pf_nacionalidade', 40),
+        'profissao': txt('pf_profissao', 80),
+        'nome_mae': txt('pf_nome_mae', 255, True),
+        'nivel_govbr': nivel if nivel in dict(NIVEIS_GOVBR) else None,
+    }
+
+
+def _salvar_pessoa(cliente_id, form):
+    """Grava os dados da pessoa se algo mudou e registra só o que mudou."""
+    antes = PessoaDados.get(cliente_id)
+    depois = _ler_pessoa(form)
+
+    def _s(v):
+        return v.isoformat() if hasattr(v, 'isoformat') else (v or None)
+    mudou = [c for c in PESSOA_CAMPOS if _s(antes.get(c)) != _s(depois.get(c))]
+    if not mudou:
+        return
+    PessoaDados.salvar(cliente_id, depois, current_user.id)
+    registrar('escrita.alterou_dados_pessoa', 'cadastros', tabela='clientes', registro_id=cliente_id,
+              antes={c: _s(antes.get(c)) for c in mudou}, depois={c: _s(depois.get(c)) for c in mudou})
+
+
 def _ler_socios(form):
-    """socios_json do formulário -> [{id, pct (Decimal), resp, qual, entrada}] (descarta lixo)."""
+    """socios_json do formulário -> [{id, pct (Decimal), resp, qual, entrada,
+    capital, pl}] (descarta lixo; capital/pl False = valor inválido)."""
     import json
     try:
         bruto = json.loads(form.get('socios_json') or '[]')
@@ -224,7 +284,8 @@ def _ler_socios(form):
         except (TypeError, ValueError, InvalidOperation, AttributeError):
             return None
         out.append({'id': sid, 'pct': pct, 'resp': bool(s.get('resp')),
-                    'qual': _qualificacao(s.get('qual')), 'entrada': _data_iso(s.get('entrada'))})
+                    'qual': _qualificacao(s.get('qual')), 'entrada': _data_iso(s.get('entrada')),
+                    'capital': _valor_opcional(s.get('capital')), 'pl': _valor_opcional(s.get('pl'))})
     return out
 
 
@@ -264,6 +325,8 @@ def _socios_e_contador_faltando(form, cliente_id=None):
                 falta.append('participação de cada sócio')
             elif abs(sum(s['pct'] for s in socios) - Decimal('100')) > Decimal('0.005'):
                 falta.append('participação dos sócios somando 100%')
+            elif any(s['capital'] is False or s['pl'] is False for s in socios):
+                falta.append('capital e pró-labore dos sócios (valor inválido)')
     return falta
 
 
@@ -306,16 +369,32 @@ def _salvar_socios(cliente_id, socios):
                           depois={'cliente_id': cliente_id,
                                   'qualificacao': novo_q or a.get('qualificacao'),
                                   'data_entrada': (novo_e or ent_antes).isoformat() if (novo_e or ent_antes) else None})
+            mud_valor = {}
+            for col, chave in (('capital_valor', 'capital'), ('pro_labore', 'pl')):
+                v_antes = a.get(col)
+                v_antes = Decimal(str(v_antes)) if v_antes is not None else None
+                if v_antes != s[chave]:
+                    mud_valor[col] = (v_antes, s[chave])
+            if mud_valor:
+                SocioCliente.atualizar_valores(a['id'], s['capital'], s['pl'])
+                registrar('escrita.alterou_socio', 'cadastros', tabela='socios_clientes', registro_id=a['id'],
+                          antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
+                                 **{c: None if v[0] is None else str(v[0]) for c, v in mud_valor.items()}},
+                          depois={'cliente_id': cliente_id,
+                                  **{c: None if v[1] is None else str(v[1]) for c, v in mud_valor.items()}})
             if s['resp']:
                 resp_id = a['id']
         else:
             sid = SocioCliente.create(cliente_id=cliente_id, pf_cliente_id=pid, nome=d.get('nome'),
                                       cpf=d.get('doc'), percentual_participacao=s['pct'],
                                       responsavel=False, ativo=True,
-                                      qualificacao=s['qual'], data_entrada=s['entrada'])
+                                      qualificacao=s['qual'], data_entrada=s['entrada'],
+                                      capital_valor=s['capital'], pro_labore=s['pl'])
             registrar('escrita.criou_socio', 'cadastros', tabela='socios_clientes', registro_id=sid,
                       depois={'cliente_id': cliente_id, 'pf_cliente_id': pid, 'nome': d.get('nome'),
                               'cpf': d.get('doc'), 'percentual_participacao': str(s['pct']),
+                              'capital_valor': None if s['capital'] is None else str(s['capital']),
+                              'pro_labore': None if s['pl'] is None else str(s['pl']),
                               'qualificacao': s['qual'] or None,
                               'data_entrada': s['entrada'].isoformat() if s['entrada'] else None,
                               **rotulo_empresa(cliente_id)})
@@ -369,13 +448,19 @@ def _ctx_form(cliente=None):
         resumo = _cadastro_resumo([s['pf_cliente_id'] for s in soc if s.get('pf_cliente_id')])
         ctx['socios_json'] = [dict(resumo[s['pf_cliente_id']], pct=str(s['percentual_participacao'] or ''),
                                    resp=bool(s.get('responsavel')), qual=s.get('qualificacao') or '',
-                                   entrada=s['data_entrada'].isoformat() if s.get('data_entrada') else '')
+                                   entrada=s['data_entrada'].isoformat() if s.get('data_entrada') else '',
+                                   capital='' if s.get('capital_valor') is None else str(s['capital_valor']),
+                                   pl='' if s.get('pro_labore') is None else str(s['pro_labore']))
                               for s in soc if s.get('pf_cliente_id') in resumo]
+        ctx['pessoa'] = PessoaDados.get(cid) if cliente.get('tipo_pessoa') == 'PF' else {}
     else:
         ctx['ramos_cliente'] = []
         ctx['grupos_cliente'] = []
         ctx['contador_atual'] = _contador_padrao()
         ctx['socios_json'] = []
+        ctx['pessoa'] = {}
+    ctx.update(ESTADOS_CIVIS=ESTADOS_CIVIS, REGIMES_BENS=REGIMES_BENS, NIVEIS_GOVBR=NIVEIS_GOVBR,
+               COM_REGIME=COM_REGIME, hoje_iso=date.today().isoformat())
     return ctx
 
 
@@ -735,6 +820,8 @@ def novo():
                 _salvar_contador(cliente_id, request.form.get('contador_id', type=int))
             if request.form.get('tipo_pessoa') == 'PJ':
                 _salvar_socios(cliente_id, _ler_socios(request.form) or [])
+            else:
+                _salvar_pessoa(cliente_id, request.form)
             
             # Salvar endereço se fornecido
             cep = request.form.get('cep', '').strip()
@@ -903,6 +990,8 @@ def detalhes(id):
                          ex_socios=ex_socios,
                          qualificacoes_socio=QUALIFICACOES_SOCIO,
                          hoje_iso=date.today().isoformat(),
+                         pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
+                         pessoa_rotulo=PessoaDados.rotulo,
                          certificado=certificado,
                          contadores=contadores,
                          contadores_disponiveis=contadores_disponiveis,
@@ -1564,6 +1653,8 @@ def editar(id):
                     _salvar_contador(id, request.form.get('contador_id', type=int))
                 if request.form.get('tipo_pessoa') == 'PJ':
                     _salvar_socios(id, _ler_socios(request.form) or [])
+                else:
+                    _salvar_pessoa(id, request.form)
 
                 # Atualizar/salvar endereço principal
                 cep = request.form.get('cep', '').strip()
@@ -1976,6 +2067,11 @@ def novo_socio(cliente_id):
     if entrada_raw and not data_entrada:
         flash('Data de entrada inválida (não pode ser no futuro).', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
+    capital_valor = _valor_opcional(request.form.get('capital_valor'))
+    pro_labore = _valor_opcional(request.form.get('pro_labore'))
+    if capital_valor is False or pro_labore is False:
+        flash('Capital ou pró-labore inválido: use só números (ex.: 10.000,00).', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
 
     if not pf_raw.isdigit() or not percentual_raw:
         flash('Escolha um cadastro (pessoa física ou empresa) e informe o percentual.', 'danger')
@@ -2026,7 +2122,9 @@ def novo_socio(cliente_id):
         responsavel=responsavel,
         ativo=True,
         qualificacao=qualificacao,
-        data_entrada=data_entrada
+        data_entrada=data_entrada,
+        capital_valor=capital_valor,
+        pro_labore=pro_labore
     )
 
     if socio_id:
@@ -2038,6 +2136,8 @@ def novo_socio(cliente_id):
                           'percentual_participacao': str(percentual), 'responsavel': responsavel,
                           'qualificacao': qualificacao or None,
                           'data_entrada': data_entrada.isoformat() if data_entrada else None,
+                          'capital_valor': None if capital_valor is None else str(capital_valor),
+                          'pro_labore': None if pro_labore is None else str(pro_labore),
                           **rotulo_empresa(cliente_id)})
         total_final = SocioCliente.get_total_percentual(cliente_id)
         if total_final == Decimal('100'):

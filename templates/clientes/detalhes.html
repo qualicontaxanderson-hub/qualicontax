@@ -410,6 +410,23 @@
                         </dl>
                     </div>
 
+                    {% if cliente.tipo_pessoa == 'PF' %}
+                    <!-- Dados pessoais (sócios, passo 3 — 14/10/2026) -->
+                    {% set ps = pessoa or {} %}
+                    <div class="fv-card">
+                        <p class="fv-seclabel">Dados pessoais</p>
+                        <dl class="fv-dl">
+                            <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
+                            <dt>RG</dt><dd>{{ ps.rg or '—' }}{% if ps.rg and ps.rg_orgao %} · {{ ps.rg_orgao }}{% endif %}</dd>
+                            <dt>Estado civil</dt><dd>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %}<br><small>{{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</dd>
+                            <dt>Nacionalidade</dt><dd>{{ ps.nacionalidade or '—' }}</dd>
+                            <dt>Profissão</dt><dd>{{ ps.profissao or '—' }}</dd>
+                            <dt>Nome da mãe</dt><dd>{{ ps.nome_mae or '—' }}</dd>
+                            <dt>Conta gov.br</dt><dd>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</dd>
+                        </dl>
+                    </div>
+                    {% endif %}
+
                     <!-- Fiscal e contrato -->
                     <div class="fv-card">
                         <p class="fv-seclabel">Fiscal e contrato</p>
@@ -885,6 +902,8 @@
                                             <th>Qualificação</th>
                                             <th>Entrada</th>
                                             <th>Participação</th>
+                                            <th>Capital</th>
+                                            <th>Pró-labore/mês</th>
                                             <th>Responsável</th>
                                             <th>Ações</th>
                                         </tr>
@@ -898,6 +917,8 @@
                                             <td>{{ socio.qualificacao or '—' }}</td>
                                             <td>{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</td>
                                             <td><strong>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</strong></td>
+                                            <td>{{ socio.capital_valor|format_currency if socio.capital_valor is not none else '—' }}</td>
+                                            <td>{{ socio.pro_labore|format_currency if socio.pro_labore is not none else '—' }}</td>
                                             <td>
                                                 <span class="badge badge-{{ 'success' if socio.responsavel else 'secondary' }}">
                                                     {{ 'Sim' if socio.responsavel else 'Não' }}
@@ -1781,6 +1802,18 @@
                         <input type="date" id="socio_entrada" name="data_entrada" class="form-control" max="{{ hoje_iso }}">
                     </div>
                 </div>
+                <div class="soc-2col">
+                    <div class="form-group">
+                        <label for="socio_capital">Capital na empresa (R$)</label>
+                        <input type="text" id="socio_capital" name="capital_valor" class="form-control" inputmode="decimal"
+                               placeholder="Ex.: 50.000,00">
+                    </div>
+                    <div class="form-group">
+                        <label for="socio_pro_labore">Pró-labore por mês (R$)</label>
+                        <input type="text" id="socio_pro_labore" name="pro_labore" class="form-control" inputmode="decimal"
+                               placeholder="Ex.: 1.518,00">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" name="responsavel" id="socio_responsavel">
@@ -1940,6 +1973,8 @@ function showAddSocioModal() {
     document.getElementById('socio_responsavel').checked = false;
     document.getElementById('socio_qualificacao').value = '';
     document.getElementById('socio_entrada').value = '';
+    document.getElementById('socio_capital').value = '';
+    document.getElementById('socio_pro_labore').value = '';
     document.getElementById('addSocioModal').style.display = 'block';
     document.getElementById('socio_busca').focus();
 }
