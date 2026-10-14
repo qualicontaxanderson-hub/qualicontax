@@ -48,7 +48,7 @@ _HIST_LABELS = {
 }
 
 # Chaves de CONTEXTO/meta — não são "campos alterados", ficam fora do campo-a-campo.
-_HIST_META = {'cliente_id', 'cliente_numero', 'cliente_nome', 'grupo_id', 'grupo_nome',
+_HIST_META = {'cliente_id', 'cliente_numero', 'cliente_nome', 'grupo_id', 'grupo_nome', 'socio_nome',
               'criado_por', 'criado_em', 'alterado_por', 'alterado_em', 'item_id', 'nfe_id',
               'job_id', 'versao', 'produto_id', 'emit_cnpj', 'codigo', 'chave', 'origem',
               'salvar_regra', 'departamento', 'ok', 'duplicados', 'erros', 'arquivos',
@@ -120,9 +120,29 @@ def _hist_dt(dt):
         return str(dt or '')
 
 
+def _hist_fmt(k, v):
+    """Valor do jeito que a tela mostra (14/10/2026): reais com R$ e código de
+    lista com o texto ('CASADO' -> 'Casado(a)'). O resto passa como veio."""
+    if v is None or str(v).strip() in ('', 'None', 'null'):
+        return v
+    if k in ('capital_valor', 'pro_labore'):
+        try:
+            n = float(v)
+            return 'R$ ' + f'{n:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        except (TypeError, ValueError):
+            return v
+    if k in ('estado_civil', 'regime_bens', 'nivel_govbr'):
+        from models.pessoa_dados import PessoaDados
+        return PessoaDados.rotulo(k, v)
+    if k == 'data_nascimento':
+        return _br(v)
+    return v
+
+
 def _hist_campo(k, antes, depois, modo=None):
     """Um campo do card: rótulo PT + tipo (sensivel/novo/removido/alterado)."""
     label = _HIST_LABELS.get(k) or k.replace('_', ' ').capitalize()
+    antes, depois = _hist_fmt(k, antes), _hist_fmt(k, depois)
     # lista negra: valor é 'alterado' ou nome de coluna sensível -> só o nome.
     if k in CAMPOS_SENSIVEIS or str(depois) == 'alterado' or str(antes) == 'alterado':
         return {'label': label, 'tipo': 'sensivel'}
@@ -283,6 +303,11 @@ def hist_preparar(row, nomes, emp_map=None):
             verbo = 'alterou'
         else:
             verbo = 'adicionou ' + _HIST_ENTIDADE.get(tab, 'um registro')
+
+    # Qual sócio (14/10/2026): "alterou um sócio" vira "alterou o sócio FULANO"
+    socio_nome = nov.get('socio_nome') or ant.get('socio_nome')
+    if socio_nome and verbo and verbo.endswith('um sócio'):
+        verbo = verbo[:-len('um sócio')] + 'o sócio ' + socio_nome
 
     is_exclusao = acao.startswith('escrita.excluiu') or (ant and not nov)
     is_alteracao = acao.startswith('escrita.alterou') and ant and nov

@@ -354,19 +354,19 @@ def _salvar_socios(cliente_id, socios):
                 execute_query("UPDATE socios_clientes SET percentual_participacao = %s WHERE id = %s",
                               (s['pct'], a['id']))
                 registrar('escrita.alterou_socio', 'cadastros', tabela='socios_clientes', registro_id=a['id'],
-                          antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
+                          antes={'cliente_id': cliente_id, 'socio_nome': a.get('nome'),
                                  'percentual_participacao': str(a.get('percentual_participacao'))},
-                          depois={'cliente_id': cliente_id, 'percentual_participacao': str(s['pct'])})
+                          depois={'cliente_id': cliente_id, 'socio_nome': a.get('nome'), 'percentual_participacao': str(s['pct'])})
             novo_q = s['qual'] if s['qual'] and s['qual'] != (a.get('qualificacao') or '') else None
             novo_e = s['entrada'] if s['entrada'] and s['entrada'] != a.get('data_entrada') else None
             if novo_q or novo_e:
                 SocioCliente.atualizar_dados(a['id'], novo_q, novo_e)
                 ent_antes = a.get('data_entrada')
                 registrar('escrita.alterou_socio', 'cadastros', tabela='socios_clientes', registro_id=a['id'],
-                          antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
+                          antes={'cliente_id': cliente_id, 'socio_nome': a.get('nome'),
                                  'qualificacao': a.get('qualificacao'),
                                  'data_entrada': ent_antes.isoformat() if ent_antes else None},
-                          depois={'cliente_id': cliente_id,
+                          depois={'cliente_id': cliente_id, 'socio_nome': a.get('nome'),
                                   'qualificacao': novo_q or a.get('qualificacao'),
                                   'data_entrada': (novo_e or ent_antes).isoformat() if (novo_e or ent_antes) else None})
             mud_valor = {}
@@ -378,9 +378,9 @@ def _salvar_socios(cliente_id, socios):
             if mud_valor:
                 SocioCliente.atualizar_valores(a['id'], s['capital'], s['pl'])
                 registrar('escrita.alterou_socio', 'cadastros', tabela='socios_clientes', registro_id=a['id'],
-                          antes={'cliente_id': cliente_id, 'nome': a.get('nome'),
+                          antes={'cliente_id': cliente_id, 'socio_nome': a.get('nome'),
                                  **{c: None if v[0] is None else str(v[0]) for c, v in mud_valor.items()}},
-                          depois={'cliente_id': cliente_id,
+                          depois={'cliente_id': cliente_id, 'socio_nome': a.get('nome'),
                                   **{c: None if v[1] is None else str(v[1]) for c, v in mud_valor.items()}})
             if s['resp']:
                 resp_id = a['id']

@@ -74,6 +74,10 @@ def _mascarar(d):
     return {k: (_MASCARA if k in CAMPOS_SENSIVEIS else v) for k, v in d.items()}
 
 
+# Chaves que dizem DE QUEM é a alteração — ficam no log mesmo sem mudar.
+_CONTEXTO_DIFF = ('cliente_id', 'cliente_numero', 'cliente_nome', 'grupo_id', 'grupo_nome', 'socio_nome')
+
+
 def _diff(antes, depois):
     """Só os campos que MUDARAM. Retorna (antes_mudou, depois_mudou) já mascarados.
 
@@ -88,8 +92,14 @@ def _diff(antes, depois):
     if antes and depois:
         chaves = set(depois) | set(antes)
         mud = [k for k in chaves if antes.get(k) != depois.get(k)]
-        a = {k: antes.get(k) for k in mud}
-        d = {k: depois.get(k) for k in mud}
+        if not mud:
+            return {}, {}
+        # CONTEXTO vai junto mesmo sem mudar (14/10/2026): sem o cliente_id a
+        # alteração de sócio/endereço sumia do Histórico da empresa, que acha
+        # as filhas pelo cliente_id do JSON; sem o nome, ninguém sabia QUAL sócio.
+        ctx = [k for k in _CONTEXTO_DIFF if k not in mud and (k in antes or k in depois)]
+        a = {k: antes.get(k, depois.get(k)) for k in mud + ctx}
+        d = {k: depois.get(k, antes.get(k)) for k in mud + ctx}
         return _mascarar(a), _mascarar(d)
     return _mascarar(antes), _mascarar(depois)
 
@@ -201,6 +211,10 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
                          or getattr(current_user, 'nick', None) or '')[:80] or None
 
         a_json, d_json = _diff(antes, depois)
+        # Edição em que NADA mudou (salvar sem mexer): não vira linha vazia
+        # "alterou o cadastro" no Histórico (14/10/2026).
+        if acao.startswith('escrita.alterou') and antes and depois and not a_json and not d_json:
+            return
         a_str, d_str = _json(a_json), _json(d_json)
         acao_curta = acao[:100]
         modulo_curto = (modulo or '')[:20]
