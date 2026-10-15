@@ -19,6 +19,7 @@ import json
 import logging
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from utils.db_helper import execute_query
 from utils import cnpj_receita as RF
@@ -186,6 +187,8 @@ def vigiar(prazo_seg=30, lote=LOTE, dry=False):
                               novo_json = %s, diff_json = %s WHERE id = %s""",
                     (json.dumps(dados, ensure_ascii=False), json.dumps(diff, ensure_ascii=False), v['id']),
                     fetch=False)
+                if fonte != 'nenhuma':
+                    RF.marcar_base_nova(datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%Y-%m-%d'))
         elif not dry:
             execute_query(
                 """UPDATE cnpj_vigia SET consultas = consultas + 1, ultima_consulta_em = NOW(),

@@ -240,15 +240,24 @@ def consultar(cnpj, completar=False):
 
 # ---------------------------------------------------------------- data da base
 def _guardar_base_em(iso):
+    """A data só AVANÇA (GREATEST). 15/10/2026: a BrasilAPI carregou a base de
+    outubro em 14/10 e a ReceitaWS seguia dizendo 15/09 — a sonda diária
+    voltava a tela para setembro com a vigia já lendo dado de outubro."""
     try:
         from utils.db_helper import execute_query
         data = str(iso)[:10]
         execute_query(
             "INSERT INTO app_config (chave, valor) VALUES (%s, %s) "
-            "ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()",
+            "ON DUPLICATE KEY UPDATE valor = GREATEST(valor, VALUES(valor)), updated_at = NOW()",
             (CHAVE_BASE_EM, data), fetch=False)
     except Exception:
         logger.exception('[cnpj] não guardou a data da base')
+
+
+def marcar_base_nova(iso):
+    """A vigia viu a Receita mudar: a fonte já está numa carga nova, e a data
+    do dia em que ela apareceu vale mais que a da ReceitaWS atrasada."""
+    _guardar_base_em(iso)
 
 
 def base_em(cnpj_para_sondar=None):
