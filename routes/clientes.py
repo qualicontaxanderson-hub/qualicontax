@@ -15,6 +15,7 @@ from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, empresas_ocultas
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
+from utils.cnpj_receita import limpar_logradouro
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente
@@ -937,7 +938,7 @@ def novo():
             
             # Salvar endereço se fornecido
             cep = request.form.get('cep', '').strip()
-            logradouro = request.form.get('logradouro', '').strip()
+            logradouro = limpar_logradouro(request.form.get('logradouro', ''))   # "RUA RUA X" -> "RUA X"
             
             if cep or logradouro:  # Se pelo menos um campo de endereço foi preenchido
                 try:
@@ -1778,7 +1779,7 @@ def editar(id):
 
                 # Atualizar/salvar endereço principal
                 cep = request.form.get('cep', '').strip()
-                logradouro = request.form.get('logradouro', '').strip()
+                logradouro = limpar_logradouro(request.form.get('logradouro', ''))   # "RUA RUA X" -> "RUA X"
                 numero = request.form.get('numero', '').strip()
                 complemento = request.form.get('complemento', '').strip()
                 bairro = request.form.get('bairro', '').strip()

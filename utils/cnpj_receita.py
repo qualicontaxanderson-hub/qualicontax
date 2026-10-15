@@ -24,6 +24,7 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime
 
 import requests
@@ -75,6 +76,34 @@ def _ie_brasilapi(d):
     return str(d.get('inscricao_estadual') or '')
 
 
+# Tipo de via e as abreviações que cadastros e contadores usam.
+_TIPO_VIA = {'RUA': 'RUA', 'R': 'RUA', 'AVENIDA': 'AVENIDA', 'AV': 'AVENIDA', 'AVE': 'AVENIDA',
+             'RODOVIA': 'RODOVIA', 'ROD': 'RODOVIA', 'ESTRADA': 'ESTRADA', 'EST': 'ESTRADA',
+             'TRAVESSA': 'TRAVESSA', 'TV': 'TRAVESSA', 'TRAV': 'TRAVESSA', 'ALAMEDA': 'ALAMEDA',
+             'AL': 'ALAMEDA', 'PRACA': 'PRACA', 'PCA': 'PRACA', 'PC': 'PRACA', 'QUADRA': 'QUADRA',
+             'QD': 'QUADRA', 'VIA': 'VIA', 'LARGO': 'LARGO', 'VIELA': 'VIELA', 'BECO': 'BECO'}
+
+
+def _via(palavra):
+    p = unicodedata.normalize('NFKD', palavra or '').encode('ascii', 'ignore').decode().upper().rstrip('.:,')
+    return _TIPO_VIA.get(p)
+
+
+def limpar_logradouro(s):
+    """Tira o tipo de via REPETIDO no começo: "RUA RUA X" -> "RUA X",
+    "AV AVENIDA X" -> "AVENIDA X", "R. RUA X" -> "RUA X". Erro comum de quem
+    registrou a empresa (a Receita guarda como veio). Fica a forma por extenso.
+    Qualquer outra coisa volta como está (só espaços normalizados)."""
+    s = re.sub(r'\s+', ' ', str(s or '')).strip()
+    while True:
+        p = s.split(' ', 2)
+        # segunda palavra de uma letra é NOME de rua em Goiânia ("RUA R 5", "RUA R-12"): não mexe
+        if len(p) < 3 or len(p[1].rstrip('.')) < 2 or not _via(p[0]) or _via(p[0]) != _via(p[1]):
+            return s
+        manter = p[1] if len(p[1].rstrip('.')) > len(p[0].rstrip('.')) else p[0]
+        s = f'{manter} {p[2]}'
+
+
 def _rua_com_tipo(tipo, nome):
     """BrasilAPI manda o tipo ("RUA", "AVENIDA", "RODOVIA"...) num campo à
     parte (descricao_tipo_de_logradouro) e o nome sem ele; a ReceitaWS já manda
@@ -83,8 +112,8 @@ def _rua_com_tipo(tipo, nome):
     tipo = re.sub(r'\s+', ' ', str(tipo or '')).strip()
     nome = re.sub(r'\s+', ' ', str(nome or '')).strip()
     if not tipo or not nome or nome.upper().startswith(tipo.upper() + ' '):
-        return nome
-    return f'{tipo} {nome}'
+        return limpar_logradouro(nome)
+    return limpar_logradouro(f'{tipo} {nome}')
 
 
 def _normalizar_brasilapi(d):
@@ -155,7 +184,8 @@ def _normalizar_receitaws(d):
         'capital_social': cap,
         'opcao_pelo_simples': bool(simples.get('optante')),
         'opcao_pelo_mei': bool(simei.get('optante')),
-        'logradouro': d.get('logradouro', '') or '',
+        'logradouro': limpar_logradouro(d.get('logradouro')),
+        'logradouro_vigia': d.get('logradouro', '') or '',     # vigia compara o que a Receita diz, cru
         'numero': d.get('numero', '') or '',
         'complemento': d.get('complemento', '') or '',
         'bairro': d.get('bairro', '') or '',
