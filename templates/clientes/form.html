@@ -35,6 +35,7 @@
     <form method="POST" action="{{ url_for('clientes.editar', id=cliente.id) if cliente else url_for('clientes.novo') }}"
           class="form-container cf-form{% if not ((cliente and cliente.tipo_pessoa) or pre.tipo in ('PF', 'PJ')) %} cf-sem-tipo{% endif %}" id="cfForm">
         {% if janela %}<input type="hidden" name="janela" value="1">{% endif %}
+        <input type="hidden" name="vigia_aplicada" id="vigiaAplicadaInp" value="">
         {% set endereco = endereco_principal if endereco_principal else None %}
         <div class="cf-layout">
         <div class="cf-main">
@@ -1689,7 +1690,16 @@ function vigiaAplicar() {
     if (!window._vigiaNovo) return;
     ultimaConsultaMeta = {fonte: 'vigia', base_em: null};
     preencherDadosCNPJ(window._vigiaNovo);
-    vigiaAcao('aplicada');
+    // 15/10/2026: a vigia só conclui quando o cadastro é SALVO (o servidor lê
+    // vigia_aplicada). Sair sem salvar deixa o aviso amarelo onde estava.
+    document.getElementById('vigiaAplicadaInp').value = '1';
+    const box = document.getElementById('vigiaBox');
+    if (box) {
+        box.className = 'cf-vigia on';
+        box.innerHTML = '<i class="fas fa-circle-check vg-ico"></i><div class="vg-txt">'
+            + '<b>Dados novos da Receita aplicados no formulário.</b> Confira os campos e clique em <b>Salvar</b> '
+            + 'para concluir. Se sair sem salvar, o aviso continua na lista de clientes.</div>';
+    }
 }
 document.addEventListener('DOMContentLoaded', vigiaCarrega);
 

@@ -906,6 +906,7 @@ def novo():
             # vigia de CNPJ armada no formulário ANTES de salvar ganha o dono
             from utils import cnpj_vigia as VG
             VG.vincular_cliente(cpf_cnpj, cliente_id)
+            _vigia_concluir_se_aplicada(cpf_cnpj, cliente_id)
 
         if cliente_id:
             # AUDITORIA (D2): quem criou este cadastro.
@@ -1707,6 +1708,7 @@ def editar(id):
                           registro_id=id,
                           antes={k: cliente.get(k) for k in _campos_log},
                           depois={k: data.get(k) for k in _campos_log})
+                _vigia_concluir_se_aplicada(cpf_cnpj, id)
 
                 # A pasta mudou de nome: reaponta os caminhos gravados. O LIKE
                 # escapa % e _ (razões sanitizadas podem conter '_'), e o
@@ -2738,6 +2740,24 @@ def cnpj_vigia_armar(cnpj):
     registrar('escrita.armou_vigia_cnpj', 'cadastros', tabela='cnpj_vigia', registro_id=cid,
               depois={'cnpj': RF.so_digitos(cnpj), 'razao_social': dados.get('razao_social'), 'fonte': fonte})
     return jsonify({'success': True, 'vigia': vigia, 'base_em': RF.base_em_br()})
+
+
+def _vigia_concluir_se_aplicada(cpf_cnpj, cliente_id):
+    """15/10/2026: "Aplicar no formulário" marcava a vigia como aplicada no
+    CLIQUE; a pessoa não salvou e a mudança da Expansão (583) sumiu da tela
+    sem chegar ao cadastro. Agora o clique só preenche e marca o campo
+    oculto ``vigia_aplicada``; a vigia conclui aqui, no cadastro SALVO."""
+    if not request.form.get('vigia_aplicada'):
+        return
+    from utils import cnpj_vigia as VG
+    try:
+        v = VG.por_cnpj(cpf_cnpj)
+        if v and v.get('status') == 'mudou':
+            VG.mudar_status(cpf_cnpj, 'aplicada')
+            registrar('escrita.vigia_cnpj_aplicada', 'cadastros', tabela='cnpj_vigia',
+                      registro_id=cliente_id, depois={'cnpj': v['cnpj'], 'ao_salvar': True})
+    except Exception:
+        logger.exception('[vigia] não concluiu a vigia de %s', cpf_cnpj)
 
 
 @clientes.route('/api/cnpj-vigia/<cnpj>/<acao>', methods=['POST'])
