@@ -75,6 +75,18 @@ def _ie_brasilapi(d):
     return str(d.get('inscricao_estadual') or '')
 
 
+def _rua_com_tipo(tipo, nome):
+    """BrasilAPI manda o tipo ("RUA", "AVENIDA", "RODOVIA"...) num campo à
+    parte (descricao_tipo_de_logradouro) e o nome sem ele; a ReceitaWS já manda
+    junto. Junta aqui para a tela receber "RUA X", não só "X" (15/10/2026:
+    280 de 326 endereços estavam sem o tipo)."""
+    tipo = re.sub(r'\s+', ' ', str(tipo or '')).strip()
+    nome = re.sub(r'\s+', ' ', str(nome or '')).strip()
+    if not tipo or not nome or nome.upper().startswith(tipo.upper() + ' '):
+        return nome
+    return f'{tipo} {nome}'
+
+
 def _normalizar_brasilapi(d):
     return {
         'cnpj': so_digitos(d.get('cnpj', '')),
@@ -92,7 +104,9 @@ def _normalizar_brasilapi(d):
         'capital_social': str(d.get('capital_social') if d.get('capital_social') is not None else ''),
         'opcao_pelo_simples': bool(d.get('opcao_pelo_simples')),
         'opcao_pelo_mei': bool(d.get('opcao_pelo_mei')),
-        'logradouro': d.get('logradouro', '') or '',
+        'logradouro': _rua_com_tipo(d.get('descricao_tipo_de_logradouro') or d.get('tipo_logradouro'), d.get('logradouro')),
+        # a vigia compara o nome SEM o tipo, como nas fotos tiradas antes de 15/10/2026
+        'logradouro_vigia': d.get('logradouro', '') or '',
         'numero': d.get('numero', '') or '',
         'complemento': d.get('complemento', '') or '',
         'bairro': d.get('bairro', '') or '',
@@ -303,7 +317,8 @@ def _norm(v):
 
 def impressao(dados):
     """Dict só com os campos vigiados (normalizados) e o hash deles."""
-    foto = {k: _norm(dados.get(k)) for k, _ in CAMPOS_VIGIA}
+    foto = {k: _norm(dados.get('logradouro_vigia', dados.get(k)) if k == 'logradouro' else dados.get(k))
+            for k, _ in CAMPOS_VIGIA}
     h = hashlib.sha256(json.dumps(foto, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
     return foto, h
 
