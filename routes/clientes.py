@@ -692,9 +692,12 @@ def index():
         try:
             from utils import cnpj_vigia as VG
             vigias_mudou = VG.com_novidade()
+            vigias_ativas = VG.em_vigia()
+            from utils.cnpj_receita import base_em_br
+            receita_base = base_em_br()          # só lê app_config: não consulta a Receita
         except Exception:
             logger.exception('[clientes] vigias com novidade falhou')
-            vigias_mudou = []
+            vigias_mudou, vigias_ativas, receita_base = [], [], None
 
         # Verificar se houve erro na obtenção dos dados
         if result is None:
@@ -720,7 +723,8 @@ def index():
                              total_pages=result['total_pages'],
                               total=result['total'],
                               stats=stats,
-                              vigias_mudou=vigias_mudou,
+                              vigias_mudou=vigias_mudou, vigias_ativas=vigias_ativas,
+                              receita_base=receita_base,
                               grupos=grupos,
                               ramos_atividade=ramos_atividade,
                               sort_by=sort_by,

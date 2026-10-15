@@ -112,6 +112,23 @@ def com_novidade():
     return out
 
 
+def em_vigia():
+    """Vigias ligadas e sem mudança ainda — o quadro verde da lista de clientes
+    (15/10/2026: a caixa só aparecia quando algo mudava, e ninguém sabia que a
+    vigia existia nem quem estava sendo vigiado)."""
+    rows = execute_query(
+        """SELECT v.cnpj, v.cliente_id, v.pedido_por_nome, v.pedido_em, v.consultas,
+                  v.proxima_em, v.erro_ultimo, c.numero_cliente, c.nome_razao_social
+             FROM cnpj_vigia v LEFT JOIN clientes c ON c.id = v.cliente_id
+            WHERE v.status = 'vigiando' ORDER BY v.pedido_em""", fetch=True) or []
+    br = lambda d, f='%d/%m/%Y': d.strftime(f) if isinstance(d, datetime) else ''
+    return [{'cnpj': r['cnpj'], 'cliente_id': r['cliente_id'], 'numero': r.get('numero_cliente'),
+             'nome': r.get('nome_razao_social') or r['cnpj'], 'por': r.get('pedido_por_nome') or '',
+             'desde': br(r['pedido_em']), 'consultas': r.get('consultas') or 0,
+             'proxima': br(r['proxima_em'], '%d/%m %H:%M'), 'falhou': bool(r.get('erro_ultimo'))}
+            for r in rows]
+
+
 def vigiar(prazo_seg=30, lote=LOTE, dry=False):
     """Uma passada pelas vigias vencidas. Resumo para o manutencao_status."""
     t0 = time.monotonic()
