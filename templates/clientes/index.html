@@ -189,13 +189,19 @@
        Situação, Regime e Segmento em botões; Razão social, Grupo, Ramo,
        Município, Estado e Certificado no painel "Filtros". Tudo filtra na
        tela, sem recarregar; cada botão conta com os outros filtros. #}
-    <div class="gc-bar">
+    {# 15/10/2026 (Anderson: "está bagunçado a parte dos Filtros"): um cartão,
+       uma linha por filtro, rótulo alinhado à esquerda e o botão Filtros no topo. #}
+    <div class="cli-filtros">
+    <div class="cli-f-row">
+        <span class="cli-seg-rot">Situação</span>
         <div class="gc-pills" id="cfSitPills" role="group" aria-label="Situação do cliente">
             <button type="button" class="gc-pill" data-v="">Todos <b></b></button>
             <button type="button" class="gc-pill" data-v="ATIVO">Ativos <b></b></button>
             <button type="button" class="gc-pill" data-v="INATIVO">Inativos <b></b></button>
         </div>
-        <span class="gc-sep"></span>
+    </div>
+    <div class="cli-f-row cli-f-dir">
+        <span class="cli-seg-rot">Regime</span>
         <div class="gc-pills gc-pills-reg" id="cfRegPills" role="group" aria-label="Regime de tributação">
             <button type="button" class="gc-pill" data-v="">Todos os regimes</button>
             <button type="button" class="gc-pill gc-pr-lucro_real" data-v="lucro_real">Lucro Real <b></b></button>
@@ -204,12 +210,20 @@
             <button type="button" class="gc-pill gc-pr-mei" data-v="mei">MEI <b></b></button>
             <button type="button" class="gc-pill gc-pr-pf" data-v="pf">Pessoa Física <b></b></button>
         </div>
-        <button type="button" class="gc-filtros-btn" id="cfBtn" onclick="cfToggle()" aria-expanded="false" aria-controls="cfPainel">
-            <i class="fas fa-sliders-h"></i> Filtros <span class="gf-n" id="cfN"></span>
-            <i class="fas fa-chevron-down gf-chev"></i>
-        </button>
     </div>
-    <div class="gc-bar cli-segbar">
+    {# TIPO JURÍDICO (14/10/2026): família da natureza da Receita. S/A tem
+       acionistas, diretoria com mandato e AGO anual — é o que mais pede controle. #}
+    <div class="cli-f-row">
+        <span class="cli-seg-rot">Tipo jurídico</span>
+        <div class="gc-pills cli-pills-seg" id="cfNatPills" role="group" aria-label="Tipo jurídico">
+            <button type="button" class="gc-pill" data-v="">Todos</button>
+            {% for v, rot in nat_familias or [] %}
+            <button type="button" class="gc-pill" data-v="{{ v }}">{{ rot }} <b></b></button>
+            {% endfor %}
+            <button type="button" class="gc-pill cli-seg-sem" data-v="-" title="Empresa sem a natureza jurídica — falta buscar o CNPJ na Receita"><i class="fas fa-circle-exclamation"></i> Sem informação <b></b></button>
+        </div>
+    </div>
+    <div class="cli-f-row cli-f-dir">
         <span class="cli-seg-rot">Segmento</span>
         <div class="gc-pills cli-pills-seg" id="cfSegPills" role="group" aria-label="Segmento">
             <button type="button" class="gc-pill" data-v="">Todos</button>
@@ -223,7 +237,7 @@
 
     {# ORIGEM (14/10/2026): de onde a empresa cliente veio — a regra pede
        "aberta pela Qualicontax" OU a contabilidade anterior. #}
-    <div class="gc-bar cli-segbar">
+    <div class="cli-f-row">
         <span class="cli-seg-rot">Origem</span>
         <div class="gc-pills cli-pills-seg" id="cfOriPills" role="group" aria-label="Origem da empresa">
             <button type="button" class="gc-pill" data-v="">Todas</button>
@@ -233,17 +247,12 @@
         </div>
     </div>
 
-    {# TIPO JURÍDICO (14/10/2026): família da natureza da Receita. S/A tem
-       acionistas, diretoria com mandato e AGO anual — é o que mais pede controle. #}
-    <div class="gc-bar cli-segbar">
-        <span class="cli-seg-rot">Tipo jurídico</span>
-        <div class="gc-pills cli-pills-seg" id="cfNatPills" role="group" aria-label="Tipo jurídico">
-            <button type="button" class="gc-pill" data-v="">Todos</button>
-            {% for v, rot in nat_familias or [] %}
-            <button type="button" class="gc-pill" data-v="{{ v }}">{{ rot }} <b></b></button>
-            {% endfor %}
-            <button type="button" class="gc-pill cli-seg-sem" data-v="-" title="Empresa sem a natureza jurídica — falta buscar o CNPJ na Receita"><i class="fas fa-circle-exclamation"></i> Sem informação <b></b></button>
-        </div>
+    <div class="cli-f-acao">
+        <button type="button" class="gc-filtros-btn" id="cfBtn" onclick="cfToggle()" aria-expanded="false" aria-controls="cfPainel">
+            <i class="fas fa-sliders-h"></i> Mais filtros <span class="gf-n" id="cfN"></span>
+            <i class="fas fa-chevron-down gf-chev"></i>
+        </button>
+    </div>
     </div>
 
     <div class="gf-painel" id="cfPainel" aria-hidden="true">
@@ -400,7 +409,15 @@
 .gf-opt-n { font-size:11px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:99px; padding:0 7px; flex-shrink:0; }
 
 /* Só desta tela: linha de Segmento e 6 campos no painel */
-.cli-segbar { margin-top:-6px; }
+/* 15/10/2026 (Anderson: sem espaço em branco): cada filtro é uma caixinha
+   que CRESCE até a linha encher; quebram sozinhas quando a tela estreita. */
+.cli-filtros { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
+.cli-f-row { flex:1 1 auto; display:flex; flex-direction:column; gap:7px; min-width:0;
+             background:#fff; border:1px solid #e3ebe6; border-radius:12px; padding:10px 14px; }
+.cli-f-row .gc-pills { gap:5px; }
+.cli-filtros .gc-pill { border-radius:9px; padding:5px 10px; font-size:12.5px; }
+.cli-f-acao { flex:0 0 auto; display:flex; align-items:center; }
+.cli-f-acao .gc-filtros-btn { margin-left:0; height:100%; min-height:40px; }
 .cli-seg-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; }
 .cli-pills-seg .gc-pill { border-radius:10px; }
 .cli-pills-seg .gc-pill i { font-size:12px; margin-right:3px; color:#16a34a; }
@@ -432,7 +449,8 @@
     .ef-hero-title { font-size:21px; }
     .cli-campos { grid-template-columns:1fr; }
     .gc-sep { display:none; }
-    .cli-seg-rot { flex-basis:100%; }
+    .cli-f-row, .cli-f-acao { flex-basis:100%; }
+    .cli-f-acao .gc-filtros-btn { width:100%; justify-content:center; }
 }
 </style>
 
