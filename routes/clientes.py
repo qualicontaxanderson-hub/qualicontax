@@ -2493,6 +2493,20 @@ def socios_da_receita():
                 if _nome_chave(r['nome_razao_social']) == _nome_chave(nome):
                     achado = r['id']
                     break
+        elif not dig and nome:
+            # A reserva (ReceitaWS) manda o QSA SEM documento, só nome e
+            # qualificação (14/10/2026: sócios 5010/5011 já cadastrados apareciam
+            # como "não está cadastrado"). Casa pelo nome — PF ou PJ — só quando
+            # UM cadastro tem esse nome; homônimo fica para escolher à mão.
+            chave = _nome_chave(nome)
+            iguais = [r for r in execute_query(
+                """SELECT id, tipo_pessoa, nome_razao_social FROM clientes
+                    WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO' AND nome_razao_social LIKE %s""",
+                (nome.split()[0] + '%',), fetch=True) or []
+                if _nome_chave(r['nome_razao_social']) == chave]
+            if len(iguais) == 1:
+                achado = iguais[0]['id']
+                eh_pj = iguais[0]['tipo_pessoa'] == 'PJ'
         if achado and achado in empresas_ocultas():
             achado = None
         cad = _cadastro_resumo([achado]).get(achado) if achado else None

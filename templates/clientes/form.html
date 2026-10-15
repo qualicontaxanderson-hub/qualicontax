@@ -2328,7 +2328,8 @@ function desenharQSA() {
         if (!c) {
             for (var j = 0; j < SOCIOS.length; j++) if (qNorm(SOCIOS[j].nome) === qNorm(q.nome)) { c = SOCIOS[j]; q.cadastro = c; break; }
         }
-        var doc = q.tipo === 'PJ' ? 'CNPJ ' + q.doc.replace(/^(\d{2})(\d{3})(\d{3}).*$/, '$1.$2.$3/…') : 'CPF ' + q.doc;
+        var doc = !q.doc ? (c && c.doc ? c.doc : 'documento não informado pela Receita')   // fonte reserva: só o nome
+            : q.tipo === 'PJ' ? 'CNPJ ' + q.doc.replace(/^(\d{2})(\d{3})(\d{3}).*$/, '$1.$2.$3/…') : 'CPF ' + q.doc;
         var dir;
         if (c) {
             dir = '<span class="mk-found"><i class="fas fa-circle-check"></i> encontrado: ' + (c.avulso ? 'avulso' : 'cliente')
