@@ -2574,7 +2574,9 @@ _LOTE_MAX_PDF = 10
 # funcionário repetir o botão 20 vezes. Medido: ~0,12 s por DANFE (mediana
 # 110 ms, pior 300 ms), então 500 dá ~1 min — por isso esse caminho sai em
 # STREAMING (_stream_pdf_lote_nfe), nunca montando o zip antes de responder.
-# CT-e e NFS-e continuam em _LOTE_MAX_PDF: o XML deles vem do Dropbox, um a um.
+# NFS-e entrou no mesmo teto em 16/10/2026 (_stream_pdf_lote_nfse): o XML vem do
+# Dropbox em paralelo por chunk, então o "tudo do filtro" também escala. Só o
+# CT-e segue em _LOTE_MAX_PDF (10) — ainda sem o caminho de streaming.
 _LOTE_MAX_PDF_NFE = 500
 # Quantas notas o streaming resolve por vez (banco + Dropbox). Pequeno de
 # propósito: o primeiro PDF sai logo e o download começa na hora.
@@ -9536,42 +9538,145 @@ def lote_xml_nfse():
         data, [r['data_emissao'] for r in rows], 'NFSE XML'))
 
 
+def _stream_pdf_lote_nfse(where_sql, params, nome_zip):
+    """Zip de DANFSE em STREAMING — espelha _stream_pdf_lote_nfe, com UMA
+    diferença de fundo: em nfse_capturadas não existe xml_raw, então o XML vem
+    SEMPRE do Dropbox (em paralelo, por chunk). Cada PDF é gerado e já vai para a
+    resposta: com 500 notas a geração passa de 1 minuto, e montar o zip antes de
+    responder estouraria o --timeout do gunicorn.
+
+    Nota que não gera PDF não vira arquivo vazio: fica de fora e entra no
+    NAO_GERADOS.txt no fim do zip, com a chave e o motivo. O nome de cada PDF é o
+    mesmo do download individual ('data - Prestador x Tomador.pdf'); colisão
+    (mesma dupla no mesmo dia) ganha o número da nota de sufixo."""
+    from brazilfiscalreport.danfse import Danfse
+
+    meta = execute_query(
+        f"SELECT n.id FROM nfse_capturadas n {where_sql} "
+        "ORDER BY n.data_emissao, n.id", tuple(params), fetch=True) or []
+    ids = [m['id'] for m in meta]
+
+    class _Saida:
+        """Arquivo só-escrita que o zipfile enche e o gerador esvazia."""
+        def __init__(self):
+            self.partes, self.pos = [], 0
+        def write(self, b):
+            self.partes.append(bytes(b))
+            self.pos += len(b)
+            return len(b)
+        def tell(self):
+            return self.pos
+        def flush(self):
+            pass
+        def tirar(self):
+            dados, self.partes = b''.join(self.partes), []
+            return dados
+
+    def gerar():
+        log = logging.getLogger(__name__)
+        saida = _Saida()
+        falhas, vistos = [], set()
+        with zipfile.ZipFile(saida, 'w', zipfile.ZIP_DEFLATED) as z:
+            for i in range(0, len(ids), _LOTE_PDF_CHUNK):
+                lote = ids[i:i + _LOTE_PDF_CHUNK]
+                ph = ','.join(['%s'] * len(lote))
+                rows = execute_query(
+                    f"SELECT n.id, n.chave_acesso, n.numero, n.data_emissao, n.xml_path, "
+                    f"n.prestador_nome, n.prestador_doc, n.tomador_nome, n.tomador_doc "
+                    f"FROM nfse_capturadas n WHERE n.id IN ({ph})",
+                    tuple(lote), fetch=True) or []
+                porid = {r['id']: r for r in rows}
+                ok = {r['id']: xml for r, xml in _xmls_nfse(rows)}   # Dropbox em paralelo
+                for _id in lote:
+                    r = porid.get(_id) or {}
+                    chave = r.get('chave_acesso') or ''
+                    xml = ok.get(_id)
+                    if not xml:
+                        falhas.append((chave or str(_id), 'XML não encontrado no Dropbox'))
+                        continue
+                    try:
+                        pdf = bytes(Danfse(xml=xml).output())
+                    except Exception:
+                        log.exception('[export-lote] falha no DANFSE da nfse_id=%s', _id)
+                        pdf = None
+                    if not pdf:
+                        falhas.append((chave or str(_id), 'XML fora do padrão do DANFSE'))
+                        continue
+                    nome = _nome_pdf_nota(r)
+                    if nome in vistos:
+                        nome = nome[:-4] + f' ({r.get("numero") or _id}).pdf'
+                    vistos.add(nome)
+                    z.writestr(nome, pdf)
+                    yield saida.tirar()
+            if falhas:
+                z.writestr('NAO_GERADOS.txt', (
+                    f'{len(falhas)} NFS-e sem PDF neste zip — baixe o XML delas:\r\n\r\n'
+                    + ''.join(f'{c}  {m}\r\n' for c, m in falhas)).encode('utf-8-sig'))  # BOM: acento certo no Bloco de Notas
+        yield saida.tirar()
+        log.info('[export-lote] DANFSE em streaming: %s notas, %s sem PDF',
+                 len(ids), len(falhas))
+
+    resp = Response(stream_with_context(gerar()), mimetype='application/zip')
+    resp.headers['Content-Disposition'] = _cd_attachment_zip(nome_zip)
+    return resp
+
+
 @escrita_fiscal.route('/conf-nfse/export/pdf-lote', methods=['POST'])
 @login_required
 def lote_pdf_nfse():
-    """DANFSE em lote — SÓ por seleção e no máximo _LOTE_MAX_PDF.
+    """DANFSE em lote — até _LOTE_MAX_PDF_NFE, por seleção OU todas do filtro.
 
-    Diferente do XML, cada PDF é MONTADO na hora (baixa o XML e renderiza), e
-    isso não escala em centenas dentro de uma requisição. Por isso aqui não vale
-    o "todos do filtro": é preciso marcar.
+    Espelha o PDF em lote das Saídas/Entradas (16/10/2026): sem ids = todas do
+    filtro, com ids = só as marcadas, e o zip sai em STREAMING (chunks de
+    _LOTE_PDF_CHUNK) para o download começar no primeiro PDF e não estourar o
+    --timeout do gunicorn. O caminho "num único PDF" (juntar) monta em memória —
+    pypdf precisa de todas as páginas de uma vez — e segue pesado, mas agora
+    limitado ao mesmo teto.
     """
     if not current_user.has_permission('escrita_fiscal.conf_nfse'):
         return jsonify({'error': 'Você não tem permissão para exportar estas NFS-e.'}), 403
     data = request.get_json(silent=True) or {}
     ids = _ids_do_lote(data)
-    if not ids:
-        return jsonify({'error': f'Marque as NFS-e que quer em PDF '
-                                 f'(no máximo {_LOTE_MAX_PDF}).'}), 400
-    if len(ids) > _LOTE_MAX_PDF:
-        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
-                                 f'(cada um é gerado na hora).'}), 400
+    if len(ids) > _LOTE_MAX_PDF_NFE:
+        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF_NFE} PDFs por vez '
+                                 f'(você marcou {len(ids)}).'}), 413
+
+    # Sem ids = TODAS do filtro; com ids = só as marcadas. Em ambos o escopo de
+    # empresa entra no WHERE — lista forjada não alcança nota de outra empresa.
+    where, params = (_where_lote_nfse_ids(data, ids) if ids else _where_lote_nfse(data))
+    where = list(where) + ["COALESCE(n.xml_path,'') <> ''"]
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
+    per = execute_query(
+        f"SELECT COUNT(*) AS t, MIN(n.data_emissao) AS mn, MAX(n.data_emissao) AS mx "
+        f"FROM nfse_capturadas n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+    total = int(per.get('t') or 0)
+    if total == 0:
+        return jsonify({'error': 'Nenhuma NFS-e com XML arquivado na seleção/filtro.'}), 404
+    if total > _LOTE_MAX_PDF_NFE:
+        return jsonify({'error': f'{total} NFS-e no filtro — o PDF vai até '
+                                 f'{_LOTE_MAX_PDF_NFE} por vez. Refine o período '
+                                 f'ou marque as que quer.'}), 413
 
     juntar = bool(data.get('juntar'))
-    where, params = _where_lote_nfse_ids(data, ids)
-    where.append("COALESCE(n.xml_path,'') <> ''")
+    # AUDITORIA (D2): exportação de arquivo (NFS-e PDF em lote) por ação do usuário.
+    registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfse_capturadas',
+              depois={'escopo': 'nfse', 'formato': 'pdf', 'marcadas': len(ids),
+                      'total': total, 'juntar': juntar,
+                      'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
+                                  **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
+
+    nome = _nome_zip_lote(data, [per.get('mn'), per.get('mx')], _prefixo_lote('nfse', 'PDF'))
+    if not juntar:
+        # ZIP com um PDF por nota, em STREAMING.
+        return _stream_pdf_lote_nfse(where_sql, params, nome)
+
+    # --- Num único PDF (juntas), em ordem de emissão ---
     rows = execute_query(
         f"SELECT n.id, n.chave_acesso, n.numero, n.data_emissao, n.xml_path, "
         f"n.prestador_nome, n.prestador_doc, n.tomador_nome, n.tomador_doc "
-        f"FROM nfse_capturadas n WHERE {' AND '.join(where)} "
-        f"ORDER BY n.data_emissao, n.id", tuple(params), fetch=True) or []
-    if not rows:
-        return jsonify({'error': 'Nenhuma das NFS-e marcadas tem XML arquivado.'}), 404
-
-    registrar('leitura.exportou_arquivo', 'fiscal', tabela='nfse_capturadas',
-              depois={'escopo': 'nfse', 'formato': 'pdf', 'total': len(rows),
-                      'juntar': juntar,
-                      'filtros': rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))})
-
+        f"FROM nfse_capturadas n {where_sql} ORDER BY n.data_emissao, n.id",
+        tuple(params), fetch=True) or []
     from brazilfiscalreport.danfse import Danfse
     pdfs, falhas = [], 0
     for r, xml in _xmls_nfse(rows):
@@ -9583,49 +9688,36 @@ def lote_pdf_nfse():
                 '[export-lote] falha ao gerar DANFSE da nfse_id=%s', r['id'])
     if not pdfs:
         return jsonify({'error': 'Não foi possível gerar nenhum PDF das NFS-e '
-                                 'marcadas (XML fora do padrão ou Dropbox fora).'}), 422
+                                 '(XML fora do padrão ou Dropbox fora).'}), 422
     if falhas:
         logging.getLogger(__name__).info(
             '[export-lote] %s PDF(s) de NFS-e ficaram de fora', falhas)
 
-    if juntar:
-        # UM PDF com todas, em ordem de emissão. O nome diz a empresa e o(s)
-        # mês(es): 'NFSe - Qualicontax Assessoria Contabil Ltda - Ago.2026.pdf'.
-        from pypdf import PdfWriter
-        w = PdfWriter()
-        for _r, pb in pdfs:
-            w.append(BytesIO(pb))
-        buf = BytesIO()
-        w.write(buf)
-        buf.seek(0)
-        cid = str(data.get('cliente_id', '')).strip()
-        gid = str(data.get('grupo_id', '')).strip()
-        quem = 'NFS-e'
-        if cid.isdigit():
-            c = execute_query('SELECT nome_razao_social r FROM clientes WHERE id=%s',
-                              (int(cid),), fetch=True, fetch_one=True) or {}
-            razao = (c.get('r') or '').strip()
-            # Nome Proprio local (o _nome_proprio vive em configuracoes.py e
-            # importar entre blueprints arrisca import circular).
-            quem = ' '.join(p.lower() if p.lower() in ('da', 'das', 'de', 'do', 'dos', 'e')
-                            else p.capitalize() for p in razao.split()) or quem
-        elif gid.isdigit():
-            g = execute_query('SELECT nome r FROM grupos_clientes WHERE id=%s',
-                              (int(gid),), fetch=True, fetch_one=True) or {}
-            quem = g.get('r') or quem
-        rotulo = _rotulo_meses([r['data_emissao'] for r, _ in pdfs])
-        nome = re.sub(r'[\\/:*?"<>|]', '', f'NFSe - {quem} - {rotulo}.pdf')
-        return send_file(buf, as_attachment=True, download_name=nome,
-                         mimetype='application/pdf')
-
-    # ZIP com um PDF por nota, cada um nomeado como o download individual.
-    # Colisão (mesma dupla no mesmo dia) ganha o número da nota de sufixo.
-    arquivos, vistos = [], set()
-    for r, pb in pdfs:
-        nome = _nome_pdf_nota(r)
-        if nome in vistos:
-            nome = nome[:-4] + f' ({r["numero"] or r["id"]}).pdf'
-        vistos.add(nome)
-        arquivos.append((nome, pb))
-    return _zip_download(arquivos, _nome_zip_lote(
-        data, [r['data_emissao'] for r, _ in pdfs], 'NFSE PDF'))
+    # UM PDF com todas, em ordem de emissão. O nome diz a empresa e o(s) mês(es):
+    # 'NFSe - Qualicontax Assessoria Contabil Ltda - Ago.2026.pdf'.
+    from pypdf import PdfWriter
+    w = PdfWriter()
+    for _r, pb in pdfs:
+        w.append(BytesIO(pb))
+    buf = BytesIO()
+    w.write(buf)
+    buf.seek(0)
+    cid = str(data.get('cliente_id', '')).strip()
+    gid = str(data.get('grupo_id', '')).strip()
+    quem = 'NFS-e'
+    if cid.isdigit():
+        c = execute_query('SELECT nome_razao_social r FROM clientes WHERE id=%s',
+                          (int(cid),), fetch=True, fetch_one=True) or {}
+        razao = (c.get('r') or '').strip()
+        # Nome Proprio local (o _nome_proprio vive em configuracoes.py e
+        # importar entre blueprints arrisca import circular).
+        quem = ' '.join(p.lower() if p.lower() in ('da', 'das', 'de', 'do', 'dos', 'e')
+                        else p.capitalize() for p in razao.split()) or quem
+    elif gid.isdigit():
+        g = execute_query('SELECT nome r FROM grupos_clientes WHERE id=%s',
+                          (int(gid),), fetch=True, fetch_one=True) or {}
+        quem = g.get('r') or quem
+    rotulo = _rotulo_meses([r['data_emissao'] for r, _ in pdfs])
+    nome_pdf = re.sub(r'[\\/:*?"<>|]', '', f'NFSe - {quem} - {rotulo}.pdf')
+    return send_file(buf, as_attachment=True, download_name=nome_pdf,
+                     mimetype='application/pdf')

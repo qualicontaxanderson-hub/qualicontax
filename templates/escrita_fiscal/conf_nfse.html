@@ -151,6 +151,15 @@ table.cc-table tr.cc-row-substituida:hover td { background:#fef3c7; }
 .sel-banner a { color:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
 .btn-exp { background:transparent; border:none; color:#6b7280; padding:4px 6px; border-radius:5px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-flex; }
 .btn-exp:hover { background:#eef2ff; color:#4338ca; }
+/* Olhinho: o DANFSE num modal (mesmo CSS de conf_compras.html) */
+.nf-prev-overlay { position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:9200; display:none; align-items:center; justify-content:center; }
+.nf-prev-overlay.open { display:flex; }
+.nf-prev-box { background:#fff; border-radius:14px; width:92vw; height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+.nf-prev-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; background:linear-gradient(135deg,#1e3a5f,#2563eb); flex-shrink:0; }
+.nf-prev-header h3 { margin:0; font-size:13.5px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nf-prev-close { background:rgba(255,255,255,.15); border:none; font-size:18px; color:#fff; cursor:pointer; width:32px; height:32px; border-radius:8px; line-height:32px; flex-shrink:0; }
+.nf-prev-close:hover { background:rgba(255,255,255,.28); }
+.nf-prev-frame { flex:1; width:100%; border:none; background:#525659; }
 .exp-drop { position:relative; display:inline-block; }
 .exp-menu { position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:160px; z-index:50; display:none; overflow:hidden; }
 .exp-menu.open { display:block; }
@@ -515,8 +524,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
         </button>
         <div class="exp-drop">
             <button class="btn-lote" onclick="togglePdfMenu(event)"
-                    title="Só as marcadas, no máximo 10 por vez">
-                <i class="fas fa-file-pdf"></i> Gerar PDF (até 10) <i class="fas fa-caret-down" style="font-size:11px;"></i>
+                    title="As marcadas; se nada estiver marcado, todas do filtro atual (até 500)">
+                <i class="fas fa-file-pdf"></i> Gerar PDF (até 500) <i class="fas fa-caret-down" style="font-size:11px;"></i>
             </button>
             <div class="exp-menu" id="pdfMenu">
                 <a onclick="gerarPdfLote(this, true)"><i class="fas fa-file-pdf" style="color:#b91c1c;"></i> Num único PDF (juntas)</a>
@@ -607,6 +616,17 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
     <div class="cc-panel-footer">
         <button onclick="closePanel()" style="background:#f3f4f6;border:1px solid #d1d5db;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;">Fechar</button>
     </div>
+</div>
+</div>
+
+<!-- ===================== MODAL: Visualizar a NFS-e (DANFSE) ===================== -->
+<div class="nf-prev-overlay" id="prevOverlay" onclick="fecharPreview()">
+<div class="nf-prev-box" onclick="event.stopPropagation()">
+    <div class="nf-prev-header">
+        <h3 id="prevTitle"><i class="fas fa-eye" style="margin-right:8px;"></i>Visualizar NFS-e</h3>
+        <button class="nf-prev-close" onclick="fecharPreview()" title="Fechar (Esc)">&times;</button>
+    </div>
+    <iframe id="prevFrame" class="nf-prev-frame" title="Visualização da NFS-e"></iframe>
 </div>
 </div>
 {% endblock %}
@@ -1107,14 +1127,50 @@ document.addEventListener('click', function () {
     const m = document.getElementById('pdfMenu');
     if (m) m.classList.remove('open');
 });
+// Nota cancelada não se escritura. Antes de levar um lote adiante, diz QUANTAS
+// das marcadas estão canceladas e deixa o usuário decidir (igual às Entradas).
+function _confirmaCanceladas() {
+    const n = Array.from(document.querySelectorAll('.chk-linha:checked'))
+        .filter(c => c.dataset.cancelada === '1').length;
+    if (!n) return true;
+    return confirm(`${n} NFS-e marcada(s) está(ão) CANCELADA(S) — não devem ser `
+                 + `escrituradas.\n\nContinuar mesmo assim?`);
+}
 function gerarPdfLote(el, juntar) {
-    const ids = idsMarcados();
-    if (!ids.length) { alert('Marque as NFS-e que quer em PDF (máximo 10).'); return; }
+    // Até 500, como Entradas e Saídas (16/10/2026). Sem nada marcado — ou com
+    // "todas do filtro" — vão TODAS as NFS-e do filtro (ids vazios; o backend
+    // conta e recusa acima de 500). 500 levam ~1 min (XML do Dropbox + DANFSE),
+    // o botão fica em "Gerando..." até lá.
     // juntar=true -> UM PDF com todas, na ordem de emissão
     // juntar=false -> zip com um PDF por nota, cada um "data - Prestador x Tomador"
+    if (!hasSearched) { alert('Faça uma busca primeiro.'); return; }
+    const pageIds = idsMarcados();
+    if (!selTudoFiltro && !pageIds.length &&
+        !confirm('Nada marcado — gerar o PDF de TODAS as NFS-e do filtro atual (até 500)?')) return;
+    if (!selTudoFiltro && pageIds.length > 500) { alert('Máximo 500 PDFs por vez (você marcou ' + pageIds.length + ').'); return; }
+    if (!_confirmaCanceladas()) return;
+    const ids = selTudoFiltro ? [] : pageIds;
     _baixarZip('{{ url_for("escrita_fiscal.lote_pdf_nfse") }}',
                {...getFilters(), ids: ids, juntar: !!juntar}, el.closest('.exp-drop').querySelector('button'));
 }
+// ---- Olhinho: o DANFSE em modal ----
+// Reaproveita o MESMO endpoint do PDF com ?inline=1 (Content-Disposition inline);
+// o <iframe> renderiza no visualizador do navegador em vez de baixar.
+function abrirPreview(id, rotulo) {
+    document.getElementById('prevTitle').innerHTML =
+        '<i class="fas fa-eye" style="margin-right:8px;"></i>' + esc(rotulo || ('NFS-e ' + id));
+    document.getElementById('prevFrame').src = URL_PDF_UMA.replace('/0/', '/' + id + '/') + '?inline=1';
+    document.getElementById('prevOverlay').classList.add('open');
+}
+function fecharPreview() {
+    const ov = document.getElementById('prevOverlay');
+    if (!ov || !ov.classList.contains('open')) return;
+    ov.classList.remove('open');
+    document.getElementById('prevFrame').src = '';  // para o carregamento do PDF
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') fecharPreview();
+});
 function exportBtns(r) {
     // O molde é /nfse/0/xml — o id fica no MEIO, não no fim como no CT-e.
     // O replace(/0$/) copiado de lá nunca casava e o link ia com o 0 cru
@@ -1122,7 +1178,11 @@ function exportBtns(r) {
     // clique). Troca-se o segmento /0/ inteiro, que só existe uma vez.
     const rot = `NFS-e ${r.numero||'—'}/${r.serie||'—'}`;
     const seg = '/' + r.id + '/';
-    return `<a class="btn-exp" href="${URL_XML_UMA.replace('/0/', seg)}" title="Baixar o XML de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`
+    // Rótulo do modal vai dentro de um onclick entre aspas simples — sem aspas.
+    const rotPrev = `${rot} · ${nomePrestador(r) || ''}`.replace(/['"\\]/g, '');
+    // Ordem como nas Entradas: 👁 (visualizar) · XML · PDF.
+    return `<button class="btn-exp" title="Visualizar o DANFSE de ${rot}" onclick="event.stopPropagation(); abrirPreview(${r.id}, '${rotPrev}')"><i class="fas fa-eye"></i></button>`
+         + `<a class="btn-exp" href="${URL_XML_UMA.replace('/0/', seg)}" title="Baixar o XML de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`
          + `<a class="btn-exp" href="${URL_PDF_UMA.replace('/0/', seg)}" title="Baixar o DANFSE de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
 }
 
@@ -1253,7 +1313,7 @@ function loadNotas() {
                 // grid-template-areas reordena pelas classes mc-*, então a
                 // manchete do cartão é o PRESTADOR mesmo ele vindo na 4ª coluna.
                 return `<tr class="cc-row-clickable${rowCls}" onclick="openPanel(${r.id})">
-                    <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" onchange="chkLinhaChange()"></td>
+                    <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${r.situacao === 'cancelada' ? '1' : '0'}" onchange="chkLinhaChange()"></td>
                     <td data-l="Emissão" class="mc-data">${fmtDate(r.data_emissao)}</td>
                     <td data-l="Nº/Série" class="mc-num">${esc(r.numero)||'—'} / ${esc(r.serie)||'—'}</td>
                     <td data-l="Papel" class="mc-papel">${papelBadge(r.papel)}</td>
