@@ -620,8 +620,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
             <i class="fas fa-file-archive"></i> Baixar XMLs <span id="xmlCount"></span>
         </button>
         <button class="btn-lote pdf" onclick="gerarPdfLote(this)"
-                title="Só os marcados, no máximo 10 por vez">
-            <i class="fas fa-file-pdf"></i> Gerar PDF (até 10)
+                title="Os marcados; se nada estiver marcado, todos do filtro atual (até 500)">
+            <i class="fas fa-file-pdf"></i> Gerar PDF (até 500)
         </button>
         <div class="exp-drop">
             <button class="btn-lote exp" onclick="toggleExp(event)" title="Relatório (PDF/Excel) do filtro atual">
@@ -966,9 +966,16 @@ function baixarXmlLote(btn) {
 }
 
 function gerarPdfLote(btn) {
-    const ids = idsMarcados();
-    if (!ids.length) { alert('Marque o que você quer em PDF (no máximo 10).'); return; }
-    if (ids.length > 10) { alert('Máximo 10 PDFs por vez (você marcou ' + ids.length + ').'); return; }
+    // Até 500, como Entradas/Saídas/NFS-e (16/10/2026). Sem nada marcado — ou em
+    // "tudo do filtro" — vão TODOS os CT-e do filtro (ids vazios; o backend conta
+    // só o modelo 57 com XML e recusa acima de 500). 500 levam ~1 min (DACTE na
+    // hora), o zip sai em streaming e o botão fica em "Gerando..." até lá.
+    const pageIds = idsMarcados();
+    if (!selTudoFiltro && !pageIds.length &&
+        !confirm('Nada marcado — gerar o PDF de TODOS os CT-e do filtro atual (até 500)?')) return;
+    if (!selTudoFiltro && pageIds.length > 500) { alert('Máximo 500 PDFs por vez (você marcou ' + pageIds.length + ').'); return; }
+    // Modo "tudo do filtro" → ids vazios: o backend gera por WHERE (só modelo 57).
+    const ids = selTudoFiltro ? [] : pageIds;
     _baixarZip('/escrita-fiscal/conf-cte/export/pdf-lote', Object.assign({}, getFilters(), {ids: ids}), btn);
 }
 

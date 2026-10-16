@@ -2907,6 +2907,27 @@ def _cd_attachment_zip(nome):
     return "attachment; filename=\"%s\"; filename*=UTF-8''%s" % (ascii_fb, quote(nome))
 
 
+class _ZipStreamSink:
+    """Arquivo só-escrita que o zipfile enche e o gerador de streaming esvazia a
+    cada arquivo, mantendo o zip em memória constante — o descritor de dados do
+    zip em saída não-pesquisável é formato padrão. Usado pelos _stream_pdf_lote_*
+    (DANFE/DANFCE, DANFSE e DACTE), que geram PDF a PDF e não cabem em memória
+    de uma vez com 500 documentos."""
+    def __init__(self):
+        self.partes, self.pos = [], 0
+    def write(self, b):
+        self.partes.append(bytes(b))
+        self.pos += len(b)
+        return len(b)
+    def tell(self):
+        return self.pos
+    def flush(self):
+        pass
+    def tirar(self):
+        dados, self.partes = b''.join(self.partes), []
+        return dados
+
+
 def _stream_xml_lote_nfe(where_sql, params, nome_zip):
     """Zip de XML em STREAMING (memória constante) para o caminho 'tudo do filtro',
     onde o volume chega a dezenas de milhares. Busca id+chave de uma vez (leve: sem
@@ -3025,25 +3046,9 @@ def _stream_pdf_lote_nfe(where_sql, params, nome_zip):
         "ORDER BY n.data_emissao, n.id", tuple(params), fetch=True) or []
     ids = [m['id'] for m in meta]
 
-    class _Saida:
-        """Arquivo só-escrita que o zipfile enche e o gerador esvazia."""
-        def __init__(self):
-            self.partes, self.pos = [], 0
-        def write(self, b):
-            self.partes.append(bytes(b))
-            self.pos += len(b)
-            return len(b)
-        def tell(self):
-            return self.pos
-        def flush(self):
-            pass
-        def tirar(self):
-            dados, self.partes = b''.join(self.partes), []
-            return dados
-
     def gerar():
         log = logging.getLogger(__name__)
-        saida = _Saida()
+        saida = _ZipStreamSink()
         falhas = []
         with zipfile.ZipFile(saida, 'w', zipfile.ZIP_DEFLATED) as z:
             for i in range(0, len(ids), _LOTE_PDF_CHUNK):
@@ -3215,48 +3220,108 @@ def lote_xml_cte():
         data, [r['data_emissao'] for r in rows], _prefixo_lote('cte', 'XML')))
 
 
+def _stream_pdf_lote_cte(where_sql, params, nome_zip):
+    """Zip de DACTE em STREAMING — espelha _stream_pdf_lote_nfe. O XML vem do
+    banco (xml_raw) quando houver, senão do Dropbox (xml_caminho), em paralelo
+    por chunk. Só o modelo 57 tem DACTE (o WHERE já filtra); cada PDF é gerado e
+    já vai para a resposta, e CT-e sem PDF entra no NAO_GERADOS.txt — não vira
+    arquivo vazio. Nome por chave, como o download individual."""
+    meta = execute_query(
+        f"SELECT t.id FROM cte_documentos t {where_sql} "
+        "ORDER BY t.data_emissao, t.id", tuple(params), fetch=True) or []
+    ids = [m['id'] for m in meta]
+
+    def gerar():
+        log = logging.getLogger(__name__)
+        saida = _ZipStreamSink()
+        falhas = []
+        with zipfile.ZipFile(saida, 'w', zipfile.ZIP_DEFLATED) as z:
+            for i in range(0, len(ids), _LOTE_PDF_CHUNK):
+                lote = ids[i:i + _LOTE_PDF_CHUNK]
+                ph = ','.join(['%s'] * len(lote))
+                rows = execute_query(
+                    f"SELECT t.id, t.chave_acesso, t.modelo, t.data_emissao, "
+                    f"t.xml_raw, t.xml_caminho FROM cte_documentos t WHERE t.id IN ({ph})",
+                    tuple(lote), fetch=True) or []
+                porid = {r['id']: r for r in rows}
+                ok = {r['id']: xml for r, xml in _xmls_cte(rows)}   # banco, senão Dropbox
+                for _id in lote:
+                    r = porid.get(_id) or {}
+                    chave = r.get('chave_acesso') or ''
+                    xml = ok.get(_id)
+                    if not xml:
+                        falhas.append((chave or str(_id), 'XML não encontrado (banco nem Dropbox)'))
+                        continue
+                    try:
+                        pdf = _gerar_pdf_documento(xml, '57')
+                    except Exception:
+                        log.exception('[export-lote] falha no DACTE do cte_id=%s', _id)
+                        pdf = None
+                    if not pdf:
+                        falhas.append((chave or str(_id), 'XML fora do padrão do DACTE'))
+                        continue
+                    z.writestr((chave or str(_id)) + '.pdf', pdf)
+                    yield saida.tirar()
+            if falhas:
+                z.writestr('NAO_GERADOS.txt', (
+                    f'{len(falhas)} CT-e sem PDF neste zip — baixe o XML deles:\r\n\r\n'
+                    + ''.join(f'{c}  {m}\r\n' for c, m in falhas)).encode('utf-8-sig'))  # BOM: acento certo no Bloco de Notas
+        yield saida.tirar()
+        log.info('[export-lote] DACTE em streaming: %s CT-e, %s sem PDF',
+                 len(ids), len(falhas))
+
+    resp = Response(stream_with_context(gerar()), mimetype='application/zip')
+    resp.headers['Content-Disposition'] = _cd_attachment_zip(nome_zip)
+    return resp
+
+
 @escrita_fiscal.route('/conf-cte/export/pdf-lote', methods=['POST'])
 @login_required
 def lote_pdf_cte():
+    """DACTE em lote — até _LOTE_MAX_PDF_NFE, por seleção OU todos do filtro.
+
+    Mesmo molde das Saídas/NFS-e (16/10/2026): sem ids = todos do filtro, com
+    ids = só os marcados, e o zip sai em STREAMING (chunks de _LOTE_PDF_CHUNK)
+    para o download começar no primeiro PDF e não estourar o --timeout do
+    gunicorn. Só o modelo 57 tem DACTE — 67/64 ficam de fora (sem layout na lib).
+    """
     if not current_user.has_permission('escrita_fiscal.conf_cte'):
         return jsonify({'error': 'Você não tem permissão para exportar estes CT-e.'}), 403
     data = request.get_json(silent=True) or {}
     ids = _ids_do_lote(data)
-    if not ids:
-        return jsonify({'error': 'Marque os CT-e que quer em PDF '
-                                 f'(no máximo {_LOTE_MAX_PDF}).'}), 400
-    if len(ids) > _LOTE_MAX_PDF:
-        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF} PDFs por vez '
+    if len(ids) > _LOTE_MAX_PDF_NFE:
+        return jsonify({'error': f'Máximo {_LOTE_MAX_PDF_NFE} PDFs por vez '
                                  f'(você marcou {len(ids)}).'}), 413
+
+    # Sem ids = TODOS do filtro; com ids = só os marcados. _where_lote já põe o
+    # escopo de empresa nos dois casos. Só modelo 57 gera DACTE e só conta o que
+    # tem XML (banco ou Dropbox).
+    where, params = _where_lote('cte', data)
+    where = list(where) + ["t.modelo = '57'",
+                           "(COALESCE(t.xml_raw,'') <> '' OR COALESCE(t.xml_caminho,'') <> '')"]
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
+    per = execute_query(
+        f"SELECT COUNT(*) AS t, MIN(t.data_emissao) AS mn, MAX(t.data_emissao) AS mx "
+        f"FROM cte_documentos t {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
+    total = int(per.get('t') or 0)
+    if total == 0:
+        return jsonify({'error': 'Nenhum CT-e modelo 57 com XML na seleção/filtro '
+                                 '(só o 57 tem DACTE).'}), 404
+    if total > _LOTE_MAX_PDF_NFE:
+        return jsonify({'error': f'{total} CT-e no filtro — o PDF vai até '
+                                 f'{_LOTE_MAX_PDF_NFE} por vez. Refine o período '
+                                 f'ou marque os que quer.'}), 413
 
     # AUDITORIA (D2): exportação de arquivo (CT-e PDF em lote) por ação do usuário.
     registrar('leitura.exportou_arquivo', 'fiscal', tabela='cte_documentos',
               depois={'escopo': 'cte', 'formato': 'pdf', 'marcadas': len(ids),
+                      'total': total,
                       'filtros': {**{k: v for k, v in data.items() if k != 'ids' and v},
                                   **rotulo_empresa(data.get('cliente_id'), data.get('grupo_id'))}})
 
-    where, params = _where_lote('cte', data)
-    where = list(where) + ["t.modelo = '57'"]
-    rows = execute_query(
-        "SELECT t.id, t.chave_acesso, t.modelo, t.data_emissao, t.xml_raw, t.xml_caminho "
-        "FROM cte_documentos t WHERE " + ' AND '.join(where),
-        tuple(params), fetch=True) or []
-
-    arquivos = []
-    for r, xml in _xmls_cte(rows):
-        try:
-            pdf = _gerar_pdf_documento(xml, '57')
-        except Exception:
-            logging.getLogger(__name__).exception(
-                '[export-lote] falha no DACTE do cte_id=%s', r['id'])
-            pdf = None
-        if pdf:
-            arquivos.append(((r['chave_acesso'] or str(r['id'])) + '.pdf', pdf))
-    if not arquivos:
-        return jsonify({'error': 'Nenhum dos CT-e marcados gera PDF (só o modelo 57 tem '
-                                 'DACTE).'}), 404
-    return _zip_download(arquivos, _nome_zip_lote(
-        data, [r['data_emissao'] for r in rows], _prefixo_lote('cte', 'PDF')))
+    nome = _nome_zip_lote(data, [per.get('mn'), per.get('mx')], _prefixo_lote('cte', 'PDF'))
+    return _stream_pdf_lote_cte(where_sql, params, nome)
 
 
 # ---------------------------------------------------------------------------
@@ -9556,25 +9621,9 @@ def _stream_pdf_lote_nfse(where_sql, params, nome_zip):
         "ORDER BY n.data_emissao, n.id", tuple(params), fetch=True) or []
     ids = [m['id'] for m in meta]
 
-    class _Saida:
-        """Arquivo só-escrita que o zipfile enche e o gerador esvazia."""
-        def __init__(self):
-            self.partes, self.pos = [], 0
-        def write(self, b):
-            self.partes.append(bytes(b))
-            self.pos += len(b)
-            return len(b)
-        def tell(self):
-            return self.pos
-        def flush(self):
-            pass
-        def tirar(self):
-            dados, self.partes = b''.join(self.partes), []
-            return dados
-
     def gerar():
         log = logging.getLogger(__name__)
-        saida = _Saida()
+        saida = _ZipStreamSink()
         falhas, vistos = [], set()
         with zipfile.ZipFile(saida, 'w', zipfile.ZIP_DEFLATED) as z:
             for i in range(0, len(ids), _LOTE_PDF_CHUNK):
