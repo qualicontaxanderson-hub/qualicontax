@@ -305,7 +305,7 @@
                    Montado pelo JS (pfDocsRender) e enviado em pf_documentos_json. #}
                 <div class="cf-fg cf-s12">
                     <div class="pf-docs-cab">
-                        <span class="cf-lbl">Documentos de identificação</span>
+                        <span class="cf-lbl">Documentos de identificação <span class="cf-req">*</span></span>
                         {% if current_user.is_admin() %}
                         <button type="button" class="pf-docs-link" onclick="incluirOpcao('rg_orgao', 'Órgão emissor')"
                                 title="Incluir um órgão emissor na lista (só administrador)"><i class="fas fa-plus"></i> órgão na lista</button>
@@ -1149,6 +1149,11 @@ let PF_DOCS = {{ (documentos or [])|tojson }};
 function pfDocsSync() {
     const el = document.getElementById('pf_documentos_json');
     if (el) el.value = JSON.stringify(PF_DOCS);
+    if (typeof atualizarResumo === 'function') atualizarResumo();   // "Antes de salvar"
+}
+// Obrigatório (19/10/2026): ao menos um documento com tipo e número.
+function pfTemDocumento() {
+    return PF_DOCS.some(d => d.tipo && (d.numero || '').trim());
 }
 function pfSel(opcoes, valor, vazio, rotulo) {
     const s = document.createElement('select');
@@ -1477,6 +1482,13 @@ document.querySelector('form').addEventListener('submit', function(e) {
         e.preventDefault();
         alert('Escolha o contador responsável.');
         document.getElementById('contadorBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+    if (tipoPessoa() === 'PF' && !pfTemDocumento()) {
+        e.preventDefault();
+        alert('Inclua ao menos um documento de identificação (RG, CNH, CIN...) com o número.');
+        document.getElementById('pfDocs').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (!PF_DOCS.length) pfDocAdd();
         return false;
     }
     if (tipoPessoa() === 'PJ') {
@@ -2080,6 +2092,7 @@ function atualizarResumo() {
     if (tipo === 'PF') {
         itens.push([doc.length === 11, 'CPF completo']);
         itens.push([!!nome, 'Nome completo']);
+        itens.push([pfTemDocumento(), 'Documento de identificação']);
     } else {
         itens.push([doc.length === 14, 'CNPJ completo']);
         itens.push([!!nome, 'Razão social']);

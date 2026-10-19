@@ -101,6 +101,10 @@ def _obrigatorios_faltando(form, avulso=False):
         falta.append('contabilidade anterior (ou marque "aberta pela Qualicontax")')
     if tipo == 'PF' and (form.get('pf_nascimento') or '').strip() and not _data_iso(form.get('pf_nascimento')):
         falta.append('data de nascimento (inválida ou no futuro)')
+    # Documento de identificação (19/10/2026): toda PF precisa de ao menos um
+    # (tipo + número). Sem o JSON da tela também falta — não há como saber.
+    if tipo == 'PF' and not _ler_documentos(form, []):
+        falta.append('documento de identificação (RG, CNH, CIN...)')
     return falta
 
 
