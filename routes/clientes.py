@@ -12,7 +12,7 @@ from utils.atividade import registrar, rotulo_empresa
 from utils.auditoria_fmt import AUDITORIA_INICIO, hist_preparar
 from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
-from utils.acesso import filtrar_lista, empresas_ocultas
+from utils.acesso import filtrar_lista, empresas_ocultas, pode_ver_empresa
 from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from utils.cnpj_receita import limpar_logradouro
@@ -447,8 +447,13 @@ def _socios_e_contador_faltando(form, cliente_id=None):
                           (kid,), fetch=True, fetch_one=True) if kid else None
         if not k or not k.get('is_contador') or k.get('situacao') != 'ATIVO' or kid == cliente_id:
             falta.append('contador responsável')
-    # sócios: toda PJ
-    if form.get('tipo_pessoa') == 'PJ':
+    # sócios: toda PJ. Filial travada: o quadro é o da raiz (já conferido lá);
+    # aqui só o pró-labore, que é dela.
+    cnpj = next((v for v in form.getlist('cpf_cnpj') if v.strip()), '')
+    if form.get('tipo_pessoa') == 'PJ' and _filial_travada(cnpj, cliente_id)[0]:
+        if any(x['pl'] is False for x in (_ler_socios(form) or [])):
+            falta.append('pró-labore dos sócios (valor inválido)')
+    elif form.get('tipo_pessoa') == 'PJ':
         socios = _ler_socios(form)
         if not socios:
             falta.append('sócios')
@@ -464,6 +469,106 @@ def _socios_e_contador_faltando(form, cliente_id=None):
             elif any(s['capital'] is False or s['pl'] is False for s in socios):
                 falta.append('capital e pró-labore dos sócios (valor inválido)')
     return falta
+
+
+# ---------------------------------------------------------------------------
+# Quadro de sócios da RAIZ (19/10/2026). O quadro é da empresa inteira (os 8
+# primeiros dígitos do CNPJ), não de um cadastro: matriz e filiais guardam a
+# MESMA cópia em socios_clientes e o salvar mantém as cópias iguais. Só o
+# pró-labore é de cada cadastro. Regras do Anderson:
+#   * filial cuja raiz já tem quadro (matriz ou outra filial) -> vem pronto e
+#     TRAVADO; só o pró-labore fica aberto;
+#   * matriz sem sócios -> a filial preenche e o quadro vai para as duas;
+#   * matriz não cadastrada -> a filial salva; a matriz, quando vier, já abre
+#     com o quadro;
+#   * a matriz edita sempre, e a mudança vai para as filiais.
+# ---------------------------------------------------------------------------
+def _cnpj_digitos(v):
+    d = re.sub(r'\D', '', v or '')
+    return d if len(d) == 14 else ''
+
+
+def _raiz_membros(cnpj, excluir=None):
+    """Os outros cadastros PJ da mesma raiz, matriz (0001) primeiro."""
+    d = _cnpj_digitos(cnpj)
+    if not d:
+        return []
+    rows = execute_query(
+        "SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, avulso FROM clientes "
+        "WHERE tipo_pessoa = 'PJ' AND REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '/', ''), '-', '') LIKE %s "
+        "AND id <> %s", (d[:8] + '%', excluir or 0), fetch=True) or []
+    for r in rows:
+        r['matriz'] = _cnpj_digitos(r['cpf_cnpj'])[8:12] == '0001'
+    return sorted(rows, key=lambda r: (not r['matriz'], r['id']))
+
+
+def _quadro_da_raiz(cnpj, excluir=None):
+    """(cadastro de onde vem o quadro, sócios dele) ou (None, []): o primeiro
+    outro cadastro da raiz que TEM sócios — a matriz, se tiver."""
+    for m in _raiz_membros(cnpj, excluir):
+        soc = SocioCliente.get_by_cliente(m['id'])
+        if soc:
+            return m, soc
+    return None, []
+
+
+def _filial_travada(cnpj, cliente_id=None):
+    """Cadastro de origem quando este CNPJ é FILIAL e a raiz já tem quadro em
+    outro cadastro; senão None (matriz e filial "primeira" editam)."""
+    d = _cnpj_digitos(cnpj)
+    if not d or d[8:12] == '0001':
+        return None, []
+    return _quadro_da_raiz(d, cliente_id)
+
+
+def _socios_json(soc, pls=None):
+    """Linhas de socios_clientes -> o SOCIOS da tela. pls: {pf_id: pró-labore}
+    deste cadastro, quando o quadro vem de outro."""
+    resumo = _cadastro_resumo([x['pf_cliente_id'] for x in soc if x.get('pf_cliente_id')])
+    out = []
+    for x in soc:
+        pid = x.get('pf_cliente_id')
+        if pid not in resumo:
+            continue
+        pl = x.get('pro_labore') if pls is None else pls.get(pid)
+        out.append(dict(resumo[pid], pct=str(x['percentual_participacao'] or ''),
+                        resp=bool(x.get('responsavel')), qual=x.get('qualificacao') or '',
+                        entrada=x['data_entrada'].isoformat() if x.get('data_entrada') else '',
+                        capital='' if x.get('capital_valor') is None else str(x['capital_valor']),
+                        pl='' if pl is None else str(pl)))
+    return out
+
+
+def _origem_json(m):
+    return {'id': m['id'], 'numero': m.get('numero_cliente') or '', 'nome': m['nome_razao_social'],
+            'matriz': bool(m.get('matriz')), 'avulso': bool(m.get('avulso')),
+            'visivel': pode_ver_empresa(m['id'])}
+
+
+def _gravar_quadro(cliente_id, form):
+    """Salva os sócios deste cadastro respeitando a raiz: filial travada grava
+    o quadro da raiz com o pró-labore DELA; os demais gravam o da tela e
+    copiam para os outros cadastros da raiz (cada um com o próprio pró-labore)."""
+    cnpj = next((v for v in form.getlist('cpf_cnpj') if v.strip()), '')
+    tela = _ler_socios(form) or []
+    origem, soc_ref = _filial_travada(cnpj, cliente_id)
+    if origem:
+        pls = {x['id']: x['pl'] for x in tela if x['pl'] is not False}
+        quadro = [{'id': x['pf_cliente_id'], 'pct': Decimal(str(x['percentual_participacao'] or 0)),
+                   'resp': bool(x.get('responsavel')), 'qual': x.get('qualificacao') or '',
+                   'entrada': x.get('data_entrada'),
+                   'capital': None if x.get('capital_valor') is None else Decimal(str(x['capital_valor'])),
+                   'pl': pls.get(x['pf_cliente_id'])}
+                  for x in soc_ref if x.get('pf_cliente_id')]
+        _salvar_socios(cliente_id, quadro)
+        return
+    _salvar_socios(cliente_id, tela)
+    if not tela:
+        return
+    for m in _raiz_membros(cnpj, cliente_id):
+        pls = {x['pf_cliente_id']: (None if x.get('pro_labore') is None else Decimal(str(x['pro_labore'])))
+               for x in SocioCliente.get_by_cliente(m['id']) if x.get('pf_cliente_id')}
+        _salvar_socios(m['id'], [dict(x, pl=pls.get(x['id'])) for x in tela])
 
 
 def _salvar_socios(cliente_id, socios):
@@ -581,13 +686,14 @@ def _ctx_form(cliente=None):
         ks = ClienteContador.contadores_do_cliente(cid)
         ctx['contador_atual'] = ks[0]['id'] if ks else None
         soc = SocioCliente.get_by_cliente(cid)
-        resumo = _cadastro_resumo([s['pf_cliente_id'] for s in soc if s.get('pf_cliente_id')])
-        ctx['socios_json'] = [dict(resumo[s['pf_cliente_id']], pct=str(s['percentual_participacao'] or ''),
-                                   resp=bool(s.get('responsavel')), qual=s.get('qualificacao') or '',
-                                   entrada=s['data_entrada'].isoformat() if s.get('data_entrada') else '',
-                                   capital='' if s.get('capital_valor') is None else str(s['capital_valor']),
-                                   pl='' if s.get('pro_labore') is None else str(s['pro_labore']))
-                              for s in soc if s.get('pf_cliente_id') in resumo]
+        ctx['socios_json'] = _socios_json(soc)
+        ctx['raiz'] = None
+        if cliente.get('tipo_pessoa') == 'PJ':
+            origem, soc_ref = _filial_travada(cliente.get('cpf_cnpj'), cid)
+            if origem:
+                pls = {x['pf_cliente_id']: x.get('pro_labore') for x in soc if x.get('pf_cliente_id')}
+                ctx['socios_json'] = _socios_json(soc_ref, pls)
+                ctx['raiz'] = {'travado': True, 'origem': _origem_json(origem)}
         ctx['pessoa'] = PessoaDados.get(cid) if cliente.get('tipo_pessoa') == 'PF' else {}
         ctx['documentos'] = ([dict(d, contrato=bool(d['contrato'])) for d in Documentos.listar(cid)]
                              if cliente.get('tipo_pessoa') == 'PF' else [])
@@ -596,6 +702,7 @@ def _ctx_form(cliente=None):
         ctx['grupos_cliente'] = []
         ctx['contador_atual'] = _contador_padrao()
         ctx['socios_json'] = []
+        ctx['raiz'] = None
         ctx['pessoa'] = {}
         ctx['documentos'] = []
     ctx['contabilidades_json'] = _contab_combo(cliente.get('contabilidade_anterior_id') if cliente else None)
@@ -1026,7 +1133,7 @@ def novo():
             if not _eh_contador(request.form):
                 _salvar_contador(cliente_id, request.form.get('contador_id', type=int))
             if request.form.get('tipo_pessoa') == 'PJ':
-                _salvar_socios(cliente_id, _ler_socios(request.form) or [])
+                _gravar_quadro(cliente_id, request.form)
                 _salvar_origem(cliente_id, request.form)
                 _salvar_natureza(cliente_id, request.form)
             else:
@@ -1895,7 +2002,7 @@ def editar(id):
                 if not _contador:
                     _salvar_contador(id, request.form.get('contador_id', type=int))
                 if request.form.get('tipo_pessoa') == 'PJ':
-                    _salvar_socios(id, _ler_socios(request.form) or [])
+                    _gravar_quadro(id, request.form)
                     _salvar_origem(id, request.form, cliente.get('contabilidade_anterior_id'))
                     _salvar_natureza(id, request.form, cliente)
                 else:
@@ -2585,6 +2692,30 @@ def cadastros_buscar():
         (excluir, f'%{q}%', dig, f'%{dig}%', q, q), fetch=True) or []
     resumo = _cadastro_resumo([r['id'] for r in filtrar_lista(rows)])
     return jsonify([resumo[r['id']] for r in rows if r['id'] in resumo])
+
+
+@clientes.route('/clientes/api/socios/raiz')
+@login_required
+def socios_da_raiz():
+    """Quadro de sócios da raiz do CNPJ digitado (cadastro novo ou CNPJ
+    trocado na edição). travado = filial cuja raiz já tem quadro em outro
+    cadastro; copiar = matriz nova, que abre com o quadro das filiais."""
+    cnpj = request.args.get('cnpj', '')
+    excluir = request.args.get('excluir', type=int)
+    d = _cnpj_digitos(cnpj)
+    if not d:
+        return jsonify({'ok': False})
+    origem, soc = _quadro_da_raiz(d, excluir)
+    membros = [_origem_json(m) for m in _raiz_membros(d, excluir)]
+    out = {'ok': True, 'filial': d[8:12] != '0001', 'membros': membros,
+           'origem': _origem_json(origem) if origem else None, 'socios': []}
+    out['travado'] = bool(origem) and out['filial']
+    if origem and out['origem']['visivel']:
+        out['socios'] = _socios_json(soc, {} if out['filial'] else None)
+        if not out['filial']:                     # matriz nova: pró-labore é dela, começa vazio
+            for x in out['socios']:
+                x['pl'] = ''
+    return jsonify(out)
 
 
 @clientes.route('/clientes/api/socios/receita', methods=['POST'])

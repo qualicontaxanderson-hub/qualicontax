@@ -113,6 +113,7 @@ MAPA = {
     # "só admin" e a equipe não conseguia criar grupo/ramo nem buscar sócio
     'clientes.cadastros_buscar':       ('clientes.create', 'clientes.edit'),
     'clientes.socios_da_receita':      ('clientes.create', 'clientes.edit'),
+    'clientes.socios_da_raiz':         ('clientes.create', 'clientes.edit'),   # quadro da raiz (matriz/filiais)
     'clientes.proximo_numero_pf':      ('clientes.create', 'clientes.edit'),
     'clientes.ramo_rapido':            ('clientes.create', 'clientes.edit'),
     'clientes.grupo_rapido':           ('clientes.create', 'clientes.edit', 'grupos.index'),

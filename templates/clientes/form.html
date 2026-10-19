@@ -376,11 +376,14 @@
                 <div class="mk-qsa" id="qsaLista"></div>
             </div>
 
+            {# Quadro da RAIZ (19/10/2026): matriz e filiais têm o mesmo quadro. #}
+            <div class="mk-raiz" id="raizAviso" style="display:none;"></div>
+
             <p class="mk-sub"><i class="fas fa-users"></i> Sócios vinculados</p>
             <div class="mk-soc" id="sociosLista"></div>
             <div class="mk-total" id="sociosTotal"></div>
 
-            <div class="mk-add">
+            <div class="mk-add" id="socioAdd">
                 <div class="mk-combo" style="flex:1;">
                     <div class="mk-combo-in">
                         <i class="fas fa-search"></i>
@@ -391,7 +394,7 @@
                 </div>
                 <button type="button" class="cf-inline-btn" onclick="cadastrarSocio('', 'PF')"><i class="fas fa-user-plus"></i> Cadastrar novo sócio</button>
             </div>
-            <p class="cf-hint">Sócio pessoa física ou empresa precisa ter cadastro (cliente ou avulso). "Cadastrar" abre a tela completa de Novo Cliente numa janela por cima, já com o nome e o próximo número livre de pessoa física; ao salvar, a janela fecha e o sócio entra aqui.</p>
+            <p class="cf-hint" id="socioAddDica">Sócio pessoa física ou empresa precisa ter cadastro (cliente ou avulso). "Cadastrar" abre a tela completa de Novo Cliente numa janela por cima, já com o nome e o próximo número livre de pessoa física; ao salvar, a janela fecha e o sócio entra aqui.</p>
         </div>
 
         <!-- ── CARD 3c: Atividade (PJ e PF) ──────────────────────────────── -->
@@ -684,6 +687,12 @@
 .pf-lista select { flex:1 1 auto; min-width:0; }
 .pf-mais { flex:0 0 auto; width:34px; border:1px solid #d7e3dc; border-radius:8px; background:#fff; color:#16a34a; cursor:pointer; }
 .pf-mais:hover { background:#f0faf4; border-color:#86efac; }
+.mk-raiz { display:flex; gap:10px; align-items:flex-start; background:#eff6ff; border:1px solid #bfdbfe;
+    color:#1e3a8a; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.45; margin:4px 0 10px; }
+.mk-raiz i { margin-top:3px; }
+.mk-raiz a { color:#1d4ed8; font-weight:700; white-space:nowrap; }
+.mk-raiz.trava { background:#f8fafc; border-color:#cbd5e1; color:#334155; }
+.mk-soc-row .cf-ctrl[readonly] { background:#f1f5f9; color:#475569; cursor:not-allowed; }
 .pf-docs-cab { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
 .pf-docs-cab .cf-lbl { margin:0; }
 .pf-docs-add, .pf-docs-link { border:1px solid #d7e3dc; background:#fff; color:#15803d; border-radius:8px;
@@ -1511,7 +1520,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
         if (!PF_DOCS.length) pfDocAdd();
         return false;
     }
-    if (tipoPessoa() === 'PJ') {
+    if (tipoPessoa() === 'PJ' && !raizTravada()) {
         var tot = totalSocios();
         var semPct = SOCIOS.some(function (s) { return qNum(s.pct) <= 0; });
         if (!SOCIOS.length || semPct || Math.abs(tot - 100) >= 0.005) {
@@ -2133,7 +2142,9 @@ function atualizarResumo() {
         var ca = document.getElementById('contabilidade_anterior_id');
         itens.push([!!((ab && ab.checked) || (ca && ca.value)), 'Contabilidade anterior']);
     }
-    if (tipo === 'PJ' && typeof SOCIOS !== 'undefined') {
+    if (tipo === 'PJ' && typeof SOCIOS !== 'undefined' && raizTravada()) {
+        itens.push([true, 'Sócios (vêm da raiz)']);
+    } else if (tipo === 'PJ' && typeof SOCIOS !== 'undefined') {
         var tot = totalSocios();
         itens.push([SOCIOS.length > 0 && Math.abs(tot - 100) < 0.005,
                     SOCIOS.length ? 'Sócios somando 100% (' + qPct(tot) + '%)' : 'Sócios']);
@@ -2166,6 +2177,10 @@ document.addEventListener('DOMContentLoaded', function () {
 var GRUPOS = {{ grupos_json|tojson }};
 var CONTADORES = {{ contadores_json|tojson }};
 var SOCIOS = {{ socios_json|tojson }};
+// Quadro da raiz: {travado, origem, membros}. Travado = filial cuja raiz já
+// tem quadro em outro cadastro -> só o pró-labore fica aberto.
+var RAIZ = {{ raiz|tojson }};
+function raizTravada() { return !!(RAIZ && RAIZ.travado); }
 var PROXIMO_PF = {{ proximo_pf|tojson }};
 var CLIENTE_ID = {{ (cliente.id if cliente else None)|tojson }};
 var QSA = [];
@@ -2365,11 +2380,13 @@ function desenharSocios() {
                     + (sub ? '<small class="mk-soc-qual">' + qEsc(sub) + '</small>' : '') + '</span>'
                     + '<span class="mk-soc-tipo">' + tipoSocio(s) + '</span>'
                     + '<span class="mk-pct"><input class="cf-ctrl" inputmode="decimal" placeholder="0,00" data-i="' + i + '" value="'
-                    + qEsc(s.pct == null ? '' : String(s.pct).replace('.', ',')) + '"><span>%</span></span>'
-                    + campoValor(s, i, 'capital', 'mk-cap', 'Capital na empresa')
+                    + qEsc(s.pct == null ? '' : String(s.pct).replace('.', ',')) + '"' + (raizTravada() ? ' readonly' : '') + '><span>%</span></span>'
+                    + campoValor(s, i, 'capital', 'mk-cap', 'Capital na empresa', raizTravada())
                     + campoValor(s, i, 'pl', 'mk-pl', 'Pró-labore por mês')
-                    + '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '') + '> responsável</label>'
-                    + '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio (ao salvar, fica em Ex-sócios com saída hoje)"><i class="fas fa-times"></i></button>'
+                    + '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '')
+                    + (raizTravada() ? ' disabled' : '') + '> responsável</label>'
+                    + (raizTravada() ? '<span></span>'
+                       : '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio (ao salvar, fica em Ex-sócios com saída hoje)"><i class="fas fa-times"></i></button>')
                     + '</div>';
             }).join('');
         box.querySelectorAll('.mk-pct input').forEach(function (inp) {
@@ -2427,10 +2444,67 @@ function lerValorBR(t) {
     var n = /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
     return n;
 }
-function campoValor(s, i, k, cls, rotulo) {
+function campoValor(s, i, k, cls, rotulo, soLeitura) {
     return '<label class="mk-val ' + cls + '"><small class="mk-val-lbl">' + rotulo + '</small>'
          + '<span class="mk-money"><i>R$</i><input class="cf-ctrl" inputmode="decimal" placeholder="0,00" title="'
-         + rotulo + ' (opcional)" data-i="' + i + '" data-k="' + k + '" value="' + qEsc(valorBR(s[k])) + '"></span></label>';
+         + rotulo + (soLeitura ? ' (vem da raiz)' : ' (opcional)') + '" data-i="' + i + '" data-k="' + k + '" value="'
+         + qEsc(valorBR(s[k])) + '"' + (soLeitura ? ' readonly' : '') + '></span></label>';
+}
+
+// ---- Quadro da raiz (matriz e filiais) ----
+function raizNome(o) {
+    return (o.numero ? 'nº ' + qEsc(o.numero) : (o.avulso ? 'avulso' : 'sem número')) + ' · ' + qEsc(o.nome)
+         + ' (' + (o.matriz ? 'matriz' : 'filial') + ')';
+}
+function raizLink(o) {
+    return o.visivel ? ' <a href="/clientes/' + o.id + '/editar" target="_blank" rel="noopener">Abrir <i class="fas fa-up-right-from-square"></i></a>' : '';
+}
+function desenharRaiz() {
+    var box = document.getElementById('raizAviso');
+    var add = document.getElementById('socioAdd');
+    if (!box) return;
+    var r = RAIZ, html = '', trava = raizTravada();
+    if (r && r.travado && r.origem) {
+        html = '<i class="fas fa-lock"></i><span><b>Quadro de sócios da empresa</b> — vem do cadastro ' + raizNome(r.origem) + '.'
+             + raizLink(r.origem) + '<br>Sócios, participação, capital e responsável se mudam lá (vale para a matriz e todas as filiais). '
+             + 'Aqui fica aberto só o <b>pró-labore desta filial</b>.</span>';
+    } else if (r && r.origem) {
+        html = '<i class="fas fa-copy"></i><span>Quadro copiado do cadastro ' + raizNome(r.origem) + '. Confira; ao salvar, '
+             + 'ele vale para toda a empresa (matriz e filiais). O pró-labore é de cada cadastro.</span>';
+    } else if (r && r.membros && r.membros.length) {
+        html = '<i class="fas fa-sitemap"></i><span>A mesma empresa tem ' + r.membros.length + ' outro(s) cadastro(s) sem sócios: '
+             + r.membros.slice(0, 4).map(raizNome).join(', ') + (r.membros.length > 4 ? '…' : '')
+             + '. O quadro que você preencher aqui vale para todos ao salvar.</span>';
+    }
+    box.innerHTML = html;
+    box.className = 'mk-raiz' + (trava ? ' trava' : '');
+    box.style.display = html ? '' : 'none';
+    if (add) add.style.display = trava ? 'none' : '';
+    var dica = document.getElementById('socioAddDica');
+    if (dica) dica.style.display = trava ? 'none' : '';
+    if (trava) { var q = document.getElementById('qsaBox'); if (q) q.style.display = 'none'; }
+}
+// Pergunta ao servidor pelo quadro da raiz do CNPJ (cadastro novo, CNPJ trocado).
+function consultarRaiz() {
+    var el = document.getElementById('cpf_cnpj_pj');
+    var d = el ? el.value.replace(/\D/g, '') : '';
+    if (d.length !== 14 || d === consultarRaiz._ultimo) return;
+    consultarRaiz._ultimo = d;
+    fetch('/clientes/api/socios/raiz?cnpj=' + d + (CLIENTE_ID ? '&excluir=' + CLIENTE_ID : ''))
+        .then(function (r) { return r.json(); })
+        .then(function (r) {
+            if (!r.ok) return;
+            var pls = {};
+            SOCIOS.forEach(function (s) { pls[s.id] = s.pl; });
+            RAIZ = r;
+            if (r.travado) {
+                SOCIOS = (r.socios || []).map(function (s) { return Object.assign({}, s, {pl: pls[s.id] || s.pl || ''}); });
+            } else if (r.origem && !SOCIOS.length) {
+                SOCIOS = r.socios || [];
+            }
+            desenharSocios(); desenharRaiz(); desenharQSA();
+        })
+        .catch(function () {});
 }
 function desenharTotal() {
     var t = totalSocios();
@@ -2504,8 +2578,10 @@ function carregarQSA(qsa) {
         .then(function (res) {
             QSA = res || [];
             // quem a Receita lista e já tem cadastro entra vinculado
-            QSA.forEach(function (q) { if (q.cadastro && !socioJa(q.cadastro.id)) addSocio(q.cadastro, false); });
-            desenharQSA(); sugerirGrupo();
+            if (!raizTravada()) {
+                QSA.forEach(function (q) { if (q.cadastro && !socioJa(q.cadastro.id)) addSocio(q.cadastro, false); });
+            }
+            desenharQSA(); desenharRaiz(); sugerirGrupo();
         })
         .catch(function () {});
 }
@@ -2562,6 +2638,11 @@ document.addEventListener('DOMContentLoaded', function () {
     var sb = document.getElementById('socioBusca');
     if (sb) qCombo(sb, document.getElementById('socioLista'), desenharBuscaSocio);
     desenharSocios();
+    // Quadro da raiz: na abertura (edição) e sempre que o CNPJ ficar completo.
+    desenharRaiz();
+    consultarRaiz();
+    var cj = document.getElementById('cpf_cnpj_pj');
+    if (cj) { cj.addEventListener('input', consultarRaiz); cj.addEventListener('change', consultarRaiz); }
     var ic = document.getElementById('is_contador');
     if (ic) ic.addEventListener('change', atualizarResumo);
     {% if janela %}
