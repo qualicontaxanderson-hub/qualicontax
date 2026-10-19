@@ -22,7 +22,7 @@ from models.socio_cliente import SocioCliente
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
-                                 REGIMES_BENS, NIVEIS_GOVBR)
+                                 REGIMES_BENS, NIVEIS_GOVBR, UFS, Opcoes, TIPOS_OPCAO)
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
 from models.cadastro_anp import CadastroAnp
@@ -277,10 +277,19 @@ def _valor_opcional(v):
     return d.quantize(Decimal('0.01')) if Decimal('0') <= d < Decimal('1e12') else False
 
 
-def _ler_pessoa(form):
+def _ler_pessoa(form, antes=None):
     """Quadro "Dados pessoais" (só PF) -> colunas de clientes_pf_dados. O que
     não é das listas vira vazio; regime de bens só fica para casado(a) e
-    união estável."""
+    união estável. Nacionalidade, profissão e órgão emissor só da lista
+    (cadastro_opcoes) — o valor antigo, de antes da lista, fica enquanto não
+    for trocado."""
+    antes = antes or {}
+    listas = Opcoes.todas()
+
+    def lista(campo):
+        v = (form.get('pf_' + campo) or '').strip()
+        return v if v and (v in listas[campo] or v == antes.get(campo)) else None
+
     def txt(nome, n, upper=False):
         t = ' '.join((form.get(nome) or '').split())[:n]
         return (t.upper() if upper else t) or None
@@ -292,11 +301,12 @@ def _ler_pessoa(form):
     return {
         'data_nascimento': _data_iso(form.get('pf_nascimento')),
         'rg': txt('pf_rg', 20, True),
-        'rg_orgao': txt('pf_rg_orgao', 20, True),
+        'rg_orgao': lista('rg_orgao'),
+        'rg_uf': form.get('pf_rg_uf') if form.get('pf_rg_uf') in UFS else None,
         'estado_civil': civil,
         'regime_bens': regime,
-        'nacionalidade': txt('pf_nacionalidade', 40),
-        'profissao': txt('pf_profissao', 80),
+        'nacionalidade': lista('nacionalidade'),
+        'profissao': lista('profissao'),
         'nome_mae': txt('pf_nome_mae', 255, True),
         'nivel_govbr': nivel if nivel in dict(NIVEIS_GOVBR) else None,
     }
@@ -305,7 +315,7 @@ def _ler_pessoa(form):
 def _salvar_pessoa(cliente_id, form):
     """Grava os dados da pessoa se algo mudou e registra só o que mudou."""
     antes = PessoaDados.get(cliente_id)
-    depois = _ler_pessoa(form)
+    depois = _ler_pessoa(form, antes)
 
     def _s(v):
         return v.isoformat() if hasattr(v, 'isoformat') else (v or None)
@@ -510,7 +520,11 @@ def _ctx_form(cliente=None):
         ctx['pessoa'] = {}
     ctx['contabilidades_json'] = _contab_combo(cliente.get('contabilidade_anterior_id') if cliente else None)
     ctx.update(ESTADOS_CIVIS=ESTADOS_CIVIS, REGIMES_BENS=REGIMES_BENS, NIVEIS_GOVBR=NIVEIS_GOVBR,
-               COM_REGIME=COM_REGIME, hoje_iso=date.today().isoformat())
+               COM_REGIME=COM_REGIME, UFS=UFS, OPCOES=Opcoes.todas(),
+               hoje_iso=date.today().isoformat())
+    if current_user.is_admin():
+        from routes.qrobo import csrf_token
+        ctx['opcoes_csrf'] = csrf_token()   # o "+ Incluir" das listas (só admin)
     return ctx
 
 
@@ -1116,6 +1130,32 @@ def detalhes(id):
                          contadores_disponiveis=contadores_disponiveis,
                          socios_total_percentual=socios_total_percentual,
                           areas_atendimento=AREAS_ATENDIMENTO)
+
+
+@clientes.route('/clientes/opcoes/<tipo>', methods=['POST'])
+@admin_required
+def incluir_opcao(tipo):
+    """Inclui um item numa lista fechada do cadastro da pessoa (só admin).
+
+    Antes de gravar confere se já existe o mesmo nome escrito de outro jeito
+    ("empresaria" x "Empresário(a)"): aí devolve o que existe e não duplica."""
+    from routes.qrobo import csrf_valido
+    if tipo not in TIPOS_OPCAO:
+        return jsonify({'ok': False, 'erro': 'Lista desconhecida.'}), 404
+    if not csrf_valido():
+        return jsonify({'ok': False, 'erro': 'A página expirou. Recarregue e tente de novo.'}), 400
+    nome = ' '.join((request.get_json(silent=True) or {}).get('nome', '').split())[:80]
+    if tipo == 'rg_orgao':
+        nome = nome.upper()
+    if len(nome) < 2:
+        return jsonify({'ok': False, 'erro': 'Escreva o nome.'}), 400
+    iguais = Opcoes.parecidas(tipo, nome)
+    if iguais:
+        return jsonify({'ok': True, 'nome': iguais[0], 'ja_existia': True})
+    Opcoes.incluir(tipo, nome, current_user.id)
+    registrar('escrita.incluiu_opcao_cadastro', 'cadastros', tabela='cadastro_opcoes',
+              depois={'lista': TIPOS_OPCAO[tipo], 'nome': nome})
+    return jsonify({'ok': True, 'nome': nome, 'ja_existia': False})
 
 
 @clientes.route('/clientes/<int:id>/acesso-reservado', methods=['POST'])

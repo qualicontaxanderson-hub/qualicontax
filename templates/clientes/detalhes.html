@@ -428,7 +428,7 @@
                         <p class="fv-seclabel">Dados pessoais</p>
                         <dl class="fv-dl">
                             <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
-                            <dt>RG</dt><dd>{{ ps.rg or '—' }}{% if ps.rg and ps.rg_orgao %} · {{ ps.rg_orgao }}{% endif %}</dd>
+                            <dt>RG</dt><dd>{{ ps.rg or '—' }}{% if ps.rg and ps.rg_orgao %} · {{ ps.rg_orgao }}{% if ps.rg_uf %}/{{ ps.rg_uf }}{% endif %}{% endif %}</dd>
                             <dt>Estado civil</dt><dd>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %}<br><small>{{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</dd>
                             <dt>Nacionalidade</dt><dd>{{ ps.nacionalidade or '—' }}</dd>
                             <dt>Profissão</dt><dd>{{ ps.profissao or '—' }}</dd>

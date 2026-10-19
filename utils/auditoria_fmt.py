@@ -34,7 +34,7 @@ _HIST_LABELS = {
     'capital_valor': 'Capital na empresa', 'pro_labore': 'Pró-labore',
     'contabilidade_anterior': 'Contabilidade anterior', 'natureza_juridica': 'Natureza jurídica', 'contato': 'Contato', 'uf': 'UF',
     # dados da pessoa (PF)
-    'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG',
+    'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG', 'rg_uf': 'UF do RG',
     'estado_civil': 'Estado civil', 'regime_bens': 'Regime de bens', 'nacionalidade': 'Nacionalidade',
     'profissao': 'Profissão', 'nome_mae': 'Nome da mãe', 'nivel_govbr': 'Conta gov.br',
     # certificado
@@ -76,6 +76,7 @@ _HIST_VERBO = {
     'escrita.saida_socio': 'registrou a saída de um sócio',
     'escrita.alterou_socio': 'alterou um sócio',
     'escrita.alterou_dados_pessoa': 'alterou os dados pessoais',
+    'escrita.incluiu_opcao_cadastro': 'incluiu um item numa lista do cadastro',
     'escrita.ignorou_socio_fila': 'tirou uma pessoa da fila de sócios',
     'escrita.criou_contrato': 'adicionou um contrato',
     'escrita.criou_grupo': 'criou um grupo',

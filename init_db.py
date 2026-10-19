@@ -961,6 +961,31 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
 
+    # 19/10/2026: listas fechadas do cadastro da pessoa (nacionalidade,
+    # profissão, órgão emissor) — a equipe escolhe, só o admin inclui. E a UF
+    # do RG em coluna própria (o órgão guarda só a sigla).
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS cadastro_opcoes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            tipo VARCHAR(20) NOT NULL,
+            nome VARCHAR(80) NOT NULL,
+            criado_por INT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_cadastro_opcoes (tipo, nome)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    from models.pessoa_dados import OPCOES_INICIAIS
+    for _tipo, _nomes in OPCOES_INICIAIS.items():
+        for _nome in _nomes:
+            _migrate("INSERT IGNORE INTO cadastro_opcoes (tipo, nome) VALUES (%s, %s)"
+                     % (repr(_tipo), repr(_nome)))
+    _c = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clientes_pf_dados' "
+        "AND COLUMN_NAME = 'rg_uf'", fetch=True, fetch_one=True) or {}
+    if _c.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE clientes_pf_dados ADD COLUMN rg_uf CHAR(2) NULL AFTER rg_orgao")
+
     # Fila "Sócios a cadastrar" (12/10/2026): o quadro de sócios da Receita das
     # empresas sem sócio, uma linha por empresa x sócio. A Receita esconde o
     # meio do CPF, então a pessoa é completada UMA vez pela equipe e ligada a

@@ -23,8 +23,65 @@ REGIMES_BENS = [
 ]
 NIVEIS_GOVBR = [('BRONZE', 'Bronze'), ('PRATA', 'Prata'), ('OURO', 'Ouro')]
 
-CAMPOS = ('data_nascimento', 'rg', 'rg_orgao', 'estado_civil', 'regime_bens',
+UFS = ('AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA',
+       'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO')
+
+CAMPOS = ('data_nascimento', 'rg', 'rg_orgao', 'rg_uf', 'estado_civil', 'regime_bens',
           'nacionalidade', 'profissao', 'nome_mae', 'nivel_govbr')
+
+# ---------------------------------------------------------------------------
+# Listas fechadas (19/10/2026): nacionalidade, profissão e órgão emissor saem
+# de cadastro_opcoes — a equipe ESCOLHE, só o admin inclui. Texto livre virou
+# "Brasileira"/"BRASILEIRA" e "SSP"/"SSP SP"/"SSP/MG" em 7 cadastros, e com
+# isso nenhum filtro funciona. Uma forma só, com "(a)" como o estado civil:
+# "Brasileiro(a)", "Empresário(a)". O órgão é a sigla; a UF fica em rg_uf.
+# ---------------------------------------------------------------------------
+TIPOS_OPCAO = {'nacionalidade': 'Nacionalidade', 'profissao': 'Profissão',
+               'rg_orgao': 'Órgão emissor'}
+OPCOES_INICIAIS = {
+    'nacionalidade': ['Brasileiro(a)'],
+    'profissao': ['Empresário(a)'],
+    'rg_orgao': ['SSP', 'PC', 'DGPC', 'SESP', 'SDS', 'SEJUSP', 'SSPDS', 'IGP', 'IFP',
+                 'POLITEC', 'DETRAN', 'DPF', 'EB', 'MB', 'FAB',
+                 'OAB', 'CRC', 'CRM', 'CREA', 'CRO', 'CRF', 'CRBM', 'CRA'],
+}
+
+
+class Opcoes:
+    """Itens das listas fechadas do cadastro da pessoa."""
+
+    @staticmethod
+    def listar(tipo):
+        rows = execute_query(
+            "SELECT nome FROM cadastro_opcoes WHERE tipo = %s ORDER BY nome",
+            (tipo,), fetch=True) or []
+        return [r['nome'] for r in rows]
+
+    @staticmethod
+    def todas():
+        return {t: Opcoes.listar(t) for t in TIPOS_OPCAO}
+
+    @staticmethod
+    def parecidas(tipo, nome):
+        """Itens que já existem e são o mesmo nome escrito de outro jeito
+        (sem acento, caixa, "(a)", "/"): o admin vê antes de duplicar."""
+        alvo = _chave(nome)
+        return [n for n in Opcoes.listar(tipo) if _chave(n) == alvo]
+
+    @staticmethod
+    def incluir(tipo, nome, usuario_id):
+        return execute_query(
+            "INSERT IGNORE INTO cadastro_opcoes (tipo, nome, criado_por) VALUES (%s, %s, %s)",
+            (tipo, nome, usuario_id))
+
+
+def _chave(nome):
+    """'Empresária' / 'EMPRESARIO' / 'Empresário(a)' -> 'EMPRESARI'."""
+    import re
+    import unicodedata
+    t = unicodedata.normalize('NFKD', nome or '').encode('ascii', 'ignore').decode().upper()
+    t = re.sub(r'\(A\)|[^A-Z]', '', t)
+    return re.sub(r'(O|A)$', '', t)
 
 ROTULOS = {
     'estado_civil': dict(ESTADOS_CIVIS),

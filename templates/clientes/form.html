@@ -14,6 +14,21 @@
 
 {% block content %}
 {% from 'clientes/_contab_anterior.html' import campo_contab, contab_js %}
+{# Lista fechada (cadastro_opcoes): a equipe escolhe; o admin vê o "+" para incluir.
+   Valor antigo que não está na lista aparece "(fora da lista)" até ser trocado. #}
+{% macro lista_pf(campo, rotulo, atual) %}
+<div class="pf-lista">
+    <select id="pf_{{ campo }}" name="pf_{{ campo }}" class="cf-ctrl" aria-label="{{ rotulo }}">
+        <option value="">Selecione…</option>
+        {% if atual and atual not in OPCOES[campo] %}<option value="{{ atual }}" selected>{{ atual }} (fora da lista)</option>{% endif %}
+        {% for n in OPCOES[campo] %}<option value="{{ n }}" {% if atual == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+    {% if current_user.is_admin() %}
+    <button type="button" class="pf-mais" title="Incluir na lista de {{ rotulo|lower }} (só administrador)"
+            onclick="incluirOpcao('{{ campo }}', '{{ rotulo }}')"><i class="fas fa-plus"></i></button>
+    {% endif %}
+</div>
+{% endmacro %}
 {% if not janela %}{% include 'cadastros/_nav_cadastros.html' %}{% endif %}
 
 <div class="ef-hero">
@@ -253,10 +268,15 @@
                     <input type="text" id="pf_rg" name="pf_rg" class="cf-ctrl" maxlength="20"
                            placeholder="Número do RG" value="{{ ps.rg or '' }}">
                 </div>
-                <div class="cf-fg cf-s3">
+                <div class="cf-fg cf-s3 pf-orgao-fg">
                     <label class="cf-lbl" for="pf_rg_orgao">Órgão emissor / UF</label>
-                    <input type="text" id="pf_rg_orgao" name="pf_rg_orgao" class="cf-ctrl" maxlength="20"
-                           placeholder="Ex.: SSP/SP" value="{{ ps.rg_orgao or '' }}">
+                    <div class="pf-orgao">
+                        {{ lista_pf('rg_orgao', 'Órgão emissor', ps.rg_orgao) }}
+                        <select id="pf_rg_uf" name="pf_rg_uf" class="cf-ctrl" aria-label="UF do RG">
+                            <option value="">UF</option>
+                            {% for u in UFS %}<option value="{{ u }}" {% if ps.rg_uf == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
+                        </select>
+                    </div>
                 </div>
                 <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="pf_nivel_govbr">Conta gov.br</label>
@@ -282,14 +302,12 @@
                 </div>
                 <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="pf_nacionalidade">Nacionalidade</label>
-                    <input type="text" id="pf_nacionalidade" name="pf_nacionalidade" class="cf-ctrl" maxlength="40"
-                           placeholder="Ex.: Brasileira" value="{{ ps.nacionalidade or '' }}">
+                    {{ lista_pf('nacionalidade', 'Nacionalidade', ps.nacionalidade) }}
                 </div>
 
                 <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="pf_profissao">Profissão</label>
-                    <input type="text" id="pf_profissao" name="pf_profissao" class="cf-ctrl" maxlength="80"
-                           placeholder="Ex.: Empresário" value="{{ ps.profissao or '' }}">
+                    {{ lista_pf('profissao', 'Profissão', ps.profissao) }}
                 </div>
                 <div class="cf-fg cf-s8">
                     <label class="cf-lbl" for="pf_nome_mae">Nome da mãe</label>
@@ -660,6 +678,16 @@
 {% block extra_js %}
 {% from 'clientes/_contab_anterior.html' import contab_js %}{# import não cruza bloco #}
 <style>
+/* Listas fechadas da pessoa: select + "+" do admin; órgão e UF lado a lado. */
+.pf-lista { display:flex; gap:6px; min-width:0; }
+.pf-lista select { flex:1 1 auto; min-width:0; }
+.pf-mais { flex:0 0 auto; width:34px; border:1px solid #d7e3dc; border-radius:8px; background:#fff; color:#16a34a; cursor:pointer; }
+.pf-mais:hover { background:#f0faf4; border-color:#86efac; }
+.pf-orgao { display:flex; gap:6px; min-width:0; }
+.pf-orgao .pf-lista { flex:1 1 auto; }
+.pf-orgao > select { flex:0 0 74px; min-width:0; }
+/* No celular (2 campos por linha) órgão + "+" + UF não cabem em meia linha. */
+@media (max-width:720px) { .cf-g12 .pf-orgao-fg { grid-column:1 / -1; } }
 /* topo (testeira + hero verde + corpo) vem de identidade.css.
    Escala do app: texto 13–14px; só rótulo em caixa alta vai a 11,5px. */
 .cf-form { max-width:1640px; margin:0 auto; }
@@ -1064,6 +1092,30 @@ function toggleTipoFields() {
 
 // Regime de bens só para casado(a) e união estável; escondido, vai vazio.
 var COM_REGIME = {{ COM_REGIME|list|tojson }};
+// "+ Incluir" das listas fechadas (só admin vê o botão; a rota também é só
+// admin). Se já existe o mesmo nome escrito de outro jeito, o servidor devolve
+// o que existe e ele é o selecionado — não duplica.
+function incluirOpcao(campo, rotulo) {
+    const nome = (prompt('Incluir na lista de ' + rotulo.toLowerCase() + ':\n' +
+        (campo === 'rg_orgao' ? 'Só a sigla (ex.: SSP). A UF vai no campo ao lado.'
+                              : 'Uma forma só, com (a) quando muda com o gênero. Ex.: Empresário(a)')) || '').trim();
+    if (!nome) return;
+    fetch('{{ url_for("clientes.incluir_opcao", tipo="__T__") }}'.replace('__T__', campo), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': '{{ opcoes_csrf or "" }}'},
+        body: JSON.stringify({nome: nome})
+    }).then(r => r.json()).then(d => {
+        if (!d.ok) { alert(d.erro || 'Não consegui incluir.'); return; }
+        const sel = document.getElementById('pf_' + campo);
+        if (![...sel.options].some(o => o.value === d.nome)) {
+            const o = new Option(d.nome, d.nome);
+            const depois = [...sel.options].find(x => x.value && !/\(fora da lista\)$/.test(x.text) && x.value.localeCompare(d.nome, 'pt-BR') > 0);
+            sel.add(o, depois || null);
+        }
+        sel.value = d.nome;
+        if (d.ja_existia) alert('Já existia na lista como "' + d.nome + '" — selecionei esse.');
+    }).catch(() => alert('Não consegui falar com o servidor. Tente de novo.'));
+}
 function toggleRegimeBens() {
     var civil = document.getElementById('pf_estado_civil');
     var wrap = document.getElementById('regimeBensWrap');
