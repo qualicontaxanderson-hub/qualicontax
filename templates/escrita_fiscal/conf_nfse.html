@@ -447,6 +447,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
                                     title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
                             <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
                                     title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+                            <button type="button" class="btn-periodo azul" id="btnHora" onclick="abrirHora()"
+                                    title="Filtrar também pelo horário de emissão (casos específicos)"><i class="fas fa-clock"></i><span id="btnHoraTxt">Hora</span></button>
                         </div>
                     </div>
                 </div>
@@ -634,6 +636,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script src="{{ url_for('static', filename='js/pdf_nome.js') }}"></script>
+<script src="{{ url_for('static', filename='js/filtro_hora.js') }}"></script>
+<script src="{{ url_for('static', filename='js/paginacao.js') }}"></script>
 <script>
 // ===========================================================================
 // Conferência de NFS-e — SOMENTE LEITURA. Só dois endpoints, ambos GET:
@@ -981,6 +985,7 @@ function clearFilters() {
     currentPage = 1;
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
     // um Buscar puxaria a base inteira da empresa.
+    limparHora(false);
     setPeriodo('45d');
 }
 function getFilters() {
@@ -989,6 +994,7 @@ function getFilters() {
         grupo_id: currentGrupoId,
         data_ini: document.getElementById('f_data_ini').value,
         data_fim: document.getElementById('f_data_fim').value,
+        ...horaFiltros(),
         prestador_doc: tsPrestador ? tsPrestador.getValue().join(',') : '',
         tomador_doc: document.getElementById('f_tomador_doc').value,
         numero: document.getElementById('f_numero').value,
@@ -1398,17 +1404,7 @@ function copiarTodasChaves() {
 
 // ---- Paginação ----
 function renderPagination(elId, total, perPage, page, onGo) {
-    const el = document.getElementById(elId);
-    const pages = Math.ceil(total / perPage);
-    if (pages <= 1) { el.innerHTML = ''; return; }
-    el.innerHTML = `
-        <button ${page <= 1 ? 'disabled' : ''} id="${elId}_prev"><i class="fas fa-chevron-left"></i></button>
-        <span style="color:#64748b;">Página <strong>${page}</strong> de ${pages} · ${total} registro(s)</span>
-        <button ${page >= pages ? 'disabled' : ''} id="${elId}_next"><i class="fas fa-chevron-right"></i></button>`;
-    const prev = document.getElementById(elId+'_prev');
-    const next = document.getElementById(elId+'_next');
-    if (prev && page > 1) prev.onclick = () => onGo(page - 1);
-    if (next && page < pages) next.onclick = () => onGo(page + 1);
+    montarPaginacao(elId, total, perPage, page, onGo);   // static/js/paginacao.js
 }
 
 // ---- Painel de detalhe ----

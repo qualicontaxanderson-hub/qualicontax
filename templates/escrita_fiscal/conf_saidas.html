@@ -549,6 +549,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                                     title="Mês passado inteiro (dia 1 ao último dia)"><i class="fas fa-calendar-minus"></i>Mês anterior</button>
                             <button type="button" class="btn-periodo roxo" onclick="setPeriodo('ano')"
                                     title="De 1º de janeiro até hoje"><i class="fas fa-calendar-alt"></i>Ano</button>
+                            <button type="button" class="btn-periodo azul" id="btnHora" onclick="abrirHora()"
+                                    title="Filtrar também pelo horário de emissão (casos específicos)"><i class="fas fa-clock"></i><span id="btnHoraTxt">Hora</span></button>
                         </div>
                     </div>
                 </div>
@@ -836,6 +838,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script src="{{ url_for('static', filename='js/pdf_nome.js') }}"></script>
+<script src="{{ url_for('static', filename='js/filtro_hora.js') }}"></script>
+<script src="{{ url_for('static', filename='js/paginacao.js') }}"></script>
 <script>
 let currentTab = 'notas';
 let currentPage = 1;
@@ -1387,6 +1391,7 @@ function clearFilters() {
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
     // um Buscar puxaria a base inteira da empresa (dezenas de milhares de notas).
     desmarcarTodos();
+    limparHora(false);
     setPeriodo('45d');  // já dispara applyFilters()
 }
 function getFilters() {
@@ -1395,6 +1400,7 @@ function getFilters() {
         grupo_id:    currentGrupoId,
         data_ini:    document.getElementById('f_data_ini').value,
         data_fim:    document.getElementById('f_data_fim').value,
+        ...horaFiltros(),
         // Multi: os valores viram "a,b,c" — string simples atravessa a query
         // string e o corpo JSON do excluir-lote sem virar lista aninhada.
         dest_cnpj:   tsDest ? tsDest.getValue().join(',') : '',
@@ -1605,7 +1611,7 @@ function loadNotas() {
 // ---- Load Por Destinatário ----
 function loadDestinatario() {
     const f = getFilters();
-    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim, cancelado:f.cancelado});
+    const params = new URLSearchParams({cliente_id:f.cliente_id, grupo_id:f.grupo_id, data_ini:f.data_ini, data_fim:f.data_fim, hora_ini:f.hora_ini, hora_fim:f.hora_fim, cancelado:f.cancelado});
     showLoad();
     _fetchWithAbort('destinatario', '{{ url_for("escrita_fiscal.api_por_destinatario") }}?' + params)
         .then(r => r.json())
@@ -1637,7 +1643,7 @@ function loadProduto() {
     const f = getFilters();
     const params = new URLSearchParams({
         cliente_id:f.cliente_id, grupo_id:f.grupo_id,
-        data_ini:f.data_ini, data_fim:f.data_fim,
+        data_ini:f.data_ini, data_fim:f.data_fim, hora_ini:f.hora_ini, hora_fim:f.hora_fim,
         dest_cnpj:f.dest_cnpj, ncm:f.ncm, descricao:f.descricao,
         cancelado:f.cancelado,
     });
@@ -1674,14 +1680,7 @@ function loadProduto() {
 
 // ---- Pagination ----
 function renderPagination(id, total, perPage, page) {
-    const pages = Math.ceil(total / perPage);
-    const el = document.getElementById(id);
-    if (pages <= 1) { el.innerHTML = ''; return; }
-    el.innerHTML = `
-        <button onclick="goPage(${page-1})" ${page<=1?'disabled':''}><i class="fas fa-chevron-left"></i></button>
-        <span>Página ${page} de ${pages} &nbsp;|&nbsp; ${total} registro(s)</span>
-        <button onclick="goPage(${page+1})" ${page>=pages?'disabled':''}><i class="fas fa-chevron-right"></i></button>
-    `;
+    montarPaginacao(id, total, perPage, page, goPage);   // static/js/paginacao.js
 }
 function goPage(p) {
     currentPage = p;

@@ -638,6 +638,52 @@ def _clausulas_data(alias, f_data_ini, f_data_fim):
     return clauses, params
 
 
+def _filtro_hora(where, params, tipo, al, a):
+    """Recorte por HORA de emissão, somado ao de data (botão "Hora" do QUANDO).
+
+    ``hora_ini``/``hora_fim`` ('HH:MM') valem como data+hora: início = data_ini
+    às hora_ini, fim = data_fim às hora_fim (o minuto inteiro). Só muda os DIAS
+    DA PONTA — os do meio passam inteiros, então o índice de data segue fazendo
+    o trabalho e a hora só é lida nas notas desses dias. Sem a data, a hora vale
+    como janela do dia.
+
+    De onde vem a hora: NF-e = ``hora_emissao`` (o expurgo preenche) ou o
+    ``<dhEmi>`` do XML enquanto ele existe; CT-e = ``dh_emissao``; NFS-e =
+    ``data_emissao``, que já é DATETIME. Nota sem hora conhecida fica de fora
+    nos dias da ponta (não dá para dizer que está dentro)."""
+    def hm(k):
+        v = str(a.get(k, '') or '').strip()
+        return v if re.fullmatch(r'([01]\d|2[0-3]):[0-5]\d', v) else ''
+    hi, hf = hm('hora_ini'), hm('hora_fim')
+    if not (hi or hf):
+        return
+    if tipo == 'nfe':
+        dia = f'{al}.data_emissao'
+        hora = (f"COALESCE({al}.hora_emissao, CASE WHEN LOCATE('<dhEmi>', {al}.xml_raw) > 0 THEN "
+                f"SUBSTRING(SUBSTRING_INDEX(SUBSTRING_INDEX({al}.xml_raw,'<dhEmi>',-1),'</dhEmi>',1),12,8) "
+                "END)")
+    elif tipo == 'cte':
+        dia, hora = f'{al}.data_emissao', f'TIME({al}.dh_emissao)'
+    else:
+        dia, hora = f'DATE({al}.data_emissao)', f'TIME({al}.data_emissao)'
+    di = str(a.get('data_ini', '') or '').strip()
+    df = str(a.get('data_fim', '') or '').strip()
+    if hi:
+        if di:
+            where.append(f'({dia} > %s OR {hora} >= %s)')
+            params.extend([di, hi + ':00'])
+        else:
+            where.append(f'{hora} >= %s')
+            params.append(hi + ':00')
+    if hf:
+        if df:
+            where.append(f'({dia} < %s OR {hora} <= %s)')
+            params.extend([df, hf + ':59'])
+        else:
+            where.append(f'{hora} <= %s')
+            params.append(hf + ':59')
+
+
 def _opcoes_valores(tabela, alias, where_sql, params, col, ordem=None, limite=None):
     """DISTINCT de uma coluna no MESMO escopo da listagem, com teto opcional.
 
@@ -2749,6 +2795,7 @@ def _where_lote_entradas(data):
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', data)
     cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
     if cl_chave:
         where.append(cl_chave)
@@ -2814,6 +2861,7 @@ def _where_lote_saidas(data):
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', data)
     cl_chave = _clausula_multi('n.chave_acesso', f_chave, params)
     if cl_chave:
         where.append(cl_chave)
@@ -2877,6 +2925,7 @@ def _where_lote_cte(data):
     if f_data_fim:
         where.append('t.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'cte', 't', data)
     if f_chave:
         where.append('t.chave_acesso LIKE %s')
         params.append(f'%{f_chave}%')
@@ -3519,6 +3568,7 @@ def _where_entradas(a, excluir=()):
     if g('data_fim'):
         where.append('n.data_emissao <= %s')
         params.append(g('data_fim'))
+    _filtro_hora(where, params, 'nfe', 'n', a)
     for faceta, col, um in (('chave', 'n.chave_acesso', 'contem'), ('num_nota', 'n.num_nota', 'igual'),
                             ('cfop', 'n.cfop', 'prefixo')):
         if faceta not in excluir:
@@ -3582,6 +3632,7 @@ def _where_saidas(a, excluir=()):
     if g('data_fim'):
         where.append('n.data_emissao <= %s')
         params.append(g('data_fim'))
+    _filtro_hora(where, params, 'nfe', 'n', a)
     for faceta, col, um in (('chave', 'n.chave_acesso', 'contem'), ('num_nota', 'n.num_nota', 'igual'),
                             ('cfop', 'n.cfop', 'prefixo')):
         if faceta not in excluir:
@@ -3646,6 +3697,7 @@ def _where_ctes(a, excluir=(), com_papel=True):
     if g('data_fim'):
         where.append('t.data_emissao <= %s')
         params.append(g('data_fim'))
+    _filtro_hora(where, params, 'cte', 't', a)
     if g('chave'):
         where.append('t.chave_acesso LIKE %s')
         params.append(f"%{g('chave')}%")
@@ -3728,6 +3780,7 @@ def _where_nfse(a, excluir=(), com_papel=True):
     if g('data_fim'):
         where.append('n.data_emissao <= %s')
         params.append(g('data_fim') + ' 23:59:59')
+    _filtro_hora(where, params, 'nfse', 'n', a)
     if com_papel and g('papel'):
         where.append('n.papel = %s')
         params.append(g('papel'))
@@ -4303,6 +4356,7 @@ def api_por_emissor():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', request.args)
     _aplica_cancelada(where, f_cancelado, 'n')
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
@@ -4351,6 +4405,7 @@ def api_por_produto():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', request.args)
     _aplica_cancelada(where, f_cancelado, 'n')
     if f_emit_cnpj:
         where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
@@ -4419,6 +4474,7 @@ def api_resumo_produtos():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', request.args)
     if f_emit_cnpj:
         where.append(_clausula_in('n.emit_cnpj', f_emit_cnpj, params))
     if f_emit_uf:
@@ -8823,6 +8879,7 @@ def api_por_destinatario():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', request.args)
     _aplica_cancelada(where, f_cancelado, 'n')
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
@@ -8868,6 +8925,7 @@ def api_por_produto_saidas():
     if f_data_fim:
         where.append('n.data_emissao <= %s')
         params.append(f_data_fim)
+    _filtro_hora(where, params, 'nfe', 'n', request.args)
     _aplica_cancelada(where, f_cancelado, 'n')
     if f_dest_cnpj:
         where.append(_clausula_in('n.dest_cnpj', f_dest_cnpj, params))
