@@ -34,7 +34,7 @@ _HIST_LABELS = {
     'capital_valor': 'Capital na empresa', 'pro_labore': 'Pró-labore',
     'contabilidade_anterior': 'Contabilidade anterior', 'natureza_juridica': 'Natureza jurídica', 'contato': 'Contato', 'uf': 'UF',
     # dados da pessoa (PF)
-    'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG', 'rg_uf': 'UF do RG',
+    'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG', 'rg_uf': 'UF do RG', 'documentos': 'Documentos de identificação',
     'estado_civil': 'Estado civil', 'regime_bens': 'Regime de bens', 'nacionalidade': 'Nacionalidade',
     'profissao': 'Profissão', 'nome_mae': 'Nome da mãe', 'nivel_govbr': 'Conta gov.br',
     # certificado

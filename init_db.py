@@ -985,6 +985,22 @@ def _apply_migrations():
         "AND COLUMN_NAME = 'rg_uf'", fetch=True, fetch_one=True) or {}
     if _c.get('cnt', 0) == 0:
         _migrate("ALTER TABLE clientes_pf_dados ADD COLUMN rg_uf CHAR(2) NULL AFTER rg_orgao")
+    # Documentos de identificação da pessoa (19/10/2026): vários por pessoa
+    # (RG, CIN, CNH, conselho...), um marcado para o contrato.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS clientes_pf_documentos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            tipo VARCHAR(12) NOT NULL,
+            numero VARCHAR(30) NOT NULL,
+            orgao VARCHAR(20) NULL,
+            uf CHAR(2) NULL,
+            contrato TINYINT(1) NOT NULL DEFAULT 0,
+            alterado_por INT NULL,
+            alterado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_pf_docs_cliente (cliente_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
 
     # Fila "Sócios a cadastrar" (12/10/2026): o quadro de sócios da Receita das
     # empresas sem sócio, uma linha por empresa x sócio. A Receita esconde o

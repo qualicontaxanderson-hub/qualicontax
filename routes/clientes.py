@@ -22,7 +22,8 @@ from models.socio_cliente import SocioCliente
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
-                                 REGIMES_BENS, NIVEIS_GOVBR, UFS, Opcoes, TIPOS_OPCAO)
+                                 REGIMES_BENS, NIVEIS_GOVBR, UFS, Opcoes, TIPOS_OPCAO,
+                                 Documentos, TIPOS_DOC, ORGAO_SUGERIDO)
 from models.grupo_cliente import GrupoCliente
 from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
 from models.cadastro_anp import CadastroAnp
@@ -300,9 +301,6 @@ def _ler_pessoa(form, antes=None):
     nivel = form.get('pf_nivel_govbr') or ''
     return {
         'data_nascimento': _data_iso(form.get('pf_nascimento')),
-        'rg': txt('pf_rg', 20, True),
-        'rg_orgao': lista('rg_orgao'),
-        'rg_uf': form.get('pf_rg_uf') if form.get('pf_rg_uf') in UFS else None,
         'estado_civil': civil,
         'regime_bens': regime,
         'nacionalidade': lista('nacionalidade'),
@@ -312,8 +310,52 @@ def _ler_pessoa(form, antes=None):
     }
 
 
+def _ler_documentos(form, antes):
+    """pf_documentos_json da tela -> lista limpa: tipo da lista fixa, número
+    obrigatório (em maiúsculas), órgão da lista fechada (ou o que já estava
+    gravado), UF válida; um só marcado para o contrato (sem marca, o 1º)."""
+    import json
+    cru = (form.get('pf_documentos_json') or '').strip()
+    if not cru:
+        return None       # o JS da tela não rodou: vazio NÃO é "sem documento" — não apaga nada
+    try:
+        bruto = json.loads(cru)
+    except ValueError:
+        return None                       # tela quebrada: não mexe no que existe
+    tipos = dict(TIPOS_DOC)
+    orgaos = set(Opcoes.listar('rg_orgao')) | {d.get('orgao') for d in antes if d.get('orgao')}
+    out, vistos = [], set()
+    for d in bruto if isinstance(bruto, list) else []:
+        if not isinstance(d, dict):
+            continue
+        tipo = str(d.get('tipo') or '')
+        numero = ' '.join(str(d.get('numero') or '').split()).upper()[:30]
+        if tipo not in tipos or not numero or (tipo, numero) in vistos:
+            continue
+        vistos.add((tipo, numero))
+        orgao = str(d.get('orgao') or '')
+        uf = str(d.get('uf') or '')
+        out.append({'tipo': tipo, 'numero': numero, 'orgao': orgao if orgao in orgaos else None,
+                    'uf': uf if uf in UFS else None, 'contrato': bool(d.get('contrato'))})
+    marcados = [d for d in out if d['contrato']]
+    for d in out:
+        d['contrato'] = False
+    if out:
+        (marcados[0] if marcados else out[0])['contrato'] = True
+    return out
+
+
 def _salvar_pessoa(cliente_id, form):
     """Grava os dados da pessoa se algo mudou e registra só o que mudou."""
+    docs_antes = Documentos.listar(cliente_id)
+    docs = _ler_documentos(form, docs_antes)
+    if docs is not None:
+        r_antes, r_depois = Documentos.resumo(docs_antes), Documentos.resumo(docs)
+        if r_antes != r_depois:
+            Documentos.salvar(cliente_id, docs, current_user.id)
+            registrar('escrita.alterou_dados_pessoa', 'cadastros', tabela='clientes',
+                      registro_id=cliente_id, antes={'documentos': r_antes},
+                      depois={'documentos': r_depois})
     antes = PessoaDados.get(cliente_id)
     depois = _ler_pessoa(form, antes)
 
@@ -512,15 +554,19 @@ def _ctx_form(cliente=None):
                                    pl='' if s.get('pro_labore') is None else str(s['pro_labore']))
                               for s in soc if s.get('pf_cliente_id') in resumo]
         ctx['pessoa'] = PessoaDados.get(cid) if cliente.get('tipo_pessoa') == 'PF' else {}
+        ctx['documentos'] = ([dict(d, contrato=bool(d['contrato'])) for d in Documentos.listar(cid)]
+                             if cliente.get('tipo_pessoa') == 'PF' else [])
     else:
         ctx['ramos_cliente'] = []
         ctx['grupos_cliente'] = []
         ctx['contador_atual'] = _contador_padrao()
         ctx['socios_json'] = []
         ctx['pessoa'] = {}
+        ctx['documentos'] = []
     ctx['contabilidades_json'] = _contab_combo(cliente.get('contabilidade_anterior_id') if cliente else None)
     ctx.update(ESTADOS_CIVIS=ESTADOS_CIVIS, REGIMES_BENS=REGIMES_BENS, NIVEIS_GOVBR=NIVEIS_GOVBR,
                COM_REGIME=COM_REGIME, UFS=UFS, OPCOES=Opcoes.todas(),
+               TIPOS_DOC=TIPOS_DOC, ORGAO_SUGERIDO=ORGAO_SUGERIDO,
                hoje_iso=date.today().isoformat())
     if current_user.is_admin():
         from routes.qrobo import csrf_token
@@ -1119,6 +1165,7 @@ def detalhes(id):
                          qualificacoes_socio=QUALIFICACOES_SOCIO,
                          hoje_iso=date.today().isoformat(),
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
+                         documentos=Documentos.listar(id) if cliente.get('tipo_pessoa') == 'PF' else [],
                          natureza=(natureza_classificar(cliente.get('natureza_codigo'), cliente.get('natureza_juridica'))
                                    + (codigo_formatado(cliente.get('natureza_codigo')),)),
                          raiz_papel=_papel_raiz(cliente, _mapa_raiz()),

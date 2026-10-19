@@ -236,6 +236,8 @@
 </form>
 
 <style>
+/* Endereço sempre em MAIÚSCULAS (o servidor grava assim; aqui é para ver). */
+#logradouro, #numero, #complemento, #bairro, #cidade { text-transform:uppercase; }
 .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 @media (max-width:420px) { .opcoes { grid-template-columns:1fr; } }
 .opcao { position:relative; display:block; cursor:pointer; }

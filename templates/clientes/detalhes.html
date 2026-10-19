@@ -181,6 +181,8 @@
 .hist-pg[disabled] { opacity:.45; cursor:default; }
 .hist-pg-info { font-size:12px; color:#64748b; }
 
+/* Endereço sempre em MAIÚSCULAS (o servidor grava assim; aqui é para ver). */
+#logradouro, #numero, #complemento, #bairro, #cidade { text-transform:uppercase; }
 /* ── Aba Acesso (empresa reservada; só admin) ───────────────────────────── */
 .acesso-form { display:flex; flex-direction:column; gap:16px; max-width:640px; }
 .acesso-opcao { display:flex; gap:10px; align-items:flex-start; cursor:pointer; font-size:14px; }
@@ -428,7 +430,7 @@
                         <p class="fv-seclabel">Dados pessoais</p>
                         <dl class="fv-dl">
                             <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
-                            <dt>RG</dt><dd>{{ ps.rg or '—' }}{% if ps.rg and ps.rg_orgao %} · {{ ps.rg_orgao }}{% if ps.rg_uf %}/{{ ps.rg_uf }}{% endif %}{% endif %}</dd>
+                            <dt>Documentos</dt><dd>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if d.contrato %} <small>(contrato)</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
                             <dt>Estado civil</dt><dd>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %}<br><small>{{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</dd>
                             <dt>Nacionalidade</dt><dd>{{ ps.nacionalidade or '—' }}</dd>
                             <dt>Profissão</dt><dd>{{ ps.profissao or '—' }}</dd>

@@ -2,6 +2,14 @@
 from utils.db_helper import execute_query
 
 
+def _mai(v):
+    """Endereço SEMPRE em maiúsculas e sem espaço repetido (19/10/2026): a busca
+    por CEP devolve "Rua Jaime Taveira"/"São Paulo" e a digitação vem de todo
+    jeito — com duas grafias nenhum filtro nem relatório agrupa."""
+    t = ' '.join(str(v).split()).upper() if v is not None else ''
+    return t or None
+
+
 class EnderecoCliente:
     """Classe para gestão de endereços de clientes"""
     
@@ -78,8 +86,8 @@ class EnderecoCliente:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
-            cliente_id, tipo, cep, logradouro, numero, complemento,
-            bairro, cidade, estado, pais, principal
+            cliente_id, tipo, cep, _mai(logradouro), _mai(numero), _mai(complemento),
+            _mai(bairro), _mai(cidade), _mai(estado), pais, principal
         )
         return execute_query(query, params)
     
@@ -119,8 +127,8 @@ class EnderecoCliente:
             WHERE id = %s
         """
         params = (
-            tipo, cep, logradouro, numero, complemento,
-            bairro, cidade, estado, pais, principal, endereco_id
+            tipo, cep, _mai(logradouro), _mai(numero), _mai(complemento),
+            _mai(bairro), _mai(cidade), _mai(estado), pais, principal, endereco_id
         )
         return execute_query(query, params)
     

@@ -258,27 +258,12 @@
         <div class="cf-card cf-after-tipo pf-only">
             <p class="cf-seclabel">Dados pessoais <span class="cf-seclabel-note">os que o contrato social e a Junta pedem · pode completar depois</span></p>
             <div class="cf-g12">
-                <div class="cf-fg cf-s3">
+                <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="pf_nascimento">Data de nascimento</label>
                     <input type="date" id="pf_nascimento" name="pf_nascimento" class="cf-ctrl" max="{{ hoje_iso }}"
                            value="{{ ps.data_nascimento.isoformat() if ps.data_nascimento else '' }}">
                 </div>
-                <div class="cf-fg cf-s3">
-                    <label class="cf-lbl" for="pf_rg">RG</label>
-                    <input type="text" id="pf_rg" name="pf_rg" class="cf-ctrl" maxlength="20"
-                           placeholder="Número do RG" value="{{ ps.rg or '' }}">
-                </div>
-                <div class="cf-fg cf-s3 pf-orgao-fg">
-                    <label class="cf-lbl" for="pf_rg_orgao">Órgão emissor / UF</label>
-                    <div class="pf-orgao">
-                        {{ lista_pf('rg_orgao', 'Órgão emissor', ps.rg_orgao) }}
-                        <select id="pf_rg_uf" name="pf_rg_uf" class="cf-ctrl" aria-label="UF do RG">
-                            <option value="">UF</option>
-                            {% for u in UFS %}<option value="{{ u }}" {% if ps.rg_uf == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="cf-fg cf-s3">
+                <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="pf_nivel_govbr">Conta gov.br</label>
                     <select id="pf_nivel_govbr" name="pf_nivel_govbr" class="cf-ctrl">
                         <option value="">Não sei</option>
@@ -314,8 +299,24 @@
                     <input type="text" id="pf_nome_mae" name="pf_nome_mae" class="cf-ctrl" maxlength="255"
                            placeholder="Nome completo da mãe" value="{{ ps.nome_mae or '' }}">
                 </div>
+
+                {# Documentos de identificação (19/10/2026): "RG é vago" — vários por
+                   pessoa (RG, CIN, CNH, conselho...), um marcado para o contrato.
+                   Montado pelo JS (pfDocsRender) e enviado em pf_documentos_json. #}
+                <div class="cf-fg cf-s12">
+                    <div class="pf-docs-cab">
+                        <span class="cf-lbl">Documentos de identificação</span>
+                        {% if current_user.is_admin() %}
+                        <button type="button" class="pf-docs-link" onclick="incluirOpcao('rg_orgao', 'Órgão emissor')"
+                                title="Incluir um órgão emissor na lista (só administrador)"><i class="fas fa-plus"></i> órgão na lista</button>
+                        {% endif %}
+                        <button type="button" class="pf-docs-add" onclick="pfDocAdd()"><i class="fas fa-plus"></i> Incluir documento</button>
+                    </div>
+                    <div id="pfDocs" class="pf-docs"></div>
+                    <input type="hidden" name="pf_documentos_json" id="pf_documentos_json" value="">
+                </div>
             </div>
-            <p class="cf-hint">O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
+            <p class="cf-hint">Em <b>Contrato</b>, marque o documento que vai no contrato social. O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
         </div>
 
         <!-- ── CARD 3: Grupo e contador (PJ e PF) ─────────────────────────── -->
@@ -683,11 +684,26 @@
 .pf-lista select { flex:1 1 auto; min-width:0; }
 .pf-mais { flex:0 0 auto; width:34px; border:1px solid #d7e3dc; border-radius:8px; background:#fff; color:#16a34a; cursor:pointer; }
 .pf-mais:hover { background:#f0faf4; border-color:#86efac; }
-.pf-orgao { display:flex; gap:6px; min-width:0; }
-.pf-orgao .pf-lista { flex:1 1 auto; }
-.pf-orgao > select { flex:0 0 74px; min-width:0; }
-/* No celular (2 campos por linha) órgão + "+" + UF não cabem em meia linha. */
-@media (max-width:720px) { .cf-g12 .pf-orgao-fg { grid-column:1 / -1; } }
+.pf-docs-cab { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.pf-docs-cab .cf-lbl { margin:0; }
+.pf-docs-add, .pf-docs-link { border:1px solid #d7e3dc; background:#fff; color:#15803d; border-radius:8px;
+    padding:5px 11px; font-size:12.5px; font-weight:700; cursor:pointer; }
+.pf-docs-add { margin-left:auto; }
+.pf-docs-link { color:#64748b; font-weight:600; }
+.pf-docs-add:hover, .pf-docs-link:hover { background:#f0faf4; border-color:#86efac; }
+.pf-docs { display:flex; flex-direction:column; gap:8px; }
+.pf-docs-vazio { font-size:12.5px; color:#94a3b8; padding:10px 12px; border:1px dashed #d7e3dc; border-radius:8px; }
+/* Uma linha por documento; no celular vira cartão (nunca rola a página). */
+.pf-doc { display:grid; grid-template-columns:minmax(150px,1.2fr) minmax(140px,1.6fr) minmax(120px,1fr) 84px auto 36px;
+    gap:8px; align-items:center; }
+.pf-doc input[type=text] { text-transform:uppercase; }
+.pf-doc-ctr { display:flex; align-items:center; gap:6px; font-size:13px; color:#334155; white-space:nowrap; cursor:pointer; }
+.pf-doc-del { border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:8px; height:36px; cursor:pointer; }
+.pf-doc-del:hover { background:#fef2f2; }
+@media (max-width:720px) {
+    .pf-doc { grid-template-columns:1fr 1fr; padding:10px; border:1px solid #e3ece7; border-radius:10px; background:#fafcfb; }
+    .pf-doc-del { justify-self:end; width:44px; }
+}
 /* topo (testeira + hero verde + corpo) vem de identidade.css.
    Escala do app: texto 13–14px; só rótulo em caixa alta vai a 11,5px. */
 .cf-form { max-width:1640px; margin:0 auto; }
@@ -1106,6 +1122,12 @@ function incluirOpcao(campo, rotulo) {
         body: JSON.stringify({nome: nome})
     }).then(r => r.json()).then(d => {
         if (!d.ok) { alert(d.erro || 'Não consegui incluir.'); return; }
+        if (campo === 'rg_orgao') {          // a lista vale para todas as linhas de documento
+            if (!PF_ORGAOS.includes(d.nome)) { PF_ORGAOS.push(d.nome); PF_ORGAOS.sort((a, b) => a.localeCompare(b, 'pt-BR')); }
+            pfDocsRender();
+            alert(d.ja_existia ? 'Já existia na lista como "' + d.nome + '".' : '"' + d.nome + '" incluído na lista de órgãos.');
+            return;
+        }
         const sel = document.getElementById('pf_' + campo);
         if (![...sel.options].some(o => o.value === d.nome)) {
             const o = new Option(d.nome, d.nome);
@@ -1116,6 +1138,79 @@ function incluirOpcao(campo, rotulo) {
         if (d.ja_existia) alert('Já existia na lista como "' + d.nome + '" — selecionei esse.');
     }).catch(() => alert('Não consegui falar com o servidor. Tente de novo.'));
 }
+// ---- Documentos de identificação ----
+// DOM montado à mão (createElement), não innerHTML: o número é digitado.
+const PF_TIPOS = {{ TIPOS_DOC|tojson }};
+const PF_ORGAOS = {{ OPCOES['rg_orgao']|tojson }};
+const PF_SUGESTAO = {{ ORGAO_SUGERIDO|tojson }};
+const PF_UFS = {{ UFS|tojson }};
+let PF_DOCS = {{ (documentos or [])|tojson }};
+
+function pfDocsSync() {
+    const el = document.getElementById('pf_documentos_json');
+    if (el) el.value = JSON.stringify(PF_DOCS);
+}
+function pfSel(opcoes, valor, vazio, rotulo) {
+    const s = document.createElement('select');
+    s.className = 'cf-ctrl'; s.setAttribute('aria-label', rotulo);
+    if (vazio !== null) s.add(new Option(vazio, ''));
+    if (valor && !opcoes.some(o => o[0] === valor)) s.add(new Option(valor + ' (fora da lista)', valor));
+    opcoes.forEach(o => s.add(new Option(o[1], o[0])));
+    s.value = valor || '';
+    return s;
+}
+function pfDocsRender() {
+    const box = document.getElementById('pfDocs');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!PF_DOCS.length) {
+        const v = document.createElement('div');
+        v.className = 'pf-docs-vazio';
+        v.textContent = 'Nenhum documento. Clique em "Incluir documento" (RG, CIN, CNH, registro no conselho...).';
+        box.appendChild(v);
+    }
+    PF_DOCS.forEach((d, i) => {
+        const row = document.createElement('div'); row.className = 'pf-doc';
+        const tipo = pfSel(PF_TIPOS, d.tipo, null, 'Tipo do documento');
+        tipo.onchange = () => {
+            d.tipo = tipo.value;
+            if (PF_SUGESTAO[d.tipo]) d.orgao = PF_SUGESTAO[d.tipo];
+            pfDocsRender();
+        };
+        const num = document.createElement('input');
+        num.type = 'text'; num.className = 'cf-ctrl'; num.maxLength = 30;
+        num.placeholder = 'Número'; num.value = d.numero || ''; num.setAttribute('aria-label', 'Número do documento');
+        num.oninput = () => { d.numero = num.value.toUpperCase(); pfDocsSync(); };
+        const org = pfSel(PF_ORGAOS.map(o => [o, o]), d.orgao, 'Órgão', 'Órgão emissor');
+        org.onchange = () => { d.orgao = org.value; pfDocsSync(); };
+        const uf = pfSel(PF_UFS.map(u => [u, u]), d.uf, 'UF', 'UF do documento');
+        uf.onchange = () => { d.uf = uf.value; pfDocsSync(); };
+        const ctr = document.createElement('label'); ctr.className = 'pf-doc-ctr';
+        const rb = document.createElement('input'); rb.type = 'radio'; rb.name = 'pf_doc_contrato'; rb.checked = !!d.contrato;
+        rb.onchange = () => { PF_DOCS.forEach((x, j) => x.contrato = (j === i)); pfDocsSync(); };
+        ctr.append(rb, document.createTextNode('Contrato'));
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'pf-doc-del'; del.title = 'Tirar este documento';
+        del.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        del.onclick = () => {
+            PF_DOCS.splice(i, 1);
+            if (PF_DOCS.length && !PF_DOCS.some(x => x.contrato)) PF_DOCS[0].contrato = true;
+            pfDocsRender();
+        };
+        row.append(tipo, num, org, uf, ctr, del);
+        box.appendChild(row);
+    });
+    pfDocsSync();
+}
+function pfDocAdd() {
+    const tipo = PF_DOCS.some(d => d.tipo === 'RG') ? 'CNH' : 'RG';
+    PF_DOCS.push({tipo: tipo, numero: '', orgao: PF_SUGESTAO[tipo] || '', uf: '', contrato: !PF_DOCS.length});
+    pfDocsRender();
+    const linhas = document.querySelectorAll('#pfDocs .pf-doc input[type=text]');
+    if (linhas.length) linhas[linhas.length - 1].focus();
+}
+document.addEventListener('DOMContentLoaded', pfDocsRender);
+
 function toggleRegimeBens() {
     var civil = document.getElementById('pf_estado_civil');
     var wrap = document.getElementById('regimeBensWrap');
@@ -1242,10 +1337,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     toggleTipoFields();
 
-    // Nomes em MAIÚSCULAS automaticamente
-    [document.getElementById('nome_razao_social_pf'),
-     document.getElementById('nome_razao_social_pj'),
-     document.getElementById('nome_fantasia')].forEach(function (field) {
+    // Nomes, nome da mãe, RG e endereço em MAIÚSCULAS automaticamente (o
+    // servidor grava assim de qualquer jeito; aqui é para a pessoa ver).
+    ['nome_razao_social_pf', 'nome_razao_social_pj', 'nome_fantasia', 'pf_nome_mae',
+     'logradouro', 'numero', 'complemento', 'bairro', 'cidade'
+    ].map(function (id) { return document.getElementById(id); }).forEach(function (field) {
         if (field) {
             field.style.textTransform = 'uppercase';
             field.addEventListener('input', function (e) {

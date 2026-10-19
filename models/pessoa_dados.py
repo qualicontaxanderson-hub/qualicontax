@@ -26,7 +26,9 @@ NIVEIS_GOVBR = [('BRONZE', 'Bronze'), ('PRATA', 'Prata'), ('OURO', 'Ouro')]
 UFS = ('AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA',
        'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO')
 
-CAMPOS = ('data_nascimento', 'rg', 'rg_orgao', 'rg_uf', 'estado_civil', 'regime_bens',
+# rg/rg_orgao/rg_uf continuam na tabela (histórico), mas o documento agora
+# mora em clientes_pf_documentos — ver Documentos abaixo.
+CAMPOS = ('data_nascimento', 'estado_civil', 'regime_bens',
           'nacionalidade', 'profissao', 'nome_mae', 'nivel_govbr')
 
 # ---------------------------------------------------------------------------
@@ -117,3 +119,50 @@ class PessoaDados:
     def rotulo(campo, valor):
         """Código gravado -> texto da tela (o que não tem rótulo volta como veio)."""
         return ROTULOS.get(campo, {}).get(valor, valor)
+
+
+# ---------------------------------------------------------------------------
+# Documentos de identificação (19/10/2026): "RG é vago" — a pessoa tem RG, CNH,
+# CIN, registro no conselho (CRC, OAB...) e cada um com órgão e UF. Vários por
+# pessoa, um marcado como o que vai no CONTRATO. Tipo é lista fixa; órgão vem
+# da lista fechada rg_orgao (cadastro_opcoes).
+# ---------------------------------------------------------------------------
+TIPOS_DOC = [
+    ('RG', 'RG'), ('CIN', 'CIN (nova identidade)'), ('CNH', 'CNH'),
+    ('OAB', 'OAB'), ('CRC', 'CRC'), ('CRM', 'CRM'), ('CREA', 'CREA'), ('CRO', 'CRO'),
+    ('CRF', 'CRF'), ('CRBM', 'CRBM'), ('CRA', 'CRA'),
+    ('RNM', 'RNM (estrangeiro)'), ('PASSAPORTE', 'Passaporte'),
+]
+# Órgão que já vem escolhido ao trocar o tipo (a pessoa pode mudar).
+ORGAO_SUGERIDO = {'CNH': 'DETRAN', 'RNM': 'DPF', 'PASSAPORTE': 'DPF',
+                  **{c: c for c in ('OAB', 'CRC', 'CRM', 'CREA', 'CRO', 'CRF', 'CRBM', 'CRA')}}
+
+
+class Documentos:
+
+    @staticmethod
+    def listar(cliente_id):
+        return execute_query(
+            "SELECT tipo, numero, orgao, uf, contrato FROM clientes_pf_documentos "
+            "WHERE cliente_id = %s ORDER BY contrato DESC, id", (cliente_id,), fetch=True) or []
+
+    @staticmethod
+    def salvar(cliente_id, docs, usuario_id=None):
+        """Substitui o conjunto de documentos da pessoa pelo da tela."""
+        execute_query("DELETE FROM clientes_pf_documentos WHERE cliente_id = %s", (cliente_id,))
+        for d in docs:
+            execute_query(
+                "INSERT INTO clientes_pf_documentos (cliente_id, tipo, numero, orgao, uf, contrato, alterado_por) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (cliente_id, d['tipo'], d['numero'], d.get('orgao'), d.get('uf'),
+                 1 if d.get('contrato') else 0, usuario_id))
+
+    @staticmethod
+    def resumo(docs):
+        """'RG 41123866 SSP/GO (contrato); CNH 0123 DETRAN/GO' — para o Histórico."""
+        partes = []
+        for d in docs:
+            org = '/'.join(x for x in (d.get('orgao'), d.get('uf')) if x)
+            partes.append(' '.join(x for x in (d['tipo'], d['numero'], org) if x)
+                          + (' (contrato)' if d.get('contrato') else ''))
+        return '; '.join(partes) or None
