@@ -101,11 +101,42 @@ def _obrigatorios_faltando(form, avulso=False):
         falta.append('contabilidade anterior (ou marque "aberta pela Qualicontax")')
     if tipo == 'PF' and (form.get('pf_nascimento') or '').strip() and not _data_iso(form.get('pf_nascimento')):
         falta.append('data de nascimento (inválida ou no futuro)')
-    # Documento de identificação (19/10/2026): toda PF precisa de ao menos um
-    # (tipo + número). Sem o JSON da tela também falta — não há como saber.
-    if tipo == 'PF' and not _ler_documentos(form, []):
-        falta.append('documento de identificação (RG, CNH, CIN...)')
+    # Documento de identificação (19/10/2026): toda PF precisa de ao menos um,
+    # e cada um COMPLETO — tipo, número, órgão e UF. Sem o JSON da tela também
+    # falta (não há como saber).
+    if tipo == 'PF':
+        falta += _documentos_faltando(form)
     return falta
+
+
+def _documentos_faltando(form):
+    """O que falta nos documentos da tela: nenhum documento, ou o campo vazio
+    de cada um ('RG sem UF'). Órgão fora da lista conta como vazio — exceto o
+    que já estava gravado para a pessoa (valor antigo continua valendo)."""
+    import json
+    try:
+        bruto = json.loads((form.get('pf_documentos_json') or '').strip() or 'null')
+    except ValueError:
+        bruto = None
+    linhas = [d for d in bruto if isinstance(d, dict)] if isinstance(bruto, list) else []
+    if not linhas:
+        return ['documento de identificação (RG, CNH, CIN...)']
+    tipos = dict(TIPOS_DOC)
+    orgaos = set(Opcoes.listar('rg_orgao'))
+    cid = request.view_args.get('id') if request.view_args else None
+    if cid:
+        orgaos |= {d.get('orgao') for d in Documentos.listar(cid) if d.get('orgao')}
+    out = []
+    for d in linhas:
+        nome = tipos.get(str(d.get('tipo') or '')) and str(d.get('tipo'))
+        sem = [rot for rot, ok in (
+            ('tipo', nome),
+            ('número', str(d.get('numero') or '').strip()),
+            ('órgão emissor', str(d.get('orgao') or '') in orgaos),
+            ('UF', str(d.get('uf') or '') in UFS)) if not ok]
+        if sem:
+            out.append(f"documento {nome or ''} sem {', '.join(sem)}".replace('  ', ' '))
+    return out
 
 
 def _telefone_valido(valor):

@@ -256,7 +256,7 @@
            equipe tiver o documento. Grava em clientes_pf_dados. #}
         {% set ps = pessoa or {} %}
         <div class="cf-card cf-after-tipo pf-only">
-            <p class="cf-seclabel">Dados pessoais <span class="cf-seclabel-note">os que o contrato social e a Junta pedem · pode completar depois</span></p>
+            <p class="cf-seclabel">Dados pessoais <span class="cf-seclabel-note">os que o contrato social e a Junta pedem · o documento é obrigatório, o resto pode completar depois</span></p>
             <div class="cf-g12">
                 <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="pf_nascimento">Data de nascimento</label>
@@ -316,7 +316,7 @@
                     <input type="hidden" name="pf_documentos_json" id="pf_documentos_json" value="">
                 </div>
             </div>
-            <p class="cf-hint">Em <b>Contrato</b>, marque o documento que vai no contrato social. O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
+            <p class="cf-hint">Cada documento precisa de tipo, número, órgão e UF. Em <b>Contrato</b>, marque o que vai no contrato social. O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
         </div>
 
         <!-- ── CARD 3: Grupo e contador (PJ e PF) ─────────────────────────── -->
@@ -697,6 +697,7 @@
 .pf-doc { display:grid; grid-template-columns:minmax(150px,1.2fr) minmax(140px,1.6fr) minmax(120px,1fr) 84px auto 36px;
     gap:8px; align-items:center; }
 .pf-doc input[type=text] { text-transform:uppercase; }
+.pf-doc .pf-vazio { border-color:#fca5a5; background:#fef2f2; }
 .pf-doc-ctr { display:flex; align-items:center; gap:6px; font-size:13px; color:#334155; white-space:nowrap; cursor:pointer; }
 .pf-doc-del { border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:8px; height:36px; cursor:pointer; }
 .pf-doc-del:hover { background:#fef2f2; }
@@ -1149,11 +1150,28 @@ let PF_DOCS = {{ (documentos or [])|tojson }};
 function pfDocsSync() {
     const el = document.getElementById('pf_documentos_json');
     if (el) el.value = JSON.stringify(PF_DOCS);
+    // Campo vazio fica vermelho: tipo, número, órgão e UF são obrigatórios.
+    document.querySelectorAll('#pfDocs .pf-doc').forEach(function (row) {
+        row.querySelectorAll('select, input[type=text]').forEach(function (c) {
+            c.classList.toggle('pf-vazio', !String(c.value || '').trim());
+        });
+    });
     if (typeof atualizarResumo === 'function') atualizarResumo();   // "Antes de salvar"
 }
-// Obrigatório (19/10/2026): ao menos um documento com tipo e número.
-function pfTemDocumento() {
-    return PF_DOCS.some(d => d.tipo && (d.numero || '').trim());
+// Obrigatório (19/10/2026): ao menos um documento, e cada um com tipo,
+// número, órgão e UF. Devolve o que falta ('RG sem UF'); vazio = completo.
+function pfDocFaltas() {
+    if (!PF_DOCS.length) return ['inclua um documento'];
+    const out = [];
+    PF_DOCS.forEach(function (d) {
+        const sem = [];
+        if (!d.tipo) sem.push('tipo');
+        if (!(d.numero || '').trim()) sem.push('número');
+        if (!d.orgao) sem.push('órgão');
+        if (!d.uf) sem.push('UF');
+        if (sem.length) out.push((d.tipo || 'documento') + ' sem ' + sem.join(', '));
+    });
+    return out;
 }
 function pfSel(opcoes, valor, vazio, rotulo) {
     const s = document.createElement('select');
@@ -1484,9 +1502,11 @@ document.querySelector('form').addEventListener('submit', function(e) {
         document.getElementById('contadorBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return false;
     }
-    if (tipoPessoa() === 'PF' && !pfTemDocumento()) {
+    if (tipoPessoa() === 'PF' && pfDocFaltas().length) {
         e.preventDefault();
-        alert('Inclua ao menos um documento de identificação (RG, CNH, CIN...) com o número.');
+        alert(PF_DOCS.length
+              ? 'Complete o documento de identificação — tipo, número, órgão e UF:\n\n• ' + pfDocFaltas().join('\n• ')
+              : 'Inclua ao menos um documento de identificação (RG, CNH, CIN...) com tipo, número, órgão e UF.');
         document.getElementById('pfDocs').scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (!PF_DOCS.length) pfDocAdd();
         return false;
@@ -2092,7 +2112,8 @@ function atualizarResumo() {
     if (tipo === 'PF') {
         itens.push([doc.length === 11, 'CPF completo']);
         itens.push([!!nome, 'Nome completo']);
-        itens.push([pfTemDocumento(), 'Documento de identificação']);
+        var faltaDoc = pfDocFaltas();
+        itens.push([!faltaDoc.length, faltaDoc.length ? 'Documento: ' + faltaDoc[0] : 'Documento de identificação']);
     } else {
         itens.push([doc.length === 14, 'CNPJ completo']);
         itens.push([!!nome, 'Razão social']);
