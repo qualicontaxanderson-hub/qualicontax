@@ -731,6 +731,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#0f766e; }
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script src="{{ url_for('static', filename='js/pdf_nome.js') }}"></script>
 <script>
 // ===========================================================================
 // Conferência de CT-e — somente leitura. Nenhum endpoint de escrita é chamado
@@ -997,7 +998,7 @@ function exportBtns(r) {
                 onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`;
     if (temPdf) {
         html += `<a class="btn-exp" href="/escrita-fiscal/cte/${r.id}/pdf" title="Baixar PDF (DACTE)"
-                    onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
+                    onclick="return pdfNomeMenu(event, this)"><i class="fas fa-file-pdf"></i></a>`;
     }
     return html;
 }

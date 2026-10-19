@@ -2274,6 +2274,30 @@ def _carregar_nota_export(nfe_id):
     return nota, None
 
 
+def _nome_pdf_unico(padrao, *, empresa, doc, rotulo, numero, data):
+    """Nome do PDF de UMA nota no padrão "nome pela empresa" do menu do PDF:
+    'PHOENIX DIST DE COMBUSTIVEIS LTDA - NF 89976 - 17.10.2026.pdf'.
+
+    ``empresa`` é a OUTRA ponta da nota (fornecedor na entrada, cliente na
+    saída) — é por ela que a equipe procura o arquivo. Sem nome cai no CNPJ;
+    sem nada, devolve ``padrao`` (o nome pela chave, como sempre foi)."""
+    quem = (empresa or '').strip() or re.sub(r'\D', '', doc or '')
+    quem = re.sub(r'\s+', ' ', re.sub(r'[\\/:*?"<>|]', '', quem)).strip()
+    if not quem:
+        return padrao
+    data_txt = data.strftime('%d.%m.%Y') if hasattr(data, 'strftime') else str(data or '')[:10]
+    numero = re.sub(r'[\\/:*?"<>|]', '', str(numero or '')).strip()
+    partes = [quem[:80].strip(), f'{rotulo} {numero}' if numero else '',
+              re.sub(r'[\\/:*?"<>|]', '.', data_txt)]
+    return ' - '.join(p for p in partes if p) + '.pdf'
+
+
+def _pede_nome_empresa():
+    """?nome=empresa veio do menu do ícone de PDF. Sem o parâmetro (ou
+    nome=chave) fica o nome de sempre."""
+    return (request.args.get('nome') or '').strip().lower() == 'empresa'
+
+
 @escrita_fiscal.route('/nota/<int:nfe_id>/xml')
 @login_required
 def nota_xml(nfe_id):
@@ -2305,6 +2329,16 @@ def nota_pdf(nfe_id):
     chave = nota.get('chave_acesso') or ''
     xml_raw = nota['xml_raw']
     modelo = chave[20:22] if len(chave) >= 22 else ''
+    nome_pdf = f'{chave or nfe_id}.pdf'
+    if _pede_nome_empresa():
+        extra = execute_query(
+            'SELECT num_nota, emit_nome, emit_cnpj, dest_nome, dest_cnpj '
+            'FROM nfe_importacoes WHERE id = %s', (nfe_id,), fetch=True, fetch_one=True) or {}
+        lado = 'dest' if nota.get('tipo') == 'saida' else 'emit'
+        nome_pdf = _nome_pdf_unico(
+            nome_pdf, empresa=extra.get(f'{lado}_nome'), doc=extra.get(f'{lado}_cnpj'),
+            rotulo='NFC-e' if modelo == '65' else 'NF', numero=extra.get('num_nota'),
+            data=nota.get('data_emissao'))
 
     if modelo == '65':
         # NFC-e: DANFCE próprio em ReportLab (a brazilfiscalreport não gera 65).
@@ -2319,7 +2353,7 @@ def nota_pdf(nfe_id):
                     'do padrão esperado). Baixe o XML por enquanto.', 422)
         inline = request.args.get('inline') in ('1', 'true', 'sim')
         return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
-                         download_name=f'{chave or nfe_id}.pdf', mimetype='application/pdf')
+                         download_name=nome_pdf, mimetype='application/pdf')
     try:
         if modelo == '57':
             # NOTA: CT-e não é gravado em nfe_importacoes (fica em cte_documentos),
@@ -2341,7 +2375,7 @@ def nota_pdf(nfe_id):
                 'padrão esperado). Baixe o XML por enquanto.', 422)
     inline = request.args.get('inline') in ('1', 'true', 'sim')
     return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
-                     download_name=f'{chave or nfe_id}.pdf', mimetype='application/pdf')
+                     download_name=nome_pdf, mimetype='application/pdf')
 
 
 @escrita_fiscal.route('/nota/<int:nfe_id>/capturar', methods=['POST'])
@@ -2485,9 +2519,21 @@ def cte_pdf(cte_id):
             '[export] falha ao gerar DACTE do cte_id=%s (chave=%s)', cte_id, chave)
         return ('Não foi possível gerar o PDF deste CT-e (o XML pode estar fora do '
                 'padrão esperado). Baixe o XML por enquanto.', 422)
+    nome_pdf = f'{chave or cte_id}.pdf'
+    if _pede_nome_empresa():
+        extra = execute_query(
+            'SELECT num_cte, data_emissao, papel_cliente, emit_nome, emit_cnpj, '
+            '       tomador_nome, tomador_cnpj FROM cte_documentos WHERE id = %s',
+            (cte_id,), fetch=True, fetch_one=True) or {}
+        # A outra ponta: quando a empresa EMITIU o CT-e, é o tomador; senão, a
+        # transportadora que emitiu.
+        lado = 'tomador' if extra.get('papel_cliente') == 'emitente' else 'emit'
+        nome_pdf = _nome_pdf_unico(
+            nome_pdf, empresa=extra.get(f'{lado}_nome'), doc=extra.get(f'{lado}_cnpj'),
+            rotulo='CT-e', numero=extra.get('num_cte'), data=extra.get('data_emissao'))
     inline = request.args.get('inline') in ('1', 'true', 'sim')
     return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
-                     download_name=f'{chave or cte_id}.pdf', mimetype='application/pdf')
+                     download_name=nome_pdf, mimetype='application/pdf')
 
 
 @escrita_fiscal.route('/conf-cte/excluir/<int:cte_id>', methods=['POST'])
@@ -9458,7 +9504,7 @@ def _carregar_nfse_export(nfse_id):
     fiscal vale mais que a cópia do arquivo.
     """
     n = execute_query(
-        'SELECT id, chave_acesso, numero, serie, xml_path, data_emissao, '
+        'SELECT id, chave_acesso, numero, serie, xml_path, data_emissao, papel, '
         '       prestador_nome, prestador_doc, tomador_nome, tomador_doc '
         '  FROM nfse_capturadas WHERE id = %s', (nfse_id,), fetch=True, fetch_one=True)
     if not n:
@@ -9521,8 +9567,16 @@ def nfse_pdf(nfse_id):
     # 'dd.mm.aaaa - Prestador x Tomador.pdf': o arquivo diz de quem é a nota sem
     # abrir. O XML segue nomeado pela chave — é o identificador fiscal e é assim
     # que outros sistemas o procuram; o PDF é para gente.
+    nome_pdf = _nome_pdf_nota(n)
+    if (request.args.get('nome') or '').strip().lower() == 'chave' and chave:
+        nome_pdf = f'{chave}.pdf'
+    elif _pede_nome_empresa():
+        lado = 'tomador' if n.get('papel') == 'emitente' else 'prestador'
+        nome_pdf = _nome_pdf_unico(
+            nome_pdf, empresa=n.get(f'{lado}_nome'), doc=n.get(f'{lado}_doc'),
+            rotulo='NFS-e', numero=n.get('numero'), data=n.get('data_emissao'))
     return send_file(BytesIO(pdf_bytes), as_attachment=not inline,
-                     download_name=_nome_pdf_nota(n), mimetype='application/pdf')
+                     download_name=nome_pdf, mimetype='application/pdf')
 
 
 def _where_lote_nfse(data):

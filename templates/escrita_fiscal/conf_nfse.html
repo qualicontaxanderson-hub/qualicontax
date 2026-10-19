@@ -633,6 +633,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script src="{{ url_for('static', filename='js/pdf_nome.js') }}"></script>
 <script>
 // ===========================================================================
 // Conferência de NFS-e — SOMENTE LEITURA. Só dois endpoints, ambos GET:
@@ -1183,7 +1184,7 @@ function exportBtns(r) {
     // Ordem como nas Entradas: 👁 (visualizar) · XML · PDF.
     return `<button class="btn-exp" title="Visualizar o DANFSE de ${rot}" onclick="event.stopPropagation(); abrirPreview(${r.id}, '${rotPrev}')"><i class="fas fa-eye"></i></button>`
          + `<a class="btn-exp" href="${URL_XML_UMA.replace('/0/', seg)}" title="Baixar o XML de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-code"></i></a>`
-         + `<a class="btn-exp" href="${URL_PDF_UMA.replace('/0/', seg)}" title="Baixar o DANFSE de ${rot}" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i></a>`;
+         + `<a class="btn-exp" href="${URL_PDF_UMA.replace('/0/', seg)}" title="Baixar o DANFSE de ${rot}" onclick="return pdfNomeMenu(event, this)"><i class="fas fa-file-pdf"></i></a>`;
 }
 
 // ---- Formatters ----
