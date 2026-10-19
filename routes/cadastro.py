@@ -187,15 +187,14 @@ def buscar_cep(token, cep):
     digitos = re.sub(r'\D', '', cep or '')
     if len(digitos) != 8:
         return jsonify(ok=False, msg='CEP deve ter 8 dígitos.'), 400
+    from utils import cep as CEP              # três fontes (ViaCEP, BrasilAPI, OpenCEP)
     try:
-        import requests
-        r = requests.get(f'https://viacep.com.br/ws/{digitos}/json/', timeout=5)
-        dados = r.json() if r.status_code == 200 else {}
-    except Exception:
-        logger.warning('[cadastro] ViaCEP indisponível para %s', digitos)
+        dados = CEP.consultar(digitos)
+    except CEP.CepIndisponivel:
+        logger.warning('[cadastro] nenhuma fonte de CEP respondeu para %s', digitos)
         return jsonify(ok=False, msg='Não consegui consultar o CEP agora. '
                                      'Você pode preencher à mão.'), 503
-    if dados.get('erro'):
+    if not dados:
         return jsonify(ok=False, msg='CEP não encontrado.'), 404
     return jsonify(ok=True, logradouro=dados.get('logradouro') or '',
                    bairro=dados.get('bairro') or '',

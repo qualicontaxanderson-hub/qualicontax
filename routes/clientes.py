@@ -2924,15 +2924,16 @@ def remover_grupo(cliente_id, grupo_id):
 @clientes.route('/api/cep/<cep>')
 @login_required
 def buscar_cep(cep):
-    """Buscar dados do CEP via API externa"""
-    import requests
+    """Endereço do CEP no formato do ViaCEP — três fontes (utils/cep.py), para
+    o ViaCEP fora do ar no Railway não virar "CEP não encontrado"."""
+    from utils import cep as CEP
     try:
-        response = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=5)
-        if response.status_code == 200:
-            return jsonify(response.json())
-    except requests.RequestException as e:
-        print(f"Erro ao buscar CEP: {e}")
-    return jsonify({'erro': True}), 404
+        dados = CEP.consultar(cep)
+    except CEP.CepIndisponivel:
+        return jsonify({'erro': True, 'indisponivel': True}), 503
+    if not dados:
+        return jsonify({'erro': True}), 404
+    return jsonify(dados)
 
 
 @clientes.route('/api/consultar-cnpj/<cnpj>')

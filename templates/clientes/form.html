@@ -1437,12 +1437,18 @@ function buscarCepCliente(cep) {
     fetch('/api/cep/' + cep)
         .then(function (r) { return r.json(); })
         .then(function (j) {
-            if (j && !j.erro && (j.logradouro || j.localidade)) {
+            if (j && j.indisponivel) {
+                if (aviso) { aviso.innerHTML = 'Não consegui consultar o CEP agora — preencha à mão.'; aviso.style.color = '#b45309'; }
+            } else if (j && !j.erro && (j.logradouro || j.localidade)) {
                 if (j.logradouro) document.getElementById('logradouro').value = j.logradouro;
                 if (j.bairro)     document.getElementById('bairro').value = j.bairro;
                 if (j.localidade) document.getElementById('cidade').value = j.localidade;
                 if (j.uf)         document.getElementById('estado').value = j.uf.toUpperCase();
-                if (aviso) { aviso.innerHTML = ''; }
+                if (aviso) {
+                    // CEP de cidade inteira (ex.: 75600-000): vem só a cidade — a rua é à mão.
+                    aviso.innerHTML = j.logradouro ? '' : 'CEP geral da cidade — preencha rua e bairro.';
+                    aviso.style.color = '#7d968a';
+                }
             } else if (aviso) {
                 aviso.innerHTML = 'CEP não encontrado — preencha o endereço à mão.'; aviso.style.color = '#b45309';
             }
