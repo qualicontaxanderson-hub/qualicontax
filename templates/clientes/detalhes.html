@@ -216,9 +216,9 @@
         <div class="ef-hero-inner ef-hero-head">
             <div>
                 {% if cliente.numero_cliente %}<span class="ef-hero-num">#{{ cliente.numero_cliente }}</span>{% endif %}
-                <h1 class="ef-hero-title">{{ cliente.nome_razao_social }}</h1>
+                <h1 class="ef-hero-title" data-copiar data-copiar-rotulo="{{ 'Nome' if cliente.tipo_pessoa == 'PF' else 'Razão social' }}">{{ cliente.nome_razao_social }}</h1>
                 <p class="ef-hero-sub">
-                    {{ cliente.cpf_cnpj }}{% if end_princ and end_princ.cidade %} · {{ end_princ.cidade|title }}{% if end_princ.estado %}/{{ end_princ.estado }}{% endif %}{% endif %}{% if cliente.data_inicio_contrato %} · cliente desde {{ cliente.data_inicio_contrato.strftime('%m/%Y') }}{% endif %}
+                    <span data-copiar data-copiar-rotulo="{{ 'CPF' if cliente.tipo_pessoa == 'PF' else 'CNPJ' }}">{{ cliente.cpf_cnpj }}</span>{% if end_princ and end_princ.cidade %} · {{ end_princ.cidade|title }}{% if end_princ.estado %}/{{ end_princ.estado }}{% endif %}{% endif %}{% if cliente.data_inicio_contrato %} · cliente desde {{ cliente.data_inicio_contrato.strftime('%m/%Y') }}{% endif %}
                 </p>
                 <div class="ef-hero-badges">
                     <span class="ef-hero-badge">{{ cliente.situacao }}</span>
@@ -233,6 +233,8 @@
                    busca que estava na tela; "Voltar" vira "Clientes". A origem fica na aba
                    (sessionStorage), então sobrevive a Editar → salvar. #}
                 <a href="#" id="btnVoltarGrupo" class="ef-btn" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
+                <button type="button" class="ef-btn" data-copiar-ficha="{{ cliente.nome_razao_social }}"
+                        title="Copia identificação, contato, dados fiscais e endereços — para colar num documento"><i class="far fa-copy"></i> <span>Copiar ficha</span></button>
                 <a href="{{ url_for('clientes.index') }}" id="btnVoltar" class="ef-btn"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
                 <script>
                 (function () {
@@ -388,7 +390,7 @@
             <div id="dados-gerais" class="tab-pane active">
                 <div class="fv-grid">
                     <!-- Identificação -->
-                    <div class="fv-card">
+                    <div class="fv-card" data-copiar-bloco>
                         <p class="fv-seclabel">Identificação</p>
                         <dl class="fv-dl">
                             <dt>Nº Cliente</dt><dd class="fv-num-hl">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}—{% endif %}</dd>
@@ -414,7 +416,7 @@
                     </div>
 
                     <!-- Contato -->
-                    <div class="fv-card">
+                    <div class="fv-card" data-copiar-bloco>
                         <p class="fv-seclabel">Contato</p>
                         <dl class="fv-dl">
                             <dt>E-mail</dt><dd>{{ cliente.email or '—' }}</dd>
@@ -426,7 +428,7 @@
                     {% if cliente.tipo_pessoa == 'PF' %}
                     <!-- Dados pessoais (sócios, passo 3 — 14/10/2026) -->
                     {% set ps = pessoa or {} %}
-                    <div class="fv-card">
+                    <div class="fv-card" data-copiar-bloco>
                         <p class="fv-seclabel">Dados pessoais</p>
                         <dl class="fv-dl">
                             <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
@@ -441,7 +443,7 @@
                     {% endif %}
 
                     <!-- Fiscal e contrato -->
-                    <div class="fv-card">
+                    <div class="fv-card" data-copiar-bloco>
                         <p class="fv-seclabel">Fiscal e contrato</p>
                         <dl class="fv-dl">
                             <dt>Regime</dt><dd>{{ cliente.regime_tributario or '—' }}</dd>
@@ -509,8 +511,11 @@
                         {% if enderecos %}
                             <div class="addresses-list">
                                 {% for endereco in enderecos %}
-                                <div class="address-item">
-                                    <div class="address-header">
+                                {% set _end = [endereco.logradouro ~ (', ' ~ endereco.numero if endereco.numero else ''), endereco.complemento, endereco.bairro,
+                                               (endereco.cidade or '') ~ ('/' ~ endereco.estado if endereco.estado else ''), ('CEP ' ~ endereco.cep) if endereco.cep else '']|select|join(' - ') %}
+                                <div class="address-item" data-copiar-bloco="{{ _end }}"
+                                     data-copiar-titulo="Endereço {{ (endereco.tipo or '')|lower }}{{ ' (principal)' if endereco.principal else '' }}">
+                                    <div class="address-header" data-copiar-cab>
                                         <span class="badge badge-{{ 'primary' if endereco.principal else 'secondary' }}">
                                             {{ endereco.tipo }}{{ ' - Principal' if endereco.principal else '' }}
                                         </span>
@@ -526,7 +531,7 @@
                                         <p>{{ endereco.complemento }}</p>
                                         {% endif %}
                                         <p>{{ endereco.bairro }} - {{ endereco.cidade }}/{{ endereco.estado }}</p>
-                                        <p>CEP: {{ endereco.cep }}</p>
+                                        <p>CEP: <span data-copiar data-copiar-rotulo="CEP">{{ endereco.cep }}</span></p>
                                         {% if endereco.pais %}
                                         <p>{{ endereco.pais }}</p>
                                         {% endif %}
@@ -934,9 +939,9 @@
                                     <tbody>
                                         {% for socio in socios %}
                                         <tr>
-                                            <td>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}
+                                            <td><span data-copiar="{{ socio.nome }}" data-copiar-rotulo="Nome do sócio">{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</span>
                                                 {% if socio.email or socio.telefone %}<br><small class="soc-contato">{{ socio.email or '' }}{% if socio.email and socio.telefone %} · {% endif %}{{ socio.telefone or '' }}</small>{% endif %}</td>
-                                            <td>{{ socio.cpf }}</td>
+                                            <td><span data-copiar data-copiar-rotulo="CPF/CNPJ do sócio">{{ socio.cpf }}</span></td>
                                             <td>{{ socio.qualificacao or '—' }}</td>
                                             <td>{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</td>
                                             <td><strong>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</strong></td>

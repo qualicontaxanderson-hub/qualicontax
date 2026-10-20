@@ -5,7 +5,7 @@
 {% set inativo = cliente.situacao != 'ATIVO' %}
 {% set pf = cliente.tipo_pessoa == 'PF' %}
 {% set origem = '' if (pf or avulso) else ('casa' if cliente.aberta_pela_casa else ('anterior' if cliente.contabilidade_anterior_id else 'sem')) %}
-<article class="gc-card cli-card {% if inativo and not avulso %}cli-off{% endif %}{% if avulso %} cli-av{% endif %}"
+<article class="gc-card cli-card {% if inativo and not avulso %}cli-off{% endif %}{% if avulso %} cli-av{% endif %}" data-copiar-bloco data-copiar-titulo="{{ cliente.nome_razao_social }}"
          data-open-url="{{ url_for('clientes.detalhes', id=cliente.id) }}"
          data-id="{{ cliente.id }}" data-num="{{ cliente.numero_cliente or '' }}"
          data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.email or '' }}"
@@ -15,8 +15,8 @@
     <header class="gc-head">
         {% if avulso %}<span class="gc-ava cli-ava cli-ava-av" title="Avulso ainda não tem número">AV</span>{% else %}<span class="gc-ava cli-ava {% if pf %}cli-ava-pf{% endif %} {% if (cliente.numero_cliente or '')|length > 3 %}cli-ava-4{% endif %}">{{ cliente.numero_cliente or '—' }}</span>{% endif %}
         <div class="gc-tit">
-            <h3 title="{{ cliente.nome_razao_social }}">{{ cliente.nome_razao_social }}</h3>
-            <span class="cli-doc">{{ 'CPF' if pf else 'CNPJ' }} <span class="mono">{{ cliente.cpf_cnpj or '—' }}</span></span>
+            <h3 title="{{ cliente.nome_razao_social }}" data-copiar data-copiar-depois data-copiar-rotulo="{{ 'Nome' if pf else 'Razão social' }}">{{ cliente.nome_razao_social }}</h3>
+            <span class="cli-doc">{{ 'CPF' if pf else 'CNPJ' }} <span class="mono" data-copiar data-copiar-rotulo="{{ 'CPF' if pf else 'CNPJ' }}">{{ cliente.cpf_cnpj or '—' }}</span></span>
         </div>
         {% if avulso %}<span class="gc-sit av">Avulso</span>{% else %}<span class="gc-sit {{ 'on' if cliente.situacao == 'ATIVO' else 'off' }}">{{ cliente.situacao|capitalize }}</span>{% endif %}
     </header>
@@ -30,10 +30,10 @@
     </div>
 
     <div class="cli-grade">
-        <div class="cli-campo"><span class="cli-rot">Insc. Estadual</span><b class="cli-val">{{ cliente.inscricao_estadual or '—' }}</b></div>
-        <div class="cli-campo"><span class="cli-rot">Insc. Municipal</span><b class="cli-val">{{ cliente.inscricao_municipal or '—' }}</b></div>
-        <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}">{{ cliente.email or '—' }}</span></div>
-        <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val">{{ cliente.celular or cliente.telefone or '—' }}</b></div>
+        <div class="cli-campo"><span class="cli-rot">Insc. Estadual</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Insc. Estadual">{{ cliente.inscricao_estadual or '—' }}</b></div>
+        <div class="cli-campo"><span class="cli-rot">Insc. Municipal</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Insc. Municipal">{{ cliente.inscricao_municipal or '—' }}</b></div>
+        <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}" data-copiar data-copiar-depois data-copiar-rotulo="E-mail">{{ cliente.email or '—' }}</span></div>
+        <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Celular">{{ cliente.celular or cliente.telefone or '—' }}</b></div>
     </div>
 
     {% if cliente.f_grupo %}
@@ -86,6 +86,7 @@
             <span class="cli-selo-t"><b>Sem certificado</b><small>nenhum A1 cadastrado</small></span></span>
         {% endif %}
         <span class="lst-c-act">
+            <button type="button" class="lst-act" data-copiar-bloco-btn title="Copiar os dados deste cadastro (nome, documento, inscrições, e-mail e celular)"><i class="far fa-copy"></i></button>
             {# O cartão inteiro abre a FICHA; aqui ficam editar e excluir (no avulso:
            converter em cliente e editar). #}
         {% if avulso %}<button type="button" class="lst-act av-act-conv"
