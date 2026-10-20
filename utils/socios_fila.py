@@ -192,9 +192,10 @@ def vincular(chave, cadastro, usuario_id, registrar=None, rotulo_empresa=None, o
     Participação: 100% quando a pessoa é o ÚNICO sócio do quadro da Receita e
     a empresa não tem outro sócio atual; senão 0% — a Receita não informa a
     participação e ela vem do contrato social (o Editar exige fechar 100%).
-    Responsável: o primeiro sócio da empresa. Devolve [(cliente_id, socio_id, pct)].
+    Responsável: quem administra (pode_ser_responsavel) — o primeiro a chegar,
+    ou no lugar de quem estava marcado sem administrar. Devolve [(cliente_id, socio_id, pct)].
     """
-    from models.socio_cliente import SocioCliente
+    from models.socio_cliente import SocioCliente, pode_ser_responsavel
     rows = execute_query(
         """SELECT f.id, f.cliente_id, f.qualificacao, f.data_entrada
              FROM socios_fila f JOIN clientes c ON c.id = f.cliente_id
@@ -215,7 +216,11 @@ def vincular(chave, cadastro, usuario_id, registrar=None, rotulo_empresa=None, o
                 (cid,), fetch=True, fetch_one=True) or {}).get('n', 0)
             atuais = SocioCliente.get_by_cliente(cid)
             pct = Decimal('100') if n_qsa == 1 and not atuais else Decimal('0')
-            resp = not any(s.get('responsavel') for s in atuais)
+            quadro = [dict(s, tipo=s.get('tipo_pessoa') or 'PF', qual=s.get('qualificacao') or '') for s in atuais]
+            novo = {'tipo': cadastro.get('tipo_pessoa') or 'PF', 'qual': r['qualificacao'] or ''}
+            quadro_novo = quadro + [novo]
+            resp = pode_ser_responsavel(novo, quadro_novo) and not any(
+                s.get('responsavel') and pode_ser_responsavel(s, quadro_novo) for s in quadro)
             sid = SocioCliente.create(
                 cliente_id=cid, pf_cliente_id=cadastro['id'], nome=cadastro.get('nome_razao_social'),
                 cpf=cadastro.get('cpf_cnpj'), email=cadastro.get('email'),

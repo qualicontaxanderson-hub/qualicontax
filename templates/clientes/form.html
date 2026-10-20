@@ -381,6 +381,7 @@
 
             <p class="mk-sub"><i class="fas fa-users"></i> Sócios vinculados</p>
             <div class="mk-soc" id="sociosLista"></div>
+            <div class="mk-resp-aviso" id="sociosRespAviso" style="display:none"></div>
             <div class="mk-total" id="sociosTotal"></div>
 
             <div class="mk-add" id="socioAdd">
@@ -984,6 +985,10 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .mk-pct { display:flex; align-items:center; gap:6px; } .mk-pct .cf-ctrl { height:34px; text-align:right; }
 .mk-rad { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; cursor:pointer; }
 .mk-rad input { accent-color:#16a34a; }
+.mk-rad.off { color:#b45309; cursor:help; }
+.mk-resp-aviso { display:flex; gap:8px; align-items:flex-start; margin:8px 0 0; padding:9px 12px; border-radius:8px;
+                 background:#fffbeb; border:1px solid #fcd34d; color:#92400e; font-size:13px; }
+.mk-resp-aviso i { margin-top:2px; }
 .mk-val { display:flex; align-items:center; gap:5px; font-size:12px; color:#64748b; min-width:0; }
 .mk-money { position:relative; display:block; flex:1 1 0; min-width:0; }
 .mk-money i { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-style:normal;
@@ -2354,6 +2359,62 @@ function dadosReceita(s) {
         }
     }
 }
+// Responsável (20/10/2026): só quem ADMINISTRA leva a marca. "Sócio" puro não;
+// empresa sócia nunca (nem pode ser Sócio-Administrador). Sem qualificação da
+// Receita, só se ninguém do quadro administra. As mesmas listas estão em
+// models/socio_cliente.py — mudou lá, muda aqui.
+var QUAL_ADMIN = ['administr', 'titular', 'empresario', 'presidente', 'diretor', 'comanditado'];
+var QUAL_SO_PF = ['administr', 'pessoa fisica', 'empresario', 'presidente', 'diretor', 'menor'];
+var QUAL_PJ = 'Sócio Pessoa Jurídica Domiciliado no Brasil';
+function qualTem(q, lista) {
+    q = qNorm(q).replace(/\s+/g, ' ');
+    return !!q && lista.some(function (k) { return q.indexOf(k) >= 0; });
+}
+function podeResponder(s) {
+    if (s.tipo === 'PJ') return false;
+    if (qualTem(s.qual, QUAL_ADMIN)) return true;
+    if ((s.qual || '').trim()) return false;
+    return !SOCIOS.some(function (x) { return x.tipo !== 'PJ' && qualTem(x.qual, QUAL_ADMIN); });
+}
+function porQueNaoResponde(s) {
+    if (s.tipo === 'PJ') return 'Empresa sócia não pode ser responsável: quem responde pela empresa é sempre uma pessoa.';
+    if ((s.qual || '').trim()) return 'É "' + s.qual + '": não administra. O responsável é quem administra (ex.: Sócio-Administrador).';
+    return 'A Receita não informou a qualificação, e outro sócio do quadro é quem administra.';
+}
+// A marca nunca fica em quem não pode: vai para o primeiro que administra.
+// Empresa sócia com qualificação de pessoa física volta para a de PJ.
+// O que foi ajustado fica no aviso até salvar (a tela se redesenha várias vezes).
+var AJUSTES_SOCIOS = [];
+function ajustarSocios() {
+    var avisos = AJUSTES_SOCIOS;
+    SOCIOS.forEach(function (s) {
+        dadosReceita(s);
+        if (s.tipo === 'PJ' && qualTem(s.qual, QUAL_SO_PF)) {
+            avisos.push('<b>' + qEsc(s.nome) + '</b> é empresa e estava como "' + qEsc(s.qual) + '" — empresa sócia não '
+                        + 'administra; ficou "' + QUAL_PJ + '".');
+            s.qual = QUAL_PJ;
+        }
+    });
+    var atual = SOCIOS.filter(function (s) { return s.resp; })[0];
+    if (!atual || !podeResponder(atual)) {
+        var alvo = SOCIOS.filter(podeResponder)[0];
+        SOCIOS.forEach(function (s) { s.resp = (s === alvo); });
+        if (atual && alvo) {
+            avisos.push('A marca de responsável estava em <b>' + qEsc(atual.nome) + '</b>, que não administra; passou para <b>'
+                        + qEsc(alvo.nome) + '</b>' + (alvo.qual ? ' (' + qEsc(alvo.qual) + ')' : '') + '. Confira e salve.');
+        }
+    }
+    avisos = avisos.slice();
+    if (SOCIOS.length && !SOCIOS.some(podeResponder)) {
+        avisos.push('Ninguém do quadro administra a empresa, então fica sem sócio responsável. '
+                    + 'Se o contrato social diz outra coisa, peça para corrigir a qualificação.');
+    }
+    var box = document.getElementById('sociosRespAviso');
+    if (box) {
+        box.innerHTML = avisos.length ? '<i class="fas fa-circle-info"></i><span>' + avisos.join('<br>') + '</span>' : '';
+        box.style.display = avisos.length ? '' : 'none';
+    }
+}
 function dataBR(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
     return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
@@ -2372,6 +2433,7 @@ function tipoSocio(s) {
 }
 function desenharSocios() {
     var box = document.getElementById('sociosLista');
+    ajustarSocios();
     if (!SOCIOS.length) {
         box.innerHTML = '<div class="mk-soc-vazio"><i class="fas fa-circle-exclamation"></i> Nenhum sócio vinculado. '
             + 'Toda empresa precisa de pelo menos um.</div>';
@@ -2389,8 +2451,11 @@ function desenharSocios() {
                     + qEsc(s.pct == null ? '' : String(s.pct).replace('.', ',')) + '"' + (raizTravada() ? ' readonly' : '') + '><span>%</span></span>'
                     + campoValor(s, i, 'capital', 'mk-cap', 'Capital na empresa', raizTravada())
                     + campoValor(s, i, 'pl', 'mk-pl', 'Pró-labore por mês')
-                    + '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '')
-                    + (raizTravada() ? ' disabled' : '') + '> responsável</label>'
+                    + (podeResponder(s)
+                       ? '<label class="mk-rad"><input type="radio" name="socioResp" data-i="' + i + '"' + (s.resp ? ' checked' : '')
+                         + (raizTravada() ? ' disabled' : '') + '> responsável</label>'
+                       : '<label class="mk-rad off" title="' + qEsc(porQueNaoResponde(s)) + '"><input type="radio" disabled> '
+                         + (s.tipo === 'PJ' ? 'empresa' : 'não administra') + '</label>')
                     + (raizTravada() ? '<span></span>'
                        : '<button type="button" class="mk-x" data-i="' + i + '" title="Tirar este sócio (ao salvar, fica em Ex-sócios com saída hoje)"><i class="fas fa-times"></i></button>')
                     + '</div>';
@@ -2421,8 +2486,7 @@ function desenharSocios() {
         });
         box.querySelectorAll('.mk-x').forEach(function (b) {
             b.addEventListener('click', function () {
-                var s = SOCIOS.splice(+b.dataset.i, 1)[0];
-                if (s && s.resp && SOCIOS.length) SOCIOS[0].resp = true;
+                SOCIOS.splice(+b.dataset.i, 1);
                 desenharSocios(); desenharQSA(); sugerirGrupo();
             });
         });

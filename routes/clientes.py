@@ -18,7 +18,7 @@ from models.endereco_cliente import EnderecoCliente
 from utils.cnpj_receita import limpar_logradouro
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
-from models.socio_cliente import SocioCliente
+from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusada_pj
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
@@ -468,6 +468,16 @@ def _socios_e_contador_faltando(form, cliente_id=None):
                 falta.append('participação dos sócios somando 100%')
             elif any(s['capital'] is False or s['pl'] is False for s in socios):
                 falta.append('capital e pró-labore dos sócios (valor inválido)')
+            else:
+                quadro = [{'nome': existem[s['id']]['nome'], 'tipo': existem[s['id']]['tipo'],
+                           'qual': s['qual']} for s in socios]
+                pj_adm = next((q for q in quadro if q['tipo'] == 'PJ' and qual_recusada_pj(q['qual'])), None)
+                resp = next((q for s, q in zip(socios, quadro) if s['resp']), None)
+                if pj_adm:
+                    falta.append(f"qualificação de {pj_adm['nome']}: empresa sócia não pode ser "
+                                 f"\"{pj_adm['qual']}\"")
+                elif resp and not pode_ser_responsavel(resp, quadro):
+                    falta.append(f"responsável: {resp['nome']} é só sócio(a) — a marca vai para quem administra")
     return falta
 
 
@@ -641,7 +651,19 @@ def _salvar_socios(cliente_id, socios):
                               **rotulo_empresa(cliente_id)})
             if s['resp']:
                 resp_id = sid
-    SocioCliente.set_responsavel(cliente_id, resp_id)
+    SocioCliente.set_responsavel(cliente_id, _resp_valido(cliente_id, resp_id))
+
+
+def _resp_valido(cliente_id, resp_id):
+    """A marca de responsável só fica em quem administra (pode_ser_responsavel).
+    Pedida para quem é só sócio — ou para ninguém — vai para o único que
+    administra; havendo mais de um, para o primeiro (fica para o usuário trocar)."""
+    soc = [dict(x, tipo=x.get('tipo_pessoa') or 'PF', qual=x.get('qualificacao') or '')
+           for x in SocioCliente.get_by_cliente(cliente_id)]
+    pode = [x['id'] for x in soc if pode_ser_responsavel(x, soc)]
+    if resp_id in pode:
+        return resp_id
+    return pode[0] if pode else None
 
 
 def _salvar_contador(cliente_id, contador_id):
@@ -2451,6 +2473,21 @@ def novo_socio(cliente_id):
     if SocioCliente.existe_pf(cliente_id, int(pf_raw)):
         flash(f'{pf.get("nome_razao_social")} já é sócio desta empresa.', 'warning')
         return redirect(url_for('clientes.detalhes', id=cliente_id))
+    tipo_socio = (pf.get('tipo_pessoa') or '').upper()
+    if tipo_socio == 'PJ' and qual_recusada_pj(qualificacao):
+        flash(f'Empresa sócia não pode ser "{qualificacao}". Use "Sócio Pessoa Jurídica Domiciliado no Brasil" '
+              '— quem administra é sempre uma pessoa física.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id))
+    if responsavel:
+        quadro = [dict(x, tipo=x.get('tipo_pessoa') or 'PF', qual=x.get('qualificacao') or '')
+                  for x in SocioCliente.get_by_cliente(cliente_id)]
+        novo = {'tipo': tipo_socio, 'qual': qualificacao}
+        if not pode_ser_responsavel(novo, quadro + [novo]):
+            flash(f'{pf.get("nome_razao_social")} não pode ser o responsável: '
+                  + ('empresa sócia nunca é.' if tipo_socio == 'PJ'
+                     else f'é "{qualificacao}", e o responsável é quem administra (ex.: Sócio-Administrador).'),
+                  'danger')
+            return redirect(url_for('clientes.detalhes', id=cliente_id))
 
     nome = pf.get('nome_razao_social') or ''
     cpf = pf.get('cpf_cnpj') or ''

@@ -1,6 +1,47 @@
 """Modelo de Sócio de Cliente"""
+import re
+import unicodedata
 from decimal import Decimal
 from utils.db_helper import execute_query
+
+
+# Quem pode ser o RESPONSÁVEL (20/10/2026, regra do Anderson): quem a Receita
+# diz que administra — Sócio-Administrador, Administrador, Titular/Empresário,
+# Presidente, Diretor, Sócio Comanditado. "Sócio" puro não administra, e
+# empresa (PJ) sócia nunca é responsável nem administradora. Sem qualificação
+# (a Receita não informou) a pessoa só entra se ninguém do quadro administra.
+# O form.html repete estas listas no JS (QUAL_ADMIN / QUAL_SO_PF).
+QUAL_ADMIN = ('administr', 'titular', 'empresario', 'presidente', 'diretor', 'comanditado')
+QUAL_SO_PF = ('administr', 'pessoa fisica', 'empresario', 'presidente', 'diretor', 'menor')
+
+
+def _qnorm(q):
+    q = unicodedata.normalize('NFKD', str(q or '')).encode('ascii', 'ignore').decode().lower()
+    return re.sub(r'\s+', ' ', q).strip()
+
+
+def qual_administra(qual):
+    q = _qnorm(qual)
+    return any(k in q for k in QUAL_ADMIN)
+
+
+def qual_recusada_pj(qual):
+    """A qualificação é de pessoa física (ex.: Sócio-Administrador) — uma PJ
+    sócia não pode tê-la. Devolve o texto recusado ou None."""
+    q = _qnorm(qual)
+    return qual if q and any(k in q for k in QUAL_SO_PF) else None
+
+
+def pode_ser_responsavel(socio, quadro):
+    """socio/quadro: dicts com 'tipo' ('PF'/'PJ') e 'qual'. True quando a
+    pessoa pode levar a marca de responsável dentro deste quadro."""
+    if (socio.get('tipo') or 'PF') == 'PJ':
+        return False
+    if qual_administra(socio.get('qual')):
+        return True
+    if (socio.get('qual') or '').strip():
+        return False
+    return not any((x.get('tipo') or 'PF') != 'PJ' and qual_administra(x.get('qual')) for x in quadro)
 
 
 class SocioCliente:
@@ -25,7 +66,8 @@ class SocioCliente:
                    COALESCE(NULLIF(pf.email, ''), s.email) AS email,
                    COALESCE(NULLIF(pf.celular, ''), NULLIF(pf.telefone, ''), s.telefone) AS telefone,
                    s.percentual_participacao, s.responsavel, s.ativo, s.criado_em,
-                   s.qualificacao, s.data_entrada, s.data_saida, s.capital_valor, s.pro_labore
+                   s.qualificacao, s.data_entrada, s.data_saida, s.capital_valor, s.pro_labore,
+                   pf.tipo_pessoa
             FROM socios_clientes s
             LEFT JOIN clientes pf ON pf.id = s.pf_cliente_id
             WHERE s.cliente_id = %s AND s.ativo = %s

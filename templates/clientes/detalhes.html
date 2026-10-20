@@ -1838,10 +1838,11 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>
+                    <label id="socioRespLbl">
                         <input type="checkbox" name="responsavel" id="socio_responsavel">
                         Marcar como sócio responsável
                     </label>
+                    <small id="socioRespDica" style="color:#b45309; display:block;"></small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2030,6 +2031,8 @@ function closeAddSocioModal() {
 
 // Sócio não se digita: busca uma Pessoa Física já cadastrada e vincula.
 function socioTrocar() {
+    SOCIO_TIPO = null;
+    if (typeof socioRespRegra === 'function') socioRespRegra();
     document.getElementById('socio_pf_id').value = '';
     document.getElementById('socioEscolhido').style.display = 'none';
     document.getElementById('socioBuscaBox').style.display = '';
@@ -2038,7 +2041,33 @@ function socioTrocar() {
     document.getElementById('socioResultados').innerHTML = '';
 }
 
+// Responsável só quem administra; empresa sócia nunca, nem como administradora
+// (mesma regra de models/socio_cliente.py — o servidor confere de novo).
+var SOCIO_TIPO = null;
+function socioRespRegra() {
+    var q = (document.getElementById('socio_qualificacao').value || '').normalize('NFD')
+              .replace(/[̀-ͯ]/g, '').toLowerCase();
+    var adm = /administr|titular|empresario|presidente|diretor|comanditado/.test(q);
+    var cx = document.getElementById('socio_responsavel'), dica = '';
+    if (SOCIO_TIPO === 'PJ') {
+        dica = /administr|pessoa fisica|empresario|presidente|diretor|menor/.test(q)
+            ? 'Empresa sócia não administra: use "Sócio Pessoa Jurídica Domiciliado no Brasil".'
+            : 'Empresa sócia não pode ser responsável.';
+    } else if (q.trim() && !adm) {
+        dica = 'Só sócio não pode ser responsável: o responsável é quem administra (ex.: Sócio-Administrador).';
+    }
+    var bloqueia = SOCIO_TIPO === 'PJ' || (q.trim() && !adm);
+    cx.disabled = !!bloqueia;
+    if (bloqueia) cx.checked = false;
+    document.getElementById('socioRespDica').textContent = dica;
+    document.getElementById('socio_qualificacao').setCustomValidity(
+        SOCIO_TIPO === 'PJ' && /administr|pessoa fisica|empresario|presidente|diretor|menor/.test(q) ? dica : '');
+}
+document.getElementById('socio_qualificacao').addEventListener('input', socioRespRegra);
+
 function socioEscolher(p) {
+    SOCIO_TIPO = p.tipo || 'PF';
+    socioRespRegra();
     document.getElementById('socio_pf_id').value = p.id;
     document.getElementById('socioEscNome').textContent = p.nome;
     document.getElementById('socioEscInfo').textContent =
