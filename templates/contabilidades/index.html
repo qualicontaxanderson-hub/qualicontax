@@ -4,7 +4,9 @@
 
 {% block content %}
 {# Aba CONTABILIDADES (14/10/2026): escritórios de onde os clientes vieram.
-   Cartões no MESMO desenho de Clientes/Grupos (clientes/_cartao_css.html). #}
+   Cartões no MESMO desenho de Clientes/Grupos (clientes/_cartao_css.html).
+   19/10/2026: janela nova — CNPJ com busca na Receita, endereço completo e
+   vários contatos (contabilidade_contatos), um principal. #}
 {% include 'clientes/_cartao_css.html' %}
 {% include 'cadastros/_nav_cadastros.html' %}
 {% set pode_editar = current_user.has_permission('clientes.edit') %}
@@ -55,22 +57,42 @@
         {% for c in contabilidades %}
         {% set off = c.situacao != 'ATIVO' %}
         <article class="gc-card cli-card ct-card {% if off %}cli-off{% endif %}" id="ca-{{ c.id }}"
-                 data-busca="{{ [c.nome, c.cidade, c.uf, c.contato, c.email, c.lista_empresas|map(attribute='nome_razao_social')|join(' ')]|select|join(' ') }}">
+                 data-busca="{{ [c.nome, c.nome_fantasia, c.cnpj, c.cidade, c.uf, c.email, c.contatos|map(attribute='nome')|join(' '), c.lista_empresas|map(attribute='nome_razao_social')|join(' ')]|select|join(' ') }}">
             <header class="gc-head">
-                <span class="gc-ava ct-ava">{{ (c.nome.split()|map('first')|list)[:2]|join }}</span>
+                <span class="gc-ava ct-ava">{{ ((c.nome_fantasia or c.nome).split()|map('first')|list)[:2]|join }}</span>
                 <div class="gc-tit">
-                    <h3 title="{{ c.nome }}">{{ c.nome }}</h3>
-                    <span class="cli-doc">CNPJ <span class="mono">{{ c.cnpj or '—' }}</span></span>
+                    <h3 title="{{ c.nome }}">{{ c.nome_fantasia or c.nome }}</h3>
+                    <span class="cli-doc">{% if c.nome_fantasia %}{{ c.nome }} · {% endif %}CNPJ <span class="mono">{{ c.cnpj or '—' }}</span></span>
                 </div>
                 <span class="gc-sit {{ 'off' if off else 'on' }}">{{ 'Inativo' if off else 'Ativo' }}</span>
             </header>
-            {% if c.cidade %}
-            <div class="gc-tags"><span class="gc-cid gc-cid-0"><i class="fas fa-location-dot"></i> {{ c.cidade }}{% if c.uf %}/{{ c.uf }}{% endif %}</span></div>
+            {% if c.cidade or c.logradouro %}
+            <div class="ct-end"><i class="fas fa-location-dot"></i>
+                <span>{% if c.logradouro %}{{ c.logradouro }}{% if c.numero %}, {{ c.numero }}{% endif %}{% if c.complemento %} · {{ c.complemento }}{% endif %}{% if c.bairro %} · {{ c.bairro }}{% endif %}<br>{% endif %}
+                <b>{{ c.cidade or '' }}{% if c.uf %}/{{ c.uf }}{% endif %}</b>{% if c.cep %} · CEP {{ c.cep }}{% endif %}</span>
+            </div>
             {% endif %}
-            <div class="cli-grade">
-                <div class="cli-campo"><span class="cli-rot">Contato</span><b class="cli-val">{{ c.contato or '—' }}</b></div>
-                <div class="cli-campo"><span class="cli-rot">Telefone</span><b class="cli-val">{{ c.telefone or '—' }}</b></div>
-                <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val">{{ c.email or '—' }}</span></div>
+            <div class="ct-canais">
+                <span><i class="fas fa-phone"></i> {{ c.telefone or '—' }}</span>
+                {% if c.email %}<a href="mailto:{{ c.email }}"><i class="fas fa-envelope"></i> {{ c.email }}</a>{% else %}<span><i class="fas fa-envelope"></i> —</span>{% endif %}
+            </div>
+            <div class="ct-contatos">
+                <span class="cli-rot">Contatos · {{ c.contatos|length }}</span>
+                {% for p in c.contatos %}
+                {% set dig = (p.telefone or '')|replace('(', '')|replace(')', '')|replace('-', '')|replace(' ', '') %}
+                <div class="ct-pessoa">
+                    <span class="ct-pessoa-ava">{{ (p.nome.split()|map('first')|list)[:2]|join }}</span>
+                    <span class="ct-pessoa-txt"><b>{{ p.nome }}{% if p.principal and c.contatos|length > 1 %} <small class="ct-princ">principal</small>{% endif %}</b>
+                        <small>{{ p.funcao or 'Função não informada' }}</small></span>
+                    <span class="ct-pessoa-acao">
+                        {% if dig|length >= 10 %}<a href="https://wa.me/55{{ dig }}" target="_blank" rel="noopener" title="WhatsApp {{ p.telefone }}" class="ct-wa"><i class="fab fa-whatsapp"></i></a>{% endif %}
+                        {% if p.telefone %}<a href="tel:{{ dig }}" title="Ligar {{ p.telefone }}"><i class="fas fa-phone"></i></a>{% endif %}
+                        {% if p.email %}<a href="mailto:{{ p.email }}" title="{{ p.email }}"><i class="fas fa-envelope"></i></a>{% endif %}
+                    </span>
+                </div>
+                {% else %}
+                <span class="ct-nenhuma">nenhum contato ainda{% if pode_editar %} — edite para incluir{% endif %}</span>
+                {% endfor %}
             </div>
             <div class="ct-emp">
                 <span class="cli-rot">Empresas que vieram daqui · {{ c.lista_empresas|length }}</span>
@@ -93,7 +115,10 @@
                     <button type="submit" class="ct-btn-sec">{{ 'Reativar' if off else 'Inativar' }}</button>
                 </form>
                 <button type="button" class="lst-act lst-act-edit" title="Editar escritório"
-                        data-c='{{ {"id": c.id, "nome": c.nome, "cnpj": c.cnpj, "contato": c.contato, "telefone": c.telefone, "email": c.email, "cidade": c.cidade, "uf": c.uf, "observacoes": c.observacoes}|tojson|forceescape }}'
+                        data-c='{{ {"id": c.id, "nome": c.nome, "nome_fantasia": c.nome_fantasia, "cnpj": c.cnpj, "telefone": c.telefone,
+                                   "email": c.email, "cep": c.cep, "logradouro": c.logradouro, "numero": c.numero,
+                                   "complemento": c.complemento, "bairro": c.bairro, "cidade": c.cidade, "uf": c.uf,
+                                   "observacoes": c.observacoes, "contatos": c.contatos}|tojson|forceescape }}'
                         onclick="ctAbrir(JSON.parse(this.dataset.c))"><i class="fas fa-pen"></i></button>
             </footer>
             {% endif %}
@@ -110,20 +135,51 @@
 
 {% if pode_editar %}
 <div class="cad-fundo" id="ctModal" hidden>
-    <form class="cad-caixa" method="POST" action="{{ url_for('contabilidades.salvar') }}" role="dialog" aria-modal="true">
-        <h3 class="cad-tit" id="ctTit">Novo escritório de contabilidade</h3>
-        <input type="hidden" name="id" id="ctId">
-        <div class="cad-grade">
-            <div class="cad-l"><label for="ctNome">Nome do escritório *</label><input name="nome" id="ctNome" maxlength="150" required autocomplete="off"></div>
-            <div><label>CNPJ</label><input name="cnpj" maxlength="18" placeholder="00.000.000/0000-00"></div>
-            <div><label>Pessoa de contato</label><input name="contato" maxlength="120"></div>
-            <div><label>Telefone</label><input name="telefone" maxlength="20" placeholder="(00) 00000-0000"></div>
-            <div><label>E-mail</label><input name="email" type="email" maxlength="150"></div>
-            <div><label>Cidade</label><input name="cidade" maxlength="80"></div>
-            <div><label>UF</label><input name="uf" maxlength="2" placeholder="GO"></div>
-            <div class="cad-l"><label>Observações</label><textarea name="observacoes"></textarea></div>
+    <form class="cad-caixa" method="POST" action="{{ url_for('contabilidades.salvar') }}" role="dialog" aria-modal="true"
+          aria-labelledby="ctTit" onsubmit="return ctEnviar()">
+        <div class="ct-m-cab">
+            <span class="ct-m-ico"><i class="fas fa-briefcase"></i></span>
+            <div><h3 class="cad-tit" id="ctTit">Novo escritório de contabilidade</h3>
+                <p class="ct-m-sub">Comece pelo CNPJ: a Receita preenche nome, telefone, e-mail e endereço.</p></div>
+            <button type="button" class="ct-m-x" onclick="ctFechar()" title="Fechar">&times;</button>
         </div>
-        <div class="cad-acoes"><button type="button" class="cad-nao" onclick="ctFechar()">Cancelar</button><button type="submit" class="cad-sim">Salvar</button></div>
+        <input type="hidden" name="id" id="ctId">
+        <input type="hidden" name="contatos_json" id="ctContatosJson">
+
+        <p class="ct-sec"><span>1</span> CNPJ</p>
+        <div class="ct-cnpj">
+            <input name="cnpj" id="ctCnpj" maxlength="18" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric">
+            <button type="button" class="ct-receita" id="ctBtnReceita" onclick="ctBuscarReceita()"><i class="fas fa-search"></i> Buscar na Receita</button>
+        </div>
+        <p class="ct-aviso" id="ctAvisoCnpj"></p>
+
+        <p class="ct-sec"><span>2</span> Escritório</p>
+        <div class="cad-grade">
+            <div class="cad-l"><label for="ctNome">Razão social *</label><input name="nome" id="ctNome" maxlength="150" required autocomplete="off"></div>
+            <div class="cad-l"><label for="ctFantasia">Nome fantasia</label><input name="nome_fantasia" id="ctFantasia" maxlength="150" autocomplete="off"></div>
+            <div><label for="ctTel">Telefone do escritório</label><input name="telefone" id="ctTel" maxlength="20" placeholder="(00) 0000-0000"></div>
+            <div><label for="ctEmail">E-mail do escritório</label><input name="email" id="ctEmail" type="email" maxlength="150"></div>
+        </div>
+
+        <p class="ct-sec"><span>3</span> Endereço</p>
+        <div class="cad-grade ct-grade-end">
+            <div><label for="ctCep">CEP</label><input name="cep" id="ctCep" maxlength="9" placeholder="00000-000" inputmode="numeric"><small class="ct-aviso" id="ctAvisoCep"></small></div>
+            <div class="ct-s3"><label for="ctLogr">Logradouro</label><input name="logradouro" id="ctLogr" maxlength="150" class="ct-mai"></div>
+            <div><label for="ctNum">Número</label><input name="numero" id="ctNum" maxlength="20" class="ct-mai"></div>
+            <div><label for="ctCompl">Complemento</label><input name="complemento" id="ctCompl" maxlength="100" class="ct-mai"></div>
+            <div class="ct-s2"><label for="ctBairro">Bairro</label><input name="bairro" id="ctBairro" maxlength="80" class="ct-mai"></div>
+            <div class="ct-s3"><label for="ctCidade">Cidade</label><input name="cidade" id="ctCidade" maxlength="80" class="ct-mai"></div>
+            <div><label for="ctUf">UF</label><select name="uf" id="ctUf"><option value="">UF</option>{% for u in UFS %}<option value="{{ u }}">{{ u }}</option>{% endfor %}</select></div>
+        </div>
+
+        <p class="ct-sec"><span>4</span> Contatos <button type="button" class="ct-add" onclick="ctContatoAdd()"><i class="fas fa-plus"></i> Incluir contato</button></p>
+        <div class="ct-qsa" id="ctQsa" hidden></div>
+        <div class="ct-lista-contatos" id="ctContatos"></div>
+
+        <p class="ct-sec"><span>5</span> Observações</p>
+        <div class="cad-grade"><div class="cad-l"><textarea name="observacoes" id="ctObs" placeholder="Ex.: atende só por WhatsApp; pedir o balancete com a Maria"></textarea></div></div>
+
+        <div class="cad-acoes"><button type="button" class="cad-nao" onclick="ctFechar()">Cancelar</button><button type="submit" class="cad-sim"><i class="fas fa-check"></i> Salvar</button></div>
     </form>
 </div>
 {% endif %}
@@ -143,6 +199,25 @@
 .ct-card { cursor:default; }
 .ct-card.ct-fora { display:none; }
 .ct-ava { background:linear-gradient(135deg,#f59e0b,#b45309); font-size:13px; }
+.ct-end { display:flex; gap:8px; font-size:12.5px; color:#475569; line-height:1.45; }
+.ct-end i { color:#16a34a; margin-top:3px; }
+.ct-canais { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:13px; color:#334155; }
+.ct-canais i { color:#94a3b8; margin-right:4px; }
+.ct-canais a { color:#0f3d2e; text-decoration:none; overflow-wrap:anywhere; }
+.ct-canais a:hover { text-decoration:underline; }
+.ct-contatos { display:flex; flex-direction:column; gap:6px; }
+.ct-pessoa { display:flex; align-items:center; gap:10px; padding:7px 9px; border:1px solid #e8eef3; border-radius:10px; background:#fafcfb; }
+.ct-pessoa-ava { width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#e0f2fe; color:#0369a1; font-size:11px;
+                 font-weight:800; display:flex; align-items:center; justify-content:center; }
+.ct-pessoa-txt { flex:1; min-width:0; display:flex; flex-direction:column; }
+.ct-pessoa-txt b { font-size:13px; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ct-pessoa-txt small { font-size:11.5px; color:#64748b; }
+.ct-princ { font-size:10px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:99px; padding:1px 7px; margin-left:4px; }
+.ct-pessoa-acao { display:flex; gap:4px; }
+.ct-pessoa-acao a { width:30px; height:30px; border-radius:8px; border:1px solid #e2e8f0; background:#fff; color:#475569;
+                    display:flex; align-items:center; justify-content:center; text-decoration:none; font-size:13px; }
+.ct-pessoa-acao a:hover { border-color:#86efac; color:#15803d; }
+.ct-pessoa-acao .ct-wa { color:#16a34a; }
 .ct-emp { display:flex; flex-direction:column; gap:6px; flex:1; }
 .ct-chip { font-size:12px; font-weight:600; color:#0f3d2e; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:99px;
            padding:2px 10px; text-decoration:none; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -156,31 +231,80 @@
               font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; }
 .ct-btn-sec:hover { border-color:#fca5a5; color:#b91c1c; }
 .ct-sub { font-size:12.5px; color:#7d968a; margin-top:6px; }
-/* janela (mesmo desenho do "Novo escritório" do cadastro) */
+/* janela */
 .cad-fundo { position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.45);
              display:flex; align-items:center; justify-content:center; padding:16px; }
 .cad-fundo[hidden] { display:none; }
-.cad-caixa { width:100%; max-width:560px; max-height:calc(100vh - 32px); overflow-y:auto; background:#fff;
-             border-radius:16px; padding:22px 22px 18px; box-shadow:0 24px 60px rgba(15,23,42,.28); font-family:inherit; }
-.cad-tit { margin:0 0 14px; font-size:17px; font-weight:800; color:#0f3d2e; }
+.cad-caixa { width:100%; max-width:880px; max-height:calc(100vh - 32px); overflow-y:auto; background:#fff;
+             border-radius:16px; padding:20px 22px 18px; box-shadow:0 24px 60px rgba(15,23,42,.28); font-family:inherit; box-sizing:border-box; }
+.ct-m-cab { display:flex; align-items:flex-start; gap:12px; margin-bottom:4px; }
+.ct-m-ico { width:40px; height:40px; flex:0 0 40px; border-radius:12px; background:linear-gradient(135deg,#f59e0b,#b45309);
+            color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; }
+.cad-tit { margin:0; font-size:17px; font-weight:800; color:#0f3d2e; }
+.ct-m-sub { margin:2px 0 0; font-size:12.5px; color:#64748b; }
+.ct-m-x { margin-left:auto; border:0; background:none; font-size:24px; line-height:1; color:#94a3b8; cursor:pointer; }
+.ct-sec { display:flex; align-items:center; gap:8px; margin:16px 0 8px; font-size:11.5px; font-weight:800; letter-spacing:.06em;
+          text-transform:uppercase; color:#15803d; }
+.ct-sec span { width:20px; height:20px; border-radius:50%; background:#15803d; color:#fff; font-size:11px;
+               display:inline-flex; align-items:center; justify-content:center; letter-spacing:0; }
+.ct-sec::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+.ct-add { order:2; border:1px solid #d7e3dc; background:#fff; color:#15803d; border-radius:8px; padding:4px 10px;
+          font-size:12px; font-weight:700; text-transform:none; letter-spacing:0; cursor:pointer; font-family:inherit; }
+.ct-add:hover { background:#f0faf4; border-color:#86efac; }
+.ct-sec .ct-add { margin-left:auto; }
+.ct-sec:has(.ct-add)::after { order:1; }
+.ct-cnpj { display:flex; gap:8px; }
+.ct-cnpj input { flex:1; min-width:0; height:44px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px; font-size:16px;
+                 font-family:inherit; box-sizing:border-box; letter-spacing:.02em; }
+.ct-cnpj input:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+.ct-receita { height:44px; padding:0 16px; border-radius:10px; border:0; background:#0f3d2e; color:#fff; font-weight:700;
+              font-size:13.5px; cursor:pointer; font-family:inherit; white-space:nowrap; }
+.ct-receita:disabled { opacity:.6; cursor:wait; }
+.ct-aviso { margin:6px 0 0; font-size:12.5px; color:#64748b; display:block; }
+.ct-aviso.ok { color:#15803d; } .ct-aviso.erro { color:#b45309; }
 .cad-grade { display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; }
+.ct-s2 { grid-column:span 2; } .ct-s3 { grid-column:span 3; }
 .cad-l { grid-column:1 / -1; }
+/* depois do .cad-grade e com 2 classes: senão o 1fr 1fr dele vence (medido em 19/10) */
+.cad-grade.ct-grade-end { grid-template-columns:repeat(4, minmax(0,1fr)); }
 .cad-grade label { display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:5px; }
-.cad-grade input, .cad-grade textarea { width:100%; height:40px; box-sizing:border-box; border:1px solid #d7e3dc;
-             border-radius:10px; padding:0 12px; font-size:14px; font-family:inherit; }
+.cad-grade input, .cad-grade textarea, .cad-grade select, .ct-contato input, .ct-contato select {
+             width:100%; height:40px; box-sizing:border-box; border:1px solid #d7e3dc;
+             border-radius:10px; padding:0 12px; font-size:14px; font-family:inherit; background:#fff; }
 .cad-grade textarea { height:72px; padding:8px 12px; resize:vertical; }
-.cad-grade input:focus, .cad-grade textarea:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16); }
-.cad-acoes { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
-.cad-acoes button { height:38px; padding:0 18px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer;
+.cad-grade input:focus, .cad-grade textarea:focus, .cad-grade select:focus, .ct-contato input:focus, .ct-contato select:focus {
+             outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+#ctNome, #ctFantasia, .ct-mai, .ct-contato .ct-c-nome { text-transform:uppercase; }
+.ct-qsa { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:8px; font-size:12.5px; color:#475569; }
+.ct-qsa button { border:1px dashed #86efac; background:#f0fdf4; color:#15803d; border-radius:99px; padding:3px 10px;
+                 font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
+.ct-qsa button:disabled { opacity:.5; cursor:default; border-style:solid; }
+.ct-lista-contatos { display:flex; flex-direction:column; gap:8px; }
+.ct-contato { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.4fr) auto 36px; gap:8px; align-items:center; }
+.ct-c-princ { display:flex; align-items:center; gap:5px; font-size:12.5px; color:#334155; white-space:nowrap; cursor:pointer; }
+.ct-c-del { height:36px; border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:8px; cursor:pointer; }
+.ct-c-vazio { font-size:12.5px; color:#94a3b8; border:1px dashed #d7e3dc; border-radius:10px; padding:10px 12px; }
+.cad-acoes { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; position:sticky; bottom:-18px; background:#fff;
+             padding:10px 0 4px; border-top:1px solid #eef2f0; }
+.cad-acoes button { height:40px; padding:0 20px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer;
                     font-family:inherit; border:1px solid transparent; }
 .cad-nao { background:#fff; border-color:#d7e3dc !important; color:#475569; }
 .cad-sim { background:#16a34a; color:#fff; }
 @media (max-width:900px) { .ct-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:720px) {
+    .ct-contato { grid-template-columns:1fr 1fr; padding:10px; border:1px solid #e3ece7; border-radius:10px; background:#fafcfb; }
+    .ct-contato .ct-c-nome { grid-column:1 / -1; }
+    .ct-c-del { justify-self:end; width:44px; }
+    .cad-grade.ct-grade-end { grid-template-columns:1fr 1fr; }
+    .ct-s3 { grid-column:1 / -1; }
+}
 @media (max-width:600px) {
     .ef-hero-head { flex-direction:column; align-items:flex-start; }
     .ef-hero-title { font-size:21px; }
     .ct-busca { flex-basis:100%; margin-left:0; }
     .cad-grade { grid-template-columns:1fr; }
+    .cad-grade.ct-grade-end { grid-template-columns:1fr 1fr; }
+    .ct-cnpj { flex-direction:column; }
 }
 </style>
 
@@ -201,24 +325,184 @@ function ctFiltrar() {
 document.getElementById('ctBusca').addEventListener('input', ctFiltrar);
 ctFiltrar();
 
+{% if pode_editar %}
+// ---- Janela: campos, contatos e busca na Receita ----
+var CT_FUNCOES = {{ FUNCOES|list|tojson }};
+var CT_CAMPOS = ['nome', 'nome_fantasia', 'cnpj', 'telefone', 'email', 'cep', 'logradouro', 'numero',
+                 'complemento', 'bairro', 'cidade', 'uf', 'observacoes'];
+var CT_CONTATOS = [];
+var CT_QSA = [];
+
+function ctEl(id) { return document.getElementById(id); }
+function ctMaskCnpj(v) {
+    var d = String(v || '').replace(/\D/g, '').slice(0, 14);
+    return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+}
+function ctMaskTel(v) {
+    var d = String(v || '').replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d;
+    if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+    if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+    return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+}
+
+function ctContatosSync() { ctEl('ctContatosJson').value = JSON.stringify(CT_CONTATOS); }
+function ctContatosRender() {
+    var box = ctEl('ctContatos');
+    box.innerHTML = '';
+    if (!CT_CONTATOS.length) {
+        var v = document.createElement('div'); v.className = 'ct-c-vazio';
+        v.textContent = 'Nenhum contato. Clique em "Incluir contato" — quem atende o fiscal, o DP, o financeiro…';
+        box.appendChild(v);
+    }
+    CT_CONTATOS.forEach(function (c, i) {
+        var row = document.createElement('div'); row.className = 'ct-contato';
+        function inp(k, ph, cls, mask) {
+            var e = document.createElement('input'); e.placeholder = ph; e.value = c[k] || ''; e.className = cls || '';
+            e.setAttribute('aria-label', ph);
+            e.addEventListener('input', function () { if (mask) e.value = mask(e.value); c[k] = e.value; ctContatosSync(); });
+            return e;
+        }
+        var nome = inp('nome', 'Nome', 'ct-c-nome');
+        var fun = document.createElement('select'); fun.setAttribute('aria-label', 'Função');
+        fun.add(new Option('Função…', ''));
+        CT_FUNCOES.forEach(function (f) { fun.add(new Option(f, f)); });
+        fun.value = c.funcao || '';
+        fun.onchange = function () { c.funcao = fun.value; ctContatosSync(); };
+        var tel = inp('telefone', 'Telefone / WhatsApp', '', ctMaskTel);
+        tel.inputMode = 'tel';
+        var em = inp('email', 'E-mail', ''); em.type = 'email';
+        var pr = document.createElement('label'); pr.className = 'ct-c-princ';
+        var rb = document.createElement('input'); rb.type = 'radio'; rb.name = 'ct_principal'; rb.checked = !!c.principal;
+        rb.style.width = 'auto'; rb.style.height = 'auto';
+        rb.onchange = function () { CT_CONTATOS.forEach(function (x, j) { x.principal = (j === i); }); ctContatosSync(); };
+        pr.append(rb, document.createTextNode('Principal'));
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'ct-c-del'; del.title = 'Tirar este contato';
+        del.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        del.onclick = function () {
+            CT_CONTATOS.splice(i, 1);
+            if (CT_CONTATOS.length && !CT_CONTATOS.some(function (x) { return x.principal; })) CT_CONTATOS[0].principal = true;
+            ctContatosRender(); ctQsaRender();
+        };
+        row.append(nome, fun, tel, em, pr, del);
+        box.appendChild(row);
+    });
+    ctContatosSync();
+}
+function ctContatoAdd(dados) {
+    CT_CONTATOS.push(Object.assign({nome: '', funcao: '', telefone: '', email: '', principal: !CT_CONTATOS.length}, dados || {}));
+    ctContatosRender(); ctQsaRender();
+    if (!dados) { var n = document.querySelectorAll('#ctContatos .ct-c-nome'); if (n.length) n[n.length - 1].focus(); }
+}
+// Sócios do escritório (QSA da Receita) como sugestão: um clique vira contato.
+function ctQsaRender() {
+    var box = ctEl('ctQsa');
+    if (!CT_QSA.length) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<span><i class="fas fa-landmark"></i> Sócios na Receita:</span>';
+    CT_QSA.forEach(function (q) {
+        var ja = CT_CONTATOS.some(function (c) { return (c.nome || '').toUpperCase() === q.nome.toUpperCase(); });
+        var b = document.createElement('button'); b.type = 'button'; b.disabled = ja;
+        b.innerHTML = (ja ? '<i class="fas fa-check"></i> ' : '<i class="fas fa-plus"></i> ') + q.nome.replace(/[<>&]/g, '');
+        b.title = ja ? 'Já está nos contatos' : 'Incluir como contato (' + (q.qualificacao || 'sócio') + ')';
+        b.onclick = function () { ctContatoAdd({nome: q.nome, funcao: 'Sócio / Responsável'}); };
+        box.appendChild(b);
+    });
+}
+
+function ctAviso(id, txt, cls) { var e = ctEl(id); e.textContent = txt || ''; e.className = 'ct-aviso' + (cls ? ' ' + cls : ''); }
+function ctBuscarReceita() {
+    var d = ctEl('ctCnpj').value.replace(/\D/g, '');
+    if (d.length !== 14) { ctAviso('ctAvisoCnpj', 'Digite o CNPJ completo (14 números).', 'erro'); ctEl('ctCnpj').focus(); return; }
+    var btn = ctEl('ctBtnReceita');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando…';
+    ctAviso('ctAvisoCnpj', 'Consultando a Receita…');
+    fetch('/api/consultar-cnpj/' + d)
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (!j.success) { ctAviso('ctAvisoCnpj', j.message || 'Não encontrei este CNPJ.', 'erro'); return; }
+            var x = j.data || {}, n = 0;
+            function por(id, v) { if (v) { ctEl(id).value = v; n++; } }
+            por('ctNome', x.razao_social); por('ctFantasia', x.nome_fantasia);
+            var tel = x.ddd_telefone_1 || '';
+            if (tel) por('ctTel', ctMaskTel(tel));
+            por('ctEmail', (x.email || '').toLowerCase());
+            if (x.cep) por('ctCep', String(x.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2'));
+            por('ctLogr', x.logradouro); por('ctNum', x.numero); por('ctCompl', x.complemento);
+            por('ctBairro', x.bairro); por('ctCidade', x.municipio);
+            if (x.uf) { ctEl('ctUf').value = String(x.uf).toUpperCase(); n++; }
+            // BrasilAPI: nome_socio/qualificacao_socio; ReceitaWS (reserva): nome/qual
+            CT_QSA = (x.qsa || []).map(function (q) {
+                return {nome: String((q && (q.nome_socio || q.nome)) || '').trim(),
+                        qualificacao: (q && (q.qualificacao_socio || q.qual)) || ''};
+            }).filter(function (q) { return q.nome; });
+            ctQsaRender();
+            var sit = x.situacao_cadastral || x.descricao_situacao_cadastral || '';
+            ctAviso('ctAvisoCnpj', 'Encontrado: ' + (x.razao_social || '') + ' — ' + n + ' campo(s) preenchido(s)'
+                    + (sit ? ' · situação ' + String(sit).toLowerCase() : '') + '. Confira e inclua os contatos.', 'ok');
+        })
+        .catch(function () { ctAviso('ctAvisoCnpj', 'Não consegui consultar a Receita agora. Preencha à mão.', 'erro'); })
+        .finally(function () { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Buscar na Receita'; });
+}
+function ctBuscarCep() {
+    var d = ctEl('ctCep').value.replace(/\D/g, '');
+    if (d.length !== 8) return;
+    ctAviso('ctAvisoCep', 'Buscando…');
+    fetch('/api/cep/' + d).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && !j.erro) {
+            if (j.logradouro) ctEl('ctLogr').value = j.logradouro;
+            if (j.bairro) ctEl('ctBairro').value = j.bairro;
+            if (j.localidade) ctEl('ctCidade').value = j.localidade;
+            if (j.uf) ctEl('ctUf').value = j.uf.toUpperCase();
+            ctAviso('ctAvisoCep', j.logradouro ? '' : 'CEP geral da cidade — preencha rua e bairro.');
+        } else {
+            ctAviso('ctAvisoCep', j && j.indisponivel ? 'Não consegui consultar agora.' : 'CEP não encontrado.', 'erro');
+        }
+    }).catch(function () { ctAviso('ctAvisoCep', 'Não consegui consultar agora.', 'erro'); });
+}
+
 function ctAbrir(c) {
-    var m = document.getElementById('ctModal');
+    var m = ctEl('ctModal');
     if (!m) return;
     var f = m.querySelector('form');
     f.reset();
-    document.getElementById('ctId').value = c ? c.id : '';
-    document.getElementById('ctTit').textContent = c ? 'Editar escritório' : 'Novo escritório de contabilidade';
-    if (c) ['nome', 'cnpj', 'contato', 'telefone', 'email', 'cidade', 'uf', 'observacoes'].forEach(function (k) {
-        f[k].value = c[k] || '';
-    });
+    ctEl('ctId').value = c ? c.id : '';
+    ctEl('ctTit').textContent = c ? 'Editar escritório' : 'Novo escritório de contabilidade';
+    CT_CAMPOS.forEach(function (k) { if (f[k]) f[k].value = (c && c[k]) || ''; });
+    CT_CONTATOS = c && c.contatos ? c.contatos.map(function (x) { return Object.assign({}, x); }) : [];
+    CT_QSA = [];
+    ctAviso('ctAvisoCnpj', c ? '' : 'Digite o CNPJ e clique em Buscar na Receita.');
+    ctAviso('ctAvisoCep', '');
+    ctContatosRender(); ctQsaRender();
     m.hidden = false;
-    document.getElementById('ctNome').focus();
+    (c ? ctEl('ctNome') : ctEl('ctCnpj')).focus();
 }
-function ctFechar() { var m = document.getElementById('ctModal'); if (m) m.hidden = true; }
+function ctFechar() { var m = ctEl('ctModal'); if (m) m.hidden = true; }
+function ctEnviar() {
+    var sem = CT_CONTATOS.filter(function (c) { return !(c.nome || '').trim(); });
+    if (sem.length) {
+        alert('Há contato sem nome. Preencha o nome ou tire a linha.');
+        return false;
+    }
+    ctContatosSync();
+    return true;
+}
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') ctFechar(); });
 (function () {
-    var m = document.getElementById('ctModal');
+    var m = ctEl('ctModal');
     if (m) m.addEventListener('mousedown', function (e) { if (e.target === m) ctFechar(); });
+    ctEl('ctCnpj').addEventListener('input', function (e) { e.target.value = ctMaskCnpj(e.target.value); });
+    ctEl('ctCnpj').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ctBuscarReceita(); } });
+    ctEl('ctTel').addEventListener('input', function (e) { e.target.value = ctMaskTel(e.target.value); });
+    ctEl('ctCep').addEventListener('input', function (e) {
+        var d = e.target.value.replace(/\D/g, '').slice(0, 8);
+        e.target.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+        if (d.length === 8) ctBuscarCep();
+    });
+})();
+{% endif %}
+(function () {
     // chegou por um link "#ca-ID" (da ficha da empresa): destaca o cartão
     var alvo = location.hash && document.querySelector(location.hash);
     if (alvo) { alvo.scrollIntoView({block: 'center'}); alvo.style.boxShadow = '0 0 0 3px rgba(245,158,11,.45)'; }

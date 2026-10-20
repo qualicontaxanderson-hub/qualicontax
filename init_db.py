@@ -961,6 +961,32 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
 
+    # 19/10/2026: contabilidades com endereço completo e vários contatos.
+    for _col_name, _col_def in [
+        ('nome_fantasia', 'VARCHAR(150) NULL AFTER nome'), ('cep', 'VARCHAR(9) NULL AFTER email'),
+        ('logradouro', 'VARCHAR(150) NULL AFTER cep'), ('numero', 'VARCHAR(20) NULL AFTER logradouro'),
+        ('complemento', 'VARCHAR(100) NULL AFTER numero'), ('bairro', 'VARCHAR(80) NULL AFTER complemento'),
+    ]:
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'contabilidades' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE contabilidades ADD COLUMN {_col_name} {_col_def}")
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS contabilidade_contatos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            contabilidade_id INT NOT NULL,
+            nome VARCHAR(120) NOT NULL,
+            funcao VARCHAR(40) NULL,
+            telefone VARCHAR(20) NULL,
+            email VARCHAR(150) NULL,
+            principal TINYINT(1) NOT NULL DEFAULT 0,
+            criado_por INT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_contab_contatos (contabilidade_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
     # 19/10/2026: listas fechadas do cadastro da pessoa (nacionalidade,
     # profissão, órgão emissor) — a equipe escolhe, só o admin inclui. E a UF
     # do RG em coluna própria (o órgão guarda só a sigla).

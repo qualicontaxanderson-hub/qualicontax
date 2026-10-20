@@ -10,7 +10,7 @@ from flask_login import current_user
 from utils.auth_helper import permission_required, login_required
 from utils.atividade import registrar
 from utils.db_helper import execute_query
-from models.contabilidade import Contabilidade, limpar
+from models.contabilidade import Contabilidade, limpar, limpar_contatos, FUNCOES, UFS
 
 contabilidades = Blueprint('contabilidades', __name__)
 
@@ -39,9 +39,12 @@ def index():
             "FROM clientes WHERE contabilidade_anterior_id IS NOT NULL ORDER BY nome_razao_social",
             fetch=True) or []:
         por.setdefault(e['cid'], []).append(e)
+    contatos = Contabilidade.contatos_de_todos()
     for c in lista:
         c['lista_empresas'] = por.get(c['id'], [])
-    return render_template('contabilidades/index.html', contabilidades=lista, stats=_kpis())
+        c['contatos'] = contatos.get(c['id'], [])
+    return render_template('contabilidades/index.html', contabilidades=lista, stats=_kpis(),
+                           FUNCOES=FUNCOES, UFS=UFS)
 
 
 def _validar(d):
@@ -50,6 +53,29 @@ def _validar(d):
     if d.get('email') and '@' not in d['email']:
         return 'E-mail inválido.'
     return None
+
+
+def _contatos_do_form(form):
+    """contatos_json da janela -> lista limpa; None = a tela não mandou (não mexe)."""
+    import json
+    cru = (form.get('contatos_json') or '').strip()
+    if not cru:
+        return None
+    try:
+        return limpar_contatos(json.loads(cru))
+    except ValueError:
+        return None
+
+
+def _gravar_contatos(cid, form, antes_lista):
+    novos = _contatos_do_form(form)
+    if novos is None:
+        return
+    r_antes, r_depois = Contabilidade.resumo_contatos(antes_lista), Contabilidade.resumo_contatos(novos)
+    Contabilidade.salvar_contatos(cid, novos, current_user.id)
+    if r_antes != r_depois:
+        registrar('escrita.alterou_contabilidade', 'cadastros', tabela='contabilidades', registro_id=cid,
+                  antes={'contatos': r_antes}, depois={'contatos': r_depois})
 
 
 @contabilidades.route('/contabilidades/salvar', methods=['POST'])
@@ -67,17 +93,27 @@ def salvar():
         if not antes:
             flash('Escritório não encontrado.', 'danger')
             return redirect(url_for('contabilidades.index'))
+        outro = Contabilidade.por_cnpj(d.get('cnpj'))
+        if outro and outro['id'] != cid:
+            flash(f'Este CNPJ já é do escritório {outro["nome"]}.', 'warning')
+            return redirect(url_for('contabilidades.index'))
+        contatos_antes = Contabilidade.contatos(cid)
+        d.pop('contato')                       # vem dos contatos, não do formulário
         Contabilidade.atualizar(cid, request.form, current_user.id)
         registrar('escrita.alterou_contabilidade', 'cadastros', tabela='contabilidades', registro_id=cid,
                   antes={k: antes.get(k) for k in d}, depois=d)
+        _gravar_contatos(cid, request.form, contatos_antes)
         flash(f'Escritório {d["nome"]} atualizado.', 'success')
     else:
-        ja = Contabilidade.por_nome(d['nome'])
+        ja = Contabilidade.por_cnpj(d.get('cnpj')) or Contabilidade.por_nome(d['nome'])
         if ja:
             flash(f'O escritório {ja["nome"]} já está cadastrado.', 'warning')
-            return redirect(url_for('contabilidades.index'))
+            return redirect(url_for('contabilidades.index') + f'#ca-{ja["id"]}')
+        d.pop('contato')
         cid = Contabilidade.criar(request.form, current_user.id)
         registrar('escrita.criou_contabilidade', 'cadastros', tabela='contabilidades', registro_id=cid, depois=d)
+        if cid:
+            _gravar_contatos(cid, request.form, [])
         flash(f'Escritório {d["nome"]} cadastrado.', 'success')
     return redirect(url_for('contabilidades.index'))
 
@@ -118,6 +154,10 @@ def rapido():
     cid = Contabilidade.criar(dados, current_user.id)
     if not cid:
         return jsonify(success=False, message='Não consegui cadastrar agora. Tente de novo.'), 500
+    if d.get('contato'):                       # o "Novo escritório" rápido tem um contato só
+        Contabilidade.salvar_contatos(cid, limpar_contatos([{'nome': d['contato'], 'telefone': d.get('telefone'),
+                                                             'email': d.get('email'), 'principal': True}]),
+                                      current_user.id)
     registrar('escrita.criou_contabilidade', 'cadastros', tabela='contabilidades', registro_id=cid,
               depois={**d, 'origem': 'formulario_cliente'})
     return jsonify(success=True, ja_existia=False, item=_item(Contabilidade.get(cid), 0))
