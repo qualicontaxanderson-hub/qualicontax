@@ -233,6 +233,8 @@
                    busca que estava na tela; "Voltar" vira "Clientes". A origem fica na aba
                    (sessionStorage), então sobrevive a Editar → salvar. #}
                 <a href="#" id="btnVoltarGrupo" class="ef-btn" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
+                {% if qualif[0] %}<button type="button" class="ef-btn" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
+                        title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> <span>Copiar qualificação</span>{% if qualif[1] %} <i class="fas fa-triangle-exclamation" style="color:#fbbf24;"></i>{% endif %}</button>{% endif %}
                 <button type="button" class="ef-btn" data-copiar-ficha="{{ cliente.nome_razao_social }}"
                         title="Copia identificação, contato, dados fiscais e endereços — para colar num documento"><i class="far fa-copy"></i> <span>Copiar ficha</span></button>
                 <a href="{{ url_for('clientes.index') }}" id="btnVoltar" class="ef-btn"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
@@ -550,10 +552,11 @@
             </div>
 
             <!-- Contatos Tab -->
-            <div id="contatos" class="tab-pane">
+            <div id="contatos" class="tab-pane" data-copiar-secao>
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Contatos</h3>
+                        {% if contatos %}<button type="button" class="btn btn-outline" data-copiar-secao-btn style="margin-left:auto; margin-right:8px;" title="Copia os dados de todos os contatos"><i class="far fa-copy"></i> Copiar contatos</button>{% endif %}
                         <button class="btn btn-primary" onclick="showAddContactModal()">
                             <i class="fas fa-plus"></i>
                             Adicionar Contato
@@ -577,17 +580,17 @@
                                     </thead>
                                     <tbody>
                                         {% for contato in contatos %}
-                                        <tr>
+                                        <tr data-copiar-bloco data-copiar-titulo="Contato: {{ contato.nome }}">
                                             <td>
-                                                {{ contato.nome }}
+                                                <span data-copiar="{{ contato.nome }}" data-copiar-rotulo="Nome">{{ contato.nome }}</span>
                                                 {% if contato.principal %}
                                                 <span class="badge badge-primary">Principal</span>
                                                 {% endif %}
                                             </td>
-                                            <td>{{ contato.cargo or '-' }}</td>
-                                            <td>{{ contato.email or '-' }}</td>
-                                            <td>{{ contato.telefone or contato.celular or '-' }}</td>
-                                            <td>{{ contato.departamento or '-' }}</td>
+                                            <td><span data-copiar data-copiar-rotulo="Cargo">{{ contato.cargo or '-' }}</span></td>
+                                            <td><span data-copiar data-copiar-rotulo="E-mail">{{ contato.email or '-' }}</span></td>
+                                            <td><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone or contato.celular or '-' }}</span></td>
+                                            <td><span data-copiar data-copiar-rotulo="Departamento">{{ contato.departamento or '-' }}</span></td>
                                             <td>
                                                 {% if contato.areas_atendimento %}
                                                     {% for area_key in contato.areas_atendimento %}
@@ -607,6 +610,7 @@
                                                 </span>
                                             </td>
                                             <td>
+                                                <button type="button" class="btn-icon" data-copiar-bloco-btn title="Copiar os dados deste contato"><i class="far fa-copy"></i></button>
                                                 <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display: inline;">
                                                     <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este contato?')">
                                                         <i class="fas fa-trash"></i>
@@ -890,15 +894,20 @@
             </div>
 
             <!-- Sócios Tab -->
-            <div id="socios" class="tab-pane">
+            <div id="socios" class="tab-pane" data-copiar-secao>
                 <div class="card">
                     <div class="card-header" style="display:block;">
                         <div style="display:flex; width:100%; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
                             <h3 class="card-title">Sócios</h3>
+                            <span style="display:flex; gap:8px; flex-wrap:wrap; margin-left:auto;">
+                            {% if qualif_todos %}<button type="button" class="btn btn-outline" data-copiar-texto="{{ qualif_todos }}" data-copiar-rotulo="Qualificação dos sócios"
+                                    title="Copia a qualificação de todos os sócios, uma por parágrafo — para o preâmbulo do contrato"><i class="fas fa-file-signature"></i> Qualificação de todos</button>{% endif %}
+                            {% if socios %}<button type="button" class="btn btn-outline" data-copiar-secao-btn title="Copia os dados de todos os sócios"><i class="far fa-copy"></i> Copiar sócios</button>{% endif %}
                             <button class="btn btn-primary" onclick="showAddSocioModal()">
                                 <i class="fas fa-plus"></i>
                                 Adicionar Sócio
                             </button>
+                            </span>
                         </div>
                         {% set total_s = socios_total_percentual or 0 %}
                         {% set total_ok = total_s == 100 %}
@@ -938,21 +947,29 @@
                                     </thead>
                                     <tbody>
                                         {% for socio in socios %}
-                                        <tr>
+                                        {% set q = qualif_socios.get(socio.pf_cliente_id) or ('', []) %}
+                                        <tr data-copiar-bloco data-copiar-titulo="Sócio: {{ socio.nome }}">
                                             <td><span data-copiar="{{ socio.nome }}" data-copiar-rotulo="Nome do sócio">{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</span>
                                                 {% if socio.email or socio.telefone %}<br><small class="soc-contato">{{ socio.email or '' }}{% if socio.email and socio.telefone %} · {% endif %}{{ socio.telefone or '' }}</small>{% endif %}</td>
                                             <td><span data-copiar data-copiar-rotulo="CPF/CNPJ do sócio">{{ socio.cpf }}</span></td>
-                                            <td>{{ socio.qualificacao or '—' }}</td>
-                                            <td>{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</td>
-                                            <td><strong>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</strong></td>
-                                            <td>{{ socio.capital_valor|format_currency if socio.capital_valor is not none else '—' }}</td>
-                                            <td>{{ socio.pro_labore|format_currency if socio.pro_labore is not none else '—' }}</td>
+                                            <td><span data-copiar data-copiar-rotulo="Qualificação">{{ socio.qualificacao or '—' }}</span></td>
+                                            <td><span data-copiar data-copiar-rotulo="Entrada">{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</span></td>
+                                            <td><strong data-copiar data-copiar-rotulo="Participação">{{ '%.2f'|format(socio.percentual_participacao or 0)|replace('.', ',') }}%</strong></td>
+                                            <td><span data-copiar data-copiar-rotulo="Capital">{{ socio.capital_valor|format_currency if socio.capital_valor is not none else '—' }}</span></td>
+                                            <td><span data-copiar data-copiar-rotulo="Pró-labore">{{ socio.pro_labore|format_currency if socio.pro_labore is not none else '—' }}</span></td>
                                             <td>
                                                 <span class="badge badge-{{ 'success' if socio.responsavel else 'secondary' }}">
                                                     {{ 'Sim' if socio.responsavel else 'Não' }}
                                                 </span>
+                                                {% if socio.responsavel %}<span hidden data-copiar="Sim" data-copiar-rotulo="Responsável"></span>{% endif %}
+                                                {% if q[0] %}<span hidden data-copiar="{{ q[0] }}" data-copiar-rotulo="Qualificação completa"></span>{% endif %}
                                             </td>
-                                            <td>
+                                            <td style="white-space:nowrap;">
+                                                {% if q[0] %}<button type="button" class="btn btn-outline btn-sm soc-qualif-btn" data-copiar-texto="{{ q[0] }}" data-copiar-rotulo="Qualificação"
+                                                        title="Copia o parágrafo de qualificação para contrato{% if q[1] %} — falta no cadastro: {{ q[1]|join(', ') }}{% endif %}">
+                                                    <i class="fas fa-file-signature"></i> Qualificação{% if q[1] %} <i class="fas fa-triangle-exclamation" style="color:#d97706;"></i>{% endif %}
+                                                </button>{% endif %}
+                                                <button type="button" class="btn-icon" data-copiar-bloco-btn title="Copiar os dados deste sócio"><i class="far fa-copy"></i></button>
                                                 <button type="button" class="btn btn-outline btn-sm soc-saida-btn"
                                                         data-id="{{ socio.id }}" data-nome="{{ socio.nome }}"
                                                         data-entrada="{{ socio.data_entrada.isoformat() if socio.data_entrada else '' }}"
@@ -1046,9 +1063,9 @@
                                     </thead>
                                     <tbody>
                                         {% for grupo in grupos %}
-                                        <tr>
+                                        <tr data-copiar-bloco data-copiar-titulo="Grupo">
                                             <td>
-                                                <strong>{{ grupo.nome }}</strong>
+                                                <strong data-copiar data-copiar-rotulo="Grupo">{{ grupo.nome }}</strong>
                                             </td>
                                             <td>{{ grupo.descricao or '-' }}</td>
                                             <td>

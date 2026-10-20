@@ -12,6 +12,11 @@
  *                             (com valor: copia esse texto pronto, ex. endereço).
  *   data-copiar-bloco-btn     botão que copia o bloco em volta dele.
  *   data-copiar-ficha         botão que copia todos os blocos da página.
+ *   data-copiar-texto="..."   botão que copia esse texto pronto (ex.: a
+ *                             qualificação do sócio para o contrato).
+ *   data-copiar-secao         área (ex.: aba Sócios); o botão
+ *                             data-copiar-secao-btn de dentro copia todos os
+ *                             blocos dela.
  *
  * CPF, CNPJ, CEP, IE e telefone ganham também o "123": só os números, para
  * os sites que não aceitam ponto e barra.
@@ -40,6 +45,7 @@
             '.ef-hero .cp-btn{color:rgba(255,255,255,.75);}',
             '.ef-hero .cp-btn:hover{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);}',
             '.cp-linha{display:flex;align-items:center;min-width:0;}',
+            'td>[data-cp-valor],td>strong[data-cp-valor]{white-space:nowrap;}',
             '.cp-linha>:first-child{min-width:0;}',
             '.cp-linha>.cp-btn{flex:0 0 auto;}',
             '#cpAviso{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:99999;max-width:min(92vw,520px);',
@@ -66,8 +72,10 @@
     function soDigitos(v) { return String(v || '').replace(/\D/g, ''); }
 
     // CPF, CNPJ, CEP, IE, telefone: só número e pontuação, com 8+ dígitos.
+    // Data (13/02/2017) não: "13022017" não serve para nada.
     function ehNumero(v) {
-        return /^[\d.\-\/\s()]+$/.test(v) && soDigitos(v).length >= 8 && soDigitos(v) !== v;
+        return /^[\d.\-\/\s()]+$/.test(v) && !/^\d{2}\/\d{2}\/\d{4}$/.test(v)
+            && soDigitos(v).length >= 8 && soDigitos(v) !== v;
     }
 
     function copiar(texto) {
@@ -108,7 +116,7 @@
     function feito(btn, texto, rotulo) {
         copiar(texto).then(function () {
             var linhas = texto.split('\n').length;
-            avisar(linhas > 1 ? (rotulo || 'Dados') + ' copiados (' + linhas + ' linhas)'
+            avisar(linhas > 1 ? 'Copiado: ' + (rotulo || 'dados') + ' (' + linhas + ' linhas)'
                               : 'Copiado: ' + texto);
             if (btn) {
                 btn.classList.add('cp-ok');
@@ -204,20 +212,24 @@
     }
 
     document.addEventListener('click', function (e) {
-        var b = e.target.closest('.cp-btn, [data-copiar-bloco-btn], [data-copiar-ficha]');
+        var b = e.target.closest('.cp-btn, [data-copiar-bloco-btn], [data-copiar-ficha], [data-copiar-texto], [data-copiar-secao-btn]');
         if (!b) return;
         e.preventDefault();
         e.stopPropagation();          // o cartão inteiro abre a ficha; o copiar não
         if (b.classList.contains('cp-btn')) {
             feito(b, b.dataset.cpValor);
-        } else if (b.hasAttribute('data-copiar-ficha')) {
+        } else if (b.hasAttribute('data-copiar-texto')) {
+            feito(b, b.getAttribute('data-copiar-texto'), b.getAttribute('data-copiar-rotulo') || 'Texto');
+        } else if (b.hasAttribute('data-copiar-ficha') || b.hasAttribute('data-copiar-secao-btn')) {
+            var ficha = b.hasAttribute('data-copiar-ficha');
+            var area = ficha ? document : (b.closest('[data-copiar-secao]') || document);
             var partes = [];
-            if (b.dataset.copiarFicha) partes.push(b.dataset.copiarFicha);
-            document.querySelectorAll('[data-copiar-bloco]').forEach(function (bl) {
+            if (ficha && b.dataset.copiarFicha) partes.push(b.dataset.copiarFicha);
+            area.querySelectorAll('[data-copiar-bloco]').forEach(function (bl) {
                 var t = linhasDoBloco(bl), tit = tituloDoBloco(bl);
                 if (t) partes.push((tit ? tit.toUpperCase() + '\n' : '') + t);
             });
-            feito(b, partes.join('\n\n'), 'Ficha');
+            feito(b, partes.join('\n\n'), ficha ? 'Ficha' : 'Dados');
         } else {
             var bl = b.closest('[data-copiar-bloco]');
             if (bl) feito(b, linhasDoBloco(bl), tituloDoBloco(bl) || 'Dados');

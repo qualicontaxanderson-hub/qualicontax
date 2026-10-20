@@ -19,6 +19,7 @@ from utils.cnpj_receita import limpar_logradouro
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusada_pj
+from utils.qualificacao import qualificacao
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
@@ -1248,6 +1249,8 @@ def detalhes(id):
     cadastros_adicionais = f_cadastros_ad.result()
     socios = f_socios.result()
     ex_socios = f_ex_socios.result()
+    qualif_socios = {s['pf_cliente_id']: qualificacao(s['pf_cliente_id'])
+                     for s in socios if s.get('pf_cliente_id')}
     certificado = f_certificado.result()
     contadores = f_contadores.result()
     # Dropdown "adicionar": só is_contador=1, menos os JÁ VINCULADOS e o PRÓPRIO
@@ -1326,6 +1329,11 @@ def detalhes(id):
                          cadastros_anp=cadastros_anp,
                          socios=socios,
                          ex_socios=ex_socios,
+                         # "Copiar qualificação" (20/10/2026): o parágrafo do contrato
+                         qualif=qualificacao(id),
+                         qualif_socios=qualif_socios,
+                         qualif_todos=(';\n\n'.join(q[0] for q in qualif_socios.values() if q[0]) + '.'
+                                       if any(q[0] for q in qualif_socios.values()) else ''),
                          qualificacoes_socio=QUALIFICACOES_SOCIO,
                          hoje_iso=date.today().isoformat(),
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
