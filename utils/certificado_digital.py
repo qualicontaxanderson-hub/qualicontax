@@ -11,7 +11,7 @@ import os
 import re
 import logging
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -38,16 +38,25 @@ class DocumentoNaoEncontradoError(CertificadoError):
 # ---------------------------------------------------------------------------
 # Criptografia da senha (Fernet)
 # ---------------------------------------------------------------------------
-def _crypto_key() -> bytes:
-    key = (os.getenv('DFE_CRYPTO_KEY', '') or '').strip()
-    if not key:
+def _crypto_keys(valor=None) -> list:
+    """Chaves de ``DFE_CRYPTO_KEY``, separadas por vírgula: a PRIMEIRA cifra,
+    todas decifram. É o que deixa trocar a chave sem parar a captura
+    (22/10/2026, incidente da Railway): "nova,velha" no ambiente →
+    scripts/rotacionar_crypto_key.py recifra o banco → só "nova"."""
+    bruto = os.getenv('DFE_CRYPTO_KEY', '') if valor is None else valor
+    chaves = [k.strip() for k in (bruto or '').split(',') if k.strip()]
+    if not chaves:
         raise CertificadoError('DFE_CRYPTO_KEY não configurada no ambiente.')
-    return key.encode()
+    return chaves
+
+
+def _fernet(valor=None) -> MultiFernet:
+    return MultiFernet([Fernet(k.encode()) for k in _crypto_keys(valor)])
 
 
 def cifrar_senha(senha: str) -> bytes:
     """Cifra a senha do certificado e retorna o token Fernet (bytes)."""
-    return Fernet(_crypto_key()).encrypt((senha or '').encode())
+    return _fernet().encrypt((senha or '').encode())
 
 
 def decifrar_senha(token) -> str:
@@ -55,7 +64,7 @@ def decifrar_senha(token) -> str:
     if isinstance(token, str):
         token = token.encode()
     try:
-        return Fernet(_crypto_key()).decrypt(token).decode()
+        return _fernet().decrypt(token).decode()
     except InvalidToken as exc:
         raise CertificadoError('Falha ao decifrar a senha (chave inválida?).') from exc
 
