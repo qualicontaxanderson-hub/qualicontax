@@ -182,6 +182,12 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
             items_data,
         )
 
+    # Forma de pagamento de cada venda (nfe_pagamentos). Só SAÍDA: na entrada o
+    # pagamento é do fornecedor. Nunca levanta — não segura a nota.
+    if tipo == 'saida':
+        from utils.nfe_pagamentos import registrar_saida
+        registrar_saida(xml_raw, chave, cli, h['data_emissao'])
+
     return 'ok'
 
 
