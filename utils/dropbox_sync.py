@@ -377,6 +377,27 @@ class DropboxService:
                     raise self._erro_pane(exc) from exc
                 raise DropboxError(f'Erro ao ler metadados de {path!r}: {exc}') from exc
 
+    def temporary_link(self, path: str):
+        """Link direto de download (vale 4 h no Dropbox), ou None.
+
+        Para entregar arquivo GRANDE sem passar pelo site: a atualização do
+        Q-Robô são ~10 MB por posto, e servir isso pelo gunicorn seria repetir
+        o erro do upload síncrono (12/09/2026) — thread presa esperando rede."""
+        for _attempt in range(2):
+            dbx = self._client()
+            if not dbx:
+                return None
+            try:
+                return dbx.files_get_temporary_link(path).link
+            except Exception as exc:
+                if self._is_auth_error(exc):
+                    with self._client_lock:
+                        self._dbx = None
+                    if _attempt == 0:
+                        continue
+                logger.warning('Dropbox temporary_link(%r) falhou: %s', path, exc)
+                return None
+
     def _path_exists(self, path: str) -> bool:
         """Retorna True se o caminho existe no Dropbox."""
         for _attempt in range(2):

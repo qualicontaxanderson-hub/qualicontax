@@ -25,7 +25,7 @@ from flask import Blueprint, request, jsonify
 
 from models.robo_config import RoboConfig
 from models.cliente import Cliente
-from utils import dropbox_sync, qrobo_maquinas
+from utils import dropbox_sync, qrobo_atualizacao, qrobo_maquinas
 from utils.db_helper import execute_query
 from utils.nfe_parser import parse_nfe_xml
 from utils.nfe_import import _save_nfe_dual
@@ -420,4 +420,9 @@ def config_saida():
         'motivo': sit['motivo'],
         'data_inicio_captura': di.isoformat() if di else None,
         'reset_seq': int(robo['robo_reset_seq'] or 0),
+        # Versão nova para este robô (0.4.1+ se atualiza sozinho), ou None.
+        # Quem recebe é o atualizar.txt da pasta Q-Robo (utils/qrobo_atualizacao).
+        'atualizacao': qrobo_atualizacao.oferta_para(
+            cliente.get('numero_cliente') if cliente else None,
+            request.headers.get('X-QRobo-Versao')),
     }), 200

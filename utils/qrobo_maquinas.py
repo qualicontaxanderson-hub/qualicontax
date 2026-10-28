@@ -65,6 +65,17 @@ def registrar(cliente_id, headers, envio=False):
     except Exception:
         _log.exception('[qrobo-maquinas] falha ao registrar maquina %s do cliente %s '
                        '(nota segue normalmente)', mid, cliente_id)
+        return
+    # 0.4.1: rodou pela tarefa SYSTEM? É o "roda sem ninguém logado" do quadro
+    # de conferência. UPDATE à parte: sem a coluna (migração add_robo_maquinas_
+    # sistema não aplicada) só este dado falha — o registro acima já entrou.
+    if (headers.get('X-QRobo-Modo') or '').strip().lower() == 'sistema':
+        try:
+            execute_query("UPDATE robo_maquinas SET ultimo_sistema = NOW() "
+                          "WHERE cliente_id = %s AND maquina_id = %s",
+                          (cliente_id, mid), fetch=False)
+        except Exception:
+            _log.warning('[qrobo-maquinas] ultimo_sistema não gravado (coluna ausente?)')
 
 
 def listar(cliente_ids):
