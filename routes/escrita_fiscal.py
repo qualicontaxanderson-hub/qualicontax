@@ -8451,9 +8451,14 @@ def _qrobo_painel_contexto(**extra):
     # o posto passa a ser pintado pela PIOR delas — um caixa parado aparece.
     # Posto sem máquina registrada (robô antigo) segue só com o semáforo dele.
     maquinas = qrobo_maquinas.listar([p['cliente_id'] for p in postos])
+    mais_nova = qrobo_maquinas.versao_mais_nova(maquinas)
+    resumo['versao_nova'] = mais_nova
+    resumo['na_nova'] = 0
     _peso = {'verde': 0, 'cinza': 1, 'amarelo': 2, 'vermelho': 3}
     for p in postos:
         p['maquinas'] = maquinas.get(p['cliente_id'], [])
+        p['versao_cls'], p['versao_txt'] = qrobo_maquinas.selo_versao(p['maquinas'], mais_nova)
+        resumo['na_nova'] += p['versao_cls'] == 'nova'
         pior = qrobo_maquinas.pior_status(p['maquinas'])
         if pior and _peso.get(pior, 0) > _peso.get(p['status_cls'], 0):
             paradas = sum(1 for m in p['maquinas'] if m['status'] == pior)

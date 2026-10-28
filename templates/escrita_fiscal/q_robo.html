@@ -50,6 +50,13 @@
 .qr-dot.verde { background:#16a34a; } .qr-dot.amarelo { background:#d97706; }
 .qr-dot.vermelho { background:#b91c1c; } .qr-dot.cinza { background:#94a3b8; }
 
+/* Versão do robô: verde = a mais nova em campo, amarelo = vai se atualizar,
+   laranja = anterior à 0.4.0 (não manda cancelamento, precisa de visita). */
+.qr-ver { display:inline-flex; align-items:center; padding:2px 9px; border-radius:7px; font-size:11.5px; font-weight:800; }
+.qr-ver.nova   { background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; }
+.qr-ver.velha  { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
+.qr-ver.antiga { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+
 .qr-onoff { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:8px; font-size:11px; font-weight:800; }
 .qr-onoff.on  { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
 .qr-onoff.off { background:#eef2f0; color:#64748b; border:1px solid #e3ece7; }
@@ -172,6 +179,11 @@
         <div class="qrk-val">{{ '{:,}'.format(resumo.saidas).replace(',', '.') }}</div>
         <div class="qrk-sub">total acumulado, origem Q-ROBO</div>
     </div>
+    <div class="qrk-c">
+        <div class="qrk-lbl">Na versão nova{% if resumo.versao_nova %} ({{ resumo.versao_nova }}){% endif %}</div>
+        <div class="qrk-val">{{ resumo.na_nova }} de {{ resumo.total }}</div>
+        <div class="qrk-sub">{{ resumo.total - resumo.na_nova }} com robô para atualizar</div>
+    </div>
 </div>
 
 <div class="nota nota-neutra">
@@ -202,6 +214,8 @@
         </div>
 
         <dl class="qrc-dl">
+            <dt>Versão</dt>
+            <dd><span class="qr-ver {{ p.versao_cls }}">{{ p.versao_txt }}</span></dd>
             <dt>Contato</dt>
             <dd>
                 {% if p.ultimo_contato %}{{ p.ultimo_contato }} <span class="ha">({{ p.contato_ha }})</span>

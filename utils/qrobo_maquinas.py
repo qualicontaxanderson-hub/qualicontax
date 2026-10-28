@@ -110,6 +110,38 @@ def pior_status(maquinas):
     return max((m['status'] for m in maquinas), key=lambda s: ordem.get(s, 0), default=None)
 
 
+def _tupla(versao):
+    """'0.4.10' -> (0, 4, 10). Texto fora do padrão vira () e perde de qualquer versão."""
+    try:
+        return tuple(int(x) for x in (versao or '').split('.'))
+    except ValueError:
+        return ()
+
+
+def versao_mais_nova(maquinas_por_posto):
+    """A maior versão que algum robô reportou — é ela que conta como "nova".
+
+    Sai do dado e não de uma constante: quando a 0.4.1 entrar no ar, a 0.4.0
+    passa a ser "desatualizada" sem ninguém mexer aqui."""
+    vers = [m['versao'] for ms in maquinas_por_posto.values() for m in ms if _tupla(m['versao'])]
+    return max(vers, key=_tupla, default=None)
+
+
+def selo_versao(maquinas, mais_nova):
+    """(classe, texto) da linha VERSÃO do cartão do posto.
+
+    Robô anterior à 0.4.0 não manda versão nenhuma — e é justamente o que não
+    envia cancelamento, por isso o texto diz o efeito e não só "sem versão".
+    Com 2 PCs, vale a PIOR versão: um caixa antigo ainda deixa cancelamento de fora."""
+    vers = [m['versao'] for m in maquinas if _tupla(m['versao'])]
+    if not vers:
+        return 'antiga', 'antiga · não manda cancelamento'
+    pior = min(vers, key=_tupla)
+    if mais_nova and _tupla(pior) >= _tupla(mais_nova):
+        return 'nova', f'{pior} · nova'
+    return 'velha', f'{pior} · desatualizada'
+
+
 def renomear(maquina_pk, cliente_id, apelido):
     """Apelido da tela ("Caixa 1"). Vazio volta a mostrar o nome do PC."""
     apelido = (apelido or '').strip()[:64] or None
