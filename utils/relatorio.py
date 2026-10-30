@@ -16,6 +16,13 @@ API:
       'totais': ['','','TOTAL', ..., 'R$ ...'],                  # mesma largura de colunas
       'logo_path': '/caminho/logo.png',                          # opcional
       'aviso': None,   # ou 'Listagem truncada em 5.000 linhas — use o Excel para o total.'
+      # Consulta por GRUPO (opcional): no lugar de 'linhas', as notas separadas
+      # por empresa. O PDF abre cada empresa com uma faixa e fecha com o
+      # subtotal; o Excel põe a coluna 'Empresa' (coluna B) em TODAS as linhas,
+      # para o filtro e a tabela dinâmica funcionarem, e o subtotal por SUBTOTAL().
+      'grupos': [{'titulo': '492 - AUTO POSTO VIP LTDA · 11.824.545/0001-39',
+                  'rotulo': '492 - AUTO POSTO VIP LTDA',
+                  'linhas': [...], 'subtotal': [...]}, ...],
     }
     pdf_bytes  = gerar_relatorio_pdf(ctx)
     xlsx_bytes = gerar_relatorio_xlsx(ctx)   # colunas 'R' saem numéricas se vier número
@@ -33,6 +40,7 @@ GREEN = colors.HexColor('#16A34A')
 DGREEN = colors.HexColor('#15803D')
 ZEBRA = colors.HexColor('#F8FAFC')
 TOTBG = colors.HexColor('#DCFCE7')
+SUBBG = colors.HexColor('#F0FDF4')
 GREY = colors.HexColor('#64748B')
 LINE = colors.HexColor('#EEF2F7')
 KPI_CORES = [colors.HexColor('#334155'), GREEN, colors.HexColor('#2563EB'),
@@ -101,13 +109,30 @@ def gerar_relatorio_pdf(ctx):
     aligns = [TA_RIGHT if c[1] == 'R' else TA_LEFT for c in cols]
     header = [_p(c[0], 7.5, colors.white, bold=True, align=aligns[i]) for i, c in enumerate(cols)]
     body = [header]
-    for row in ctx.get('linhas', []):
-        body.append([_p(row[i], 8, align=aligns[i]) for i in range(len(cols))])
+    faixas, subtots = [], []
+    grupos = ctx.get('grupos')
+    if grupos:
+        for g in grupos:
+            faixas.append(len(body))
+            body.append([_p(g['titulo'], 8.5, DGREEN, bold=True)] + [''] * (len(cols) - 1))
+            for row in g['linhas']:
+                body.append([_p(row[i], 8, align=aligns[i]) for i in range(len(cols))])
+            subtots.append(len(body))
+            body.append([_p(g['subtotal'][i], 8, DGREEN, bold=True, align=aligns[i])
+                         for i in range(len(cols))])
+    else:
+        for row in ctx.get('linhas', []):
+            body.append([_p(row[i], 8, align=aligns[i]) for i in range(len(cols))])
     totais = ctx.get('totais')
     if totais:
         body.append([_p(totais[i], 8, bold=True, align=aligns[i]) for i in range(len(cols))])
 
-    tbl = Table(body, repeatRows=1)
+    # a coluna do NOME (emitente, destinatário...) leva 3 partes da largura;
+    # dividida por igual, o nome quebrava em cinco linhas por nota
+    nomes = ('Emitente', 'Destinatário', 'Transportadora', 'Prestador', 'Tomador')
+    pesos = [3 if c[0].startswith(nomes) else 1 for c in cols]
+    larguras = [larg * p_ / sum(pesos) for p_ in pesos] if cols else None
+    tbl = Table(body, repeatRows=1, colWidths=larguras)
     style = [
         ('BACKGROUND', (0, 0), (-1, 0), DGREEN),
         ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -115,9 +140,20 @@ def gerar_relatorio_pdf(ctx):
         ('LINEBELOW', (0, 1), (-1, -2), 0.4, LINE),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]
-    for r in range(1, len(body) - (1 if totais else 0)):
-        if r % 2 == 0:
-            style.append(('BACKGROUND', (0, r), (-1, r), ZEBRA))
+    if not grupos:
+        for r in range(1, len(body) - (1 if totais else 0)):
+            if r % 2 == 0:
+                style.append(('BACKGROUND', (0, r), (-1, r), ZEBRA))
+    for r in faixas:
+        style += [('SPAN', (0, r), (-1, r)), ('BACKGROUND', (0, r), (-1, r), TOTBG),
+                  ('TOPPADDING', (0, r), (-1, r), 6)]
+    # o rótulo do subtotal ocupa as colunas de texto até o primeiro valor
+    pr = next((i for i, c in enumerate(cols) if c[1] == 'R'), len(cols))
+    for r in subtots:
+        if pr > 1:
+            style.append(('SPAN', (0, r), (pr - 1, r)))
+        style += [('BACKGROUND', (0, r), (-1, r), SUBBG),
+                  ('LINEBELOW', (0, r), (-1, r), 1, colors.HexColor('#BBF7D0'))]
     if totais:
         style += [('BACKGROUND', (0, -1), (-1, -1), TOTBG),
                   ('LINEABOVE', (0, -1), (-1, -1), 1.2, GREEN)]
@@ -148,7 +184,19 @@ def gerar_relatorio_xlsx(ctx):
         XLImage = None
 
     wb = Workbook(); ws = wb.active; ws.title = 'Dados'
-    cols = ctx.get('colunas', [])
+    grupos = ctx.get('grupos')
+    cols = list(ctx.get('colunas', []))
+    if grupos:
+        # coluna B = Empresa, em todas as linhas
+        cols.insert(1, ('Empresa', 'L'))
+        linhas = []
+        for g in grupos:
+            for row in g['linhas']:
+                linhas.append(('n', [row[0], g['rotulo']] + list(row[1:])))
+            linhas.append(('s', 'Subtotal ' + g['rotulo']))
+    else:
+        linhas = [('n', row) for row in ctx.get('linhas', [])]
+    sub_fill = PatternFill('solid', fgColor='F0FDF4')
     hdr_fill = PatternFill('solid', fgColor='15803D')
     white_bold = Font(name='Arial', bold=True, color='FFFFFF', size=10)
     tot_fill = PatternFill('solid', fgColor='DCFCE7')
@@ -174,7 +222,22 @@ def gerar_relatorio_xlsx(ctx):
         cell.alignment = Alignment(horizontal='right' if c[1] == 'R' else 'left', vertical='center')
 
     r = hr + 1
-    for row in ctx.get('linhas', []):
+    ini_grupo = r
+    for tipo, row in linhas:
+        if tipo == 's':
+            # SUBTOTAL(9) e não SUM: o total geral (também SUBTOTAL) ignora estas
+            # linhas e não conta cada empresa duas vezes.
+            ws.cell(row=r, column=2, value=row).font = Font(name='Arial', bold=True, size=10)
+            for i, c in enumerate(cols, 1):
+                if c[1] == 'R' and r > ini_grupo:
+                    L = get_column_letter(i)
+                    cell = ws.cell(row=r, column=i, value=f'=SUBTOTAL(9,{L}{ini_grupo}:{L}{r-1})')
+                    cell.font = Font(name='Arial', bold=True); cell.number_format = 'R$ #,##0.00'
+                    cell.alignment = Alignment(horizontal='right')
+                ws.cell(row=r, column=i).fill = sub_fill
+            r += 1
+            ini_grupo = r
+            continue
         for i, v in enumerate(row, 1):
             cell = ws.cell(row=r, column=i, value=v)
             cell.font = Font(name='Arial', size=10); cell.border = border
@@ -190,13 +253,15 @@ def gerar_relatorio_xlsx(ctx):
     for i, c in enumerate(cols, 1):
         if c[1] == 'R' and last >= hr + 1:
             L = get_column_letter(i)
-            cell = ws.cell(row=r, column=i, value=f'=SUM({L}{hr+1}:{L}{last})')
+            f = 'SUBTOTAL(9,' if grupos else 'SUM('
+            cell = ws.cell(row=r, column=i, value=f'={f}{L}{hr+1}:{L}{last})')
             cell.font = Font(name='Arial', bold=True); cell.number_format = 'R$ #,##0.00'
             cell.alignment = Alignment(horizontal='right')
     for i in range(1, len(cols) + 1):
         ws.cell(row=r, column=i).fill = tot_fill
 
     for i, c in enumerate(cols, 1):
-        ws.column_dimensions[get_column_letter(i)].width = 34 if i == 3 else 14
+        larga = (2, 4) if grupos else (3,)
+        ws.column_dimensions[get_column_letter(i)].width = 34 if i in larga else 14
     ws.freeze_panes = f'A{hr+1}'
     out = io.BytesIO(); wb.save(out); return out.getvalue()

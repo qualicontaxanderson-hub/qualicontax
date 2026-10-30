@@ -2216,13 +2216,13 @@ def api_notas():
                    n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
                    n.nome_arquivo,
                    n.importado_em, n.atualizado_em, n.cliente_id, n.grupo_id,
-                   c.nome_razao_social AS empresa_nome,
+                   c.nome_razao_social AS empresa_nome, c.numero_cliente AS empresa_numero,
                    g.nome AS grupo_nome
               FROM nfe_importacoes n
               LEFT JOIN clientes c ON c.id = n.cliente_id
               LEFT JOIN grupos_clientes g ON g.id = n.grupo_id
               {where_sql}
-             ORDER BY n.data_emissao DESC, n.id DESC
+             ORDER BY {_ordem_lista(request.args)}
              LIMIT %s OFFSET %s""",
         tuple(params) + (per_page, offset),
         fetch=True,
@@ -3552,6 +3552,15 @@ FACETAS_ENTRADA = ('emit_cnpj', 'emit_uf', 'num_nota', 'cfop', 'chave', 'dest_cn
                    'origem', 'cancelado', 'resumo', 'vinc_status', 'produto_id', 'item_desc')
 
 
+def _ordem_lista(a):
+    """ORDER BY da listagem de notas. ``ordem=empresa`` (clique no título da
+    coluna Empresa, consulta por grupo) junta as notas de cada empresa — pelo
+    cliente_id, que está no idx_lista; a data continua mandando dentro dela."""
+    if str(a.get('ordem', '') or '').strip() == 'empresa':
+        return 'n.cliente_id, n.data_emissao DESC, n.id DESC'
+    return 'n.data_emissao DESC, n.id DESC'
+
+
 def _where_entradas(a, excluir=()):
     def g(k):
         return str(a.get(k, '') or '').strip()
@@ -3916,9 +3925,11 @@ def _rel_nome(escopo, ext):
     return base[:-4] + '.' + ext
 
 
-def _rel_linhas(escopo, formato, where_sql, params, limite):
+def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None):
     """Linhas do relatório (até ``limite``). Colunas 'R' = string BRL no PDF, número
-    no Excel (pra somar). Contagens (Itens/NF-e) sempre string (não é moeda)."""
+    no Excel (pra somar). Contagens (Itens/NF-e) sempre string (não é moeda).
+    ``chaves`` (lista), quando vem, recebe o cliente_id de cada linha, na mesma
+    ordem — é por ele que o relatório de GRUPO separa as empresas."""
     pdf = (formato == 'pdf')
     if escopo == 'nfse':
         rows = execute_query(
@@ -3949,13 +3960,15 @@ def _rel_linhas(escopo, formato, where_sql, params, limite):
 
     if escopo == 'cte':
         rows = execute_query(
-            "SELECT t.data_emissao, t.num_cte, t.serie, t.emit_nome, t.emit_cnpj, "
+            "SELECT t.cliente_id, t.data_emissao, t.num_cte, t.serie, t.emit_nome, t.emit_cnpj, "
             "t.uf_ini, t.uf_fim, t.cfop, t.valor_frete, t.valor_icms, "
             "(SELECT COUNT(*) FROM cte_nfe cn WHERE cn.cte_id = t.id) AS qtd_nfes "
             f"FROM cte_documentos t {where_sql} ORDER BY t.data_emissao DESC, t.id DESC LIMIT %s",
             tuple(params) + (limite,), fetch=True) or []
         out = []
         for r in rows:
+            if chaves is not None:
+                chaves.append(r['cliente_id'])
             fre, icm = r['valor_frete'] or 0, r['valor_icms'] or 0
             out.append([
                 _rel_data(r['data_emissao']),
@@ -3975,7 +3988,7 @@ def _rel_linhas(escopo, formato, where_sql, params, limite):
     partes = ("n.dest_nome AS nome, n.dest_cnpj AS doc, n.dest_uf AS uf"
               if escopo == 'saida' else "n.emit_nome AS nome, n.emit_cnpj AS doc, n.emit_uf AS uf")
     rows = execute_query(
-        f"SELECT n.id, n.data_emissao, n.num_nota, n.serie, {partes}, n.cfop, "
+        f"SELECT n.id, n.cliente_id, n.data_emissao, n.num_nota, n.serie, {partes}, n.cfop, "
         f"n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, "
         f"COALESCE(ic.qtd, 0) AS qtd_itens{hora} FROM nfe_importacoes n "
         f"LEFT JOIN (SELECT nfe_id, COUNT(*) AS qtd FROM nfe_itens GROUP BY nfe_id) ic ON ic.nfe_id = n.id "
@@ -3983,6 +3996,8 @@ def _rel_linhas(escopo, formato, where_sql, params, limite):
         tuple(params) + (limite,), fetch=True) or []
     out = []
     for r in rows:
+        if chaves is not None:
+            chaves.append(r['cliente_id'])
         data = _rel_data(r['data_emissao'])
         if escopo == 'saida' and r.get('hora'):
             data += ' ' + str(r['hora'])[:5]
@@ -3996,6 +4011,52 @@ def _rel_linhas(escopo, formato, where_sql, params, limite):
             _rel_brl(pi) if pdf else float(pi), _rel_brl(co) if pdf else float(co),
         ])
     return out
+
+
+def _rel_grupos(linhas, chaves, colunas, pdf, doc_nome=('nota', 'notas')):
+    """Separa as linhas (números crus nas colunas 'R') por empresa, na ordem do
+    número do cliente; dentro de cada uma fica a ordem que veio (data). Devolve
+    a lista de 'grupos' do utils.relatorio, com o subtotal de cada empresa."""
+    from utils.formatters import format_cnpj
+    ids = sorted({c for c in chaves if c})
+    info = {}
+    if ids:
+        ph = ','.join(['%s'] * len(ids))
+        for r in execute_query(
+                f"SELECT id, numero_cliente, nome_razao_social, cpf_cnpj FROM clientes "
+                f"WHERE id IN ({ph})", tuple(ids), fetch=True) or []:
+            info[r['id']] = r
+    por = {}
+    for chave, row in zip(chaves, linhas):
+        por.setdefault(chave, []).append(row)
+
+    def _num(c):
+        n = str((info.get(c) or {}).get('numero_cliente') or '').strip()
+        return (0, int(n), '') if n.isdigit() else (1 if c else 2, 0, n)
+
+    rcols = [i for i, c in enumerate(colunas) if c[1] == 'R']
+    grupos = []
+    for chave in sorted(por, key=_num):
+        rows = por[chave]
+        c = info.get(chave) or {}
+        num = str(c.get('numero_cliente') or '').strip()
+        nome = str(c.get('nome_razao_social') or '').strip()
+        rotulo = (f'{num} - {nome}' if num and nome else nome or num) or 'Sem empresa vinculada'
+        doc = c.get('cpf_cnpj') or ''
+        try:
+            doc = format_cnpj(doc) if doc else ''
+        except Exception:
+            pass
+        soma = {i: sum(float(r[i] or 0) for r in rows) for i in rcols}
+        sub = [''] * len(colunas)
+        sub[0] = f"Subtotal {num or rotulo} · {len(rows)} {doc_nome[len(rows) != 1]}"
+        for i in rcols:
+            sub[i] = _rel_brl(soma[i])
+        if pdf:
+            rows = [[_rel_brl(v) if i in rcols else v for i, v in enumerate(r)] for r in rows]
+        grupos.append({'titulo': rotulo + (f' · {doc}' if doc else ''), 'rotulo': rotulo,
+                       'linhas': rows, 'subtotal': sub})
+    return grupos
 
 
 def _exportar_relatorio(escopo, permissao, titulo):
@@ -4068,19 +4129,33 @@ def _exportar_relatorio(escopo, permissao, titulo):
         return jsonify({'error': f'{total} registros — o limite do Excel é {_LOTE_MAX_XML}. '
                                  f'Refine o filtro.'}), 413
 
-    aviso, linhas = None, []
+    # Consulta por GRUPO ou por todas: separa por empresa, com subtotal. A
+    # NFS-e não guarda a empresa na nota (o escopo é pelo documento) — fica como era.
+    por_grupo = (escopo != 'nfse'
+                 and not request.args.get('cliente_id', '').strip().isdigit())
+    aviso, linhas, grupos = None, [], None
     if formato == 'pdf' and total > _REL_MAX_PDF:
         aviso = (f'Listagem completa no Excel — são {_rel_int(total)} registros '
                  f'(o PDF lista até {_rel_int(_REL_MAX_PDF)}).')
     else:
         limite = _REL_MAX_PDF if formato == 'pdf' else _LOTE_MAX_XML
-        linhas = _rel_linhas(escopo, formato, where_sql, params, limite)
+        if por_grupo:
+            # números crus (como no Excel) para somar o subtotal de cada
+            # empresa; no PDF viram moeda depois, em _rel_grupos.
+            chaves = []
+            linhas = _rel_linhas(escopo, 'xlsx', where_sql, params, limite, chaves)
+            grupos = _rel_grupos(linhas, chaves, colunas, pdf=(formato == 'pdf'),
+                                 doc_nome=('CT-e', 'CT-e') if escopo == 'cte' else ('nota', 'notas'))
+            linhas = []
+        else:
+            linhas = _rel_linhas(escopo, formato, where_sql, params, limite)
 
     ctx = {
         'titulo': titulo, 'empresa': _rel_empresa(), 'periodo': _rel_periodo(),
         'gerado_em': datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%d/%m/%Y %H:%M'),
         'kpis': kpis, 'colunas': colunas, 'linhas': linhas, 'totais': totais,
         'logo_path': _REL_LOGO if os.path.exists(_REL_LOGO) else None, 'aviso': aviso,
+        'grupos': grupos,
     }
     if formato == 'xlsx':
         dados = gerar_relatorio_xlsx(ctx)
@@ -8773,7 +8848,7 @@ def api_notas_saidas():
         f"""SELECT n.id
               FROM nfe_importacoes n {_hint}
               {where_sql}
-             ORDER BY n.data_emissao DESC, n.id DESC
+             ORDER BY {_ordem_lista(request.args)}
              LIMIT %s OFFSET %s""",
         tuple(params) + (per_page, offset),
         fetch=True,
@@ -8789,7 +8864,7 @@ def api_notas_saidas():
                        n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
                        n.nome_arquivo,
                        n.importado_em, n.cliente_id, n.grupo_id,
-                       c.nome_razao_social AS empresa_nome,
+                       c.nome_razao_social AS empresa_nome, c.numero_cliente AS empresa_numero,
                        g.nome AS grupo_nome
                   FROM nfe_importacoes n
                   LEFT JOIN clientes c ON c.id = n.cliente_id

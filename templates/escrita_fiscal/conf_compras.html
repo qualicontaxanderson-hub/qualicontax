@@ -183,6 +183,13 @@ table.cc-table td.money { text-align:right; font-variant-numeric:tabular-nums; f
 .cc-data-pill            { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; white-space:nowrap; }
 .cc-data-pill.importado  { background:#dbeafe; color:#1d4ed8; }
 .cc-data-pill.atualizado { background:#e9d5ff; color:#7c3aed; }
+/* Coluna EMPRESA (consulta por grupo/todas). Some com uma empresa só. */
+td.col-emp { font-weight:700; color:#14532d; max-width:230px; white-space:nowrap;
+             overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; }
+th.th-ordem { cursor:pointer; user-select:none; white-space:nowrap; }
+th.th-ordem i { color:#cbd5e1; margin-left:3px; }
+th.th-ordem.on i { color:#15803d; }
+table.cc-table.sem-emp .col-emp { display:none !important; }
 
 /* Delete button */
 .btn-del { background:transparent; border:none; color:#ef4444; padding:4px 7px; border-radius:5px; cursor:pointer; font-size:13px; }
@@ -446,6 +453,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
         grid-template-columns:auto 1fr 1fr 1fr auto;
         grid-template-areas:
             "chk  nome nome nome valor"
+            "chk  emp  emp  emp   emp"
             "chk  num  data itens itens"
             "chk  uf   cfop icms  icms"
             "chk  imp  imp  imp   imp"
@@ -467,6 +475,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
     td.mc-uf { grid-area:uf; } td.mc-cfop { grid-area:cfop; } td.mc-icms { grid-area:icms; }
     td.mc-imp { grid-area:imp; } td.mc-origem { grid-area:orig; } td.mc-cad { grid-area:cad; }
     td.mc-acoes { grid-area:acoes; }
+    td.mc-emp { grid-area:emp; max-width:none; white-space:normal; font-size:11.5px; }
 
     /* rotulo curto antes das celulas secundarias: sem cabecalho, o numero
        solto nao diz de que coluna e */
@@ -766,12 +775,13 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 <div id="tab-notas">
     <div id="selBanner" class="sel-banner" style="display:none;"></div>
     <div class="cc-table-wrap">
-        <table class="cc-table">
+        <table class="cc-table" id="tblNotas">
             <thead>
                 <tr>
                     <th style="width:34px;text-align:center;"><input type="checkbox" id="chkTodos" onclick="marcarTodos(this)" title="Marcar todos desta página"></th>
                     <th>Data</th>
                     <th>Nº / Série</th>
+                    <th class="col-emp th-ordem" id="thEmpresa" onclick="alternarOrdemEmpresa()" title="Clique para juntar as notas de cada empresa">Empresa <i class="fas fa-sort"></i></th>
                     <th>Importação</th>
                     <th>Emitente</th>
                     <th>UF</th>
@@ -785,7 +795,7 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
                 </tr>
             </thead>
             <tbody id="tbodyNotas">
-                <tr><td colspan="13" class="cc-empty"><i class="fas fa-magnifying-glass"></i>Selecione uma empresa e clique em Buscar</td></tr>
+                <tr><td colspan="14" class="cc-empty"><i class="fas fa-magnifying-glass"></i>Selecione uma empresa e clique em Buscar</td></tr>
             </tbody>
         </table>
     </div>
@@ -1830,9 +1840,27 @@ function showLoad() { document.getElementById('loadingIndicator').style.display=
 function hideLoad() { document.getElementById('loadingIndicator').style.display='none'; }
 
 // ---- Load Notas ----
+// Coluna EMPRESA: só faz sentido quando a consulta é por grupo ou por todas as
+// empresas — com uma empresa só, o nome já está no alto da tela. O clique no
+// título junta as notas de cada empresa (ordem do servidor, não da página).
+let ordemEmpresa = false;
+function alternarOrdemEmpresa() {
+    ordemEmpresa = !ordemEmpresa;
+    currentPage = 1;
+    loadNotas();
+}
+function empresaRotulo(r) {
+    if (!r.empresa_nome) return r.grupo_nome || '—';
+    return (r.empresa_numero ? r.empresa_numero + ' – ' : '') + r.empresa_nome;
+}
 function loadNotas() {
     const f = getFilters();
     const params = new URLSearchParams({...f, page: currentPage});
+    if (ordemEmpresa) params.set('ordem', 'empresa');
+    const _tbl = document.getElementById('tblNotas');
+    if (_tbl) _tbl.classList.toggle('sem-emp', !!f.cliente_id);
+    const _thEmp = document.getElementById('thEmpresa');
+    if (_thEmp) _thEmp.classList.toggle('on', ordemEmpresa);
     showLoad();
     document.getElementById('tbodyNotas').innerHTML = '';
     _fetchWithAbort('notas', '{{ url_for("escrita_fiscal.api_notas") }}?' + params)
@@ -1866,14 +1894,14 @@ function loadNotas() {
                 // maior que zero e não veio linha, não é tela vazia, é erro.
                 const falhou = data.consulta_cortada || (data.total > 0);
                 tbody.innerHTML = falhou
-                  ? '<tr><td colspan="13" class="cc-empty" style="color:#b45309">'
+                  ? '<tr><td colspan="14" class="cc-empty" style="color:#b45309">'
                     + '<i class="fas fa-hourglass-half"></i><br>'
                     + '<b>A consulta demorou demais e foi interrompida.</b><br>'
                     + '<span style="font-size:12px">'
                     + (data.total > 0 ? ('Há <b>' + data.total + '</b> nota(s) neste filtro — elas existem, só não vieram agora.<br>') : '')
                     + 'Tente de novo (a segunda costuma vir rápida) ou aperte o período.'
                     + '</span></td></tr>'
-                  : '<tr><td colspan="13" class="cc-empty"><i class="fas fa-magnifying-glass"></i><br>Nenhuma nota encontrada</td></tr>';
+                  : '<tr><td colspan="14" class="cc-empty"><i class="fas fa-magnifying-glass"></i><br>Nenhuma nota encontrada</td></tr>';
                 document.getElementById('paginationNotas').innerHTML = '';
                 return;
             }
@@ -1904,6 +1932,7 @@ function loadNotas() {
                     <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}" onchange="chkLinhaChange()"></td>
                     <td class="mc-data" data-l="Emissão">${fmtDate(r.data_emissao)}</td>
                     <td class="mc-num" data-l="Nº/Série">${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
+                    <td class="mc-emp col-emp" data-l="Empresa" title="${empresaRotulo(r)}">${empresaRotulo(r)}</td>
                     <td class="mc-imp" data-l="Importação">${dataPill}</td>
                     <td class="mc-nome" data-l="Emitente" title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
                     <td class="mc-uf" data-l="UF">${r.emit_uf||'—'}</td>
