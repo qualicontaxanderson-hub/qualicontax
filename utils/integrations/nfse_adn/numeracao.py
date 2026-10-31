@@ -104,9 +104,11 @@ def abrir_serie(empresa_id, serie, ambiente=2, numero_inicial=0, observacao=None
     a primeira DPS sai com ``numero_inicial + 1``. ``ambiente`` 1 = produção,
     2 = produção restrita; série de teste é outra série.
     """
-    serie = str(serie).strip()
-    if not serie.isdigit() or len(serie) > 5:
-        raise ValueError(f'Série inválida: {serie!r} (até 5 dígitos).')
+    serie = str(serie).strip().upper()
+    # Dígitos para a DPS nacional; a prefeitura de São Paulo aceita letras no
+    # RPS (ex.: "RP1" do Conexa, "QC" nossa). Até 5 caracteres nos dois.
+    if not serie.isalnum() or len(serie) > 5:
+        raise ValueError(f'Série inválida: {serie!r} (até 5 letras ou dígitos).')
     if ambiente not in (1, 2):
         raise ValueError('ambiente deve ser 1 (produção) ou 2 (produção restrita).')
     existente = execute_query(
