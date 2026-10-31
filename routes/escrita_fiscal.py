@@ -2193,6 +2193,7 @@ def api_notas():
         ('dest_cnpj', f_dest_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
         ('origem', f_origem), ('vinc_status', f_vinc_status),
         ('cancelado', f_cancelado), ('resumo', f_resumo),
+        ('operacao', request.args.get('operacao', '').strip()),
         ('produto_id', request.args.get('produto_id', '').strip()),
         ('item_desc', request.args.get('item_desc', '').strip())) if v}
     if page == 1 and (_termo or _filtros):
@@ -2214,7 +2215,7 @@ def api_notas():
                    n.dest_cnpj, n.dest_nome,
                    n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
                    n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
-                   n.nome_arquivo,
+                   n.nome_arquivo, n.operacao,
                    n.importado_em, n.atualizado_em, n.cliente_id, n.grupo_id,
                    c.nome_razao_social AS empresa_nome, c.numero_cliente AS empresa_numero,
                    g.nome AS grupo_nome
@@ -2233,22 +2234,8 @@ def api_notas():
     # eram COUNT(*)/SUM() OVER() na mesma consulta: para devolver 50 linhas o
     # MySQL lia TODAS as do filtro — 259 mil notas x 8 KB de XML na linha =
     # 498 s na Westpark. Aqui o agregado le so o indice idx_lista.
-    _tot = execute_query(
-        f"""SELECT COUNT(*) AS _total,
-                   COALESCE(SUM(n.valor_total), 0) AS _kpi_valor,
-                   COALESCE(SUM(n.valor_icms), 0) AS _kpi_icms,
-                   COALESCE(SUM(n.valor_pis), 0) AS _kpi_pis,
-                   COALESCE(SUM(n.valor_cofins), 0) AS _kpi_cofins
-              FROM nfe_importacoes n
-              {where_sql}""",
-        tuple(params), fetch=True, fetch_one=True) or {}
-    total = int(_tot.get('_total') or 0)
-    kpi = {
-        'total_valor':  float(_tot.get('_kpi_valor') or 0),
-        'total_icms':   float(_tot.get('_kpi_icms') or 0),
-        'total_pis':    float(_tot.get('_kpi_pis') or 0),
-        'total_cofins': float(_tot.get('_kpi_cofins') or 0),
-    }
+    # Desde 30/10/2026 tambem a contagem de cada Operacao (os botoes).
+    total, kpi, operacoes = _totais_operacao(request.args, _where_entradas)
     # Itens SO das notas da pagina (antes: GROUP BY sobre 1,17 milhao de itens
     # a cada pagina, dentro de um LEFT JOIN derivado).
     _itens = {}
@@ -2266,9 +2253,8 @@ def api_notas():
         r['itens_vinculados'] = int(_it.get('itens_vinculados') or 0)
 
     rows = []
-    _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
     for r in all_rows:
-        row = {k: v for k, v in r.items() if k not in _window_cols}
+        row = dict(r)
         for k in ('data_emissao', 'importado_em', 'atualizado_em'):
             if row.get(k) and hasattr(row[k], 'isoformat'):
                 row[k] = row[k].isoformat()
@@ -2278,7 +2264,7 @@ def api_notas():
 
     return jsonify({
         'total': total, 'page': page, 'per_page': per_page, 'rows': rows,
-        'kpi': kpi,
+        'kpi': kpi, 'operacoes': operacoes,
     })
 
 
@@ -2830,6 +2816,7 @@ def _where_lote_entradas(data):
     _aplica_resumo(where, f_resumo, 'n')
     _aplica_vinc_status(where, data.get('vinc_status'), 'n')
     _aplica_produto(where, data.get('produto_id'), data.get('item_desc'), params)
+    _aplica_operacao(where, params, data.get('operacao'))
     return where, params
 
 
@@ -2893,6 +2880,7 @@ def _where_lote_saidas(data):
     _aplica_cancelada(where, f_cancelado, 'n')
     _aplica_vinc_status(where, data.get('vinc_status'), 'n')
     _aplica_produto(where, data.get('produto_id'), data.get('item_desc'), params)
+    _aplica_operacao(where, params, data.get('operacao'))
     return where, params
 
 
@@ -3561,6 +3549,90 @@ def _ordem_lista(a):
     return 'n.data_emissao DESC, n.id DESC'
 
 
+# OPERAÇÃO da nota (30/10/2026) — coluna virtual nfe_importacoes.operacao,
+# com o índice idx_operacao (cliente_id, tipo, operacao, data_emissao):
+#   T = transferência ou remessa (CFOP x151-x159, x408/x409, x552, x557,
+#       x658/x659, x663-x666 armazenagem, x901-x934 remessas)
+#   D = despesa: a empresa emitiu para o PRÓPRIO CNPJ (uso e consumo), fora T
+#   N = compra (entrada) ou venda (saída) normal
+# Sem o índice, separar por operação lia a nota inteira: 16-27 s nas saídas
+# de outubro da Westpark (34 mil notas), contra 0,8 s dos totais.
+OPERACOES = ('N', 'D', 'T')
+
+
+def _aplica_operacao(where, params, valor, alias='n'):
+    v = str(valor or '').strip().upper()
+    if v in OPERACOES:
+        where.append(f'{alias}.operacao = %s')
+        params.append(v)
+
+
+def _rotulo_operacao(op, escopo, natureza=''):
+    """Texto da operação no Excel (e o do filtro, sem natureza)."""
+    if op == 'D':
+        t = 'Despesa (uso e consumo)'
+        if 'VENDA' in str(natureza or '').upper():
+            t += ' — emitida como venda'
+        return t
+    if op == 'T':
+        return 'Transferência / remessa'
+    return 'Venda' if escopo == 'saida' else 'Compra'
+
+
+def _filtro_operacao_rotulo(a, escopo):
+    op = str(a.get('operacao', '') or '').strip().upper()
+    if op == 'N':
+        return 'Só vendas' if escopo == 'saida' else 'Só compras'
+    if op == 'D':
+        return 'Despesas (uso e consumo)'
+    if op == 'T':
+        return 'Transferências e remessas'
+    return None
+
+
+def _totais_operacao(a, montador):
+    """Total, KPIs e a contagem de cada Operação (os botões) do filtro ``a``.
+
+    Duas consultas que o índice responde sem ler a nota: o total do filtro
+    SEM a operação (idx_lista, como sempre foi) e só as notas D e T
+    (idx_operacao — são poucas). "Só compras/vendas" = total − D − T.
+    Devolve (total, kpi, contagem); contagem None quando a consulta das D/T
+    falhou — aí a tela não mostra número inventado nos botões."""
+    where, params = montador(a, excluir=('operacao',))
+    wsql = 'WHERE ' + ' AND '.join(where)
+    cols = ("COUNT(*) AS c, COALESCE(SUM(n.valor_total),0) AS v, "
+            "COALESCE(SUM(n.valor_icms),0) AS icms, COALESCE(SUM(n.valor_pis),0) AS pis, "
+            "COALESCE(SUM(n.valor_cofins),0) AS cofins")
+    campos = ('c', 'v', 'icms', 'pis', 'cofins')
+    tot = execute_query(f"SELECT {cols} FROM nfe_importacoes n {wsql}",
+                        tuple(params), fetch=True, fetch_one=True) or {}
+    esp = execute_query(
+        f"SELECT n.operacao AS op, {cols} FROM nfe_importacoes n {wsql} "
+        f"AND n.operacao IN ('D','T') GROUP BY n.operacao", tuple(params), fetch=True)
+
+    def _num(r):
+        return {k: float((r or {}).get(k) or 0) for k in campos}
+
+    por = {'': _num(tot)}
+    contagem = None
+    if esp is not None:
+        por_op = {r['op']: r for r in esp}
+        por['D'], por['T'] = _num(por_op.get('D')), _num(por_op.get('T'))
+        por['N'] = {k: por[''][k] - por['D'][k] - por['T'][k] for k in campos}
+        contagem = {(k or 'todas'): int(v['c']) for k, v in por.items()}
+    op = str(a.get('operacao', '') or '').strip().upper()
+    op = op if op in OPERACOES else ''
+    sel = por.get(op)
+    if sel is None:
+        # as D/T falharam e há operação escolhida: soma direto (lenta, mas certa)
+        w2, p2 = montador(a)
+        sel = _num(execute_query(f"SELECT {cols} FROM nfe_importacoes n WHERE {' AND '.join(w2)}",
+                                 tuple(p2), fetch=True, fetch_one=True))
+    kpi = {'total_valor': round(sel['v'], 2), 'total_icms': round(sel['icms'], 2),
+           'total_pis': round(sel['pis'], 2), 'total_cofins': round(sel['cofins'], 2)}
+    return int(sel['c']), kpi, contagem
+
+
 def _where_entradas(a, excluir=()):
     def g(k):
         return str(a.get(k, '') or '').strip()
@@ -3616,6 +3688,8 @@ def _where_entradas(a, excluir=()):
     _aplica_produto(where,
                     '' if 'produto_id' in excluir else g('produto_id'),
                     '' if 'item_desc' in excluir else g('item_desc'), params)
+    if 'operacao' not in excluir:
+        _aplica_operacao(where, params, g('operacao'))
     return where, params
 
 
@@ -3678,6 +3752,8 @@ def _where_saidas(a, excluir=()):
     _aplica_produto(where,
                     '' if 'produto_id' in excluir else g('produto_id'),
                     '' if 'item_desc' in excluir else g('item_desc'), params)
+    if 'operacao' not in excluir:
+        _aplica_operacao(where, params, g('operacao'))
     return where, params
 
 
@@ -3925,11 +4001,12 @@ def _rel_nome(escopo, ext):
     return base[:-4] + '.' + ext
 
 
-def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None):
+def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None, com_op=False):
     """Linhas do relatório (até ``limite``). Colunas 'R' = string BRL no PDF, número
     no Excel (pra somar). Contagens (Itens/NF-e) sempre string (não é moeda).
     ``chaves`` (lista), quando vem, recebe o cliente_id de cada linha, na mesma
-    ordem — é por ele que o relatório de GRUPO separa as empresas."""
+    ordem — é por ele que o relatório de GRUPO separa as empresas.
+    ``com_op`` (Excel de Entradas/Saídas) põe a Operação no fim de cada linha."""
     pdf = (formato == 'pdf')
     if escopo == 'nfse':
         rows = execute_query(
@@ -3989,7 +4066,7 @@ def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None):
               if escopo == 'saida' else "n.emit_nome AS nome, n.emit_cnpj AS doc, n.emit_uf AS uf")
     rows = execute_query(
         f"SELECT n.id, n.cliente_id, n.data_emissao, n.num_nota, n.serie, {partes}, n.cfop, "
-        f"n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, "
+        f"n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.operacao, n.natureza_operacao, "
         f"COALESCE(ic.qtd, 0) AS qtd_itens{hora} FROM nfe_importacoes n "
         f"LEFT JOIN (SELECT nfe_id, COUNT(*) AS qtd FROM nfe_itens GROUP BY nfe_id) ic ON ic.nfe_id = n.id "
         f"{where_sql} ORDER BY n.data_emissao DESC, n.id DESC LIMIT %s",
@@ -4003,13 +4080,16 @@ def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None):
             data += ' ' + str(r['hora'])[:5]
         v, ic, pi, co = (r['valor_total'] or 0, r['valor_icms'] or 0,
                          r['valor_pis'] or 0, r['valor_cofins'] or 0)
-        out.append([
+        linha = [
             data, f"{r['num_nota'] or '—'}/{r['serie'] or '—'}",
             r['nome'] or r['doc'] or '—', r['uf'] or '—', r['cfop'] or '—',
             str(int(r['qtd_itens'] or 0)),
             _rel_brl(v) if pdf else float(v), _rel_brl(ic) if pdf else float(ic),
             _rel_brl(pi) if pdf else float(pi), _rel_brl(co) if pdf else float(co),
-        ])
+        ]
+        if com_op:
+            linha.append(_rotulo_operacao(r.get('operacao'), escopo, r.get('natureza_operacao')))
+        out.append(linha)
     return out
 
 
@@ -4107,12 +4187,11 @@ def _exportar_relatorio(escopo, permissao, titulo):
                    ('CFOP', 'L'), ('NF-e', 'L'), ('Frete R$', 'R'), ('ICMS', 'R')]
         totais = ['', '', 'TOTAL', '', '', '', _rel_brl(agg.get('frete')), _rel_brl(agg.get('icms'))]
     else:
-        agg = execute_query(
-            "SELECT COUNT(*) AS tot, COALESCE(SUM(n.valor_total),0) AS v, "
-            "COALESCE(SUM(n.valor_icms),0) AS icms, COALESCE(SUM(n.valor_pis),0) AS pis, "
-            "COALESCE(SUM(n.valor_cofins),0) AS cofins "
-            f"FROM nfe_importacoes n {where_sql}", tuple(params), fetch=True, fetch_one=True) or {}
-        total = int(agg.get('tot') or 0)
+        # o mesmo cálculo da tela (com a Operação escolhida), pelos índices
+        total, k, _ = _totais_operacao(request.args,
+                                       _where_saidas if escopo == 'saida' else _where_entradas)
+        agg = {'v': k['total_valor'], 'icms': k['total_icms'], 'pis': k['total_pis'],
+               'cofins': k['total_cofins']}
         kpis = [('Total de Notas', _rel_int(total)), ('Valor Total', _rel_brl(agg.get('v'))),
                 ('ICMS', _rel_brl(agg.get('icms'))), ('PIS', _rel_brl(agg.get('pis'))),
                 ('COFINS', _rel_brl(agg.get('cofins')))]
@@ -4122,6 +4201,11 @@ def _exportar_relatorio(escopo, permissao, titulo):
                    ('Itens', 'L'), ('Valor R$', 'R'), ('ICMS', 'R'), ('PIS', 'R'), ('COFINS', 'R')]
         totais = ['', 'TOTAL', '', '', '', '', _rel_brl(agg.get('v')), _rel_brl(agg.get('icms')),
                   _rel_brl(agg.get('pis')), _rel_brl(agg.get('cofins'))]
+        if formato == 'xlsx':
+            # Operação de cada nota (Venda/Compra, Despesa, Transferência) — só
+            # no Excel, para filtrar; no PDF a coluna não cabe
+            colunas.append(('Operação', 'L'))
+            totais.append('')
 
     if total == 0:
         return jsonify({'error': 'Nada no filtro atual para o relatório.'}), 404
@@ -4139,16 +4223,17 @@ def _exportar_relatorio(escopo, permissao, titulo):
                  f'(o PDF lista até {_rel_int(_REL_MAX_PDF)}).')
     else:
         limite = _REL_MAX_PDF if formato == 'pdf' else _LOTE_MAX_XML
+        com_op = formato == 'xlsx' and escopo in ('entrada', 'saida')
         if por_grupo:
             # números crus (como no Excel) para somar o subtotal de cada
             # empresa; no PDF viram moeda depois, em _rel_grupos.
             chaves = []
-            linhas = _rel_linhas(escopo, 'xlsx', where_sql, params, limite, chaves)
+            linhas = _rel_linhas(escopo, 'xlsx', where_sql, params, limite, chaves, com_op=com_op)
             grupos = _rel_grupos(linhas, chaves, colunas, pdf=(formato == 'pdf'),
                                  doc_nome=('CT-e', 'CT-e') if escopo == 'cte' else ('nota', 'notas'))
             linhas = []
         else:
-            linhas = _rel_linhas(escopo, formato, where_sql, params, limite)
+            linhas = _rel_linhas(escopo, formato, where_sql, params, limite, com_op=com_op)
 
     ctx = {
         'titulo': titulo, 'empresa': _rel_empresa(), 'periodo': _rel_periodo(),
@@ -4156,6 +4241,8 @@ def _exportar_relatorio(escopo, permissao, titulo):
         'kpis': kpis, 'colunas': colunas, 'linhas': linhas, 'totais': totais,
         'logo_path': _REL_LOGO if os.path.exists(_REL_LOGO) else None, 'aviso': aviso,
         'grupos': grupos,
+        'operacao': (_filtro_operacao_rotulo(request.args, escopo)
+                     if escopo in ('entrada', 'saida') else None),
     }
     if formato == 'xlsx':
         dados = gerar_relatorio_xlsx(ctx)
@@ -8804,6 +8891,7 @@ def api_notas_saidas():
         ('emit_cnpj', f_emit_cnpj), ('vmin', f_vmin), ('vmax', f_vmax),
         ('origem', f_origem), ('cancelado', f_cancelado),
         ('vinc_status', f_vinc_status),
+        ('operacao', request.args.get('operacao', '').strip()),
         ('produto_id', request.args.get('produto_id', '').strip()),
         ('item_desc', request.args.get('item_desc', '').strip())) if v}
     if page == 1 and (_termo or _filtros):
@@ -8844,6 +8932,13 @@ def api_notas_saidas():
     _so_indice = not any(request.args.get(k, '').strip() for k in _fora_do_indice)
     _hint = ('FORCE INDEX (idx_lista)'
              if (f_cliente_id or f_grupo_id) and _so_indice else '')
+    # Operação escolhida (30/10/2026): pelo idx_operacao. Pelo idx_lista o
+    # MySQL lê cada nota do mês para saber a operação e ordenar — "Só vendas"
+    # da Westpark em outubro levou 31 s; pelo idx_operacao, 0,6 s (o índice já
+    # vem em ordem de data e não precisa abrir a nota).
+    if (request.args.get('operacao', '').strip().upper() in OPERACOES
+            and (f_cliente_id or f_grupo_id) and _so_indice):
+        _hint = 'FORCE INDEX (idx_operacao)'
     ids_pagina = [r['id'] for r in (execute_query(
         f"""SELECT n.id
               FROM nfe_importacoes n {_hint}
@@ -8862,7 +8957,7 @@ def api_notas_saidas():
                        n.dest_cnpj, n.dest_nome, n.dest_uf,
                        n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.valor_ipi,
                        n.cfop, n.natureza_operacao, n.origem, n.incompleta, n.cancelada,
-                       n.nome_arquivo,
+                       n.nome_arquivo, n.operacao,
                        n.importado_em, n.cliente_id, n.grupo_id,
                        c.nome_razao_social AS empresa_nome, c.numero_cliente AS empresa_numero,
                        g.nome AS grupo_nome
@@ -8878,22 +8973,8 @@ def api_notas_saidas():
     # eram COUNT(*)/SUM() OVER() na mesma consulta: para devolver 50 linhas o
     # MySQL lia TODAS as do filtro — 259 mil notas x 8 KB de XML na linha =
     # 498 s na Westpark. Aqui o agregado le so o indice idx_lista.
-    _tot = execute_query(
-        f"""SELECT COUNT(*) AS _total,
-                   COALESCE(SUM(n.valor_total), 0) AS _kpi_valor,
-                   COALESCE(SUM(n.valor_icms), 0) AS _kpi_icms,
-                   COALESCE(SUM(n.valor_pis), 0) AS _kpi_pis,
-                   COALESCE(SUM(n.valor_cofins), 0) AS _kpi_cofins
-              FROM nfe_importacoes n
-              {where_sql}""",
-        tuple(params), fetch=True, fetch_one=True) or {}
-    total = int(_tot.get('_total') or 0)
-    kpi = {
-        'total_valor':  float(_tot.get('_kpi_valor') or 0),
-        'total_icms':   float(_tot.get('_kpi_icms') or 0),
-        'total_pis':    float(_tot.get('_kpi_pis') or 0),
-        'total_cofins': float(_tot.get('_kpi_cofins') or 0),
-    }
+    # Desde 30/10/2026 tambem a contagem de cada Operacao (os botoes).
+    total, kpi, operacoes = _totais_operacao(request.args, _where_saidas)
     # Itens SO das notas da pagina (antes: GROUP BY sobre 1,17 milhao de itens
     # a cada pagina, dentro de um LEFT JOIN derivado).
     _itens = {}
@@ -8926,10 +9007,9 @@ def api_notas_saidas():
             tuple(ids_pagina), fetch=True) or []
         horas = {h['id']: h['hora_emissao'] for h in hrows}
 
-    _window_cols = {'_total', '_kpi_valor', '_kpi_icms', '_kpi_pis', '_kpi_cofins'}
     rows = []
     for r in all_rows:
-        row = {k: v for k, v in r.items() if k not in _window_cols}
+        row = dict(r)
         for k in ('data_emissao', 'importado_em'):
             if row.get(k) and hasattr(row[k], 'isoformat'):
                 row[k] = row[k].isoformat()
@@ -8938,7 +9018,8 @@ def api_notas_saidas():
         row['hora_emissao'] = horas.get(r['id'])
         rows.append(row)
 
-    return jsonify({'total': total, 'page': page, 'per_page': per_page, 'rows': rows, 'kpi': kpi})
+    return jsonify({'total': total, 'page': page, 'per_page': per_page, 'rows': rows, 'kpi': kpi,
+                    'operacoes': operacoes})
 
 
 @escrita_fiscal.route('/conf-saidas/api/por-destinatario')

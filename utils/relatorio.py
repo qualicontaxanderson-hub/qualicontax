@@ -16,6 +16,7 @@ API:
       'totais': ['','','TOTAL', ..., 'R$ ...'],                  # mesma largura de colunas
       'logo_path': '/caminho/logo.png',                          # opcional
       'aviso': None,   # ou 'Listagem truncada em 5.000 linhas — use o Excel para o total.'
+      'operacao': None,  # ou 'Despesas (uso e consumo)' — o filtro de Operação, no cabeçalho
       # Consulta por GRUPO (opcional): no lugar de 'linhas', as notas separadas
       # por empresa. O PDF abre cada empresa com uma faixa e fecha com o
       # subtotal; o Excel põe a coluna 'Empresa' (coluna B) em TODAS as linhas,
@@ -82,8 +83,11 @@ def gerar_relatorio_pdf(ctx):
     el += [head, Spacer(1, 6)]
 
     # ---- info empresa/período ----
-    el += [_p('<b>Empresa:</b> %s&nbsp;&nbsp;&nbsp;&nbsp;<b>Período:</b> %s'
-              % (ctx.get('empresa', '—'), ctx.get('periodo', '—')), 9), Spacer(1, 6)]
+    info = ('<b>Empresa:</b> %s&nbsp;&nbsp;&nbsp;&nbsp;<b>Período:</b> %s'
+            % (ctx.get('empresa', '—'), ctx.get('periodo', '—')))
+    if ctx.get('operacao'):
+        info += '&nbsp;&nbsp;&nbsp;&nbsp;<b>Operação:</b> %s' % ctx['operacao']
+    el += [_p(info, 9), Spacer(1, 6)]
 
     # ---- KPIs coloridos ----
     kpis = ctx.get('kpis', [])[:5]
@@ -214,6 +218,9 @@ def gerar_relatorio_xlsx(ctx):
     ws['D4'] = ctx.get('empresa', ''); ws['D4'].font = Font(name='Arial', size=10)
     ws['C5'] = 'Período:'; ws['C5'].font = Font(name='Arial', bold=True, size=10)
     ws['D5'] = ctx.get('periodo', ''); ws['D5'].font = Font(name='Arial', size=10)
+    if ctx.get('operacao'):
+        ws['C6'] = 'Operação:'; ws['C6'].font = Font(name='Arial', bold=True, size=10)
+        ws['D6'] = ctx['operacao']; ws['D6'].font = Font(name='Arial', size=10)
 
     hr = 7
     for i, c in enumerate(cols, 1):

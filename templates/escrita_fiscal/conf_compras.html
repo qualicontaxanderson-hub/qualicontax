@@ -262,6 +262,29 @@ table.cc-items-table td.cc-comercial.cc-comercial-dif { color:#b45309; backgroun
 table.cc-table tr.cc-row-cancelada td { background:#fef2f2; }
 table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
 
+/* ---- OPERAÇÃO (30/10/2026): botões acima da lista + etiqueta na nota ----
+   Despesa = nota da empresa para o próprio CNPJ; Transferência = CFOP de
+   transferência, armazenagem ou remessa. "Todas" é o padrão. */
+.cc-op { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:-6px 0 14px; }
+.cc-op-lbl { font-size:10px; font-weight:800; color:#15803d; letter-spacing:.4px; margin-right:2px; }
+.cc-op-chip { border:1px solid #cbd5e1; border-radius:99px; padding:5px 13px; font-size:12.5px; font-weight:600; background:#fff; color:#334155; cursor:pointer; font-family:inherit; }
+.cc-op-chip:hover { border-color:#16a34a; }
+.cc-op-chip.on { background:#15803d; border-color:#15803d; color:#fff; }
+.cc-op-chip .q { display:inline-block; margin-left:6px; background:#e2e8f0; border-radius:9px; padding:0 7px; font-size:11px; }
+.cc-op-chip.on .q { background:rgba(255,255,255,.25); }
+.cc-op-chip .q:empty { display:none; }
+.cc-op-chip .curto { display:none; }
+.tag-op { padding:2px 7px; border-radius:4px; font-size:10px; font-weight:800; letter-spacing:.3px; margin-left:6px; white-space:nowrap; }
+.tag-op.desp { background:#ffedd5; color:#9a3412; }
+.tag-op.transf { background:#e0e7ff; color:#3730a3; }
+.aviso-op { color:#b45309; font-size:11px; font-weight:700; margin-left:6px; white-space:nowrap; }
+@media (max-width:820px) {
+    /* no cartão a coluna do número é estreita: etiqueta e aviso descem de
+       linha em vez de passar por cima da emissão */
+    .mc-num .tag-op { display:table; margin:3px 0 0; }
+    .mc-num .aviso-op { display:block; margin:3px 0 0; white-space:normal; }
+}
+
 /* ---- Capturar documento (linha em RESUMO) + toast ---- */
 .btn-capturar { background:#0ea5e9; color:#fff; border:none; padding:2px 9px; border-radius:99px; font-size:10px; font-weight:700; cursor:pointer; margin-left:5px; white-space:nowrap; }
 .btn-capturar:hover:not(:disabled) { background:#0284c7; }
@@ -521,6 +544,11 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
     .cc-kpi-label { font-size:9px; letter-spacing:.3px; }
     .cc-kpi-value { font-size:15px; margin-top:2px; }
     .cc-kpi-sub { display:none; }
+    .cc-op { gap:6px; margin:-4px 0 12px; }
+    .cc-op-lbl { width:100%; }
+    .cc-op-chip { padding:4px 10px; font-size:12px; }
+    .cc-op-chip .longo { display:none; }
+    .cc-op-chip .curto { display:inline; }
 }
 </style>
 {% endblock %}
@@ -599,6 +627,15 @@ table.cc-table tr.cc-row-cancelada:hover td { background:#fee2e2; }
         <div class="cc-kpi-label">COFINS</div>
         <div class="cc-kpi-value red" id="kpiCOFINS">{{ stats.total_cofins | default(0) | format_currency }}</div>
     </div>
+</div>
+
+<!-- Operação: os totais acima e o relatório seguem o botão escolhido -->
+<div class="cc-op" id="opBar">
+    <span class="cc-op-lbl">OPERAÇÃO</span>
+    <button type="button" class="cc-op-chip on" data-op="" onclick="escolherOperacao('')">Todas<span class="q" data-q="todas"></span></button>
+    <button type="button" class="cc-op-chip" data-op="N" onclick="escolherOperacao('N')" title="Compras de fornecedores — sem as despesas e as transferências"><span class="longo">Só compras</span><span class="curto">Compras</span><span class="q" data-q="N"></span></button>
+    <button type="button" class="cc-op-chip" data-op="D" onclick="escolherOperacao('D')" title="Notas da empresa para o próprio CNPJ (uso e consumo)"><span class="longo">Despesas (uso e consumo)</span><span class="curto">Despesas</span><span class="q" data-q="D"></span></button>
+    <button type="button" class="cc-op-chip" data-op="T" onclick="escolherOperacao('T')" title="Transferências entre filiais, armazenagem e remessas"><span class="longo">Transferências e remessas</span><span class="curto">Transf.</span><span class="q" data-q="T"></span></button>
 </div>
 
 <!-- Filters -->
@@ -1699,6 +1736,8 @@ function clearFilters() {
     document.getElementById('f_vinc_status').value = '';
     document.getElementById('f_cancelado').value = '';
     document.getElementById('f_resumo').value = '';
+    operacaoSel = '';
+    marcarOperacao();
     currentPage = 1;
     // Volta para os últimos 45 dias em vez de deixar a data vazia: sem recorte,
     // um Buscar puxaria a base inteira da empresa (dezenas de milhares de notas).
@@ -1731,6 +1770,7 @@ function getFilters() {
         produto_id: tsProd ? tsProd.getValue().join(',') : '',
         item_desc: tsDesc ? tsDesc.getValue().join(',') : '',
         ncm: document.getElementById('f_ncm').value,
+        operacao: operacaoSel || '',
     };
 }
 function applyFilters() {
@@ -1853,6 +1893,36 @@ function empresaRotulo(r) {
     if (!r.empresa_nome) return r.grupo_nome || '—';
     return (r.empresa_numero ? r.empresa_numero + ' – ' : '') + r.empresa_nome;
 }
+
+// OPERAÇÃO (30/10/2026): '' Todas · N compras · D despesas · T transferências.
+// Vai no getFilters, então a lista, os totais, o relatório e o lote seguem o botão.
+var operacaoSel = '';
+function marcarOperacao() {
+    document.querySelectorAll('#opBar .cc-op-chip').forEach(b =>
+        b.classList.toggle('on', (b.dataset.op || '') === operacaoSel));
+}
+function escolherOperacao(op) {
+    operacaoSel = op || '';
+    marcarOperacao();
+    if (currentClienteId || currentGrupoId) applyFilters();
+}
+function contarOperacoes(c) {
+    // sem contagem (consulta falhou), o botão fica sem número — nada inventado
+    document.querySelectorAll('#opBar .q').forEach(q => {
+        const n = c ? c[q.dataset.q] : null;
+        q.textContent = (n === null || n === undefined) ? '' : n.toLocaleString('pt-BR');
+    });
+}
+function seloOperacao(r) {
+    if (r.operacao === 'D') {
+        const venda = /VENDA/i.test(r.natureza_operacao || '');
+        return ' <span class="tag-op desp" title="Nota da empresa para o próprio CNPJ (uso e consumo)">DESPESA</span>'
+            + (venda ? ' <span class="aviso-op" title="A natureza da nota diz VENDA, mas ela foi emitida para o próprio CNPJ. Peça ao cliente para corrigir a natureza nas próximas.">⚠ emitida como VENDA</span>' : '');
+    }
+    if (r.operacao === 'T')
+        return ' <span class="tag-op transf" title="Transferência entre filiais, armazenagem ou remessa (pelo CFOP)">TRANSFERÊNCIA</span>';
+    return '';
+}
 function loadNotas() {
     const f = getFilters();
     const params = new URLSearchParams({...f, page: currentPage});
@@ -1883,6 +1953,7 @@ function loadNotas() {
                 document.getElementById('kpiPIS').textContent = fmtBRL(data.kpi.total_pis);
                 document.getElementById('kpiCOFINS').textContent = fmtBRL(data.kpi.total_cofins);
             }
+            contarOperacoes(data.operacoes);
             const tbody = document.getElementById('tbodyNotas');
             if (!data.rows || data.rows.length === 0) {
                 // FALHA e AUSÊNCIA não são a mesma coisa. Quando a consulta é
@@ -1931,7 +2002,7 @@ function loadNotas() {
                 return `<tr class="cc-row-clickable${canc ? ' cc-row-cancelada' : ''}" data-nfeid="${r.id}" onclick="openPanel(${r.id}, event)">
                     <td class="mc-chk" onclick="event.stopPropagation()" style="text-align:center;"><input type="checkbox" class="chk-linha" value="${r.id}" data-cancelada="${canc}" onchange="chkLinhaChange()"></td>
                     <td class="mc-data" data-l="Emissão">${fmtDate(r.data_emissao)}</td>
-                    <td class="mc-num" data-l="Nº/Série">${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}</td>
+                    <td class="mc-num" data-l="Nº/Série">${r.num_nota||'—'} / ${r.serie||'—'}${seloCanc}${seloOperacao(r)}</td>
                     <td class="mc-emp col-emp" data-l="Empresa" title="${empresaRotulo(r)}">${empresaRotulo(r)}</td>
                     <td class="mc-imp" data-l="Importação">${dataPill}</td>
                     <td class="mc-nome" data-l="Emitente" title="${r.emit_cnpj}" style="text-transform:uppercase;">${r.emit_nome||r.emit_cnpj||'—'}</td>
