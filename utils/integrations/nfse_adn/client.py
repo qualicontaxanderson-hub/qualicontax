@@ -272,10 +272,23 @@ class SessaoADN:
     def __init__(self, x509, chave_priv, cadeia):
         self._material = (x509, chave_priv, cadeia)
 
+    @property
+    def material(self):
+        """(x509, chave privada, cadeia) — a emissão precisa da chave para assinar a DPS."""
+        return self._material
+
     def get(self, url, **kw):
         s = montar_sessao_mtls(*self._material)
         try:
             return s.get(url, **kw)
+        finally:
+            s.close()
+
+    def post(self, url, **kw):
+        """Mesma sessão descartável do ``get``; usada pela emissão (Sefin Nacional)."""
+        s = montar_sessao_mtls(*self._material)
+        try:
+            return s.post(url, **kw)
         finally:
             s.close()
 
