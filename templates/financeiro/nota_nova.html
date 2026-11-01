@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+
+{% block title %}Nova nota - Notas Fiscais - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-file-invoice" style="color: var(--primary-green);"></i>
+            Nova nota fiscal de serviço
+        </h1>
+        <p class="page-subtitle">{{ empresa.nome_razao_social if empresa else '' }} — o padrão da empresa já vem preenchido; mude o que for diferente nesta nota</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-outline" href="{{ url_for('financeiro.notas', emp=emp_id) }}"><i class="fas fa-arrow-left"></i> Notas</a>
+    </div>
+</div>
+
+{% if fin_empresas|length > 1 %}
+<div class="fin-escopo">
+    <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Emitir pela</span>
+    <div class="fin-chips">
+        {% for e in fin_empresas %}
+        <a class="fin-chip {{ 'ativo' if e.cliente_id == emp_id }}" title="{{ e.nome_razao_social }}"
+           href="{{ url_for('financeiro.nota_nova', emp=e.cliente_id) }}">{{ e.apelido }}</a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if pre.de %}
+<div class="nf-teste on" style="background:#eff6ff; border-color:#93c5fd; color:#1e3a8a;">
+    Esta nota nasce da nota <strong>{{ pre.serie }}-{{ pre.numero if pre.numero else '' }}</strong> recusada: corrija o que o governo apontou e emita de novo. Ela receberá um número novo.
+</div>
+{% endif %}
+
+<div class="nf-steps" id="nfSteps">
+    <button type="button" class="nf-step on" data-ir="1"><b>1</b> Pessoas</button>
+    <button type="button" class="nf-step" data-ir="2"><b>2</b> Serviço</button>
+    <button type="button" class="nf-step" data-ir="3"><b>3</b> Valores</button>
+    <button type="button" class="nf-step" data-ir="4"><b>4</b> Revisão</button>
+</div>
+
+<div class="nf-teste" id="nfAvisoTeste">
+    <i class="fas fa-flask"></i> Esta série emite no <strong>ambiente de teste</strong> do governo. A nota sai autorizada, mas não vale como documento fiscal.
+</div>
+
+<form method="POST" action="{{ url_for('financeiro.nota_emitir') }}" id="nfForm" autocomplete="off">
+<input type="hidden" name="emp" value="{{ emp_id }}">
+<input type="hidden" name="fin_titulo_id" id="nfTituloId" value="{{ pre.fin_titulo_id or '' }}">
+<input type="hidden" name="tomador_cliente_id" id="nfClienteId" value="{{ pre.tomador_cliente_id or '' }}">
+
+<!-- ===== 1 · PESSOAS ===== -->
+<div class="nf-pane on" data-passo="1">
+    <div class="nf-sec">
+        <h3><i class="fas fa-paper-plane" style="color:#0369a1;"></i> Série e competência</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Série *</label>
+                <select name="serie" id="nfSerie" class="form-control" required>
+                    {% for s in series %}
+                    <option value="{{ s.serie }}" data-emissor="{{ s.emissor }}" data-ambiente="{{ s.ambiente }}"
+                            {{ 'selected' if s.serie == pre.serie }}>
+                        {{ s.serie }} — {{ EMISSORES[s.emissor] }}{{ ' · TESTE' if s.ambiente == 2 else '' }} · último nº {{ s.ultimo_numero }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if not series %}<span class="nf-ajuda" style="color:#b91c1c;">Nenhuma série ativa. <a href="{{ url_for('financeiro.notas_config', emp=emp_id) }}">Abra uma na configuração.</a></span>{% endif %}
+            </div>
+            <div class="form-group">
+                <label>Competência (data do serviço) *</label>
+                <input type="date" name="competencia" id="nfCompet" class="form-control" required value="{{ pre.competencia }}">
+                <span class="nf-ajuda">Mês a que o serviço se refere. A emissão é hoje.</span>
+            </div>
+            {% if titulos %}
+            <div class="form-group">
+                <label>Nasce de um título a receber?</label>
+                <select id="nfTitulo" class="form-control">
+                    <option value="">— sem título —</option>
+                    {% for t in titulos %}
+                    <option value="{{ t.id }}" data-cliente="{{ t.cliente_id or '' }}" data-doc="{{ t.contraparte_doc or '' }}"
+                            data-nome="{{ t.contraparte_nome }}" data-valor="{{ t.valor }}" data-comp="{{ t.competencia.isoformat() if t.competencia else '' }}"
+                            {{ 'selected' if titulo and titulo.id == t.id }}>
+                        {{ t.vencimento.strftime('%d/%m') }} · {{ t.contraparte_nome[:38] }} · {{ t.valor | float | round(2) | format_currency }}{{ ' · ' ~ t.status if t.status != 'aberto' else '' }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <span class="nf-ajuda">Preenche tomador, valor e competência; a nota fica ligada ao título.</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="nf-sec">
+        <h3><i class="fas fa-user-tie" style="color:#6d28d9;"></i> Tomador <small>quem recebe a nota</small></h3>
+        <div class="form-group">
+            <label>Buscar no cadastro de clientes</label>
+            <input type="text" id="nfBusca" class="form-control" placeholder="Nome, CNPJ/CPF ou número do cliente">
+            <div class="nf-res" id="nfRes"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group" style="grid-column: span 2;">
+                <label>Nome / razão social *</label>
+                <input type="text" name="tomador_nome" id="t_nome" class="form-control" required maxlength="150" value="{{ pre.tomador_nome or '' }}">
+            </div>
+            <div class="form-group">
+                <label>CNPJ ou CPF *</label>
+                <input type="text" name="tomador_doc" id="t_doc" class="form-control" required value="{{ pre.tomador_doc or '' }}" inputmode="numeric">
+            </div>
+            <div class="form-group">
+                <label>Inscrição municipal</label>
+                <input type="text" name="tomador_im" id="t_im" class="form-control" value="{{ pre.tomador_im or pre.tomador_inscricao_municipal or '' }}">
+                <span class="nf-ajuda">Só quando o tomador é de São Paulo.</span>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>CEP</label>
+                <input type="text" name="tomador_cep" id="t_cep" class="form-control" value="{{ pre.tomador_cep or '' }}" inputmode="numeric" maxlength="9">
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <label>Logradouro</label>
+                <input type="text" name="tomador_logradouro" id="t_lgr" class="form-control" value="{{ pre.tomador_logradouro or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Número</label>
+                <input type="text" name="tomador_numero" id="t_num" class="form-control" value="{{ pre.tomador_numero or '' }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Complemento</label>
+                <input type="text" name="tomador_complemento" id="t_cpl" class="form-control" value="{{ pre.tomador_complemento or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Bairro</label>
+                <input type="text" name="tomador_bairro" id="t_bairro" class="form-control" value="{{ pre.tomador_bairro or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Cidade / UF</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="t_cidade" class="form-control" value="{{ pre.tomador_cidade or '' }}" placeholder="Cidade">
+                    <input type="text" name="tomador_uf" id="t_uf" class="form-control" style="width:64px; flex:none;" maxlength="2" value="{{ pre.tomador_uf or '' }}" placeholder="UF">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Município (código IBGE) *</label>
+                <input type="text" name="tomador_ibge" id="t_ibge" class="form-control" required maxlength="7" value="{{ pre.tomador_ibge or '' }}" inputmode="numeric">
+                <span class="nf-ajuda" id="t_ibge_ajuda">Vem das notas que esse cliente já recebeu, senão pelo CEP.</span>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>E-mail</label>
+                <input type="email" name="tomador_email" id="t_email" class="form-control" value="{{ pre.tomador_email or '' }}">
+                <span class="nf-ajuda">Vai no XML; o envio da nota por e-mail vem na próxima etapa do projeto.</span>
+            </div>
+            <div class="form-group">
+                <label>Telefone</label>
+                <input type="text" name="tomador_fone" id="t_fone" class="form-control" value="{{ pre.tomador_fone or '' }}">
+            </div>
+        </div>
+    </div>
+    <div class="nf-acoes">
+        <span></span>
+        <button type="button" class="btn btn-primary" data-prox="2">Continuar <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+<!-- ===== 2 · SERVIÇO ===== -->
+<div class="nf-pane" data-passo="2">
+    <div class="nf-sec">
+        <h3><i class="fas fa-briefcase" style="color:#b45309;"></i> Serviço</h3>
+        <div class="form-group">
+            <label>Descrição do serviço *</label>
+            <textarea name="descricao" id="s_desc" class="form-control" rows="3" required maxlength="1000">{{ pre.descricao or '' }}</textarea>
+            <span class="nf-ajuda">É o texto que aparece na nota. Até 1.000 caracteres.</span>
+        </div>
+        <div class="form-row">
+            <div class="form-group nf-so-nacional">
+                <label>Código de tributação nacional *</label>
+                <input type="text" name="cod_trib_nac" id="s_ctn" class="form-control" maxlength="6" value="{{ pre.cod_trib_nac or '' }}">
+            </div>
+            <div class="form-group nf-so-nacional">
+                <label>Código municipal</label>
+                <input type="text" name="cod_trib_mun" class="form-control" maxlength="3" value="{{ pre.cod_trib_mun or '' }}">
+            </div>
+            <div class="form-group">
+                <label>NBS</label>
+                <input type="text" name="cod_nbs" class="form-control" maxlength="9" value="{{ pre.cod_nbs or '' }}">
+            </div>
+            <div class="form-group nf-so-sp">
+                <label>Código de serviço (prefeitura SP) *</label>
+                <input type="text" name="cod_servico_sp" class="form-control" maxlength="5" value="{{ pre.cod_servico_sp or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Local da prestação (IBGE)</label>
+                <input type="text" name="loc_prestacao" class="form-control" maxlength="7" value="{{ pre.loc_prestacao or '' }}">
+                <span class="nf-ajuda">Normalmente o município da empresa.</span>
+            </div>
+        </div>
+    </div>
+    <div class="nf-acoes">
+        <button type="button" class="btn btn-outline" data-prox="1"><i class="fas fa-arrow-left"></i> Voltar</button>
+        <button type="button" class="btn btn-primary" data-prox="3">Continuar <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+<!-- ===== 3 · VALORES ===== -->
+<div class="nf-pane" data-passo="3">
+    <div class="nf-sec">
+        <h3><i class="fas fa-dollar-sign" style="color:#15803d;"></i> Valores</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Valor do serviço (R$) *</label>
+                <input type="number" name="valor_servico" id="v_valor" class="form-control" required min="0.01" step="0.01" value="{{ pre.valor_servico or '' }}" style="font-size:18px; font-weight:800;">
+            </div>
+            <div class="form-group">
+                <label>ISS</label>
+                <select name="trib_issqn" class="form-control">
+                    {% for k, v in TRIB_ISSQN.items() %}<option value="{{ k }}" {{ 'selected' if (pre.trib_issqn or 1)|int == k }}>{{ v }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Alíquota do ISS (%)</label>
+                <input type="text" name="aliquota_iss" class="form-control" value="{{ pre.aliquota_iss or '' }}" inputmode="decimal" placeholder="{{ 'o governo calcula (Simples)' if cfg.op_simp_nac != 1 else '' }}">
+            </div>
+            <div class="form-group">
+                <label style="margin-top:26px;"><input type="checkbox" name="iss_retido" value="1" {{ 'checked' if pre.iss_retido }}> ISS retido pelo tomador</label>
+            </div>
+        </div>
+    </div>
+    <div class="nf-sec">
+        <h3><i class="fas fa-hand-holding-usd" style="color:#b91c1c;"></i> Retenções federais <small>só preencha se o tomador retiver</small></h3>
+        <div class="form-row">
+            {% for campo, rotulo in [('ret_pis', 'PIS'), ('ret_cofins', 'COFINS'), ('ret_inss', 'INSS'), ('ret_irrf', 'IR'), ('ret_csll', 'CSLL')] %}
+            <div class="form-group">
+                <label>{{ rotulo }} (R$)</label>
+                <input type="number" name="{{ campo }}" class="form-control nf-ret" min="0" step="0.01" value="{{ pre[campo] if pre[campo] and pre[campo]|float > 0 else '' }}" placeholder="0,00">
+            </div>
+            {% endfor %}
+        </div>
+        <div class="fin-fraco" style="margin-top:4px;">Valor líquido: <strong id="v_liquido" style="font-size:15px; color:#0f3d2e;">—</strong></div>
+    </div>
+    <details class="nf-sec">
+        <summary style="cursor:pointer; font-size:13px; font-weight:800; color:#0f3d2e;"><i class="fas fa-landmark" style="color:#0f766e;"></i> Reforma tributária (IBS/CBS) — classificação desta nota</summary>
+        <div class="form-row" style="margin-top:12px;">
+            <div class="form-group"><label>CST</label><input type="text" name="ibscbs_cst" class="form-control" maxlength="3" value="{{ pre.ibscbs_cst }}"></div>
+            <div class="form-group"><label>cClassTrib</label><input type="text" name="ibscbs_cclasstrib" class="form-control" maxlength="10" value="{{ pre.ibscbs_cclasstrib }}"></div>
+            <div class="form-group"><label>cIndOp</label><input type="text" name="ibscbs_cind_op" class="form-control" maxlength="10" value="{{ pre.ibscbs_cind_op }}"></div>
+            <div class="form-group"><label>Destinatário</label>
+                <select name="ibscbs_ind_dest" class="form-control">{% for k, v in IND_DEST.items() %}<option value="{{ k }}" {{ 'selected' if (pre.ibscbs_ind_dest or 0)|int == k }}>{{ v }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label>Consumidor final</label>
+                <select name="ibscbs_ind_final" class="form-control">{% for k, v in IND_FINAL.items() %}<option value="{{ k }}" {{ 'selected' if (pre.ibscbs_ind_final or 0)|int == k }}>{{ v }}</option>{% endfor %}</select></div>
+        </div>
+        <span class="nf-ajuda">Os valores de IBS e CBS são calculados pelo governo e voltam na nota autorizada.</span>
+    </details>
+    <div class="nf-acoes">
+        <button type="button" class="btn btn-outline" data-prox="2"><i class="fas fa-arrow-left"></i> Voltar</button>
+        <button type="button" class="btn btn-primary" data-prox="4">Revisar <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+<!-- ===== 4 · REVISÃO ===== -->
+<div class="nf-pane" data-passo="4">
+    <div class="nf-sec">
+        <h3><i class="fas fa-check-double" style="color:#15803d;"></i> Confira antes de emitir</h3>
+        <dl class="nf-resumo" id="nfResumo"></dl>
+    </div>
+    <div class="nf-acoes">
+        <button type="button" class="btn btn-outline" data-prox="3"><i class="fas fa-arrow-left"></i> Voltar</button>
+        <button type="submit" class="btn btn-primary" id="nfEmitir" style="min-width:200px;"><i class="fas fa-paper-plane"></i> Emitir nota</button>
+    </div>
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var URL_BUSCA = "{{ url_for('financeiro.notas_buscar') }}";
+    var URL_TOMADOR = "{{ url_for('financeiro.notas_tomador', cliente_id=0) }}";
+    var URL_CEP = "{{ url_for('financeiro.notas_cep', cep='00000000') }}";
+    var form = document.getElementById('nfForm');
+    var passo = 1;
+
+    function $(id) { return document.getElementById(id); }
+    function brl(v) { return (isNaN(v) ? 0 : v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+    // ---- passos ------------------------------------------------------------
+    function mostrar(n) {
+        passo = n;
+        document.querySelectorAll('.nf-pane').forEach(function (p) { p.classList.toggle('on', +p.dataset.passo === n); });
+        document.querySelectorAll('.nf-step').forEach(function (s) {
+            var k = +s.dataset.ir;
+            s.classList.toggle('on', k === n);
+            s.classList.toggle('ok', k < n);
+        });
+        if (n === 4) montarResumo();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function validarPasso(n) {
+        var pane = document.querySelector('.nf-pane[data-passo="' + n + '"]');
+        var campos = pane.querySelectorAll('input, select, textarea');
+        for (var i = 0; i < campos.length; i++) {
+            var c = campos[i];
+            if (c.offsetParent === null && c.type !== 'hidden') continue;   // escondido (ex.: só-SP)
+            if (!c.checkValidity()) { c.reportValidity(); return false; }
+        }
+        return true;
+    }
+    document.querySelectorAll('[data-prox]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var alvo = +b.dataset.prox;
+            if (alvo > passo && !validarPasso(passo)) return;
+            mostrar(alvo);
+        });
+    });
+    document.querySelectorAll('.nf-step').forEach(function (s) {
+        s.addEventListener('click', function () {
+            var alvo = +s.dataset.ir;
+            for (var k = passo; k < alvo; k++) { if (!validarPasso(k)) { mostrar(k); return; } }
+            mostrar(alvo);
+        });
+    });
+
+    // ---- série: emissor e ambiente -------------------------------------------
+    function serieMudou() {
+        var sel = $('nfSerie'), opt = sel && sel.options[sel.selectedIndex];
+        var emissor = opt ? opt.dataset.emissor : 'nacional';
+        var teste = opt && opt.dataset.ambiente === '2';
+        $('nfAvisoTeste').classList.toggle('on', !!teste);
+        document.querySelectorAll('.nf-so-sp').forEach(function (e) { e.style.display = emissor === 'sp' ? '' : 'none'; });
+        document.querySelectorAll('.nf-so-nacional').forEach(function (e) { e.style.display = emissor === 'sp' ? 'none' : ''; });
+        var ctn = $('s_ctn'); if (ctn) ctn.required = emissor !== 'sp';
+        var csp = form.querySelector('[name=cod_servico_sp]'); if (csp) csp.required = emissor === 'sp';
+    }
+    if ($('nfSerie')) { $('nfSerie').addEventListener('change', serieMudou); serieMudou(); }
+
+    // ---- título -> tomador, valor, competência -------------------------------
+    var selT = $('nfTitulo');
+    if (selT) selT.addEventListener('change', function () {
+        var o = selT.options[selT.selectedIndex];
+        $('nfTituloId').value = o.value || '';
+        if (!o.value) return;
+        if (o.dataset.valor) $('v_valor').value = parseFloat(o.dataset.valor).toFixed(2);
+        if (o.dataset.comp) $('nfCompet').value = o.dataset.comp;
+        if (o.dataset.cliente) carregarTomador(o.dataset.cliente);
+        else { $('t_doc').value = o.dataset.doc || ''; $('t_nome').value = o.dataset.nome || ''; $('nfClienteId').value = ''; }
+        liquido();
+    });
+
+    // ---- busca de tomador -----------------------------------------------------
+    var busca = $('nfBusca'), caixa = $('nfRes'), timer = null;
+    busca.addEventListener('input', function () {
+        clearTimeout(timer);
+        var q = busca.value.trim();
+        if (q.length < 2) { caixa.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+            fetch(URL_BUSCA + '?q=' + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (lista) {
+                caixa.innerHTML = '';
+                if (!lista.length) {
+                    var v = document.createElement('div'); v.className = 'nf-res-vazio';
+                    v.textContent = 'Nenhum cliente com "' + q + '". Preencha os campos à mão.'; caixa.appendChild(v); return;
+                }
+                lista.forEach(function (p) {
+                    var b = document.createElement('button'); b.type = 'button'; b.className = 'nf-res-item';
+                    b.innerHTML = '<strong></strong> <small></small>';
+                    b.querySelector('strong').textContent = (p.numero_cliente ? p.numero_cliente + ' · ' : '') + p.nome;
+                    b.querySelector('small').textContent = (p.cpf_cnpj || '') + (p.situacao !== 'ATIVO' ? ' · ' + p.situacao : '');
+                    b.addEventListener('click', function () { caixa.innerHTML = ''; busca.value = ''; carregarTomador(p.id); });
+                    caixa.appendChild(b);
+                });
+            });
+        }, 250);
+    });
+    function carregarTomador(id) {
+        fetch(URL_TOMADOR.replace('/0', '/' + id)).then(function (r) { return r.json(); }).then(function (t) {
+            $('nfClienteId').value = t.cliente_id || '';
+            $('t_nome').value = t.nome || ''; $('t_doc').value = t.documento || ''; $('t_im').value = t.inscricao_municipal || '';
+            $('t_cep').value = t.cep || ''; $('t_lgr').value = t.logradouro || ''; $('t_num').value = t.numero || '';
+            $('t_cpl').value = t.complemento || ''; $('t_bairro').value = t.bairro || ''; $('t_cidade').value = t.cidade || '';
+            $('t_uf').value = t.uf || ''; $('t_email').value = t.email || ''; $('t_fone').value = t.fone || '';
+            $('t_ibge').value = t.ibge || '';
+            $('t_ibge_ajuda').textContent = t.ibge
+                ? (t.fonte_ibge === 'notas' ? 'Confirmado pelas notas que esse cliente já recebeu.' : 'Encontrado pelo CEP — confira.')
+                : 'Não achei o código IBGE: digite o CEP ou o código à mão.';
+            $('t_ibge_ajuda').style.color = t.ibge ? '' : '#b91c1c';
+            // cadastro sem rua ou bairro: o CEP completa (o governo recusa endereço pela metade)
+            if (!t.logradouro || !t.bairro) buscarCep();
+        });
+    }
+    // CEP -> endereço e IBGE (digitado à mão ou para completar o cadastro)
+    function buscarCep() {
+        var d = $('t_cep').value.replace(/\D/g, '');
+        if (d.length !== 8) return;
+        fetch(URL_CEP.replace('00000000', d)).then(function (r) { return r.ok ? r.json() : null; }).then(function (c) {
+            if (!c) return;
+            if (!$('t_lgr').value) $('t_lgr').value = c.logradouro || '';
+            if (!$('t_bairro').value) $('t_bairro').value = c.bairro || '';
+            $('t_cidade').value = c.cidade || $('t_cidade').value; $('t_uf').value = c.uf || $('t_uf').value;
+            if (c.ibge && !$('t_ibge').value) { $('t_ibge').value = c.ibge; $('t_ibge_ajuda').textContent = 'Encontrado pelo CEP — confira.'; $('t_ibge_ajuda').style.color = ''; }
+        });
+    }
+    $('t_cep').addEventListener('blur', buscarCep);
+
+    // ---- líquido ----------------------------------------------------------------
+    function liquido() {
+        var v = parseFloat($('v_valor').value) || 0, r = 0;
+        document.querySelectorAll('.nf-ret').forEach(function (i) { r += parseFloat(i.value) || 0; });
+        $('v_liquido').textContent = brl(v - r) + (r ? ' (' + brl(v) + ' − ' + brl(r) + ' de retenções)' : '');
+    }
+    $('v_valor').addEventListener('input', liquido);
+    document.querySelectorAll('.nf-ret').forEach(function (i) { i.addEventListener('input', liquido); });
+    liquido();
+
+    // ---- resumo -----------------------------------------------------------------
+    function val(nome) { var e = form.querySelector('[name="' + nome + '"]'); return e ? e.value : ''; }
+    function texto(nome) { var e = form.querySelector('[name="' + nome + '"]'); return e && e.tagName === 'SELECT' ? e.options[e.selectedIndex].text : val(nome); }
+    function montarResumo() {
+        var sel = $('nfSerie'), opt = sel.options[sel.selectedIndex] || {};
+        var v = parseFloat(val('valor_servico')) || 0, r = 0;
+        document.querySelectorAll('.nf-ret').forEach(function (i) { r += parseFloat(i.value) || 0; });
+        var comp = val('competencia').split('-');
+        var linhas = [
+            ['Emitida por', {{ (empresa.nome_razao_social if empresa else '') | tojson }}],
+            ['Série', (opt.text || '').trim() + (opt.dataset && opt.dataset.ambiente === '2' ? '  ⚠ TESTE' : '')],
+            ['Competência', comp.length === 3 ? comp[2] + '/' + comp[1] + '/' + comp[0] : val('competencia')],
+            ['Tomador', val('tomador_nome') + ' · ' + val('tomador_doc')],
+            ['Endereço', [val('tomador_logradouro'), val('tomador_numero'), val('tomador_complemento')].filter(Boolean).join(', ') + ' — ' + [val('tomador_bairro'), $('t_cidade').value, val('tomador_uf')].filter(Boolean).join(' / ') + ' · IBGE ' + val('tomador_ibge')],
+            ['E-mail', val('tomador_email') || '—'],
+            ['Serviço', val('descricao')],
+            ['Códigos', (opt.dataset && opt.dataset.emissor === 'sp' ? 'Serviço SP ' + val('cod_servico_sp') : 'Trib. nacional ' + val('cod_trib_nac') + (val('cod_trib_mun') ? ' · municipal ' + val('cod_trib_mun') : '')) + (val('cod_nbs') ? ' · NBS ' + val('cod_nbs') : '')],
+            ['ISS', texto('trib_issqn') + (form.querySelector('[name=iss_retido]').checked ? ' · retido pelo tomador' : '') + (val('aliquota_iss') ? ' · ' + val('aliquota_iss') + '%' : '')],
+            ['IBS/CBS', 'CST ' + val('ibscbs_cst') + ' · cClassTrib ' + val('ibscbs_cclasstrib') + ' · cIndOp ' + val('ibscbs_cind_op')],
+            ['Valor do serviço', brl(v), 'big'],
+            ['Retenções', r ? brl(r) : 'nenhuma'],
+            ['Valor líquido', brl(v - r), 'big'],
+        ];
+        var dl = $('nfResumo'); dl.innerHTML = '';
+        linhas.forEach(function (l) {
+            var d = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+            dt.textContent = l[0]; dd.textContent = l[1]; if (l[2]) dd.className = 'nf-' + l[2];
+            d.appendChild(dt); d.appendChild(dd); dl.appendChild(d);
+        });
+    }
+    form.addEventListener('submit', function () {
+        var b = $('nfEmitir'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando ao governo...';
+    });
+})();
+</script>
+{% endblock %}

@@ -187,7 +187,15 @@ TABELAS = (('nfse_dps_controle', DDL_CONTROLE), ('nfse_emitidas', DDL_EMITIDAS))
 
 # Colunas acrescentadas DEPOIS da criação entram aqui, nunca no CREATE:
 # (tabela, coluna, ALTER). Vazio hoje; é o lugar dos próximos patches.
-ALTERS = []
+ALTERS = [
+    # 01/11/2026 — tela de emissão: por qual caminho a nota saiu. A mesma empresa
+    # pode ter série da prefeitura (RPS) e série nacional (DPS); a série diz o
+    # caminho na hora de emitir, e a coluna guarda a resposta para a lista, o
+    # PDF e o cancelamento não dependerem da configuração do momento.
+    ('nfse_emitidas', 'emissor',
+     "ALTER TABLE nfse_emitidas ADD COLUMN emissor VARCHAR(10) NOT NULL DEFAULT 'nacional' "
+     "COMMENT 'nacional (Sefin) | sp (prefeitura de Sao Paulo)' AFTER ambiente"),
+]
 
 
 def tabela_existe(nome):

@@ -616,3 +616,69 @@ table.fin-tab tbody tr:last-child td { border-bottom:none; }
 .qpt-nao:hover { background:#f8fafc; }
 .qpt-sim { background:#16a34a; color:#fff; }
 .qpt-sim:hover { background:#15803d; }
+
+/* ==========================================================================
+   NOTAS FISCAIS (Financeiro > emissão de NFS-e) — 01/11/2026
+   Prefixo .nf-*. Passos do assistente, blocos do formulário, selos de situação.
+   ========================================================================== */
+.nf-steps { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:0 0 14px; }
+.nf-step { display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px;
+  border:1.5px solid #e2e8f0; background:#fff; color:#94a3b8; font-size:12.5px; font-weight:700;
+  cursor:pointer; font-family:inherit; text-align:left; }
+.nf-step b { width:24px; height:24px; border-radius:99px; display:inline-flex; align-items:center;
+  justify-content:center; background:#f1f5f9; color:#64748b; font-size:12px; flex:none; }
+.nf-step.on { border-color:#16a34a; color:#0f3d2e; background:#f0fdf4; }
+.nf-step.on b { background:#16a34a; color:#fff; }
+.nf-step.ok { color:#0f3d2e; }
+.nf-step.ok b { background:#dcfce7; color:#15803d; }
+.nf-pane { display:none; }
+.nf-pane.on { display:block; }
+.nf-sec { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:12px; }
+.nf-sec h3 { margin:0 0 12px; font-size:13px; font-weight:800; color:#0f3d2e; letter-spacing:.2px;
+  display:flex; align-items:center; gap:8px; }
+.nf-sec h3 small { font-weight:600; color:#7d968a; font-size:11.5px; }
+.nf-sec .form-group { margin-bottom:12px; }
+.nf-sec label { font-size:12px; }
+.nf-sec .form-control { font-size:13.5px; padding:8px 10px; }
+.nf-ajuda { font-size:11.5px; color:#64748b; margin-top:4px; display:block; }
+.nf-acoes { display:flex; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+.nf-acoes .btn { min-width:140px; }
+.nf-teste { background:#fffbeb; border:1.5px solid #fcd34d; color:#92400e; border-radius:10px;
+  padding:10px 14px; font-size:13px; font-weight:600; margin-bottom:12px; display:none; }
+.nf-teste.on { display:block; }
+.nf-pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:11px; font-weight:800;
+  letter-spacing:.3px; white-space:nowrap; }
+.nf-pill-autorizada { background:#dcfce7; color:#15803d; }
+.nf-pill-rejeitada, .nf-pill-erro { background:#fee2e2; color:#b91c1c; }
+.nf-pill-rascunho { background:#f1f5f9; color:#64748b; }
+.nf-pill-cancelada { background:#fef3c7; color:#92400e; }
+.nf-pill-teste { background:#fef9c3; color:#854d0e; }
+.nf-pill-sp { background:#e0f2fe; color:#0369a1; }
+.nf-pill-nacional { background:#ede9fe; color:#6d28d9; }
+.nf-res { margin-top:4px; }
+.nf-res-item { display:block; width:100%; text-align:left; padding:8px 10px; border:1px solid #e5e7eb;
+  border-radius:8px; background:#fff; cursor:pointer; margin-top:4px; font:inherit; font-size:13px; }
+.nf-res-item:hover { background:#f0fdf4; border-color:#86efac; }
+.nf-res-item small { color:#6b7280; }
+.nf-res-vazio { padding:8px 10px; color:#6b7280; margin-top:4px; font-size:13px; }
+.nf-resumo { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px 18px; margin:0; }
+.nf-resumo div { padding:8px 0; border-bottom:1px dashed #eef2f0; }
+.nf-resumo dt { font-size:10.5px; font-weight:800; color:#94a3b8; letter-spacing:.4px; text-transform:uppercase; }
+.nf-resumo dd { margin:2px 0 0; font-size:13.5px; color:#0f172a; word-break:break-word; }
+.nf-resumo dd.nf-big { font-size:20px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.nf-erro-lista { margin:0; padding:0; list-style:none; }
+.nf-erro-lista li { padding:9px 12px; border-left:4px solid #ef4444; background:#fef2f2; border-radius:8px;
+  margin-bottom:6px; font-size:13px; color:#7f1d1d; }
+.nf-erro-lista li code { font-weight:800; margin-right:6px; }
+.nf-aviso-lista li { border-left-color:#f59e0b; background:#fffbeb; color:#78350f; }
+.nf-chave { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; word-break:break-all; }
+@media (max-width:768px) {
+  .nf-steps { grid-template-columns:1fr 1fr; }
+  .nf-step { padding:8px 10px; font-size:12px; }
+  .nf-acoes .btn { flex:1 1 auto; }
+}
+@media (max-width:768px) {
+  /* no celular cada campo ocupa a linha inteira (o "span 2" do nome vale só na tela larga) */
+  .nf-sec .form-row { grid-template-columns:1fr; gap:10px; }
+  .nf-sec .form-row .form-group { grid-column:auto !important; }
+}

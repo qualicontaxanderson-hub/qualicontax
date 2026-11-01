@@ -3154,3 +3154,9 @@ def _preserve_filters():
             'status', 'data_inicio', 'data_fim', 'f_descricao')
     return {k: request.form.get(k) or request.args.get(k) or ''
             for k in keys}
+
+
+# Notas fiscais de serviço (emissão) — rotas no MESMO blueprint, em arquivo
+# próprio só pelo tamanho deste. Fica no fim: o módulo importa ``financeiro``
+# e ``_empresas_ctx`` daqui.
+from routes import financeiro_notas  # noqa: E402,F401

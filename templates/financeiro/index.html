@@ -39,6 +39,14 @@
             <div class="ef-card-num" data-counter="titulos"></div>
             <p class="ef-card-desc">Títulos em aberto, baixas e vencimentos</p>
         </a>
+        {% if pode_rota('financeiro.notas') %}
+        <a href="{{ url_for('financeiro.notas') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-file-invoice"></i></div>
+            <h3 class="ef-card-title">Notas Fiscais</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">Emitir NFS-e dos honorários — pela prefeitura ou pelo emissor nacional</p>
+        </a>
+        {% endif %}
         <a href="{{ url_for('financeiro.extrato') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-university"></i></div>
             <h3 class="ef-card-title">Extrato Bancário</h3>

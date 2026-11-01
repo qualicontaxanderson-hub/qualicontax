@@ -67,11 +67,13 @@ class Pessoa:
         return _tag('CNPJ' if len(d) == 14 else 'CPF', d) if d else ''
 
     def _end_xml(self):
-        if not (_dig(self.cidade_ibge) and _dig(self.cep)):
+        # O grupo <end> é opcional, mas quando vai precisa estar inteiro: xLgr, nro e xBairro
+        # são obrigatórios no esquema (E1235 se faltar). Sem rua ou bairro, a nota vai sem endereço.
+        if not (_dig(self.cidade_ibge) and _dig(self.cep) and (self.logradouro or '').strip() and (self.bairro or '').strip()):
             return ''
         return ('<end><endNac>' + _tag('cMun', _dig(self.cidade_ibge)) + _tag('CEP', _dig(self.cep).zfill(8))
-                + '</endNac>' + _tag('xLgr', (self.logradouro or '')[:255]) + _tag('nro', (self.numero or '')[:60])
-                + _tag('xCpl', (self.complemento or '')[:156] or None) + _tag('xBairro', (self.bairro or '')[:60])
+                + '</endNac>' + _tag('xLgr', self.logradouro.strip()[:255]) + _tag('nro', ((self.numero or '').strip() or 'S/N')[:60])
+                + _tag('xCpl', (self.complemento or '')[:156] or None) + _tag('xBairro', self.bairro.strip()[:60])
                 + '</end>')
 
 
@@ -106,6 +108,15 @@ class DPS:
     tot_trib_fed: Decimal = Decimal('0')
     tot_trib_est: Decimal = Decimal('0')
     tot_trib_mun: Decimal = Decimal('0')
+    # retenções federais (tribFed) — só entram no XML quando > 0. Qualicontax
+    # (Simples) não retém; o grupo existe para a nota que precisar. Ordem do XSD
+    # NT 009: piscofins{CST, vPis, vCofins, tpRetPisCofins}, vRetCP, vRetIRRF,
+    # vRetCSLL. NÃO provado no Sefin (nenhuma nota com retenção foi enviada).
+    ret_pis: Decimal = Decimal('0')
+    ret_cofins: Decimal = Decimal('0')
+    ret_inss: Decimal = Decimal('0')      # vRetCP
+    ret_irrf: Decimal = Decimal('0')
+    ret_csll: Decimal = Decimal('0')
     # IBS/CBS declarado
     fin_nfse: int = 0
     ind_final: int = 0
@@ -133,6 +144,24 @@ class DPS:
 
 
 LEIAUTE_POR_AMBIENTE = {1: '1.01', 2: 'nt009'}   # 31/10/2026
+
+
+def _trib_fed(d: DPS) -> str:
+    """``<tribFed>`` só com o que for maior que zero; vazio quando não há retenção."""
+    pis, cofins = _d(d.ret_pis), _d(d.ret_cofins)
+    inss, irrf, csll = _d(d.ret_inss), _d(d.ret_irrf), _d(d.ret_csll)
+    if not any(v > 0 for v in (pis, cofins, inss, irrf, csll)):
+        return ''
+    partes = ['<tribFed>']
+    if pis > 0 or cofins > 0:
+        # CST 01 = operação tributável; tpRetPisCofins 1 = retidos
+        partes += ['<piscofins>', _tag('CST', '01'), _tag('vPis', _v2(pis)), _tag('vCofins', _v2(cofins)),
+                   _tag('tpRetPisCofins', 1), '</piscofins>']
+    partes += [_tag('vRetCP', _v2(inss)) if inss > 0 else '',
+               _tag('vRetIRRF', _v2(irrf)) if irrf > 0 else '',
+               _tag('vRetCSLL', _v2(csll)) if csll > 0 else '',
+               '</tribFed>']
+    return ''.join(partes)
 
 
 def xml_dps(d: DPS) -> str:
@@ -189,6 +218,7 @@ def xml_dps(d: DPS) -> str:
         _tag('tpRetISSQN', int(d.tp_ret_issqn)),
         _tag('pAliq', _v2(d.p_aliq)) if d.p_aliq is not None else '',
         '</tribMun>',
+        _trib_fed(d),
         '<totTrib><vTotTrib>',
         _tag('vTotTribFed', _v2(d.tot_trib_fed)),
         _tag('vTotTribEst', _v2(d.tot_trib_est)),

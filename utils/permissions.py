@@ -48,6 +48,8 @@ PERMISSION_CATALOG = {
         'financeiro.extrato':             'Extrato bancário (escritório)',
         'financeiro.empresas':            'Minhas empresas do financeiro',
         'financeiro.programacoes':        'Programações (contas do mês)',
+        # Nasce sem perfil (01/11/2026): só admin emite até alguém ser marcado.
+        'financeiro.notas':               'Notas fiscais de serviço (emitir e consultar)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',
