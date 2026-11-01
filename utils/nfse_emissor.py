@@ -129,18 +129,25 @@ def pedido_do_form(f, empresa_id, cfg):
     nome = g('tomador_nome')
     if not nome:
         raise PedidoInvalido('Informe o nome do tomador.')
+    # Endereço do tomador: opcional, mas o governo só aceita o bloco inteiro (CEP, rua,
+    # número, bairro e município). O CEP é a chave: com CEP, o resto vira obrigatório;
+    # sem CEP, a nota sai sem endereço (e o IBS/CBS é calculado pelo local da prestação).
     ibge = _dig(g('tomador_ibge'))
-    if len(ibge) != 7:
-        raise PedidoInvalido('Município do tomador: informe o código IBGE de 7 dígitos.')
     cep = _dig(g('tomador_cep'))
-    if cep and len(cep) != 8:
-        raise PedidoInvalido('CEP do tomador inválido.')
-    if cep and not g('tomador_logradouro'):
-        raise PedidoInvalido('Endereço do tomador incompleto: o cadastro dele está sem a rua. '
-                             'Preencha a rua (o CEP costuma trazer) ou apague o CEP para a nota sair sem endereço.')
-    if cep and not g('tomador_bairro'):
-        raise PedidoInvalido('Endereço do tomador incompleto: falta o bairro. '
-                             'Preencha o bairro ou apague o CEP para a nota sair sem endereço.')
+    if cep:
+        if len(cep) != 8:
+            raise PedidoInvalido('CEP do tomador inválido.')
+        if not g('tomador_logradouro'):
+            raise PedidoInvalido('Endereço do tomador incompleto: falta a rua. '
+                                 'Preencha a rua (o CEP costuma trazer) ou apague o CEP para a nota sair sem endereço.')
+        if not g('tomador_bairro'):
+            raise PedidoInvalido('Endereço do tomador incompleto: falta o bairro. '
+                                 'Preencha o bairro ou apague o CEP para a nota sair sem endereço.')
+        if len(ibge) != 7:
+            raise PedidoInvalido('Endereço do tomador incompleto: falta o município (código IBGE de 7 dígitos). '
+                                 'Confira o CEP ou digite o código à mão.')
+    elif len(ibge) not in (0, 7):
+        raise PedidoInvalido('Município do tomador: o código IBGE tem 7 dígitos.')
     valor = _dec(g('valor_servico'), 'Valor do serviço', Decimal('0.01'))
     descricao = g('descricao')
     if not descricao:
@@ -266,7 +273,9 @@ def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora):
         # IM do prestador NÃO vai: São Paulo não tem cadastro complementar no CNC (E0120, 31/10/2026).
         prestador=D.Pessoa(documento=cert.cnpj, email=cfg.get('email_remetente') or ''),
         op_simp_nac=cfg['op_simp_nac'], reg_ap_trib_sn=cfg.get('reg_ap_trib_sn'), reg_esp_trib=cfg.get('reg_esp_trib') or 0,
-        tomador=D.Pessoa(documento=p.tomador_doc, nome=p.tomador_nome, inscricao_municipal=p.tomador_im,
+        # IM do tomador também NÃO vai no nacional: é opcional no leiaute e o Sefin valida
+        # contra o cadastro do município (mesma família do E0120). Só a prefeitura de SP usa.
+        tomador=D.Pessoa(documento=p.tomador_doc, nome=p.tomador_nome, inscricao_municipal='',
                          cidade_ibge=p.tomador_ibge, cep=p.tomador_cep, logradouro=p.tomador_logradouro,
                          numero=p.tomador_numero, complemento=p.tomador_complemento, bairro=p.tomador_bairro,
                          fone=p.tomador_fone, email=p.tomador_email),

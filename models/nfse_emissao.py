@@ -207,8 +207,10 @@ def buscar_clientes(q, limite=12):
 
 
 def ibge_do_documento(doc):
-    """Código IBGE do município pelo que as notas já capturadas dizem desse CNPJ/CPF:
-    como tomador em nfse_capturadas, ou como prestador. None se nunca apareceu."""
+    """Código IBGE do município pelo que as notas já capturadas dizem desse CNPJ/CPF
+    (como tomador, senão como prestador). É o município MAIS FREQUENTE, não o da última
+    nota: quem emite costuma errar o município do tomador (o Anderson aparece em
+    Goiânia na nota de um laboratório). Só serve de reserva quando não há CEP."""
     d = _dig(doc)
     if not d:
         return None
@@ -219,7 +221,7 @@ def ibge_do_documento(doc):
              UNION ALL
              SELECT prestador_municipio_ibge, data_emissao FROM nfse_capturadas
               WHERE prestador_doc = %s AND prestador_municipio_ibge IS NOT NULL
-           ) x ORDER BY d DESC LIMIT 1""", (d, d), fetch=True, fetch_one=True)
+           ) x GROUP BY ibge ORDER BY COUNT(*) DESC, MAX(d) DESC LIMIT 1""", (d, d), fetch=True, fetch_one=True)
     return (r or {}).get('ibge')
 
 
@@ -235,9 +237,10 @@ def tomador_do_cliente(cliente_id, consultar_cep=True):
         'SELECT cep, logradouro, numero, complemento, bairro, cidade, estado FROM enderecos_clientes '
         " WHERE cliente_id = %s ORDER BY principal DESC, (tipo = 'COMERCIAL') DESC, id LIMIT 1",
         (cliente_id,), fetch=True, fetch_one=True) or {}
-    ibge = ibge_do_documento(c['cpf_cnpj'])
-    fonte_ibge = 'notas' if ibge else ''
-    if not ibge and consultar_cep and e.get('cep'):
+    # Município: o CEP do cadastro manda (o IBGE vem dos Correios/IBGE via ViaCEP);
+    # as notas capturadas são só reserva, porque o emitente erra o município do tomador.
+    ibge, fonte_ibge = None, ''
+    if consultar_cep and e.get('cep'):
         try:
             from utils.cep import consultar
             r = consultar(e['cep'])
@@ -245,7 +248,10 @@ def tomador_do_cliente(cliente_id, consultar_cep=True):
                 ibge, fonte_ibge = _dig(r['ibge']), 'cep'
         except Exception:
             pass
-    return {
+    if not ibge:
+        ibge = ibge_do_documento(c['cpf_cnpj'])
+        fonte_ibge = 'notas' if ibge else ''
+    t = {
         'cliente_id': c['id'], 'numero_cliente': c['numero_cliente'],
         'documento': _dig(c['cpf_cnpj']), 'nome': c['nome_razao_social'],
         'inscricao_municipal': c.get('inscricao_municipal') or '',
@@ -255,6 +261,33 @@ def tomador_do_cliente(cliente_id, consultar_cep=True):
         'cidade': e.get('cidade') or '', 'uf': e.get('estado') or '',
         'ibge': ibge or '', 'fonte_ibge': fonte_ibge,
     }
+    t['faltas'] = faltas_do_tomador(t)
+    return t
+
+
+def faltas_do_tomador(t):
+    """O que falta no cadastro para a nota sair inteira. Cada item: {campo, nivel, texto}.
+    nivel 'obrigatorio' trava a emissão; 'endereco' faz a nota sair sem endereço (o governo
+    exige o bloco completo ou nada); 'opcional' é só aviso."""
+    f = []
+    if len(t.get('documento') or '') not in (11, 14):
+        f.append({'campo': 'documento', 'nivel': 'obrigatorio', 'texto': 'CPF/CNPJ'})
+    if not (t.get('nome') or '').strip():
+        f.append({'campo': 'nome', 'nivel': 'obrigatorio', 'texto': 'nome'})
+    if not t.get('cep'):
+        f.append({'campo': 'cep', 'nivel': 'endereco', 'texto': 'CEP'})
+    else:
+        if not (t.get('logradouro') or '').strip():
+            f.append({'campo': 'logradouro', 'nivel': 'endereco', 'texto': 'rua'})
+        if not (t.get('numero') or '').strip():
+            f.append({'campo': 'numero', 'nivel': 'endereco', 'texto': 'número'})
+        if not (t.get('bairro') or '').strip():
+            f.append({'campo': 'bairro', 'nivel': 'endereco', 'texto': 'bairro'})
+        if len(t.get('ibge') or '') != 7:
+            f.append({'campo': 'ibge', 'nivel': 'endereco', 'texto': 'município (código IBGE)'})
+    if not (t.get('email') or '').strip():
+        f.append({'campo': 'email', 'nivel': 'opcional', 'texto': 'e-mail'})
+    return f
 
 
 def titulos_para_nota(empresa_id, dias=120):

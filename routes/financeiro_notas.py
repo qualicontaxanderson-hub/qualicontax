@@ -345,6 +345,7 @@ def notas_tomador(cliente_id):
     t = tomador_do_cliente(cliente_id)
     if not t:
         abort(404)
+    t['url_cadastro'] = url_for('clientes.editar', id=cliente_id)
     return jsonify(t)
 
 

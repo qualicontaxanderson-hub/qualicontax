@@ -641,6 +641,19 @@ table.fin-tab tbody tr:last-child td { border-bottom:none; }
 .nf-sec label { font-size:12px; }
 .nf-sec .form-control { font-size:13.5px; padding:8px 10px; }
 .nf-ajuda { font-size:11.5px; color:#64748b; margin-top:4px; display:block; }
+.nf-sub { margin:14px 0 8px; font-size:12px; font-weight:800; color:#0f3d2e; text-transform:uppercase; letter-spacing:.4px; }
+.nf-sub small { display:block; font-weight:500; color:#64748b; font-size:11.5px; text-transform:none; letter-spacing:0; margin-top:2px; }
+.nf-req-cep { color:#b91c1c; visibility:hidden; }
+.nf-cad { background:#f8fafc; border:1.5px dashed #cbd5e1; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+.nf-cad-top { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:13px; color:#0f172a; }
+.nf-cad-top a { font-weight:700; color:#0369a1; white-space:nowrap; }
+.nf-cad-faltas { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center; }
+.nf-falta-rotulo { font-size:12px; font-weight:700; color:#475569; }
+.nf-falta { display:inline-block; padding:3px 9px; border-radius:99px; font-size:11.5px; font-weight:700; }
+.nf-falta-obrigatorio { background:#fee2e2; color:#b91c1c; }
+.nf-falta-endereco { background:#fef3c7; color:#92400e; }
+.nf-falta-opcional { background:#f1f5f9; color:#64748b; }
+.nf-falta-ok { background:#dcfce7; color:#15803d; }
 .nf-acoes { display:flex; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
 .nf-acoes .btn { min-width:140px; }
 .nf-teste { background:#fffbeb; border:1.5px solid #fcd34d; color:#92400e; border-radius:10px;

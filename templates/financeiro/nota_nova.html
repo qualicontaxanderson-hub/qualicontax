@@ -94,11 +94,19 @@
     </div>
 
     <div class="nf-sec">
-        <h3><i class="fas fa-user-tie" style="color:#6d28d9;"></i> Tomador <small>quem recebe a nota</small></h3>
+        <h3><i class="fas fa-user-tie" style="color:#6d28d9;"></i> Tomador <small>quem recebe a nota · obrigatórios só nome e CPF/CNPJ (*); o resto vem do cadastro</small></h3>
         <div class="form-group">
             <label>Buscar no cadastro de clientes</label>
             <input type="text" id="nfBusca" class="form-control" placeholder="Nome, CNPJ/CPF ou número do cliente">
             <div class="nf-res" id="nfRes"></div>
+        </div>
+        <div class="nf-cad" id="nfCad" hidden>
+            <div class="nf-cad-top">
+                <span><i class="fas fa-id-card"></i> Dados do cadastro <strong id="nfCadNome"></strong></span>
+                <a id="nfCadLink" href="#" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Abrir cadastro</a>
+            </div>
+            <div id="nfCadFaltas" class="nf-cad-faltas"></div>
+            <span class="nf-ajuda">O que você mudar aqui vale só para esta nota. Para corrigir de vez, mude no cadastro e escolha o cliente de novo.</span>
         </div>
         <div class="form-row">
             <div class="form-group" style="grid-column: span 2;">
@@ -112,21 +120,22 @@
             <div class="form-group">
                 <label>Inscrição municipal</label>
                 <input type="text" name="tomador_im" id="t_im" class="form-control" value="{{ pre.tomador_im or pre.tomador_inscricao_municipal or '' }}">
-                <span class="nf-ajuda">Só quando o tomador é de São Paulo.</span>
+                <span class="nf-ajuda">Só entra na nota da prefeitura de São Paulo, e só para tomador de São Paulo. O emissor nacional não a usa.</span>
             </div>
         </div>
+        <h4 class="nf-sub">Endereço <small>opcional, mas o governo só aceita completo: com CEP, rua, número, bairro e município passam a ser obrigatórios. Com endereço, o IBS/CBS sai pelo município do tomador; sem, pelo local da prestação.</small></h4>
         <div class="form-row">
             <div class="form-group">
                 <label>CEP</label>
                 <input type="text" name="tomador_cep" id="t_cep" class="form-control" value="{{ pre.tomador_cep or '' }}" inputmode="numeric" maxlength="9">
             </div>
             <div class="form-group" style="grid-column: span 2;">
-                <label>Logradouro</label>
+                <label>Rua / logradouro <span class="nf-req-cep">*</span></label>
                 <input type="text" name="tomador_logradouro" id="t_lgr" class="form-control" value="{{ pre.tomador_logradouro or '' }}">
             </div>
             <div class="form-group">
-                <label>Número</label>
-                <input type="text" name="tomador_numero" id="t_num" class="form-control" value="{{ pre.tomador_numero or '' }}">
+                <label>Número <span class="nf-req-cep">*</span></label>
+                <input type="text" name="tomador_numero" id="t_num" class="form-control" value="{{ pre.tomador_numero or '' }}" placeholder="S/N se não tiver">
             </div>
         </div>
         <div class="form-row">
@@ -135,7 +144,7 @@
                 <input type="text" name="tomador_complemento" id="t_cpl" class="form-control" value="{{ pre.tomador_complemento or '' }}">
             </div>
             <div class="form-group">
-                <label>Bairro</label>
+                <label>Bairro <span class="nf-req-cep">*</span></label>
                 <input type="text" name="tomador_bairro" id="t_bairro" class="form-control" value="{{ pre.tomador_bairro or '' }}">
             </div>
             <div class="form-group">
@@ -146,11 +155,12 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>Município (código IBGE) *</label>
-                <input type="text" name="tomador_ibge" id="t_ibge" class="form-control" required maxlength="7" value="{{ pre.tomador_ibge or '' }}" inputmode="numeric">
+                <label>Município (código IBGE) <span class="nf-req-cep">*</span></label>
+                <input type="text" name="tomador_ibge" id="t_ibge" class="form-control" maxlength="7" pattern="[0-9]{7}" title="7 dígitos" value="{{ pre.tomador_ibge or '' }}" inputmode="numeric">
                 <span class="nf-ajuda" id="t_ibge_ajuda">Vem das notas que esse cliente já recebeu, senão pelo CEP.</span>
             </div>
         </div>
+        <h4 class="nf-sub">Contato <small>opcional</small></h4>
         <div class="form-row">
             <div class="form-group">
                 <label>E-mail</label>
@@ -376,8 +386,35 @@
             });
         }, 250);
     });
+    // endereço: com CEP, rua/número/bairro/município viram obrigatórios
+    function enderecoObrigatorio() {
+        var tem = $('t_cep').value.replace(/\D/g, '').length > 0;
+        ['t_lgr', 't_num', 't_bairro', 't_ibge'].forEach(function (id) { $(id).required = tem; });
+        document.querySelectorAll('.nf-req-cep').forEach(function (e) { e.style.visibility = tem ? 'visible' : 'hidden'; });
+    }
+    $('t_cep').addEventListener('input', enderecoObrigatorio);
+    enderecoObrigatorio();
+    function mostrarCadastro(t) {
+        $('nfCadNome').textContent = (t.numero_cliente ? 'nº ' + t.numero_cliente + ' · ' : '') + (t.nome || '');
+        $('nfCadLink').href = t.url_cadastro || '#';
+        var box = $('nfCadFaltas'); box.innerHTML = '';
+        var faltas = t.faltas || [];
+        if (!faltas.length) {
+            var ok = document.createElement('span'); ok.className = 'nf-falta nf-falta-ok';
+            ok.innerHTML = '<i class="fas fa-check"></i> cadastro completo para a nota'; box.appendChild(ok);
+        } else {
+            var rot = document.createElement('span'); rot.className = 'nf-falta-rotulo'; rot.textContent = 'Falta no cadastro:'; box.appendChild(rot);
+            faltas.forEach(function (f) {
+                var s = document.createElement('span'); s.className = 'nf-falta nf-falta-' + f.nivel;
+                s.textContent = f.texto + (f.nivel === 'obrigatorio' ? ' (obrigatório)' : f.nivel === 'endereco' ? ' (sem isso a nota sai sem endereço)' : ' (opcional)');
+                box.appendChild(s);
+            });
+        }
+        $('nfCad').hidden = false;
+    }
     function carregarTomador(id) {
         fetch(URL_TOMADOR.replace('/0', '/' + id)).then(function (r) { return r.json(); }).then(function (t) {
+            mostrarCadastro(t);
             $('nfClienteId').value = t.cliente_id || '';
             $('t_nome').value = t.nome || ''; $('t_doc').value = t.documento || ''; $('t_im').value = t.inscricao_municipal || '';
             $('t_cep').value = t.cep || ''; $('t_lgr').value = t.logradouro || ''; $('t_num').value = t.numero || '';
@@ -385,9 +422,11 @@
             $('t_uf').value = t.uf || ''; $('t_email').value = t.email || ''; $('t_fone').value = t.fone || '';
             $('t_ibge').value = t.ibge || '';
             $('t_ibge_ajuda').textContent = t.ibge
-                ? (t.fonte_ibge === 'notas' ? 'Confirmado pelas notas que esse cliente já recebeu.' : 'Encontrado pelo CEP — confira.')
+                ? (t.fonte_ibge === 'cep' ? 'Pelo CEP do cadastro.' : 'Pelas notas que esse cliente já recebeu (o cadastro não tem CEP) — confira.')
                 : 'Não achei o código IBGE: digite o CEP ou o código à mão.';
-            $('t_ibge_ajuda').style.color = t.ibge ? '' : '#b91c1c';
+            $('t_ibge_ajuda').style.color = (t.ibge && t.fonte_ibge === 'cep') ? '' : '#b45309';
+            if (!t.ibge) $('t_ibge_ajuda').style.color = '#b91c1c';
+            enderecoObrigatorio();
             // cadastro sem rua ou bairro: o CEP completa (o governo recusa endereço pela metade)
             if (!t.logradouro || !t.bairro) buscarCep();
         });
@@ -405,6 +444,7 @@
         });
     }
     $('t_cep').addEventListener('blur', buscarCep);
+    $('t_cep').addEventListener('input', function () { if ($('t_cep').value.replace(/\D/g, '').length === 8) buscarCep(); });
 
     // ---- líquido ----------------------------------------------------------------
     function liquido() {
