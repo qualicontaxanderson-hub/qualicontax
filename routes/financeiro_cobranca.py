@@ -63,7 +63,7 @@ def cobranca():
         bancarias=bancarias, PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, SITUACOES=SITUACOES,
         fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, hoje=date.today(),
         filtros=dict(situacao=situacao, busca=busca, de=de, ate=ate, emp=','.join(map(str, sel))),
-        webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True).rsplit('X', 1)[0])
+        webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True, _scheme='https').rsplit('X', 1)[0])
 
 
 @financeiro.route('/financeiro/cobranca/salvar', methods=['POST'])
@@ -250,7 +250,7 @@ def nota_boleto(nota_id):
         efi, _c = FinCobrancaConta.cliente_efi(conta['id'])
         data = efi.criar_boleto(
             itens, pagador, vencimento, custom_id=custom_id,
-            notification_url=url_for('cobranca_webhook.efi', segredo=conta['webhook_segredo'], _external=True),
+            notification_url=url_for('cobranca_webhook.efi', segredo=conta['webhook_segredo'], _external=True, _scheme='https'),
             juros_mes=conta.get('juros_mes'), multa_pct=conta.get('multa_pct'), dias_baixa=conta.get('dias_baixa'),
             mensagem=mensagem or None)
     except (EfiErro, ValueError) as exc:
