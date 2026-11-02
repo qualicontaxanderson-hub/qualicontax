@@ -102,6 +102,9 @@ class Pedido:
     fin_nfse: int = 0
     # ligação
     fin_titulo_id: int = None
+    servico_id: int = None          # nfse_servicos.id do primeiro serviço com nota (compatibilidade)
+    itens: list = field(default_factory=list)   # [{servico_id, nome, valor, emite_nota}] — o que foi cobrado
+    valor_boleto: Decimal = None    # soma de TODOS os itens (nota + só boleto); o boleto vem na próxima fase
     origem: str = 'manual'
     extras: dict = field(default_factory=dict)
 
@@ -146,13 +149,45 @@ def pedido_do_form(f, empresa_id, cfg):
     ibge = t['ibge'] if len(t.get('ibge') or '') == 7 else ''
     cep = t['cep'] if endereco_ok else ''
     end = (lambda k: (t.get(k) or '')) if endereco_ok else (lambda k: '')
-    valor = _dec(g('valor_servico'), 'Valor do serviço', Decimal('0.01'))
+    # Itens (02/11/2026): vários serviços por nota. Cada um entra na nota ou vai só no boleto
+    # (taxa repassada, emite_nota = 0 no catálogo). A nota soma SÓ os que entram; o boleto, todos.
+    def lista(k):
+        if hasattr(f, 'getlist'):
+            return f.getlist(k)
+        v = f.get(k)
+        return v if isinstance(v, list) else ([v] if v not in (None, '') else [])
+    itens, valor_boleto, servico_nf = [], None, None
+    ids, vals = lista('item_servico_id'), lista('item_valor')
+    if vals:
+        from models.nfse_emissao import NfseServico
+        catalogo = {s['id']: s for s in NfseServico.listar(empresa_id)}
+        for i, (sid_i, v) in enumerate(zip(ids, vals), 1):
+            if not str(v).strip() and not str(sid_i).strip():
+                continue
+            s = catalogo.get(int(sid_i)) if str(sid_i).isdigit() else None
+            if str(sid_i).isdigit() and not s:
+                raise PedidoInvalido(f'Item {i}: serviço não está mais na lista da empresa.')
+            vd = _dec(v, f'Valor do item {i}' + (f' ({s["nome"]})' if s else ''), Decimal('0.01'))
+            itens.append({'servico_id': s['id'] if s else None, 'nome': s['nome'] if s else 'Serviço',
+                          'valor': str(vd), 'emite_nota': (str(s.get('emite_nota', 1)) != '0') if s else True})
+            if s and itens[-1]['emite_nota'] and not servico_nf:
+                servico_nf = s
+        if not itens:
+            raise PedidoInvalido('Informe ao menos um serviço com valor.')
+        valor = sum((Decimal(i['valor']) for i in itens if i['emite_nota']), Decimal('0'))
+        valor_boleto = sum((Decimal(i['valor']) for i in itens), Decimal('0'))
+        if valor <= 0:
+            raise PedidoInvalido('Nenhum item entra na nota fiscal: todos são "só no boleto". '
+                                 'Taxa repassada não gera nota.')
+    else:
+        valor = _dec(g('valor_servico'), 'Valor do serviço', Decimal('0.01'))
     descricao = g('descricao')
     if not descricao:
         raise PedidoInvalido('Informe a descrição do serviço.')
     aliq = g('aliquota_iss')
     aliq = _dec(aliq, 'Alíquota do ISS', Decimal('0')) if aliq not in ('', None) else None
     tid = g('fin_titulo_id')
+    sid = servico_nf['id'] if servico_nf else g('servico_id')
     return Pedido(
         empresa_id=int(empresa_id), serie=serie, competencia=comp,
         tomador_doc=doc, tomador_nome=nome[:150], tomador_ibge=ibge, tomador_cep=cep,
@@ -181,6 +216,8 @@ def pedido_do_form(f, empresa_id, cfg):
         # consumidor final: o que a tela mandou; sem a tela, pessoa física é consumidor final
         ibscbs_ind_final=int(g('ibscbs_ind_final', t.get('ind_final', 0)) or 0),
         fin_titulo_id=int(tid) if str(tid).isdigit() else None,
+        servico_id=int(sid) if str(sid).isdigit() else None,
+        itens=itens, valor_boleto=valor_boleto,
     )
 
 

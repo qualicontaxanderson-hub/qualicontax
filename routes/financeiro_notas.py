@@ -17,7 +17,7 @@ from flask import (Response, abort, flash, jsonify, redirect, render_template,
 from flask_login import current_user
 
 from models.fin_empresa import FinEmpresa
-from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC,
+from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC, NfseServico,
                                  REG_AP_TRIB_SN, REG_ESP_TRIB, SITUACOES, TP_RET_ISSQN, TRIB_ISSQN,
                                  NfseConfig, NfseEmitida, buscar_clientes, titulos_para_nota,
                                  tomador_do_cliente)
@@ -95,8 +95,55 @@ def notas_config():
     empresa = next((e for e in emps if e['cliente_id'] == emp_id), None)
     return render_template(
         'financeiro/notas_config.html', cfg=cfg, empresa=empresa, emp_id=emp_id,
-        series=NfseEmitida.series(emp_id), fin_empresas=emps, sel_empresas=[emp_id], emp_mapa=mapa,
-        **_LISTAS)
+        series=NfseEmitida.series(emp_id), servicos=NfseServico.listar(emp_id),
+        fin_empresas=emps, sel_empresas=[emp_id], emp_mapa=mapa, **_LISTAS)
+
+
+@financeiro.route('/financeiro/notas/config/servico', methods=['POST'])
+@permission_required(PERM)
+def notas_servico():
+    """Catálogo de serviços da empresa: salvar (novo ou edição) ou ligar/desligar."""
+    emp_id = request.form.get('emp', '')
+    if not emp_id.isdigit() or int(emp_id) not in FinEmpresa.ids_validos():
+        abort(400)
+    emp_id = int(emp_id)
+    acao = request.form.get('acao')
+    sid = request.form.get('servico_id', '')
+    sid = int(sid) if sid.isdigit() else None
+    if acao == 'salvar':
+        dados = {k: request.form.get(k, '') for k in NfseServico.CAMPOS}
+        novo_id, erro = NfseServico.salvar(emp_id, dados, servico_id=sid, usuario_id=current_user.id)
+        if erro:
+            flash(erro, 'danger')
+        else:
+            registrar('escrita.salvou_servico_nfse', 'financeiro', tabela='nfse_servicos', registro_id=novo_id,
+                      depois={'empresa_id': emp_id, **{k: dados[k] for k in ('nome', 'valor_padrao')}})
+            flash(f'Serviço "{dados["nome"].strip()}" salvo.', 'success')
+    elif acao == 'alternar' and sid:
+        NfseServico.alternar(sid, emp_id)
+        registrar('escrita.alternou_servico_nfse', 'financeiro', tabela='nfse_servicos', registro_id=sid)
+        flash('Serviço atualizado.', 'success')
+    return redirect(url_for('financeiro.notas_config', emp=emp_id) + '#servicos')
+
+
+@financeiro.route('/financeiro/notas/servico/novo', methods=['POST'])
+@permission_required(PERM)
+def notas_servico_json():
+    """Serviço novo criado de dentro da Nova nota (JSON): entra no catálogo e volta pronto para a lista."""
+    d = request.get_json(silent=True) or {}
+    emp = str(d.get('emp', ''))
+    if not emp.isdigit() or int(emp) not in FinEmpresa.ids_validos():
+        return jsonify({'ok': False, 'erro': 'Empresa inválida.'}), 400
+    emp_id = int(emp)
+    dados = {'nome': d.get('nome', ''), 'descricao': d.get('descricao', ''), 'emite_nota': d.get('emite_nota', 1),
+             'ordem': '999'}
+    novo_id, erro = NfseServico.salvar(emp_id, dados, usuario_id=current_user.id)
+    if erro:
+        return jsonify({'ok': False, 'erro': erro})
+    registrar('escrita.salvou_servico_nfse', 'financeiro', tabela='nfse_servicos', registro_id=novo_id,
+              depois={'empresa_id': emp_id, 'nome': dados['nome'], 'origem': 'nova nota'})
+    s = next((x for x in NfseServico.listar(emp_id) if x['id'] == novo_id), None)
+    return jsonify({'ok': True, 'servico': NfseServico.para_tela([s])[0] if s else None})
 
 
 @financeiro.route('/financeiro/notas/config/serie', methods=['POST'])
@@ -177,8 +224,9 @@ def nota_nova():
             except ValueError:
                 dj = None
         if dj:
-            pre.update({k: v for k, v in dj.items() if v not in (None, '') and k != 'empresa_id'})
+            pre.update({k: v for k, v in dj.items() if v not in (None, '') and k not in ('empresa_id', 'itens')})
             pre['de'] = int(de)
+            pre['itens'] = [{'sid': i.get('servico_id') or '', 'valor': i.get('valor')} for i in (dj.get('itens') or [])]
             if not pre.get('tomador_cliente_id'):      # nota antiga, sem vínculo: a busca já nasce com o documento
                 pre['tomador_busca'] = pre.get('tomador_doc') or pre.get('tomador_nome') or ''
     titulo = None
@@ -189,6 +237,7 @@ def nota_nova():
     if titulo:
         pre['fin_titulo_id'] = titulo['id']
         pre['valor_servico'] = titulo['valor']
+        pre['itens'] = [{'sid': '', 'valor': str(titulo['valor'])}]
         if titulo.get('competencia'):
             competencia = titulo['competencia']
             pre['competencia'] = competencia.isoformat()
@@ -202,6 +251,8 @@ def nota_nova():
     return render_template(
         'financeiro/nota_nova.html', cfg=cfg, empresa=empresa, emp_id=emp_id, series=series, pre=pre,
         titulos=titulos_para_nota(emp_id), titulo=titulo,
+        servicos=NfseServico.para_tela(NfseServico.listar(emp_id, so_ativos=True)),
+        pre_itens=pre.get('itens') or ([{'sid': '', 'valor': str(pre['valor_servico'])}] if pre.get('valor_servico') else []),
         fin_empresas=emps, sel_empresas=[emp_id], emp_mapa=mapa, hoje=date.today(), **_LISTAS)
 
 

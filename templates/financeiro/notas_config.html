@@ -199,6 +199,97 @@
 </div>
 </form>
 
+<div class="nf-sec" id="servicos">
+    <h3><i class="fas fa-concierge-bell" style="color:#6d28d9;"></i> Serviços <small>a lista que a nota escolhe: o nome vai na lista, a descrição vira o texto da nota</small></h3>
+    {% if servicos %}
+    <div class="fin-rolar">
+        <table class="fin-tab nf-tab-servicos" style="min-width:0;">
+            <thead><tr><th>Serviço</th><th>Descrição na nota</th><th>Códigos</th><th>Valor padrão</th><th></th></tr></thead>
+            <tbody>
+                {% for s in servicos %}
+                <tr style="{{ 'opacity:.55;' if not s.ativo }}" data-s='{{ {"id": s.id, "nome": s.nome, "descricao": s.descricao, "cod_trib_nac": s.cod_trib_nac or "", "cod_trib_mun": s.cod_trib_mun or "", "cod_nbs": s.cod_nbs or "", "cod_servico_sp": s.cod_servico_sp or "", "valor_padrao": ("%.2f" % s.valor_padrao) if s.valor_padrao else "", "ordem": s.ordem, "emite_nota": 0 if s.emite_nota == 0 else 1} | tojson }}'>
+                    <td class="fin-td-titulo"><strong>{{ s.nome }}</strong>
+                        {% if s.emite_nota == 0 %}<span class="nf-pill nf-pill-boleto">SÓ BOLETO</span>{% else %}<span class="nf-pill nf-pill-autorizada">NOTA</span>{% endif %}
+                        {% if not s.ativo %} <span class="nf-pill nf-pill-rascunho">DESLIGADO</span>{% endif %}</td>
+                    <td class="fin-td-meta">{{ s.descricao }}</td>
+                    <td class="fin-td-extra fin-fraco">{{ s.cod_trib_nac or '—' }}{{ ' · ' ~ s.cod_trib_mun if s.cod_trib_mun }}{{ ' · NBS ' ~ s.cod_nbs if s.cod_nbs }}{{ ' · SP ' ~ s.cod_servico_sp if s.cod_servico_sp }}{% if not (s.cod_trib_nac or s.cod_nbs or s.cod_servico_sp) %} <small>(padrão da empresa)</small>{% endif %}</td>
+                    <td class="fin-td-valor fin-num">{{ (s.valor_padrao | float | format_currency) if s.valor_padrao else '—' }}</td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
+                        <button type="button" class="fin-btn-tag nf-serv-editar"><i class="fas fa-pen"></i> Editar</button>
+                        <form method="POST" action="{{ url_for('financeiro.notas_servico') }}" style="display:inline;">
+                            <input type="hidden" name="emp" value="{{ emp_id }}">
+                            <input type="hidden" name="acao" value="alternar">
+                            <input type="hidden" name="servico_id" value="{{ s.id }}">
+                            <button class="fin-btn-tag"><i class="fas fa-{{ 'toggle-on' if s.ativo else 'toggle-off' }}" style="color:{{ '#16a34a' if s.ativo else '#9ca3af' }};"></i> {{ 'Desligar' if s.ativo else 'Religar' }}</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="fin-fraco">Nenhum serviço cadastrado. Cadastre o primeiro abaixo — a nota passa a escolher na lista.</p>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('financeiro.notas_servico') }}" id="nfServForm" style="margin-top:14px; border-top:1px dashed #e2e8f0; padding-top:12px;">
+        <input type="hidden" name="emp" value="{{ emp_id }}">
+        <input type="hidden" name="acao" value="salvar">
+        <input type="hidden" name="servico_id" id="sv_id" value="">
+        <h4 class="nf-sub" id="nfServTitulo">Novo serviço</h4>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Nome na lista *</label>
+                <input type="text" name="nome" id="sv_nome" class="form-control" maxlength="80" required placeholder="Ex.: Honorários contábeis, Balanço, Abertura de empresa">
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <label>Descrição que aparece na nota *</label>
+                <input type="text" name="descricao" id="sv_descricao" class="form-control" maxlength="1000" required placeholder="Ex.: Honorários contábeis referentes a {mes} de {ano}">
+                <span class="nf-ajuda">Use <code>{mes}</code>, <code>{ano}</code> e <code>{competencia}</code> (mm/aaaa): viram a competência da nota.</span>
+            </div>
+            <div class="form-group">
+                <label>Valor padrão (R$)</label>
+                <input type="text" name="valor_padrao" id="sv_valor" class="form-control dinheiro">
+                <span class="nf-ajuda">Vazio = digita na nota.</span>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Onde aparece</label>
+            <div class="nf-radios">
+                <label class="nf-check"><input type="radio" name="emite_nota" value="1" id="sv_emite1" checked> <strong>Entra na nota fiscal</strong> <small>serviço prestado: honorários, abertura, balanço...</small></label>
+                <label class="nf-check"><input type="radio" name="emite_nota" value="0" id="sv_emite0"> <strong>Só no boleto</strong> <small>taxa ou despesa repassada (Junta, cartório, Correios): some no boleto, nunca na nota</small></label>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Trib. nacional</label>
+                <input type="text" name="cod_trib_nac" id="sv_ctn" class="form-control" maxlength="6" placeholder="{{ cfg.cod_trib_nac or 'padrão' }}">
+            </div>
+            <div class="form-group">
+                <label>Código municipal</label>
+                <input type="text" name="cod_trib_mun" id="sv_ctm" class="form-control" maxlength="3" placeholder="{{ cfg.cod_trib_mun or 'padrão' }}">
+            </div>
+            <div class="form-group">
+                <label>NBS</label>
+                <input type="text" name="cod_nbs" id="sv_nbs" class="form-control" maxlength="9" placeholder="{{ cfg.cod_nbs or 'padrão' }}">
+            </div>
+            <div class="form-group">
+                <label>Serviço (prefeitura SP)</label>
+                <input type="text" name="cod_servico_sp" id="sv_csp" class="form-control" maxlength="5" placeholder="{{ cfg.cod_servico_sp or 'padrão' }}">
+            </div>
+            <div class="form-group">
+                <label>Ordem na lista</label>
+                <input type="number" name="ordem" id="sv_ordem" class="form-control" value="0">
+            </div>
+        </div>
+        <span class="nf-ajuda">Códigos vazios usam o padrão da empresa (acima). Preencha só quando o serviço for diferente.</span>
+        <div class="nf-acoes" style="justify-content:flex-end;">
+            <button type="button" class="btn btn-outline" id="nfServLimpar" hidden><i class="fas fa-times"></i> Cancelar edição</button>
+            <button type="submit" class="btn btn-outline" id="nfServSalvar"><i class="fas fa-plus"></i> Salvar serviço</button>
+        </div>
+    </form>
+</div>
+
 <div class="nf-sec">
     <h3><i class="fas fa-list-ol" style="color:#1d4ed8;"></i> Séries <small>cada série tem numeração própria e um ambiente</small></h3>
     {% if series %}
@@ -261,4 +352,32 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script>
+(function () {
+    function $(id) { return document.getElementById(id); }
+    var form = $('nfServForm'); if (!form) return;
+    function limpar() {
+        $('sv_id').value = ''; form.reset(); $('sv_valor').value = '';
+        $('nfServTitulo').textContent = 'Novo serviço'; $('nfServLimpar').hidden = true;
+        $('nfServSalvar').innerHTML = '<i class="fas fa-plus"></i> Salvar serviço';
+    }
+    document.querySelectorAll('.nf-serv-editar').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var s = JSON.parse(b.closest('tr').dataset.s);
+            $('sv_id').value = s.id; $('sv_nome').value = s.nome; $('sv_descricao').value = s.descricao;
+            $('sv_ctn').value = s.cod_trib_nac; $('sv_ctm').value = s.cod_trib_mun; $('sv_nbs').value = s.cod_nbs; $('sv_csp').value = s.cod_servico_sp;
+            $('sv_ordem').value = s.ordem; $(s.emite_nota === 0 ? 'sv_emite0' : 'sv_emite1').checked = true;
+            $('sv_valor').value = s.valor_padrao ? Dinheiro.fmt(Math.round(parseFloat(s.valor_padrao) * 100)) : '';
+            $('nfServTitulo').textContent = 'Editando: ' + s.nome; $('nfServLimpar').hidden = false;
+            $('nfServSalvar').innerHTML = '<i class="fas fa-save"></i> Salvar alteração';
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' }); $('sv_nome').focus();
+        });
+    });
+    $('nfServLimpar').addEventListener('click', limpar);
+})();
+</script>
 {% endblock %}

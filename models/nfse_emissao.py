@@ -84,10 +84,91 @@ class NfseConfig:
     @staticmethod
     def descricao_para(cfg, competencia: date):
         """``descricao_padrao`` com {mes} e {ano} preenchidos para a competência."""
-        meses = ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto',
-                 'setembro', 'outubro', 'novembro', 'dezembro')
-        modelo = (cfg or {}).get('descricao_padrao') or 'Serviços prestados em {mes} de {ano}'
-        return modelo.replace('{mes}', meses[competencia.month - 1]).replace('{ano}', str(competencia.year))
+        return preencher_modelo((cfg or {}).get('descricao_padrao') or 'Serviços prestados em {mes} de {ano}',
+                                competencia)
+
+
+MESES = ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto',
+         'setembro', 'outubro', 'novembro', 'dezembro')
+
+
+def preencher_modelo(modelo, competencia: date):
+    """{mes}, {ano} e {competencia} (mm/aaaa) preenchidos — o mesmo que a tela faz em JS."""
+    return ((modelo or '').replace('{mes}', MESES[competencia.month - 1])
+            .replace('{ano}', str(competencia.year))
+            .replace('{competencia}', f'{competencia.month:02d}/{competencia.year}'))
+
+
+class NfseServico:
+    """Catálogo de serviços da empresa (``nfse_servicos``, 02/11/2026): "Honorários
+    contábeis", "Balanço", "Abertura de empresa"... A nota escolhe um; o nome vai na lista,
+    a descrição vira o texto da nota e códigos/valor cobrem o padrão quando preenchidos."""
+
+    CAMPOS = ('nome', 'descricao', 'cod_trib_nac', 'cod_trib_mun', 'cod_nbs', 'cod_servico_sp',
+              'valor_padrao', 'ordem', 'emite_nota')
+
+    @staticmethod
+    def listar(empresa_id, so_ativos=False):
+        extra = ' AND ativo = 1' if so_ativos else ''
+        return execute_query(
+            f'SELECT * FROM nfse_servicos WHERE empresa_id = %s{extra} ORDER BY ativo DESC, ordem, nome',
+            (empresa_id,), fetch=True) or []
+
+    @staticmethod
+    def para_tela(servicos):
+        """Lista serializável para o JS da nota (Decimal vira texto)."""
+        return [{'id': s['id'], 'nome': s['nome'], 'descricao': s['descricao'] or '',
+                 'cod_trib_nac': s.get('cod_trib_nac') or '', 'cod_trib_mun': s.get('cod_trib_mun') or '',
+                 'cod_nbs': s.get('cod_nbs') or '', 'cod_servico_sp': s.get('cod_servico_sp') or '',
+                 'valor_padrao': (f"{s['valor_padrao']:.2f}" if s.get('valor_padrao') else ''),
+                 'emite_nota': 0 if str(s.get('emite_nota', 1)) in ('0', 'False') else 1}
+                for s in servicos]
+
+    @staticmethod
+    def salvar(empresa_id, dados, servico_id=None, usuario_id=None):
+        """Cria (servico_id None) ou altera. Devolve (id, erro)."""
+        nome = (dados.get('nome') or '').strip()[:80]
+        descricao = (dados.get('descricao') or '').strip()[:1000]
+        if not nome or not descricao:
+            return None, 'Nome e descrição são obrigatórios.'
+        valor = (dados.get('valor_padrao') or '').strip()
+        if valor:
+            try:
+                from decimal import Decimal
+                valor = Decimal(valor.replace('.', '').replace(',', '.')) if ',' in valor else Decimal(valor)
+            except Exception:
+                return None, 'Valor padrão inválido.'
+            if valor <= 0:
+                valor = None
+        else:
+            valor = None
+        ordem = dados.get('ordem') or '0'
+        emite = 0 if str(dados.get('emite_nota', '1')).strip() in ('0', 'false', 'False', 'nao', 'não') else 1
+        vals = (nome, descricao, _dig(dados.get('cod_trib_nac'))[:6] or None, _dig(dados.get('cod_trib_mun'))[:3] or None,
+                _dig(dados.get('cod_nbs'))[:9] or None, _dig(dados.get('cod_servico_sp'))[:5] or None,
+                valor, int(ordem) if str(ordem).lstrip('-').isdigit() else 0, emite)
+        dup = execute_query('SELECT id FROM nfse_servicos WHERE empresa_id = %s AND nome = %s AND id <> %s',
+                            (empresa_id, nome, servico_id or 0), fetch=True, fetch_one=True)
+        if dup:
+            return None, f'Já existe um serviço chamado "{nome}" nesta empresa.'
+        if servico_id:
+            r = execute_query(
+                'UPDATE nfse_servicos SET nome = %s, descricao = %s, cod_trib_nac = %s, cod_trib_mun = %s, '
+                '  cod_nbs = %s, cod_servico_sp = %s, valor_padrao = %s, ordem = %s, emite_nota = %s, '
+                '  atualizado_em = NOW(), alterado_por = %s WHERE id = %s AND empresa_id = %s',
+                vals + (usuario_id, servico_id, empresa_id))
+            return (servico_id, None) if r is not None else (None, 'Não foi possível salvar.')
+        r = execute_query(
+            'INSERT INTO nfse_servicos (empresa_id, nome, descricao, cod_trib_nac, cod_trib_mun, cod_nbs, '
+            '  cod_servico_sp, valor_padrao, ordem, emite_nota, alterado_por) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            (empresa_id,) + vals + (usuario_id,))
+        return (r, None) if r else (None, 'Não foi possível salvar.')
+
+    @staticmethod
+    def alternar(servico_id, empresa_id):
+        return execute_query('UPDATE nfse_servicos SET ativo = NOT ativo, atualizado_em = NOW() '
+                             ' WHERE id = %s AND empresa_id = %s', (servico_id, empresa_id))
 
 
 class NfseEmitida:
