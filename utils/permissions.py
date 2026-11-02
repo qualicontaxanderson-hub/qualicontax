@@ -50,6 +50,8 @@ PERMISSION_CATALOG = {
         'financeiro.programacoes':        'Programações (contas do mês)',
         # Nasce sem perfil (01/11/2026): só admin emite até alguém ser marcado.
         'financeiro.notas':               'Notas fiscais de serviço (emitir e consultar)',
+        # Nasce sem perfil (02/11/2026): credenciais de banco e boletos — só admin até marcar.
+        'financeiro.cobranca':            'Cobrança (contas Efí/Bradesco e boletos)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',

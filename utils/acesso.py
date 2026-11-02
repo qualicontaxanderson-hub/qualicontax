@@ -58,6 +58,7 @@ BLUEPRINTS_PUBLICOS = {
     'colabore_api',  # API de máquina (chave Bearer por funcionário)
     'robo_saidas',   # API de máquina do Q-Robô (chave do posto)
     'qrobo',         # Portal do Instalador — login e gate próprios
+    'cobranca_webhook',  # aviso de pagamento da Efí (segredo aleatório na URL; os dados vêm de consulta nossa)
 }
 ENDPOINTS_PUBLICOS = {'static', 'health'}
 

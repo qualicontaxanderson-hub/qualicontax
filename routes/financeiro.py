@@ -3160,3 +3160,4 @@ def _preserve_filters():
 # próprio só pelo tamanho deste. Fica no fim: o módulo importa ``financeiro``
 # e ``_empresas_ctx`` daqui.
 from routes import financeiro_notas  # noqa: E402,F401
+from routes import financeiro_cobranca  # noqa: E402,F401  (cobrança Efí e boletos, 02/11/2026)

@@ -10,7 +10,7 @@ importado no fim dele para as rotas entrarem no mesmo blueprint.
 """
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from flask import (Response, abort, flash, jsonify, redirect, render_template,
                    request, url_for)
@@ -24,6 +24,7 @@ from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, 
 from routes.financeiro import _empresas_ctx, financeiro
 from utils import nfse_emissor
 from utils.atividade import registrar
+from utils.acesso import pode_rota
 from utils.auth_helper import permission_required
 from utils.db_helper import execute_query
 from utils.integrations.nfse_adn import numeracao
@@ -333,7 +334,35 @@ def nota_detalhe(nota_id):
     if n.get('fin_titulo_id'):
         titulo = execute_query('SELECT id, descricao, valor, vencimento, status FROM fin_titulos WHERE id = %s',
                                (n['fin_titulo_id'],), fetch=True, fetch_one=True)
+    # Boleto (02/11/2026): o que já existe desta nota, ou o que precisa para gerar um
+    from models.fin_cobranca import FinBoleto, FinCobrancaConta
+    from utils.integrations.efi.client import SITUACOES as SIT_BOLETO
+    boleto = FinBoleto.da_nota(nota_id)
+    if boleto and isinstance(boleto.get('itens_json'), str):
+        try:
+            boleto['itens_json'] = json.loads(boleto['itens_json'])
+        except ValueError:
+            boleto['itens_json'] = []
+    contas_cobranca = [c for c in FinCobrancaConta.listar(empresa_ids=[n['empresa_id']], apenas_ativas=True)]
+    dj = n.get('dps_json')
+    if isinstance(dj, str):
+        try:
+            dj = json.loads(dj)
+        except ValueError:
+            dj = {}
+    itens = (dj or {}).get('itens') or []
+    valor_boleto = (dj or {}).get('valor_boleto') or n.get('valor_servico')
+    hoje = date.today()
+    conta_padrao = next((c for c in contas_cobranca if c['ambiente'] == 'producao'), contas_cobranca[0] if contas_cobranca else None)
+    if conta_padrao and conta_padrao.get('dia_vencimento'):
+        d = int(conta_padrao['dia_vencimento'])
+        venc = date(hoje.year + (hoje.month == 12), hoje.month % 12 + 1, min(d, 28)) if hoje.day >= d else date(hoje.year, hoje.month, min(d, 28))
+    else:
+        venc = hoje + timedelta(days=7)
     return render_template('financeiro/nota_detalhe.html', n=n, erros=erros, alertas=alertas, titulo=titulo,
+                           boleto=boleto, contas_cobranca=contas_cobranca, conta_padrao=conta_padrao,
+                           itens=itens, valor_boleto=valor_boleto, venc_sugerido=venc, SIT_BOLETO=SIT_BOLETO,
+                           pode_cobranca=pode_rota('financeiro.cobranca'),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, **_LISTAS)
 
 

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Cobrança - Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-barcode" style="color: var(--primary-green);"></i>
+            Cobrança
+        </h1>
+        <p class="page-subtitle">Contas de cobrança (Efí, Bradesco) e os boletos emitidos — o pagamento dá baixa no título sozinho</p>
+    </div>
+    <div class="page-actions">
+        <button type="button" class="btn btn-primary" id="cbNova"><i class="fas fa-plus"></i> Nova conta de cobrança</button>
+    </div>
+</div>
+
+{% include 'financeiro/_sel_empresas.html' %}
+
+<div class="fin-kpis">
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Boletos em aberto</div><div class="fin-kpi-val">{{ resumo.abertos }}</div><div class="fin-kpi-pe">{{ resumo.valor_aberto | float | format_currency }}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Pagos neste mês</div><div class="fin-kpi-val">{{ resumo.pagos_mes }}</div><div class="fin-kpi-pe">{{ resumo.valor_pago_mes | float | format_currency }}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Vencidos</div><div class="fin-kpi-val">{{ resumo.vencidos }}</div><div class="fin-kpi-pe">sem pagamento após o vencimento</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Contas de cobrança</div><div class="fin-kpi-val">{{ contas | selectattr('ativo') | list | length }}</div><div class="fin-kpi-pe">{{ contas | rejectattr('ativo') | list | length }} desligada(s)</div></div>
+</div>
+
+<!-- ===== formulário (nova / editar) ===== -->
+<div class="nf-sec cb-form" id="cbForm" hidden>
+    <h3><i class="fas fa-key" style="color:#6d28d9;"></i> <span id="cbFormTitulo">Nova conta de cobrança</span>
+        <small>as credenciais ficam cifradas no banco, por empresa; nada vai para o Railway nem aparece depois</small></h3>
+    <form method="POST" action="{{ url_for('financeiro.cobranca_salvar') }}" enctype="multipart/form-data" autocomplete="off">
+        <input type="hidden" name="conta_id" id="cb_id" value="">
+        <div class="form-row">
+            <div class="form-group">
+                <label>Empresa *</label>
+                <select name="empresa_id" id="cb_empresa" class="form-control" required>
+                    {% for e in fin_empresas %}<option value="{{ e.cliente_id }}" {{ 'selected' if sel_empresas and e.cliente_id == sel_empresas[0] }}>{{ e.apelido }} — {{ e.nome_razao_social }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Nome da conta *</label>
+                <input type="text" name="apelido" id="cb_apelido" class="form-control" maxlength="60" required placeholder="Ex.: Efí Qualicontax">
+            </div>
+            <div class="form-group">
+                <label>Provedor</label>
+                <select name="provedor" id="cb_provedor" class="form-control">
+                    {% for k, v in PROVEDORES.items() %}<option value="{{ k }}" {{ 'disabled' if k != 'efi' }}>{{ v }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Ambiente</label>
+                <select name="ambiente" id="cb_ambiente" class="form-control">
+                    {% for k, v in AMBIENTES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                </select>
+                <span class="nf-ajuda">Cada ambiente tem o seu par de chaves no painel da Efí. Comece pelo teste.</span>
+            </div>
+        </div>
+
+        <h4 class="nf-sub">Credenciais da aplicação <small>painel da Efí → API → Aplicações. Deixe em branco para manter o que já está salvo.</small></h4>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Client ID <span id="cb_cid_est" class="cb-estado"></span></label>
+                <input type="text" name="client_id" id="cb_client_id" class="form-control" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+                <label>Client Secret <span id="cb_sec_est" class="cb-estado"></span></label>
+                <input type="password" name="client_secret" id="cb_client_secret" class="form-control" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>Certificado da API (.p12) <span id="cb_cert_est" class="cb-estado"></span></label>
+                <input type="file" name="certificado" id="cb_cert" class="form-control" accept=".p12,.pfx,.pem">
+                <span class="nf-ajuda">Painel da Efí → API → Meus Certificados → Novo. Só a API Pix usa (saldo, Pix recebidos, Pix no boleto). O boleto sai sem ele.</span>
+            </div>
+            <div class="form-group">
+                <label>Senha do certificado</label>
+                <input type="password" name="certificado_senha" id="cb_cert_senha" class="form-control" autocomplete="new-password" placeholder="normalmente em branco">
+            </div>
+        </div>
+
+        <h4 class="nf-sub">Padrão do boleto <small>o que cada boleto novo já traz; pode mudar na hora</small></h4>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Conta bancária (onde o dinheiro cai)</label>
+                <select name="fin_conta_id" id="cb_fin_conta" class="form-control">
+                    <option value="">— escolha —</option>
+                    {% for b in bancarias %}<option value="{{ b.id }}" data-emp="{{ b.empresa_id }}">{{ b.banco_nome }} · {{ b.conta }}{{ ' · ' ~ b.apelido if b.apelido }}</option>{% endfor %}
+                </select>
+                <span class="nf-ajuda">Liga o boleto ao extrato: o Pix e o OFX dessa conta se encaixam sem duplicar.</span>
+            </div>
+            <div class="form-group">
+                <label>Chave Pix da conta</label>
+                <input type="text" name="chave_pix" id="cb_chave_pix" class="form-control" maxlength="80" placeholder="CNPJ, e-mail, telefone ou chave aleatória">
+            </div>
+            <div class="form-group">
+                <label>Juros ao mês (%)</label>
+                <input type="text" name="juros_mes" id="cb_juros" class="form-control" value="1,00" inputmode="decimal">
+            </div>
+            <div class="form-group">
+                <label>Multa (%)</label>
+                <input type="text" name="multa_pct" id="cb_multa" class="form-control" value="2,00" inputmode="decimal">
+            </div>
+            <div class="form-group">
+                <label>Dias para baixa após o vencimento</label>
+                <input type="number" name="dias_baixa" id="cb_dias" class="form-control" value="60" min="0" max="120">
+            </div>
+            <div class="form-group">
+                <label>Dia de vencimento dos honorários</label>
+                <input type="number" name="dia_vencimento" id="cb_dia" class="form-control" min="1" max="31" placeholder="ex.: 10">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Mensagem padrão no boleto</label>
+            <input type="text" name="mensagem_padrao" id="cb_msg" class="form-control" maxlength="400" placeholder="Até 4 linhas de 100 caracteres; use | para quebrar a linha">
+        </div>
+        <div class="nf-acoes" style="justify-content:flex-end;">
+            <button type="button" class="btn btn-outline" id="cbCancelar"><i class="fas fa-times"></i> Cancelar</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar conta</button>
+        </div>
+    </form>
+</div>
+
+<!-- ===== contas de cobrança ===== -->
+<div class="nf-sec">
+    <h3><i class="fas fa-university" style="color:#0369a1;"></i> Contas de cobrança <small>uma por empresa e ambiente; teste antes de emitir</small></h3>
+    {% if not contas %}
+    <p class="fin-fraco">Nenhuma conta de cobrança ainda. Clique em <strong>Nova conta de cobrança</strong>, cole as credenciais da aplicação da Efí e teste.</p>
+    {% endif %}
+    <div class="cb-grid">
+        {% for c in contas %}
+        <article class="cb-card {{ 'cb-off' if not c.ativo }}" data-c='{{ {"id": c.id, "empresa_id": c.empresa_id, "apelido": c.apelido, "provedor": c.provedor, "ambiente": c.ambiente, "fin_conta_id": c.fin_conta_id or "", "chave_pix": c.chave_pix or "", "juros_mes": ("%.2f" % c.juros_mes).replace(".", ","), "multa_pct": ("%.2f" % c.multa_pct).replace(".", ","), "dias_baixa": c.dias_baixa, "dia_vencimento": c.dia_vencimento or "", "mensagem_padrao": c.mensagem_padrao or "", "tem_client_id": c.tem_client_id, "tem_secret": c.tem_secret, "tem_certificado": c.tem_certificado, "client_id_mascara": c.client_id_mascara} | tojson }}'>
+            <div class="cb-card-top">
+                <div class="cb-card-ico"><i class="fas fa-{{ 'flask' if c.ambiente != 'producao' else 'university' }}"></i></div>
+                <div class="cb-card-id">
+                    <strong>{{ c.apelido }}</strong>
+                    <span>{{ c.nome_razao_social }} · nº {{ c.numero_cliente }}</span>
+                </div>
+                <div class="cb-card-pills">
+                    <span class="nf-pill {{ 'nf-pill-nacional' if c.provedor == 'efi' else 'nf-pill-sp' }}">{{ PROVEDORES[c.provedor] | upper }}</span>
+                    <span class="nf-pill {{ 'nf-pill-teste' if c.ambiente != 'producao' else 'nf-pill-autorizada' }}">{{ 'TESTE' if c.ambiente != 'producao' else 'PRODUÇÃO' }}</span>
+                    {% if not c.ativo %}<span class="nf-pill nf-pill-rascunho">DESLIGADA</span>{% endif %}
+                </div>
+            </div>
+            <dl class="cb-card-grid">
+                <div><dt>Client ID</dt><dd>{{ c.client_id_mascara or '— não preenchido' }}</dd></div>
+                <div><dt>Client Secret</dt><dd>{{ 'preenchido' if c.tem_secret else '— não preenchido' }}</dd></div>
+                <div><dt>Certificado da API</dt><dd>{{ c.certificado_nome if c.tem_certificado else '— sem (boleto sai; saldo e Pix não)' }}</dd></div>
+                <div><dt>Conta bancária</dt><dd>{{ (c.banco_nome ~ ' · ' ~ c.conta_bancaria) if c.banco_nome else '—' }}</dd></div>
+                <div><dt>Chave Pix</dt><dd>{{ c.chave_pix or '—' }}</dd></div>
+                <div><dt>Boleto</dt><dd>juros {{ c.juros_mes }}% a.m. · multa {{ c.multa_pct }}% · baixa em {{ c.dias_baixa }} dias{{ ' · vence dia ' ~ c.dia_vencimento if c.dia_vencimento }}</dd></div>
+                <div class="cb-span"><dt>Endereço do aviso de pagamento (webhook)</dt><dd class="mono" data-copiar data-copiar-rotulo="Webhook">{{ webhook_base }}{{ c.webhook_segredo }}</dd><small>Vai sozinho em cada boleto que emitimos; não precisa cadastrar na Efí.</small></div>
+                <div class="cb-span"><dt>Último teste</dt>
+                    <dd class="{{ 'cb-ok' if c.teste_resultado and c.teste_resultado.startswith('OK') else ('cb-erro' if c.teste_resultado else '') }}">
+                        {{ (c.testado_em.strftime('%d/%m/%Y %H:%M') ~ ' — ' ~ c.teste_resultado) if c.testado_em else 'nunca testada' }}</dd></div>
+            </dl>
+            <div class="cb-saldo" id="cbSaldo{{ c.id }}" hidden></div>
+            <div class="cb-card-acoes">
+                <form method="POST" action="{{ url_for('financeiro.cobranca_testar', conta_id=c.id) }}"><button class="btn btn-outline"><i class="fas fa-plug"></i> Testar</button></form>
+                {% if c.tem_certificado %}<button type="button" class="btn btn-outline cb-ver-saldo" data-id="{{ c.id }}" data-url="{{ url_for('financeiro.cobranca_saldo', conta_id=c.id) }}"><i class="fas fa-wallet"></i> Saldo e Pix</button>{% endif %}
+                <button type="button" class="btn btn-outline cb-editar"><i class="fas fa-pen"></i> Editar</button>
+                <form method="POST" action="{{ url_for('financeiro.cobranca_alternar', conta_id=c.id) }}"><button class="btn btn-outline"><i class="fas fa-{{ 'toggle-on' if c.ativo else 'toggle-off' }}"></i> {{ 'Desligar' if c.ativo else 'Religar' }}</button></form>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ===== boletos ===== -->
+<div class="nf-sec">
+    <h3><i class="fas fa-barcode" style="color:#15803d;"></i> Boletos <small>emitidos a partir das notas; o pagamento chega pelo aviso da Efí</small></h3>
+    <form method="GET" class="fin-filtros" action="{{ url_for('financeiro.cobranca') }}">
+        <input type="hidden" name="emp" value="{{ filtros.emp }}">
+        <select name="situacao" class="form-control" onchange="this.form.submit()">
+            <option value="todas" {{ 'selected' if filtros.situacao == 'todas' }}>Todos</option>
+            <option value="abertos" {{ 'selected' if filtros.situacao == 'abertos' }}>Em aberto</option>
+            <option value="paid" {{ 'selected' if filtros.situacao == 'paid' }}>Pagos</option>
+            <option value="unpaid" {{ 'selected' if filtros.situacao == 'unpaid' }}>Vencidos</option>
+            <option value="canceled" {{ 'selected' if filtros.situacao == 'canceled' }}>Cancelados</option>
+            <option value="erro" {{ 'selected' if filtros.situacao == 'erro' }}>Com erro</option>
+        </select>
+        <input type="date" name="de" class="form-control" value="{{ filtros.de }}" title="Vencimento de">
+        <input type="date" name="ate" class="form-control" value="{{ filtros.ate }}" title="Vencimento até">
+        <input type="search" name="busca" class="form-control" value="{{ filtros.busca }}" placeholder="pagador, CNPJ, nº Efí">
+        <button class="btn btn-outline"><i class="fas fa-filter"></i> Filtrar</button>
+    </form>
+    {% if boletos %}
+    <div class="fin-rolar">
+        <table class="fin-tab" style="min-width:0;">
+            <thead><tr><th>Vencimento</th><th>Pagador</th><th>Nota</th><th>Valor</th><th>Situação</th><th>Conta</th><th></th></tr></thead>
+            <tbody>
+                {% for b in boletos %}
+                <tr>
+                    <td class="fin-td-meta fin-num">{{ b.vencimento.strftime('%d/%m/%Y') }}</td>
+                    <td class="fin-td-titulo"><strong>{{ b.pagador_nome }}</strong><br><small class="fin-fraco">{{ b.pagador_doc }}{{ ' · Efí nº ' ~ b.charge_id if b.charge_id }}</small></td>
+                    <td class="fin-td-extra">{% if b.nfse_id %}<a href="{{ url_for('financeiro.nota_detalhe', nota_id=b.nfse_id) }}">{{ b.serie }}-{{ b.numero_dps }}{{ ' · NFS-e ' ~ b.numero_nfse if b.numero_nfse }}</a>{% else %}—{% endif %}</td>
+                    <td class="fin-td-valor fin-num">{{ b.valor | float | format_currency }}{% if b.valor_pago %}<br><small class="fin-fraco">pago {{ b.valor_pago | float | format_currency }}</small>{% endif %}</td>
+                    <td class="fin-td-oculta"><span class="nf-pill cb-sit-{{ b.situacao }}">{{ b.situacao_txt | upper }}</span>{% if b.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}{% if b.pago_em %}<br><small class="fin-fraco">em {{ b.pago_em.strftime('%d/%m/%Y') }}</small>{% endif %}</td>
+                    <td class="fin-td-extra fin-fraco">{{ b.conta_apelido }}</td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
+                        {% if b.pdf_url %}<a class="fin-btn-tag" href="{{ b.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
+                        {% if b.situacao in ('waiting', 'unpaid', 'new') %}
+                        <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=b.id) }}" style="display:inline;"><input type="hidden" name="volta" value="{{ request.full_path }}"><button class="fin-btn-tag" title="Perguntar à Efí como está"><i class="fas fa-sync-alt"></i></button></form>
+                        <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=b.id) }}" style="display:inline;" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ request.full_path }}"><button class="fin-btn-tag"><i class="fas fa-ban"></i></button></form>
+                        {% endif %}
+                        {% if b.situacao == 'erro' %}<span class="fin-fraco" title="{{ b.erro }}"><i class="fas fa-exclamation-circle" style="color:#b91c1c;"></i> {{ (b.erro or '')[:60] }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="fin-fraco">Nenhum boleto ainda. O boleto nasce na tela da nota autorizada: botão <strong>Gerar boleto</strong>.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    function $(id) { return document.getElementById(id); }
+    var form = $('cbForm');
+    function abrir(c) {
+        form.hidden = false;
+        $('cb_id').value = c ? c.id : '';
+        $('cbFormTitulo').textContent = c ? 'Editando: ' + c.apelido : 'Nova conta de cobrança';
+        if (c) { $('cb_empresa').value = c.empresa_id; $('cb_apelido').value = c.apelido; $('cb_provedor').value = c.provedor; $('cb_ambiente').value = c.ambiente;
+                 $('cb_fin_conta').value = c.fin_conta_id; $('cb_chave_pix').value = c.chave_pix; $('cb_juros').value = c.juros_mes; $('cb_multa').value = c.multa_pct;
+                 $('cb_dias').value = c.dias_baixa; $('cb_dia').value = c.dia_vencimento; $('cb_msg').value = c.mensagem_padrao; }
+        else { $('cb_apelido').value = ''; $('cb_fin_conta').value = ''; $('cb_chave_pix').value = ''; $('cb_juros').value = '1,00'; $('cb_multa').value = '2,00'; $('cb_dias').value = '60'; $('cb_dia').value = ''; $('cb_msg').value = ''; $('cb_ambiente').value = 'homologacao'; }
+        $('cb_client_id').value = ''; $('cb_client_secret').value = ''; $('cb_cert').value = ''; $('cb_cert_senha').value = '';
+        $('cb_cid_est').textContent = c && c.tem_client_id ? '(salvo: ' + c.client_id_mascara + ')' : '*';
+        $('cb_sec_est').textContent = c && c.tem_secret ? '(salvo)' : '*';
+        $('cb_cert_est').textContent = c && c.tem_certificado ? '(salvo)' : '';
+        $('cb_client_id').required = !(c && c.tem_client_id); $('cb_client_secret').required = !(c && c.tem_secret);
+        filtrarContas();
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' }); $('cb_apelido').focus();
+    }
+    function filtrarContas() {
+        var emp = $('cb_empresa').value;
+        [...$('cb_fin_conta').options].forEach(function (o) { if (o.value) o.hidden = o.dataset.emp !== emp; });
+        var sel = $('cb_fin_conta').selectedOptions[0];
+        if (sel && sel.hidden) $('cb_fin_conta').value = '';
+    }
+    $('cb_empresa').addEventListener('change', filtrarContas);
+    $('cbNova').addEventListener('click', function () { abrir(null); });
+    $('cbCancelar').addEventListener('click', function () { form.hidden = true; });
+    document.querySelectorAll('.cb-editar').forEach(function (b) {
+        b.addEventListener('click', function () { abrir(JSON.parse(b.closest('.cb-card').dataset.c)); });
+    });
+    document.querySelectorAll('.cb-ver-saldo').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var box = $('cbSaldo' + b.dataset.id); box.hidden = false; box.textContent = 'Consultando a Efí...';
+            fetch(b.dataset.url).then(function (r) { return r.json(); }).then(function (j) {
+                if (!j.ok) { box.textContent = 'Não deu: ' + j.erro; box.className = 'cb-saldo cb-erro'; return; }
+                box.className = 'cb-saldo';
+                var brl = function (v) { return (parseFloat(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); };
+                var h = '<strong>Saldo: ' + brl(j.saldo) + '</strong>';
+                h += '<div class="fin-fraco" style="margin-top:4px;">Pix recebidos nos últimos 7 dias: ' + (j.pix.length ? '' : 'nenhum') + '</div>';
+                j.pix.forEach(function (p) { h += '<div class="cb-pix"><span>' + (p.horario || '').replace('T', ' ').slice(0, 16) + '</span><span>' + (p.pagador || '') + '</span><strong>' + brl(p.valor) + '</strong></div>'; });
+                box.innerHTML = h;
+            }).catch(function () { box.textContent = 'Falha de conexão.'; box.className = 'cb-saldo cb-erro'; });
+        });
+    });
+})();
+</script>
+{% endblock %}

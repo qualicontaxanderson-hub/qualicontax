@@ -47,6 +47,14 @@
             <p class="ef-card-desc">Emitir NFS-e dos honorários — pela prefeitura ou pelo emissor nacional</p>
         </a>
         {% endif %}
+        {% if pode_rota('financeiro.cobranca') %}
+        <a href="{{ url_for('financeiro.cobranca') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-barcode"></i></div>
+            <h3 class="ef-card-title">Cobrança</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">Contas de cobrança (Efí) e boletos — o pagamento dá baixa no título sozinho</p>
+        </a>
+        {% endif %}
         <a href="{{ url_for('financeiro.extrato') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-university"></i></div>
             <h3 class="ef-card-title">Extrato Bancário</h3>

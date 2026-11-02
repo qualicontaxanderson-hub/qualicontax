@@ -115,6 +115,67 @@
 </div>
 {% endif %}
 
+{% if n.situacao == 'autorizada' and pode_cobranca %}
+<div class="nf-sec" id="boleto">
+    <h3><i class="fas fa-barcode" style="color:#15803d;"></i> Boleto <small>{{ 'o boleto desta nota' if boleto else 'cobrar pela Efí: a nota mais o que vai só no boleto' }}</small></h3>
+    {% if boleto %}
+    <div class="nf-resumo">
+        <div><dt>Situação</dt><dd><span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</dd></div>
+        <div><dt>Valor do boleto</dt><dd class="nf-big">{{ boleto.valor | float | format_currency }}</dd></div>
+        <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
+        <div><dt>Nº na Efí</dt><dd>{{ boleto.charge_id or '—' }}</dd></div>
+        {% if boleto.pago_em %}<div><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }} · {{ boleto.valor_pago | float | format_currency }}</dd></div>{% endif %}
+        {% if boleto.linha_digitavel %}<div style="grid-column:1/-1;"><dt>Linha digitável</dt><dd class="mono" data-copiar data-copiar-rotulo="Linha digitável">{{ boleto.linha_digitavel }}</dd></div>{% endif %}
+        {% if boleto.pix_copia_cola %}<div style="grid-column:1/-1;"><dt>Pix copia e cola</dt><dd class="mono" style="font-size:11.5px;" data-copiar data-copiar-rotulo="Pix">{{ boleto.pix_copia_cola }}</dd></div>{% endif %}
+        {% if boleto.erro %}<div style="grid-column:1/-1;"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
+    </div>
+    {% if boleto.itens_json %}
+    <div class="nf-ajuda" style="margin-top:8px;">Itens do boleto:
+        {% for i in boleto.itens_json %}{{ i.nome }} R$ {{ i.valor }}{{ ' (só boleto)' if not i.emite_nota }}{{ ' · ' if not loop.last }}{% endfor %}</div>
+    {% endif %}
+    <div class="nf-acoes" style="justify-content:flex-start; margin-top:10px;">
+        {% if boleto.pdf_url %}<a class="btn btn-primary" href="{{ boleto.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF do boleto</a>{% endif %}
+        {% if boleto.link %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
+        {% if boleto.situacao in ('waiting', 'unpaid', 'new') %}
+        <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-sync-alt"></i> Conferir na Efí</button></form>
+        <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-ban"></i> Cancelar boleto</button></form>
+        {% endif %}
+        <a class="btn btn-outline" href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}"><i class="fas fa-list"></i> Todos os boletos</a>
+    </div>
+    {% elif not contas_cobranca %}
+    <p class="fin-fraco">A empresa ainda não tem conta de cobrança. <a href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}">Cadastre a Efí em Financeiro → Cobrança</a> e volte aqui.</p>
+    {% else %}
+    <form method="POST" action="{{ url_for('financeiro.nota_boleto', nota_id=n.id) }}" class="cb-gerar">
+        <div class="nf-resumo" style="margin-bottom:10px;">
+            <div><dt>Valor do boleto</dt><dd class="nf-big">{{ valor_boleto | float | format_currency }}</dd>
+                {% if itens %}<small class="fin-fraco">{% for i in itens %}{{ i.nome }} R$ {{ i.valor }}{{ ' (só boleto)' if not i.emite_nota }}{{ ' · ' if not loop.last }}{% endfor %}</small>{% endif %}</div>
+            <div><dt>Pagador</dt><dd>{{ n.tomador_nome }}<br><small class="fin-fraco">{{ n.tomador_doc }}{{ ' · ' ~ n.tomador_email if n.tomador_email }}</small></dd></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Conta de cobrança</label>
+                <select name="conta_id" class="form-control">
+                    {% for c in contas_cobranca %}<option value="{{ c.id }}" {{ 'selected' if conta_padrao and c.id == conta_padrao.id }}>{{ c.apelido }} · {{ 'TESTE' if c.ambiente != 'producao' else 'produção' }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Vencimento *</label>
+                <input type="date" name="vencimento" class="form-control" required value="{{ venc_sugerido.isoformat() }}">
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <label>Mensagem no boleto</label>
+                <input type="text" name="mensagem" class="form-control" maxlength="400" value="{{ conta_padrao.mensagem_padrao if conta_padrao and conta_padrao.mensagem_padrao else '' }}" placeholder="até 4 linhas de 100 caracteres">
+            </div>
+        </div>
+        <div class="nf-acoes" style="justify-content:flex-start;">
+            <button class="btn btn-primary"><i class="fas fa-barcode"></i> Gerar boleto na Efí</button>
+            <span class="nf-ajuda" style="align-self:center;">O boleto leva o aviso de pagamento: quando for pago, o título recebe a baixa sozinho.</span>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+
 <div class="nf-sec">
     <h3><i class="fas fa-code" style="color:#64748b;"></i> Arquivos</h3>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
