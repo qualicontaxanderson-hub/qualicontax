@@ -159,41 +159,18 @@ def cobranca_saldo(conta_id):
 # ---------------------------------------------------------------------------
 # Boleto a partir de uma nota
 # ---------------------------------------------------------------------------
-def _brl(v):
-    return 'R$ ' + f'{Decimal(v):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+SLOGAN = 'A EMPRESA é sua, a PARCERIA é NOSSA'
 
 
 def _itens_para_efi(itens, maximo=5):
-    """A Efí mostra no máximo 5 itens no PDF. Até 5: como estão. Acima: 4 + 'Demais serviços (N)'
-    com a soma; devolve também os textos 'Nome R$ v' dos que ficaram de fora, para a observação."""
+    """A Efí imprime só 5 itens no PDF. Até 5: como estão. Acima: os 4 primeiros e a 5ª linha
+    'Demais serviços (N): nome, nome' com a soma — o cliente lê tudo no papel."""
     if len(itens) <= maximo:
-        return itens, []
+        return itens
     resto = itens[maximo - 1:]
     soma = sum((i['valor'] for i in resto), Decimal('0'))
-    cabeca = list(itens[:maximo - 1]) + [{'nome': f'Demais serviços ({len(resto)})', 'valor': soma, 'emite_nota': True}]
-    return cabeca, [f"{i['nome']} {_brl(i['valor'])}" for i in resto]
-
-
-def _empacotar(textos, max_linhas, largura=100, sep=' · '):
-    """Junta os textos em linhas de até ``largura``; se não couber tudo, a última termina com 'e mais N'."""
-    if max_linhas <= 0:
-        return []
-    linhas, atual, usados = [], '', 0
-    for t in textos:
-        cand = t if not atual else atual + sep + t
-        if len(cand) <= largura:
-            atual = cand; usados += 1
-        elif len(linhas) + 1 < max_linhas:
-            linhas.append(atual); atual = t[:largura]; usados += 1
-        else:
-            break
-    if atual:
-        linhas.append(atual)
-    faltam = len(textos) - usados
-    if faltam > 0:
-        fim = f' e mais {faltam}'
-        linhas[-1] = linhas[-1][:largura - len(fim)].rstrip() + fim
-    return linhas[:max_linhas]
+    nome = f"Demais serviços ({len(resto)}): " + ', '.join(i['nome'] for i in resto)
+    return list(itens[:maximo - 1]) + [{'nome': nome[:255], 'valor': soma, 'emite_nota': True}]
 
 
 def _competencia(n):
@@ -213,14 +190,21 @@ def periodo_da_nota(n):
 
 
 def _servicos_periodicos(empresa_id, ids):
-    """Ids dos serviços do catálogo cuja descrição muda com o mês ({mes}, {ano} ou {competencia}):
-    honorários e afins. É o item que leva o período no nome do boleto; taxa avulsa não."""
+    """Serviços do catálogo cuja descrição muda com a data: {id: 'mes' | 'ano'}. Com {mes} ou
+    {competencia} o item do boleto leva 'Novembro/2026'; só com {ano} (13º) leva '2026'; avulso, nada."""
     ids = [int(i) for i in ids if str(i or '').isdigit()]
     if not ids:
-        return set()
+        return {}
     rows = execute_query('SELECT id, descricao FROM nfse_servicos WHERE empresa_id = %s AND id IN ('
                          + ','.join(['%s'] * len(ids)) + ')', tuple([empresa_id] + ids), fetch=True) or []
-    return {r['id'] for r in rows if any(m in (r['descricao'] or '') for m in ('{mes}', '{ano}', '{competencia}'))}
+    out = {}
+    for r in rows:
+        d = r['descricao'] or ''
+        if '{mes}' in d or '{competencia}' in d:
+            out[r['id']] = 'mes'
+        elif '{ano}' in d:
+            out[r['id']] = 'ano'
+    return out
 
 
 def _itens_da_nota(n):
@@ -236,12 +220,16 @@ def _itens_da_nota(n):
     brutos = dj.get('itens') or []
     periodicos = _servicos_periodicos(n['empresa_id'], [i.get('servico_id') for i in brutos])
     periodo = periodo_da_nota(n)
+    ano = str(_competencia(n).year)
     itens = []
     for i in brutos:
-        nome = i.get('nome') or 'Serviço'
+        nome = (i.get('nome') or 'Serviço').replace(' — ', ' - ')
         sid = i.get('servico_id')
-        if str(sid or '').isdigit() and int(sid) in periodicos and periodo not in nome:
+        tipo = periodicos.get(int(sid)) if str(sid or '').isdigit() else None
+        if tipo == 'mes' and periodo not in nome:
             nome = f'{nome} - {periodo}'
+        elif tipo == 'ano' and ano not in nome:
+            nome = f'{nome} - {ano}'
         itens.append({'nome': nome, 'valor': Decimal(str(i.get('valor') or 0)),
                       'emite_nota': bool(i.get('emite_nota', True))})
     if not itens:
@@ -310,21 +298,14 @@ def nota_boleto(nota_id):
         flash('A nota não tem valor para cobrar.', 'danger')
         return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
     pagador = _pagador_da_nota(n, dj)
+    # Observação do boleto (Efí: até 4 linhas de 100): o slogan (ou a mensagem da conta / da tela, '|'
+    # quebra a linha) e, com nota fiscal autorizada, a última linha é sempre a nota vinculada.
     mensagem = preencher_modelo((request.form.get('mensagem') or conta.get('mensagem_padrao') or '').strip(),
-                                _competencia(n)) or f'Referente a {periodo_da_nota(n)}'
-    # Observação do boleto: até 4 linhas de 100; '|' quebra a linha. Com nota fiscal autorizada, a última
-    # linha é sempre a nota vinculada (número da NFS-e e chave de acesso), para o cliente conferir.
+                                _competencia(n)) or SLOGAN
     linhas = [l.strip()[:100] for l in mensagem.replace('|', '\n').split('\n') if l.strip()]
     linha_nota = [f"NFS-e nº {n['numero_nfse']} - chave {n.get('chave_acesso') or ''}".strip(' -')] if n.get('numero_nfse') else []
-    # A Efí imprime só 5 itens no PDF ("E mais N itens"). Com mais de 5: os 4 primeiros um por linha, o 5º
-    # "Demais serviços (N)" com a soma, e a lista dos demais vai na observação, compacta, nas linhas que sobram.
-    itens_efi, extras = _itens_para_efi(itens)
-    if extras:
-        linhas = linhas[:1]
-        linhas += _empacotar(extras, 4 - len(linhas) - len(linha_nota))
-    else:
-        linhas = linhas[:4 - len(linha_nota)]
-    mensagem = '\n'.join(linhas + linha_nota)
+    mensagem = '\n'.join(linhas[:4 - len(linha_nota)] + linha_nota)
+    itens_efi = _itens_para_efi(itens)
     descricao = 'Honorários e serviços — ' + ', '.join(i['nome'] for i in itens)
     titulo_id = _titulo_para(n, pagador, total, vencimento, descricao)
     itens_json = [{'nome': i['nome'], 'valor': str(i['valor']), 'emite_nota': i['emite_nota']} for i in itens]

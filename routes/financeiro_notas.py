@@ -344,7 +344,7 @@ def nota_detalhe(nota_id):
         except ValueError:
             boleto['itens_json'] = []
     contas_cobranca = [c for c in FinCobrancaConta.listar(empresa_ids=[n['empresa_id']], apenas_ativas=True)]
-    from routes.financeiro_cobranca import _competencia as _comp_nota, periodo_da_nota
+    from routes.financeiro_cobranca import SLOGAN, _competencia as _comp_nota
     dj = n.get('dps_json')
     if isinstance(dj, str):
         try:
@@ -355,10 +355,9 @@ def nota_detalhe(nota_id):
     valor_boleto = (dj or {}).get('valor_boleto') or n.get('valor_servico')
     hoje = date.today()
     conta_padrao = next((c for c in contas_cobranca if c['ambiente'] == 'producao'), contas_cobranca[0] if contas_cobranca else None)
-    # Observação do boleto: a mensagem padrão da conta com {mes}/{ano}/{competencia} preenchidos; sem ela,
-    # 'Referente a Novembro/2026' (a competência da nota), como o boleto do Conexa.
-    msg_sugerida = (preencher_modelo((conta_padrao or {}).get('mensagem_padrao') or '', _comp_nota(n))
-                    or f'Referente a {periodo_da_nota(n)}')
+    # Observação do boleto: a mensagem padrão da conta com {mes}/{ano}/{competencia} preenchidos ou o slogan;
+    # a nota fiscal entra sozinha na última linha.
+    msg_sugerida = preencher_modelo((conta_padrao or {}).get('mensagem_padrao') or '', _comp_nota(n)) or SLOGAN
     if conta_padrao and conta_padrao.get('dia_vencimento'):
         d = int(conta_padrao['dia_vencimento'])
         venc = date(hoje.year + (hoje.month == 12), hoje.month % 12 + 1, min(d, 28)) if hoje.day >= d else date(hoje.year, hoje.month, min(d, 28))
