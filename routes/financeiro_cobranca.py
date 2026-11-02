@@ -24,7 +24,7 @@ from flask_login import current_user
 
 from models.fin_cobranca import AMBIENTES, PROVEDORES, FinBoleto, FinCobrancaConta
 from models.fin_empresa import FinEmpresa
-from models.nfse_emissao import NfseEmitida, tomador_do_cliente
+from models.nfse_emissao import MESES, NfseEmitida, preencher_modelo, tomador_do_cliente
 from routes.financeiro import _empresas_ctx, financeiro
 from utils.atividade import registrar
 from utils.auth_helper import permission_required
@@ -159,8 +159,73 @@ def cobranca_saldo(conta_id):
 # ---------------------------------------------------------------------------
 # Boleto a partir de uma nota
 # ---------------------------------------------------------------------------
+def _brl(v):
+    return 'R$ ' + f'{Decimal(v):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _itens_para_efi(itens, maximo=5):
+    """A Efí mostra no máximo 5 itens no PDF. Até 5: como estão. Acima: 4 + 'Demais serviços (N)'
+    com a soma; devolve também os textos 'Nome R$ v' dos que ficaram de fora, para a observação."""
+    if len(itens) <= maximo:
+        return itens, []
+    resto = itens[maximo - 1:]
+    soma = sum((i['valor'] for i in resto), Decimal('0'))
+    cabeca = list(itens[:maximo - 1]) + [{'nome': f'Demais serviços ({len(resto)})', 'valor': soma, 'emite_nota': True}]
+    return cabeca, [f"{i['nome']} {_brl(i['valor'])}" for i in resto]
+
+
+def _empacotar(textos, max_linhas, largura=100, sep=' · '):
+    """Junta os textos em linhas de até ``largura``; se não couber tudo, a última termina com 'e mais N'."""
+    if max_linhas <= 0:
+        return []
+    linhas, atual, usados = [], '', 0
+    for t in textos:
+        cand = t if not atual else atual + sep + t
+        if len(cand) <= largura:
+            atual = cand; usados += 1
+        elif len(linhas) + 1 < max_linhas:
+            linhas.append(atual); atual = t[:largura]; usados += 1
+        else:
+            break
+    if atual:
+        linhas.append(atual)
+    faltam = len(textos) - usados
+    if faltam > 0:
+        fim = f' e mais {faltam}'
+        linhas[-1] = linhas[-1][:largura - len(fim)].rstrip() + fim
+    return linhas[:max_linhas]
+
+
+def _competencia(n):
+    c = n.get('competencia')
+    if isinstance(c, str):
+        try:
+            c = date.fromisoformat(c[:10])
+        except ValueError:
+            c = None
+    return c or date.today()
+
+
+def periodo_da_nota(n):
+    """'Novembro/2026' — a competência da nota, como o boleto do Conexa mostra."""
+    c = _competencia(n)
+    return f'{MESES[c.month - 1].capitalize()}/{c.year}'
+
+
+def _servicos_periodicos(empresa_id, ids):
+    """Ids dos serviços do catálogo cuja descrição muda com o mês ({mes}, {ano} ou {competencia}):
+    honorários e afins. É o item que leva o período no nome do boleto; taxa avulsa não."""
+    ids = [int(i) for i in ids if str(i or '').isdigit()]
+    if not ids:
+        return set()
+    rows = execute_query('SELECT id, descricao FROM nfse_servicos WHERE empresa_id = %s AND id IN ('
+                         + ','.join(['%s'] * len(ids)) + ')', tuple([empresa_id] + ids), fetch=True) or []
+    return {r['id'] for r in rows if any(m in (r['descricao'] or '') for m in ('{mes}', '{ano}', '{competencia}'))}
+
+
 def _itens_da_nota(n):
-    """Itens cobrados: os da nota (nota + só boleto) ou, sem itens, a própria nota."""
+    """Itens cobrados: os da nota (nota + só boleto) ou, sem itens, a própria nota.
+    Item periódico (honorários) sai como 'Honorários contábeis - Novembro/2026'."""
     dj = n.get('dps_json')
     if isinstance(dj, str):
         try:
@@ -168,10 +233,19 @@ def _itens_da_nota(n):
         except ValueError:
             dj = {}
     dj = dj or {}
-    itens = [{'nome': i.get('nome') or 'Serviço', 'valor': Decimal(str(i.get('valor') or 0)),
-              'emite_nota': bool(i.get('emite_nota', True))} for i in (dj.get('itens') or [])]
+    brutos = dj.get('itens') or []
+    periodicos = _servicos_periodicos(n['empresa_id'], [i.get('servico_id') for i in brutos])
+    periodo = periodo_da_nota(n)
+    itens = []
+    for i in brutos:
+        nome = i.get('nome') or 'Serviço'
+        sid = i.get('servico_id')
+        if str(sid or '').isdigit() and int(sid) in periodicos and periodo not in nome:
+            nome = f'{nome} - {periodo}'
+        itens.append({'nome': nome, 'valor': Decimal(str(i.get('valor') or 0)),
+                      'emite_nota': bool(i.get('emite_nota', True))})
     if not itens:
-        itens = [{'nome': (n.get('descricao') or 'Serviços contábeis')[:80],
+        itens = [{'nome': f"Honorários contábeis - {periodo}",
                   'valor': Decimal(str(n.get('valor_servico') or 0)), 'emite_nota': True}]
     total = sum((i['valor'] for i in itens), Decimal('0'))
     return itens, total, dj
@@ -236,7 +310,21 @@ def nota_boleto(nota_id):
         flash('A nota não tem valor para cobrar.', 'danger')
         return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
     pagador = _pagador_da_nota(n, dj)
-    mensagem = (request.form.get('mensagem') or conta.get('mensagem_padrao') or '').strip()
+    mensagem = preencher_modelo((request.form.get('mensagem') or conta.get('mensagem_padrao') or '').strip(),
+                                _competencia(n)) or f'Referente a {periodo_da_nota(n)}'
+    # Observação do boleto: até 4 linhas de 100; '|' quebra a linha. Com nota fiscal autorizada, a última
+    # linha é sempre a nota vinculada (número da NFS-e e chave de acesso), para o cliente conferir.
+    linhas = [l.strip()[:100] for l in mensagem.replace('|', '\n').split('\n') if l.strip()]
+    linha_nota = [f"NFS-e nº {n['numero_nfse']} - chave {n.get('chave_acesso') or ''}".strip(' -')] if n.get('numero_nfse') else []
+    # A Efí imprime só 5 itens no PDF ("E mais N itens"). Com mais de 5: os 4 primeiros um por linha, o 5º
+    # "Demais serviços (N)" com a soma, e a lista dos demais vai na observação, compacta, nas linhas que sobram.
+    itens_efi, extras = _itens_para_efi(itens)
+    if extras:
+        linhas = linhas[:1]
+        linhas += _empacotar(extras, 4 - len(linhas) - len(linha_nota))
+    else:
+        linhas = linhas[:4 - len(linha_nota)]
+    mensagem = '\n'.join(linhas + linha_nota)
     descricao = 'Honorários e serviços — ' + ', '.join(i['nome'] for i in itens)
     titulo_id = _titulo_para(n, pagador, total, vencimento, descricao)
     itens_json = [{'nome': i['nome'], 'valor': str(i['valor']), 'emite_nota': i['emite_nota']} for i in itens]
@@ -249,7 +337,7 @@ def nota_boleto(nota_id):
     try:
         efi, _c = FinCobrancaConta.cliente_efi(conta['id'])
         data = efi.criar_boleto(
-            itens, pagador, vencimento, custom_id=custom_id,
+            itens_efi, pagador, vencimento, custom_id=custom_id,
             notification_url=url_for('cobranca_webhook.efi', segredo=conta['webhook_segredo'], _external=True, _scheme='https'),
             juros_mes=conta.get('juros_mes'), multa_pct=conta.get('multa_pct'), dias_baixa=conta.get('dias_baixa'),
             mensagem=mensagem or None)

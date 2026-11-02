@@ -17,7 +17,7 @@ from flask import (Response, abort, flash, jsonify, redirect, render_template,
 from flask_login import current_user
 
 from models.fin_empresa import FinEmpresa
-from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC, NfseServico,
+from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC, NfseServico, preencher_modelo,
                                  REG_AP_TRIB_SN, REG_ESP_TRIB, SITUACOES, TP_RET_ISSQN, TRIB_ISSQN,
                                  NfseConfig, NfseEmitida, buscar_clientes, titulos_para_nota,
                                  tomador_do_cliente)
@@ -344,6 +344,7 @@ def nota_detalhe(nota_id):
         except ValueError:
             boleto['itens_json'] = []
     contas_cobranca = [c for c in FinCobrancaConta.listar(empresa_ids=[n['empresa_id']], apenas_ativas=True)]
+    from routes.financeiro_cobranca import _competencia as _comp_nota, periodo_da_nota
     dj = n.get('dps_json')
     if isinstance(dj, str):
         try:
@@ -354,6 +355,10 @@ def nota_detalhe(nota_id):
     valor_boleto = (dj or {}).get('valor_boleto') or n.get('valor_servico')
     hoje = date.today()
     conta_padrao = next((c for c in contas_cobranca if c['ambiente'] == 'producao'), contas_cobranca[0] if contas_cobranca else None)
+    # Observação do boleto: a mensagem padrão da conta com {mes}/{ano}/{competencia} preenchidos; sem ela,
+    # 'Referente a Novembro/2026' (a competência da nota), como o boleto do Conexa.
+    msg_sugerida = (preencher_modelo((conta_padrao or {}).get('mensagem_padrao') or '', _comp_nota(n))
+                    or f'Referente a {periodo_da_nota(n)}')
     if conta_padrao and conta_padrao.get('dia_vencimento'):
         d = int(conta_padrao['dia_vencimento'])
         venc = date(hoje.year + (hoje.month == 12), hoje.month % 12 + 1, min(d, 28)) if hoje.day >= d else date(hoje.year, hoje.month, min(d, 28))
@@ -362,6 +367,7 @@ def nota_detalhe(nota_id):
     return render_template('financeiro/nota_detalhe.html', n=n, erros=erros, alertas=alertas, titulo=titulo,
                            boleto=boleto, contas_cobranca=contas_cobranca, conta_padrao=conta_padrao,
                            itens=itens, valor_boleto=valor_boleto, venc_sugerido=venc, SIT_BOLETO=SIT_BOLETO,
+                           msg_sugerida=msg_sugerida,
                            pode_cobranca=pode_rota('financeiro.cobranca'),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, **_LISTAS)
 
