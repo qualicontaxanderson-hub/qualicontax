@@ -257,8 +257,10 @@ def _dig(v):
 
 
 def _pagador(p):
+    # Nome e endereço do pagador vão em Maiúscula e minúscula (o cadastro guarda em caixa alta).
+    from utils.texto import nome_proprio
     doc = _dig(p.get('documento'))
-    nome = (p.get('nome') or '').strip()[:255]
+    nome = nome_proprio((p.get('nome') or '').strip())[:255]
     c = {}
     if len(doc) == 14:
         c['juridical_person'] = {'corporate_name': nome, 'cnpj': doc}
@@ -272,11 +274,11 @@ def _pagador(p):
         c['phone_number'] = fone
     e = p.get('endereco') or {}
     if e.get('cep') and e.get('logradouro') and e.get('cidade') and e.get('uf'):
-        c['address'] = {'street': e['logradouro'][:255], 'number': (e.get('numero') or 'S/N')[:30],
-                        'neighborhood': (e.get('bairro') or '')[:80], 'zipcode': _dig(e['cep']),
-                        'city': e['cidade'][:80], 'state': e['uf'][:2].upper()}
+        c['address'] = {'street': nome_proprio(e['logradouro'])[:255], 'number': (e.get('numero') or 'S/N')[:30],
+                        'neighborhood': nome_proprio(e.get('bairro') or '')[:80], 'zipcode': _dig(e['cep']),
+                        'city': nome_proprio(e['cidade'])[:80], 'state': e['uf'][:2].upper()}
         if e.get('complemento'):
-            c['address']['complement'] = e['complemento'][:60]
+            c['address']['complement'] = nome_proprio(e['complemento'])[:60]
     return c
 
 
