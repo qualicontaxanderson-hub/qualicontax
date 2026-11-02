@@ -4,6 +4,9 @@
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+{% set dj = n.dps_json if n.dps_json is mapping else {} %}
+{% set teste = n.ambiente == 2 %}
+{% macro pct(v) %}{{ ('%.2f' | format(v | float)) | replace('.', ',') }}%{% endmacro %}
 
 <div class="page-header">
     <div>
@@ -11,9 +14,9 @@
             <i class="fas fa-file-invoice" style="color: var(--primary-green);"></i>
             Nota {{ n.serie }}-{{ n.numero_dps }}
             <span class="nf-pill nf-pill-{{ n.situacao }}" style="vertical-align:middle; margin-left:6px;">{{ SITUACOES.get(n.situacao, n.situacao) | upper }}</span>
-            {% if n.ambiente == 2 %}<span class="nf-pill nf-pill-teste" style="vertical-align:middle;">TESTE</span>{% endif %}
+            {% if teste %}<span class="nf-pill nf-pill-teste" style="vertical-align:middle;">TESTE</span>{% endif %}
         </h1>
-        <p class="page-subtitle">{{ n.empresa_nome }} · {{ EMISSORES.get(n.emissor or 'nacional') }}</p>
+        <p class="page-subtitle">{{ n.empresa_nome | nome_proprio }} · {{ EMISSORES.get(n.emissor or 'nacional') }}{{ ' · ambiente de teste' if teste }}</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-outline" href="{{ url_for('financeiro.notas', emp=n.empresa_id) }}"><i class="fas fa-arrow-left"></i> Notas</a>
@@ -27,6 +30,10 @@
         {% endif %}
     </div>
 </div>
+
+{% if teste %}
+<div class="nf-teste on"><i class="fas fa-flask"></i> Nota emitida no <strong>ambiente de teste</strong> do governo: sai autorizada, mas não vale como documento fiscal.</div>
+{% endif %}
 
 {% if n.situacao in ('rejeitada', 'erro') %}
 <div class="nf-sec" style="border-color:#fca5a5;">
@@ -53,105 +60,180 @@
 </div>
 {% endif %}
 
-<div class="nf-sec">
-    <h3><i class="fas fa-hashtag" style="color:#0369a1;"></i> Identificação</h3>
-    <dl class="nf-resumo">
-        <div><dt>Emitida por</dt><dd>{{ n.empresa_nome }} ({{ n.empresa_numero or n.empresa_id }})</dd></div>
-        <div><dt>Série e número</dt><dd>{{ n.serie }}-{{ n.numero_dps }}</dd></div>
-        {% if n.numero_nfse %}<div><dt>Número da NFS-e</dt><dd class="nf-big">{{ n.numero_nfse }}</dd></div>{% endif %}
-        <div><dt>Caminho</dt><dd>{{ EMISSORES.get(n.emissor or 'nacional') }}{{ ' · ambiente de teste' if n.ambiente == 2 else ' · produção' }}</dd></div>
-        <div><dt>Emissão</dt><dd>{{ n.dh_emissao.strftime('%d/%m/%Y %H:%M') if n.dh_emissao else '—' }}</dd></div>
-        <div><dt>Competência</dt><dd>{{ n.competencia.strftime('%d/%m/%Y') if n.competencia else '—' }}</dd></div>
-        {% if n.data_processamento %}<div><dt>Processada em</dt><dd>{{ n.data_processamento.strftime('%d/%m/%Y %H:%M') }}{% if n.cstat %} · cStat {{ n.cstat }}{% endif %}</dd></div>{% endif %}
-        {% if n.chave_acesso %}
-        <div style="grid-column:1 / -1;"><dt>{{ 'Código de verificação' if n.emissor == 'sp' else 'Chave de acesso' }}</dt><dd class="nf-chave" data-copiar="{{ n.chave_acesso }}">{{ n.chave_acesso }}</dd></div>
+<!-- ===== faixa de resumo ===== -->
+<dl class="nd-hero">
+    <div class="nd-kpi nd-kpi-verde">
+        <dt>{{ 'Número da NFS-e' if n.numero_nfse else 'Número' }}</dt>
+        <dd>{{ n.numero_nfse or (n.serie ~ '-' ~ n.numero_dps) }}<small>{{ 'DPS ' ~ n.serie ~ '-' ~ n.numero_dps if n.numero_nfse else EMISSORES.get(n.emissor or 'nacional') }}</small></dd>
+    </div>
+    <div class="nd-kpi">
+        <dt>Valor da nota</dt>
+        <dd>{{ n.valor_servico | float | round(2) | format_currency }}<small>{% if n.valor_liquido is not none and n.valor_liquido != n.valor_servico %}líquido {{ n.valor_liquido | float | round(2) | format_currency }}{% elif valor_boleto and valor_boleto != n.valor_servico %}boleto {{ valor_boleto | float | round(2) | format_currency }}{% else %}líquido igual ao valor{% endif %}</small></dd>
+    </div>
+    <div class="nd-kpi">
+        <dt>Emissão</dt>
+        <dd>{{ n.dh_emissao.strftime('%d/%m/%Y') if n.dh_emissao else '—' }}<small>{% if n.dh_emissao %}às {{ n.dh_emissao.strftime('%H:%M') }} · {% endif %}competência {{ n.competencia.strftime('%d/%m/%Y') if n.competencia else '—' }}</small></dd>
+    </div>
+    <div class="nd-kpi">
+        <dt>Boleto</dt>
+        {% if boleto %}
+        <dd>{{ boleto.valor | float | format_currency }}<small><span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span> vence {{ boleto.vencimento.strftime('%d/%m/%Y') }}</small></dd>
+        {% elif n.situacao == 'autorizada' and pode_cobranca %}
+        <dd class="nd-kpi-fraco">sem boleto<small><a href="#boleto">gerar abaixo</a></small></dd>
+        {% else %}
+        <dd class="nd-kpi-fraco">—<small>{{ 'só nota autorizada gera boleto' if n.situacao != 'autorizada' else 'cobrança não liberada para você' }}</small></dd>
         {% endif %}
-        {% if n.emissor == 'sp' and n.numero_nfse %}
-        <div style="grid-column:1 / -1;"><dt>Consulta pública</dt><dd><a href="https://nfe.prefeitura.sp.gov.br/publico/verificacao.aspx" target="_blank" rel="noopener">nfe.prefeitura.sp.gov.br → Verificação de autenticidade</a> — informe inscrição {{ n.dps_json.get('inscricao_municipal', '') if n.dps_json is mapping else '' }}, nota {{ n.numero_nfse }} e o código acima.</dd></div>
-        {% endif %}
-        {% if titulo %}
-        <div><dt>Título ligado</dt><dd><a href="{{ url_for('financeiro.titulos', status='todos', busca=titulo.descricao) }}">#{{ titulo.id }} · {{ titulo.descricao }}</a> · {{ titulo.valor | float | round(2) | format_currency }} · {{ titulo.status }}</dd></div>
-        {% endif %}
-    </dl>
-</div>
+    </div>
+</dl>
 
-<div class="nf-sec">
-    <h3><i class="fas fa-user-tie" style="color:#6d28d9;"></i> Tomador</h3>
-    <dl class="nf-resumo">
-        <div><dt>Nome</dt><dd>{{ n.tomador_nome or '—' }}</dd></div>
-        <div><dt>CNPJ / CPF</dt><dd data-copiar="{{ n.tomador_doc }}">{{ n.tomador_doc or '—' }}</dd></div>
-        <div><dt>Município (IBGE)</dt><dd>{{ n.tomador_municipio or '—' }}</dd></div>
-        <div><dt>E-mail</dt><dd>{{ n.tomador_email or '—' }}</dd></div>
-        {% if n.dps_json is mapping %}
-        <div style="grid-column:1 / -1;"><dt>Endereço</dt><dd>{{ [n.dps_json.get('tomador_logradouro'), n.dps_json.get('tomador_numero'), n.dps_json.get('tomador_complemento')] | select | join(', ') }}{% if n.dps_json.get('tomador_bairro') %} — {{ n.dps_json.get('tomador_bairro') }}{% endif %}{% if n.dps_json.get('tomador_cep') %} · CEP {{ n.dps_json.get('tomador_cep') }}{% endif %}</dd></div>
-        {% endif %}
-    </dl>
-</div>
-
-<div class="nf-sec">
-    <h3><i class="fas fa-briefcase" style="color:#b45309;"></i> Serviço e valores</h3>
-    <dl class="nf-resumo">
-        <div style="grid-column:1 / -1;"><dt>Descrição</dt><dd>{{ n.descricao or '—' }}</dd></div>
-        <div><dt>Códigos</dt><dd>{% if n.cod_trib_nac %}Trib. nacional {{ n.cod_trib_nac }}{% endif %}{% if n.cod_trib_mun %} · municipal {{ n.cod_trib_mun }}{% endif %}{% if n.cod_nbs %} · NBS {{ n.cod_nbs }}{% endif %}{% if n.dps_json is mapping and n.dps_json.get('cod_servico_sp') %} · serviço SP {{ n.dps_json.get('cod_servico_sp') }}{% endif %}</dd></div>
-        <div><dt>Local da prestação</dt><dd>{{ n.loc_prestacao or '—' }}</dd></div>
-        <div><dt>Valor do serviço</dt><dd class="nf-big">{{ n.valor_servico | float | round(2) | format_currency }}</dd></div>
-        <div><dt>ISS</dt><dd>{{ 'retido pelo tomador' if n.iss_retido else 'não retido' }}{% if n.aliquota_iss %} · {{ n.aliquota_iss }}%{% endif %}</dd></div>
-        {% if n.total_retencoes %}<div><dt>Retenções federais</dt><dd>{{ n.total_retencoes | float | round(2) | format_currency }}</dd></div>{% endif %}
-        {% if n.valor_liquido is not none %}<div><dt>Valor líquido</dt><dd class="nf-big">{{ n.valor_liquido | float | round(2) | format_currency }}</dd></div>{% endif %}
-    </dl>
-</div>
-
-{% if n.ibs_total is not none or n.cbs_valor is not none %}
-<div class="nf-sec">
-    <h3><i class="fas fa-landmark" style="color:#0f766e;"></i> IBS e CBS calculados pelo governo <small>CST {{ n.ibscbs_cst }} · cClassTrib {{ n.ibscbs_cclasstrib }} · cIndOp {{ n.ibscbs_cind_op }}</small></h3>
-    <dl class="nf-resumo">
-        <div><dt>Base de cálculo</dt><dd>{{ (n.ibscbs_bc or 0) | float | round(2) | format_currency }}</dd></div>
-        <div><dt>IBS estadual</dt><dd>{{ (n.ibs_uf_valor or 0) | float | round(2) | format_currency }}{% if n.ibs_uf_aliq_efet is not none %} <span class="fin-fraco">({{ n.ibs_uf_aliq_efet }}%)</span>{% endif %}</dd></div>
-        <div><dt>IBS municipal</dt><dd>{{ (n.ibs_mun_valor or 0) | float | round(2) | format_currency }}{% if n.ibs_mun_aliq_efet is not none %} <span class="fin-fraco">({{ n.ibs_mun_aliq_efet }}%)</span>{% endif %}</dd></div>
-        <div><dt>CBS</dt><dd>{{ (n.cbs_valor or 0) | float | round(2) | format_currency }}{% if n.cbs_aliq_efet is not none %} <span class="fin-fraco">({{ n.cbs_aliq_efet }}%)</span>{% endif %}</dd></div>
-        <div><dt>Total da nota</dt><dd class="nf-big">{{ (n.valor_total_nf or n.valor_servico) | float | round(2) | format_currency }}</dd></div>
-    </dl>
-    <span class="nf-ajuda">Em 2026 o IBS e a CBS são só informativos (fase de teste da reforma): nada é cobrado a mais do tomador.</span>
+{% if n.chave_acesso %}
+<div class="nd-chave">
+    <span class="nd-chave-rotulo"><i class="fas fa-key"></i> {{ 'Código de verificação' if n.emissor == 'sp' else 'Chave de acesso' }}</span>
+    <code data-copiar="{{ n.chave_acesso }}" title="Clique para copiar">{{ n.chave_acesso }}</code>
+    {% if n.data_processamento %}<span class="nd-chave-meta">processada em {{ n.data_processamento.strftime('%d/%m/%Y %H:%M') }}{% if n.cstat %} · cStat {{ n.cstat }}{% endif %}</span>{% endif %}
+    {% if n.emissor == 'sp' and n.numero_nfse %}
+    <span class="nd-chave-meta"><a href="https://nfe.prefeitura.sp.gov.br/publico/verificacao.aspx" target="_blank" rel="noopener">Verificar na prefeitura</a> com a inscrição {{ dj.get('inscricao_municipal', '') }}, a nota {{ n.numero_nfse }} e este código.</span>
+    {% endif %}
 </div>
 {% endif %}
 
-{% if n.situacao == 'autorizada' and pode_cobranca %}
-<div class="nf-sec" id="boleto">
-    <h3><i class="fas fa-barcode" style="color:#15803d;"></i> Boleto <small>{{ 'o boleto desta nota' if boleto else 'cobrar pela Efí: a nota mais o que vai só no boleto' }}</small></h3>
-    {% if boleto %}
-    <div class="nf-resumo">
-        <div><dt>Situação</dt><dd><span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</dd></div>
-        <div><dt>Valor do boleto</dt><dd class="nf-big">{{ boleto.valor | float | format_currency }}</dd></div>
-        <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
-        <div><dt>Nº na Efí</dt><dd>{{ boleto.charge_id or '—' }}</dd></div>
-        {% if boleto.pago_em %}<div><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }} · {{ boleto.valor_pago | float | format_currency }}</dd></div>{% endif %}
-        {% if boleto.linha_digitavel %}<div style="grid-column:1/-1;"><dt>Linha digitável</dt><dd class="mono" data-copiar data-copiar-rotulo="Linha digitável">{{ boleto.linha_digitavel }}</dd></div>{% endif %}
-        {% if boleto.pix_copia_cola %}<div style="grid-column:1/-1;"><dt>Pix copia e cola</dt><dd class="mono" style="font-size:11.5px;" data-copiar data-copiar-rotulo="Pix">{{ boleto.pix_copia_cola }}</dd></div>{% endif %}
-        {% if boleto.erro %}<div style="grid-column:1/-1;"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
-    </div>
-    {% if boleto.itens_json %}
-    <div class="nf-ajuda" style="margin-top:8px;">Itens do boleto:
-        {% for i in boleto.itens_json %}{{ i.nome }} R$ {{ i.valor }}{{ ' (só boleto)' if not i.emite_nota }}{{ ' · ' if not loop.last }}{% endfor %}</div>
-    {% endif %}
-    <div class="nf-acoes" style="justify-content:flex-start; margin-top:10px;">
-        {% if boleto.pdf_url %}<a class="btn btn-primary" href="{{ boleto.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF do boleto</a>{% endif %}
-        {% if boleto.link %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
-        {% if boleto.situacao in ('waiting', 'unpaid', 'new') %}
-        <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-sync-alt"></i> Conferir na Efí</button></form>
-        <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-ban"></i> Cancelar boleto</button></form>
-        {% endif %}
-        <a class="btn btn-outline" href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}"><i class="fas fa-list"></i> Todos os boletos</a>
-    </div>
-    {% elif not contas_cobranca %}
-    <p class="fin-fraco">A empresa ainda não tem conta de cobrança. <a href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}">Cadastre a Efí em Financeiro → Cobrança</a> e volte aqui.</p>
-    {% else %}
-    <form method="POST" action="{{ url_for('financeiro.nota_boleto', nota_id=n.id) }}" class="cb-gerar">
-        <div class="nf-resumo" style="margin-bottom:10px;">
-            <div><dt>Valor do boleto</dt><dd class="nf-big">{{ valor_boleto | float | format_currency }}</dd>
-                {% if itens %}<small class="fin-fraco">{% for i in itens %}{{ i.nome }} R$ {{ i.valor }}{{ ' (só boleto)' if not i.emite_nota }}{{ ' · ' if not loop.last }}{% endfor %}</small>{% endif %}</div>
-            <div><dt>Pagador</dt><dd>{{ n.tomador_nome }}<br><small class="fin-fraco">{{ n.tomador_doc }}{{ ' · ' ~ n.tomador_email if n.tomador_email }}</small></dd></div>
+<div class="nd-grid">
+
+<!-- ===== PESSOAS ===== -->
+<section class="nf-card">
+    <header><b><i class="fas fa-user-tie"></i></b><span>Pessoas</span><small>quem emite e quem recebe</small></header>
+    <div class="nf-card-body">
+        <div class="nd-pessoa">
+            <span class="nd-ava nd-ava-verde"><i class="fas fa-building"></i></span>
+            <div>
+                <span class="nd-rotulo">Emitida por</span>
+                <h4>{{ n.empresa_nome | nome_proprio }}</h4>
+                <p>{{ n.cnpj_emitente | format_cnpj if n.cnpj_emitente else '' }}{% if n.empresa_numero %} · nº {{ n.empresa_numero }}{% endif %}</p>
+            </div>
         </div>
-        <div class="form-row">
+        <div class="nd-pessoa">
+            <span class="nd-ava"><i class="fas fa-{{ 'user' if (n.tomador_doc or '') | length == 11 else 'industry' }}"></i></span>
+            <div>
+                <span class="nd-rotulo">Tomador</span>
+                <h4>{{ n.tomador_nome | nome_proprio or '—' }}</h4>
+                <p data-copiar="{{ n.tomador_doc }}" title="Clique para copiar">{{ n.tomador_doc | format_cpf if (n.tomador_doc or '') | length == 11 else (n.tomador_doc | format_cnpj if n.tomador_doc else '—') }}</p>
+                {% set rua = [dj.get('tomador_logradouro'), dj.get('tomador_numero'), dj.get('tomador_complemento')] | select | join(', ') %}
+                {% if rua %}<p>{{ rua | nome_proprio }}{% if dj.get('tomador_bairro') %}, {{ dj.get('tomador_bairro') | nome_proprio }}{% endif %}</p>{% endif %}
+                {% if tomador_cidade or dj.get('tomador_cep') %}<p>{{ tomador_cidade or '' }}{{ ' · ' if tomador_cidade and dj.get('tomador_cep') }}{% if dj.get('tomador_cep') %}CEP {{ dj.get('tomador_cep')[:5] }}-{{ dj.get('tomador_cep')[5:] }}{% endif %}</p>{% endif %}
+                {% if n.tomador_email or dj.get('tomador_fone') %}<p>{{ n.tomador_email or '' }}{{ ' · ' if n.tomador_email and dj.get('tomador_fone') }}{{ dj.get('tomador_fone') | format_phone if dj.get('tomador_fone') }}</p>{% endif %}
+                {% if dj.get('tomador_cliente_id') %}<p><a href="{{ url_for('clientes.detalhes', id=dj.get('tomador_cliente_id')) }}"><i class="fas fa-external-link-alt"></i> Abrir cadastro</a></p>{% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== SERVIÇOS ===== -->
+<section class="nf-card">
+    <header><b><i class="fas fa-briefcase"></i></b><span>Serviços</span><small>o que foi cobrado nesta nota</small></header>
+    <div class="nf-card-body">
+        {% if itens %}
+        {% set ns = namespace(nota=0, so_boleto=0) %}
+        <table class="nd-itens">
+            <thead><tr><th>Serviço</th><th class="v">Valor</th></tr></thead>
+            <tbody>
+            {% for i in itens %}
+                {% if i.emite_nota %}{% set ns.nota = ns.nota + (i.valor | float) %}{% else %}{% set ns.so_boleto = ns.so_boleto + (i.valor | float) %}{% endif %}
+                <tr><td>{{ i.nome }}{% if not i.emite_nota %}<span class="nd-so-boleto">só boleto</span>{% endif %}</td><td class="v">{{ i.valor | float | format_currency }}</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="nd-total"><td>Valor da nota</td><td class="v">{{ ns.nota | round(2) | format_currency }}</td></tr>
+                {% if ns.so_boleto %}
+                <tr><td>Só no boleto (repasses)</td><td class="v">{{ ns.so_boleto | round(2) | format_currency }}</td></tr>
+                <tr class="nd-total"><td>Total a cobrar</td><td class="v">{{ (ns.nota + ns.so_boleto) | round(2) | format_currency }}</td></tr>
+                {% endif %}
+            </tfoot>
+        </table>
+        {% else %}
+        <table class="nd-itens">
+            <tbody><tr><td>{{ n.descricao or 'Serviços contábeis' }}</td><td class="v">{{ n.valor_servico | float | round(2) | format_currency }}</td></tr></tbody>
+        </table>
+        {% endif %}
+        {% if itens and n.descricao %}
+        <details class="nd-desc">
+            <summary>Descrição que saiu na nota</summary>
+            <p>{{ n.descricao }}</p>
+        </details>
+        {% endif %}
+        <dl class="nd-kv" style="margin-top:12px;">
+            <div><dt>Tributação nacional</dt><dd>{{ n.cod_trib_nac or '—' }}{% if n.cod_trib_mun %} <span class="fin-fraco">· municipal {{ n.cod_trib_mun }}</span>{% endif %}</dd></div>
+            <div><dt>NBS</dt><dd>{{ n.cod_nbs or '—' }}{% if dj.get('cod_servico_sp') %} <span class="fin-fraco">· serviço SP {{ dj.get('cod_servico_sp') }}</span>{% endif %}</dd></div>
+            <div><dt>Local da prestação</dt><dd>{{ loc_prestacao_nome or n.loc_prestacao or '—' }}</dd></div>
+            <div><dt>Caminho</dt><dd>{{ EMISSORES.get(n.emissor or 'nacional') }}</dd></div>
+        </dl>
+    </div>
+</section>
+
+<!-- ===== IMPOSTOS ===== -->
+<section class="nf-card">
+    <header><b><i class="fas fa-landmark"></i></b><span>Impostos</span><small>o que o governo calculou</small></header>
+    <div class="nf-card-body">
+        <dl class="nd-kv">
+            <div><dt>ISS</dt><dd>{{ 'retido pelo tomador' if n.iss_retido else 'não retido' }}{% if n.aliquota_iss %} · {{ pct(n.aliquota_iss) }}{% endif %}{% if n.valor_iss %} · {{ n.valor_iss | float | round(2) | format_currency }}{% endif %}</dd></div>
+            <div><dt>Retenções federais</dt><dd>{{ n.total_retencoes | float | round(2) | format_currency if n.total_retencoes else 'nenhuma' }}</dd></div>
+            {% if n.reg_ap_trib_sn or n.op_simp_nac %}<div class="nd-span"><dt>Regime</dt><dd>Simples Nacional{% if n.reg_ap_trib_sn %} · apuração {{ n.reg_ap_trib_sn }}{% endif %}</dd></div>{% endif %}
+        </dl>
+        {% if n.ibs_total is not none or n.cbs_valor is not none %}
+        <h4 class="nd-sub">IBS e CBS <small>CST {{ n.ibscbs_cst }} · cClassTrib {{ n.ibscbs_cclasstrib }} · cIndOp {{ n.ibscbs_cind_op }}</small></h4>
+        <table class="nd-itens nd-itens-mini">
+            <tbody>
+                <tr><td>Base de cálculo</td><td class="v">{{ (n.ibscbs_bc or 0) | float | round(2) | format_currency }}</td></tr>
+                <tr><td>IBS estadual{% if n.ibs_uf_aliq_efet is not none %} <span class="fin-fraco">{{ pct(n.ibs_uf_aliq_efet) }}</span>{% endif %}</td><td class="v">{{ (n.ibs_uf_valor or 0) | float | round(2) | format_currency }}</td></tr>
+                <tr><td>IBS municipal{% if n.ibs_mun_aliq_efet is not none %} <span class="fin-fraco">{{ pct(n.ibs_mun_aliq_efet) }}</span>{% endif %}</td><td class="v">{{ (n.ibs_mun_valor or 0) | float | round(2) | format_currency }}</td></tr>
+                <tr><td>CBS{% if n.cbs_aliq_efet is not none %} <span class="fin-fraco">{{ pct(n.cbs_aliq_efet) }}</span>{% endif %}</td><td class="v">{{ (n.cbs_valor or 0) | float | round(2) | format_currency }}</td></tr>
+            </tbody>
+            <tfoot><tr class="nd-total"><td>Total da nota</td><td class="v">{{ (n.valor_total_nf or n.valor_servico) | float | round(2) | format_currency }}</td></tr></tfoot>
+        </table>
+        <p class="nd-nota-aviso">Em 2026 o IBS e a CBS são só informativos (fase de teste da reforma): nada é cobrado a mais do tomador.</p>
+        {% endif %}
+    </div>
+</section>
+
+<!-- ===== BOLETO ===== -->
+{% if n.situacao == 'autorizada' and pode_cobranca %}
+<section class="nf-card" id="boleto">
+    <header><b><i class="fas fa-barcode"></i></b><span>Boleto</span><small>{{ 'o boleto desta nota' if boleto else 'cobrar pela Efí: a nota mais o que vai só no boleto' }}</small></header>
+    <div class="nf-card-body">
+    {% if boleto %}
+        <div class="nd-boleto-top">
+            <div><span class="nd-rotulo">Valor</span><strong class="nd-valor">{{ boleto.valor | float | format_currency }}</strong></div>
+            <div><span class="nd-rotulo">Situação</span><span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</div>
+        </div>
+        <dl class="nd-kv">
+            <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
+            <div><dt>Nº na Efí</dt><dd>{{ boleto.charge_id or '—' }}</dd></div>
+            {% if boleto.pago_em %}<div class="nd-span"><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }} · {{ boleto.valor_pago | float | format_currency }}</dd></div>{% endif %}
+            {% if boleto.linha_digitavel %}<div class="nd-span"><dt>Linha digitável</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Linha digitável" title="Clique para copiar">{{ boleto.linha_digitavel }}</code></dd></div>{% endif %}
+            {% if boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}
+            {% if boleto.erro %}<div class="nd-span"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
+        </dl>
+        {% if boleto.itens_json %}
+        <table class="nd-itens nd-itens-mini" style="margin-top:10px;">
+            <tbody>{% for i in boleto.itens_json %}<tr><td>{{ i.nome }}{% if not i.emite_nota %}<span class="nd-so-boleto">só boleto</span>{% endif %}</td><td class="v">{{ i.valor | float | format_currency }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% endif %}
+        <div class="nd-acoes">
+            {% if boleto.pdf_url %}<a class="btn btn-primary" href="{{ boleto.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF do boleto</a>{% endif %}
+            {% if boleto.link %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
+            {% if boleto.situacao in ('waiting', 'unpaid', 'new') %}
+            <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-sync-alt"></i> Conferir na Efí</button></form>
+            <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-ban"></i> Cancelar boleto</button></form>
+            {% endif %}
+            <a class="btn btn-outline" href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}"><i class="fas fa-list"></i> Todos os boletos</a>
+        </div>
+    {% elif not contas_cobranca %}
+        <p class="fin-fraco">A empresa ainda não tem conta de cobrança. <a href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}">Cadastre a Efí em Financeiro → Cobrança</a> e volte aqui.</p>
+    {% else %}
+        <form method="POST" action="{{ url_for('financeiro.nota_boleto', nota_id=n.id) }}" class="cb-gerar">
+            <div class="nd-boleto-top">
+                <div><span class="nd-rotulo">Valor do boleto</span><strong class="nd-valor">{{ valor_boleto | float | format_currency }}</strong></div>
+                <div><span class="nd-rotulo">Pagador</span><span class="nd-pagador">{{ n.tomador_nome | nome_proprio }}</span></div>
+            </div>
             <div class="form-group">
                 <label>Conta de cobrança</label>
                 <select name="conta_id" class="form-control">
@@ -162,27 +244,56 @@
                 <label>Vencimento *</label>
                 <input type="date" name="vencimento" class="form-control" required value="{{ venc_sugerido.isoformat() }}">
             </div>
-            <div class="form-group" style="grid-column: span 2;">
-                <label>Mensagem no boleto</label>
-                <input type="text" name="mensagem" class="form-control" maxlength="400" value="{{ msg_sugerida or '' }}" placeholder="até 4 linhas de 100 caracteres">
+            <div class="form-group">
+                <label>Observação no boleto</label>
+                <input type="text" name="mensagem" class="form-control" maxlength="400" value="{{ msg_sugerida or '' }}" placeholder="até 4 linhas de 100 caracteres; | quebra a linha">
+                <span class="nf-ajuda">A nota fiscal entra sozinha na última linha.</span>
             </div>
-        </div>
-        <div class="nf-acoes" style="justify-content:flex-start;">
-            <button class="btn btn-primary"><i class="fas fa-barcode"></i> Gerar boleto na Efí</button>
-            <span class="nf-ajuda" style="align-self:center;">O boleto leva o aviso de pagamento: quando for pago, o título recebe a baixa sozinho.</span>
-        </div>
-    </form>
+            <button class="btn btn-primary" style="width:100%;"><i class="fas fa-barcode"></i> Gerar boleto na Efí</button>
+            <span class="nf-ajuda" style="display:block; margin-top:8px;">O boleto leva o aviso de pagamento: quando for pago, o título recebe a baixa sozinho.</span>
+        </form>
     {% endif %}
-</div>
+    </div>
+</section>
 {% endif %}
 
-<div class="nf-sec">
-    <h3><i class="fas fa-code" style="color:#64748b;"></i> Arquivos</h3>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        {% if n.xml_dps %}<a class="fin-btn-tag" href="{{ url_for('financeiro.nota_xml', nota_id=n.id, qual='dps') }}"><i class="fas fa-file-code"></i> {{ 'XML do RPS enviado' if n.emissor == 'sp' else 'XML da DPS enviada' }}</a>{% endif %}
-        {% if n.situacao in ('autorizada', 'cancelada') %}<a class="fin-btn-tag" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}"><i class="fas fa-file-code"></i> XML da NFS-e</a>{% endif %}
-        {% if n.xml_nfse_path %}<span class="fin-fraco" style="align-self:center;">Guardado no Dropbox em <code>{{ n.xml_nfse_path }}</code></span>
-        {% elif n.situacao == 'autorizada' and n.ambiente == 2 %}<span class="fin-fraco" style="align-self:center;">Nota de teste: o XML fica só no banco.</span>{% endif %}
+<!-- ===== TÍTULO ===== -->
+{% if titulo %}
+<section class="nf-card">
+    <header><b><i class="fas fa-receipt"></i></b><span>Título a receber</span><small>a nota fica ligada ao título do Financeiro</small></header>
+    <div class="nf-card-body">
+        <div class="nd-boleto-top">
+            <div><span class="nd-rotulo">Título #{{ titulo.id }}</span><strong class="nd-valor">{{ titulo.valor | float | round(2) | format_currency }}</strong></div>
+            <div><span class="nd-rotulo">Situação</span><span class="nf-pill nd-tit-{{ titulo.status }}">{{ titulo.status | upper }}</span></div>
+        </div>
+        <dl class="nd-kv">
+            <div><dt>Vencimento</dt><dd>{{ titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else '—' }}</dd></div>
+            <div><dt>Descrição</dt><dd class="nd-corta" title="{{ titulo.descricao }}">{{ titulo.descricao }}</dd></div>
+        </dl>
+        <div class="nd-acoes">
+            <a class="btn btn-outline" href="{{ url_for('financeiro.titulos', status='todos', busca='#' ~ titulo.id) }}"><i class="fas fa-external-link-alt"></i> Abrir no Financeiro</a>
+        </div>
     </div>
+</section>
+{% endif %}
+
+<!-- ===== ARQUIVOS ===== -->
+<section class="nf-card">
+    <header><b><i class="fas fa-folder-open"></i></b><span>Arquivos</span><small>XML e cópia guardada</small></header>
+    <div class="nf-card-body">
+        <div class="nd-acoes" style="margin-top:0;">
+            {% if n.situacao in ('autorizada', 'cancelada') and n.emissor != 'sp' %}<a class="btn btn-outline" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}"><i class="fas fa-file-pdf"></i> PDF da nota</a>{% endif %}
+            {% if n.situacao in ('autorizada', 'cancelada') %}<a class="btn btn-outline" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}"><i class="fas fa-file-code"></i> XML da NFS-e</a>{% endif %}
+            {% if n.xml_dps %}<a class="btn btn-outline" href="{{ url_for('financeiro.nota_xml', nota_id=n.id, qual='dps') }}"><i class="fas fa-file-code"></i> {{ 'XML do RPS enviado' if n.emissor == 'sp' else 'XML da DPS enviada' }}</a>{% endif %}
+        </div>
+        <p class="nd-nota-aviso">
+            {% if n.xml_nfse_path %}Cópia guardada no Dropbox em <code>{{ n.xml_nfse_path }}</code>.
+            {% elif n.situacao == 'autorizada' and teste %}Nota de teste: o XML fica só no banco.
+            {% elif n.situacao == 'autorizada' %}A cópia no Dropbox é feita pela rotina de arquivamento.
+            {% else %}Sem arquivo guardado.{% endif %}
+        </p>
+    </div>
+</section>
+
 </div>
 {% endblock %}

@@ -199,6 +199,8 @@ app.jinja_env.filters['format_cnpj'] = format_cnpj
 app.jinja_env.filters['format_phone'] = format_phone
 app.jinja_env.filters['format_currency'] = format_currency
 app.jinja_env.filters['format_date'] = format_date
+from utils.texto import nome_proprio
+app.jinja_env.filters['nome_proprio'] = nome_proprio   # 'RUA JAIME TAVEIRA' -> 'Rua Jaime Taveira' (so texto em caixa alta)
 
 # E1: campo vazio renderiza VAZIO, nunca a palavra "None". O Jinja imprime o
 # None do Python como str(None)=="None" quando ele vem de uma expressão (ex.:

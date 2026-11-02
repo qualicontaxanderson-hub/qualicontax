@@ -353,6 +353,16 @@ def nota_detalhe(nota_id):
             dj = {}
     itens = (dj or {}).get('itens') or []
     valor_boleto = (dj or {}).get('valor_boleto') or n.get('valor_servico')
+    # cidade/UF do tomador e do local da prestação para a tela (o banco guarda só o código IBGE)
+    tomador_cidade = loc_prestacao_nome = None
+    cid_tom = (dj or {}).get('tomador_cliente_id')
+    if str(cid_tom or '').isdigit():
+        t = tomador_do_cliente(int(cid_tom), consultar_cep=False)
+        if t and t.get('cidade'):
+            from utils.texto import nome_proprio
+            tomador_cidade = f"{nome_proprio(t['cidade'])}/{t['uf'].upper()}" if t.get('uf') else nome_proprio(t['cidade'])
+            if str(n.get('loc_prestacao') or '') == str(t.get('ibge') or (dj or {}).get('tomador_ibge') or ''):
+                loc_prestacao_nome = f"{tomador_cidade} ({n['loc_prestacao']})"
     hoje = date.today()
     conta_padrao = next((c for c in contas_cobranca if c['ambiente'] == 'producao'), contas_cobranca[0] if contas_cobranca else None)
     # Observação do boleto: a mensagem padrão da conta com {mes}/{ano}/{competencia} preenchidos ou o slogan;
@@ -366,7 +376,7 @@ def nota_detalhe(nota_id):
     return render_template('financeiro/nota_detalhe.html', n=n, erros=erros, alertas=alertas, titulo=titulo,
                            boleto=boleto, contas_cobranca=contas_cobranca, conta_padrao=conta_padrao,
                            itens=itens, valor_boleto=valor_boleto, venc_sugerido=venc, SIT_BOLETO=SIT_BOLETO,
-                           msg_sugerida=msg_sugerida,
+                           msg_sugerida=msg_sugerida, tomador_cidade=tomador_cidade, loc_prestacao_nome=loc_prestacao_nome,
                            pode_cobranca=pode_rota('financeiro.cobranca'),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, **_LISTAS)
 
