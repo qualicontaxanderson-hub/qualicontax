@@ -180,15 +180,16 @@ class Efi:
 
     # ------------------------------------------------------------------ boleto
     def criar_boleto(self, itens, pagador, vencimento, custom_id=None, notification_url=None,
-                     juros_mes=None, multa_pct=None, dias_baixa=None, mensagem=None):
+                     juros_mes=None, multa_pct=None, dias_baixa=None, mensagem=None, efi_avisa_por_email=False):
         """Boleto em um passo. ``itens``: [{nome, valor(Decimal|float em reais), quantidade}];
         ``pagador``: {nome, documento (CPF 11 / CNPJ 14 dígitos), email, telefone, endereco{...}}.
-        Devolve o ``data`` da Efí (charge_id, barcode, link, pdf, pix...)."""
+        ``efi_avisa_por_email``: a Efí só manda e-mail ao pagador quando recebe o e-mail dele; o padrão é
+        NÃO mandar (quem avisa o cliente é o nosso app). Devolve o ``data`` da Efí (charge_id, barcode, link, pdf, pix...)."""
         corpo = {
             'items': [{'name': (i['nome'] or 'Serviço')[:255], 'value': _cent(i['valor']),
                        'amount': int(i.get('quantidade') or 1)} for i in itens],
             'payment': {'banking_billet': {
-                'customer': _pagador(pagador),
+                'customer': _pagador(pagador, com_email=efi_avisa_por_email),
                 'expire_at': vencimento.strftime('%Y-%m-%d') if hasattr(vencimento, 'strftime') else str(vencimento),
                 'configurations': _config(juros_mes, multa_pct, dias_baixa),
             }},
@@ -256,8 +257,9 @@ def _dig(v):
     return ''.join(ch for ch in str(v or '') if ch.isdigit())
 
 
-def _pagador(p):
+def _pagador(p, com_email=False):
     # Nome e endereço do pagador vão em Maiúscula e minúscula (o cadastro guarda em caixa alta).
+    # O e-mail só vai quando a Efí deve avisar o pagador (ela dispara o e-mail dela ao receber o endereço).
     from utils.texto import nome_proprio
     doc = _dig(p.get('documento'))
     nome = nome_proprio((p.get('nome') or '').strip())[:255]
@@ -267,7 +269,7 @@ def _pagador(p):
     else:
         c['name'] = nome
         c['cpf'] = doc
-    if p.get('email'):
+    if com_email and p.get('email'):
         c['email'] = p['email'][:255]
     fone = _dig(p.get('telefone'))
     if len(fone) in (10, 11):
