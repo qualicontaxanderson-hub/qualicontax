@@ -86,7 +86,7 @@ class FinCobrancaConta:
         dias_baixa = dados.get('dias_baixa')
         dias_baixa = max(0, min(120, int(dias_baixa))) if str(dias_baixa or '').isdigit() else 60
         base = (apelido, provedor, ambiente, fin_conta, (dados.get('chave_pix') or '').strip()[:80] or None,
-                dec('juros_mes', '1.00'), dec('multa_pct', '2.00'), dias_baixa, dia,
+                dec('juros_mes', '0.00'), dec('multa_pct', '0.00'), dias_baixa, dia,
                 (dados.get('mensagem_padrao') or '').strip()[:400] or None)
         sets_seg, vals_seg = [], []
         if client_id:

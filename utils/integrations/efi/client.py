@@ -281,11 +281,15 @@ def _pagador(p):
 
 
 def _config(juros_mes, multa_pct, dias_baixa):
+    # Juros e multa só entram quando são maiores que zero: a Efí recusa o bloco com valor 0
+    # ("A propriedade [interest.value] é obrigatória"); sem o bloco o boleto sai sem encargo.
     cfg = {}
-    if multa_pct is not None:
-        cfg['fine'] = int(round(float(multa_pct) * 100))              # 2,00 % -> 200
-    if juros_mes is not None:
-        cfg['interest'] = {'value': int(round(float(juros_mes) * 100)), 'type': 'monthly'}   # 1,00 % a.m. -> 100
+    multa = int(round(float(multa_pct or 0) * 100))                   # 2,00 % -> 200
+    if multa > 0:
+        cfg['fine'] = multa
+    juros = int(round(float(juros_mes or 0) * 100))                   # 1,00 % a.m. -> 100
+    if juros > 0:
+        cfg['interest'] = {'value': juros, 'type': 'monthly'}
     if dias_baixa is not None:
         cfg['days_to_write_off'] = max(0, min(120, int(dias_baixa)))
     return cfg
