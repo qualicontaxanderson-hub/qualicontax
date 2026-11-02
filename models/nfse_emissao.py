@@ -199,7 +199,8 @@ def buscar_clientes(q, limite=12):
         params.append(f'%{dig}%')
     cond += ')'
     return execute_query(
-        f"""SELECT c.id, c.numero_cliente, c.nome_razao_social AS nome, c.cpf_cnpj, c.tipo_pessoa, c.situacao
+        f"""SELECT c.id, c.numero_cliente, c.nome_razao_social AS nome, c.cpf_cnpj, c.tipo_pessoa, c.situacao,
+                  COALESCE(c.avulso, 0) AS avulso
               FROM clientes c
              WHERE {cond}
              ORDER BY (c.situacao = 'ATIVO') DESC, c.nome_razao_social
@@ -225,11 +226,22 @@ def ibge_do_documento(doc):
     return (r or {}).get('ibge')
 
 
+def formatar_documento(doc):
+    d = _dig(doc)
+    if len(d) == 11:
+        return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+    if len(d) == 14:
+        return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+    return d
+
+
 def tomador_do_cliente(cliente_id, consultar_cep=True):
-    """Dados do tomador a partir do cadastro: documento, nome, endereço principal,
-    e-mail e o IBGE do município (das notas capturadas; senão pelo CEP)."""
+    """Dados do tomador a partir do cadastro (cliente ou avulso): documento, nome,
+    endereço principal, e-mail e o IBGE do município (pelo CEP; senão pelas notas).
+    É a ÚNICA fonte do tomador (02/11/2026): a tela mostra, o pedido relê daqui."""
     c = execute_query(
-        'SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, inscricao_municipal, email, telefone, celular '
+        'SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, inscricao_municipal, email, telefone, celular, '
+        '       tipo_pessoa, situacao, COALESCE(avulso, 0) AS avulso '
         '  FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
     if not c:
         return None
@@ -251,9 +263,15 @@ def tomador_do_cliente(cliente_id, consultar_cep=True):
     if not ibge:
         ibge = ibge_do_documento(c['cpf_cnpj'])
         fonte_ibge = 'notas' if ibge else ''
+    doc = _dig(c['cpf_cnpj'])
     t = {
         'cliente_id': c['id'], 'numero_cliente': c['numero_cliente'],
-        'documento': _dig(c['cpf_cnpj']), 'nome': c['nome_razao_social'],
+        'avulso': bool(c.get('avulso')), 'tipo_pessoa': c.get('tipo_pessoa') or ('PF' if len(doc) == 11 else 'PJ'),
+        'situacao': c.get('situacao') or '',
+        'documento': doc, 'doc_fmt': formatar_documento(doc), 'nome': c['nome_razao_social'],
+        # Reforma: pessoa física é consumidor final; empresa toma o serviço para a atividade dela.
+        # É a sugestão da tela; quem emite pode mudar na etapa Valores.
+        'ind_final': 1 if len(doc) == 11 else 0,
         'inscricao_municipal': c.get('inscricao_municipal') or '',
         'email': c.get('email') or '', 'fone': _dig(c.get('telefone') or c.get('celular') or ''),
         'cep': _dig(e.get('cep')), 'logradouro': e.get('logradouro') or '', 'numero': e.get('numero') or '',

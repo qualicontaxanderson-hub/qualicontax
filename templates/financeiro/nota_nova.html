@@ -93,84 +93,39 @@
         </div>
     </div>
 
-    <div class="nf-sec">
-        <h3><i class="fas fa-user-tie" style="color:#6d28d9;"></i> Tomador <small>quem recebe a nota · obrigatórios só nome e CPF/CNPJ (*); o resto vem do cadastro</small></h3>
-        <div class="form-group">
-            <label>Buscar no cadastro de clientes</label>
-            <input type="text" id="nfBusca" class="form-control" placeholder="Nome, CNPJ/CPF ou número do cliente">
-            <div class="nf-res" id="nfRes"></div>
-        </div>
-        <div class="nf-cad" id="nfCad" hidden>
-            <div class="nf-cad-top">
-                <span><i class="fas fa-id-card"></i> Dados do cadastro <strong id="nfCadNome"></strong></span>
-                <a id="nfCadLink" href="#" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Abrir cadastro</a>
-            </div>
-            <div id="nfCadFaltas" class="nf-cad-faltas"></div>
-            <span class="nf-ajuda">O que você mudar aqui vale só para esta nota. Para corrigir de vez, mude no cadastro e escolha o cliente de novo.</span>
-        </div>
-        <div class="form-row">
-            <div class="form-group" style="grid-column: span 2;">
-                <label>Nome / razão social *</label>
-                <input type="text" name="tomador_nome" id="t_nome" class="form-control" required maxlength="150" value="{{ pre.tomador_nome or '' }}">
-            </div>
-            <div class="form-group">
-                <label>CNPJ ou CPF *</label>
-                <input type="text" name="tomador_doc" id="t_doc" class="form-control" required value="{{ pre.tomador_doc or '' }}" inputmode="numeric">
-            </div>
-            <div class="form-group">
-                <label>Inscrição municipal</label>
-                <input type="text" name="tomador_im" id="t_im" class="form-control" value="{{ pre.tomador_im or pre.tomador_inscricao_municipal or '' }}">
-                <span class="nf-ajuda">Só entra na nota da prefeitura de São Paulo, e só para tomador de São Paulo. O emissor nacional não a usa.</span>
+    <div class="nf-sec" id="nfTomadorSec">
+        <h3><i class="fas fa-user-tie" style="color:#6d28d9;"></i> Quem recebe a nota <small>sempre alguém do cadastro (cliente ou avulso) · os dados saem de lá na hora de emitir</small></h3>
+        <div id="nfEscolha">
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Buscar no cadastro</label>
+                <input type="text" id="nfBusca" class="form-control" placeholder="Nome, CNPJ/CPF ou número do cadastro" value="{{ pre.tomador_busca or '' }}">
+                <div class="nf-res" id="nfRes"></div>
+                <span class="nf-ajuda">Não está no cadastro? <a href="{{ url_for('clientes.novo') }}" target="_blank" rel="noopener">Cadastre como cliente ou avulso</a> e volte aqui.</span>
+                <span class="nf-ajuda nf-escolha-erro" id="nfEscolhaErro" hidden><i class="fas fa-exclamation-circle"></i> Escolha quem recebe a nota antes de continuar.</span>
             </div>
         </div>
-        <h4 class="nf-sub">Endereço <small>opcional, mas o governo só aceita completo: com CEP, rua, número, bairro e município passam a ser obrigatórios. Com endereço, o IBS/CBS sai pelo município do tomador; sem, pelo local da prestação.</small></h4>
-        <div class="form-row">
-            <div class="form-group">
-                <label>CEP</label>
-                <input type="text" name="tomador_cep" id="t_cep" class="form-control" value="{{ pre.tomador_cep or '' }}" inputmode="numeric" maxlength="9">
-            </div>
-            <div class="form-group" style="grid-column: span 2;">
-                <label>Rua / logradouro <span class="nf-req-cep">*</span></label>
-                <input type="text" name="tomador_logradouro" id="t_lgr" class="form-control" value="{{ pre.tomador_logradouro or '' }}">
-            </div>
-            <div class="form-group">
-                <label>Número <span class="nf-req-cep">*</span></label>
-                <input type="text" name="tomador_numero" id="t_num" class="form-control" value="{{ pre.tomador_numero or '' }}" placeholder="S/N se não tiver">
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Complemento</label>
-                <input type="text" name="tomador_complemento" id="t_cpl" class="form-control" value="{{ pre.tomador_complemento or '' }}">
-            </div>
-            <div class="form-group">
-                <label>Bairro <span class="nf-req-cep">*</span></label>
-                <input type="text" name="tomador_bairro" id="t_bairro" class="form-control" value="{{ pre.tomador_bairro or '' }}">
-            </div>
-            <div class="form-group">
-                <label>Cidade / UF</label>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="t_cidade" class="form-control" value="{{ pre.tomador_cidade or '' }}" placeholder="Cidade">
-                    <input type="text" name="tomador_uf" id="t_uf" class="form-control" style="width:64px; flex:none;" maxlength="2" value="{{ pre.tomador_uf or '' }}" placeholder="UF">
+        <div class="nf-ficha" id="nfFicha" hidden>
+            <div class="nf-ficha-top">
+                <div class="nf-ficha-ava" id="nfFAva"><i class="fas fa-building"></i></div>
+                <div class="nf-ficha-id">
+                    <strong id="nfFNome"></strong>
+                    <span id="nfFSub"></span>
+                </div>
+                <div class="nf-ficha-acoes">
+                    <a id="nfFLink" href="#" target="_blank" rel="noopener" class="btn btn-outline"><i class="fas fa-external-link-alt"></i> Abrir cadastro</a>
+                    <button type="button" id="nfFReler" class="btn btn-outline" title="Corrigiu no cadastro? Leia de novo"><i class="fas fa-sync-alt"></i> Reler</button>
+                    <button type="button" id="nfFTrocar" class="btn btn-outline"><i class="fas fa-exchange-alt"></i> Trocar</button>
                 </div>
             </div>
-            <div class="form-group">
-                <label>Município (código IBGE) <span class="nf-req-cep">*</span></label>
-                <input type="text" name="tomador_ibge" id="t_ibge" class="form-control" maxlength="7" pattern="[0-9]{7}" title="7 dígitos" value="{{ pre.tomador_ibge or '' }}" inputmode="numeric">
-                <span class="nf-ajuda" id="t_ibge_ajuda">Vem das notas que esse cliente já recebeu, senão pelo CEP.</span>
-            </div>
-        </div>
-        <h4 class="nf-sub">Contato <small>opcional</small></h4>
-        <div class="form-row">
-            <div class="form-group">
-                <label>E-mail</label>
-                <input type="email" name="tomador_email" id="t_email" class="form-control" value="{{ pre.tomador_email or '' }}">
-                <span class="nf-ajuda">Vai no XML; o envio da nota por e-mail vem na próxima etapa do projeto.</span>
-            </div>
-            <div class="form-group">
-                <label>Telefone</label>
-                <input type="text" name="tomador_fone" id="t_fone" class="form-control" value="{{ pre.tomador_fone or '' }}">
-            </div>
+            <dl class="nf-ficha-grid">
+                <div><dt>Endereço</dt><dd id="nfFEnd"></dd></div>
+                <div><dt>Município (IBGE)</dt><dd id="nfFIbge"></dd><small id="nfFIbgeFonte"></small></div>
+                <div><dt>E-mail</dt><dd id="nfFEmail"></dd><small>Vai no XML; o envio por e-mail vem na próxima etapa.</small></div>
+                <div><dt>Telefone</dt><dd id="nfFFone"></dd></div>
+                <div class="nf-so-sp"><dt>Inscrição municipal</dt><dd id="nfFIm"></dd><small>Só entra na nota da prefeitura de São Paulo.</small></div>
+            </dl>
+            <div id="nfCadFaltas" class="nf-cad-faltas"></div>
+            <div class="nf-ficha-aviso" id="nfFAviso" hidden></div>
         </div>
     </div>
     <div class="nf-acoes">
@@ -292,7 +247,6 @@
 (function () {
     var URL_BUSCA = "{{ url_for('financeiro.notas_buscar') }}";
     var URL_TOMADOR = "{{ url_for('financeiro.notas_tomador', cliente_id=0) }}";
-    var URL_CEP = "{{ url_for('financeiro.notas_cep', cep='00000000') }}";
     var form = document.getElementById('nfForm');
     var passo = 1;
 
@@ -312,6 +266,10 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     function validarPasso(n) {
+        if (n === 1) {
+            if (!$('nfClienteId').value) { $('nfEscolhaErro').hidden = false; $('nfBusca').focus(); return false; }
+            if (TOM && (TOM.faltas || []).some(function (f) { return f.nivel === 'obrigatorio'; })) { $('nfFAviso').scrollIntoView({ block: 'center' }); return false; }
+        }
         var pane = document.querySelector('.nf-pane[data-passo="' + n + '"]');
         var campos = pane.querySelectorAll('input, select, textarea');
         for (var i = 0; i < campos.length; i++) {
@@ -349,6 +307,72 @@
     }
     if ($('nfSerie')) { $('nfSerie').addEventListener('change', serieMudou); serieMudou(); }
 
+    // ---- tomador: sempre do cadastro -----------------------------------------
+    var TOM = null;
+    var selFinal = form.querySelector('[name=ibscbs_ind_final]');
+    var indFinalMexido = {{ 'true' if pre.de else 'false' }};   // ao corrigir, vale o que a nota anterior dizia
+    if (selFinal) selFinal.addEventListener('change', function () { indFinalMexido = true; });
+
+    function chip(texto, cls) { var s = document.createElement('span'); s.className = 'nf-falta ' + cls; s.textContent = texto; return s; }
+    function enderecoTexto(t) {
+        return [[t.logradouro, t.numero, t.complemento].filter(Boolean).join(', '), t.bairro,
+                [t.cidade, t.uf].filter(Boolean).join('/'),
+                t.cep ? 'CEP ' + String(t.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''].filter(Boolean).join(' · ');
+    }
+    function mostrarFicha(t) {
+        TOM = t;
+        var pf = (t.documento || '').length === 11;
+        $('nfFAva').innerHTML = '<i class="fas ' + (pf ? 'fa-user' : 'fa-building') + '"></i>';
+        $('nfFNome').textContent = t.nome || '';
+        $('nfFSub').textContent = [t.numero_cliente ? 'nº ' + t.numero_cliente : '', t.avulso ? 'Avulso' : 'Cliente',
+            pf ? 'Pessoa física' : 'Pessoa jurídica', (pf ? 'CPF ' : 'CNPJ ') + (t.doc_fmt || t.documento || ''),
+            t.situacao && t.situacao !== 'ATIVO' ? t.situacao : ''].filter(Boolean).join(' · ');
+        $('nfFLink').href = t.url_cadastro || '#';
+        var end = enderecoTexto(t);
+        $('nfFEnd').textContent = end || 'sem endereço no cadastro';
+        $('nfFIbge').textContent = t.ibge ? t.ibge + (t.cidade ? ' · ' + t.cidade + (t.uf ? '/' + t.uf : '') : '') : '—';
+        $('nfFIbgeFonte').textContent = t.ibge
+            ? (t.fonte_ibge === 'cep' ? 'pelo CEP do cadastro' : 'pelas notas que esse cadastro já recebeu (não tem CEP) — confira')
+            : 'não achei: o cadastro precisa de CEP';
+        $('nfFEmail').textContent = t.email || '—';
+        $('nfFFone').textContent = t.fone || '—';
+        $('nfFIm').textContent = t.inscricao_municipal || '—';
+
+        var box = $('nfCadFaltas'); box.innerHTML = '';
+        var faltas = t.faltas || [];
+        var obrig = faltas.filter(function (f) { return f.nivel === 'obrigatorio'; });
+        var semEnd = faltas.filter(function (f) { return f.nivel === 'endereco'; });
+        if (!faltas.length) box.appendChild(chip('cadastro completo para a nota', 'nf-falta-ok'));
+        else {
+            var rot = document.createElement('span'); rot.className = 'nf-falta-rotulo'; rot.textContent = 'Falta no cadastro:'; box.appendChild(rot);
+            faltas.forEach(function (f) { box.appendChild(chip(f.texto, 'nf-falta-' + f.nivel)); });
+        }
+        var av = $('nfFAviso'); av.hidden = true; av.className = 'nf-ficha-aviso';
+        if (obrig.length) {
+            av.className += ' erro'; av.hidden = false;
+            av.textContent = 'A nota não sai sem ' + obrig.map(function (f) { return f.texto; }).join(' e ') + '. Abra o cadastro, complete e clique em Reler.';
+        } else if (semEnd.length) {
+            av.className += ' alerta'; av.hidden = false;
+            av.textContent = 'A nota vai sair SEM endereço: o governo só aceita o endereço inteiro, e no cadastro falta ' +
+                semEnd.map(function (f) { return f.texto; }).join(', ') + '. O IBS/CBS sai pelo local da prestação. Para a nota levar o endereço, complete o cadastro e clique em Reler.';
+        }
+        $('nfClienteId').value = t.cliente_id || '';
+        $('nfEscolha').hidden = true; $('nfFicha').hidden = false; $('nfEscolhaErro').hidden = true;
+        if (selFinal && !indFinalMexido) selFinal.value = String(t.ind_final || 0);
+    }
+    function carregarTomador(id) {
+        return fetch(URL_TOMADOR.replace('/0', '/' + id)).then(function (r) { return r.ok ? r.json() : null; }).then(function (t) {
+            if (t) mostrarFicha(t);
+        });
+    }
+    function trocarTomador() {
+        TOM = null; $('nfClienteId').value = '';
+        $('nfFicha').hidden = true; $('nfEscolha').hidden = false;
+        $('nfBusca').value = ''; $('nfRes').innerHTML = ''; $('nfBusca').focus();
+    }
+    $('nfFTrocar').addEventListener('click', trocarTomador);
+    $('nfFReler').addEventListener('click', function () { if (TOM) carregarTomador(TOM.cliente_id); });
+
     // ---- título -> tomador, valor, competência -------------------------------
     var selT = $('nfTitulo');
     if (selT) selT.addEventListener('change', function () {
@@ -358,11 +382,11 @@
         if (o.dataset.valor) $('v_valor').value = parseFloat(o.dataset.valor).toFixed(2);
         if (o.dataset.comp) $('nfCompet').value = o.dataset.comp;
         if (o.dataset.cliente) carregarTomador(o.dataset.cliente);
-        else { $('t_doc').value = o.dataset.doc || ''; $('t_nome').value = o.dataset.nome || ''; $('nfClienteId').value = ''; }
+        else { trocarTomador(); busca.value = o.dataset.doc || o.dataset.nome || ''; busca.dispatchEvent(new Event('input')); }
         liquido();
     });
 
-    // ---- busca de tomador -----------------------------------------------------
+    // ---- busca no cadastro -----------------------------------------------------
     var busca = $('nfBusca'), caixa = $('nfRes'), timer = null;
     busca.addEventListener('input', function () {
         clearTimeout(timer);
@@ -373,78 +397,21 @@
                 caixa.innerHTML = '';
                 if (!lista.length) {
                     var v = document.createElement('div'); v.className = 'nf-res-vazio';
-                    v.textContent = 'Nenhum cliente com "' + q + '". Preencha os campos à mão.'; caixa.appendChild(v); return;
+                    v.textContent = 'Nenhum cadastro com "' + q + '". Cadastre como cliente ou avulso e volte aqui.'; caixa.appendChild(v); return;
                 }
                 lista.forEach(function (p) {
                     var b = document.createElement('button'); b.type = 'button'; b.className = 'nf-res-item';
                     b.innerHTML = '<strong></strong> <small></small>';
                     b.querySelector('strong').textContent = (p.numero_cliente ? p.numero_cliente + ' · ' : '') + p.nome;
-                    b.querySelector('small').textContent = (p.cpf_cnpj || '') + (p.situacao !== 'ATIVO' ? ' · ' + p.situacao : '');
+                    b.querySelector('small').textContent = [p.cpf_cnpj || '', p.avulso ? 'avulso' : '', p.situacao && p.situacao !== 'ATIVO' ? p.situacao : ''].filter(Boolean).join(' · ');
                     b.addEventListener('click', function () { caixa.innerHTML = ''; busca.value = ''; carregarTomador(p.id); });
                     caixa.appendChild(b);
                 });
             });
         }, 250);
     });
-    // endereço: com CEP, rua/número/bairro/município viram obrigatórios
-    function enderecoObrigatorio() {
-        var tem = $('t_cep').value.replace(/\D/g, '').length > 0;
-        ['t_lgr', 't_num', 't_bairro', 't_ibge'].forEach(function (id) { $(id).required = tem; });
-        document.querySelectorAll('.nf-req-cep').forEach(function (e) { e.style.visibility = tem ? 'visible' : 'hidden'; });
-    }
-    $('t_cep').addEventListener('input', enderecoObrigatorio);
-    enderecoObrigatorio();
-    function mostrarCadastro(t) {
-        $('nfCadNome').textContent = (t.numero_cliente ? 'nº ' + t.numero_cliente + ' · ' : '') + (t.nome || '');
-        $('nfCadLink').href = t.url_cadastro || '#';
-        var box = $('nfCadFaltas'); box.innerHTML = '';
-        var faltas = t.faltas || [];
-        if (!faltas.length) {
-            var ok = document.createElement('span'); ok.className = 'nf-falta nf-falta-ok';
-            ok.innerHTML = '<i class="fas fa-check"></i> cadastro completo para a nota'; box.appendChild(ok);
-        } else {
-            var rot = document.createElement('span'); rot.className = 'nf-falta-rotulo'; rot.textContent = 'Falta no cadastro:'; box.appendChild(rot);
-            faltas.forEach(function (f) {
-                var s = document.createElement('span'); s.className = 'nf-falta nf-falta-' + f.nivel;
-                s.textContent = f.texto + (f.nivel === 'obrigatorio' ? ' (obrigatório)' : f.nivel === 'endereco' ? ' (sem isso a nota sai sem endereço)' : ' (opcional)');
-                box.appendChild(s);
-            });
-        }
-        $('nfCad').hidden = false;
-    }
-    function carregarTomador(id) {
-        fetch(URL_TOMADOR.replace('/0', '/' + id)).then(function (r) { return r.json(); }).then(function (t) {
-            mostrarCadastro(t);
-            $('nfClienteId').value = t.cliente_id || '';
-            $('t_nome').value = t.nome || ''; $('t_doc').value = t.documento || ''; $('t_im').value = t.inscricao_municipal || '';
-            $('t_cep').value = t.cep || ''; $('t_lgr').value = t.logradouro || ''; $('t_num').value = t.numero || '';
-            $('t_cpl').value = t.complemento || ''; $('t_bairro').value = t.bairro || ''; $('t_cidade').value = t.cidade || '';
-            $('t_uf').value = t.uf || ''; $('t_email').value = t.email || ''; $('t_fone').value = t.fone || '';
-            $('t_ibge').value = t.ibge || '';
-            $('t_ibge_ajuda').textContent = t.ibge
-                ? (t.fonte_ibge === 'cep' ? 'Pelo CEP do cadastro.' : 'Pelas notas que esse cliente já recebeu (o cadastro não tem CEP) — confira.')
-                : 'Não achei o código IBGE: digite o CEP ou o código à mão.';
-            $('t_ibge_ajuda').style.color = (t.ibge && t.fonte_ibge === 'cep') ? '' : '#b45309';
-            if (!t.ibge) $('t_ibge_ajuda').style.color = '#b91c1c';
-            enderecoObrigatorio();
-            // cadastro sem rua ou bairro: o CEP completa (o governo recusa endereço pela metade)
-            if (!t.logradouro || !t.bairro) buscarCep();
-        });
-    }
-    // CEP -> endereço e IBGE (digitado à mão ou para completar o cadastro)
-    function buscarCep() {
-        var d = $('t_cep').value.replace(/\D/g, '');
-        if (d.length !== 8) return;
-        fetch(URL_CEP.replace('00000000', d)).then(function (r) { return r.ok ? r.json() : null; }).then(function (c) {
-            if (!c) return;
-            if (!$('t_lgr').value) $('t_lgr').value = c.logradouro || '';
-            if (!$('t_bairro').value) $('t_bairro').value = c.bairro || '';
-            $('t_cidade').value = c.cidade || $('t_cidade').value; $('t_uf').value = c.uf || $('t_uf').value;
-            if (c.ibge && !$('t_ibge').value) { $('t_ibge').value = c.ibge; $('t_ibge_ajuda').textContent = 'Encontrado pelo CEP — confira.'; $('t_ibge_ajuda').style.color = ''; }
-        });
-    }
-    $('t_cep').addEventListener('blur', buscarCep);
-    $('t_cep').addEventListener('input', function () { if ($('t_cep').value.replace(/\D/g, '').length === 8) buscarCep(); });
+    if (busca.value.trim().length >= 2) busca.dispatchEvent(new Event('input'));
+    {% if pre.tomador_cliente_id %}carregarTomador({{ pre.tomador_cliente_id|int }});{% endif %}
 
     // ---- líquido ----------------------------------------------------------------
     function liquido() {
@@ -468,9 +435,10 @@
             ['Emitida por', {{ (empresa.nome_razao_social if empresa else '') | tojson }}],
             ['Série', (opt.text || '').trim() + (opt.dataset && opt.dataset.ambiente === '2' ? '  ⚠ TESTE' : '')],
             ['Competência', comp.length === 3 ? comp[2] + '/' + comp[1] + '/' + comp[0] : val('competencia')],
-            ['Tomador', val('tomador_nome') + ' · ' + val('tomador_doc')],
-            ['Endereço', [val('tomador_logradouro'), val('tomador_numero'), val('tomador_complemento')].filter(Boolean).join(', ') + ' — ' + [val('tomador_bairro'), $('t_cidade').value, val('tomador_uf')].filter(Boolean).join(' / ') + ' · IBGE ' + val('tomador_ibge')],
-            ['E-mail', val('tomador_email') || '—'],
+            ['Tomador', TOM ? (TOM.numero_cliente ? 'nº ' + TOM.numero_cliente + ' · ' : '') + TOM.nome + ' · ' + (TOM.doc_fmt || TOM.documento) : '—'],
+            ['Endereço', TOM && !(TOM.faltas || []).some(function (f) { return f.nivel === 'endereco'; }) ? enderecoTexto(TOM) + ' · IBGE ' + TOM.ibge : 'a nota sai sem endereço' + (TOM && TOM.ibge ? ' (município ' + TOM.ibge + ')' : '')],
+            ['E-mail', TOM && TOM.email ? TOM.email : '—'],
+            ['Consumidor final', texto('ibscbs_ind_final')],
             ['Serviço', val('descricao')],
             ['Códigos', (opt.dataset && opt.dataset.emissor === 'sp' ? 'Serviço SP ' + val('cod_servico_sp') : 'Trib. nacional ' + val('cod_trib_nac') + (val('cod_trib_mun') ? ' · municipal ' + val('cod_trib_mun') : '')) + (val('cod_nbs') ? ' · NBS ' + val('cod_nbs') : '')],
             ['ISS', texto('trib_issqn') + (form.querySelector('[name=iss_retido]').checked ? ' · retido pelo tomador' : '') + (val('aliquota_iss') ? ' · ' + val('aliquota_iss') + '%' : '')],

@@ -179,6 +179,8 @@ def nota_nova():
         if dj:
             pre.update({k: v for k, v in dj.items() if v not in (None, '') and k != 'empresa_id'})
             pre['de'] = int(de)
+            if not pre.get('tomador_cliente_id'):      # nota antiga, sem vínculo: a busca já nasce com o documento
+                pre['tomador_busca'] = pre.get('tomador_doc') or pre.get('tomador_nome') or ''
     titulo = None
     tid = request.args.get('titulo', '')
     if tid.isdigit():
@@ -190,12 +192,10 @@ def nota_nova():
         if titulo.get('competencia'):
             competencia = titulo['competencia']
             pre['competencia'] = competencia.isoformat()
-        tom = tomador_do_cliente(titulo['cliente_id']) if titulo.get('cliente_id') else None
-        if tom:
-            pre.update({f'tomador_{k}': v for k, v in tom.items() if k != 'numero_cliente'})
-        else:
-            pre['tomador_doc'] = titulo.get('contraparte_doc') or ''
-            pre['tomador_nome'] = titulo.get('contraparte_nome') or ''
+        if titulo.get('cliente_id'):
+            pre['tomador_cliente_id'] = titulo['cliente_id']
+        else:                                            # título sem cadastro ligado: a busca nasce preenchida
+            pre['tomador_busca'] = titulo.get('contraparte_doc') or titulo.get('contraparte_nome') or ''
     if not pre.get('descricao'):
         pre['descricao'] = NfseConfig.descricao_para(cfg, date.fromisoformat(str(pre['competencia'])[:10]))
     empresa = next((e for e in emps if e['cliente_id'] == emp_id), None)

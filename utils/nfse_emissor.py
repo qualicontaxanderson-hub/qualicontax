@@ -123,31 +123,29 @@ def pedido_do_form(f, empresa_id, cfg):
         comp = date.fromisoformat(g('competencia') or date.today().isoformat())
     except ValueError:
         raise PedidoInvalido('Competência inválida.')
-    doc = _dig(g('tomador_doc'))
-    if len(doc) not in (11, 14):
-        raise PedidoInvalido('CNPJ ou CPF do tomador inválido.')
-    nome = g('tomador_nome')
-    if not nome:
-        raise PedidoInvalido('Informe o nome do tomador.')
-    # Endereço do tomador: opcional, mas o governo só aceita o bloco inteiro (CEP, rua,
-    # número, bairro e município). O CEP é a chave: com CEP, o resto vira obrigatório;
-    # sem CEP, a nota sai sem endereço (e o IBS/CBS é calculado pelo local da prestação).
-    ibge = _dig(g('tomador_ibge'))
-    cep = _dig(g('tomador_cep'))
-    if cep:
-        if len(cep) != 8:
-            raise PedidoInvalido('CEP do tomador inválido.')
-        if not g('tomador_logradouro'):
-            raise PedidoInvalido('Endereço do tomador incompleto: falta a rua. '
-                                 'Preencha a rua (o CEP costuma trazer) ou apague o CEP para a nota sair sem endereço.')
-        if not g('tomador_bairro'):
-            raise PedidoInvalido('Endereço do tomador incompleto: falta o bairro. '
-                                 'Preencha o bairro ou apague o CEP para a nota sair sem endereço.')
-        if len(ibge) != 7:
-            raise PedidoInvalido('Endereço do tomador incompleto: falta o município (código IBGE de 7 dígitos). '
-                                 'Confira o CEP ou digite o código à mão.')
-    elif len(ibge) not in (0, 7):
-        raise PedidoInvalido('Município do tomador: o código IBGE tem 7 dígitos.')
+    # O tomador é SEMPRE alguém do cadastro (cliente ou avulso) — decisão de 02/11/2026.
+    # A tela não digita tomador: mostra a ficha; aqui o cadastro é relido na hora de
+    # emitir, para a nota sair com o que está lá (corrigiu no cadastro, corrigiu para todas).
+    cid = g('tomador_cliente_id')
+    if not str(cid).isdigit():
+        raise PedidoInvalido('Escolha quem recebe a nota no cadastro (cliente ou avulso).')
+    from models.nfse_emissao import tomador_do_cliente
+    t = tomador_do_cliente(int(cid))
+    if not t:
+        raise PedidoInvalido('O cadastro escolhido como tomador não existe mais.')
+    faltas = t.get('faltas') or []
+    obrig = [x['texto'] for x in faltas if x['nivel'] == 'obrigatorio']
+    if obrig:
+        raise PedidoInvalido('O cadastro do tomador está sem ' + ' e '.join(obrig)
+                             + '. Complete o cadastro e emita de novo.')
+    doc, nome = t['documento'], t['nome']
+    # Endereço: o governo só aceita o bloco inteiro (CEP, rua, número, bairro e município).
+    # Cadastro pela metade = a nota sai SEM endereço (o IBS/CBS sai pelo local da prestação);
+    # o município (IBGE) fica, porque sozinho não faz mal e diz a cidade do tomador.
+    endereco_ok = not any(x['nivel'] == 'endereco' for x in faltas)
+    ibge = t['ibge'] if len(t.get('ibge') or '') == 7 else ''
+    cep = t['cep'] if endereco_ok else ''
+    end = (lambda k: (t.get(k) or '')) if endereco_ok else (lambda k: '')
     valor = _dec(g('valor_servico'), 'Valor do serviço', Decimal('0.01'))
     descricao = g('descricao')
     if not descricao:
@@ -155,15 +153,14 @@ def pedido_do_form(f, empresa_id, cfg):
     aliq = g('aliquota_iss')
     aliq = _dec(aliq, 'Alíquota do ISS', Decimal('0')) if aliq not in ('', None) else None
     tid = g('fin_titulo_id')
-    cid = g('tomador_cliente_id')
     return Pedido(
         empresa_id=int(empresa_id), serie=serie, competencia=comp,
         tomador_doc=doc, tomador_nome=nome[:150], tomador_ibge=ibge, tomador_cep=cep,
-        tomador_logradouro=g('tomador_logradouro')[:255], tomador_numero=(g('tomador_numero') or 'S/N')[:60],
-        tomador_complemento=g('tomador_complemento')[:156], tomador_bairro=g('tomador_bairro')[:60],
-        tomador_uf=g('tomador_uf')[:2].upper(), tomador_email=g('tomador_email')[:80],
-        tomador_fone=_dig(g('tomador_fone')), tomador_im=_dig(g('tomador_im')),
-        tomador_cliente_id=int(cid) if str(cid).isdigit() else None,
+        tomador_logradouro=end('logradouro')[:255], tomador_numero=(end('numero') or 'S/N')[:60],
+        tomador_complemento=end('complemento')[:156], tomador_bairro=end('bairro')[:60],
+        tomador_uf=(t.get('uf') or '')[:2].upper(), tomador_email=(t.get('email') or '')[:80],
+        tomador_fone=_dig(t.get('fone') or ''), tomador_im=_dig(t.get('inscricao_municipal') or ''),
+        tomador_cliente_id=int(cid),
         descricao=descricao[:1000],
         cod_trib_nac=_dig(g('cod_trib_nac', cfg.get('cod_trib_nac'))),
         cod_trib_mun=_dig(g('cod_trib_mun', cfg.get('cod_trib_mun') or '')),
@@ -181,7 +178,8 @@ def pedido_do_form(f, empresa_id, cfg):
         ibscbs_cclasstrib=_dig(g('ibscbs_cclasstrib', cfg.get('ibscbs_cclasstrib') or '000001')).zfill(6),
         ibscbs_cind_op=_dig(g('ibscbs_cind_op', cfg.get('ibscbs_cind_op') or '100301')).zfill(6),
         ibscbs_ind_dest=int(g('ibscbs_ind_dest', cfg.get('ibscbs_ind_dest') or 0) or 0),
-        ibscbs_ind_final=int(g('ibscbs_ind_final', cfg.get('ibscbs_ind_final') or 0) or 0),
+        # consumidor final: o que a tela mandou; sem a tela, pessoa física é consumidor final
+        ibscbs_ind_final=int(g('ibscbs_ind_final', t.get('ind_final', 0)) or 0),
         fin_titulo_id=int(tid) if str(tid).isdigit() else None,
     )
 
