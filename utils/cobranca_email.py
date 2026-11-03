@@ -158,7 +158,7 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
         'kpis': kpis, 'itens': linhas, 'total': _brl(boleto['valor']),
         'linha_digitavel': boleto.get('linha_digitavel') or '', 'pix': boleto.get('pix_copia_cola') or '',
         'botoes': botoes, 'nota_txt': nota_txt, 'anexos_txt': anexos_txt,
-        'slogan': 'A EMPRESA é sua, a PARCERIA é NOSSA',
+        'slogan': 'a EMPRESA é sua, a PARCERIA é NOSSA',
         'rodape': f'Enviado por {empresa_nome}. Dúvida sobre esta cobrança? É só responder a este e-mail.',
     }
     html = _env().get_template('cobranca.html').render(d=d)

@@ -61,13 +61,16 @@ def montar(para, assunto, html, texto, remetente=None, anexos=None):
     msg.set_content(texto)
     msg.add_alternative(html, subtype='html')
     try:
+        if 'cid:logo' not in (html or ''):
+            raise OSError('sem logo no html')     # e-mail só texto: nada de logo solta como anexo
         with open(_LOGO, 'rb') as f:
             # inline, não attachment: imagem "anexada" a pouco texto pesa no
             # filtro de spam (Cloudmark deu 100 no aviso de 06/10).
             msg.get_payload()[1].add_related(f.read(), 'image', 'png', cid='<logo>',
                                              disposition='inline', filename='logo.png')
-    except OSError:
-        logger.warning('[email] logo não encontrada em %s; segue sem ela.', _LOGO)
+    except OSError as exc:
+        if 'sem logo' not in str(exc):
+            logger.warning('[email] logo não encontrada em %s; segue sem ela.', _LOGO)
     for nome, conteudo, mime in (anexos or []):
         tipo, _, sub = (mime or 'application/octet-stream').partition('/')
         msg.add_attachment(conteudo, maintype=tipo, subtype=sub or 'octet-stream', filename=nome)

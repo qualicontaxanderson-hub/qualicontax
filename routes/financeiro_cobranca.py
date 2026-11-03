@@ -198,7 +198,7 @@ def cobranca_saldo(conta_id):
 # ---------------------------------------------------------------------------
 # Boleto a partir de uma nota
 # ---------------------------------------------------------------------------
-SLOGAN = 'A EMPRESA é sua, a PARCERIA é NOSSA'
+SLOGAN = 'a EMPRESA é sua, a PARCERIA é NOSSA'
 
 
 def _itens_para_efi(itens, maximo=5):
