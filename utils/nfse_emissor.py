@@ -476,10 +476,13 @@ def cancelar_nota(nota_id: int, c_motivo, x_motivo, usuario_id=None) -> dict:
         caminho = _arquivar(r.xml_evento, n['empresa_id'], n['chave_acesso'] + '-cancelamento', agora)
     execute_query(
         """UPDATE nfse_emitidas SET situacao = 'cancelada', cancelada_em = %s, cancelamento_motivo = %s,
-                  cancelamento_protocolo = %s, raw_resposta = %s, erro_ultimo = NULL, atualizado_em = NOW()
+                  cancelamento_protocolo = %s, erro_ultimo = NULL, atualizado_em = NOW()
             WHERE id = %s""",
         (agora.replace(tzinfo=None), f"{EV.MOTIVOS_CANCELAMENTO.get(int(c_motivo), '')}: {x_motivo}"[:255],
-         (r.id_evento or '')[:80], bruto, nota_id))
+         (r.id_evento or '')[:80], nota_id))
+    # raw_resposta fica com a resposta da AUTORIZAÇÃO: é de lá que o PDF da nota de teste sai
+    # (em produção o XML está no Dropbox). O evento vai ao Dropbox em produção e ao log aqui.
+    logger.info('[nfse-cancelamento] nota %s: evento %s registrado (%s)', nota_id, r.id_evento, r.dh_proc)
 
     efeitos = {'titulo': None, 'boleto': None, 'xml_evento_path': caminho}
     if n.get('fin_titulo_id'):

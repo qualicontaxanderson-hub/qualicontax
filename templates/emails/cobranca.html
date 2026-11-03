@@ -1,0 +1,92 @@
+{#- E-mail de cobrança ao CLIENTE (utils/cobranca_email.py) — 03/11/2026.
+    Mesma moldura dos avisos (aviso.html): tabelas, estilo na própria tag, logo embutida (cid:logo).
+    Quem lê é o cliente do escritório: sem jargão, tudo o que ele precisa para pagar. -#}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f3f6f3;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f3f6f3;">
+<tr><td align="left" style="padding:12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="width:100%;max-width:720px;background:#ffffff;border:1px solid #e4e7ec;border-radius:10px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1f2933;font-size:14px;line-height:1.5;">
+
+  <tr><td style="padding:14px 20px 12px;border-bottom:4px solid #2f8f3e;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td valign="middle"><img src="cid:logo" width="97" height="52" alt="{{ d.empresa }}" style="display:block;border:0;height:52px;width:97px;"></td>
+      <td valign="middle" align="right" style="font-size:12.5px;color:#667085;">{{ d.data_txt }}</td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td style="padding:18px 20px 4px;">
+    <h1 style="margin:0 0 4px;font-size:18px;line-height:1.3;color:#1e4d2b;font-weight:700;">{{ d.titulo }}</h1>
+    <p style="margin:0 0 14px;color:#344054;font-size:13.5px;">{{ d.intro }}</p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;"><tr>
+    {%- for rot, val in d.kpis %}
+      <td style="padding:0 8px 8px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e4e7ec;border-radius:8px;"><tr>
+          <td style="padding:6px 12px;min-width:84px;">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#667085;white-space:nowrap;">{{ rot }}</div>
+            <div style="font-size:20px;font-weight:700;color:#1f2933;white-space:nowrap;">{{ val }}</div>
+          </td>
+        </tr></table>
+      </td>
+    {%- endfor %}
+    </tr></table>
+
+    <div style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#667085;font-weight:600;">O que está sendo cobrado</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;font-size:13px;">
+      {%- for i in d.itens %}
+      <tr>
+        <td valign="top" style="padding:6px 8px;{% if not loop.first %}border-top:1px solid #e4e7ec;{% endif %}">{{ i.nome }}{% if i.obs %} <span style="color:#667085;font-size:12px;">({{ i.obs }})</span>{% endif %}</td>
+        <td valign="top" align="right" style="padding:6px 8px;{% if not loop.first %}border-top:1px solid #e4e7ec;{% endif %}white-space:nowrap;width:1%;font-weight:600;">{{ i.valor }}</td>
+      </tr>
+      {%- endfor %}
+      <tr>
+        <td style="padding:8px 8px;border-top:2px solid #1e4d2b;font-weight:700;color:#1e4d2b;">Total do boleto</td>
+        <td align="right" style="padding:8px 8px;border-top:2px solid #1e4d2b;font-weight:700;color:#1e4d2b;white-space:nowrap;">{{ d.total }}</td>
+      </tr>
+    </table>
+
+    {%- if d.linha_digitavel %}
+    <div style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#667085;font-weight:600;">Linha digitável</div>
+    <p style="margin:0 0 14px;padding:10px 14px;background:#f6f8f6;border:1px solid #e4e7ec;border-radius:8px;font-family:Consolas,'Courier New',monospace;font-size:14px;letter-spacing:.02em;word-break:break-all;">{{ d.linha_digitavel }}</p>
+    {%- endif %}
+
+    {%- if d.pix %}
+    <div style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#667085;font-weight:600;">Pix copia e cola</div>
+    <p style="margin:0 0 14px;padding:10px 14px;background:#f6f8f6;border:1px solid #e4e7ec;border-radius:8px;font-family:Consolas,'Courier New',monospace;font-size:12px;word-break:break-all;">{{ d.pix }}</p>
+    {%- endif %}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 18px;"><tr>
+      {%- for rot, url in d.botoes %}
+      <td style="padding:0 8px 8px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:{{ '#1e4d2b' if loop.first else '#ffffff' }};border:1px solid #1e4d2b;border-radius:999px;">
+          <a href="{{ url }}" style="display:inline-block;padding:9px 18px;color:{{ '#ffffff' if loop.first else '#1e4d2b' }};text-decoration:none;font-weight:600;font-size:13px;">{{ rot }}</a>
+        </td></tr></table>
+      </td>
+      {%- endfor %}
+    </tr></table>
+
+    {%- if d.nota_txt %}
+    <p style="margin:0 0 14px;padding:10px 14px;background:#e3f4e5;border-radius:8px;color:#1e6b2c;font-size:13px;">{{ d.nota_txt }}</p>
+    {%- endif %}
+    {%- if d.anexos_txt %}
+    <p style="margin:0 0 14px;color:#667085;font-size:13px;">{{ d.anexos_txt }}</p>
+    {%- endif %}
+    {%- if d.slogan %}
+    <p style="margin:0 0 6px;color:#1e4d2b;font-weight:700;font-size:13px;">{{ d.slogan }}</p>
+    {%- endif %}
+  </td></tr>
+
+  <tr><td style="border-top:1px solid #e4e7ec;padding:12px 20px;font-size:11.5px;color:#667085;background:#f6f8f6;border-radius:0 0 10px 10px;">
+    {{ d.rodape }}
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

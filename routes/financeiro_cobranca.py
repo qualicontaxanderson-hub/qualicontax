@@ -373,12 +373,38 @@ def nota_boleto(nota_id):
     FinBoleto.gravar_resposta(boleto_id, data, custom_id)
     if titulo_id:
         execute_query('UPDATE fin_titulos SET boleto_id = %s WHERE id = %s', (boleto_id, titulo_id))
+    # Quem avisa o cliente é o nosso app (avisa_por = 'app'): o e-mail sai na hora, pela caixa da conta.
+    aviso_email = None
+    if (conta.get('avisa_por') or 'app') == 'app' and conta.get('email_remetente'):
+        from utils import cobranca_email
+        ok_mail, aviso_email = cobranca_email.enviar_boleto(boleto_id, usuario_id=current_user.id)
+        if not ok_mail:
+            aviso_email = 'O boleto saiu, mas o e-mail não: ' + aviso_email
     registrar('escrita.emitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
               depois={'nfse_id': nota_id, 'charge_id': data.get('charge_id'), 'valor': str(total),
                       'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
     flash(f"Boleto emitido na Efí (nº {data.get('charge_id')}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
           .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.', 'success')
+    if aviso_email:
+        flash(aviso_email, 'success' if aviso_email.startswith('E-mail enviado') else 'warning')
     return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
+
+
+@financeiro.route('/financeiro/boletos/<int:boleto_id>/enviar-email', methods=['POST'])
+@permission_required(PERM)
+def boleto_enviar_email(boleto_id):
+    """Manda (ou reenvia) o e-mail de cobrança do boleto: itens completos, PDFs da nota e do boleto."""
+    from utils import cobranca_email
+    b = FinBoleto.get(boleto_id)
+    if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    ok, msg = cobranca_email.enviar_boleto(boleto_id, para=request.form.get('para'), usuario_id=current_user.id)
+    flash(msg, 'success' if ok else 'danger')
+    registrar('escrita.enviou_email_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              depois={'ok': ok, 'para': (request.form.get('para') or b.get('pagador_email') or '')[:200], 'msg': msg[:200]})
+    volta = request.form.get('volta') or (url_for('financeiro.nota_detalhe', nota_id=b['nfse_id']) + '#boleto'
+                                          if b.get('nfse_id') else url_for('financeiro.cobranca', emp=b['empresa_id']))
+    return redirect(volta)
 
 
 @financeiro.route('/financeiro/boletos/<int:boleto_id>/cancelar', methods=['POST'])

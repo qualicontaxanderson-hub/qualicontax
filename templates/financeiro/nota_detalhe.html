@@ -217,6 +217,7 @@
             {% if boleto.linha_digitavel %}<div class="nd-span"><dt>Linha digitável</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Linha digitável" title="Clique para copiar">{{ boleto.linha_digitavel }}</code></dd></div>{% endif %}
             {% if boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}
             {% if boleto.erro %}<div class="nd-span"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
+            <div class="nd-span"><dt>E-mail ao cliente</dt><dd>{% if boleto.email_enviado_em %}enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}{% else %}ainda não enviado{% endif %}</dd></div>
         </dl>
         {% if boleto.itens_json %}
         <table class="nd-itens nd-itens-mini" style="margin-top:10px;">
@@ -232,6 +233,17 @@
             {% endif %}
             <a class="btn btn-outline" href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}"><i class="fas fa-list"></i> Todos os boletos</a>
         </div>
+        {% if boleto.situacao not in ('canceled', 'erro') %}
+        <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="nd-email-form">
+            <input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto">
+            <label class="nd-rotulo" for="nd_email_para">Enviar por e-mail para</label>
+            <div class="nd-email-linha">
+                <input type="text" id="nd_email_para" name="para" class="form-control" value="{{ boleto.pagador_email or n.tomador_email or '' }}" placeholder="um ou mais e-mails, separados por vírgula">
+                <button class="btn btn-outline" type="submit"><i class="fas fa-envelope"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }} e-mail</button>
+            </div>
+            <small class="nd-ajuda">Vai a lista completa do que foi cobrado, a linha digitável, o Pix e os PDFs do boleto e da nota, pela caixa de e-mail da conta de cobrança.</small>
+        </form>
+        {% endif %}
     {% elif not contas_cobranca %}
         <p class="fin-fraco">A empresa ainda não tem conta de cobrança. <a href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}">Cadastre a Efí em Financeiro → Cobrança</a> e volte aqui.</p>
     {% else %}
