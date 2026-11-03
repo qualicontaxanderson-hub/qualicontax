@@ -22,7 +22,7 @@ from decimal import Decimal
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from models.fin_cobranca import AMBIENTES, PROVEDORES, FinBoleto, FinCobrancaConta
+from models.fin_cobranca import AMBIENTES, AVISA_POR, PROVEDORES, FinBoleto, FinCobrancaConta
 from models.fin_empresa import FinEmpresa
 from models.nfse_emissao import MESES, NfseEmitida, preencher_modelo, tomador_do_cliente
 from routes.financeiro import _empresas_ctx, financeiro
@@ -60,7 +60,7 @@ def cobranca():
         b['situacao_txt'] = SITUACOES.get(b['situacao'], b['situacao'])
     return render_template(
         'financeiro/cobranca.html', contas=contas, boletos=boletos, resumo=FinBoleto.resumo(sel),
-        bancarias=bancarias, PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, SITUACOES=SITUACOES,
+        bancarias=bancarias, PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, AVISA_POR=AVISA_POR, SITUACOES=SITUACOES,
         fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, hoje=date.today(),
         filtros=dict(situacao=situacao, busca=busca, de=de, ate=ate, emp=','.join(map(str, sel))),
         webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True, _scheme='https').rsplit('X', 1)[0])
@@ -87,15 +87,18 @@ def cobranca_salvar():
         emp_id, dados, conta_id=cid, usuario_id=current_user.id,
         client_id=request.form.get('client_id') or None, client_secret=request.form.get('client_secret') or None,
         certificado=cert_bytes, certificado_nome=(arq.filename if cert_bytes else None),
-        certificado_senha=request.form.get('certificado_senha') or '')
+        certificado_senha=request.form.get('certificado_senha') or '',
+        email_senha=request.form.get('email_senha') or None)
     if erro:
         flash(erro, 'danger')
     else:
         registrar('escrita.salvou_conta_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=novo_id,
                   depois={'empresa_id': emp_id, 'apelido': dados['apelido'], 'provedor': dados['provedor'],
                           'ambiente': dados['ambiente'], 'trocou_segredo': bool(request.form.get('client_secret')),
-                          'trocou_certificado': bool(cert_bytes)})
-        flash(f'Conta de cobrança "{dados["apelido"].strip()}" salva. Clique em Testar para provar as credenciais.', 'success')
+                          'trocou_certificado': bool(cert_bytes), 'trocou_senha_email': bool(request.form.get('email_senha')),
+                          'email_remetente': dados.get('email_remetente'), 'avisa_por': dados.get('avisa_por')})
+        flash(f'Conta de cobrança "{dados["apelido"].strip()}" salva. Clique em Testar para provar as credenciais'
+              + (' e em Testar e-mail para provar a caixa de e-mail.' if dados.get('email_remetente') else '.'), 'success')
     return redirect(url_for('financeiro.cobranca', emp=emp_id))
 
 
@@ -118,6 +121,42 @@ def cobranca_testar(conta_id):
         flash(f'{c["apelido"]}: {resultado}', 'danger')
     FinCobrancaConta.registrar_teste(conta_id, resultado)
     registrar('escrita.testou_conta_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=conta_id,
+              depois={'resultado': resultado[:200]})
+    return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
+
+
+@financeiro.route('/financeiro/cobranca/<int:conta_id>/testar-email', methods=['POST'])
+@permission_required(PERM)
+def cobranca_testar_email(conta_id):
+    """Manda um e-mail de prova pela caixa de cobrança da conta para quem clicou."""
+    from utils import email_envio
+    c = FinCobrancaConta.get(conta_id)
+    if not c or c['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    para = (getattr(current_user, 'email', '') or '').strip()
+    if not para:
+        flash('O seu usuário não tem e-mail cadastrado para receber a prova.', 'warning')
+        return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
+    try:
+        rem = FinCobrancaConta.remetente_email(conta_id)
+        assunto = f'Teste do e-mail de cobrança — {c["apelido"]}'
+        texto = (f'Este é um teste da caixa {rem["user"]} feito pelo Qualicontax em '
+                 f'{date.today().strftime("%d/%m/%Y")}.\n'
+                 'Se chegou, os boletos e as notas desta conta sairão por ela.')
+        html = ('<p>Este é um <b>teste da caixa de e-mail de cobrança</b> da conta '
+                f'<b>{c["apelido"]}</b> ({rem["user"]}), feito pelo Qualicontax.</p>'
+                '<p>Se chegou, os boletos e as notas fiscais desta conta sairão por ela, '
+                'e as respostas dos clientes caem nessa caixa.</p>')
+        ok, erro = email_envio.enviar([para], assunto, html, texto, remetente=rem)
+        resultado = f'OK: enviado de {rem["user"]} para {para}' if ok else f'FALHOU: {erro}'
+    except ValueError as exc:
+        resultado = f'FALHOU: {exc}'
+    except Exception as exc:                      # chave mestra
+        logger.exception('[cobranca] teste de e-mail da conta %s', conta_id)
+        resultado = f'FALHOU: {exc}'
+    FinCobrancaConta.registrar_teste_email(conta_id, resultado)
+    flash(f'{c["apelido"]}: {resultado}', 'success' if resultado.startswith('OK') else 'danger')
+    registrar('escrita.testou_email_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=conta_id,
               depois={'resultado': resultado[:200]})
     return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
 
@@ -321,7 +360,7 @@ def nota_boleto(nota_id):
             itens_efi, pagador, vencimento, custom_id=custom_id,
             notification_url=url_for('cobranca_webhook.efi', segredo=conta['webhook_segredo'], _external=True, _scheme='https'),
             juros_mes=conta.get('juros_mes'), multa_pct=conta.get('multa_pct'), dias_baixa=conta.get('dias_baixa'),
-            mensagem=mensagem or None)
+            mensagem=mensagem or None, efi_avisa_por_email=(conta.get('avisa_por') == 'efi'))
     except (EfiErro, ValueError) as exc:
         FinBoleto.gravar_erro(boleto_id, str(exc))
         flash(f'A Efí não emitiu o boleto: {exc}', 'danger')

@@ -16,6 +16,11 @@ Variáveis (todas com padrão, menos a senha):
   SMTP_USER      app@qualicontax.com.br
   SMTP_PASSWORD  (obrigatória)
   SMTP_FROM_NOME Qualicontax
+
+REMETENTE POR CONTA (03/11/2026): o boleto e a nota saem da caixa do Financeiro
+(``fin_cobranca_contas.email_*``, senha cifrada no banco), não da app@. Por isso
+``montar``/``enviar`` aceitam ``remetente`` = {host, port, user, senha, nome};
+sem ele, vale a configuração do Railway (relatórios). ``anexos`` = [(nome, bytes, mime)].
 """
 import logging
 import os
@@ -44,10 +49,10 @@ def configurado() -> bool:
     return bool(_cfg()['senha'])
 
 
-def montar(para, assunto, html, texto):
-    """EmailMessage pronta (texto + HTML + logo embutida). Separado do envio
+def montar(para, assunto, html, texto, remetente=None, anexos=None):
+    """EmailMessage pronta (texto + HTML + logo embutida + anexos). Separado do envio
     para o teste conferir a mensagem sem abrir conexão."""
-    c = _cfg()
+    c = remetente or _cfg()
     msg = EmailMessage()
     msg['From'] = formataddr((c['nome'], c['user']))
     msg['To'] = ', '.join(para)
@@ -63,33 +68,41 @@ def montar(para, assunto, html, texto):
                                              disposition='inline', filename='logo.png')
     except OSError:
         logger.warning('[email] logo não encontrada em %s; segue sem ela.', _LOGO)
+    for nome, conteudo, mime in (anexos or []):
+        tipo, _, sub = (mime or 'application/octet-stream').partition('/')
+        msg.add_attachment(conteudo, maintype=tipo, subtype=sub or 'octet-stream', filename=nome)
     return msg
 
 
-def enviar(para, assunto, html, texto):
-    """Envia. Devolve ``(ok, erro)``. Nunca estoura."""
+def enviar(para, assunto, html, texto, remetente=None, anexos=None):
+    """Envia. Devolve ``(ok, erro)``. Nunca estoura.
+    ``remetente`` troca a caixa (e-mail de cobrança da conta); sem ele vale a do Railway."""
     para = [p for p in dict.fromkeys((e or '').strip().lower() for e in para) if p]
     if not para:
         return False, 'nenhum destinatário'
-    c = _cfg()
-    if not c['senha']:
-        return False, 'SMTP_PASSWORD não configurada no Railway'
+    c = remetente or _cfg()
+    if not c.get('user'):
+        return False, 'remetente sem endereço de e-mail'
+    if not c.get('senha'):
+        return False, ('a senha da caixa de e-mail não foi preenchida na conta de cobrança' if remetente
+                       else 'SMTP_PASSWORD não configurada no Railway')
     try:
-        msg = montar(para, assunto, html, texto)
+        msg = montar(para, assunto, html, texto, remetente=c, anexos=anexos)
         ctx = ssl.create_default_context()
-        if c['port'] == 465:
-            with smtplib.SMTP_SSL(c['host'], c['port'], context=ctx, timeout=30) as s:
+        if int(c['port']) == 465:
+            with smtplib.SMTP_SSL(c['host'], int(c['port']), context=ctx, timeout=30) as s:
                 s.login(c['user'], c['senha'])
                 s.send_message(msg)
         else:
-            with smtplib.SMTP(c['host'], c['port'], timeout=30) as s:
+            with smtplib.SMTP(c['host'], int(c['port']), timeout=30) as s:
                 s.starttls(context=ctx)
                 s.login(c['user'], c['senha'])
                 s.send_message(msg)
         logger.info('[email] enviado "%s" para %d destinatário(s).', assunto, len(para))
         return True, None
     except smtplib.SMTPAuthenticationError:
-        return False, 'o Titan recusou usuário/senha (confira SMTP_USER e SMTP_PASSWORD)'
+        return False, (f"o servidor de e-mail recusou a senha de {c['user']}" if remetente
+                       else 'o Titan recusou usuário/senha (confira SMTP_USER e SMTP_PASSWORD)')
     except Exception as exc:                       # rede, porta bloqueada, timeout…
         logger.exception('[email] falha ao enviar "%s".', assunto)
         return False, f'{type(exc).__name__}: {str(exc)[:300]}'

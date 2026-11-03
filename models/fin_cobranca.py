@@ -17,12 +17,16 @@ logger = logging.getLogger(__name__)
 
 PROVEDORES = {'efi': 'Efí', 'bradesco': 'Bradesco (em breve)'}
 AMBIENTES = {'homologacao': 'Teste (homologação)', 'producao': 'Produção — o boleto vale'}
+AVISA_POR = {'app': 'Nosso app, pela caixa de e-mail abaixo', 'efi': 'A Efí, pelo e-mail dela',
+             'ninguem': 'Ninguém (só o PDF na tela)'}
+SEGREDOS = ('client_id_cif', 'client_secret_cif', 'certificado_cif', 'certificado_senha_cif', 'email_senha_cif')
 
 
 class FinCobrancaConta:
 
     CAMPOS_TEXTO = ('apelido', 'provedor', 'ambiente', 'fin_conta_id', 'chave_pix', 'juros_mes', 'multa_pct',
-                    'dias_baixa', 'dia_vencimento', 'mensagem_padrao')
+                    'dias_baixa', 'dia_vencimento', 'mensagem_padrao',
+                    'email_remetente', 'email_nome', 'email_host', 'email_porta', 'avisa_por')
 
     @staticmethod
     def listar(empresa_ids=None, apenas_ativas=False):
@@ -37,7 +41,8 @@ class FinCobrancaConta:
             f"""SELECT c.*, fc.banco_nome, fc.conta AS conta_bancaria, cl.nome_razao_social, cl.numero_cliente,
                        (c.client_id_cif IS NOT NULL) AS tem_client_id,
                        (c.client_secret_cif IS NOT NULL) AS tem_secret,
-                       (c.certificado_cif IS NOT NULL) AS tem_certificado
+                       (c.certificado_cif IS NOT NULL) AS tem_certificado,
+                       (c.email_senha_cif IS NOT NULL) AS tem_email_senha
                   FROM fin_cobranca_contas c
                   LEFT JOIN fin_contas fc ON fc.id = c.fin_conta_id
                   JOIN clientes cl ON cl.id = c.empresa_id
@@ -50,7 +55,7 @@ class FinCobrancaConta:
                     l['client_id_mascara'] = seg.mascarar(seg.decifrar_texto(l['client_id_cif']))
                 except Exception:
                     l['client_id_mascara'] = 'ilegível (chave mudou?)'
-            for k in ('client_id_cif', 'client_secret_cif', 'certificado_cif', 'certificado_senha_cif'):
+            for k in SEGREDOS:
                 l.pop(k, None)
         return linhas
 
@@ -58,13 +63,13 @@ class FinCobrancaConta:
     def get(conta_id, com_segredos=False):
         c = execute_query('SELECT * FROM fin_cobranca_contas WHERE id = %s', (conta_id,), fetch=True, fetch_one=True)
         if c and not com_segredos:
-            for k in ('client_id_cif', 'client_secret_cif', 'certificado_cif', 'certificado_senha_cif'):
+            for k in SEGREDOS:
                 c.pop(k, None)
         return c
 
     @staticmethod
     def salvar(empresa_id, dados, conta_id=None, usuario_id=None, client_id=None, client_secret=None,
-               certificado=None, certificado_nome=None, certificado_senha=None):
+               certificado=None, certificado_nome=None, certificado_senha=None, email_senha=None):
         """Cria ou altera. Segredos só são trocados quando vêm preenchidos (campo vazio = mantém).
         Devolve (id, erro)."""
         apelido = (dados.get('apelido') or '').strip()[:60]
@@ -85,10 +90,20 @@ class FinCobrancaConta:
         dia = int(dia) if str(dia or '').isdigit() and 1 <= int(dia) <= 31 else None
         dias_baixa = dados.get('dias_baixa')
         dias_baixa = max(0, min(120, int(dias_baixa))) if str(dias_baixa or '').isdigit() else 60
+        email_rem = (dados.get('email_remetente') or '').strip().lower()[:120] or None
+        if email_rem and ('@' not in email_rem or ' ' in email_rem):
+            return None, 'O e-mail de cobrança não parece um endereço (ex.: financeiro@qualicontax.com.br).'
+        porta = dados.get('email_porta')
+        porta = int(porta) if str(porta or '').isdigit() and 1 <= int(porta) <= 65535 else 465
+        avisa = dados.get('avisa_por') if dados.get('avisa_por') in AVISA_POR else 'app'
         base = (apelido, provedor, ambiente, fin_conta, (dados.get('chave_pix') or '').strip()[:80] or None,
                 dec('juros_mes', '0.00'), dec('multa_pct', '0.00'), dias_baixa, dia,
-                (dados.get('mensagem_padrao') or '').strip()[:400] or None)
+                (dados.get('mensagem_padrao') or '').strip()[:400] or None,
+                email_rem, (dados.get('email_nome') or '').strip()[:60] or None,
+                (dados.get('email_host') or '').strip()[:80] or 'smtp.titan.email', porta, avisa)
         sets_seg, vals_seg = [], []
+        if email_senha:
+            sets_seg.append('email_senha_cif = %s'); vals_seg.append(seg.cifrar(email_senha))
         if client_id:
             sets_seg.append('client_id_cif = %s'); vals_seg.append(seg.cifrar(client_id.strip()))
         if client_secret:
@@ -100,14 +115,16 @@ class FinCobrancaConta:
         if conta_id:
             sql = ('UPDATE fin_cobranca_contas SET apelido = %s, provedor = %s, ambiente = %s, fin_conta_id = %s, '
                    'chave_pix = %s, juros_mes = %s, multa_pct = %s, dias_baixa = %s, dia_vencimento = %s, '
-                   'mensagem_padrao = %s' + ''.join(', ' + s for s in sets_seg)
+                   'mensagem_padrao = %s, email_remetente = %s, email_nome = %s, email_host = %s, '
+                   'email_porta = %s, avisa_por = %s' + ''.join(', ' + s for s in sets_seg)
                    + ', atualizado_em = NOW(), alterado_por = %s WHERE id = %s AND empresa_id = %s')
             r = execute_query(sql, base + tuple(vals_seg) + (usuario_id, conta_id, empresa_id))
             return (conta_id, None) if r is not None else (None, 'Não foi possível salvar.')
         if not client_id or not client_secret:
             return None, 'Client ID e Client Secret são obrigatórios na primeira vez.'
         cols = ['empresa_id', 'apelido', 'provedor', 'ambiente', 'fin_conta_id', 'chave_pix', 'juros_mes',
-                'multa_pct', 'dias_baixa', 'dia_vencimento', 'mensagem_padrao', 'webhook_segredo', 'alterado_por']
+                'multa_pct', 'dias_baixa', 'dia_vencimento', 'mensagem_padrao', 'email_remetente', 'email_nome',
+                'email_host', 'email_porta', 'avisa_por', 'webhook_segredo', 'alterado_por']
         vals = [empresa_id, *base, seg.novo_segredo_webhook(), usuario_id]
         for s, v in zip(sets_seg, vals_seg):
             cols.append(s.split(' = ')[0]); vals.append(v)
@@ -124,6 +141,26 @@ class FinCobrancaConta:
     def registrar_teste(conta_id, resultado):
         execute_query('UPDATE fin_cobranca_contas SET testado_em = NOW(), teste_resultado = %s WHERE id = %s',
                       ((resultado or '')[:255], conta_id))
+
+    @staticmethod
+    def registrar_teste_email(conta_id, resultado):
+        execute_query('UPDATE fin_cobranca_contas SET email_testado_em = NOW(), email_teste_resultado = %s '
+                      'WHERE id = %s', ((resultado or '')[:255], conta_id))
+
+    @staticmethod
+    def remetente_email(conta_id):
+        """A caixa de e-mail de cobrança da conta, pronta para ``email_envio.enviar(remetente=...)``.
+        Decifra a senha só aqui, só na hora de usar. Levanta ValueError se a conta não tem e-mail."""
+        c = FinCobrancaConta.get(conta_id, com_segredos=True)
+        if not c:
+            raise ValueError('Conta de cobrança não encontrada.')
+        if not c.get('email_remetente'):
+            raise ValueError('A conta de cobrança não tem e-mail de cobrança preenchido.')
+        if not c.get('email_senha_cif'):
+            raise ValueError(f"A senha da caixa {c['email_remetente']} não foi preenchida.")
+        return {'host': c.get('email_host') or 'smtp.titan.email', 'port': int(c.get('email_porta') or 465),
+                'user': c['email_remetente'], 'senha': seg.decifrar_texto(c['email_senha_cif']),
+                'nome': c.get('email_nome') or 'Financeiro'}
 
     @staticmethod
     def cliente_efi(conta_id):
