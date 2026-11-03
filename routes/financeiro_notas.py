@@ -398,6 +398,40 @@ def nota_xml(nota_id):
                     headers={'Content-Disposition': f'attachment; filename="{nome}"'})
 
 
+@financeiro.route('/financeiro/notas/<int:nota_id>/cancelar', methods=['POST'])
+@permission_required(PERM)
+def nota_cancelar(nota_id):
+    """Cancela a NFS-e no governo (evento e101101) e desfaz título e boleto."""
+    n = NfseEmitida.get(nota_id)
+    if not n or n['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    volta = url_for('financeiro.nota_detalhe', nota_id=nota_id)
+    try:
+        linha = nfse_emissor.cancelar_nota(nota_id, request.form.get('c_motivo'), request.form.get('x_motivo'),
+                                           usuario_id=current_user.id)
+    except ValueError as exc:
+        flash(str(exc), 'warning')
+        return redirect(volta)
+    except nfse_emissor.CancelamentoRecusado as exc:
+        flash(f'O governo não cancelou a nota: {exc}', 'danger')
+        return redirect(volta)
+    except Exception as exc:
+        logger.exception('[nfse] cancelamento da nota %s', nota_id)
+        flash(f'Falha ao cancelar: {exc}', 'danger')
+        return redirect(volta)
+    ef = linha.get('_efeitos') or {}
+    registrar('escrita.cancelou_nfse', 'financeiro', tabela='nfse_emitidas', registro_id=nota_id,
+              depois={'chave': n.get('chave_acesso'), 'protocolo': linha.get('cancelamento_protocolo'),
+                      'motivo': linha.get('cancelamento_motivo'), 'ambiente': n.get('ambiente'), **ef})
+    partes = ['Nota cancelada no governo']
+    if ef.get('titulo'):
+        partes.append(f"título {ef['titulo']}")
+    if ef.get('boleto'):
+        partes.append(f"boleto {ef['boleto']}")
+    flash('; '.join(partes) + '.', 'success')
+    return redirect(volta)
+
+
 @financeiro.route('/financeiro/notas/<int:nota_id>/pdf')
 @permission_required(PERM)
 def nota_pdf(nota_id):

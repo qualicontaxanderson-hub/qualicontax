@@ -862,6 +862,12 @@ table.fin-tab tbody tr:last-child td { border-bottom:none; }
 .nd-tit-parcial { background:#fef3c7; color:#92400e; }
 .nd-tit-pago { background:#dcfce7; color:#15803d; }
 .nd-tit-cancelado { background:#f1f5f9; color:#64748b; }
+.nd-cancelada { background:#fef2f2 !important; border-color:#fca5a5 !important; color:#7f1d1d !important; overflow-wrap:anywhere; }
+.nd-btn-perigo { color:#b91c1c !important; border-color:#fca5a5 !important; }
+.nd-btn-perigo:hover { background:#fef2f2 !important; }
+.nd-card-perigo { border-color:#fca5a5 !important; }
+.nd-card-perigo > header { background:#fef2f2 !important; border-bottom-color:#fecaca !important; color:#7f1d1d !important; }
+.nd-card-perigo > header b { background:#b91c1c !important; }
 @media (max-width:1280px) {
   .nd-hero, .nd-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
 }

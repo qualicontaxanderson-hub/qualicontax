@@ -157,7 +157,8 @@ CREATE TABLE IF NOT EXISTS nfse_emitidas (
     COMMENT 'preenchido na nota VELHA quando a nova e autorizada (sentido oposto)',
   cancelada_em     DATETIME NULL,
   cancelamento_motivo VARCHAR(255) NULL,
-  cancelamento_protocolo VARCHAR(60) NULL,
+  cancelamento_protocolo VARCHAR(80) NULL
+    COMMENT 'Id do infEvento: EVT + chave(50) + tipo(6) + nSeq(3) = 62',
 
   -- documentos e resposta bruta
   dps_json       JSON NULL COMMENT 'tudo que a tela/contrato declarou — fonte do montador',

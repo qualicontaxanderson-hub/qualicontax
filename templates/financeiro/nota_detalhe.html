@@ -25,6 +25,9 @@
             <a class="btn btn-primary" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}"><i class="fas fa-file-pdf"></i> PDF da nota</a>
             {% endif %}
             <a class="btn btn-outline" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}"><i class="fas fa-file-code"></i> XML</a>
+            {% if n.situacao == 'autorizada' and n.emissor != 'sp' %}
+            <a class="btn btn-outline nd-btn-perigo" href="#cancelar"><i class="fas fa-ban"></i> Cancelar nota</a>
+            {% endif %}
         {% elif n.situacao in ('rejeitada', 'erro') %}
             <a class="btn btn-primary" href="{{ url_for('financeiro.nota_nova', emp=n.empresa_id, de=n.id) }}"><i class="fas fa-redo"></i> Corrigir e emitir de novo</a>
         {% endif %}
@@ -33,6 +36,9 @@
 
 {% if teste %}
 <div class="nf-teste on"><i class="fas fa-flask"></i> Nota emitida no <strong>ambiente de teste</strong> do governo: sai autorizada, mas não vale como documento fiscal.</div>
+{% endif %}
+{% if n.situacao == 'cancelada' %}
+<div class="nf-teste on nd-cancelada"><i class="fas fa-ban"></i> <strong>Nota cancelada</strong>{% if n.cancelada_em %} em {{ n.cancelada_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}{% if n.cancelamento_motivo %} · {{ n.cancelamento_motivo }}{% endif %}{% if n.cancelamento_protocolo %} · evento {{ n.cancelamento_protocolo }}{% endif %}</div>
 {% endif %}
 
 {% if n.situacao in ('rejeitada', 'erro') %}
@@ -273,6 +279,31 @@
         <div class="nd-acoes">
             <a class="btn btn-outline" href="{{ url_for('financeiro.titulos', status='todos', busca='#' ~ titulo.id) }}"><i class="fas fa-external-link-alt"></i> Abrir no Financeiro</a>
         </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- ===== CANCELAR ===== -->
+{% if n.situacao == 'autorizada' and n.emissor != 'sp' %}
+<section class="nf-card nd-card-perigo" id="cancelar">
+    <header><b><i class="fas fa-ban"></i></b><span>Cancelar nota</span><small>o cancelamento vai ao governo e não tem volta</small></header>
+    <div class="nf-card-body">
+        <form method="POST" action="{{ url_for('financeiro.nota_cancelar', nota_id=n.id) }}" onsubmit="return confirm('Cancelar a nota {{ n.serie }}-{{ n.numero_dps }} no governo? Não dá para desfazer.');">
+            <div class="form-group">
+                <label>Motivo *</label>
+                <select name="c_motivo" class="form-control" required>
+                    <option value="1">Erro na emissão</option>
+                    <option value="2">Serviço não prestado</option>
+                    <option value="9">Outros</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Explicação * <small class="fin-fraco">(de 15 a 255 caracteres, vai no evento)</small></label>
+                <textarea name="x_motivo" class="form-control" rows="3" minlength="15" maxlength="255" required placeholder="Ex.: Nota emitida com valor errado; será substituída pela nota correta."></textarea>
+            </div>
+            <button class="btn btn-outline nd-btn-perigo" style="width:100%;"><i class="fas fa-ban"></i> Cancelar nota no governo</button>
+            <span class="nf-ajuda" style="display:block; margin-top:8px;">Junto: o título a receber é cancelado (se nada foi baixado) e o boleto em aberto é cancelado na Efí.</span>
+        </form>
     </div>
 </section>
 {% endif %}

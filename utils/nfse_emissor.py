@@ -421,6 +421,88 @@ def _arquivar(xml_nfse, empresa_id, chave, quando):
     return None
 
 
+# --- cancelamento (emissor nacional) -------------------------------------------
+
+class CancelamentoRecusado(Exception):
+    """O Sefin recusou o pedido (ou a nota não pode ser cancelada por aqui)."""
+
+
+def cancelar_nota(nota_id: int, c_motivo, x_motivo, usuario_id=None) -> dict:
+    """Cancela uma NFS-e AUTORIZADA do emissor nacional: evento e101101 assinado com o certificado
+    da empresa, nota marcada como cancelada, título a receber cancelado (se nada foi baixado),
+    boleto em aberto cancelado na Efí, XML do evento guardado ao lado da nota no Dropbox.
+
+    Levanta ``ValueError`` (motivo inválido), ``CancelamentoRecusado`` (o governo disse não) ou
+    ``ADNError``/``SemCertificado`` (rede, certificado). Devolve a linha final da nota.
+    """
+    from utils.integrations.nfse_adn import client as adn, eventos as EV
+    n = execute_query('SELECT * FROM nfse_emitidas WHERE id = %s', (nota_id,), fetch=True, fetch_one=True)
+    if not n:
+        raise CancelamentoRecusado('Nota não encontrada.')
+    if n['situacao'] != 'autorizada':
+        raise CancelamentoRecusado('Só nota autorizada pode ser cancelada.')
+    if (n.get('emissor') or 'nacional') != 'nacional':
+        raise CancelamentoRecusado('O cancelamento pela prefeitura de São Paulo ainda não está no sistema.')
+    if not n.get('chave_acesso'):
+        raise CancelamentoRecusado('A nota não tem chave de acesso.')
+    x_motivo = EV.validar_motivo(c_motivo, x_motivo)
+
+    cert = adn.resolver_certificado(n['empresa_id'])
+    sess = adn.abrir_sessao(cert)
+    x509, chave_priv, _ = sess.material
+    amb = int(n['ambiente'] or 1)
+    agora = datetime.now(FUSO).replace(microsecond=0)
+    xml, pid = EV.xml_pedido_cancelamento(n['chave_acesso'], cert.cnpj, amb, int(c_motivo), x_motivo, agora)
+    assinado = EV.assinar_pedido(xml, pid, chave_priv, x509)
+
+    try:
+        r = EV.registrar(sess, n['chave_acesso'], assinado, amb)
+    except Exception:
+        # Rede caiu depois do envio? Pergunta ao Sefin antes de dizer que falhou.
+        try:
+            r = EV.consultar(sess, n['chave_acesso'], amb)
+        except Exception:
+            raise
+        if not r.ok:
+            raise
+    bruto = json.dumps(r.bruto, ensure_ascii=False)
+    if not r.ok:
+        execute_query("UPDATE nfse_emitidas SET erro_ultimo = %s, atualizado_em = NOW() WHERE id = %s",
+                      ('cancelamento: ' + _texto_erros(r.erros)[:1900], nota_id))
+        raise CancelamentoRecusado(_texto_erros(r.erros))
+
+    caminho = None
+    if amb == 1:
+        caminho = _arquivar(r.xml_evento, n['empresa_id'], n['chave_acesso'] + '-cancelamento', agora)
+    execute_query(
+        """UPDATE nfse_emitidas SET situacao = 'cancelada', cancelada_em = %s, cancelamento_motivo = %s,
+                  cancelamento_protocolo = %s, raw_resposta = %s, erro_ultimo = NULL, atualizado_em = NOW()
+            WHERE id = %s""",
+        (agora.replace(tzinfo=None), f"{EV.MOTIVOS_CANCELAMENTO.get(int(c_motivo), '')}: {x_motivo}"[:255],
+         (r.id_evento or '')[:80], bruto, nota_id))
+
+    efeitos = {'titulo': None, 'boleto': None, 'xml_evento_path': caminho}
+    if n.get('fin_titulo_id'):
+        from models.fin_titulo import FinTitulo
+        efeitos['titulo'] = 'cancelado' if FinTitulo.cancelar(n['fin_titulo_id']) else 'mantido (já tem baixa)'
+    try:
+        from models.fin_cobranca import FinBoleto, FinCobrancaConta
+        b = FinBoleto.da_nota(nota_id)
+        if b and b['situacao'] in ('new', 'waiting', 'unpaid'):
+            efi, _c = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
+            efi.cancelar(b['charge_id'])
+            FinBoleto.atualizar_situacao(b['id'], 'canceled')
+            efeitos['boleto'] = 'cancelado na Efí'
+        elif b:
+            efeitos['boleto'] = f"mantido ({b['situacao']})"
+    except Exception as exc:
+        logger.warning('[nfse-cancelamento] boleto da nota %s não cancelado: %s', nota_id, exc)
+        efeitos['boleto'] = f'NÃO cancelado: {exc}'
+    linha = execute_query('SELECT * FROM nfse_emitidas WHERE id = %s', (nota_id,), fetch=True, fetch_one=True)
+    linha['_efeitos'] = efeitos
+    return linha
+
+
 # --- prefeitura de São Paulo ---------------------------------------------------
 def _enviar_sp(emitida_id, numero, p: Pedido, cfg, agora):
     from utils.integrations.nfse_sp import client as sp, rps as R
