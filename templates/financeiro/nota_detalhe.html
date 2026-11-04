@@ -218,6 +218,13 @@
             {% if boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}
             {% if boleto.erro %}<div class="nd-span"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
             <div class="nd-span"><dt>E-mail ao cliente</dt><dd>{% if boleto.email_enviado_em %}enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}{% else %}ainda não enviado{% endif %}</dd></div>
+            {% if boleto.email_enviado_em %}
+            <div class="nd-span"><dt>O cliente abriu?</dt><dd class="nd-carimbos">
+                <span class="nd-carimbo {{ 'nd-carimbo-sim' if boleto.abriu_boleto_em else 'nd-carimbo-nao' }}" title="Clicou em 'Abrir o boleto' no e-mail"><i class="fas fa-{{ 'check' if boleto.abriu_boleto_em else 'minus' }}"></i> boleto{% if boleto.abriu_boleto_em %} {{ boleto.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
+                {% if boleto.nfse_id %}<span class="nd-carimbo {{ 'nd-carimbo-sim' if boleto.abriu_nota_em else 'nd-carimbo-nao' }}" title="Clicou em 'Ver a nota fiscal' no e-mail"><i class="fas fa-{{ 'check' if boleto.abriu_nota_em else 'minus' }}"></i> nota{% if boleto.abriu_nota_em %} {{ boleto.abriu_nota_em.strftime('%d/%m %H:%M') }}{% endif %}</span>{% endif %}
+                <span class="nd-carimbo {{ 'nd-carimbo-talvez' if boleto.email_visto_em else 'nd-carimbo-nao' }}" title="A imagem do e-mail carregou — é indício de leitura, não prova (alguns programas de e-mail carregam sozinhos ou bloqueiam)"><i class="fas fa-{{ 'eye' if boleto.email_visto_em else 'minus' }}"></i> e-mail visto{% if boleto.email_visto_em %} {{ boleto.email_visto_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
+            </dd></div>
+            {% endif %}
         </dl>
         {% if boleto.itens_json %}
         <table class="nd-itens nd-itens-mini" style="margin-top:10px;">

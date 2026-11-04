@@ -59,6 +59,7 @@ BLUEPRINTS_PUBLICOS = {
     'robo_saidas',   # API de máquina do Q-Robô (chave do posto)
     'qrobo',         # Portal do Instalador — login e gate próprios
     'cobranca_webhook',  # aviso de pagamento da Efí (segredo aleatório na URL; os dados vêm de consulta nossa)
+    'cobranca_publica',  # links do e-mail de cobrança ao cliente (código aleatório do boleto na URL)
 }
 ENDPOINTS_PUBLICOS = {'static', 'health'}
 

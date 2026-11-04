@@ -36,6 +36,9 @@ PERM = 'financeiro.cobranca'
 CATEGORIA_HONORARIOS = 1          # fin_categorias: Receita de honorários → Honorários contábeis
 
 cobranca_webhook = Blueprint('cobranca_webhook', __name__)
+# Links do e-mail de cobranca (04/11/2026): sem login, o codigo do boleto e a chave. Publico
+# em utils/acesso.py. Anota a hora em que o cliente abriu e segue para a Efi / entrega a nota.
+cobranca_publica = Blueprint('cobranca_publica', __name__)
 
 
 def _emp_ok(emp_raw):
@@ -476,6 +479,43 @@ def _baixar(b, valor_pago, pago_em):
 # ---------------------------------------------------------------------------
 # Webhook da Efí (público; o segredo da URL identifica a conta)
 # ---------------------------------------------------------------------------
+@cobranca_publica.route('/c/<token>/boleto')
+def abrir_boleto(token):
+    """Cliente clicou em "Abrir o boleto": carimba e manda para a pagina da Efi (ou o PDF)."""
+    from utils import cobranca_email
+    b = cobranca_email.registrar_abertura(token, 'boleto')
+    if not b or not (b.get('link') or b.get('pdf_url')):
+        abort(404)
+    return redirect(b.get('link') or b['pdf_url'])
+
+
+@cobranca_publica.route('/c/<token>/nota')
+def abrir_nota(token):
+    """Cliente clicou em "Ver a nota fiscal": carimba e entrega o PDF da nota DESTE boleto."""
+    from flask import Response
+    from utils import cobranca_email
+    b = cobranca_email.registrar_abertura(token, 'nota')
+    if not b or not b.get('nfse_id'):
+        abort(404)
+    nota = NfseEmitida.get(b['nfse_id'])
+    pdf = cobranca_email.pdf_da_nota(nota)
+    if not pdf:
+        abort(404)
+    nome = f"NFS-e {nota.get('numero_nfse')}.pdf"
+    return Response(pdf, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'inline; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+
+
+@cobranca_publica.route('/c/<token>/pixel.png')
+def pixel(token):
+    """Imagem de 1 px do e-mail: carimba "visto" (indicio) e devolve um GIF transparente."""
+    from flask import Response
+    from utils import cobranca_email
+    cobranca_email.registrar_abertura(token, 'pixel')
+    gif = b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+    return Response(gif, mimetype='image/gif', headers={'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'})
+
+
 @cobranca_webhook.route('/webhooks/efi/<segredo>', methods=['POST', 'GET'])
 def efi(segredo):
     if request.method == 'GET':                      # a Efí valida a URL com um GET ao cadastrar

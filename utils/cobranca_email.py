@@ -18,12 +18,16 @@ devolve ``(ok, mensagem)`` para a tela.
 import json
 import logging
 import os
+import secrets
 from datetime import date, datetime
 from decimal import Decimal
 
 from utils.db_helper import execute_query
 
 logger = logging.getLogger(__name__)
+
+# Endereco publico do app para os links do e-mail (o mesmo dos avisos diarios).
+APP_URL = os.getenv('APP_URL', 'https://app.qualicontax.com.br').rstrip('/')
 
 MESES = ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto',
          'setembro', 'outubro', 'novembro', 'dezembro')
@@ -79,6 +83,47 @@ def _primeiro_nome(nome):
     from utils.texto import nome_proprio
     partes = nome_proprio(nome or '').split()
     return partes[0] if partes else ''
+
+
+def garantir_token(boleto):
+    """O codigo dos links do e-mail (``email_token``): nasce no primeiro envio e nao muda, para o
+    e-mail antigo continuar valendo. Devolve o codigo (ou None se a coluna ainda nao existe)."""
+    if boleto.get('email_token'):
+        return boleto['email_token']
+    tok = secrets.token_urlsafe(24)                 # 32 caracteres, 192 bits
+    r = execute_query('UPDATE fin_boletos SET email_token = %s WHERE id = %s AND email_token IS NULL',
+                      (tok, boleto['id']))
+    if r is None:
+        return None
+    linha = execute_query('SELECT email_token FROM fin_boletos WHERE id = %s', (boleto['id'],),
+                          fetch=True, fetch_one=True) or {}
+    boleto['email_token'] = linha.get('email_token')
+    return boleto['email_token']
+
+
+CARIMBOS = {'pixel': 'email_visto_em', 'boleto': 'abriu_boleto_em', 'nota': 'abriu_nota_em'}
+
+
+def registrar_abertura(token, qual):
+    """Anota a PRIMEIRA vez que o cliente abriu (pixel, boleto ou nota). Devolve o boleto ou None."""
+    col = CARIMBOS.get(qual)
+    if not col or not token or len(token) > 48:
+        return None
+    b = execute_query('SELECT * FROM fin_boletos WHERE email_token = %s', (token,), fetch=True, fetch_one=True)
+    if not b:
+        return None
+    if not b.get(col):
+        execute_query(f'UPDATE fin_boletos SET {col} = NOW() WHERE id = %s AND {col} IS NULL', (b['id'],))
+    return b
+
+
+def links_do_email(boleto):
+    """(url_boleto, url_nota, url_pixel) pelos nossos links, ou (link da Efi, None, None) sem codigo."""
+    tok = boleto.get('email_token')
+    if not tok:
+        return boleto.get('link') or boleto.get('pdf_url'), None, None
+    base = f'{APP_URL}/c/{tok}'
+    return f'{base}/boleto', f'{base}/nota', f'{base}/pixel.png'
 
 
 def _nome_arquivo(*partes):
@@ -140,9 +185,14 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
         linhas = [{'nome': 'Honorários e serviços', 'valor': _brl(boleto['valor']), 'obs': ''}]
     # Um botão só (Anderson, 04/11/2026): a página da Efí e o PDF mostram o mesmo
     # boleto, e o PDF já vai em anexo. Sem página, o link do PDF serve de botão.
+    # Os botoes passam por links NOSSOS (04/11/2026): anotam a hora em que o cliente abriu e
+    # seguem para a Efi / entregam o PDF da nota. Sem codigo (coluna nova ausente) vai o link da Efi.
+    url_boleto, url_nota, url_pixel = links_do_email(boleto)
     botoes = []
-    if boleto.get('link') or boleto.get('pdf_url'):
-        botoes.append(('Abrir o boleto', boleto.get('link') or boleto['pdf_url']))
+    if url_boleto and (boleto.get('link') or boleto.get('pdf_url')):
+        botoes.append(('Abrir o boleto', url_boleto))
+    if tem_nota and url_nota:
+        botoes.append(('Ver a nota fiscal', url_nota))
     nota_txt = ''
     if tem_nota:
         nota_txt = (f"Nota fiscal de serviço nº {nota['numero_nfse']} emitida em {_data(nota.get('dh_emissao') or nota.get('data_processamento'))}"
@@ -167,7 +217,7 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
         'empresa': empresa_nome, 'data_txt': date.today().strftime('%d/%m/%Y'), 'titulo': titulo, 'intro': intro,
         'kpis': kpis, 'itens': linhas, 'total': _brl(boleto['valor']),
         'linha_digitavel': boleto.get('linha_digitavel') or '', 'pix': boleto.get('pix_copia_cola') or '',
-        'botoes': botoes, 'nota_txt': nota_txt, 'anexos_txt': anexos_txt,
+        'botoes': botoes, 'nota_txt': nota_txt, 'anexos_txt': anexos_txt, 'pixel': url_pixel,
         'slogan': 'a EMPRESA é sua, a PARCERIA é NOSSA',
         'rodape': f'Enviado por {empresa_nome}. Dúvida sobre esta cobrança? É só responder a este e-mail.',
     }
@@ -207,6 +257,7 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
     except ValueError as exc:
         return False, f'{exc} Preencha o bloco "E-mail de cobrança" na conta de cobrança.'
     nota = NfseEmitida.get(b['nfse_id']) if b.get('nfse_id') else None
+    garantir_token(b)
     assunto, html, texto, anexos, faltas = montar(b, nota, _empresa(b['empresa_id']))
     ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, anexos=anexos)
     if not ok:
