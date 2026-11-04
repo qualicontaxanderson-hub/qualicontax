@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
 <title>{{ d.titulo }}</title>
-<style>@media only screen and (max-width:520px){ .pad{padding-left:18px!important;padding-right:18px!important;} .faixa{padding-left:12px!important;padding-right:12px!important;} }</style>
+<style>@media only screen and (max-width:520px){ .pad{padding-left:18px!important;padding-right:18px!important;} .faixa{padding-left:12px!important;padding-right:12px!important;} {# no celular 'Baixar PDF' cai na mesma tela de 'Abrir' (o iPhone nao baixa PDF, abre e salva pelo Compartilhar): some e o Abrir ocupa a largura toda #}.baixar{display:none!important;max-height:0!important;overflow:hidden!important;} .abrir{width:100%!important;padding-right:0!important;} }</style>
 </head>
 <body style="margin:0;padding:0;background:#eef3ee;">
 {# Modelo de 04/11/2026 (pedido do Anderson: nome da empresa do cliente em destaque, texto
@@ -94,7 +94,7 @@
         <div style="font-size:16px;font-weight:800;color:#1f2933;margin:0 0 10px;">{{ titulo }}</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr>
           {%- for rot, url in grupo %}
-          <td width="50%" style="padding:0 {{ '8px' if loop.first else '0' }} 8px 0;">
+          <td width="50%" class="{{ 'abrir' if loop.first else 'baixar' }}" style="padding:0 {{ '8px' if loop.first else '0' }} 8px 0;">
             <a href="{{ url }}" style="display:block;text-align:center;background:{{ '#2f8f3e' if loop.first else '#ffffff' }};color:{{ '#ffffff' if loop.first else '#1e4d2b' }};text-decoration:none;font-weight:700;font-size:15px;padding:13px 8px;border-radius:10px;white-space:nowrap;">{{ rot }}</a>
           </td>
           {%- endfor %}

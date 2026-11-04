@@ -489,6 +489,14 @@ def abrir_boleto(token):
     return redirect(b.get('link') or b['pdf_url'])
 
 
+def _disposicao_download():
+    """'attachment' baixa no computador; no iPhone/iPad o Safari ignora e abre uma tela sem o nome do
+    arquivo (Anderson, 04/11/2026: 'tela inutil'). La vai 'inline': abre o visualizador e o botao
+    Compartilhar salva com o nome certo (Qualicontax - NFS-e N - Mes-Ano.pdf)."""
+    ua = request.headers.get('User-Agent', '')
+    return 'inline' if ('iPhone' in ua or 'iPad' in ua or 'iPod' in ua) else 'attachment'
+
+
 @cobranca_publica.route('/c/<token>/boleto/pdf')
 def baixar_boleto(token):
     """Cliente clicou em "Baixar o boleto": carimba e entrega o PDF da Efi como download."""
@@ -502,7 +510,7 @@ def baixar_boleto(token):
         return redirect(b['pdf_url'])          # a Efi nao respondeu: manda direto para o PDF dela
     nome, _ = cobranca_email.nomes_dos_pdfs(b, None, cobranca_email._empresa(b['empresa_id']))
     return Response(pdf, mimetype='application/pdf',
-                    headers={'Content-Disposition': f'attachment; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+                    headers={'Content-Disposition': f'{_disposicao_download()}; filename="{nome}"', 'Cache-Control': 'private, no-store'})
 
 
 def _pdf_da_nota_do_token(token, disposicao):
@@ -529,7 +537,7 @@ def abrir_nota(token):
 @cobranca_publica.route('/c/<token>/nota/pdf')
 def baixar_nota(token):
     """Cliente clicou em "Baixar a nota": carimba e entrega o PDF como download."""
-    return _pdf_da_nota_do_token(token, 'attachment')
+    return _pdf_da_nota_do_token(token, _disposicao_download())
 
 
 @cobranca_publica.route('/c/<token>/pixel.png')
