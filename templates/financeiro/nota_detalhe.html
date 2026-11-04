@@ -248,7 +248,7 @@
                 <input type="text" id="nd_email_para" name="para" class="form-control" value="{{ boleto.pagador_email or n.tomador_email or '' }}" placeholder="um ou mais e-mails, separados por vírgula">
                 <button class="btn btn-outline" type="submit"><i class="fas fa-envelope"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }} e-mail</button>
             </div>
-            <small class="nd-ajuda">Vai a lista completa do que foi cobrado, a linha digitável, o Pix e os PDFs do boleto e da nota, pela caixa de e-mail da conta de cobrança.</small>
+            <small class="nd-ajuda">Vai a lista completa do que foi cobrado, a linha digitável, o Pix e os botões para abrir ou baixar o boleto e a nota (sem anexo: assim dá para saber o que o cliente abriu), pela caixa de e-mail da conta de cobrança.</small>
         </form>
         {% endif %}
     {% elif not contas_cobranca %}

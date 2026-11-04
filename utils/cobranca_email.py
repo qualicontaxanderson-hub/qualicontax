@@ -118,12 +118,22 @@ def registrar_abertura(token, qual):
 
 
 def links_do_email(boleto):
-    """(url_boleto, url_nota, url_pixel) pelos nossos links, ou (link da Efi, None, None) sem codigo."""
+    """Links do e-mail pelo nosso app (carimbam a abertura): boleto, boleto_pdf, nota, nota_pdf, pixel.
+    Sem codigo (coluna nova ausente) so o link da Efi, direto."""
     tok = boleto.get('email_token')
     if not tok:
-        return boleto.get('link') or boleto.get('pdf_url'), None, None
+        return {'boleto': boleto.get('link') or boleto.get('pdf_url'), 'boleto_pdf': None,
+                'nota': None, 'nota_pdf': None, 'pixel': None}
     base = f'{APP_URL}/c/{tok}'
-    return f'{base}/boleto', f'{base}/nota', f'{base}/pixel.png'
+    return {'boleto': f'{base}/boleto', 'boleto_pdf': f'{base}/boleto/pdf',
+            'nota': f'{base}/nota', 'nota_pdf': f'{base}/nota/pdf', 'pixel': f'{base}/pixel.png'}
+
+
+def nomes_dos_pdfs(boleto, nota, empresa_nome):
+    """(nome do PDF do boleto, nome do PDF da nota) — os mesmos do anexo e do download."""
+    nb = _nome_arquivo(empresa_nome, f'Boleto venc {_data(boleto["vencimento"]).replace("/", "-")}')
+    nn = _nome_arquivo(empresa_nome, f"NFS-e {nota['numero_nfse']}", _competencia_txt(nota).replace('/', '-')) if nota else None
+    return nb, nn
 
 
 def _nome_arquivo(*partes):
@@ -166,16 +176,22 @@ def pdf_da_nota(nota):
         return None
 
 
-def montar(boleto, nota, empresa_nome, com_anexos=True):
-    """(assunto, html, texto, anexos, faltas) — ``faltas`` lista o que não foi anexado."""
+def montar(boleto, nota, empresa_nome, com_anexos=False):
+    """(assunto, html, texto, anexos, faltas) — ``faltas`` lista o que não foi anexado.
+
+    Sem anexo por padrão (Anderson, 04/11/2026): o boleto e a nota vão pelos botões, que passam
+    pelo nosso link e carimbam a hora em que o cliente abriu. Anexo abriria por fora, sem carimbo.
+    ``com_anexos=True`` continua existindo para quem precisar do PDF junto.
+    """
     itens = _itens(boleto)
     comp = _competencia_txt(nota) if nota else ''
     tem_nota = bool(nota and nota.get('numero_nfse') and nota.get('situacao') == 'autorizada')
     titulo = f'Boleto e nota fiscal — {comp}' if (tem_nota and comp) else (f'Boleto — {comp}' if comp else 'Boleto')
     primeiro = _primeiro_nome(boleto.get('pagador_nome'))
     intro = (f'Olá{", " + primeiro if primeiro else ""}. Segue a cobrança de {empresa_nome}'
-             + (f' referente a {comp}' if comp else '') + '. O boleto'
-             + (' e a nota fiscal vão' if tem_nota else ' vai') + ' em anexo; abaixo está tudo o que foi cobrado.')
+             + (f' referente a {comp}' if comp else '') + '. Abaixo está tudo o que foi cobrado; '
+             + ('os botões abrem ou baixam o boleto e a nota fiscal.' if (tem_nota and com_anexos is False) else
+                ('o boleto' + (' e a nota fiscal vão' if tem_nota else ' vai') + ' em anexo.' if com_anexos else 'o botão abre o boleto.')))
     kpis = [('Valor', _brl(boleto['valor'])), ('Vencimento', _data(boleto['vencimento']))]
     if tem_nota:
         kpis.append(('NFS-e nº', str(nota['numero_nfse'])))
@@ -183,16 +199,20 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
                'obs': '' if i.get('emite_nota', True) else 'não entra na nota fiscal'} for i in itens]
     if not linhas:
         linhas = [{'nome': 'Honorários e serviços', 'valor': _brl(boleto['valor']), 'obs': ''}]
-    # Um botão só (Anderson, 04/11/2026): a página da Efí e o PDF mostram o mesmo
-    # boleto, e o PDF já vai em anexo. Sem página, o link do PDF serve de botão.
-    # Os botoes passam por links NOSSOS (04/11/2026): anotam a hora em que o cliente abriu e
-    # seguem para a Efi / entregam o PDF da nota. Sem codigo (coluna nova ausente) vai o link da Efi.
-    url_boleto, url_nota, url_pixel = links_do_email(boleto)
-    botoes = []
-    if url_boleto and (boleto.get('link') or boleto.get('pdf_url')):
-        botoes.append(('Abrir o boleto', url_boleto))
-    if tem_nota and url_nota:
-        botoes.append(('Ver a nota fiscal', url_nota))
+    # Botoes em dois grupos (Anderson, 04/11/2026: 'tem cliente que gosta so de abrir e outro so de
+    # baixar'): Boleto -> Abrir (pagina da Efi) / Baixar PDF; Nota fiscal -> Ver / Baixar PDF. Todos
+    # passam por links NOSSOS, que carimbam a hora em que o cliente abriu. Sem codigo, so a Efi.
+    urls = links_do_email(boleto)
+    url_pixel = urls['pixel']
+    grupos, botoes = [], []
+    if urls['boleto'] and (boleto.get('link') or boleto.get('pdf_url')):
+        g = [('Abrir o boleto', urls['boleto'])]
+        if urls['boleto_pdf'] and boleto.get('pdf_url'):
+            g.append(('Baixar o boleto (PDF)', urls['boleto_pdf']))
+        grupos.append(('Boleto', g))
+    if tem_nota and urls['nota']:
+        grupos.append(('Nota fiscal', [('Ver a nota fiscal', urls['nota']), ('Baixar a nota (PDF)', urls['nota_pdf'])]))
+    botoes = [b for _, g in grupos for b in g]
     nota_txt = ''
     if tem_nota:
         nota_txt = (f"Nota fiscal de serviço nº {nota['numero_nfse']} emitida em {_data(nota.get('dh_emissao') or nota.get('data_processamento'))}"
@@ -213,11 +233,13 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
     anexos_txt = ''
     if anexos:
         anexos_txt = 'Em anexo: ' + ' e '.join('o PDF do boleto' if 'Boleto' in a[0] else 'o PDF da nota fiscal' for a in anexos) + '.'
+    elif botoes:
+        anexos_txt = ''
     d = {
         'empresa': empresa_nome, 'data_txt': date.today().strftime('%d/%m/%Y'), 'titulo': titulo, 'intro': intro,
         'kpis': kpis, 'itens': linhas, 'total': _brl(boleto['valor']),
         'linha_digitavel': boleto.get('linha_digitavel') or '', 'pix': boleto.get('pix_copia_cola') or '',
-        'botoes': botoes, 'nota_txt': nota_txt, 'anexos_txt': anexos_txt, 'pixel': url_pixel,
+        'botoes': botoes, 'grupos': grupos, 'nota_txt': nota_txt, 'anexos_txt': anexos_txt, 'pixel': url_pixel,
         'slogan': 'a EMPRESA é sua, a PARCERIA é NOSSA',
         'rodape': f'Enviado por {empresa_nome}. Dúvida sobre esta cobrança? É só responder a este e-mail.',
     }

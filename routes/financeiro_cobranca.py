@@ -489,9 +489,23 @@ def abrir_boleto(token):
     return redirect(b.get('link') or b['pdf_url'])
 
 
-@cobranca_publica.route('/c/<token>/nota')
-def abrir_nota(token):
-    """Cliente clicou em "Ver a nota fiscal": carimba e entrega o PDF da nota DESTE boleto."""
+@cobranca_publica.route('/c/<token>/boleto/pdf')
+def baixar_boleto(token):
+    """Cliente clicou em "Baixar o boleto": carimba e entrega o PDF da Efi como download."""
+    from flask import Response
+    from utils import cobranca_email
+    b = cobranca_email.registrar_abertura(token, 'boleto')
+    if not b or not b.get('pdf_url'):
+        abort(404)
+    pdf = cobranca_email.pdf_do_boleto(b)
+    if not pdf:
+        return redirect(b['pdf_url'])          # a Efi nao respondeu: manda direto para o PDF dela
+    nome, _ = cobranca_email.nomes_dos_pdfs(b, None, cobranca_email._empresa(b['empresa_id']))
+    return Response(pdf, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'attachment; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+
+
+def _pdf_da_nota_do_token(token, disposicao):
     from flask import Response
     from utils import cobranca_email
     b = cobranca_email.registrar_abertura(token, 'nota')
@@ -501,9 +515,21 @@ def abrir_nota(token):
     pdf = cobranca_email.pdf_da_nota(nota)
     if not pdf:
         abort(404)
-    nome = f"NFS-e {nota.get('numero_nfse')}.pdf"
+    _, nome = cobranca_email.nomes_dos_pdfs(b, nota, cobranca_email._empresa(b['empresa_id']))
     return Response(pdf, mimetype='application/pdf',
-                    headers={'Content-Disposition': f'inline; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+                    headers={'Content-Disposition': f'{disposicao}; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+
+
+@cobranca_publica.route('/c/<token>/nota')
+def abrir_nota(token):
+    """Cliente clicou em "Ver a nota fiscal": carimba e abre o PDF da nota DESTE boleto no navegador."""
+    return _pdf_da_nota_do_token(token, 'inline')
+
+
+@cobranca_publica.route('/c/<token>/nota/pdf')
+def baixar_nota(token):
+    """Cliente clicou em "Baixar a nota": carimba e entrega o PDF como download."""
+    return _pdf_da_nota_do_token(token, 'attachment')
 
 
 @cobranca_publica.route('/c/<token>/pixel.png')
