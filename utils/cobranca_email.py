@@ -79,6 +79,32 @@ def _empresa(empresa_id):
     return nome_proprio(e.get('nome_fantasia') or e.get('nome_razao_social') or 'o escritório')
 
 
+def _competencia_do_titulo(boleto):
+    """Sem nota, a competência vem do título do Financeiro que gerou o boleto."""
+    if not boleto.get('titulo_id'):
+        return ''
+    t = execute_query('SELECT competencia FROM fin_titulos WHERE id = %s', (boleto['titulo_id'],),
+                      fetch=True, fetch_one=True) or {}
+    return _competencia_txt(t)
+
+
+def _telefone_empresa(empresa_id):
+    """Telefone (ou celular) da empresa que cobra, do cadastro dela — vai no rodapé do e-mail."""
+    e = execute_query('SELECT telefone, celular FROM clientes WHERE id = %s', (empresa_id,),
+                      fetch=True, fetch_one=True) or {}
+    return (e.get('telefone') or e.get('celular') or '').strip()
+
+
+def _doc_fmt(doc):
+    """CPF 000.000.000-00 / CNPJ 00.000.000/0000-00; outra coisa volta como veio."""
+    d = ''.join(ch for ch in str(doc or '') if ch.isdigit())
+    if len(d) == 11:
+        return f'CPF {d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+    if len(d) == 14:
+        return f'CNPJ {d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+    return str(doc or '')
+
+
 def _primeiro_nome(nome):
     from utils.texto import nome_proprio
     partes = nome_proprio(nome or '').split()
@@ -176,7 +202,7 @@ def pdf_da_nota(nota):
         return None
 
 
-def montar(boleto, nota, empresa_nome, com_anexos=False):
+def montar(boleto, nota, empresa_nome, com_anexos=False, telefone=''):
     """(assunto, html, texto, anexos, faltas) — ``faltas`` lista o que não foi anexado.
 
     Sem anexo por padrão (Anderson, 04/11/2026): o boleto e a nota vão pelos botões, que passam
@@ -184,17 +210,29 @@ def montar(boleto, nota, empresa_nome, com_anexos=False):
     ``com_anexos=True`` continua existindo para quem precisar do PDF junto.
     """
     itens = _itens(boleto)
-    comp = _competencia_txt(nota) if nota else ''
+    comp = _competencia_txt(nota) if nota else _competencia_do_titulo(boleto)
     tem_nota = bool(nota and nota.get('numero_nfse') and nota.get('situacao') == 'autorizada')
-    titulo = f'Boleto e nota fiscal — {comp}' if (tem_nota and comp) else (f'Boleto — {comp}' if comp else 'Boleto')
-    primeiro = _primeiro_nome(boleto.get('pagador_nome'))
-    intro = (f'Olá{", " + primeiro if primeiro else ""}. Segue a cobrança de {empresa_nome}'
-             + (f' referente a {comp}' if comp else '') + '. Abaixo está tudo o que foi cobrado; '
-             + ('os botões abrem ou baixam o boleto e a nota fiscal.' if (tem_nota and com_anexos is False) else
-                ('o boleto' + (' e a nota fiscal vão' if tem_nota else ' vai') + ' em anexo.' if com_anexos else 'o botão abre o boleto.')))
+    # A EMPRESA do cliente em destaque (Anderson, 04/11/2026): o mesmo e-mail pode receber a
+    # cobrança de dez empresas; o nome vai no assunto e na faixa verde.
+    from utils.texto import nome_proprio
+    cliente_nome = nome_proprio((nota or {}).get('tomador_nome') or boleto.get('pagador_nome') or '') or 'Cliente'
+    cliente_doc = _doc_fmt((nota or {}).get('tomador_doc') or boleto.get('pagador_doc'))
+    titulo = 'Boleto e nota fiscal' if tem_nota else 'Boleto'
+    titulo_assunto = f'{titulo} — {comp}' if comp else titulo
+    eyebrow = f'Cobrança · {comp}' if comp else 'Cobrança'
+    # Saudação com nome só quando o pagador é pessoa (CPF): empresa viraria 'Olá, Ar!'.
+    doc_digitos = ''.join(ch for ch in str(boleto.get('pagador_doc') or '') if ch.isdigit())
+    primeiro = _primeiro_nome(boleto.get('pagador_nome')) if len(doc_digitos) == 11 else ''
+    saudacao = f'Olá, {primeiro}!' if primeiro else 'Olá!'
+    quem = 'à empresa acima' if cliente_doc.startswith('CNPJ') else 'ao cliente acima'
+    intro = (f'Aqui está a cobrança de {empresa_nome} referente {quem}'
+             + (f', competência {comp}' if comp else '') + '. Abaixo, tudo o que foi cobrado'
+             + (' e os botões para abrir ou baixar o boleto' + (' e a nota fiscal' if tem_nota else '') + '.'
+                if com_anexos is False else
+                '; o boleto' + (' e a nota fiscal vão' if tem_nota else ' vai') + ' em anexo.'))
+    # So dois numeros grandes (valor e vencimento): tres nao cabem no celular. O numero da
+    # NFS-e ja esta na caixa verde da nota.
     kpis = [('Valor', _brl(boleto['valor'])), ('Vencimento', _data(boleto['vencimento']))]
-    if tem_nota:
-        kpis.append(('NFS-e nº', str(nota['numero_nfse'])))
     linhas = [{'nome': i.get('nome') or '', 'valor': _brl(i.get('valor')),
                'obs': '' if i.get('emite_nota', True) else 'não entra na nota fiscal'} for i in itens]
     if not linhas:
@@ -208,10 +246,10 @@ def montar(boleto, nota, empresa_nome, com_anexos=False):
     if urls['boleto'] and (boleto.get('link') or boleto.get('pdf_url')):
         g = [('Abrir o boleto', urls['boleto'])]
         if urls['boleto_pdf'] and boleto.get('pdf_url'):
-            g.append(('Baixar o boleto (PDF)', urls['boleto_pdf']))
+            g.append(('Baixar PDF', urls['boleto_pdf']))
         grupos.append(('Boleto', g))
     if tem_nota and urls['nota']:
-        grupos.append(('Nota fiscal', [('Ver a nota fiscal', urls['nota']), ('Baixar a nota (PDF)', urls['nota_pdf'])]))
+        grupos.append(('Nota fiscal', [('Ver a nota', urls['nota']), ('Baixar PDF', urls['nota_pdf'])]))
     botoes = [b for _, g in grupos for b in g]
     nota_txt = ''
     if tem_nota:
@@ -237,14 +275,17 @@ def montar(boleto, nota, empresa_nome, com_anexos=False):
         anexos_txt = ''
     d = {
         'empresa': empresa_nome, 'data_txt': date.today().strftime('%d/%m/%Y'), 'titulo': titulo, 'intro': intro,
+        'eyebrow': eyebrow, 'saudacao': saudacao, 'cliente_nome': cliente_nome, 'cliente_doc': cliente_doc,
+        'cliente_rotulo': 'Empresa' if cliente_doc.startswith('CNPJ') else 'Cliente',
         'kpis': kpis, 'itens': linhas, 'total': _brl(boleto['valor']),
         'linha_digitavel': boleto.get('linha_digitavel') or '', 'pix': boleto.get('pix_copia_cola') or '',
         'botoes': botoes, 'grupos': grupos, 'nota_txt': nota_txt, 'anexos_txt': anexos_txt, 'pixel': url_pixel,
         'slogan': 'a EMPRESA é sua, a PARCERIA é NOSSA',
-        'rodape': f'Enviado por {empresa_nome}. Dúvida sobre esta cobrança? É só responder a este e-mail.',
+        'rodape': (f'Enviado por {empresa_nome}. Em caso de dúvida, responda este e-mail'
+                   + (f' ou entre em contato pelo telefone {telefone}' if telefone else '') + '.'),
     }
     html = _env().get_template('cobranca.html').render(d=d)
-    t = [titulo, '', intro, '', f'Valor: {d["total"]}   Vencimento: {_data(boleto["vencimento"])}', '', 'O QUE ESTÁ SENDO COBRADO']
+    t = [titulo_assunto, cliente_nome + ((' · ' + cliente_doc) if cliente_doc else ''), '', saudacao, intro, '', f'Valor: {d["total"]}   Vencimento: {_data(boleto["vencimento"])}', '', 'DETALHAMENTO DA COBRANÇA']
     t += [f'  {l["nome"]}{(" (" + l["obs"] + ")") if l["obs"] else ""}: {l["valor"]}' for l in linhas]
     t += [f'  Total do boleto: {d["total"]}', '']
     if d['linha_digitavel']:
@@ -255,7 +296,7 @@ def montar(boleto, nota, empresa_nome, com_anexos=False):
     if nota_txt:
         t += ['', nota_txt]
     t += ['', d['slogan'], '', d['rodape']]
-    assunto = f"{titulo} · {empresa_nome}"
+    assunto = f"{titulo_assunto} · {cliente_nome}"
     return assunto, html, '\n'.join(t), anexos, faltas
 
 
@@ -280,7 +321,8 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
         return False, f'{exc} Preencha o bloco "E-mail de cobrança" na conta de cobrança.'
     nota = NfseEmitida.get(b['nfse_id']) if b.get('nfse_id') else None
     garantir_token(b)
-    assunto, html, texto, anexos, faltas = montar(b, nota, _empresa(b['empresa_id']))
+    assunto, html, texto, anexos, faltas = montar(b, nota, _empresa(b['empresa_id']),
+                                                  telefone=_telefone_empresa(b['empresa_id']))
     ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, anexos=anexos)
     if not ok:
         return False, f'O e-mail não saiu: {erro}'
