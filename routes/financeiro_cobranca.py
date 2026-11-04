@@ -481,12 +481,24 @@ def _baixar(b, valor_pago, pago_em):
 # ---------------------------------------------------------------------------
 @cobranca_publica.route('/c/<token>/boleto')
 def abrir_boleto(token):
-    """Cliente clicou em "Abrir o boleto": carimba e manda para a pagina da Efi (ou o PDF)."""
+    """Cliente clicou em "Abrir o boleto": carimba e mostra o PDF do boleto no navegador (nosso endereco,
+    nome certo). A pagina "Boleto Digital" da Efi so entra como socorro, quando ela nao entrega o PDF
+    (Anderson, 04/11/2026: "abrir boleto esta abrindo assim e nao quero assim nao, quero o nosso boleto")."""
+    return _pdf_do_boleto_do_token(token, 'inline')
+
+
+def _pdf_do_boleto_do_token(token, disposicao):
+    from flask import Response
     from utils import cobranca_email
     b = cobranca_email.registrar_abertura(token, 'boleto')
-    if not b or not (b.get('link') or b.get('pdf_url')):
+    if not b or not (b.get('pdf_url') or b.get('link')):
         abort(404)
-    return redirect(b.get('link') or b['pdf_url'])
+    pdf = cobranca_email.pdf_do_boleto(b) if b.get('pdf_url') else None
+    if not pdf:
+        return redirect(b.get('pdf_url') or b['link'])   # a Efi nao respondeu: manda direto para o dela
+    nome, _ = cobranca_email.nomes_dos_pdfs(b, None, cobranca_email._empresa(b['empresa_id']))
+    return Response(pdf, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'{disposicao}; filename="{nome}"', 'Cache-Control': 'private, no-store'})
 
 
 def _disposicao_download():
@@ -499,18 +511,8 @@ def _disposicao_download():
 
 @cobranca_publica.route('/c/<token>/boleto/pdf')
 def baixar_boleto(token):
-    """Cliente clicou em "Baixar o boleto": carimba e entrega o PDF da Efi como download."""
-    from flask import Response
-    from utils import cobranca_email
-    b = cobranca_email.registrar_abertura(token, 'boleto')
-    if not b or not b.get('pdf_url'):
-        abort(404)
-    pdf = cobranca_email.pdf_do_boleto(b)
-    if not pdf:
-        return redirect(b['pdf_url'])          # a Efi nao respondeu: manda direto para o PDF dela
-    nome, _ = cobranca_email.nomes_dos_pdfs(b, None, cobranca_email._empresa(b['empresa_id']))
-    return Response(pdf, mimetype='application/pdf',
-                    headers={'Content-Disposition': f'{_disposicao_download()}; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+    """Cliente clicou em "Baixar o boleto": carimba e entrega o PDF como download (inline no iPhone)."""
+    return _pdf_do_boleto_do_token(token, _disposicao_download())
 
 
 def _pdf_da_nota_do_token(token, disposicao):
