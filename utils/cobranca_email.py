@@ -81,6 +81,16 @@ def _primeiro_nome(nome):
     return partes[0] if partes else ''
 
 
+def _nome_arquivo(*partes):
+    """Nome de anexo que o cliente entende ao salvar: "Qualicontax - Boleto venc 09-11-2026.pdf".
+    Tira o que Windows/Mac/Gmail recusam em nome de arquivo e encurta."""
+    import re
+    txt = ' - '.join(str(x).strip() for x in partes if x)
+    txt = re.sub(r'[\/:*?"<>|]+', ' ', txt)
+    txt = re.sub(r'\s+', ' ', txt).strip(' .')
+    return txt[:120] + '.pdf'
+
+
 def pdf_do_boleto(boleto, timeout=30):
     """O PDF do boleto na Efí (``pdf_url`` é público). Devolve bytes ou None."""
     url = boleto.get('pdf_url')
@@ -128,11 +138,11 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
                'obs': '' if i.get('emite_nota', True) else 'não entra na nota fiscal'} for i in itens]
     if not linhas:
         linhas = [{'nome': 'Honorários e serviços', 'valor': _brl(boleto['valor']), 'obs': ''}]
+    # Um botão só (Anderson, 04/11/2026): a página da Efí e o PDF mostram o mesmo
+    # boleto, e o PDF já vai em anexo. Sem página, o link do PDF serve de botão.
     botoes = []
-    if boleto.get('link'):
-        botoes.append(('Abrir o boleto', boleto['link']))
-    if boleto.get('pdf_url'):
-        botoes.append(('PDF do boleto', boleto['pdf_url']))
+    if boleto.get('link') or boleto.get('pdf_url'):
+        botoes.append(('Abrir o boleto', boleto.get('link') or boleto['pdf_url']))
     nota_txt = ''
     if tem_nota:
         nota_txt = (f"Nota fiscal de serviço nº {nota['numero_nfse']} emitida em {_data(nota.get('dh_emissao') or nota.get('data_processamento'))}"
@@ -141,18 +151,18 @@ def montar(boleto, nota, empresa_nome, com_anexos=True):
     if com_anexos:
         pb = pdf_do_boleto(boleto)
         if pb:
-            anexos.append((f"Boleto_{boleto.get('charge_id') or boleto['id']}.pdf", pb, 'application/pdf'))
+            anexos.append((_nome_arquivo(empresa_nome, f'Boleto venc {_data(boleto["vencimento"]).replace("/", "-")}'), pb, 'application/pdf'))
         else:
             faltas.append('PDF do boleto')
         if tem_nota:
             pn = pdf_da_nota(nota)
             if pn:
-                anexos.append((f"NFSe_{nota['numero_nfse']}_{(nota.get('serie') or '')}-{nota.get('numero_dps') or ''}.pdf", pn, 'application/pdf'))
+                anexos.append((_nome_arquivo(empresa_nome, f"NFS-e {nota['numero_nfse']}", comp.replace('/', '-')), pn, 'application/pdf'))
             else:
                 faltas.append('PDF da nota fiscal')
     anexos_txt = ''
     if anexos:
-        anexos_txt = 'Em anexo: ' + ' e '.join('o PDF do boleto' if a[0].startswith('Boleto') else 'o PDF da nota fiscal' for a in anexos) + '.'
+        anexos_txt = 'Em anexo: ' + ' e '.join('o PDF do boleto' if 'Boleto' in a[0] else 'o PDF da nota fiscal' for a in anexos) + '.'
     d = {
         'empresa': empresa_nome, 'data_txt': date.today().strftime('%d/%m/%Y'), 'titulo': titulo, 'intro': intro,
         'kpis': kpis, 'itens': linhas, 'total': _brl(boleto['valor']),
