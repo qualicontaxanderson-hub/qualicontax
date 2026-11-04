@@ -242,8 +242,9 @@ def montar(boleto, nota, empresa_nome, com_anexos=False, telefone=''):
     # So dois numeros grandes (valor e vencimento): tres nao cabem no celular. O numero da
     # NFS-e ja esta na caixa verde da nota.
     kpis = [('Valor', _brl(boleto['valor'])), ('Vencimento', _data(boleto['vencimento']))]
+    # 'não entra na nota fiscal' só faz sentido quando HÁ nota; no boleto avulso todo item é só boleto.
     linhas = [{'nome': i.get('nome') or '', 'valor': _brl(i.get('valor')),
-               'obs': '' if i.get('emite_nota', True) else 'não entra na nota fiscal'} for i in itens]
+               'obs': '' if (i.get('emite_nota', True) or not tem_nota) else 'não entra na nota fiscal'} for i in itens]
     if not linhas:
         linhas = [{'nome': 'Honorários e serviços', 'valor': _brl(boleto['valor']), 'obs': ''}]
     # Botoes em dois grupos (Anderson, 04/11/2026: 'tem cliente que gosta so de abrir e outro so de

@@ -39,20 +39,12 @@
             <div class="ef-card-num" data-counter="titulos"></div>
             <p class="ef-card-desc">Títulos em aberto, baixas e vencimentos</p>
         </a>
-        {% if pode_rota('financeiro.notas') %}
-        <a href="{{ url_for('financeiro.notas') }}" class="ef-card">
-            <div class="ef-card-ico" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-file-invoice"></i></div>
-            <h3 class="ef-card-title">Notas Fiscais</h3>
-            <div class="ef-card-num"></div>
-            <p class="ef-card-desc">Emitir NFS-e dos honorários — pela prefeitura ou pelo emissor nacional</p>
-        </a>
-        {% endif %}
-        {% if pode_rota('financeiro.cobranca') %}
-        <a href="{{ url_for('financeiro.cobranca') }}" class="ef-card">
+        {% if pode_rota('financeiro.cobrancas') %}
+        <a href="{{ url_for('financeiro.cobrancas') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-barcode"></i></div>
-            <h3 class="ef-card-title">Cobrança</h3>
+            <h3 class="ef-card-title">Cobranças</h3>
             <div class="ef-card-num"></div>
-            <p class="ef-card-desc">Contas de cobrança (Efí) e boletos — o pagamento dá baixa no título sozinho</p>
+            <p class="ef-card-desc">Nota fiscal + boleto, só boleto ou só nota — o pagamento dá baixa no título sozinho</p>
         </a>
         {% endif %}
         <a href="{{ url_for('financeiro.extrato') }}" class="ef-card">

@@ -48,25 +48,19 @@ def _emp_ok(emp_raw):
 # ---------------------------------------------------------------------------
 # Tela: contas de cobrança + boletos
 # ---------------------------------------------------------------------------
+def _volta_contas(emp_id=None):
+    """As contas de cobrança moram em Contas Bancárias, aba Cobrança (04/11/2026)."""
+    return url_for('financeiro.contas', emp=emp_id) + '#cobranca'
+
+
 @financeiro.route('/financeiro/cobranca')
 @permission_required(PERM)
 def cobranca():
-    emps, sel, mapa = _empresas_ctx()
-    situacao = request.args.get('situacao') or 'todas'
-    busca = (request.args.get('busca') or '').strip()
-    de, ate = request.args.get('de') or '', request.args.get('ate') or ''
-    contas = FinCobrancaConta.listar(empresa_ids=sel)
-    from models.extrato_lancamento import FinContaBancaria
-    bancarias = FinContaBancaria.listar(empresa_ids=[e['cliente_id'] for e in emps], apenas_ativas=True)
-    boletos = FinBoleto.listar(empresa_ids=sel, situacao=situacao, de=de or None, ate=ate or None, busca=busca or None)
-    for b in boletos:
-        b['situacao_txt'] = SITUACOES.get(b['situacao'], b['situacao'])
-    return render_template(
-        'financeiro/cobranca.html', contas=contas, boletos=boletos, resumo=FinBoleto.resumo(sel),
-        bancarias=bancarias, PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, AVISA_POR=AVISA_POR, SITUACOES=SITUACOES,
-        fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, hoje=date.today(),
-        filtros=dict(situacao=situacao, busca=busca, de=de, ate=ate, emp=','.join(map(str, sel))),
-        webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True, _scheme='https').rsplit('X', 1)[0])
+    """Endereço antigo: as contas de cobrança foram para Contas → Cobrança; os boletos, para Cobranças."""
+    emp = request.args.get('emp') or None
+    if request.args.get('situacao') or request.args.get('busca') or request.args.get('de'):
+        return redirect(url_for('financeiro.cobrancas', ver='boletos', **{k: v for k, v in request.args.items()}))
+    return redirect(_volta_contas(emp))
 
 
 @financeiro.route('/financeiro/cobranca/salvar', methods=['POST'])
@@ -84,7 +78,7 @@ def cobranca_salvar():
     cert_bytes = arq.read() if arq and arq.filename else None
     if cert_bytes and len(cert_bytes) > 200_000:
         flash('O certificado da API deve ser o .p12 da Efí (poucos KB).', 'danger')
-        return redirect(url_for('financeiro.cobranca', emp=emp_id))
+        return redirect(_volta_contas(emp_id))
     dados = {k: request.form.get(k, '') for k in FinCobrancaConta.CAMPOS_TEXTO}
     novo_id, erro = FinCobrancaConta.salvar(
         emp_id, dados, conta_id=cid, usuario_id=current_user.id,
@@ -102,7 +96,7 @@ def cobranca_salvar():
                           'email_remetente': dados.get('email_remetente'), 'avisa_por': dados.get('avisa_por')})
         flash(f'Conta de cobrança "{dados["apelido"].strip()}" salva. Clique em Testar para provar as credenciais'
               + (' e em Testar e-mail para provar a caixa de e-mail.' if dados.get('email_remetente') else '.'), 'success')
-    return redirect(url_for('financeiro.cobranca', emp=emp_id))
+    return redirect(_volta_contas(emp_id))
 
 
 @financeiro.route('/financeiro/cobranca/<int:conta_id>/testar', methods=['POST'])
@@ -125,7 +119,7 @@ def cobranca_testar(conta_id):
     FinCobrancaConta.registrar_teste(conta_id, resultado)
     registrar('escrita.testou_conta_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=conta_id,
               depois={'resultado': resultado[:200]})
-    return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
+    return redirect(_volta_contas(c['empresa_id']))
 
 
 @financeiro.route('/financeiro/cobranca/<int:conta_id>/testar-email', methods=['POST'])
@@ -139,7 +133,7 @@ def cobranca_testar_email(conta_id):
     para = (getattr(current_user, 'email', '') or '').strip()
     if not para:
         flash('O seu usuário não tem e-mail cadastrado para receber a prova.', 'warning')
-        return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
+        return redirect(_volta_contas(c['empresa_id']))
     try:
         rem = FinCobrancaConta.remetente_email(conta_id)
         assunto = f'Teste do e-mail de cobrança — {c["apelido"]}'
@@ -161,7 +155,7 @@ def cobranca_testar_email(conta_id):
     flash(f'{c["apelido"]}: {resultado}', 'success' if resultado.startswith('OK') else 'danger')
     registrar('escrita.testou_email_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=conta_id,
               depois={'resultado': resultado[:200]})
-    return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
+    return redirect(_volta_contas(c['empresa_id']))
 
 
 @financeiro.route('/financeiro/cobranca/<int:conta_id>/alternar', methods=['POST'])
@@ -173,7 +167,7 @@ def cobranca_alternar(conta_id):
     FinCobrancaConta.alternar(conta_id, c['empresa_id'])
     registrar('escrita.alternou_conta_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=conta_id)
     flash('Conta de cobrança atualizada.', 'success')
-    return redirect(url_for('financeiro.cobranca', emp=c['empresa_id']))
+    return redirect(_volta_contas(c['empresa_id']))
 
 
 @financeiro.route('/financeiro/cobranca/<int:conta_id>/saldo')
@@ -309,6 +303,181 @@ def _titulo_para(n, pagador, total, vencimento, descricao):
     return tid
 
 
+def _pagador_do_tomador(t):
+    """Pagador do boleto a partir do cadastro (tomador_do_cliente)."""
+    return {'documento': t['documento'], 'nome': t['nome'], 'email': t.get('email'), 'telefone': t.get('fone'),
+            'endereco': {'cep': t.get('cep'), 'logradouro': t.get('logradouro'), 'numero': t.get('numero'),
+                         'complemento': t.get('complemento'), 'bairro': t.get('bairro'),
+                         'cidade': t.get('cidade'), 'uf': t.get('uf')}, 'cliente_id': t['cliente_id']}
+
+
+def sugestao_boleto(conta_padrao, competencia):
+    """(vencimento sugerido, observação sugerida) para as telas que geram boleto: o dia de vencimento
+    da conta (ou +7 dias) e a mensagem padrão com {mes}/{ano}/{competencia} preenchidos (ou o slogan)."""
+    hoje = date.today()
+    msg = preencher_modelo((conta_padrao or {}).get('mensagem_padrao') or '', competencia or hoje) or SLOGAN
+    if conta_padrao and conta_padrao.get('dia_vencimento'):
+        d = int(conta_padrao['dia_vencimento'])
+        venc = date(hoje.year + (hoje.month == 12), hoje.month % 12 + 1, min(d, 28)) if hoje.day >= d else date(hoje.year, hoje.month, min(d, 28))
+    else:
+        venc = hoje + timedelta(days=7)
+    return venc, msg
+
+
+def _mensagem_do_boleto(mensagem, competencia, conta, n=None):
+    """Observação da Efí (até 4 linhas de 100): a mensagem pedida (ou a padrão da conta, ou o slogan),
+    '|' quebra a linha; com nota autorizada a última linha é sempre a nota."""
+    mensagem = preencher_modelo((mensagem or conta.get('mensagem_padrao') or '').strip(), competencia) or SLOGAN
+    linhas = [l.strip()[:100] for l in mensagem.replace('|', '\n').split('\n') if l.strip()]
+    linha_nota = []
+    if n and n.get('numero_nfse'):
+        linha_nota = [f"NFS-e nº {n['numero_nfse']} - chave {n.get('chave_acesso') or ''}".strip(' -')]
+    return '\n'.join(linhas[:4 - len(linha_nota)] + linha_nota)
+
+
+def _emitir_na_efi(conta, boleto_id, itens, pagador, vencimento, mensagem, titulo_id, nota_id, total, usuario_id):
+    """O passo comum de todo boleto (da nota ou avulso): chama a Efí, grava a resposta, liga o título,
+    manda o e-mail (quando a conta avisa pelo app) e registra. Devolve (ok, msg, aviso_email)."""
+    custom_id = f'QC-{boleto_id}'
+    try:
+        efi, _c = FinCobrancaConta.cliente_efi(conta['id'])
+        data = efi.criar_boleto(
+            _itens_para_efi(itens), pagador, vencimento, custom_id=custom_id,
+            notification_url=url_for('cobranca_webhook.efi', segredo=conta['webhook_segredo'], _external=True, _scheme='https'),
+            juros_mes=conta.get('juros_mes'), multa_pct=conta.get('multa_pct'), dias_baixa=conta.get('dias_baixa'),
+            mensagem=mensagem or None, efi_avisa_por_email=(conta.get('avisa_por') == 'efi'))
+    except (EfiErro, ValueError) as exc:
+        FinBoleto.gravar_erro(boleto_id, str(exc))
+        return False, f'A Efí não emitiu o boleto: {exc}', None
+    except Exception as exc:
+        logger.exception('[cobranca] boleto %s', boleto_id)
+        FinBoleto.gravar_erro(boleto_id, str(exc))
+        return False, f'Falha ao emitir o boleto: {exc}', None
+    FinBoleto.gravar_resposta(boleto_id, data, custom_id)
+    if titulo_id:
+        execute_query('UPDATE fin_titulos SET boleto_id = %s WHERE id = %s', (boleto_id, titulo_id))
+    # Quem avisa o cliente é o nosso app (avisa_por = 'app'): o e-mail sai na hora, pela caixa da conta.
+    aviso_email = None
+    if (conta.get('avisa_por') or 'app') == 'app' and conta.get('email_remetente'):
+        from utils import cobranca_email
+        ok_mail, aviso_email = cobranca_email.enviar_boleto(boleto_id, usuario_id=usuario_id)
+        if not ok_mail:
+            aviso_email = 'O boleto saiu, mas o e-mail não: ' + aviso_email
+    registrar('escrita.emitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              depois={'nfse_id': nota_id, 'charge_id': data.get('charge_id'), 'valor': str(total),
+                      'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
+    msg = (f"Boleto emitido na Efí (nº {data.get('charge_id')}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
+           .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.')
+    return True, msg, aviso_email
+
+
+def gerar_boleto_da_nota(n, conta, vencimento, mensagem, usuario_id):
+    """Boleto de uma nota autorizada. Devolve (ok, msg, aviso_email)."""
+    itens, total, dj = _itens_da_nota(n)
+    if total <= 0:
+        return False, 'A nota não tem valor para cobrar.', None
+    pagador = _pagador_da_nota(n, dj)
+    mensagem = _mensagem_do_boleto(mensagem, _competencia(n), conta, n)
+    descricao = 'Honorários e serviços — ' + ', '.join(i['nome'] for i in itens)
+    titulo_id = _titulo_para(n, pagador, total, vencimento, descricao)
+    itens_json = [{'nome': i['nome'], 'valor': str(i['valor']), 'emite_nota': i['emite_nota']} for i in itens]
+    boleto_id = FinBoleto.rascunho(n['empresa_id'], conta, titulo_id, n['id'], total, vencimento, pagador,
+                                   itens_json, mensagem or None, usuario_id)
+    if not boleto_id:
+        return False, 'Não foi possível registrar o boleto.', None
+    return _emitir_na_efi(conta, boleto_id, itens, pagador, vencimento, mensagem, titulo_id, n['id'], total, usuario_id)
+
+
+def itens_avulsos_do_form(f, empresa_id, competencia):
+    """Itens de um boleto SEM nota: serviço do catálogo (nome + período, como na nota) ou descrição livre.
+    Devolve (itens, total); levanta ValueError com a mensagem para a tela."""
+    ids, vals, nomes = f.getlist('item_servico_id'), f.getlist('item_valor'), f.getlist('item_nome')
+    from models.nfse_emissao import NfseServico
+    catalogo = {s['id']: s for s in NfseServico.listar(empresa_id)}
+    periodicos = _servicos_periodicos(empresa_id, ids)
+    periodo = f'{MESES[competencia.month - 1].capitalize()}/{competencia.year}'
+    itens = []
+    for i, sid in enumerate(ids):
+        v = (vals[i] if i < len(vals) else '').strip()
+        nome_livre = (nomes[i] if i < len(nomes) else '').strip()
+        if not v and not str(sid).strip() and not nome_livre:
+            continue
+        s = catalogo.get(int(sid)) if str(sid).isdigit() else None
+        try:
+            valor = Decimal(v.replace('.', '').replace(',', '.')) if ',' in v else Decimal(v or '0')
+        except Exception:
+            raise ValueError(f'Valor do item {i + 1} inválido.')
+        if valor <= 0:
+            raise ValueError(f'Informe o valor do item {i + 1}.')
+        nome = (s['nome'] if s else nome_livre).replace(' — ', ' - ')
+        if not nome:
+            raise ValueError(f'Descreva o item {i + 1} ou escolha um serviço da lista.')
+        tipo = periodicos.get(s['id']) if s else None
+        if tipo == 'mes' and periodo not in nome:
+            nome = f'{nome} - {periodo}'
+        elif tipo == 'ano' and str(competencia.year) not in nome:
+            nome = f'{nome} - {competencia.year}'
+        itens.append({'nome': nome[:255], 'valor': valor, 'emite_nota': False, 'servico_id': s['id'] if s else None})
+    if not itens:
+        raise ValueError('Informe ao menos um item com valor.')
+    return itens, sum((i['valor'] for i in itens), Decimal('0'))
+
+
+def emitir_boleto_avulso(empresa_id, conta, pagador, itens, total, competencia, vencimento, mensagem, titulo_id, usuario_id):
+    """Boleto SEM nota fiscal (Anderson, 04/11/2026: "só o boleto para a Brilho"). O título é o centro:
+    reusa o título escolhido ou cria um a receber. Devolve (boleto_id, ok, msg, aviso_email)."""
+    mensagem = _mensagem_do_boleto(mensagem, competencia, conta)
+    itens_json = [{'nome': i['nome'], 'valor': str(i['valor']), 'emite_nota': False} for i in itens]
+    boleto_id = FinBoleto.rascunho(empresa_id, conta, titulo_id, None, total, vencimento, pagador,
+                                   itens_json, mensagem or None, usuario_id)
+    if not boleto_id:
+        return None, False, 'Não foi possível registrar o boleto.', None
+    titulo_novo = False
+    if not titulo_id:
+        from models.fin_titulo import FinTitulo
+        descricao = 'Honorários e serviços — ' + ', '.join(i['nome'] for i in itens)
+        titulo_id = FinTitulo.criar('R', pagador['nome'] or 'Cliente', CATEGORIA_HONORARIOS, descricao[:255], competencia,
+                                    date.today(), vencimento, total, empresa_id, contraparte_doc=pagador.get('documento'),
+                                    cliente_id=pagador.get('cliente_id'), origem='boleto', chave_idem=f'boleto:{boleto_id}')
+        titulo_novo = bool(titulo_id)
+        if titulo_id:
+            execute_query('UPDATE fin_boletos SET titulo_id = %s WHERE id = %s', (titulo_id, boleto_id))
+    ok, msg, aviso = _emitir_na_efi(conta, boleto_id, itens, pagador, vencimento, mensagem, titulo_id, None, total, usuario_id)
+    if not ok and titulo_novo:
+        from models.fin_titulo import FinTitulo
+        FinTitulo.cancelar(titulo_id)            # a Efí recusou: o título que nasceu para este boleto não fica aberto
+    return boleto_id, ok, msg, aviso
+
+
+@financeiro.route('/financeiro/boletos/<int:boleto_id>')
+@permission_required(PERM)
+def boleto_detalhe(boleto_id):
+    """Página do boleto (o boleto da nota mora na tela da nota; esta serve ao boleto SEM nota)."""
+    b = FinBoleto.get(boleto_id)
+    if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    if b.get('nfse_id'):
+        return redirect(url_for('financeiro.nota_detalhe', nota_id=b['nfse_id']) + '#boleto')
+    if isinstance(b.get('itens_json'), str):
+        try:
+            b['itens_json'] = json.loads(b['itens_json'])
+        except ValueError:
+            b['itens_json'] = []
+    emps, sel, mapa = _empresas_ctx()
+    titulo = None
+    if b.get('titulo_id'):
+        titulo = execute_query('SELECT id, descricao, valor, valor_baixado, vencimento, competencia, status, cliente_id '
+                               'FROM fin_titulos WHERE id = %s', (b['titulo_id'],), fetch=True, fetch_one=True)
+    cliente = None
+    cid = (titulo or {}).get('cliente_id')
+    if cid:
+        cliente = execute_query('SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, email, celular, telefone '
+                                'FROM clientes WHERE id = %s', (cid,), fetch=True, fetch_one=True)
+    return render_template('financeiro/boleto_detalhe.html', boleto=b, titulo=titulo, cliente=cliente,
+                           SIT_BOLETO=SITUACOES, empresa_nome=mapa.get(b['empresa_id'], ''),
+                           fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
+
+
 @financeiro.route('/financeiro/notas/<int:nota_id>/boleto', methods=['POST'])
 @permission_required(PERM)
 def nota_boleto(nota_id):
@@ -335,59 +504,8 @@ def nota_boleto(nota_id):
         flash('O vencimento precisa ser hoje ou depois.', 'danger')
         return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
 
-    itens, total, dj = _itens_da_nota(n)
-    if total <= 0:
-        flash('A nota não tem valor para cobrar.', 'danger')
-        return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
-    pagador = _pagador_da_nota(n, dj)
-    # Observação do boleto (Efí: até 4 linhas de 100): o slogan (ou a mensagem da conta / da tela, '|'
-    # quebra a linha) e, com nota fiscal autorizada, a última linha é sempre a nota vinculada.
-    mensagem = preencher_modelo((request.form.get('mensagem') or conta.get('mensagem_padrao') or '').strip(),
-                                _competencia(n)) or SLOGAN
-    linhas = [l.strip()[:100] for l in mensagem.replace('|', '\n').split('\n') if l.strip()]
-    linha_nota = [f"NFS-e nº {n['numero_nfse']} - chave {n.get('chave_acesso') or ''}".strip(' -')] if n.get('numero_nfse') else []
-    mensagem = '\n'.join(linhas[:4 - len(linha_nota)] + linha_nota)
-    itens_efi = _itens_para_efi(itens)
-    descricao = 'Honorários e serviços — ' + ', '.join(i['nome'] for i in itens)
-    titulo_id = _titulo_para(n, pagador, total, vencimento, descricao)
-    itens_json = [{'nome': i['nome'], 'valor': str(i['valor']), 'emite_nota': i['emite_nota']} for i in itens]
-    boleto_id = FinBoleto.rascunho(n['empresa_id'], conta, titulo_id, nota_id, total, vencimento, pagador,
-                                   itens_json, mensagem or None, current_user.id)
-    if not boleto_id:
-        flash('Não foi possível registrar o boleto.', 'danger')
-        return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
-    custom_id = f'QC-{boleto_id}'
-    try:
-        efi, _c = FinCobrancaConta.cliente_efi(conta['id'])
-        data = efi.criar_boleto(
-            itens_efi, pagador, vencimento, custom_id=custom_id,
-            notification_url=url_for('cobranca_webhook.efi', segredo=conta['webhook_segredo'], _external=True, _scheme='https'),
-            juros_mes=conta.get('juros_mes'), multa_pct=conta.get('multa_pct'), dias_baixa=conta.get('dias_baixa'),
-            mensagem=mensagem or None, efi_avisa_por_email=(conta.get('avisa_por') == 'efi'))
-    except (EfiErro, ValueError) as exc:
-        FinBoleto.gravar_erro(boleto_id, str(exc))
-        flash(f'A Efí não emitiu o boleto: {exc}', 'danger')
-        return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
-    except Exception as exc:
-        logger.exception('[cobranca] boleto da nota %s', nota_id)
-        FinBoleto.gravar_erro(boleto_id, str(exc))
-        flash(f'Falha ao emitir o boleto: {exc}', 'danger')
-        return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
-    FinBoleto.gravar_resposta(boleto_id, data, custom_id)
-    if titulo_id:
-        execute_query('UPDATE fin_titulos SET boleto_id = %s WHERE id = %s', (boleto_id, titulo_id))
-    # Quem avisa o cliente é o nosso app (avisa_por = 'app'): o e-mail sai na hora, pela caixa da conta.
-    aviso_email = None
-    if (conta.get('avisa_por') or 'app') == 'app' and conta.get('email_remetente'):
-        from utils import cobranca_email
-        ok_mail, aviso_email = cobranca_email.enviar_boleto(boleto_id, usuario_id=current_user.id)
-        if not ok_mail:
-            aviso_email = 'O boleto saiu, mas o e-mail não: ' + aviso_email
-    registrar('escrita.emitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
-              depois={'nfse_id': nota_id, 'charge_id': data.get('charge_id'), 'valor': str(total),
-                      'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
-    flash(f"Boleto emitido na Efí (nº {data.get('charge_id')}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
-          .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.', 'success')
+    ok, msg, aviso_email = gerar_boleto_da_nota(n, conta, vencimento, request.form.get('mensagem'), current_user.id)
+    flash(msg, 'success' if ok else 'danger')
     if aviso_email:
         flash(aviso_email, 'success' if aviso_email.startswith('E-mail enviado') else 'warning')
     return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
@@ -406,7 +524,7 @@ def boleto_enviar_email(boleto_id):
     registrar('escrita.enviou_email_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
               depois={'ok': ok, 'para': (request.form.get('para') or b.get('pagador_email') or '')[:200], 'msg': msg[:200]})
     volta = request.form.get('volta') or (url_for('financeiro.nota_detalhe', nota_id=b['nfse_id']) + '#boleto'
-                                          if b.get('nfse_id') else url_for('financeiro.cobranca', emp=b['empresa_id']))
+                                          if b.get('nfse_id') else url_for('financeiro.boleto_detalhe', boleto_id=boleto_id))
     return redirect(volta)
 
 
@@ -416,7 +534,7 @@ def boleto_cancelar(boleto_id):
     b = FinBoleto.get(boleto_id)
     if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
-    volta = request.form.get('volta') or url_for('financeiro.cobranca', emp=b['empresa_id'])
+    volta = request.form.get('volta') or url_for('financeiro.cobrancas', emp=b['empresa_id'], ver='boletos')
     if b['situacao'] not in ('new', 'waiting', 'unpaid'):
         flash('Só boleto em aberto pode ser cancelado.', 'warning')
         return redirect(volta)
@@ -427,9 +545,13 @@ def boleto_cancelar(boleto_id):
         flash(f'A Efí não cancelou: {exc}', 'danger')
         return redirect(volta)
     FinBoleto.atualizar_situacao(boleto_id, 'canceled')
+    titulo_cancelado = False
+    if not b.get('nfse_id') and b.get('titulo_id'):      # boleto sem nota: o título nasceu com ele e vai junto
+        from models.fin_titulo import FinTitulo
+        titulo_cancelado = bool(FinTitulo.cancelar(b['titulo_id']))
     registrar('escrita.cancelou_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
-              depois={'charge_id': b['charge_id']})
-    flash('Boleto cancelado na Efí.', 'success')
+              depois={'charge_id': b['charge_id'], 'titulo_cancelado': titulo_cancelado})
+    flash('Boleto cancelado na Efí.' + (' O título a receber foi cancelado junto.' if titulo_cancelado else ''), 'success')
     return redirect(volta)
 
 
@@ -440,7 +562,7 @@ def boleto_sincronizar(boleto_id):
     b = FinBoleto.get(boleto_id)
     if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
-    volta = request.form.get('volta') or url_for('financeiro.cobranca', emp=b['empresa_id'])
+    volta = request.form.get('volta') or url_for('financeiro.cobrancas', emp=b['empresa_id'], ver='boletos')
     try:
         efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
         d = efi.consultar(b['charge_id'])

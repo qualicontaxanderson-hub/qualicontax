@@ -1,20 +1,33 @@
 {% extends "base.html" %}
 
-{% block title %}Nova nota - Notas Fiscais - Qualicontax{% endblock %}
+{% block title %}Nova cobrança - Notas Fiscais - Qualicontax{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+<style>
+/* O que emitir (Anderson, 04/11/2026): nota + boleto, só boleto ou só nota — na mesma tela */
+.nf-modos { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+.nf-modo { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border:1.5px solid #e2e8f0; border-radius:12px;
+           cursor:pointer; background:#fff; margin:0; font-weight:normal; }
+.nf-modo.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 2px rgba(22,163,74,.18); }
+.nf-modo.off { opacity:.5; cursor:not-allowed; }
+.nf-modo input { margin:3px 0 0; flex-shrink:0; }
+.nf-modo b { display:block; font-size:14px; color:#0f172a; }
+.nf-modo small { display:block; font-size:12px; color:#64748b; margin-top:2px; line-height:1.35; }
+.nf-item-nome { grid-column:1 / -1; }
+@media (max-width:700px) { .nf-modos { grid-template-columns:1fr; } }
+</style>
 
 <div class="page-header">
     <div>
         <h1 class="page-title">
             <i class="fas fa-file-invoice" style="color: var(--primary-green);"></i>
-            Nova nota fiscal de serviço
+            Nova cobrança
         </h1>
-        <p class="page-subtitle">{{ empresa.nome_razao_social if empresa else '' }} — o padrão da empresa já vem preenchido; mude o que for diferente nesta nota</p>
+        <p class="page-subtitle">{{ empresa.nome_razao_social if empresa else '' }} — nota fiscal e boleto juntos, só o boleto ou só a nota; o padrão da empresa já vem preenchido</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-outline" href="{{ url_for('financeiro.notas', emp=emp_id) }}"><i class="fas fa-arrow-left"></i> Notas</a>
+        <a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas', emp=emp_id) }}"><i class="fas fa-arrow-left"></i> Cobranças</a>
     </div>
 </div>
 
@@ -36,7 +49,7 @@
 </div>
 {% endif %}
 
-<div class="nf-teste" id="nfAvisoTeste">
+<div class="nf-teste nf-so-nota" id="nfAvisoTeste">
     <i class="fas fa-flask"></i> Esta série emite no <strong>ambiente de teste</strong> do governo. A nota sai autorizada, mas não vale como documento fiscal.
 </div>
 
@@ -45,13 +58,33 @@
 <input type="hidden" name="fin_titulo_id" id="nfTituloId" value="{{ pre.fin_titulo_id or '' }}">
 <input type="hidden" name="tomador_cliente_id" id="nfClienteId" value="{{ pre.tomador_cliente_id or '' }}">
 
+<!-- ===== 0 · O QUE EMITIR ===== -->
+<section class="nf-card" data-card="0" style="margin-bottom:12px;">
+    <header><b><i class="fas fa-sliders-h"></i></b><span>O que emitir</span><small>nota fiscal e boleto juntos, só o boleto ou só a nota fiscal</small></header>
+    <div class="nf-card-body nf-modos">
+        {% set _sem_boleto = not contas_cobranca %}
+        <label class="nf-modo {{ 'on' if modo == 'nota_boleto' }}{{ ' off' if sem_cfg or _sem_boleto }}" title="{{ 'A empresa não tem configuração fiscal' if sem_cfg else ('A empresa não tem conta de cobrança' if _sem_boleto else '') }}">
+            <input type="radio" name="modo" value="nota_boleto" {{ 'checked' if modo == 'nota_boleto' }} {{ 'disabled' if sem_cfg or _sem_boleto }}>
+            <span><b>Nota fiscal + boleto</b><small>a nota sai, o boleto nasce dela e o e-mail vai com os dois</small></span>
+        </label>
+        <label class="nf-modo {{ 'on' if modo == 'boleto' }}{{ ' off' if _sem_boleto }}" title="{{ 'A empresa não tem conta de cobrança' if _sem_boleto else '' }}">
+            <input type="radio" name="modo" value="boleto" {{ 'checked' if modo == 'boleto' }} {{ 'disabled' if _sem_boleto }}>
+            <span><b>Só o boleto</b><small>sem nota fiscal; o título a receber nasce com ele e o e-mail vai só com o boleto</small></span>
+        </label>
+        <label class="nf-modo {{ 'on' if modo == 'nota' }}{{ ' off' if sem_cfg }}" title="{{ 'A empresa não tem configuração fiscal' if sem_cfg else '' }}">
+            <input type="radio" name="modo" value="nota" {{ 'checked' if modo == 'nota' }} {{ 'disabled' if sem_cfg }}>
+            <span><b>Só a nota fiscal</b><small>o boleto pode ser gerado depois, na tela da nota</small></span>
+        </label>
+    </div>
+</section>
+
 <div class="nf-cards">
 
 <!-- ===== 1 · PESSOAS ===== -->
 <section class="nf-card" data-card="1">
     <header><b>1</b><span>Pessoas</span><small>quem emite e quem recebe</small></header>
     <div class="nf-card-body">
-        <div class="form-group">
+        <div class="form-group nf-so-nota">
             <label>Série *</label>
             <select name="serie" id="nfSerie" class="form-control" required>
                 {% for s in series %}
@@ -81,17 +114,17 @@
                 </option>
                 {% endfor %}
             </select>
-            <span class="nf-ajuda">Preenche tomador, valor e competência; a nota fica ligada ao título.</span>
+            <span class="nf-ajuda">Preenche quem recebe, valor e competência; a nota (ou o boleto) fica ligada ao título.</span>
         </div>
         {% endif %}
 
-        <h4 class="nf-sub">Quem recebe a nota <small>sempre alguém do cadastro (cliente ou avulso); os dados saem de lá na hora de emitir</small></h4>
+        <h4 class="nf-sub">Quem recebe <small>sempre alguém do cadastro (cliente ou avulso); os dados saem de lá na hora de emitir</small></h4>
         <div id="nfEscolha">
             <div class="form-group" style="margin-bottom:0;">
                 <input type="text" id="nfBusca" class="form-control" placeholder="Nome, CNPJ/CPF ou número do cadastro" value="{{ pre.tomador_busca or '' }}">
                 <div class="nf-res" id="nfRes"></div>
                 <span class="nf-ajuda">Não está no cadastro? <a href="{{ url_for('clientes.novo') }}" target="_blank" rel="noopener">Cadastre como cliente ou avulso</a> e volte aqui.</span>
-                <span class="nf-ajuda nf-escolha-erro" id="nfEscolhaErro" hidden><i class="fas fa-exclamation-circle"></i> Escolha quem recebe a nota.</span>
+                <span class="nf-ajuda nf-escolha-erro" id="nfEscolhaErro" hidden><i class="fas fa-exclamation-circle"></i> Escolha quem recebe.</span>
             </div>
         </div>
         <div class="nf-ficha" id="nfFicha" hidden>
@@ -145,12 +178,12 @@
         </div>
         <span class="nf-ajuda"><a href="{{ url_for('financeiro.notas_config', emp=emp_id) }}#servicos">Editar a lista de serviços</a> (nomes, textos, valores padrão, o que é só boleto).</span>
 
-        <div class="form-group" style="margin-top:12px;">
+        <div class="form-group nf-so-nota" style="margin-top:12px;">
             <label>Descrição que aparece na nota *</label>
             <textarea name="descricao" id="s_desc" class="form-control" rows="4" required maxlength="1000">{{ pre.descricao or '' }}</textarea>
             <span class="nf-ajuda">Montada pelos serviços que entram na nota. Pode ajustar o texto; itens "só boleto" não aparecem aqui.</span>
         </div>
-        <details class="nf-detalhe">
+        <details class="nf-detalhe nf-so-nota">
             <summary><i class="fas fa-hashtag" style="color:#0369a1;"></i> Códigos fiscais</summary>
             <div class="nf-2col" style="margin-top:10px;">
                 <div class="form-group">
@@ -185,10 +218,11 @@
     <div class="nf-card-body">
         <input type="hidden" name="valor_servico" id="v_valor" value="{{ pre.valor_servico or '' }}">
         <div class="nf-totais">
-            <div class="nf-total nf-total-nota"><span>Valor da nota fiscal</span><strong id="v_nota">R$ 0,00</strong><small id="v_nota_itens"></small></div>
+            <div class="nf-total nf-total-nota nf-so-nota"><span>Valor da nota fiscal</span><strong id="v_nota">R$ 0,00</strong><small id="v_nota_itens"></small></div>
             <div class="nf-total" id="v_boleto_box"><span>Só no boleto</span><strong id="v_so_boleto">R$ 0,00</strong><small id="v_so_boleto_itens">nenhuma taxa repassada</small></div>
-            <div class="nf-total nf-total-boleto"><span>Total a cobrar (boleto)</span><strong id="v_boleto">R$ 0,00</strong><small>o boleto vem na próxima etapa do projeto</small></div>
+            <div class="nf-total nf-total-boleto"><span>Total a cobrar (boleto)</span><strong id="v_boleto">R$ 0,00</strong><small id="v_boleto_txt"></small></div>
         </div>
+        <div class="nf-so-nota">
         <div class="nf-2col">
             <div class="form-group">
                 <label>ISS</label>
@@ -230,6 +264,32 @@
                 <span class="nf-ajuda">Pessoa física é consumidor final; empresa não. Já vem marcado pelo CPF/CNPJ.</span></div>
             <span class="nf-ajuda">Os valores de IBS e CBS são calculados pelo governo e voltam na nota autorizada.</span>
         </details>
+        </div>
+
+        <div class="nf-so-boleto" id="nfBoletoBox">
+            <h4 class="nf-sub">Boleto <small>pela Efí; quando a conta avisa pelo app, o e-mail ao cliente sai sozinho</small></h4>
+            {% if contas_cobranca %}
+            <div class="nf-2col">
+                <div class="form-group">
+                    <label>Conta de cobrança *</label>
+                    <select name="conta_id" id="nfConta" class="form-control">
+                        {% for c in contas_cobranca %}<option value="{{ c.id }}" {{ 'selected' if conta_padrao and c.id == conta_padrao.id }}>{{ c.apelido }} · {{ 'TESTE' if c.ambiente != 'producao' else 'produção' }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Vencimento *</label>
+                    <input type="date" name="vencimento" id="nfVenc" class="form-control" value="{{ venc_sugerido.isoformat() }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Observação no boleto</label>
+                <input type="text" name="mensagem" class="form-control" maxlength="400" value="{{ msg_sugerida or '' }}" placeholder="até 4 linhas de 100 caracteres; | quebra a linha">
+                <span class="nf-ajuda">Com nota fiscal, ela entra sozinha na última linha.</span>
+            </div>
+            {% else %}
+            <p class="nf-ajuda">A empresa não tem conta de cobrança ativa. <a href="{{ url_for('financeiro.contas', emp=emp_id) }}#cobranca">Cadastre em Contas → Cobrança</a> para gerar boletos.</p>
+            {% endif %}
+        </div>
     </div>
 </section>
 
@@ -239,7 +299,7 @@
     <div class="nf-card-body">
         <dl class="nf-resumo nf-resumo-coluna" id="nfResumo"></dl>
         <div class="nf-pendente" id="nfPendente" hidden></div>
-        <button type="submit" class="btn btn-primary nf-emitir" id="nfEmitir"><i class="fas fa-paper-plane"></i> Emitir nota</button>
+        <button type="submit" class="btn btn-primary nf-emitir" id="nfEmitir"><i class="fas fa-paper-plane"></i> <span id="nfEmitirTxt">Emitir nota</span></button>
     </div>
 </section>
 
@@ -260,12 +320,28 @@
     function brl(c) { return 'R$ ' + Dinheiro.fmt(c); }
     Dinheiro.ligar(form);
 
+    // ---- o que emitir: nota + boleto, só boleto, só nota ------------------------------
+    function modo() { var r = form.querySelector('[name=modo]:checked'); return r ? r.value : 'nota'; }
+    function modoMudou() {
+        var m = modo();
+        form.querySelectorAll('.nf-modo').forEach(function (l) { var i = l.querySelector('input'); l.classList.toggle('on', !!(i && i.checked)); });
+        document.querySelectorAll('.nf-so-nota').forEach(function (e) { e.style.display = m === 'boleto' ? 'none' : ''; });
+        document.querySelectorAll('.nf-so-boleto').forEach(function (e) { e.style.display = m === 'nota' ? 'none' : ''; });
+        if ($('s_desc')) $('s_desc').required = m !== 'boleto';
+        if ($('nfSerie')) $('nfSerie').required = m !== 'boleto';
+        if ($('nfAvisoTeste') && m === 'boleto') $('nfAvisoTeste').style.display = 'none';
+        $('nfEmitirTxt').textContent = m === 'boleto' ? 'Gerar o boleto' : (m === 'nota_boleto' ? 'Emitir a nota e gerar o boleto' : 'Emitir a nota');
+        desenharItens(); itensMudaram();
+    }
+    form.querySelectorAll('[name=modo]').forEach(function (r) { r.addEventListener('change', modoMudou); });
+
     // ---- série: emissor e ambiente -------------------------------------------
     function serieMudou() {
         var sel = $('nfSerie'), opt = sel && sel.options[sel.selectedIndex];
         var emissor = opt ? opt.dataset.emissor : 'nacional';
         var teste = opt && opt.dataset.ambiente === '2';
         $('nfAvisoTeste').classList.toggle('on', !!teste);
+        if (modo() === 'boleto') $('nfAvisoTeste').style.display = 'none';
         document.querySelectorAll('.nf-so-sp').forEach(function (e) { e.style.display = emissor === 'sp' ? '' : 'none'; });
         $('s_ctn').required = emissor !== 'sp';
         $('s_csp').required = emissor === 'sp';
@@ -390,13 +466,13 @@
         if (c.length !== 3) return texto;
         return texto.replace(/\{mes\}/g, MESES[+c[1] - 1] || '').replace(/\{ano\}/g, c[0]).replace(/\{competencia\}/g, c[1] + '/' + c[0]);
     }
-    function entraNaNota(it) { var sv = servico(it.sid); return !sv || +sv.emite_nota !== 0; }
+    function entraNaNota(it) { if (modo() === 'boleto') return false; var sv = servico(it.sid); return !sv || +sv.emite_nota !== 0; }
     function desenharItens() {
         var box = $('nfItens'); box.innerHTML = '';
         if (!ITENS.length) ITENS.push({ sid: '', valor: 0 });
         ITENS.forEach(function (it, k) {
-            var sv = servico(it.sid), soBoleto = sv && +sv.emite_nota === 0;
-            var linha = document.createElement('div'); linha.className = 'nf-item' + (soBoleto ? ' nf-item-boleto' : '');
+            var sv = servico(it.sid), soBoleto = modo() === 'boleto' || (sv && +sv.emite_nota === 0);
+            var linha = document.createElement('div'); linha.className = 'nf-item' + (soBoleto && modo() !== 'boleto' ? ' nf-item-boleto' : '');
             var sel = document.createElement('select'); sel.className = 'form-control'; sel.name = 'item_servico_id';
             var o0 = document.createElement('option'); o0.value = ''; o0.textContent = SERVICOS.length ? '— escolha o serviço —' : '— descrição livre —'; sel.appendChild(o0);
             SERVICOS.forEach(function (sv2) {
@@ -415,7 +491,12 @@
             var tag = document.createElement('span'); tag.className = 'nf-item-tag'; tag.textContent = soBoleto ? 'só boleto' : 'nota';
             var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'nf-item-rm'; rm.title = 'Tirar este item'; rm.innerHTML = '<i class="fas fa-times"></i>';
             rm.addEventListener('click', function () { ITENS.splice(k, 1); itensMudaram(); desenharItens(); });
-            linha.appendChild(sel); linha.appendChild(val); linha.appendChild(tag); linha.appendChild(rm);
+            // só boleto sem serviço da lista: descrição livre do item (vai no boleto e no e-mail)
+            var nome = document.createElement('input'); nome.type = 'text'; nome.name = 'item_nome'; nome.className = 'form-control nf-item-nome';
+            nome.placeholder = 'Descrição do item no boleto (ex.: Honorários de novembro)'; nome.maxLength = 120; nome.value = it.nome || '';
+            nome.hidden = !!it.sid || modo() !== 'boleto';
+            nome.addEventListener('input', function () { it.nome = nome.value; itensMudaram(); });
+            linha.appendChild(sel); linha.appendChild(val); linha.appendChild(tag); linha.appendChild(rm); linha.appendChild(nome);
             box.appendChild(linha);
         });
         Dinheiro.ligar(box);
@@ -423,7 +504,7 @@
     function totais() {
         var nota = 0, boleto = 0, nomesNota = [], nomesBoleto = [];
         ITENS.forEach(function (it) {
-            var sv = servico(it.sid), nome = sv ? sv.nome : 'serviço';
+            var sv = servico(it.sid), nome = sv ? sv.nome : ((it.nome || '').trim() || 'serviço');
             if (entraNaNota(it)) { nota += it.valor; if (it.valor) nomesNota.push(nome); }
             else { boleto += it.valor; if (it.valor) nomesBoleto.push(nome); }
         });
@@ -442,6 +523,7 @@
         $('v_so_boleto').textContent = brl(t.soBoleto); $('v_so_boleto_itens').textContent = t.nomesBoleto.join(' + ') || 'nenhuma taxa repassada';
         $('v_boleto_box').classList.toggle('on', t.soBoleto > 0);
         $('v_boleto').textContent = brl(t.boleto);
+        $('v_boleto_txt').textContent = modo() === 'nota' ? 'o boleto pode ser gerado depois, na tela da nota' : 'sai pela Efí nesta emissão';
         var desc = $('s_desc'), nova = montarDescricao();
         if (nova && (!desc.value.trim() || desc.value === descAuto)) { desc.value = nova; descAuto = nova; }
         // códigos: do primeiro serviço com nota que tenha código próprio
@@ -490,27 +572,35 @@
     function val(nome) { var e = form.querySelector('[name="' + nome + '"]'); return e ? e.value : ''; }
     function texto(nome) { var e = form.querySelector('[name="' + nome + '"]'); return e && e.tagName === 'SELECT' ? e.options[e.selectedIndex].text : val(nome); }
     function montarResumo() {
-        var sel = $('nfSerie'), opt = sel.options[sel.selectedIndex] || {};
+        var m = modo(), comNota = m !== 'boleto', comBoleto = m !== 'nota';
+        var sel = $('nfSerie'), opt = (sel && sel.options[sel.selectedIndex]) || {};
         var tt = totais(), v = tt.nota, r = retencoes();
         var comp = val('competencia').split('-');
+        var venc = val('vencimento').split('-');
         var emissorSp = opt.dataset && opt.dataset.emissor === 'sp';
         var linhas = [
+            ['O que emitir', m === 'boleto' ? 'Só o boleto' : (m === 'nota_boleto' ? 'Nota fiscal + boleto' : 'Só a nota fiscal')],
             ['Emitida por', {{ (empresa.nome_razao_social if empresa else '') | tojson }}],
-            ['Série', (opt.text || '').trim() + (opt.dataset && opt.dataset.ambiente === '2' ? '  ⚠ TESTE' : '')],
+        ];
+        if (comNota) linhas.push(['Série', (opt.text || '').trim() + (opt.dataset && opt.dataset.ambiente === '2' ? '  ⚠ TESTE' : '')]);
+        linhas.push(
             ['Competência', comp.length === 3 ? comp[2] + '/' + comp[1] + '/' + comp[0] : val('competencia')],
-            ['Tomador', TOM ? (TOM.numero_cliente ? 'nº ' + TOM.numero_cliente + ' · ' : '') + TOM.nome + ' · ' + (TOM.doc_fmt || TOM.documento) : '— escolha no cadastro', TOM ? '' : 'falta'],
-            ['Endereço', TOM ? (semEndereco(TOM) ? 'a nota sai sem endereço' + (TOM.ibge ? ' (município ' + TOM.ibge + ')' : '') : enderecoTexto(TOM) + ' · IBGE ' + TOM.ibge) : '—'],
-            ['E-mail', TOM && TOM.email ? TOM.email : '—'],
-            ['Serviços', (function () { var t = totais(); return (t.nomesNota.join(' + ') || '—') + (t.nomesBoleto.length ? ' · só boleto: ' + t.nomesBoleto.join(' + ') : ''); })()],
+            [comNota ? 'Tomador' : 'Pagador', TOM ? (TOM.numero_cliente ? 'nº ' + TOM.numero_cliente + ' · ' : '') + TOM.nome + ' · ' + (TOM.doc_fmt || TOM.documento) : '— escolha no cadastro', TOM ? '' : 'falta']);
+        if (comNota) linhas.push(['Endereço', TOM ? (semEndereco(TOM) ? 'a nota sai sem endereço' + (TOM.ibge ? ' (município ' + TOM.ibge + ')' : '') : enderecoTexto(TOM) + ' · IBGE ' + TOM.ibge) : '—']);
+        linhas.push(['E-mail', TOM && TOM.email ? TOM.email : (comBoleto ? '— sem e-mail no cadastro: o boleto não vai por e-mail' : '—')]);
+        linhas.push([comNota ? 'Serviços' : 'Itens do boleto', (function () { var t = totais(); return (t.nomesNota.join(' + ') || (comNota ? '—' : '')) + (t.nomesBoleto.length ? (comNota ? ' · só boleto: ' : '') + t.nomesBoleto.join(' + ') : '') || '—'; })()]);
+        if (comNota) linhas.push(
             ['Descrição na nota', val('descricao') || '— falta a descrição', val('descricao') ? '' : 'falta'],
             ['Códigos', (emissorSp ? 'Serviço SP ' + val('cod_servico_sp') : 'Trib. nacional ' + val('cod_trib_nac') + (val('cod_trib_mun') ? ' · municipal ' + val('cod_trib_mun') : '')) + (val('cod_nbs') ? ' · NBS ' + val('cod_nbs') : '')],
             ['ISS', texto('trib_issqn') + (form.querySelector('[name=iss_retido]').checked ? ' · retido pelo tomador' : '') + (val('aliquota_iss') ? ' · ' + val('aliquota_iss') + '%' : '')],
             ['IBS/CBS', 'CST ' + val('ibscbs_cst') + ' · cClassTrib ' + val('ibscbs_cclasstrib') + ' · cIndOp ' + val('ibscbs_cind_op') + ' · ' + texto('ibscbs_ind_final').toLowerCase()],
             ['Valor da nota', v ? brl(v) : '— falta o valor', v ? 'big' : 'falta'],
             ['Retenções', r ? brl(r) : 'nenhuma'],
-            ['Líquido da nota', brl(v - r), 'big'],
-            ['Total a cobrar (boleto)', tt.soBoleto ? brl(tt.boleto) + ' (nota ' + brl(v) + ' + ' + brl(tt.soBoleto) + ' só no boleto)' : brl(tt.boleto)],
-        ];
+            ['Líquido da nota', brl(v - r), 'big']);
+        if (comBoleto) linhas.push(
+            ['Boleto', ($('nfConta') ? $('nfConta').options[$('nfConta').selectedIndex].text : '— sem conta de cobrança') + (venc.length === 3 ? ' · vence ' + venc[2] + '/' + venc[1] + '/' + venc[0] : ' · — falta o vencimento'), ($('nfConta') && venc.length === 3) ? '' : 'falta'],
+            ['Total a cobrar (boleto)', tt.soBoleto && comNota ? brl(tt.boleto) + ' (nota ' + brl(v) + ' + ' + brl(tt.soBoleto) + ' só no boleto)' : brl(tt.boleto), tt.boleto ? 'big' : 'falta']);
+        else linhas.push(['Total a cobrar (boleto)', tt.soBoleto ? brl(tt.boleto) + ' (nota ' + brl(v) + ' + ' + brl(tt.soBoleto) + ' só no boleto)' : brl(tt.boleto)]);
         var dl = $('nfResumo'); dl.innerHTML = '';
         linhas.forEach(function (l) {
             var d = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
@@ -518,12 +608,22 @@
             d.appendChild(dt); d.appendChild(dd); dl.appendChild(d);
         });
         var pend = [];
-        if (!TOM) pend.push('escolha quem recebe a nota');
-        else if (faltaObrig(TOM)) pend.push('complete o cadastro do tomador');
-        if (!val('descricao').trim()) pend.push('escreva a descrição do serviço');
-        if (!v) pend.push(tt.soBoleto ? 'nenhum item entra na nota (todos são só boleto)' : 'informe o valor');
-        if (emissorSp && !val('cod_servico_sp')) pend.push('informe o código de serviço da prefeitura');
-        if (!emissorSp && !val('cod_trib_nac')) pend.push('informe o código de tributação nacional');
+        if (!TOM) pend.push(comNota ? 'escolha quem recebe a nota' : 'escolha quem recebe o boleto');
+        else if (comNota && faltaObrig(TOM)) pend.push('complete o cadastro do tomador');
+        else if (!comNota && !(TOM.documento && TOM.nome)) pend.push('o cadastro precisa de CPF/CNPJ e nome');
+        if (comNota) {
+            if (!val('descricao').trim()) pend.push('escreva a descrição do serviço');
+            if (!v) pend.push(tt.soBoleto ? 'nenhum item entra na nota (todos são só boleto)' : 'informe o valor');
+            if (emissorSp && !val('cod_servico_sp')) pend.push('informe o código de serviço da prefeitura');
+            if (!emissorSp && !val('cod_trib_nac')) pend.push('informe o código de tributação nacional');
+        } else {
+            if (!tt.boleto) pend.push('informe o valor');
+            if (ITENS.some(function (it) { return it.valor && !it.sid && !(it.nome || '').trim(); })) pend.push('descreva o item do boleto ou escolha um serviço da lista');
+        }
+        if (comBoleto) {
+            if (!$('nfConta')) pend.push('cadastre uma conta de cobrança para a empresa');
+            if (venc.length !== 3) pend.push('informe o vencimento do boleto');
+        }
         var p = $('nfPendente'); p.hidden = !pend.length;
         p.textContent = pend.length ? 'Antes de emitir: ' + pend.join('; ') + '.' : '';
         $('nfEmitir').disabled = !!pend.length;
@@ -540,7 +640,8 @@
             if (c.offsetParent === null && c.type !== 'hidden') continue;   // escondido (ex.: só-SP)
             if (!c.checkValidity()) { ev.preventDefault(); c.reportValidity(); return; }
         }
-        var b = $('nfEmitir'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando ao governo...';
+        var b = $('nfEmitir'); b.disabled = true;
+        b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (modo() === 'boleto' ? 'Gerando o boleto na Efí...' : (modo() === 'nota_boleto' ? 'Enviando ao governo e gerando o boleto...' : 'Enviando ao governo...'));
     });
 
     // ---- nascimento da tela ----------------------------------------------------------
@@ -551,6 +652,7 @@
         descAuto = $('s_desc').value;          // o texto do padrão da empresa é 'automático': o item escolhido o substitui
         desenharItens(); itensMudaram();
     })();
+    modoMudou();
     if (busca.value.trim().length >= 2) busca.dispatchEvent(new Event('input'));
     {% if pre.tomador_cliente_id %}carregarTomador({{ pre.tomador_cliente_id|int }});{% endif %}
     montarResumo();

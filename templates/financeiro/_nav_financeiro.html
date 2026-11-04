@@ -10,8 +10,7 @@
 {% set _abas = [
     ('financeiro.index',             '/financeiro/',             'INÍCIO'),
     ('financeiro.titulos',           '/financeiro/titulos',      'TÍTULOS'),
-    ('financeiro.notas',             '/financeiro/notas',        'NOTAS FISCAIS'),
-    ('financeiro.cobranca',          '/financeiro/cobranca',     'COBRANÇA'),
+    ('financeiro.cobrancas',         '/financeiro/cobranca',     'COBRANÇAS'),
     ('financeiro.extrato',           '/financeiro/extrato',      'EXTRATO'),
     ('financeiro.contas',            '/financeiro/contas',       'CONTAS'),
     ('financeiro.programacoes',      '/financeiro/programacoes', 'PROGRAMAÇÕES'),
@@ -26,12 +25,14 @@
         {% set _ativa.pref = _pref %}
     {% endif %}
 {% endfor %}
+{# COBRANÇAS (04/11/2026) junta notas fiscais e boletos: /financeiro/notas/... e /financeiro/boletos/... acendem ela #}
+{% if request.path.startswith('/financeiro/boletos') or request.path.startswith('/financeiro/notas') %}{% set _ativa.pref = '/financeiro/cobranca' %}{% endif %}
 
 <nav class="nav-fiscal" aria-label="Navegação do Financeiro">
     <div class="nav-fiscal-track">
         {% for _ep, _pref, _label in _abas %}
         {# NOTAS FISCAIS nasceu só-admin (01/11/2026): a aba só aparece para quem o portão deixa entrar #}
-        {% if _ep not in ('financeiro.notas', 'financeiro.cobranca') or pode_rota(_ep) %}
+        {% if _ep != 'financeiro.cobrancas' or pode_rota(_ep) %}
         <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
            href="{{ url_for(_ep) }}"
            {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>

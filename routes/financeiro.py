@@ -1320,9 +1320,20 @@ def contas():
         'cores': cores(),
         'eh_admin': admin,
     }
+    # Aba Cobrança (04/11/2026): as contas de cobrança (Efí) são cadastro, como a conta corrente
+    from models.fin_cobranca import AMBIENTES, AVISA_POR, PROVEDORES, FinCobrancaConta
+    from utils.acesso import pode_rota
+    pode_cob = pode_rota('financeiro.cobranca')
+    contas_cob = FinCobrancaConta.listar(empresa_ids=sel) if pode_cob else []
+    dados['pode_cobranca'] = pode_cob
+    dados['n_cobranca'] = len([c for c in contas_cob if c.get('ativo')])
     return render_template(
         'financeiro/contas.html', dados=dados, ano=ano,
-        contas=contas, fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
+        contas=contas, fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
+        pode_cobranca=pode_cob, contas_cob=contas_cob,
+        bancarias=FinContaBancaria.listar(empresa_ids=[e['cliente_id'] for e in emps], apenas_ativas=True),
+        PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, AVISA_POR=AVISA_POR, hoje=hoje,
+        webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True, _scheme='https').rsplit('X', 1)[0])
 
 
 @financeiro.route('/financeiro/contas/nova', methods=['POST'])

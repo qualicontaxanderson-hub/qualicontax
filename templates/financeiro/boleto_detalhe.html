@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Boleto {{ boleto.charge_id or boleto.id }} - Cobrança - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{# Boleto SEM nota fiscal (04/11/2026). O boleto de uma nota mora na tela da nota; a rota manda para lá. #}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <i class="fas fa-barcode" style="color: var(--primary-green);"></i>
+            Boleto {{ ('nº ' ~ boleto.charge_id) if boleto.charge_id else ('#' ~ boleto.id) }}
+            <span class="nf-pill cb-sit-{{ boleto.situacao }}" style="vertical-align:middle; margin-left:6px;">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>
+            {% if boleto.ambiente != 'producao' %}<span class="nf-pill nf-pill-teste" style="vertical-align:middle;">TESTE</span>{% endif %}
+        </h1>
+        <p class="page-subtitle">{{ empresa_nome }} · só boleto, sem nota fiscal · conta {{ boleto.conta_apelido }}</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas', emp=boleto.empresa_id) }}"><i class="fas fa-arrow-left"></i> Cobranças</a>
+        <a class="btn btn-primary" href="{{ url_for('financeiro.nota_nova', emp=boleto.empresa_id) }}"><i class="fas fa-plus"></i> Nova cobrança</a>
+    </div>
+</div>
+
+<div class="nf-cards">
+
+<section class="nf-card">
+    <header><b><i class="fas fa-user"></i></b><span>Pagador</span><small>quem recebe o boleto</small></header>
+    <div class="nf-card-body">
+        <dl class="nd-kv">
+            <div class="nd-span"><dt>Nome</dt><dd>{{ (boleto.pagador_nome or '—') | nome_proprio }}{% if cliente %} <small class="nd-ajuda">· {{ 'nº ' ~ cliente.numero_cliente if cliente.numero_cliente else 'avulso' }} · <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}">abrir cadastro</a></small>{% endif %}</dd></div>
+            <div><dt>CPF/CNPJ</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Documento" title="Clique para copiar">{{ boleto.pagador_doc or '—' }}</code></dd></div>
+            <div><dt>E-mail</dt><dd>{{ boleto.pagador_email or (cliente.email if cliente else '') or '—' }}</dd></div>
+        </dl>
+    </div>
+</section>
+
+<section class="nf-card" id="boleto">
+    <header><b><i class="fas fa-barcode"></i></b><span>Boleto</span><small>emitido pela Efí sem nota fiscal</small></header>
+    <div class="nf-card-body">
+        {% set volta = url_for('financeiro.boleto_detalhe', boleto_id=boleto.id) ~ '#boleto' %}
+        {% set email_padrao = cliente.email if cliente else '' %}
+        {% include 'financeiro/_boleto_card.html' %}
+    </div>
+</section>
+
+{% if titulo %}
+<section class="nf-card">
+    <header><b><i class="fas fa-receipt"></i></b><span>Título a receber</span><small>o boleto fica ligado ao título do Financeiro; o pagamento dá a baixa sozinho</small></header>
+    <div class="nf-card-body">
+        <dl class="nd-kv">
+            <div class="nd-span"><dt>Descrição</dt><dd>{{ titulo.descricao }}</dd></div>
+            <div><dt>Valor</dt><dd>{{ titulo.valor | float | format_currency }}{% if titulo.valor_baixado %}<small class="nd-ajuda"> · baixado {{ titulo.valor_baixado | float | format_currency }}</small>{% endif %}</dd></div>
+            <div><dt>Situação</dt><dd>{{ titulo.status | capitalize }}</dd></div>
+            <div><dt>Vencimento</dt><dd>{{ titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else '—' }}</dd></div>
+            <div><dt>Competência</dt><dd>{{ titulo.competencia.strftime('%m/%Y') if titulo.competencia else '—' }}</dd></div>
+        </dl>
+        <div class="nd-acoes"><a class="btn btn-outline" href="{{ url_for('financeiro.titulos', emp=boleto.empresa_id, busca=titulo.id) }}"><i class="fas fa-list"></i> Ver em Títulos</a></div>
+    </div>
+</section>
+{% endif %}
+
+</div>
+{% endblock %}

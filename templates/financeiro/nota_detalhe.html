@@ -19,7 +19,7 @@
         <p class="page-subtitle">{{ n.empresa_nome | nome_proprio }} · {{ EMISSORES.get(n.emissor or 'nacional') }}{{ ' · ambiente de teste' if teste }}</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-outline" href="{{ url_for('financeiro.notas', emp=n.empresa_id) }}"><i class="fas fa-arrow-left"></i> Notas</a>
+        <a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas', emp=n.empresa_id) }}"><i class="fas fa-arrow-left"></i> Cobranças</a>
         {% if n.situacao in ('autorizada', 'cancelada') %}
             {% if n.emissor != 'sp' %}
             <a class="btn btn-primary" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}"><i class="fas fa-file-pdf"></i> PDF da nota</a>
@@ -206,54 +206,11 @@
     <header><b><i class="fas fa-barcode"></i></b><span>Boleto</span><small>{{ 'o boleto desta nota' if boleto else 'cobrar pela Efí: a nota mais o que vai só no boleto' }}</small></header>
     <div class="nf-card-body">
     {% if boleto %}
-        <div class="nd-boleto-top">
-            <div><span class="nd-rotulo">Valor</span><strong class="nd-valor">{{ boleto.valor | float | format_currency }}</strong></div>
-            <div><span class="nd-rotulo">Situação</span><span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</div>
-        </div>
-        <dl class="nd-kv">
-            <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
-            <div><dt>Nº na Efí</dt><dd>{{ boleto.charge_id or '—' }}</dd></div>
-            {% if boleto.pago_em %}<div class="nd-span"><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }} · {{ boleto.valor_pago | float | format_currency }}</dd></div>{% endif %}
-            {% if boleto.linha_digitavel %}<div class="nd-span"><dt>Linha digitável</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Linha digitável" title="Clique para copiar">{{ boleto.linha_digitavel }}</code></dd></div>{% endif %}
-            {% if boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}
-            {% if boleto.erro %}<div class="nd-span"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
-            <div class="nd-span"><dt>E-mail ao cliente</dt><dd>{% if boleto.email_enviado_em %}enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}{% else %}ainda não enviado{% endif %}</dd></div>
-            {% if boleto.email_enviado_em %}
-            <div class="nd-span"><dt>O cliente abriu?</dt><dd class="nd-carimbos">
-                <span class="nd-carimbo {{ 'nd-carimbo-sim' if boleto.abriu_boleto_em else 'nd-carimbo-nao' }}" title="Última vez que abriu ou baixou o boleto pelo e-mail atual"><i class="fas fa-{{ 'check' if boleto.abriu_boleto_em else 'minus' }}"></i> boleto{% if boleto.abriu_boleto_em %} {{ boleto.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
-                {% if boleto.nfse_id %}<span class="nd-carimbo {{ 'nd-carimbo-sim' if boleto.abriu_nota_em else 'nd-carimbo-nao' }}" title="Última vez que viu ou baixou a nota pelo e-mail atual"><i class="fas fa-{{ 'check' if boleto.abriu_nota_em else 'minus' }}"></i> nota{% if boleto.abriu_nota_em %} {{ boleto.abriu_nota_em.strftime('%d/%m %H:%M') }}{% endif %}</span>{% endif %}
-                <span class="nd-carimbo {{ 'nd-carimbo-talvez' if boleto.email_visto_em else 'nd-carimbo-nao' }}" title="Última vez que a imagem do e-mail carregou — é indício de leitura, não prova (alguns programas de e-mail carregam sozinhos ou bloqueiam). Zera a cada reenvio."><i class="fas fa-{{ 'eye' if boleto.email_visto_em else 'minus' }}"></i> e-mail visto{% if boleto.email_visto_em %} {{ boleto.email_visto_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
-            </dd></div>
-            {% if boleto.abriu_ip %}<div class="nd-span"><dt>Última abertura veio de</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="IP" title="Clique para copiar">{{ boleto.abriu_ip }}</code>{% if boleto.abriu_agente %} <small class="nd-ajuda" title="{{ boleto.abriu_agente }}">{{ boleto.abriu_agente[:90] }}{{ '…' if boleto.abriu_agente|length > 90 }}</small>{% endif %}</dd></div>{% endif %}
-            {% endif %}
-        </dl>
-        {% if boleto.itens_json %}
-        <table class="nd-itens nd-itens-mini" style="margin-top:10px;">
-            <tbody>{% for i in boleto.itens_json %}<tr><td>{{ i.nome }}{% if not i.emite_nota %}<span class="nd-so-boleto">só boleto</span>{% endif %}</td><td class="v">{{ i.valor | float | format_currency }}</td></tr>{% endfor %}</tbody>
-        </table>
-        {% endif %}
-        <div class="nd-acoes">
-            {% if boleto.pdf_url %}<a class="btn btn-primary" href="{{ boleto.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF do boleto</a>{% endif %}
-            {% if boleto.link %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
-            {% if boleto.situacao in ('waiting', 'unpaid', 'new') %}
-            <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-sync-alt"></i> Conferir na Efí</button></form>
-            <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto"><button class="btn btn-outline"><i class="fas fa-ban"></i> Cancelar boleto</button></form>
-            {% endif %}
-            <a class="btn btn-outline" href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}"><i class="fas fa-list"></i> Todos os boletos</a>
-        </div>
-        {% if boleto.situacao not in ('canceled', 'erro') %}
-        <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="nd-email-form"{% if boleto.email_enviado_em %} onsubmit="return confirm('Este boleto já foi enviado por e-mail em {{ boleto.email_enviado_em.strftime('%d/%m/%Y às %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}. O boleto novo sai sozinho ao ser gerado. Enviar de novo?');"{% endif %}>
-            <input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto">
-            <label class="nd-rotulo" for="nd_email_para">Enviar por e-mail para</label>
-            <div class="nd-email-linha">
-                <input type="text" id="nd_email_para" name="para" class="form-control" value="{{ boleto.pagador_email or n.tomador_email or '' }}" placeholder="um ou mais e-mails, separados por vírgula">
-                <button class="btn btn-outline" type="submit"><i class="fas fa-envelope"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }} e-mail</button>
-            </div>
-            <small class="nd-ajuda">Vai a lista completa do que foi cobrado, a linha digitável, o Pix e os botões para abrir ou baixar o boleto e a nota (sem anexo: assim dá para saber o que o cliente abriu), pela caixa de e-mail da conta de cobrança.</small>
-        </form>
-        {% endif %}
+        {% set volta = url_for('financeiro.nota_detalhe', nota_id=n.id) ~ '#boleto' %}
+        {% set email_padrao = n.tomador_email %}
+        {% include 'financeiro/_boleto_card.html' %}
     {% elif not contas_cobranca %}
-        <p class="fin-fraco">A empresa ainda não tem conta de cobrança. <a href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}">Cadastre a Efí em Financeiro → Cobrança</a> e volte aqui.</p>
+        <p class="fin-fraco">A empresa ainda não tem conta de cobrança. <a href="{{ url_for('financeiro.contas', emp=n.empresa_id) }}#cobranca">Cadastre a Efí em Contas → Cobrança</a> e volte aqui.</p>
     {% else %}
         <form method="POST" action="{{ url_for('financeiro.nota_boleto', nota_id=n.id) }}" class="cb-gerar">
             <div class="nd-boleto-top">

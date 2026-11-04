@@ -199,6 +199,9 @@
     <section class="painel" id="p-contas"></section>
     <section class="painel" id="p-extratos"></section>
     <section class="painel" id="p-formatos"></section>
+    {% if pode_cobranca %}
+    <section class="painel" id="p-cobranca">{% include 'financeiro/_cobranca_contas.html' %}</section>
+    {% endif %}
 </div>
 
 {# Urls das ações; o JS troca o 0 pelo id. Ano vizinho mantém o filtro de empresa. #}
@@ -329,13 +332,15 @@ function tipoPend(p) {
 }
 
 /* ---------- abas (a aba fica no endereço: #config, #contas...) ---------- */
-const ABAS = ['painel', 'config', 'contas', 'extratos', 'formatos'];
+const ABAS = ['painel', 'config', 'contas', 'extratos', 'formatos', 'cobranca'];
 let abaOn = ABAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'painel';
 function abas(nPend, nContas, nFalta) {
   const L = [['painel','Painel',''], ['config','A configurar',`<span class="n ${nPend?'amb':''}">${nPend}</span>`],
              ['contas','Contas',`<span class="n">${nContas}</span>`],
              ['extratos','Extratos recebidos',`<span class="n ${nFalta?'verm':'verde'}">${nFalta ? nFalta + ' faltando' : 'em dia'}</span>`],
              ['formatos','Formatos por banco','']];
+  // Cobrança (Efí) mora aqui desde 04/11/2026: o cadastro da conta de cobrança é cadastro, como a conta corrente
+  if (D.pode_cobranca) L.push(['cobranca','Cobrança',`<span class="n">${D.n_cobranca}</span>`]);
   const t = document.getElementById('ctAbas');
   t.innerHTML = L.map(([k, r, n]) => `<button class="aba ${abaOn===k?'on':''}" data-a="${k}" type="button">${r} ${n}</button>`).join('');
   t.querySelectorAll('.aba').forEach(b => b.onclick = () => abrir(b.dataset.a));

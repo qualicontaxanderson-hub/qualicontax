@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Notas Fiscais - Financeiro - Qualicontax{% endblock %}
+{% block title %}Cobranças - Financeiro - Qualicontax{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
@@ -10,17 +10,17 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">
-            <i class="fas fa-file-invoice" style="color: var(--primary-green);"></i>
-            Notas Fiscais de Serviço
+            <i class="fas fa-barcode" style="color: var(--primary-green);"></i>
+            Cobranças
         </h1>
-        <p class="page-subtitle">NFS-e emitidas pelo escritório — honorários e outros serviços</p>
+        <p class="page-subtitle">Nota fiscal + boleto, só boleto ou só nota — cada cartão é uma cobrança do escritório; o pagamento dá baixa no título sozinho</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-outline" href="{{ url_for('financeiro.notas_config', emp=(sel_empresas[0] if sel_empresas|length == 1 else None)) }}">
             <i class="fas fa-sliders-h"></i> Configuração fiscal
         </a>
         <a class="btn btn-primary" href="{{ url_for('financeiro.nota_nova', emp=(sel_empresas[0] if sel_empresas|length == 1 else None)) }}">
-            <i class="fas fa-plus"></i> Nova nota
+            <i class="fas fa-plus"></i> Nova cobrança
         </a>
     </div>
 </div>
@@ -31,7 +31,7 @@
     <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
     <div class="fin-chips">
         <a class="fin-chip {{ 'ativo' if not sel_empresas }}"
-           href="{{ url_for('financeiro.notas', **_outros) }}">TODAS</a>
+           href="{{ url_for('financeiro.cobrancas', **_outros) }}">TODAS</a>
         {% for e in fin_empresas %}
         {% if e.cliente_id in sel_empresas %}
             {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
@@ -41,7 +41,7 @@
         {% set _csv = _nova | join(',') %}
         <a class="fin-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
            title="{{ e.nome_razao_social }}{{ '' if e.cliente_id in configuradas else ' — sem configuração fiscal' }}"
-           href="{{ url_for('financeiro.notas', emp=_csv, **_outros) if _csv else url_for('financeiro.notas', **_outros) }}">{{ e.apelido }}{% if e.cliente_id not in configuradas %} <i class="fas fa-exclamation-circle" style="font-size:10px;"></i>{% endif %}</a>
+           href="{{ url_for('financeiro.cobrancas', emp=_csv, **_outros) if _csv else url_for('financeiro.cobrancas', **_outros) }}">{{ e.apelido }}{% if e.cliente_id not in configuradas %} <i class="fas fa-exclamation-circle" style="font-size:10px;"></i>{% endif %}</a>
         {% endfor %}
     </div>
     <span class="fin-selo">
@@ -50,6 +50,28 @@
     </span>
 </div>
 
+{% if pode_cobranca %}
+<div class="nfc-ver">
+    <a class="{{ 'on' if ver == 'cartoes' }}" href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None) }}"><i class="fas fa-th-large"></i> Cobranças</a>
+    <a class="{{ 'on' if ver == 'boletos' }}" href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None, ver='boletos') }}"><i class="fas fa-barcode"></i> Boletos por vencimento</a>
+</div>
+{% endif %}
+<style>
+.nfc-ver { display:flex; gap:6px; margin:0 0 12px; }
+.nfc-ver a { font-size:13px; font-weight:700; padding:7px 14px; border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; text-decoration:none; background:#fff; }
+.nfc-ver a.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+</style>
+
+{% if ver == 'boletos' %}
+{% if resumo_boletos %}
+<div class="fin-kpis">
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Boletos em aberto</div><div class="fin-kpi-val">{{ resumo_boletos.abertos }}</div><div class="fin-kpi-pe">{{ resumo_boletos.valor_aberto | float | format_currency }}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Pagos neste mês</div><div class="fin-kpi-val">{{ resumo_boletos.pagos_mes }}</div><div class="fin-kpi-pe">{{ resumo_boletos.valor_pago_mes | float | format_currency }}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Vencidos</div><div class="fin-kpi-val">{{ resumo_boletos.vencidos }}</div><div class="fin-kpi-pe">sem pagamento após o vencimento</div></div>
+</div>
+{% endif %}
+{% include 'financeiro/_boletos_tabela.html' %}
+{% else %}
 <div class="fin-kpis">
     <div class="fin-kpi">
         <div class="fin-kpi-lbl">Notas no mês</div>
@@ -86,7 +108,7 @@
         <i class="fas fa-chevron-down" id="nfChevron" style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
     </div>
     <div id="nfFiltroCorpo" style="display:{{ '' if _ativos else 'none' }};">
-        <form method="GET" action="{{ url_for('financeiro.notas') }}">
+        <form method="GET" action="{{ url_for('financeiro.cobrancas') }}">
             <input type="hidden" name="emp" value="{{ filtros.emp }}">
             <div class="fin-grade">
                 <div>
@@ -104,7 +126,7 @@
             </div>
             <div class="fin-acoes-filtro">
                 <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i> Filtrar</button>
-                <a class="btn btn-outline" href="{{ url_for('financeiro.notas', emp=filtros.emp or None) }}">Limpar</a>
+                <a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None) }}">Limpar</a>
             </div>
         </form>
     </div>
@@ -123,6 +145,7 @@
 .nfc .gc-ava.nfc-ava-sp { background:linear-gradient(135deg,#0ea5e9,#0c4a6e); }
 .nfc .gc-ava.nfc-ava-teste { background:linear-gradient(135deg,#d97706,#78350f); }
 .nfc .gc-ava.nfc-ava-off { background:linear-gradient(135deg,#94a3b8,#475569); }
+.nfc .gc-ava.nfc-ava-bol { background:linear-gradient(135deg,#2563eb,#1e3a5f); font-size:16px; }
 .nfc-doc { display:block; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .nfc-doc .mono { font-family:Consolas,'Courier New',monospace; }
 .nfc-meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 12px; padding:10px 12px;
@@ -151,17 +174,17 @@
 <div class="nfc-faixa">
     <span>
         {% if padrao_45 %}
-            Mostrando as notas dos <b>últimos 45 dias</b> ({{ notas|length }}).
-            <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None, tudo=1) }}">Ver todas</a>
+            Mostrando as cobranças dos <b>últimos 45 dias</b> ({{ notas|length }}).
+            <a href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None, tudo=1) }}">Ver todas</a>
         {% elif filtros.tudo and not (filtros.de or filtros.ate or filtros.busca or filtros.situacao != 'todas') %}
-            Mostrando <b>todas</b> as notas{{ ' (as 400 mais recentes)' if notas|length >= 400 }}.
-            <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None) }}">Só os últimos 45 dias</a>
+            Mostrando <b>todas</b> as cobranças{{ ' (as 400 mais recentes)' if notas|length >= 400 }}.
+            <a href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None) }}">Só os últimos 45 dias</a>
         {% else %}
-            <b>{{ notas|length }}</b> nota{{ '' if notas|length == 1 else 's' }} com os filtros.
-            <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None) }}">Limpar</a>
+            <b>{{ notas|length }}</b> cobrança{{ '' if notas|length == 1 else 's' }} com os filtros.
+            <a href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None) }}">Limpar</a>
         {% endif %}
     </span>
-    <span class="fin-fraco">Clique no cartão para abrir a nota.</span>
+    <span class="fin-fraco">Clique no cartão para abrir.</span>
 </div>
 
 {% if notas %}
@@ -170,25 +193,33 @@
     {% set teste = n.ambiente == 2 %}
     {% set pf = (n.tomador_doc or '')|replace('.', '')|replace('-', '')|replace('/', '')|length == 11 %}
     {% set autorizada = n.situacao == 'autorizada' %}
-    <article class="gc-card nfc" data-open-url="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}" tabindex="0" role="button" title="Abrir a nota">
+    {% set so_boleto = n.tipo == 'boleto' %}
+    {% set abrir_url = url_for('financeiro.boleto_detalhe', boleto_id=n.id) if so_boleto else url_for('financeiro.nota_detalhe', nota_id=n.id) %}
+    <article class="gc-card nfc" data-open-url="{{ abrir_url }}" tabindex="0" role="button" title="{{ 'Abrir o boleto' if so_boleto else 'Abrir a nota' }}">
         <header class="gc-head">
+            {% if so_boleto %}
+            <span class="gc-ava nfc-ava-bol{{ ' nfc-ava-teste' if teste }}" title="Boleto sem nota fiscal{{ ' · ambiente de teste' if teste }}"><i class="fas fa-barcode"></i><small>{{ 'teste' if teste else 'só boleto' }}</small></span>
+            {% else %}
             <span class="gc-ava {{ 'nfc-ava-teste' if teste else ('nfc-ava-sp' if n.emissor == 'sp' else '') }}{{ ' nfc-ava-off' if n.situacao in ('cancelada', 'rejeitada', 'erro') and not teste }}" title="Série {{ n.serie }}, DPS nº {{ n.numero_dps }}{{ ' · ambiente de teste' if teste }}">
                 {{ n.serie }}-{{ n.numero_dps }}<small>{{ 'teste' if teste else ('SP' if n.emissor == 'sp' else 'nacional') }}</small>
             </span>
+            {% endif %}
             <div class="gc-tit">
                 <h3 title="{{ n.tomador_nome or '' }}">{{ (n.tomador_nome or '—') | nome_proprio }}</h3>
                 <span class="nfc-doc">{{ 'CPF' if pf else 'CNPJ' }} <span class="mono">{{ n.tomador_doc or '—' }}</span>{% if not sel_empresas or sel_empresas|length > 1 %} · por <b>{{ emp_mapa.get(n.empresa_id, n.empresa_id) }}</b>{% endif %}</span>
             </div>
-            <span class="nf-pill nf-pill-{{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao) | upper }}</span>
+            {% if so_boleto %}<span class="nf-pill cb-sit-{{ n.situacao }}">{{ SIT_BOLETO.get(n.situacao, n.situacao) | upper }}</span>
+            {% else %}<span class="nf-pill nf-pill-{{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao) | upper }}</span>{% endif %}
         </header>
 
         <div class="nfc-meta">
             <div class="nfc-meta-valor">
                 <span class="nfc-valor">{{ n.valor_servico | float | round(2) | format_currency }}{% if n.valor_liquido is not none and n.valor_liquido != n.valor_servico %}<small>líquido {{ n.valor_liquido | float | round(2) | format_currency }}</small>{% endif %}</span>
-                {% if n.numero_nfse %}<span class="fin-fraco" style="font-size:12px;">NFS-e nº <b style="color:#0f3d2e;">{{ n.numero_nfse }}</b></span>{% endif %}
+                {% if so_boleto %}<span class="fin-fraco" style="font-size:12px;">Boleto Efí nº <b style="color:#0f3d2e;">{{ n.charge_id or '—' }}</b></span>
+                {% elif n.numero_nfse %}<span class="fin-fraco" style="font-size:12px;">NFS-e nº <b style="color:#0f3d2e;">{{ n.numero_nfse }}</b></span>{% endif %}
             </div>
             <div class="cli-campo"><span class="cli-rot">Emissão</span><b class="cli-val">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y') }}</b></div>
-            <div class="cli-campo"><span class="cli-rot">Competência</span><b class="cli-val">{{ n.competencia.strftime('%m/%Y') if n.competencia else '—' }}</b></div>
+            <div class="cli-campo"><span class="cli-rot">{{ 'Vencimento' if so_boleto else 'Competência' }}</span><b class="cli-val">{{ n.boleto_vencimento.strftime('%d/%m/%Y') if so_boleto and n.boleto_vencimento else (n.competencia.strftime('%m/%Y') if n.competencia else '—') }}</b></div>
             <div class="cli-campo"><span class="cli-rot">{{ 'Cancelada em' if n.situacao == 'cancelada' else 'Emitida por' }}</span><b class="cli-val">{{ n.cancelada_em.strftime('%d/%m/%Y') if n.situacao == 'cancelada' and n.cancelada_em else emp_mapa.get(n.empresa_id, '—') }}</b></div>
         </div>
 
@@ -226,8 +257,10 @@
                 <span class="cli-selo-t"><b>Precisa reemitir</b><small>corrija o que o governo apontou</small></span></span>
             {% endif %}
             <div class="nfc-acoes">
-                <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}" title="Detalhes"><i class="fas fa-eye"></i> Abrir</a>
-                {% if n.situacao in ('autorizada', 'cancelada') %}
+                <a class="fin-btn-tag" href="{{ abrir_url }}" title="Detalhes"><i class="fas fa-eye"></i> Abrir</a>
+                {% if so_boleto %}
+                    {% if n.pdf_url %}<a class="fin-btn-tag" href="{{ n.pdf_url }}" title="PDF do boleto" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
+                {% elif n.situacao in ('autorizada', 'cancelada') %}
                     {% if n.emissor != 'sp' %}<a class="fin-btn-tag" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}" title="PDF da nota" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
                     <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}" title="XML da NFS-e"><i class="fas fa-file-code"></i> XML</a>
                 {% elif n.situacao in ('rejeitada', 'erro') %}
@@ -242,15 +275,16 @@
 <div class="fin-caixa">
     <div class="fin-vazio">
         <i class="fas fa-file-invoice" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-        {% if padrao_45 %}Nenhuma nota nos últimos 45 dias. <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None, tudo=1) }}">Ver todas as notas</a>.{% else %}Nenhuma nota com esses filtros.{% endif %}
+        {% if padrao_45 %}Nenhuma cobrança nos últimos 45 dias. <a href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None, tudo=1) }}">Ver todas</a>.{% else %}Nenhuma cobrança com esses filtros.{% endif %}
         {% if sel_empresas|length == 1 and sel_empresas[0] not in configuradas %}
         <br>Esta empresa ainda não tem configuração fiscal:
         <a href="{{ url_for('financeiro.notas_config', emp=sel_empresas[0]) }}">preencha aqui</a> antes da primeira nota.
         {% else %}
-        <br>Emita a primeira no botão <strong>Nova nota</strong>.
+        <br>Emita a primeira no botão <strong>Nova cobrança</strong>.
         {% endif %}
     </div>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}
 

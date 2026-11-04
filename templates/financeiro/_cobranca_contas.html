@@ -1,32 +1,10 @@
-{% extends "base.html" %}
-
-{% block title %}Cobrança - Financeiro - Qualicontax{% endblock %}
-
-{% block content %}
-{% include 'financeiro/_nav_financeiro.html' %}
-
-<div class="page-header">
-    <div>
-        <h1 class="page-title">
-            <i class="fas fa-barcode" style="color: var(--primary-green);"></i>
-            Cobrança
-        </h1>
-        <p class="page-subtitle">Contas de cobrança (Efí, Bradesco) e os boletos emitidos — o pagamento dá baixa no título sozinho</p>
-    </div>
-    <div class="page-actions">
-        <button type="button" class="btn btn-primary" id="cbNova"><i class="fas fa-plus"></i> Nova conta de cobrança</button>
-    </div>
+{# Contas de cobrança (Efí) — mora na tela Contas Bancárias, aba Cobrança (Anderson, 04/11/2026:
+   'Contas tem o cadastro da conta corrente, uma das abas é o cadastro de Cobrança').
+   Espera: contas_cob, bancarias, fin_empresas, PROVEDORES, AMBIENTES, AVISA_POR, webhook_base. #}
+<div class="nf-sec" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+    <div><h3 style="margin:0;"><i class="fas fa-university" style="color:#0369a1;"></i> Contas de cobrança <small>Efí: uma por empresa e ambiente; teste antes de emitir. O boleto e a nota nascem em <a href="{{ url_for('financeiro.cobrancas') }}">Cobranças</a>.</small></h3></div>
+    <button type="button" class="btn btn-primary" id="cbNova"><i class="fas fa-plus"></i> Nova conta de cobrança</button>
 </div>
-
-{% include 'financeiro/_sel_empresas.html' %}
-
-<div class="fin-kpis">
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Boletos em aberto</div><div class="fin-kpi-val">{{ resumo.abertos }}</div><div class="fin-kpi-pe">{{ resumo.valor_aberto | float | format_currency }}</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Pagos neste mês</div><div class="fin-kpi-val">{{ resumo.pagos_mes }}</div><div class="fin-kpi-pe">{{ resumo.valor_pago_mes | float | format_currency }}</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Vencidos</div><div class="fin-kpi-val">{{ resumo.vencidos }}</div><div class="fin-kpi-pe">sem pagamento após o vencimento</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Contas de cobrança</div><div class="fin-kpi-val">{{ contas | selectattr('ativo') | list | length }}</div><div class="fin-kpi-pe">{{ contas | rejectattr('ativo') | list | length }} desligada(s)</div></div>
-</div>
-
 <!-- ===== formulário (nova / editar) ===== -->
 <div class="nf-sec cb-form" id="cbForm" hidden>
     <h3><i class="fas fa-key" style="color:#6d28d9;"></i> <span id="cbFormTitulo">Nova conta de cobrança</span>
@@ -155,12 +133,11 @@
 
 <!-- ===== contas de cobrança ===== -->
 <div class="nf-sec">
-    <h3><i class="fas fa-university" style="color:#0369a1;"></i> Contas de cobrança <small>uma por empresa e ambiente; teste antes de emitir</small></h3>
-    {% if not contas %}
+    {% if not contas_cob %}
     <p class="fin-fraco">Nenhuma conta de cobrança ainda. Clique em <strong>Nova conta de cobrança</strong>, cole as credenciais da aplicação da Efí e teste.</p>
     {% endif %}
     <div class="cb-grid">
-        {% for c in contas %}
+        {% for c in contas_cob %}
         <article class="cb-card {{ 'cb-off' if not c.ativo }}" data-c='{{ {"id": c.id, "empresa_id": c.empresa_id, "apelido": c.apelido, "provedor": c.provedor, "ambiente": c.ambiente, "fin_conta_id": c.fin_conta_id or "", "chave_pix": c.chave_pix or "", "juros_mes": ("%.2f" % c.juros_mes).replace(".", ","), "multa_pct": ("%.2f" % c.multa_pct).replace(".", ","), "dias_baixa": c.dias_baixa, "dia_vencimento": c.dia_vencimento or "", "mensagem_padrao": c.mensagem_padrao or "", "tem_client_id": c.tem_client_id, "tem_secret": c.tem_secret, "tem_certificado": c.tem_certificado, "client_id_mascara": c.client_id_mascara, "avisa_por": c.avisa_por or "app", "email_remetente": c.email_remetente or "", "email_nome": c.email_nome or "", "email_host": c.email_host or "smtp.titan.email", "email_porta": c.email_porta or 465, "tem_email_senha": c.tem_email_senha} | tojson }}'>
             <div class="cb-card-top">
                 <div class="cb-card-ico"><i class="fas fa-{{ 'flask' if c.ambiente != 'producao' else 'university' }}"></i></div>
@@ -204,57 +181,6 @@
     </div>
 </div>
 
-<!-- ===== boletos ===== -->
-<div class="nf-sec">
-    <h3><i class="fas fa-barcode" style="color:#15803d;"></i> Boletos <small>emitidos a partir das notas; o pagamento chega pelo aviso da Efí</small></h3>
-    <form method="GET" class="fin-filtros" action="{{ url_for('financeiro.cobranca') }}">
-        <input type="hidden" name="emp" value="{{ filtros.emp }}">
-        <select name="situacao" class="form-control" onchange="this.form.submit()">
-            <option value="todas" {{ 'selected' if filtros.situacao == 'todas' }}>Todos</option>
-            <option value="abertos" {{ 'selected' if filtros.situacao == 'abertos' }}>Em aberto</option>
-            <option value="paid" {{ 'selected' if filtros.situacao == 'paid' }}>Pagos</option>
-            <option value="unpaid" {{ 'selected' if filtros.situacao == 'unpaid' }}>Vencidos</option>
-            <option value="canceled" {{ 'selected' if filtros.situacao == 'canceled' }}>Cancelados</option>
-            <option value="erro" {{ 'selected' if filtros.situacao == 'erro' }}>Com erro</option>
-        </select>
-        <input type="date" name="de" class="form-control" value="{{ filtros.de }}" title="Vencimento de">
-        <input type="date" name="ate" class="form-control" value="{{ filtros.ate }}" title="Vencimento até">
-        <input type="search" name="busca" class="form-control" value="{{ filtros.busca }}" placeholder="pagador, CNPJ, nº Efí">
-        <button class="btn btn-outline"><i class="fas fa-filter"></i> Filtrar</button>
-    </form>
-    {% if boletos %}
-    <div class="fin-rolar">
-        <table class="fin-tab" style="min-width:0;">
-            <thead><tr><th>Vencimento</th><th>Pagador</th><th>Nota</th><th>Valor</th><th>Situação</th><th>Conta</th><th></th></tr></thead>
-            <tbody>
-                {% for b in boletos %}
-                <tr>
-                    <td class="fin-td-meta fin-num">{{ b.vencimento.strftime('%d/%m/%Y') }}</td>
-                    <td class="fin-td-titulo"><strong>{{ b.pagador_nome }}</strong><br><small class="fin-fraco">{{ b.pagador_doc }}{{ ' · Efí nº ' ~ b.charge_id if b.charge_id }}</small></td>
-                    <td class="fin-td-extra">{% if b.nfse_id %}<a href="{{ url_for('financeiro.nota_detalhe', nota_id=b.nfse_id) }}">{{ b.serie }}-{{ b.numero_dps }}{{ ' · NFS-e ' ~ b.numero_nfse if b.numero_nfse }}</a>{% else %}—{% endif %}</td>
-                    <td class="fin-td-valor fin-num">{{ b.valor | float | format_currency }}{% if b.valor_pago %}<br><small class="fin-fraco">pago {{ b.valor_pago | float | format_currency }}</small>{% endif %}</td>
-                    <td class="fin-td-oculta"><span class="nf-pill cb-sit-{{ b.situacao }}">{{ b.situacao_txt | upper }}</span>{% if b.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}{% if b.pago_em %}<br><small class="fin-fraco">em {{ b.pago_em.strftime('%d/%m/%Y') }}</small>{% endif %}{% if b.email_enviado_em %}<br><small class="fin-fraco" title="E-mail enviado em {{ b.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}{% if b.email_visto_em %} · visto {{ b.email_visto_em.strftime('%d/%m %H:%M') }} (indício){% endif %}{% if b.abriu_boleto_em %} · abriu o boleto {{ b.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}{% if b.abriu_nota_em %} · abriu a nota {{ b.abriu_nota_em.strftime('%d/%m %H:%M') }}{% endif %}"><i class="fas fa-envelope"></i> {% if b.abriu_boleto_em or b.abriu_nota_em %}<span style="color:#1e6b2c;">abriu {{ 'boleto' if b.abriu_boleto_em }}{{ ' e ' if b.abriu_boleto_em and b.abriu_nota_em }}{{ 'nota' if b.abriu_nota_em }}</span>{% elif b.email_visto_em %}<span style="color:#9a5b00;">visto</span>{% else %}enviado, não aberto{% endif %}</small>{% endif %}</td>
-                    <td class="fin-td-extra fin-fraco">{{ b.conta_apelido }}</td>
-                    <td class="fin-td-acao" style="white-space:nowrap;">
-                        {% if b.pdf_url %}<a class="fin-btn-tag" href="{{ b.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
-                        {% if b.situacao in ('waiting', 'unpaid', 'new') %}
-                        <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=b.id) }}" style="display:inline;"><input type="hidden" name="volta" value="{{ request.full_path }}"><button class="fin-btn-tag" title="Perguntar à Efí como está"><i class="fas fa-sync-alt"></i></button></form>
-                        <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=b.id) }}" style="display:inline;" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ request.full_path }}"><button class="fin-btn-tag"><i class="fas fa-ban"></i></button></form>
-                        {% endif %}
-                        {% if b.situacao == 'erro' %}<span class="fin-fraco" title="{{ b.erro }}"><i class="fas fa-exclamation-circle" style="color:#b91c1c;"></i> {{ (b.erro or '')[:60] }}</span>{% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="fin-fraco">Nenhum boleto ainda. O boleto nasce na tela da nota autorizada: botão <strong>Gerar boleto</strong>.</p>
-    {% endif %}
-</div>
-{% endblock %}
-
-{% block extra_js %}
 <script>
 (function () {
     function $(id) { return document.getElementById(id); }
@@ -306,4 +232,3 @@
     });
 })();
 </script>
-{% endblock %}

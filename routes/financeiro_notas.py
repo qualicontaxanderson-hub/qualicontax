@@ -54,24 +54,84 @@ def _empresa_unica(emps, sel):
 @financeiro.route('/financeiro/notas')
 @permission_required(PERM)
 def notas():
+    """Endereço antigo (até 04/11/2026): a lista de notas virou a tela Cobranças."""
+    return redirect(url_for('financeiro.cobrancas', **{k: v for k, v in request.args.items()}))
+
+
+def _cartao_do_boleto(b):
+    """Boleto SEM nota como cartão da tela Cobranças (mesmos campos que o cartão da nota usa)."""
+    itens = b.get('itens_json') or []
+    if isinstance(itens, str):
+        try:
+            itens = json.loads(itens)
+        except ValueError:
+            itens = []
+    return {
+        'tipo': 'boleto', 'id': b['id'], 'empresa_id': b['empresa_id'], 'ambiente': 1 if b['ambiente'] == 'producao' else 2,
+        'emissor': None, 'serie': None, 'numero_dps': None, 'situacao': b['situacao'], 'numero_nfse': None,
+        'dh_emissao': b.get('criado_em'), 'criado_em': b.get('criado_em'), 'competencia': None, 'cancelada_em': None,
+        'tomador_doc': b.get('pagador_doc'), 'tomador_nome': b.get('pagador_nome'),
+        'descricao': ' + '.join(i.get('nome') or '' for i in itens) or 'Boleto', 'valor_servico': b['valor'], 'valor_liquido': None,
+        'erro_ultimo': b.get('erro'), 'boleto_id': b['id'], 'boleto_situacao': b['situacao'], 'boleto_vencimento': b['vencimento'],
+        'boleto_pago_em': b.get('pago_em'), 'boleto_valor_pago': b.get('valor_pago'), 'boleto_ambiente': b['ambiente'],
+        'email_enviado_em': b.get('email_enviado_em'), 'email_visto_em': b.get('email_visto_em'),
+        'abriu_boleto_em': b.get('abriu_boleto_em'), 'abriu_nota_em': None, 'pdf_url': b.get('pdf_url'),
+        'charge_id': b.get('charge_id'),
+    }
+
+
+@financeiro.route('/financeiro/cobrancas')
+@permission_required(PERM)
+def cobrancas():
+    """COBRANÇAS (Anderson, 04/11/2026): a tela em cartões — cada cartão é uma cobrança (nota com boleto, só
+    nota ou só boleto) — e a visão Boletos (tabela por vencimento). Abre com os últimos 45 dias."""
+    from models.fin_cobranca import FinBoleto
+    from utils.integrations.efi.client import SITUACOES as SIT_BOLETO
     emps, sel, mapa = _empresas_ctx()
+    ver = 'boletos' if request.args.get('ver') == 'boletos' else 'cartoes'
     situacao = request.args.get('situacao') or 'todas'
     de = request.args.get('de') or ''
     ate = request.args.get('ate') or ''
     busca = (request.args.get('busca') or '').strip()
+    pode_cob = pode_rota('financeiro.cobranca')
+    configuradas = {e['cliente_id'] for e in emps if NfseConfig.get(e['cliente_id'])}
+    comum = dict(fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, configuradas=configuradas, ver=ver,
+                 pode_cobranca=pode_cob, SIT_BOLETO=SIT_BOLETO, hoje=date.today(), **_LISTAS)
+    if ver == 'boletos':
+        boletos = []
+        if pode_cob:
+            boletos = FinBoleto.listar(empresa_ids=sel, situacao=situacao, de=de or None, ate=ate or None, busca=busca or None)
+            for b in boletos:
+                b['situacao_txt'] = SIT_BOLETO.get(b['situacao'], b['situacao'])
+        return render_template(
+            'financeiro/cobrancas.html', boletos=boletos, resumo_boletos=FinBoleto.resumo(sel) if pode_cob else None,
+            filtros=dict(situacao=situacao, de=de, ate=ate, busca=busca, emp=','.join(map(str, sel)), tudo=''),
+            padrao_45=False, **comum)
     # Sem filtro nenhum a tela abre com os ULTIMOS 45 DIAS (Anderson, 04/11/2026); "ver todas" manda ?tudo=1.
     padrao_45 = not (de or ate or busca or situacao != 'todas' or request.args.get('tudo'))
-    de_efetivo = (date.today() - timedelta(days=45)).isoformat() if padrao_45 else de
-    lista = NfseEmitida.listar(empresa_ids=sel, situacao=situacao, de=de_efetivo or None, ate=ate or None,
-                               busca=busca or None)
-    configuradas = {e['cliente_id'] for e in emps if NfseConfig.get(e['cliente_id'])}
-    from utils.integrations.efi.client import SITUACOES as SIT_BOLETO
+    corte = date.today() - timedelta(days=45)
+    de_efetivo = corte.isoformat() if padrao_45 else de
+    sit_nota = situacao if situacao in SITUACOES else 'todas'
+    cartoes = [dict(n, tipo='nota') for n in NfseEmitida.listar(empresa_ids=sel, situacao=sit_nota, de=de_efetivo or None,
+                                                                   ate=ate or None, busca=busca or None)]
+    if pode_cob and situacao == 'todas':
+        for b in FinBoleto.listar(empresa_ids=sel, busca=busca or None):
+            if b.get('nfse_id') or b['situacao'] == 'erro':
+                continue
+            criado = b.get('criado_em').date() if hasattr(b.get('criado_em'), 'date') else None
+            if padrao_45 and criado and criado < corte:
+                continue
+            if de and criado and criado < date.fromisoformat(de):
+                continue
+            if ate and criado and criado > date.fromisoformat(ate):
+                continue
+            cartoes.append(_cartao_do_boleto(b))
+    cartoes.sort(key=lambda c: (c.get('dh_emissao') or c.get('criado_em') or date.min).isoformat(), reverse=True)
     return render_template(
-        'financeiro/notas.html', notas=lista, resumo=NfseEmitida.resumo(sel),
-        fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, configuradas=configuradas,
+        'financeiro/cobrancas.html', notas=cartoes, resumo=NfseEmitida.resumo(sel), boletos=None, resumo_boletos=None,
         filtros=dict(situacao=situacao, de=de, ate=ate, busca=busca, emp=','.join(map(str, sel)),
                      tudo=request.args.get('tudo') or ''),
-        padrao_45=padrao_45, SIT_BOLETO=SIT_BOLETO, hoje=date.today(), **_LISTAS)
+        padrao_45=padrao_45, **comum)
 
 
 # ---------------------------------------------------------------------------
@@ -195,16 +255,24 @@ def nota_nova():
     if not emp_id:
         flash('Marque uma empresa em Minhas Empresas antes de emitir.', 'warning')
         return redirect(url_for('financeiro.empresas'))
+    # Boleto na mesma tela (Anderson, 04/11/2026: "eleição se será emitido com NF ou só o boleto ou só a nota")
+    from models.fin_cobranca import FinCobrancaConta
+    from routes.financeiro_cobranca import sugestao_boleto
+    contas_cobranca = (FinCobrancaConta.listar(empresa_ids=[emp_id], apenas_ativas=True)
+                       if pode_rota('financeiro.cobranca') else [])
+    conta_padrao = next((c for c in contas_cobranca if c['ambiente'] == 'producao'), contas_cobranca[0] if contas_cobranca else None)
     cfg = NfseConfig.get(emp_id)
-    if not cfg:
+    if not cfg and not contas_cobranca:
         flash('Preencha a configuração fiscal da empresa antes da primeira nota.', 'warning')
         return redirect(url_for('financeiro.notas_config', emp=emp_id))
-    series = [s for s in NfseEmitida.series(emp_id) if s['ativo']]
+    sem_cfg = not cfg                 # sem configuração fiscal só dá para emitir o boleto
+    cfg = cfg or {}
+    series = [s for s in NfseEmitida.series(emp_id) if s['ativo']] if not sem_cfg else []
     for s in series:
         s['emissor'] = nfse_emissor.emissor_da_serie(cfg, s['serie'])
     # série sugerida: a do emissor configurado, em produção
     sugerida = next((s['serie'] for s in series
-                     if s['emissor'] == cfg['emissor'] and s['ambiente'] == 1), None) \
+                     if s['emissor'] == cfg.get('emissor') and s['ambiente'] == 1), None) \
         or (series[0]['serie'] if series else '')
     # ``pre`` = o que o formulário nasce mostrando: o padrão da empresa, coberto
     # pela nota anterior (?de=, para corrigir uma rejeitada) e pelo título (?titulo=).
@@ -251,14 +319,24 @@ def nota_nova():
             pre['tomador_cliente_id'] = titulo['cliente_id']
         else:                                            # título sem cadastro ligado: a busca nasce preenchida
             pre['tomador_busca'] = titulo.get('contraparte_doc') or titulo.get('contraparte_nome') or ''
-    if not pre.get('descricao'):
+    if not pre.get('descricao') and not sem_cfg:
         pre['descricao'] = NfseConfig.descricao_para(cfg, date.fromisoformat(str(pre['competencia'])[:10]))
     empresa = next((e for e in emps if e['cliente_id'] == emp_id), None)
+    modo = request.args.get('modo') or ('boleto' if sem_cfg else ('nota_boleto' if contas_cobranca else 'nota'))
+    if modo not in ('nota_boleto', 'boleto', 'nota'):
+        modo = 'nota_boleto'
+    if sem_cfg:
+        modo = 'boleto'
+    elif not contas_cobranca:
+        modo = 'nota'
+    venc_sugerido, msg_sugerida = sugestao_boleto(conta_padrao, date.fromisoformat(str(pre['competencia'])[:10]))
     return render_template(
         'financeiro/nota_nova.html', cfg=cfg, empresa=empresa, emp_id=emp_id, series=series, pre=pre,
         titulos=titulos_para_nota(emp_id), titulo=titulo,
         servicos=NfseServico.para_tela(NfseServico.listar(emp_id, so_ativos=True)),
         pre_itens=pre.get('itens') or ([{'sid': '', 'valor': str(pre['valor_servico'])}] if pre.get('valor_servico') else []),
+        modo=modo, sem_cfg=sem_cfg, contas_cobranca=contas_cobranca, conta_padrao=conta_padrao,
+        venc_sugerido=venc_sugerido, msg_sugerida=msg_sugerida,
         fin_empresas=emps, sel_empresas=[emp_id], emp_mapa=mapa, hoje=date.today(), **_LISTAS)
 
 
@@ -269,10 +347,19 @@ def nota_emitir():
     if not emp_raw.isdigit() or int(emp_raw) not in FinEmpresa.ids_validos():
         abort(400)
     emp_id = int(emp_raw)
+    modo = request.form.get('modo') or 'nota'
+    if modo == 'boleto':
+        return _emitir_so_boleto(emp_id)
     cfg = NfseConfig.get(emp_id)
     if not cfg:
         flash('Empresa sem configuração fiscal.', 'danger')
         return redirect(url_for('financeiro.notas_config', emp=emp_id))
+    dados_boleto = None
+    if modo == 'nota_boleto':
+        dados_boleto, erro = _dados_do_boleto(emp_id)
+        if erro:
+            flash(erro, 'danger')
+            return redirect(url_for('financeiro.nota_nova', emp=emp_id, modo=modo))
     try:
         pedido = nfse_emissor.pedido_do_form(request.form, emp_id, cfg)
         linha = nfse_emissor.emitir(pedido, cfg, usuario_id=current_user.id)
@@ -299,12 +386,86 @@ def nota_emitir():
         flash(f"Nota autorizada — série {linha['serie']} nº {linha['numero_dps']}"
               + (f", NFS-e nº {linha['numero_nfse']}" if linha.get('numero_nfse') else '')
               + (' (ambiente de teste)' if linha['ambiente'] == 2 else '') + '.', 'success')
+        if dados_boleto:                      # nota + boleto: o boleto sai em seguida, pela mesma tela
+            from routes.financeiro_cobranca import gerar_boleto_da_nota
+            n = NfseEmitida.get(linha['id'])
+            ok, msg, aviso = gerar_boleto_da_nota(n, dados_boleto['conta'], dados_boleto['vencimento'],
+                                                  dados_boleto['mensagem'], current_user.id)
+            flash(msg, 'success' if ok else 'danger')
+            if aviso:
+                flash(aviso, 'success' if aviso.startswith('E-mail enviado') else 'warning')
+    elif dados_boleto:
+        flash('O boleto não foi gerado porque a nota não foi autorizada.', 'warning')
     elif linha['situacao'] == 'rejeitada':
         flash('A nota foi recusada. Veja o motivo abaixo, corrija e emita de novo '
               '(o número ficou registrado como rejeitado).', 'danger')
     else:
         flash('Falha ao enviar a nota. O número ficou registrado; veja o erro abaixo.', 'danger')
     return redirect(url_for('financeiro.nota_detalhe', nota_id=linha['id']))
+
+
+def _dados_do_boleto(emp_id):
+    """Conta, vencimento e observação do boleto vindos da tela Nova cobrança. (dict, erro)."""
+    from models.fin_cobranca import FinCobrancaConta
+    if not pode_rota('financeiro.cobranca'):
+        return None, 'Você não tem acesso à cobrança para gerar o boleto.'
+    conta_id = request.form.get('conta_id', '')
+    conta = FinCobrancaConta.get(int(conta_id)) if conta_id.isdigit() else None
+    if not conta or conta['empresa_id'] != emp_id or not conta.get('ativo'):
+        return None, 'Escolha a conta de cobrança do boleto.'
+    try:
+        vencimento = date.fromisoformat(request.form.get('vencimento') or '')
+    except ValueError:
+        return None, 'Informe o vencimento do boleto.'
+    if vencimento < date.today():
+        return None, 'O vencimento do boleto precisa ser hoje ou depois.'
+    return {'conta': conta, 'vencimento': vencimento, 'mensagem': (request.form.get('mensagem') or '').strip()}, None
+
+
+def _emitir_so_boleto(emp_id):
+    """Modo "só o boleto" da tela Nova cobrança: sem nota fiscal; o título é o centro."""
+    from routes.financeiro_cobranca import emitir_boleto_avulso, itens_avulsos_do_form, _pagador_do_tomador
+    volta = url_for('financeiro.nota_nova', emp=emp_id, modo='boleto')
+    dados, erro = _dados_do_boleto(emp_id)
+    if erro:
+        flash(erro, 'danger')
+        return redirect(volta)
+    cid = request.form.get('tomador_cliente_id', '')
+    t = tomador_do_cliente(int(cid), consultar_cep=False) if cid.isdigit() else None
+    if not t or not t.get('documento') or not t.get('nome'):
+        flash('Escolha no cadastro quem recebe o boleto (com CPF/CNPJ e nome).', 'danger')
+        return redirect(volta)
+    try:
+        competencia = date.fromisoformat(request.form.get('competencia') or date.today().isoformat())
+    except ValueError:
+        flash('Competência inválida.', 'danger')
+        return redirect(volta)
+    try:
+        itens, total = itens_avulsos_do_form(request.form, emp_id, competencia)
+    except ValueError as exc:
+        flash(str(exc), 'danger')
+        return redirect(volta)
+    titulo_id = None
+    tid = request.form.get('fin_titulo_id', '')
+    if tid.isdigit():
+        tit = execute_query('SELECT id, boleto_id FROM fin_titulos WHERE id = %s AND empresa_id = %s AND tipo = %s',
+                            (int(tid), emp_id, 'R'), fetch=True, fetch_one=True)
+        if not tit:
+            flash('O título escolhido não é desta empresa.', 'danger')
+            return redirect(volta)
+        if tit.get('boleto_id'):
+            flash('Esse título já tem boleto.', 'danger')
+            return redirect(volta)
+        titulo_id = tit['id']
+    boleto_id, ok, msg, aviso = emitir_boleto_avulso(emp_id, dados['conta'], _pagador_do_tomador(t), itens, total,
+                                                     competencia, dados['vencimento'], dados['mensagem'], titulo_id,
+                                                     current_user.id)
+    flash(msg, 'success' if ok else 'danger')
+    if aviso:
+        flash(aviso, 'success' if aviso.startswith('E-mail enviado') else 'warning')
+    if not boleto_id:
+        return redirect(volta)
+    return redirect(url_for('financeiro.boleto_detalhe', boleto_id=boleto_id))
 
 
 # ---------------------------------------------------------------------------

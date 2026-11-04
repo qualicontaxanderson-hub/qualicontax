@@ -1,0 +1,59 @@
+{# Tabela de boletos por vencimento — visão 'Boletos' da tela Cobranças. Espera: boletos, filtros. #}
+<!-- ===== boletos ===== -->
+<div class="nf-sec">
+    <h3><i class="fas fa-barcode" style="color:#15803d;"></i> Boletos <small>das notas ou avulsos (só boleto), por vencimento; o pagamento chega pelo aviso da Efí</small></h3>
+    <div class="fin-filtros" style="margin-bottom:12px;">
+    <form method="GET" action="{{ url_for('financeiro.cobrancas') }}">
+        <input type="hidden" name="emp" value="{{ filtros.emp }}"><input type="hidden" name="ver" value="boletos">
+        <div class="fin-grade">
+            <div>
+                <label>Situação</label>
+                <select name="situacao">
+                    <option value="todas" {{ 'selected' if filtros.situacao == 'todas' }}>Todos</option>
+                    <option value="abertos" {{ 'selected' if filtros.situacao == 'abertos' }}>Em aberto</option>
+                    <option value="paid" {{ 'selected' if filtros.situacao == 'paid' }}>Pagos</option>
+                    <option value="unpaid" {{ 'selected' if filtros.situacao == 'unpaid' }}>Vencidos</option>
+                    <option value="canceled" {{ 'selected' if filtros.situacao == 'canceled' }}>Cancelados</option>
+                    <option value="erro" {{ 'selected' if filtros.situacao == 'erro' }}>Com erro</option>
+                </select>
+            </div>
+            <div><label>Vencimento de</label><input type="date" name="de" value="{{ filtros.de }}"></div>
+            <div><label>até</label><input type="date" name="ate" value="{{ filtros.ate }}"></div>
+            <div><label>Pagador, CNPJ ou nº na Efí</label><input type="search" name="busca" value="{{ filtros.busca }}" placeholder="nome, CNPJ, nº Efí"></div>
+        </div>
+        <div class="fin-acoes-filtro">
+            <button class="btn btn-primary" type="submit"><i class="fas fa-filter"></i> Filtrar</button>
+            <a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas', emp=filtros.emp or None, ver='boletos') }}">Limpar</a>
+        </div>
+    </form>
+    </div>
+    {% if boletos %}
+    <div class="fin-rolar">
+        <table class="fin-tab" style="min-width:0;">
+            <thead><tr><th>Vencimento</th><th>Pagador</th><th>Nota</th><th>Valor</th><th>Situação</th><th>Conta</th><th></th></tr></thead>
+            <tbody>
+                {% for b in boletos %}
+                <tr>
+                    <td class="fin-td-meta fin-num">{{ b.vencimento.strftime('%d/%m/%Y') }}</td>
+                    <td class="fin-td-titulo"><a href="{{ url_for('financeiro.nota_detalhe', nota_id=b.nfse_id) ~ '#boleto' if b.nfse_id else url_for('financeiro.boleto_detalhe', boleto_id=b.id) }}" style="color:inherit; text-decoration:none;"><strong>{{ b.pagador_nome }}</strong></a><br><small class="fin-fraco">{{ b.pagador_doc }}{{ ' · Efí nº ' ~ b.charge_id if b.charge_id }}</small></td>
+                    <td class="fin-td-extra">{% if b.nfse_id %}<a href="{{ url_for('financeiro.nota_detalhe', nota_id=b.nfse_id) }}">{{ b.serie }}-{{ b.numero_dps }}{{ ' · NFS-e ' ~ b.numero_nfse if b.numero_nfse }}</a>{% else %}<a href="{{ url_for('financeiro.boleto_detalhe', boleto_id=b.id) }}" class="fin-fraco">só boleto</a>{% endif %}</td>
+                    <td class="fin-td-valor fin-num">{{ b.valor | float | format_currency }}{% if b.valor_pago %}<br><small class="fin-fraco">pago {{ b.valor_pago | float | format_currency }}</small>{% endif %}</td>
+                    <td class="fin-td-oculta"><span class="nf-pill cb-sit-{{ b.situacao }}">{{ b.situacao_txt | upper }}</span>{% if b.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}{% if b.pago_em %}<br><small class="fin-fraco">em {{ b.pago_em.strftime('%d/%m/%Y') }}</small>{% endif %}{% if b.email_enviado_em %}<br><small class="fin-fraco" title="E-mail enviado em {{ b.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}{% if b.email_visto_em %} · visto {{ b.email_visto_em.strftime('%d/%m %H:%M') }} (indício){% endif %}{% if b.abriu_boleto_em %} · abriu o boleto {{ b.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}{% if b.abriu_nota_em %} · abriu a nota {{ b.abriu_nota_em.strftime('%d/%m %H:%M') }}{% endif %}"><i class="fas fa-envelope"></i> {% if b.abriu_boleto_em or b.abriu_nota_em %}<span style="color:#1e6b2c;">abriu {{ 'boleto' if b.abriu_boleto_em }}{{ ' e ' if b.abriu_boleto_em and b.abriu_nota_em }}{{ 'nota' if b.abriu_nota_em }}</span>{% elif b.email_visto_em %}<span style="color:#9a5b00;">visto</span>{% else %}enviado, não aberto{% endif %}</small>{% endif %}</td>
+                    <td class="fin-td-extra fin-fraco">{{ b.conta_apelido }}</td>
+                    <td class="fin-td-acao" style="white-space:nowrap;">
+                        {% if b.pdf_url %}<a class="fin-btn-tag" href="{{ b.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
+                        {% if b.situacao in ('waiting', 'unpaid', 'new') %}
+                        <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=b.id) }}" style="display:inline;"><input type="hidden" name="volta" value="{{ request.full_path }}"><button class="fin-btn-tag" title="Perguntar à Efí como está"><i class="fas fa-sync-alt"></i></button></form>
+                        <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=b.id) }}" style="display:inline;" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ request.full_path }}"><button class="fin-btn-tag"><i class="fas fa-ban"></i></button></form>
+                        {% endif %}
+                        {% if b.situacao == 'erro' %}<span class="fin-fraco" title="{{ b.erro }}"><i class="fas fa-exclamation-circle" style="color:#b91c1c;"></i> {{ (b.erro or '')[:60] }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="fin-fraco">Nenhum boleto ainda. Use <strong>Nova cobrança</strong> (nota fiscal + boleto, só boleto ou só nota) ou o botão <strong>Gerar boleto</strong> na tela de uma nota autorizada.</p>
+    {% endif %}
+</div>
