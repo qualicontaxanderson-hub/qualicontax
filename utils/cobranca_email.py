@@ -131,15 +131,16 @@ CARIMBOS = {'pixel': 'email_visto_em', 'boleto': 'abriu_boleto_em', 'nota': 'abr
 
 
 def registrar_abertura(token, qual):
-    """Anota a PRIMEIRA vez que o cliente abriu (pixel, boleto ou nota). Devolve o boleto ou None."""
+    """Anota a ÚLTIMA vez que o cliente abriu (pixel, boleto ou nota). Devolve o boleto ou None."""
     col = CARIMBOS.get(qual)
     if not col or not token or len(token) > 48:
         return None
     b = execute_query('SELECT * FROM fin_boletos WHERE email_token = %s', (token,), fetch=True, fetch_one=True)
     if not b:
         return None
-    if not b.get(col):
-        execute_query(f'UPDATE fin_boletos SET {col} = NOW() WHERE id = %s AND {col} IS NULL', (b['id'],))
+    # Guarda a ULTIMA abertura (Anderson, 04/11/2026: 'nao esta voltando' — com a primeira
+    # vez fixa ele clicava de novo e nada mudava). O reenvio zera os tres carimbos.
+    execute_query(f'UPDATE fin_boletos SET {col} = NOW() WHERE id = %s', (b['id'],))
     return b
 
 
@@ -326,7 +327,9 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
     ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, anexos=anexos)
     if not ok:
         return False, f'O e-mail não saiu: {erro}'
-    execute_query('UPDATE fin_boletos SET email_enviado_em = NOW(), email_enviado_para = %s, atualizado_em = NOW() '
+    # Os carimbos falam DESTE e-mail: zeram a cada (re)envio.
+    execute_query('UPDATE fin_boletos SET email_enviado_em = NOW(), email_enviado_para = %s, atualizado_em = NOW(), '
+                  'email_visto_em = NULL, abriu_boleto_em = NULL, abriu_nota_em = NULL '
                   'WHERE id = %s', (', '.join(destinos)[:255], boleto_id))
     msg = f'E-mail enviado para {", ".join(destinos)}'
     if faltas:
