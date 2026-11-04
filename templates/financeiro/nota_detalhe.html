@@ -242,7 +242,7 @@
             <a class="btn btn-outline" href="{{ url_for('financeiro.cobranca', emp=n.empresa_id) }}"><i class="fas fa-list"></i> Todos os boletos</a>
         </div>
         {% if boleto.situacao not in ('canceled', 'erro') %}
-        <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="nd-email-form">
+        <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="nd-email-form"{% if boleto.email_enviado_em %} onsubmit="return confirm('Este boleto já foi enviado por e-mail em {{ boleto.email_enviado_em.strftime('%d/%m/%Y às %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}. O boleto novo sai sozinho ao ser gerado. Enviar de novo?');"{% endif %}>
             <input type="hidden" name="volta" value="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}#boleto">
             <label class="nd-rotulo" for="nd_email_para">Enviar por e-mail para</label>
             <div class="nd-email-linha">

@@ -59,14 +59,19 @@ def notas():
     de = request.args.get('de') or ''
     ate = request.args.get('ate') or ''
     busca = (request.args.get('busca') or '').strip()
-    lista = NfseEmitida.listar(empresa_ids=sel, situacao=situacao, de=de or None, ate=ate or None,
+    # Sem filtro nenhum a tela abre com os ULTIMOS 45 DIAS (Anderson, 04/11/2026); "ver todas" manda ?tudo=1.
+    padrao_45 = not (de or ate or busca or situacao != 'todas' or request.args.get('tudo'))
+    de_efetivo = (date.today() - timedelta(days=45)).isoformat() if padrao_45 else de
+    lista = NfseEmitida.listar(empresa_ids=sel, situacao=situacao, de=de_efetivo or None, ate=ate or None,
                                busca=busca or None)
     configuradas = {e['cliente_id'] for e in emps if NfseConfig.get(e['cliente_id'])}
+    from utils.integrations.efi.client import SITUACOES as SIT_BOLETO
     return render_template(
         'financeiro/notas.html', notas=lista, resumo=NfseEmitida.resumo(sel),
         fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa, configuradas=configuradas,
-        filtros=dict(situacao=situacao, de=de, ate=ate, busca=busca, emp=','.join(map(str, sel))),
-        hoje=date.today(), **_LISTAS)
+        filtros=dict(situacao=situacao, de=de, ate=ate, busca=busca, emp=','.join(map(str, sel)),
+                     tudo=request.args.get('tudo') or ''),
+        padrao_45=padrao_45, SIT_BOLETO=SIT_BOLETO, hoje=date.today(), **_LISTAS)
 
 
 # ---------------------------------------------------------------------------

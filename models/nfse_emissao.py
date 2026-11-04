@@ -199,8 +199,13 @@ class NfseEmitida:
                        n.dh_emissao, n.competencia, n.criado_em, n.numero_nfse, n.chave_acesso,
                        n.tomador_doc, n.tomador_nome, n.descricao, n.valor_servico, n.valor_liquido,
                        n.ibs_total, n.cbs_valor, n.erro_ultimo, n.fin_titulo_id, n.xml_nfse_path,
-                       n.cancelada_em
+                       n.cancelada_em,
+                       b.id AS boleto_id, b.situacao AS boleto_situacao, b.vencimento AS boleto_vencimento,
+                       b.pago_em AS boleto_pago_em, b.valor_pago AS boleto_valor_pago, b.ambiente AS boleto_ambiente,
+                       b.email_enviado_em, b.email_visto_em, b.abriu_boleto_em, b.abriu_nota_em
                   FROM nfse_emitidas n
+                  LEFT JOIN fin_boletos b
+                    ON b.id = (SELECT MAX(x.id) FROM fin_boletos x WHERE x.nfse_id = n.id AND x.situacao <> 'erro')
                 {where}
                  ORDER BY COALESCE(n.dh_emissao, n.criado_em) DESC, n.id DESC
                  LIMIT %s""", tuple(params) + (int(limite),), fetch=True) or []

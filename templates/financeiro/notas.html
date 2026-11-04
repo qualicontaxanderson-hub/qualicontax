@@ -110,71 +110,139 @@
     </div>
 </div>
 
+{# ===== Lista em CARTÕES (Anderson, 04/11/2026: "melhore essa tela em cards, e que apareça
+   inicialmente as notas dos últimos 45 dias"). O cartão é o .gc-card de Grupos/Clientes. ===== #}
+{% include 'clientes/_cartao_css.html' %}
+<style>
+.nfc-faixa { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+             margin:0 0 12px; font-size:13px; color:#64748b; }
+.nfc-faixa b { color:#0f3d2e; }
+.nfc-faixa a { font-weight:700; color:#15803d; }
+.nfc .gc-ava { font-size:13px; letter-spacing:0; flex-direction:column; line-height:1.05; width:52px; height:48px; }
+.nfc .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
+.nfc .gc-ava.nfc-ava-sp { background:linear-gradient(135deg,#0ea5e9,#0c4a6e); }
+.nfc .gc-ava.nfc-ava-teste { background:linear-gradient(135deg,#d97706,#78350f); }
+.nfc .gc-ava.nfc-ava-off { background:linear-gradient(135deg,#94a3b8,#475569); }
+.nfc-doc { display:block; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nfc-doc .mono { font-family:Consolas,'Courier New',monospace; }
+.nfc-meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 12px; padding:10px 12px;
+            background:#f8fbf9; border:1px solid #edf3ef; border-radius:11px; }
+.nfc-meta .cli-val { white-space:normal; }
+.nfc-meta-valor { grid-column:1 / -1; display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+                  padding-bottom:8px; border-bottom:1px dashed #e2e8e4; }
+.nfc-valor { font-size:22px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1; }
+.nfc-valor small { font-size:12px; font-weight:600; color:#64748b; margin-left:6px; }
+.nfc-desc { margin:0; font-size:13px; color:#475569; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2;
+            -webkit-box-orient:vertical; overflow:hidden; }
+.nfc-desc.nfc-erro { color:#b91c1c; }
+.nfc .cli-pe { flex-wrap:wrap; }
+.nfc .cli-selo { min-width:200px; }
+.cli-selo-info { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.nfc-acoes { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+.nfc-acoes .fin-btn-tag { white-space:nowrap; }
+@media (max-width:600px) {
+    .gc-grid { grid-template-columns:1fr; }
+    .nfc-meta { grid-template-columns:1fr 1fr; }
+    .nfc .cli-selo { min-width:0; flex-basis:100%; }
+    .nfc-acoes { width:100%; justify-content:flex-start; }
+}
+</style>
+
+<div class="nfc-faixa">
+    <span>
+        {% if padrao_45 %}
+            Mostrando as notas dos <b>últimos 45 dias</b> ({{ notas|length }}).
+            <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None, tudo=1) }}">Ver todas</a>
+        {% elif filtros.tudo and not (filtros.de or filtros.ate or filtros.busca or filtros.situacao != 'todas') %}
+            Mostrando <b>todas</b> as notas{{ ' (as 400 mais recentes)' if notas|length >= 400 }}.
+            <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None) }}">Só os últimos 45 dias</a>
+        {% else %}
+            <b>{{ notas|length }}</b> nota{{ '' if notas|length == 1 else 's' }} com os filtros.
+            <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None) }}">Limpar</a>
+        {% endif %}
+    </span>
+    <span class="fin-fraco">Clique no cartão para abrir a nota.</span>
+</div>
+
+{% if notas %}
+<div class="gc-grid">
+    {% for n in notas %}
+    {% set teste = n.ambiente == 2 %}
+    {% set pf = (n.tomador_doc or '')|replace('.', '')|replace('-', '')|replace('/', '')|length == 11 %}
+    {% set autorizada = n.situacao == 'autorizada' %}
+    <article class="gc-card nfc" data-open-url="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}" tabindex="0" role="button" title="Abrir a nota">
+        <header class="gc-head">
+            <span class="gc-ava {{ 'nfc-ava-teste' if teste else ('nfc-ava-sp' if n.emissor == 'sp' else '') }}{{ ' nfc-ava-off' if n.situacao in ('cancelada', 'rejeitada', 'erro') and not teste }}" title="Série {{ n.serie }}, DPS nº {{ n.numero_dps }}{{ ' · ambiente de teste' if teste }}">
+                {{ n.serie }}-{{ n.numero_dps }}<small>{{ 'teste' if teste else ('SP' if n.emissor == 'sp' else 'nacional') }}</small>
+            </span>
+            <div class="gc-tit">
+                <h3 title="{{ n.tomador_nome or '' }}">{{ (n.tomador_nome or '—') | nome_proprio }}</h3>
+                <span class="nfc-doc">{{ 'CPF' if pf else 'CNPJ' }} <span class="mono">{{ n.tomador_doc or '—' }}</span>{% if not sel_empresas or sel_empresas|length > 1 %} · por <b>{{ emp_mapa.get(n.empresa_id, n.empresa_id) }}</b>{% endif %}</span>
+            </div>
+            <span class="nf-pill nf-pill-{{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao) | upper }}</span>
+        </header>
+
+        <div class="nfc-meta">
+            <div class="nfc-meta-valor">
+                <span class="nfc-valor">{{ n.valor_servico | float | round(2) | format_currency }}{% if n.valor_liquido is not none and n.valor_liquido != n.valor_servico %}<small>líquido {{ n.valor_liquido | float | round(2) | format_currency }}</small>{% endif %}</span>
+                {% if n.numero_nfse %}<span class="fin-fraco" style="font-size:12px;">NFS-e nº <b style="color:#0f3d2e;">{{ n.numero_nfse }}</b></span>{% endif %}
+            </div>
+            <div class="cli-campo"><span class="cli-rot">Emissão</span><b class="cli-val">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y') }}</b></div>
+            <div class="cli-campo"><span class="cli-rot">Competência</span><b class="cli-val">{{ n.competencia.strftime('%m/%Y') if n.competencia else '—' }}</b></div>
+            <div class="cli-campo"><span class="cli-rot">{{ 'Cancelada em' if n.situacao == 'cancelada' else 'Emitida por' }}</span><b class="cli-val">{{ n.cancelada_em.strftime('%d/%m/%Y') if n.situacao == 'cancelada' and n.cancelada_em else emp_mapa.get(n.empresa_id, '—') }}</b></div>
+        </div>
+
+        {% if n.situacao in ('rejeitada', 'erro') and n.erro_ultimo %}
+        <p class="nfc-desc nfc-erro" title="{{ n.erro_ultimo }}"><i class="fas fa-exclamation-circle"></i> {{ n.erro_ultimo }}</p>
+        {% else %}
+        <p class="nfc-desc" title="{{ n.descricao or '' }}">{{ n.descricao or '—' }}</p>
+        {% endif %}
+
+        <footer class="cli-pe">
+            {% set bs = n.boleto_situacao %}
+            {% if bs in ('paid', 'settled') %}
+            <span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i>
+                <span class="cli-selo-t"><b>Boleto pago</b><small>{{ 'em ' ~ n.boleto_pago_em.strftime('%d/%m/%Y') if n.boleto_pago_em else 'baixa recebida' }}{{ ' · TESTE' if n.boleto_ambiente != 'producao' }}</small></span>
+                {% if n.boleto_valor_pago %}<span class="cli-selo-d"><small>recebido</small><b>{{ n.boleto_valor_pago | float | format_currency }}</b></span>{% endif %}</span>
+            {% elif bs == 'unpaid' or (bs in ('waiting', 'new') and n.boleto_vencimento and n.boleto_vencimento < hoje) %}
+            <span class="cli-selo cli-selo-bad"><i class="fas fa-triangle-exclamation"></i>
+                <span class="cli-selo-t"><b>Boleto vencido</b><small>{% if n.email_enviado_em %}e-mail enviado{{ ' · abriu' if n.abriu_boleto_em or n.abriu_nota_em else (' · visto' if n.email_visto_em else ' · não aberto') }}{% else %}e-mail não enviado{% endif %}</small></span>
+                <span class="cli-selo-d"><small>venceu em</small><b>{{ n.boleto_vencimento.strftime('%d/%m/%Y') }}</b></span></span>
+            {% elif bs in ('waiting', 'new') %}
+            <span class="cli-selo cli-selo-info"><i class="fas fa-barcode"></i>
+                <span class="cli-selo-t"><b>Boleto em aberto{{ ' · TESTE' if n.boleto_ambiente != 'producao' }}</b><small>{% if n.email_enviado_em %}e-mail enviado{{ ' · abriu' if n.abriu_boleto_em or n.abriu_nota_em else (' · visto' if n.email_visto_em else ' · não aberto') }}{% else %}e-mail não enviado{% endif %}</small></span>
+                <span class="cli-selo-d"><small>vence em</small><b>{{ n.boleto_vencimento.strftime('%d/%m/%Y') }}</b></span></span>
+            {% elif bs in ('canceled', 'expired') %}
+            <span class="cli-selo cli-selo-sem"><i class="fas fa-ban"></i>
+                <span class="cli-selo-t"><b>Boleto cancelado</b><small>{{ 'a nota foi cancelada' if n.situacao == 'cancelada' else 'cancelado na Efí' }}</small></span></span>
+            {% elif autorizada %}
+            <span class="cli-selo cli-selo-sem"><i class="fas fa-barcode"></i>
+                <span class="cli-selo-t"><b>Sem boleto</b><small>gere na tela da nota</small></span></span>
+            {% elif n.situacao == 'cancelada' %}
+            <span class="cli-selo cli-selo-sem"><i class="fas fa-ban"></i>
+                <span class="cli-selo-t"><b>Nota cancelada</b><small>{{ 'em ' ~ n.cancelada_em.strftime('%d/%m/%Y') if n.cancelada_em else '' }}</small></span></span>
+            {% else %}
+            <span class="cli-selo cli-selo-bad"><i class="fas fa-redo"></i>
+                <span class="cli-selo-t"><b>Precisa reemitir</b><small>corrija o que o governo apontou</small></span></span>
+            {% endif %}
+            <div class="nfc-acoes">
+                <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}" title="Detalhes"><i class="fas fa-eye"></i> Abrir</a>
+                {% if n.situacao in ('autorizada', 'cancelada') %}
+                    {% if n.emissor != 'sp' %}<a class="fin-btn-tag" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}" title="PDF da nota" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
+                    <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}" title="XML da NFS-e"><i class="fas fa-file-code"></i> XML</a>
+                {% elif n.situacao in ('rejeitada', 'erro') %}
+                    <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_nova', emp=n.empresa_id, de=n.id) }}" title="Corrigir e emitir de novo"><i class="fas fa-redo"></i> Reemitir</a>
+                {% endif %}
+            </div>
+        </footer>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
 <div class="fin-caixa">
-    {% if notas %}
-    <div class="fin-rolar">
-        <table class="fin-tab">
-            <thead>
-                <tr>
-                    <th>Data</th>
-                    <th>Nota</th>
-                    {% if not sel_empresas or sel_empresas|length > 1 %}<th>Empresa</th>{% endif %}
-                    <th>Tomador</th>
-                    <th>Descrição</th>
-                    <th style="text-align:right;">Valor</th>
-                    <th>Situação</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for n in notas %}
-                <tr>
-                    <td class="fin-td-meta fin-num">
-                        {{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y') }}
-                        <span class="fin-mob"> · {{ n.serie }}-{{ n.numero_dps }}{% if n.numero_nfse %} → NFS-e {{ n.numero_nfse }}{% endif %}</span>
-                    </td>
-                    <td class="fin-td-oculta fin-num">
-                        <strong>{{ n.serie }}-{{ n.numero_dps }}</strong>
-                        {% if n.numero_nfse %}<br><span class="fin-fraco">NFS-e nº {{ n.numero_nfse }}</span>{% endif %}
-                        <br><span class="nf-pill nf-pill-{{ n.emissor or 'nacional' }}">{{ 'PREFEITURA SP' if n.emissor == 'sp' else 'NACIONAL' }}</span>
-                        {% if n.ambiente == 2 %}<span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}
-                    </td>
-                    {% if not sel_empresas or sel_empresas|length > 1 %}
-                    <td class="fin-td-oculta">{{ emp_mapa.get(n.empresa_id, n.empresa_id) }}</td>
-                    {% endif %}
-                    <td class="fin-td-titulo">
-                        <a href="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}" style="color:inherit; text-decoration:none;">{{ n.tomador_nome or '—' }}</a>
-                        <span class="fin-mob fin-fraco"><br>{{ emp_mapa.get(n.empresa_id, '') }}{% if n.ambiente == 2 %} · <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</span>
-                    </td>
-                    <td class="fin-td-extra fin-fraco" style="max-width:320px;">{{ (n.descricao or '')[:110] }}{% if (n.descricao or '')|length > 110 %}…{% endif %}</td>
-                    <td class="fin-td-valor fin-valor">{{ n.valor_servico | float | round(2) | format_currency }}</td>
-                    <td class="fin-td-meta">
-                        <span class="nf-pill nf-pill-{{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao) | upper }}</span>
-                    </td>
-                    <td class="fin-td-acao" style="white-space:nowrap;">
-                        <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_detalhe', nota_id=n.id) }}" title="Detalhes">
-                            <i class="fas fa-eye"></i> <span class="fin-mob">Detalhes</span></a>
-                        {% if n.situacao in ('autorizada', 'cancelada') %}
-                        {% if n.emissor != 'sp' %}
-                        <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}" title="PDF da nota">
-                            <i class="fas fa-file-pdf"></i> <span class="fin-mob">PDF</span></a>
-                        {% endif %}
-                        <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}" title="XML da NFS-e">
-                            <i class="fas fa-file-code"></i> <span class="fin-mob">XML</span></a>
-                        {% elif n.situacao in ('rejeitada', 'erro') %}
-                        <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_nova', emp=n.empresa_id, de=n.id) }}" title="Corrigir e emitir de novo">
-                            <i class="fas fa-redo"></i> <span class="fin-mob">Reemitir</span></a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
     <div class="fin-vazio">
         <i class="fas fa-file-invoice" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-        Nenhuma nota com esses filtros.
+        {% if padrao_45 %}Nenhuma nota nos últimos 45 dias. <a href="{{ url_for('financeiro.notas', emp=filtros.emp or None, tudo=1) }}">Ver todas as notas</a>.{% else %}Nenhuma nota com esses filtros.{% endif %}
         {% if sel_empresas|length == 1 and sel_empresas[0] not in configuradas %}
         <br>Esta empresa ainda não tem configuração fiscal:
         <a href="{{ url_for('financeiro.notas_config', emp=sel_empresas[0]) }}">preencha aqui</a> antes da primeira nota.
@@ -182,8 +250,8 @@
         <br>Emita a primeira no botão <strong>Nova nota</strong>.
         {% endif %}
     </div>
-    {% endif %}
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -194,5 +262,14 @@ function nfToggleFiltros() {
     c.style.display = aberto ? 'none' : '';
     ch.style.transform = aberto ? '' : 'rotate(180deg)';
 }
+// O cartão inteiro abre a nota (como em Clientes); os botões do rodapé seguem o próprio link.
+document.querySelectorAll('.nfc[data-open-url]').forEach(function (card) {
+    function abrir(ev) {
+        if (ev.target.closest('a, button, form')) return;
+        window.location.href = card.dataset.openUrl;
+    }
+    card.addEventListener('click', abrir);
+    card.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(ev); } });
+});
 </script>
 {% endblock %}
