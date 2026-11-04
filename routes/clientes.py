@@ -1896,7 +1896,11 @@ def editar(id):
             elif numero_cliente and Cliente.existe_numero_cliente(numero_cliente, id):
                 _erro_num = f'Número do cliente "{numero_cliente}" já está em uso por outro cliente!'
             if not _erro_num:
-                _falta = (_obrigatorios_faltando(request.form, bool(cliente.get('avulso')))
+                # Avulso que recebe número aqui está VIRANDO cliente: valem as
+                # exigências de cliente (origem da empresa), como no botão
+                # "Converter em cliente" (03/11/2026).
+                _ainda_avulso = bool(cliente.get('avulso')) and not numero_cliente
+                _falta = (_obrigatorios_faltando(request.form, _ainda_avulso)
                           + _socios_e_contador_faltando(request.form, id))
                 if _falta:
                     _erro_num = _msg_faltando(_falta)
@@ -1968,6 +1972,25 @@ def editar(id):
                           antes={k: cliente.get(k) for k in _campos_log},
                           depois={k: data.get(k) for k in _campos_log})
                 _vigia_concluir_se_aplicada(cpf_cnpj, id)
+
+                # AVULSO QUE GANHOU NÚMERO AQUI vira cliente de verdade (03/11/2026).
+                # Antes a edição gravava o número e deixava a marca de avulso
+                # ligada: o cadastro sumia da carteira (que só lista avulso = 0),
+                # não aparecia na busca, mas "já está em uso" barrava o número —
+                # três cadastros do Jabes (591, 592, 596) ficaram assim hoje.
+                # É o mesmo que o botão "Converter em cliente" dos Avulsos faz;
+                # a pasta já foi renomeada logo acima.
+                _virou_cliente = False
+                if cliente.get('avulso') and data.get('numero_cliente'):
+                    execute_query('UPDATE clientes SET avulso = 0, virou_cliente_em = NOW() '
+                                  'WHERE id = %s AND avulso = 1', (id,))
+                    _virou_cliente = True
+                    registrar('escrita.converteu_avulso', 'cadastros', tabela='clientes',
+                              registro_id=id,
+                              antes={'avulso': True, 'pasta': pasta_antiga},
+                              depois={'numero_cliente': data.get('numero_cliente'),
+                                      'pasta': pasta_nova, 'dropbox': _pasta_st or 'sem_mudanca',
+                                      'nome': data.get('nome_razao_social'), 'por': 'edicao'})
 
                 # A pasta mudou de nome: reaponta os caminhos gravados. O LIKE
                 # escapa % e _ (razões sanitizadas podem conter '_'), e o
@@ -2090,7 +2113,12 @@ def editar(id):
                     except Exception as endereco_error:
                         print(f"Erro ao salvar endereço do cliente {id}: {endereco_error}")
                 
-                flash('Cliente atualizado com sucesso!', 'success')
+                if _virou_cliente:
+                    flash(f'{data.get("nome_razao_social")} agora é o cliente '
+                          f'{data.get("numero_cliente")} e já aparece na lista de Clientes.',
+                          'success')
+                else:
+                    flash('Cliente atualizado com sucesso!', 'success')
                 return redirect(url_for('clientes.detalhes', id=id))
             else:
                 if _pasta_st == 'movida':
