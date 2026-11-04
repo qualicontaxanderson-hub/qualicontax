@@ -224,6 +224,7 @@
                 {% if boleto.nfse_id %}<span class="nd-carimbo {{ 'nd-carimbo-sim' if boleto.abriu_nota_em else 'nd-carimbo-nao' }}" title="Última vez que viu ou baixou a nota pelo e-mail atual"><i class="fas fa-{{ 'check' if boleto.abriu_nota_em else 'minus' }}"></i> nota{% if boleto.abriu_nota_em %} {{ boleto.abriu_nota_em.strftime('%d/%m %H:%M') }}{% endif %}</span>{% endif %}
                 <span class="nd-carimbo {{ 'nd-carimbo-talvez' if boleto.email_visto_em else 'nd-carimbo-nao' }}" title="Última vez que a imagem do e-mail carregou — é indício de leitura, não prova (alguns programas de e-mail carregam sozinhos ou bloqueiam). Zera a cada reenvio."><i class="fas fa-{{ 'eye' if boleto.email_visto_em else 'minus' }}"></i> e-mail visto{% if boleto.email_visto_em %} {{ boleto.email_visto_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
             </dd></div>
+            {% if boleto.abriu_ip %}<div class="nd-span"><dt>Última abertura veio de</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="IP" title="Clique para copiar">{{ boleto.abriu_ip }}</code>{% if boleto.abriu_agente %} <small class="nd-ajuda" title="{{ boleto.abriu_agente }}">{{ boleto.abriu_agente[:90] }}{{ '…' if boleto.abriu_agente|length > 90 }}</small>{% endif %}</dd></div>{% endif %}
             {% endif %}
         </dl>
         {% if boleto.itens_json %}

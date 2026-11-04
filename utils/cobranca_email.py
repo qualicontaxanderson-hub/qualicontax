@@ -140,7 +140,15 @@ def registrar_abertura(token, qual):
         return None
     # Guarda a ULTIMA abertura (Anderson, 04/11/2026: 'nao esta voltando' — com a primeira
     # vez fixa ele clicava de novo e nada mudava). O reenvio zera os tres carimbos.
-    execute_query(f'UPDATE fin_boletos SET {col} = NOW() WHERE id = %s', (b['id'],))
+    # IP e navegador de quem abriu (migracao 05): separam o clique do cliente da visita
+    # automatica do servidor de e-mail. Sem as colunas, grava so a hora.
+    from utils.qrobo_chaves import contexto_request
+    ip, agente = contexto_request()
+    if 'abriu_ip' in b:
+        execute_query(f'UPDATE fin_boletos SET {col} = NOW(), abriu_ip = %s, abriu_agente = %s WHERE id = %s',
+                      ((ip or '')[:45] or None, (agente or '')[:255] or None, b['id']))
+    else:
+        execute_query(f'UPDATE fin_boletos SET {col} = NOW() WHERE id = %s', (b['id'],))
     return b
 
 
@@ -329,7 +337,7 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
         return False, f'O e-mail não saiu: {erro}'
     # Os carimbos falam DESTE e-mail: zeram a cada (re)envio.
     execute_query('UPDATE fin_boletos SET email_enviado_em = NOW(), email_enviado_para = %s, atualizado_em = NOW(), '
-                  'email_visto_em = NULL, abriu_boleto_em = NULL, abriu_nota_em = NULL '
+                  'email_visto_em = NULL, abriu_boleto_em = NULL, abriu_nota_em = NULL, abriu_ip = NULL, abriu_agente = NULL '
                   'WHERE id = %s', (', '.join(destinos)[:255], boleto_id))
     msg = f'E-mail enviado para {", ".join(destinos)}'
     if faltas:
