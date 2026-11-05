@@ -260,7 +260,9 @@ def consultar(cnpj, completar=False):
     for nome, fn in (('brasilapi', _brasilapi), ('receitaws', _receitaws)):
         try:
             dados = fn(cnpj)
-            if completar and nome == 'brasilapi' and not dados.get('logradouro') and not dados.get('email'):
+            # 05/11/2026: a BrasilAPI não traz o e-mail do CNPJ (só a ReceitaWS traz); antes só
+            # pedíamos o complemento quando faltava o endereço, e o e-mail quase nunca vinha.
+            if completar and nome == 'brasilapi' and (not dados.get('logradouro') or not dados.get('email')):
                 try:
                     extra = _receitaws(cnpj)
                     for k in CAMPOS_COMPLEMENTO:
