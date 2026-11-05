@@ -9,6 +9,16 @@
 .ct-dep { display:inline-block; background:#e8f3ec; color:#1f6f43; border:1px solid #cfe5d7; border-radius:999px; font-size:11px; padding:1px 8px; margin:1px 3px 1px 0; }
 .ct-dep-todos { background:#1f6f43; color:#fff; border-color:#1f6f43; }
 .ct-falta { color:#b45309; font-size:12px; white-space:nowrap; }
+.rs-falta { color:#b91c1c; font-weight:600; }
+.rs-inativo { color:#b45309; font-size:12px; }
+.rs-btn { margin-left:auto; font-size:11px; padding:3px 10px; }
+.fv-seclabel .rs-btn { font-weight:600; letter-spacing:0; text-transform:none; }
+/* tabela de contatos cabe a 1380px: padding menor, e-mail quebra, chips não quebram (05/11/2026) */
+#contatos .table th, #contatos .table td { padding:10px 8px; vertical-align:top; font-size:13px; }
+#contatos .table td:nth-child(3) { word-break:break-all; }
+#contatos .table td:nth-child(4), #contatos .table td:nth-child(5) { white-space:nowrap; }
+#contatos .ct-dep { white-space:nowrap; }
+.ct-reuso-item .btn { white-space:nowrap; flex-shrink:0; }
 .ct-hint { display:block; color:var(--text-secondary); font-size:11px; margin-top:3px; }
 .ct-reuso { background:#fff7e6; border:1px solid #f5d58a; border-radius:9px; padding:8px 10px; margin:-4px 0 12px; }
 .ct-reuso-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
@@ -475,6 +485,19 @@
                         </dl>
                     </div>
 
+                    <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento -->
+                    <div class="fv-card" data-copiar-bloco>
+                        <p class="fv-seclabel">Responsáveis no escritório
+                            <button type="button" class="btn btn-outline rs-btn" onclick="abrirResponsaveis()" title="Trocar quem responde por cada departamento"><i class="fas fa-pen"></i> Editar</button></p>
+                        <dl class="fv-dl">
+                            {% for r in responsaveis %}
+                            <dt>{{ r.departamento }}</dt>
+                            <dd{% if not r.usuario_nome %} data-nocopiar{% endif %}>{% if r.usuario_nome %}{{ r.usuario_nome }}{% if r.usuario_situacao == 'INATIVO' %} <span class="rs-inativo">(usuário inativo)</span>{% endif %}
+                                {% else %}<span class="rs-falta">sem responsável</span>{% endif %}</dd>
+                            {% endfor %}
+                        </dl>
+                    </div>
+
                     <!-- Resumo do Certificado (verde se há; claro se não há) — botões só na aba Certificado -->
                     {% if certificado %}
                     {% set cs = certificado.cert_status %}
@@ -600,9 +623,9 @@
                                                 {% else %}<span class="ct-falta" title="Celular é obrigatório no contato: aparece em A CADASTRAR até ser preenchido"><i class="fas fa-triangle-exclamation"></i> sem celular</span>{% endif %}
                                             </td>
                                             <td><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone or '-' }}</span></td>
-                                            <td data-copiar="{{ contato.departamentos|join(', ') or 'nenhum' }}" data-copiar-rotulo="Recebe" style="min-width:230px;">
+                                            <td data-copiar="{{ contato.departamentos|join(', ') or 'nenhum' }}" data-copiar-rotulo="Recebe">
                                                 {% if contato.departamentos|length >= departamentos_contato|length %}
-                                                    <span class="ct-dep ct-dep-todos" title="{{ contato.departamentos|join(', ') }}"><i class="fas fa-check-double"></i> Todos os departamentos</span>
+                                                    <span class="ct-dep ct-dep-todos" title="Recebe de todos os departamentos: {{ contato.departamentos|join(', ') }}"><i class="fas fa-check-double"></i> Todos</span>
                                                 {% elif contato.departamentos %}
                                                     {% for d in contato.departamentos %}<span class="ct-dep">{{ d }}</span>{% endfor %}
                                                 {% else %}
@@ -1673,6 +1696,41 @@
 
 <!-- Modal de Contato (adicionar e editar) — 05/11/2026: celular obrigatório, o que ele RECEBE por
      departamento, reaproveitamento pelo celular e confirmação antes de salvar (pedido do Anderson). -->
+<!-- Responsáveis no escritório: um select por departamento (05/11/2026) -->
+<div id="respModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+            <h3>Responsáveis no escritório</h3>
+            <button class="modal-close" onclick="fecharResponsaveis()">&times;</button>
+        </div>
+        <form action="{{ url_for('clientes.salvar_responsaveis', id=cliente.id) }}" method="POST">
+            <div class="modal-body">
+                <p style="color:#64748b; font-size:13px; margin:0 0 12px;">Quem do escritório responde por cada departamento desta empresa. Deixe em branco quando ainda não há ninguém.</p>
+                {% for r in responsaveis %}
+                <div class="form-group" style="display:grid; grid-template-columns:150px 1fr; align-items:center; gap:10px; margin-bottom:8px;">
+                    <label for="resp_{{ r.departamento_id }}" style="margin:0;">{{ r.departamento }}</label>
+                    <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}" class="form-control">
+                        <option value="">— sem responsável —</option>
+                        {% for u in funcionarios %}
+                        <option value="{{ u.id }}" {% if u.id == r.usuario_id %}selected{% endif %}>{{ u.nome }}{% if u.departamento %} · {{ u.departamento }}{% endif %}</option>
+                        {% endfor %}
+                        {% if r.usuario_id and r.usuario_situacao == 'INATIVO' %}<option value="{{ r.usuario_id }}" selected>{{ r.usuario_nome }} (inativo)</option>{% endif %}
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharResponsaveis()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+function abrirResponsaveis() { document.getElementById('respModal').style.display = 'block'; }
+function fecharResponsaveis() { document.getElementById('respModal').style.display = 'none'; }
+</script>
+
 <div id="addContactModal" class="modal" style="display: none;">
     <div class="modal-content" style="max-width:620px;">
         <div class="modal-header">

@@ -17,6 +17,7 @@ from models.cliente import Cliente
 from models.endereco_cliente import EnderecoCliente
 from utils.cnpj_receita import limpar_logradouro
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
+from models.cliente_responsavel import ClienteResponsavel
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusada_pj
 from utils.qualificacao import qualificacao
@@ -1284,6 +1285,8 @@ def detalhes(id):
         f_certificado = executor.submit(DfeCertificado.get_by_cliente, id)
         f_contadores = executor.submit(ClienteContador.contadores_do_cliente, id)
         f_contadores_disp = executor.submit(ClienteContador.listar_contadores)
+        f_responsaveis = executor.submit(ClienteResponsavel.por_cliente, id)
+        f_funcionarios = executor.submit(ClienteResponsavel.usuarios_disponiveis)
 
     enderecos = f_enderecos.result()
     contatos = f_contatos.result()
@@ -1395,6 +1398,8 @@ def detalhes(id):
                          contadores_disponiveis=contadores_disponiveis,
                          socios_total_percentual=socios_total_percentual,
                          departamentos_contato=ContatoCliente.departamentos_disponiveis(),
+                         responsaveis=f_responsaveis.result(),
+                         funcionarios=f_funcionarios.result(),
                          areas_atendimento=AREAS_ATENDIMENTO)
 
 
@@ -2419,6 +2424,36 @@ def _contato_resumo(dados):
     r = {k: dados.get(k) for k in ('nome', 'cargo', 'email', 'telefone', 'celular', 'principal')}
     r['departamentos'] = [nomes[i] for i in dados.get('departamentos', []) if i in nomes]
     return r
+
+
+@clientes.route('/clientes/<int:id>/responsaveis', methods=['POST'])
+@login_required
+def salvar_responsaveis(id):
+    """Responsáveis do escritório por departamento (05/11/2026, migração Acessórias): um funcionário
+    por departamento, ou vazio = sem responsável."""
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        flash('Cliente não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+    validos = {u['id']: u['nome'] for u in ClienteResponsavel.usuarios_disponiveis()}
+    atuais = ClienteResponsavel.por_cliente(id)
+    antes = {r['departamento']: r['usuario_nome'] for r in atuais}
+    depois = {}
+    for r in atuais:
+        uid = request.form.get('resp_%d' % r['departamento_id'], type=int)
+        if uid and uid not in validos:
+            flash('Funcionário inválido para %s.' % r['departamento'], 'danger')
+            return redirect(url_for('clientes.detalhes', id=id))
+        depois[r['departamento']] = validos.get(uid) if uid else None
+        if (uid or None) != (r['usuario_id'] or None):
+            ClienteResponsavel.definir(id, r['departamento_id'], uid or None)
+    if antes != depois:
+        registrar('escrita.alterou_responsaveis', 'cadastros', tabela='clientes', registro_id=id,
+                  antes=antes, depois=depois)
+        flash('Responsáveis salvos.', 'success')
+    else:
+        flash('Nada mudou nos responsáveis.', 'info')
+    return redirect(url_for('clientes.detalhes', id=id))
 
 
 @clientes.route('/clientes/<int:cliente_id>/contatos/novo', methods=['POST'])

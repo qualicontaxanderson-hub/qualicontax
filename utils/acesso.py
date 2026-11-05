@@ -91,6 +91,7 @@ MAPA = {
     'clientes.excluir_endereco':       'clientes.edit',
     'clientes.novo_contato':           'clientes.edit',
     'clientes.editar_contato':         'clientes.edit',
+    'clientes.salvar_responsaveis':    'clientes.edit',
     'clientes.excluir_contato':        'clientes.edit',
     'clientes.api_contato_por_celular': 'clientes.edit',   # reaproveitar contato pelo celular (05/11/2026)
     'clientes.novo_socio':             'clientes.edit',
@@ -419,6 +420,7 @@ _EMPRESA_POR_ARG = {
 _EMPRESA_POR_ENDPOINT = {
     'clientes.detalhes':             ('id', None),
     'clientes.editar':               ('id', None),
+    'clientes.salvar_responsaveis':  ('id', None),
     'clientes.inativar':             ('id', None),
     'clientes.delete':               ('id', None),
     'clientes.historico':            ('id', None),
