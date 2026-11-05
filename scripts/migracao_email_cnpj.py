@@ -76,7 +76,7 @@ def coletar(alvo, cache, pausa):
     print('coleta terminada:', Counter('ok' if 'email' in v else v['erro'] for v in d.values()))
 
 
-def aplicar(alvo, cache, apply, csv_path, manter_escritorio=False):
+def aplicar(alvo, cache, apply, csv_path, manter_escritorio=False, limpar_sem_email=False):
     d = carregar(cache)
     tot, linhas = Counter(), []
     for c in alvo:
@@ -93,20 +93,28 @@ def aplicar(alvo, cache, apply, csv_path, manter_escritorio=False):
             continue
         novo = r['email']
         if not novo:
-            tot['CNPJ sem e-mail na Receita (não mexe)'] += 1
-            linhas.append((rot, 'CNPJ sem e-mail na Receita', atual, ''))
+            # 05/11/2026 (Anderson): "Sem e-mail no CNPJ: é para deixar o que está na Receita Federal" —
+            # ou seja, VAZIO. O cadastro passa a refletir o CNPJ também quando o CNPJ não tem e-mail.
+            if atual and limpar_sem_email:
+                tot[f"{'limpado' if apply else 'limparia'} (CNPJ sem e-mail na Receita)"] += 1
+                linhas.append((rot, 'limpa (CNPJ sem e-mail)', atual, ''))
+                if apply:
+                    execute_query('UPDATE clientes SET email = NULL, alterado_por = %s, alterado_em = NOW() WHERE id = %s', (USUARIO_ID, c['id']))
+                    registrar_agente('escrita.email_cnpj_migracao', 'cadastros', USUARIO_ID, USUARIO_NOME, USUARIO_LOGIN,
+                                     tabela='clientes', registro_id=c['id'],
+                                     depois={'email_antes': atual, 'email': None, 'fonte': 'receitaws (CNPJ sem e-mail na Receita)'})
+            else:
+                tot['CNPJ sem e-mail na Receita (já vazio)' if not atual else 'CNPJ sem e-mail na Receita (não mexe)'] += 1
+                linhas.append((rot, 'CNPJ sem e-mail na Receita', atual, ''))
             continue
-        if ENCHIMENTO.search(novo):
-            # 05/11/2026: 22 CNPJs têm "email@email.com" e parecidos — quem abriu a empresa inventou.
-            # Não é e-mail de ninguém: não entra no cadastro, só relata.
-            tot['CNPJ com e-mail de enchimento, ex. email@email.com (não mexe)'] += 1
-            linhas.append((rot, 'CNPJ com e-mail de enchimento', atual, novo))
-            continue
+        # 05/11/2026 (Anderson, vendo a planilha): "é para deixar no CADASTRO como está na RECEITA, não é
+        # para deixar como cadastraram" — vale também para e-mail da Qualicontax e para "email@email.com".
+        enchimento = bool(ENCHIMENTO.search(novo))
         if novo == atual:
             tot['já igual ao CNPJ'] += 1
             linhas.append((rot, 'já igual ao CNPJ', atual, novo))
             continue
-        tipo = 'escritório' if any(k in novo for k in DOMINIOS_ESCRITORIO) else 'cliente'
+        tipo = 'enchimento' if enchimento else ('escritório' if any(k in novo for k in DOMINIOS_ESCRITORIO) else 'cliente')
         if tipo == 'escritório' and manter_escritorio:
             # 05/11/2026 (Anderson, sobre os 55 CNPJs com e-mail da Qualicontax na Receita): "Pode deixar
             # como está e eu vou pedir para eles alterarem" — o cadastro fica como está; a planilha lista.
@@ -114,7 +122,7 @@ def aplicar(alvo, cache, apply, csv_path, manter_escritorio=False):
             linhas.append((rot, 'CNPJ com e-mail do escritório', atual, novo))
             continue
         tot[f"{'trocado' if apply else 'trocaria'} (e-mail do {tipo} no CNPJ)" if atual else f"{'preenchido' if apply else 'preencheria'} (e-mail do {tipo} no CNPJ)"] += 1
-        linhas.append((rot, 'troca' if atual else 'preenche', atual, novo))
+        linhas.append((rot, ('troca' if atual else 'preenche') + (f' ({tipo})' if tipo != 'cliente' else ''), atual, novo))
         if apply:
             execute_query('UPDATE clientes SET email = %s, alterado_por = %s, alterado_em = NOW() WHERE id = %s', (novo[:255], USUARIO_ID, c['id']))
             registrar_agente('escrita.email_cnpj_migracao', 'cadastros', USUARIO_ID, USUARIO_NOME, USUARIO_LOGIN,
@@ -134,6 +142,7 @@ def main():
     ap.add_argument('--apply', action='store_true')
     ap.add_argument('--pausa', type=float, default=21.0)
     ap.add_argument('--csv')
+    ap.add_argument('--limpar-sem-email', action='store_true', help='CNPJ sem e-mail na Receita: esvazia o e-mail do cadastro')
     ap.add_argument('--manter-escritorio', action='store_true', help='não troca quando o e-mail do CNPJ é da Qualicontax/M3A3')
     a = ap.parse_args()
     alvo = execute_query(SQL, fetch=True) or []
@@ -141,7 +150,7 @@ def main():
     if a.coletar:
         coletar(alvo, a.cache, a.pausa)
     else:
-        aplicar(alvo, a.cache, a.apply, a.csv, a.manter_escritorio)
+        aplicar(alvo, a.cache, a.apply, a.csv, a.manter_escritorio, a.limpar_sem_email)
 
 
 if __name__ == '__main__':

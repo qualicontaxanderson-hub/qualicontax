@@ -465,9 +465,13 @@
             <p class="cf-seclabel">Contato</p>
             <div class="cf-g12">
                 <div class="cf-fg cf-s6">
-                    <label class="cf-lbl" for="email">E-mail <span class="cf-req">*</span> <span class="cf-rf pj-only">Receita</span></label>
-                    <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com" required
+                    {# 05/11/2026 (Anderson): no PJ este e-mail é O QUE ESTÁ NO CNPJ (vem da busca, pode ser vazio);
+                       obrigatório só para pessoa física. O e-mail de cobrança é o dos CONTATOS. #}
+                    <label class="cf-lbl" for="email">E-mail <span class="cf-req pf-only">*</span> <span class="cf-rf pj-only">Receita</span></label>
+                    <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com"
+                           {% if cliente and cliente.tipo_pessoa == 'PF' %}required{% endif %}
                            value="{{ cliente.email if cliente else '' }}">
+                    <small class="cf-hint pj-only">É o e-mail registrado no CNPJ. Quem recebe boletos e documentos são os <b>contatos</b>.</small>
                 </div>
                 <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="telefone">Telefone <span class="cf-opt">(fixo)</span> <span class="cf-rf pj-only">Receita</span></label>
@@ -2152,7 +2156,9 @@ function atualizarResumo() {
     var cel = document.getElementById('celular');
     var eml = document.getElementById('email');
     itens.push([!!(grp && grp.value), 'Grupo de empresas']);
-    itens.push([!!(eml && eml.value.trim() && eml.checkValidity()), 'E-mail']);
+    // 05/11/2026: no PJ o e-mail é o do CNPJ (pode não existir na Receita); obrigatório só na pessoa física.
+    if (tipo === 'PF') itens.push([!!(eml && eml.value.trim() && eml.checkValidity()), 'E-mail']);
+    else itens.push([!(eml && eml.value.trim()) || eml.checkValidity(), 'E-mail (o do CNPJ)']);
     itens.push([!!(cel && cel.value.replace(/\D/g, '').length >= 10), 'Celular']);
     itens.push([!!document.querySelector('input[name="ramos_atividade_ids"]:checked'), 'Ramo de atividade']);
     var ehContador = document.getElementById('is_contador') && document.getElementById('is_contador').checked;

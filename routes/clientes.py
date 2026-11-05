@@ -78,7 +78,10 @@ def _obrigatorios_faltando(form, avulso=False):
     grupo = GrupoCliente.get_by_id(gid) if gid else None
     if not grupo or grupo.get('situacao') != 'ATIVO':
         falta.append('grupo de empresas')
-    if not (form.get('email') or '').strip():
+    # 05/11/2026 (Anderson): no PJ o e-mail do cadastro é O QUE ESTÁ NO CNPJ (vem da busca), e há CNPJ
+    # sem e-mail na Receita — então só a pessoa física continua obrigada a ter e-mail aqui. O e-mail de
+    # cobrança é o dos CONTATOS; quem não tem contato com e-mail aparece em A CADASTRAR.
+    if form.get('tipo_pessoa') == 'PF' and not (form.get('email') or '').strip():
         falta.append('e-mail')
     if not _telefone_valido(form.get('celular')):
         falta.append('celular')
