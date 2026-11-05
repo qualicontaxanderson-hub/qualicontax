@@ -347,10 +347,16 @@ def _norm(v):
     return re.sub(r'\s+', ' ', str(v if v is not None else '')).strip().upper()
 
 
-def impressao(dados):
-    """Dict só com os campos vigiados (normalizados) e o hash deles."""
+def impressao(dados, referencia=None):
+    """Dict só com os campos vigiados (normalizados) e o hash deles.
+
+    ``referencia`` (05/11/2026): a foto anterior. O e-mail só vem pelo complemento da ReceitaWS,
+    que pode faltar num dia; e-mail vazio na consulta nova NÃO é mudança — herda o da referência.
+    E-mail que APARECE (referência vazia, nova com valor) é mudança, e é a que o Anderson quer."""
     foto = {k: _norm(dados.get('logradouro_vigia', dados.get(k)) if k == 'logradouro' else dados.get(k))
             for k, _ in CAMPOS_VIGIA}
+    if referencia and not foto.get('email') and _norm(referencia.get('email')):
+        foto['email'] = _norm(referencia.get('email'))
     h = hashlib.sha256(json.dumps(foto, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
     return foto, h
 

@@ -18,6 +18,7 @@ PENDENCIAS_EMPRESA = [
     ('im', 'Insc. Municipal', 'amb', 'inscrição municipal (CCM)'),
     ('ie', 'Insc. Estadual', 'amb', 'inscrição estadual, ou marcar isenta'),
     ('socios', 'Sócios', 'verm', 'nenhum sócio cadastrado'),
+    ('regime', 'Regime', 'verm', 'regime tributário em branco: Simples, Lucro Presumido, Lucro Real ou MEI (a Receita só diz se é optante do Simples)'),
     ('cobranca', 'Financeiro (cobrança)', 'verm', 'como cobrar: própria, via grupo ou pendente'),
     ('email', 'Contato com e-mail', 'verm', 'sem e-mail no cadastro nem nos contatos'),
     ('grupo', 'Grupo', 'cinza', 'grupo de empresas'),
@@ -28,6 +29,7 @@ PENDENCIAS_EMPRESA = [
 ]
 PENDENCIAS_AVULSO = [
     ('email', 'E-mail', 'verm', 'sem e-mail'),
+    ('regime', 'Regime', 'verm', 'PJ com regime tributário em branco: Simples, Lucro Presumido, Lucro Real ou MEI'),
     ('celular', 'Celular', 'amb', 'sem celular'),
     ('grupo', 'Grupo', 'cinza', 'sem grupo de empresas'),
     ('ramo', 'Ramo', 'cinza', 'sem ramo de atividade'),
@@ -53,7 +55,7 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
 
 _SQL_AVULSOS = """
 SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa, c.situacao, c.email, c.celular, c.telefone,
-       c.avulso_em, c.conexa_id, c.emite_nf, c.cobranca, c.observacoes,
+       c.avulso_em, c.conexa_id, c.emite_nf, c.cobranca, c.observacoes, c.regime_tributario,
        (SELECT COUNT(*) FROM cliente_grupo_relacao g WHERE g.cliente_id = c.id) AS n_grupos,
        (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos
   FROM clientes c
@@ -82,6 +84,8 @@ def empresas_pendentes(ocultas=frozenset()):
             p.append('ie')
         if pj and not c['n_socios']:
             p.append('socios')
+        if pj and _vazio(c['regime_tributario']):
+            p.append('regime')
         if (c['cobranca'] or 'PENDENTE') == 'PENDENTE':
             p.append('cobranca')
         if _vazio(c['email']) and not c['n_contatos_email']:
@@ -110,6 +114,8 @@ def avulsos_pendentes(ocultas=frozenset()):
         p = []
         if _vazio(c['email']):
             p.append('email')
+        if c['tipo_pessoa'] != 'PF' and _vazio(c['regime_tributario']):
+            p.append('regime')
         if _vazio(c['celular']):
             p.append('celular')
         if not c['n_grupos']:

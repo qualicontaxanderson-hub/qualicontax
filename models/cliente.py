@@ -368,8 +368,9 @@ class Cliente:
             # PF doesn't have regime, use SIMPLES as default (most common)
             regime_tributario = 'SIMPLES'
         else:
-            # PJ can have regime, use provided or default to SIMPLES
-            regime_tributario = data.get('regime_tributario') or 'SIMPLES'
+            # 05/11/2026 (Anderson): PJ sem regime escolhido fica EM BRANCO e vira pendência em
+            # A CADASTRAR — "se preenchermos, o erro é do Simples". Antes caía em SIMPLES calado.
+            regime_tributario = data.get('regime_tributario') or None
         
         # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None
@@ -436,8 +437,9 @@ class Cliente:
             # PF doesn't have regime, use SIMPLES as default (most common)
             regime_tributario = 'SIMPLES'
         else:
-            # PJ can have regime, use provided or default to SIMPLES
-            regime_tributario = data.get('regime_tributario') or 'SIMPLES'
+            # 05/11/2026 (Anderson): PJ sem regime escolhido fica EM BRANCO e vira pendência em
+            # A CADASTRAR — "se preenchermos, o erro é do Simples". Antes caía em SIMPLES calado.
+            regime_tributario = data.get('regime_tributario') or None
         
         # Converter strings vazias para None em campos opcionais (exceto regime_tributario)
         porte_empresa = data.get('porte_empresa') or None

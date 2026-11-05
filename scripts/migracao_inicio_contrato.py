@@ -53,6 +53,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--json', required=True, help='migracao.json (abas em lista com cabeçalho na linha 0)')
     ap.add_argument('--apply', action='store_true')
+    ap.add_argument('--limpar-digitadas', action='store_true',
+                    help='05/11/2026, Anderson: "Limpar para ela trabalhar" — apaga também as datas < 05/2025 digitadas por alguém')
     a = ap.parse_args()
     m = json.load(open(a.json, encoding='utf-8'))
     emp = m['empresas']
@@ -82,6 +84,10 @@ def main():
         if cad[n] == ini:
             tot['limpa (a parte 1 pôs a data de cadastro no Acessórias < 05/2025)'] += 1
             limpar.append(c)
+        elif a.limpar_digitadas:
+            tot['limpa (digitada por alguém antes de 05/2025; fica para a planilha)'] += 1
+            c['digitada'] = True
+            limpar.append(c)
         else:
             tot['< 05/2025 mas DIGITADA por alguém (mantida, só relato)'] += 1
             digitadas.append(c)
@@ -98,7 +104,9 @@ def main():
             registrar_agente('escrita.limpou_inicio_contrato_migracao', 'cadastros', USUARIO_ID, USUARIO_NOME, USUARIO_LOGIN,
                              tabela='clientes', registro_id=c['id'],
                              depois={'data_inicio_contrato_antes': c['data_inicio_contrato'].isoformat(), 'data_inicio_contrato': None,
-                                     'motivo': 'era a data de cadastro no Acessórias (< 01/05/2025), não a entrada; aguarda planilha'})
+                                     'motivo': ('data digitada antes de 01/05/2025, sem certeza (muitas são a abertura da empresa); aguarda planilha'
+                                                if c.get('digitada') else
+                                                'era a data de cadastro no Acessórias (< 01/05/2025), não a entrada; aguarda planilha')})
         print(f'\nlimpas: {len(limpar)}')
 
 

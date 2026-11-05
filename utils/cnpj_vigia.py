@@ -31,6 +31,11 @@ RETENTATIVA_H = 6       # quando a fonte falhou
 LOTE = 20               # vigias por rodada do cron
 
 
+def _familia(fonte):
+    """'brasilapi+receitaws' e 'brasilapi' são a mesma fonte principal (o '+' é só o complemento)."""
+    return str(fonte or '').split('+')[0]
+
+
 def _j(v):
     try:
         return json.loads(v) if isinstance(v, str) and v else (v or {})
@@ -61,7 +66,9 @@ def armar(cnpj, cliente_id, usuario_id, usuario_nome):
     """Consulta AGORA (é a foto de referência) e arma/rearma a vigia.
     Devolve (vigia serializada, dados da consulta, fonte)."""
     cnpj = RF.so_digitos(cnpj)
-    dados, fonte = RF.consultar(cnpj)
+    # 05/11/2026: completar=True para a foto ter o E-MAIL do CNPJ (só a ReceitaWS traz). Se o
+    # complemento falhar agora, o e-mail entra vazio e a vigia o traz no dia em que ele vier.
+    dados, fonte = RF.consultar(cnpj, completar=True)
     foto, h = RF.impressao(dados)
     execute_query(
         """INSERT INTO cnpj_vigia (cnpj, cliente_id, pedido_por, pedido_por_nome, pedido_em,
@@ -147,7 +154,7 @@ def vigiar(prazo_seg=30, lote=LOTE, dry=False):
             res['sem_tempo'] = True
             break
         try:
-            dados, fonte = RF.consultar(v['cnpj'])
+            dados, fonte = RF.consultar(v['cnpj'], completar=True)
         except RF.CnpjNaoEncontrado:
             # a base pública não conhece mais o CNPJ (baixa?) — é mudança, e das grandes
             dados, fonte = {'situacao_cadastral': 'NÃO ENCONTRADO NA BASE'}, 'nenhuma'
@@ -160,8 +167,11 @@ def vigiar(prazo_seg=30, lote=LOTE, dry=False):
                     (str(e)[:250], RETENTATIVA_H, v['id']), fetch=False)
             continue
         res['consultadas'] += 1
-        foto, h = RF.impressao(dados)
-        if fonte != 'nenhuma' and v.get('foto_fonte') and fonte != v['foto_fonte']:
+        # 05/11/2026: o complemento da ReceitaWS (e-mail) é cortesia e pode faltar num dia (3/min);
+        # a referência cobre o e-mail quando ele vem vazio, e 'brasilapi+receitaws' é a mesma
+        # família de 'brasilapi' para o julgamento de fonte abaixo.
+        foto, h = RF.impressao(dados, referencia=_j(v['foto_json']))
+        if fonte != 'nenhuma' and v.get('foto_fonte') and _familia(fonte) != _familia(v['foto_fonte']):
             # Fonte diferente da foto de referência: a BrasilAPI oculta endereço
             # e contato de MEI, a ReceitaWS não — comparar as duas daria um
             # "mudou" falso. Não julga; conta a consulta e espera o dia seguinte.

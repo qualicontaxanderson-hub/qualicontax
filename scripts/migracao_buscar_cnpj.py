@@ -151,9 +151,11 @@ def montar(c, rf):
             campos['regime_tributario'] = 'MEI'
             avisos.append(('regime: padrão SIMPLES do avulso vira MEI pela Receita', 'SIMPLES', 'MEI'))
         elif not rf.get('opcao_pelo_simples'):
-            # 05/11/2026: a coluna é NOT NULL (enum); gravar None derrubava o UPDATE inteiro do cliente
-            # (15 avulsos ficaram sem nada na 1ª rodada). Fica SIMPLES e o aviso pede decisão na tela.
-            avisos.append(('regime: Receita diz NÃO optante do Simples; padrão SIMPLES mantido, decidir na tela', 'SIMPLES', 'Presumido ou Real?'))
+            # 05/11/2026 (Anderson): "deixa pendência para o pessoal resolver, porque se preenchermos o
+            # erro é do Simples". A coluna passou a aceitar NULL (migracao_02_regime_nulo) e o PJ sem
+            # regime cai em A CADASTRAR com a pendência "Regime".
+            campos['regime_tributario'] = None
+            avisos.append(('regime: Receita diz NÃO optante do Simples; padrão retirado, fica pendente em A CADASTRAR', 'SIMPLES', 'Presumido ou Real?'))
     else:
         rg = c['regime_tributario']
         if rf.get('opcao_pelo_mei') and rg != 'MEI':

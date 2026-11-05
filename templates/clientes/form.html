@@ -1702,6 +1702,16 @@ function preencherDadosCNPJ(data) {
         tentarPreencher('porte_empresa', porte, 'Porte da Empresa');
     } else { naoPreenchidos.push('Porte da Empresa (não disponível)'); }
 
+    // 05/11/2026 (Anderson): a Receita só afirma Simples ou MEI. Quando afirma, marca; quando diz que
+    // NÃO é optante, deixa EM BRANCO (Presumido ou Real é decisão de gente) e o PJ fica em A CADASTRAR.
+    // Só mexe no campo vazio: regime já escolhido não é sobrescrito pela busca.
+    const regimeSel = document.getElementById('regime_tributario');
+    if (regimeSel && !regimeSel.value) {
+        if (data.opcao_pelo_mei === true) tentarPreencher('regime_tributario', 'MEI', 'Regime tributário');
+        else if (data.opcao_pelo_simples === true) tentarPreencher('regime_tributario', 'SIMPLES', 'Regime tributário');
+        else if (data.opcao_pelo_simples === false) naoPreenchidos.push('Regime tributário (a Receita diz que NÃO é do Simples: escolher Lucro Presumido ou Real)');
+    }
+
     if (data.data_inicio_atividade) {
         let dataFormatada = '';
         if (data.data_inicio_atividade.includes('/')) {
