@@ -14,8 +14,55 @@ AREAS_ATENDIMENTO = [
 ]
 
 
+# 05/11/2026 (migração Acessórias): o que um contato RECEBE é a ligação contatos_departamentos com a
+# tabela departamentos — estes sete, nesta ordem (é a ordem da planilha do Acessórias). Os demais
+# departamentos (Atendimento, Comercial, Diretoria) são internos e não aparecem no contato.
+DEPARTAMENTOS_CONTATO = ['Contábil', 'Fiscal', 'Pessoal', 'Financeiro', 'Legalização', 'Certificado Digital', 'Visita']
+_SQL_DEPTOS = """(SELECT GROUP_CONCAT(d.nome ORDER BY FIELD(d.nome, 'Contábil', 'Fiscal', 'Pessoal', 'Financeiro',
+                                                            'Legalização', 'Certificado Digital', 'Visita') SEPARATOR '|')
+                    FROM contatos_departamentos cd JOIN departamentos d ON d.id = cd.departamento_id
+                   WHERE cd.contato_id = c.id)"""
+
+
+def _split_deptos(v):
+    return [x for x in (v or '').split('|') if x]
+
+
 class ContatoCliente:
     """Classe para gestão de contatos de clientes"""
+
+    @staticmethod
+    def departamentos_disponiveis():
+        """[{id, nome}] dos departamentos que um contato pode receber, na ordem de DEPARTAMENTOS_CONTATO."""
+        rows = execute_query('SELECT id, nome FROM departamentos WHERE ativo = 1', fetch=True) or []
+        por_nome = {r['nome']: r for r in rows}
+        return [por_nome[n] for n in DEPARTAMENTOS_CONTATO if n in por_nome]
+
+    @staticmethod
+    def set_departamentos(contato_id, departamento_ids):
+        """Troca a lista do que o contato recebe (apaga e grava)."""
+        execute_query('DELETE FROM contatos_departamentos WHERE contato_id = %s', (contato_id,), fetch=False)
+        for did in sorted({int(d) for d in (departamento_ids or []) if str(d).isdigit()}):
+            execute_query('INSERT IGNORE INTO contatos_departamentos (contato_id, departamento_id) VALUES (%s, %s)',
+                          (contato_id, did), fetch=False)
+
+    @staticmethod
+    def por_celular(celular, exceto_cliente_id=None):
+        """Contatos de OUTRAS empresas com este celular (05/11/2026, Anderson: "ao digitar o telefone
+        do Anderson, o sistema pergunta: quer utilizar o e-mail do tal do Anderson?")."""
+        d = ''.join(ch for ch in str(celular or '') if ch.isdigit())
+        if len(d) < 10:
+            return []
+        rows = execute_query(f"""
+            SELECT c.id, c.cliente_id, c.nome, c.cargo, c.email, c.celular, k.nome_razao_social AS empresa,
+                   k.numero_cliente, {_SQL_DEPTOS} AS deptos
+              FROM contatos_clientes c JOIN clientes k ON k.id = c.cliente_id
+             WHERE c.ativo = 1 AND REGEXP_REPLACE(COALESCE(c.celular, ''), '[^0-9]', '') = %s
+               AND (%s IS NULL OR c.cliente_id <> %s)
+             ORDER BY c.id""", (d, exceto_cliente_id, exceto_cliente_id), fetch=True) or []
+        for r in rows:
+            r['departamentos'] = _split_deptos(r.pop('deptos'))
+        return rows
     
     @staticmethod
     def get_by_cliente(cliente_id):
@@ -28,16 +75,17 @@ class ContatoCliente:
         Returns:
             list: Lista de contatos
         """
-        query = """
-            SELECT id, cliente_id, nome, cargo, email, telefone, celular,
-                   departamento, areas_atendimento, principal, ativo
-            FROM contatos_clientes
-            WHERE cliente_id = %s
-            ORDER BY principal DESC, nome ASC
+        query = f"""
+            SELECT c.id, c.cliente_id, c.nome, c.cargo, c.email, c.telefone, c.celular,
+                   c.departamento, c.areas_atendimento, c.principal, c.ativo, {_SQL_DEPTOS} AS deptos
+            FROM contatos_clientes c
+            WHERE c.cliente_id = %s
+            ORDER BY c.principal DESC, c.nome ASC
         """
         rows = execute_query(query, (cliente_id,), fetch=True) or []
         for r in rows:
             r['areas_atendimento'] = _parse_areas(r.get('areas_atendimento'))
+            r['departamentos'] = _split_deptos(r.pop('deptos'))
         return rows
     
     @staticmethod
@@ -51,21 +99,22 @@ class ContatoCliente:
         Returns:
             dict: Dados do contato ou None
         """
-        query = """
-            SELECT id, cliente_id, nome, cargo, email, telefone, celular,
-                   departamento, areas_atendimento, principal, ativo
-            FROM contatos_clientes
-            WHERE id = %s
+        query = f"""
+            SELECT c.id, c.cliente_id, c.nome, c.cargo, c.email, c.telefone, c.celular,
+                   c.departamento, c.areas_atendimento, c.principal, c.ativo, {_SQL_DEPTOS} AS deptos
+            FROM contatos_clientes c
+            WHERE c.id = %s
         """
         row = execute_query(query, (contato_id,), fetch=True, fetch_one=True)
         if row:
             row['areas_atendimento'] = _parse_areas(row.get('areas_atendimento'))
+            row['departamentos'] = _split_deptos(row.pop('deptos'))
         return row
     
     @staticmethod
     def create(cliente_id, nome, cargo=None, email=None, telefone=None,
                celular=None, departamento=None, areas_atendimento=None,
-               principal=False, ativo=True):
+               principal=False, ativo=True, departamentos=None):
         """
         Cria novo contato.
         
@@ -104,12 +153,15 @@ class ContatoCliente:
             cliente_id, nome, cargo, email, telefone, celular,
             departamento, areas_json, principal, ativo
         )
-        return execute_query(query, params)
+        cid = execute_query(query, params)
+        if cid and departamentos is not None:
+            ContatoCliente.set_departamentos(cid, departamentos)
+        return cid
     
     @staticmethod
     def update(contato_id, nome, cargo=None, email=None, telefone=None,
                celular=None, departamento=None, areas_atendimento=None,
-               principal=False, ativo=True):
+               principal=False, ativo=True, departamentos=None):
         """
         Atualiza dados do contato.
         
@@ -150,7 +202,10 @@ class ContatoCliente:
             nome, cargo, email, telefone, celular,
             departamento, areas_json, principal, ativo, contato_id
         )
-        return execute_query(query, params)
+        r = execute_query(query, params)
+        if departamentos is not None:
+            ContatoCliente.set_departamentos(contato_id, departamentos)
+        return r
     
     @staticmethod
     def delete(contato_id):
@@ -163,6 +218,7 @@ class ContatoCliente:
         Returns:
             int: ID do contato ou None
         """
+        execute_query('DELETE FROM contatos_departamentos WHERE contato_id = %s', (contato_id,), fetch=False)
         query = "DELETE FROM contatos_clientes WHERE id = %s"
         return execute_query(query, (contato_id,))
     

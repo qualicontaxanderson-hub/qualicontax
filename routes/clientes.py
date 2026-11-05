@@ -1351,7 +1351,8 @@ def detalhes(id):
                          contadores=contadores,
                          contadores_disponiveis=contadores_disponiveis,
                          socios_total_percentual=socios_total_percentual,
-                          areas_atendimento=AREAS_ATENDIMENTO)
+                         departamentos_contato=ContatoCliente.departamentos_disponiveis(),
+                         areas_atendimento=AREAS_ATENDIMENTO)
 
 
 @clientes.route('/clientes/opcoes/<tipo>', methods=['POST'])
@@ -2346,29 +2347,82 @@ def excluir_endereco(id):
 
 
 # Rotas para Contatos
+def _contato_form():
+    """Lê e valida o formulário do contato (05/11/2026, Anderson): NOME e CELULAR obrigatórios em
+    todo contato (cliente ou avulso); o que ele recebe é a lista de departamentos marcados.
+    Devolve (dados, faltas)."""
+    f = request.form
+    nome = (f.get('nome') or '').strip()
+    celular = (f.get('celular') or '').strip()
+    falta = []
+    if not nome:
+        falta.append('nome')
+    if not _telefone_valido(celular):
+        falta.append('celular (DDD + número)')
+    tel = (f.get('telefone') or '').strip()
+    if re.sub(r'\D', '', tel) and not _telefone_valido(tel):
+        falta.append('telefone (número inválido)')
+    dados = dict(nome=nome, cargo=(f.get('cargo') or '').strip()[:100] or None,
+                 email=(f.get('email') or '').strip().lower()[:255] or None,
+                 telefone=tel or None, celular=celular,
+                 principal=f.get('principal') == 'on',
+                 departamentos=[int(d) for d in f.getlist('departamentos') if d.isdigit()])
+    return dados, falta
+
+
+def _contato_resumo(dados):
+    nomes = {d['id']: d['nome'] for d in ContatoCliente.departamentos_disponiveis()}
+    r = {k: dados.get(k) for k in ('nome', 'cargo', 'email', 'telefone', 'celular', 'principal')}
+    r['departamentos'] = [nomes[i] for i in dados.get('departamentos', []) if i in nomes]
+    return r
+
+
 @clientes.route('/clientes/<int:cliente_id>/contatos/novo', methods=['POST'])
 @login_required
 def novo_contato(cliente_id):
-    """Adicionar novo contato"""
-    contato_id = ContatoCliente.create(
-        cliente_id=cliente_id,
-        nome=request.form.get('nome'),
-        cargo=request.form.get('cargo'),
-        email=request.form.get('email'),
-        telefone=request.form.get('telefone'),
-        celular=request.form.get('celular'),
-        departamento=request.form.get('departamento'),
-        areas_atendimento=request.form.getlist('areas_atendimento'),
-        principal=request.form.get('principal') == 'on',
-        ativo=True
-    )
-    
+    """Adicionar novo contato (celular obrigatório; departamentos que recebe)."""
+    dados, falta = _contato_form()
+    if falta:
+        flash('Contato não salvo: falta ' + ' e '.join(falta) + '.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=cliente_id) + '#contatos')
+    contato_id = ContatoCliente.create(cliente_id=cliente_id, ativo=True, **dados)
     if contato_id:
-        flash('Contato adicionado com sucesso!', 'success')
+        registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=contato_id,
+                  depois=dict(_contato_resumo(dados), cliente_id=cliente_id))
+        flash('Contato adicionado.', 'success')
     else:
         flash('Erro ao adicionar contato!', 'danger')
-    
-    return redirect(url_for('clientes.detalhes', id=cliente_id))
+    return redirect(url_for('clientes.detalhes', id=cliente_id) + '#contatos')
+
+
+@clientes.route('/contatos/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_contato(id):
+    """Editar contato (05/11/2026): mesmas regras do novo."""
+    contato = ContatoCliente.get_by_id(id)
+    if not contato:
+        flash('Contato não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+    dados, falta = _contato_form()
+    if falta:
+        flash('Contato não salvo: falta ' + ' e '.join(falta) + '.', 'danger')
+        return redirect(url_for('clientes.detalhes', id=contato['cliente_id']) + '#contatos')
+    antes = {k: contato.get(k) for k in ('nome', 'cargo', 'email', 'telefone', 'celular', 'principal')}
+    antes['departamentos'] = contato.get('departamentos') or []
+    antes['cliente_id'] = contato['cliente_id']
+    ContatoCliente.update(id, ativo=bool(contato.get('ativo', True)), **dados)
+    registrar('escrita.alterou_contato', 'cadastros', tabela='contatos_clientes', registro_id=id,
+              antes=antes, depois=dict(_contato_resumo(dados), cliente_id=contato['cliente_id']))
+    flash('Contato salvo.', 'success')
+    return redirect(url_for('clientes.detalhes', id=contato['cliente_id']) + '#contatos')
+
+
+@clientes.route('/api/contatos/por-celular/<digitos>')
+@login_required
+def api_contato_por_celular(digitos):
+    """Contatos de OUTRAS empresas com este celular — para reaproveitar nome/e-mail (05/11/2026)."""
+    cid = request.args.get('cliente_id', type=int)
+    return jsonify(ContatoCliente.por_celular(digitos, exceto_cliente_id=cid))
 
 
 @clientes.route('/contatos/<int:id>/excluir', methods=['POST'])

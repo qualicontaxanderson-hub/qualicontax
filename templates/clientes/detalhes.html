@@ -6,6 +6,13 @@
 <style>
 /* ── Area-chip checkboxes ─────────────────────────────────────────────────── */
 .area-chip { display:inline-flex; cursor:pointer; user-select:none; }
+.ct-dep { display:inline-block; background:#e8f3ec; color:#1f6f43; border:1px solid #cfe5d7; border-radius:999px; font-size:11px; padding:1px 8px; margin:1px 3px 1px 0; }
+.ct-dep-todos { background:#1f6f43; color:#fff; border-color:#1f6f43; }
+.ct-falta { color:#b45309; font-size:12px; white-space:nowrap; }
+.ct-hint { display:block; color:var(--text-secondary); font-size:11px; margin-top:3px; }
+.ct-reuso { background:#fff7e6; border:1px solid #f5d58a; border-radius:9px; padding:8px 10px; margin:-4px 0 12px; }
+.ct-reuso-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
+.ct-reuso-item + .ct-reuso-item { border-top:1px dashed #f0d9a0; }
 .area-chip-input { display:none; }
 .area-chip-body {
     display:inline-flex; align-items:center; gap:5px;
@@ -570,11 +577,10 @@
                                         <tr>
                                             <th>Nome</th>
                                             <th>Cargo</th>
-                                            <th>Email</th>
+                                            <th>E-mail</th>
+                                            <th>Celular</th>
                                             <th>Telefone</th>
-                                            <th>Departamento</th>
-                                            <th>Áreas de Recebimento</th>
-                                            <th>Status</th>
+                                            <th>Recebe</th>
                                             <th>Ações</th>
                                         </tr>
                                     </thead>
@@ -589,28 +595,26 @@
                                             </td>
                                             <td><span data-copiar data-copiar-rotulo="Cargo">{{ contato.cargo or '-' }}</span></td>
                                             <td><span data-copiar data-copiar-rotulo="E-mail">{{ contato.email or '-' }}</span></td>
-                                            <td><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone or contato.celular or '-' }}</span></td>
-                                            <td><span data-copiar data-copiar-rotulo="Departamento">{{ contato.departamento or '-' }}</span></td>
                                             <td>
-                                                {% if contato.areas_atendimento %}
-                                                    {% for area_key in contato.areas_atendimento %}
-                                                        {% for a in areas_atendimento if a[0] == area_key %}
-                                                        <span class="badge" style="background:{{ a[3] }}20; color:{{ a[3] }}; border:1px solid {{ a[3] }}40; font-size:10px; margin-right:2px;">
-                                                            <i class="fas {{ a[2] }}" style="margin-right:2px;"></i>{{ a[1] }}
-                                                        </span>
-                                                        {% endfor %}
-                                                    {% endfor %}
+                                                {% if contato.celular %}<span data-copiar data-copiar-rotulo="Celular">{{ contato.celular }}</span>
+                                                {% else %}<span class="ct-falta" title="Celular é obrigatório no contato: aparece em A CADASTRAR até ser preenchido"><i class="fas fa-triangle-exclamation"></i> sem celular</span>{% endif %}
+                                            </td>
+                                            <td><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone or '-' }}</span></td>
+                                            <td data-copiar="{{ contato.departamentos|join(', ') or 'nenhum' }}" data-copiar-rotulo="Recebe" style="min-width:230px;">
+                                                {% if contato.departamentos|length >= departamentos_contato|length %}
+                                                    <span class="ct-dep ct-dep-todos" title="{{ contato.departamentos|join(', ') }}"><i class="fas fa-check-double"></i> Todos os departamentos</span>
+                                                {% elif contato.departamentos %}
+                                                    {% for d in contato.departamentos %}<span class="ct-dep">{{ d }}</span>{% endfor %}
                                                 {% else %}
-                                                    <span class="text-muted" style="font-size:11px;">Todas</span>
+                                                    <span class="ct-falta"><i class="fas fa-circle-xmark"></i> não recebe nada</span>
                                                 {% endif %}
                                             </td>
-                                            <td>
-                                                <span class="badge badge-{{ 'success' if contato.ativo else 'secondary' }}">
-                                                    {{ 'Ativo' if contato.ativo else 'Inativo' }}
-                                                </span>
-                                            </td>
-                                            <td>
+                                            <td style="white-space:nowrap;">
                                                 <button type="button" class="btn-icon" data-copiar-bloco-btn title="Copiar os dados deste contato"><i class="far fa-copy"></i></button>
+                                                <button type="button" class="btn-icon" title="Editar este contato"
+                                                        onclick='editarContato({{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos}|tojson }})'>
+                                                    <i class="fas fa-pen"></i>
+                                                </button>
                                                 <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display: inline;">
                                                     <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este contato?')">
                                                         <i class="fas fa-trash"></i>
@@ -1667,62 +1671,57 @@
     </div>
 </div>
 
-<!-- Modal para Adicionar Contato -->
+<!-- Modal de Contato (adicionar e editar) — 05/11/2026: celular obrigatório, o que ele RECEBE por
+     departamento, reaproveitamento pelo celular e confirmação antes de salvar (pedido do Anderson). -->
 <div id="addContactModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width:580px;">
+    <div class="modal-content" style="max-width:620px;">
         <div class="modal-header">
-            <h3>Adicionar Contato</h3>
+            <h3 id="ctModalTitulo">Adicionar contato</h3>
             <button class="modal-close" onclick="closeAddContactModal()">&times;</button>
         </div>
-        <form action="{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}" method="POST">
+        <form id="ctForm" action="{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}" method="POST" onsubmit="return contatoConfirmar()">
             <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="ct_celular">Celular *</label>
+                        <input type="text" id="ct_celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000" required
+                               onblur="contatoPorCelular()" autocomplete="off">
+                        <small class="ct-hint">Obrigatório. Se este celular já é de alguém em outra empresa, o sistema oferece os dados dele.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="ct_telefone">Telefone fixo</label>
+                        <input type="text" id="ct_telefone" name="telefone" class="form-control" data-mask="phone" placeholder="(00) 0000-0000">
+                    </div>
+                </div>
+                <div id="ctReuso" class="ct-reuso" style="display:none;"></div>
                 <div class="form-group">
-                    <label for="nome">Nome *</label>
-                    <input type="text" id="nome" name="nome" class="form-control" required>
+                    <label for="ct_nome">Nome *</label>
+                    <input type="text" id="ct_nome" name="nome" class="form-control" required>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="cargo">Cargo</label>
-                        <input type="text" id="cargo" name="cargo" class="form-control">
+                        <label for="ct_email">E-mail</label>
+                        <input type="email" id="ct_email" name="email" class="form-control" placeholder="quem recebe boletos e documentos">
                     </div>
                     <div class="form-group">
-                        <label for="departamento">Departamento</label>
-                        <input type="text" id="departamento" name="departamento" class="form-control">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" class="form-control">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="telefone">Telefone</label>
-                        <input type="text" id="telefone" name="telefone" class="form-control" data-mask="phone" placeholder="(00) 0000-0000">
-                    </div>
-                    <div class="form-group">
-                        <label for="celular">Celular</label>
-                        <input type="text" id="celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000">
+                        <label for="ct_cargo">Cargo</label>
+                        <input type="text" id="ct_cargo" name="cargo" class="form-control" placeholder="ex.: Sócio-Administrador, Financeiro">
                     </div>
                 </div>
 
-                <!-- Áreas de Recebimento -->
                 <div class="form-group">
                     <label style="display:block; margin-bottom:8px;">
-                        Áreas de Recebimento
-                        <span style="font-weight:400; font-size:11px; color:var(--text-secondary);">
-                            — deixe em branco para receber todas
-                        </span>
+                        Recebe de quais departamentos
+                        <span style="font-weight:400; font-size:11px; color:var(--text-secondary);">— boletos, documentos e avisos de cada área vão para quem está marcado</span>
                     </label>
                     <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                        {% for area_key, area_label, area_icon, area_color in areas_atendimento %}
-                        <label class="area-chip" style="--chip-color:{{ area_color }};">
-                            <input type="checkbox" name="areas_atendimento" value="{{ area_key }}" class="area-chip-input">
-                            <span class="area-chip-body">
-                                <i class="fas {{ area_icon }}"></i>
-                                {{ area_label }}
-                            </span>
+                        {% for d in departamentos_contato %}
+                        <label class="area-chip" style="--chip-color:#1f6f43;">
+                            <input type="checkbox" name="departamentos" value="{{ d.id }}" class="area-chip-input ct-dep-chk" data-nome="{{ d.nome }}">
+                            <span class="area-chip-body">{{ d.nome }}</span>
                         </label>
                         {% endfor %}
+                        <button type="button" class="btn btn-outline btn-sm" onclick="contatoMarcarTodos()" style="align-self:center;">Todos</button>
                     </div>
                 </div>
 
@@ -1735,7 +1734,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeAddContactModal()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Adicionar</button>
+                <button type="submit" class="btn btn-primary" id="ctSalvar">Adicionar</button>
             </div>
         </form>
     </div>
@@ -1997,12 +1996,82 @@ function closeAddAddressModal() {
     document.getElementById('addAddressModal').style.display = 'none';
 }
 
+const CT_URL_NOVO = "{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}";
+const CT_URL_EDITAR = "{{ url_for('clientes.editar_contato', id=0) }}";
+const CT_URL_CELULAR = "{{ url_for('clientes.api_contato_por_celular', digitos='0000000000') }}";
+
+function contatoLimpar() {
+    ['ct_celular', 'ct_telefone', 'ct_nome', 'ct_email', 'ct_cargo'].forEach(function (id) { document.getElementById(id).value = ''; });
+    document.getElementById('principal_contato').checked = false;
+    document.querySelectorAll('.ct-dep-chk').forEach(function (c) { c.checked = false; });
+    const r = document.getElementById('ctReuso'); r.style.display = 'none'; r.innerHTML = '';
+}
 function showAddContactModal() {
+    contatoLimpar();
+    document.getElementById('ctModalTitulo').textContent = 'Adicionar contato';
+    document.getElementById('ctSalvar').textContent = 'Adicionar';
+    document.getElementById('ctForm').action = CT_URL_NOVO;
+    document.getElementById('addContactModal').style.display = 'block';
+    document.getElementById('ct_celular').focus();
+}
+function editarContato(c) {
+    contatoLimpar();
+    document.getElementById('ctModalTitulo').textContent = 'Editar contato';
+    document.getElementById('ctSalvar').textContent = 'Salvar';
+    document.getElementById('ctForm').action = CT_URL_EDITAR.replace(/0$/, String(c.id));
+    document.getElementById('ct_celular').value = c.celular || '';
+    document.getElementById('ct_telefone').value = c.telefone || '';
+    document.getElementById('ct_nome').value = c.nome || '';
+    document.getElementById('ct_email').value = c.email || '';
+    document.getElementById('ct_cargo').value = c.cargo || '';
+    document.getElementById('principal_contato').checked = !!c.principal;
+    document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = (c.departamentos || []).indexOf(k.dataset.nome) >= 0; });
     document.getElementById('addContactModal').style.display = 'block';
 }
-
 function closeAddContactModal() {
     document.getElementById('addContactModal').style.display = 'none';
+}
+function contatoMarcarTodos() {
+    document.querySelectorAll('.ct-dep-chk').forEach(function (c) { c.checked = true; });
+}
+// Reaproveitar: "ao digitar o telefone do Anderson, o sistema pergunta: quer utilizar o e-mail dele?"
+function contatoPorCelular() {
+    const dig = (document.getElementById('ct_celular').value || '').replace(/\D/g, '');
+    const box = document.getElementById('ctReuso');
+    box.style.display = 'none'; box.innerHTML = '';
+    if (dig.length < 10) return;
+    fetch(CT_URL_CELULAR.replace('0000000000', dig) + '?cliente_id={{ cliente.id }}')
+        .then(function (r) { return r.json(); })
+        .then(function (lista) {
+            if (!lista || !lista.length) return;
+            window._ctReuso = lista;
+            box.innerHTML = lista.map(function (c, i) {
+                return '<div class="ct-reuso-item"><div><b>' + c.nome + '</b>' + (c.email ? ' &middot; ' + c.email : '') +
+                    '<br><small>contato de ' + (c.numero_cliente ? c.numero_cliente + ' - ' : '') + c.empresa +
+                    (c.departamentos.length ? ' (recebe ' + c.departamentos.join(', ') + ')' : '') + '</small></div>' +
+                    '<button type="button" class="btn btn-sm btn-primary" onclick="contatoUsar(' + i + ')">Usar os dados dele</button></div>';
+            }).join('');
+            box.style.display = 'block';
+        }).catch(function () {});
+}
+function contatoUsar(i) {
+    const c = window._ctReuso[i];
+    const nome = document.getElementById('ct_nome'), email = document.getElementById('ct_email'), cargo = document.getElementById('ct_cargo');
+    if (!nome.value) nome.value = c.nome || '';
+    if (!email.value) email.value = c.email || '';
+    if (!cargo.value) cargo.value = c.cargo || '';
+    document.getElementById('ctReuso').style.display = 'none';
+}
+// Antes de salvar: "tem certeza que esse é o contato que receberá documentos de tal e tal departamento?"
+function contatoConfirmar() {
+    const nome = (document.getElementById('ct_nome').value || '').trim();
+    const dig = (document.getElementById('ct_celular').value || '').replace(/\D/g, '');
+    if (dig.length < 10) { alert('O celular é obrigatório (DDD + número).'); document.getElementById('ct_celular').focus(); return false; }
+    const deps = Array.from(document.querySelectorAll('.ct-dep-chk:checked')).map(function (c) { return c.dataset.nome; });
+    const msg = deps.length
+        ? nome.toUpperCase() + ' é o contato de {{ cliente.nome_razao_social|e }} que vai receber boletos, documentos e avisos de: ' + deps.join(', ') + '.\n\nTem certeza?'
+        : nome.toUpperCase() + ' fica cadastrado SEM receber nada de nenhum departamento (nenhum marcado).\n\nTem certeza?';
+    return confirm(msg);
 }
 
 function showAddCadastroAdicionalModal() {
