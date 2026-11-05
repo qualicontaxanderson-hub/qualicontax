@@ -151,8 +151,9 @@ def montar(c, rf):
             campos['regime_tributario'] = 'MEI'
             avisos.append(('regime: padrão SIMPLES do avulso vira MEI pela Receita', 'SIMPLES', 'MEI'))
         elif not rf.get('opcao_pelo_simples'):
-            campos['regime_tributario'] = None
-            avisos.append(('regime: Receita diz NÃO optante do Simples; padrão retirado, decidir na tela', 'SIMPLES', 'Presumido ou Real?'))
+            # 05/11/2026: a coluna é NOT NULL (enum); gravar None derrubava o UPDATE inteiro do cliente
+            # (15 avulsos ficaram sem nada na 1ª rodada). Fica SIMPLES e o aviso pede decisão na tela.
+            avisos.append(('regime: Receita diz NÃO optante do Simples; padrão SIMPLES mantido, decidir na tela', 'SIMPLES', 'Presumido ou Real?'))
     else:
         rg = c['regime_tributario']
         if rf.get('opcao_pelo_mei') and rg != 'MEI':
