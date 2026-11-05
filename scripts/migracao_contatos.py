@@ -121,7 +121,7 @@ def main():
         "SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE avulso = 0 AND numero_cliente REGEXP '^[0-9]+$'", fetch=True) or []}
     existentes = {}
     for c in execute_query("""SELECT c.id, c.cliente_id, c.nome, c.cargo, c.email, c.telefone, c.celular,
-                                     (SELECT GROUP_CONCAT(d.nome ORDER BY d.nome) FROM contatos_departamentos cd
+                                     (SELECT GROUP_CONCAT(d.nome ORDER BY d.nome SEPARATOR ', ') FROM contatos_departamentos cd
                                         JOIN departamentos d ON d.id = cd.departamento_id WHERE cd.contato_id = c.id) AS deptos
                                 FROM contatos_clientes c""", fetch=True) or []:
         existentes.setdefault(c['cliente_id'], []).append(c)
@@ -152,7 +152,9 @@ def main():
             novos = {'cargo': ex['cargo'] or g['cargo'], 'celular': ex['celular'] or g['celular'], 'telefone': ex['telefone'] or g['telefone']}
             mudou_campos = {k: v for k, v in novos.items() if v != antes[k]}
             deptos_antes = ex['deptos'] or ''
-            mudou_deptos = deptos_antes != ', '.join(sorted(g['deptos']))
+            # 2ª rodada de 05/11 marcou 761 'completado: departamentos' falsos: o GROUP_CONCAT vinha com ','
+            # e aqui se comparava com ', '. Agora os dois lados usam ', ' e a mesma ordem.
+            mudou_deptos = sorted((deptos_antes or '').split(', ')) != sorted(g['deptos']) if (deptos_antes or g['deptos']) else False
             if not mudou_campos and not mudou_deptos:
                 tot['já existia igual'] += 1
                 continue
