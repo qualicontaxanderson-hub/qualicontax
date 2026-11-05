@@ -31,6 +31,7 @@ from utils.atividade import registrar_agente         # noqa: E402
 
 USUARIO_ID, USUARIO_NOME, USUARIO_LOGIN = 62, 'Anderson Antunes Vieira', 'anderson'
 DOMINIOS_ESCRITORIO = ('qualicontax', 'm3a3')
+ENCHIMENTO = re.compile(r'@email\.com$|^(teste|exemplo|naotem|semema?il)@', re.I)
 SQL = """SELECT c.id, c.numero_cliente, c.avulso, c.nome_razao_social, c.cpf_cnpj, c.email
            FROM clientes c
           WHERE c.tipo_pessoa <> 'PF' AND c.situacao = 'ATIVO'
@@ -75,7 +76,7 @@ def coletar(alvo, cache, pausa):
     print('coleta terminada:', Counter('ok' if 'email' in v else v['erro'] for v in d.values()))
 
 
-def aplicar(alvo, cache, apply, csv_path):
+def aplicar(alvo, cache, apply, csv_path, manter_escritorio=False):
     d = carregar(cache)
     tot, linhas = Counter(), []
     for c in alvo:
@@ -95,10 +96,23 @@ def aplicar(alvo, cache, apply, csv_path):
             tot['CNPJ sem e-mail na Receita (não mexe)'] += 1
             linhas.append((rot, 'CNPJ sem e-mail na Receita', atual, ''))
             continue
+        if ENCHIMENTO.search(novo):
+            # 05/11/2026: 22 CNPJs têm "email@email.com" e parecidos — quem abriu a empresa inventou.
+            # Não é e-mail de ninguém: não entra no cadastro, só relata.
+            tot['CNPJ com e-mail de enchimento, ex. email@email.com (não mexe)'] += 1
+            linhas.append((rot, 'CNPJ com e-mail de enchimento', atual, novo))
+            continue
         if novo == atual:
             tot['já igual ao CNPJ'] += 1
+            linhas.append((rot, 'já igual ao CNPJ', atual, novo))
             continue
         tipo = 'escritório' if any(k in novo for k in DOMINIOS_ESCRITORIO) else 'cliente'
+        if tipo == 'escritório' and manter_escritorio:
+            # 05/11/2026 (Anderson, sobre os 55 CNPJs com e-mail da Qualicontax na Receita): "Pode deixar
+            # como está e eu vou pedir para eles alterarem" — o cadastro fica como está; a planilha lista.
+            tot['CNPJ com e-mail do escritório (não mexe, ele pede ao cliente para alterar)'] += 1
+            linhas.append((rot, 'CNPJ com e-mail do escritório', atual, novo))
+            continue
         tot[f"{'trocado' if apply else 'trocaria'} (e-mail do {tipo} no CNPJ)" if atual else f"{'preenchido' if apply else 'preencheria'} (e-mail do {tipo} no CNPJ)"] += 1
         linhas.append((rot, 'troca' if atual else 'preenche', atual, novo))
         if apply:
@@ -120,13 +134,14 @@ def main():
     ap.add_argument('--apply', action='store_true')
     ap.add_argument('--pausa', type=float, default=21.0)
     ap.add_argument('--csv')
+    ap.add_argument('--manter-escritorio', action='store_true', help='não troca quando o e-mail do CNPJ é da Qualicontax/M3A3')
     a = ap.parse_args()
     alvo = execute_query(SQL, fetch=True) or []
     print(f'{len(alvo)} PJ ativas')
     if a.coletar:
         coletar(alvo, a.cache, a.pausa)
     else:
-        aplicar(alvo, a.cache, a.apply, a.csv)
+        aplicar(alvo, a.cache, a.apply, a.csv, a.manter_escritorio)
 
 
 if __name__ == '__main__':
