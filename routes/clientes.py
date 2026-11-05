@@ -69,7 +69,41 @@ def _numero_inteiro(numero):
     return str(int(n)) if n.isdigit() else n
 
 
-def _obrigatorios_faltando(form, avulso=False):
+def _contatos_do_form(form):
+    """Contatos guardados no formulário do cliente (campo contatos_json, 05/11/2026): só os que têm
+    nome e celular válido contam."""
+    import json as _json
+    try:
+        lista = _json.loads(form.get('contatos_json') or '[]')
+    except ValueError:
+        lista = []
+    out = []
+    for c in lista if isinstance(lista, list) else []:
+        if not isinstance(c, dict):
+            continue
+        nome = str(c.get('nome') or '').strip()
+        cel = str(c.get('celular') or '').strip()
+        if nome and _telefone_valido(cel):
+            out.append({'nome': nome[:255], 'celular': cel[:20], 'telefone': (str(c.get('telefone') or '').strip() or None),
+                        'email': (str(c.get('email') or '').strip().lower()[:255] or None),
+                        'cargo': (str(c.get('cargo') or '').strip()[:100] or None),
+                        'departamentos': [int(d) for d in (c.get('departamentos') or []) if str(d).isdigit()]})
+    return out
+
+
+def _gravar_contatos_do_formulario(cliente_id, form=None):
+    """Grava os contatos guardados no formulário (novo ou edição). Devolve quantos."""
+    n = 0
+    for c in _contatos_do_form(form or request.form):
+        cid = ContatoCliente.create(cliente_id=cliente_id, ativo=True, **c)
+        if cid:
+            n += 1
+            registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=cid,
+                      depois=dict(c, cliente_id=cliente_id, origem='formulário do cadastro'))
+    return n
+
+
+def _obrigatorios_faltando(form, avulso=False, cliente_id=None):
     """Grupo, e-mail, celular e ramo de atividade (07/10/2026): exigidos de
     TODO cadastro — cliente e avulso, novo e edição. A tela confere antes de
     enviar; isto é a rede de segurança do servidor. Devolve o que falta."""
@@ -81,8 +115,13 @@ def _obrigatorios_faltando(form, avulso=False):
     # 05/11/2026 (Anderson): no PJ o e-mail do cadastro é O QUE ESTÁ NO CNPJ (vem da busca), e há CNPJ
     # sem e-mail na Receita — então só a pessoa física continua obrigada a ter e-mail aqui. O e-mail de
     # cobrança é o dos CONTATOS; quem não tem contato com e-mail aparece em A CADASTRAR.
-    if form.get('tipo_pessoa') == 'PF' and not (form.get('email') or '').strip():
-        falta.append('e-mail')
+    if form.get('tipo_pessoa') == 'PF':
+        # 05/11/2026 (Anderson): "A Pessoa Física vamos retirar esse campo [e-mail] e deixar
+        # obrigatório só o Cadastro do Contato" — ao menos um contato com celular.
+        ja_tem = cliente_id and execute_query('SELECT COUNT(*) n FROM contatos_clientes WHERE cliente_id = %s AND ativo = 1',
+                                              (cliente_id,), fetch=True, fetch_one=True)['n']
+        if not ja_tem and not _contatos_do_form(form):
+            falta.append('contato (nome e celular): a pessoa física precisa de ao menos um')
     if not _telefone_valido(form.get('celular')):
         falta.append('celular')
     tel = form.get('telefone') or ''
@@ -1041,12 +1080,15 @@ def relatorio():
 
 
 def _render_novo():
-    return render_template('clientes/form.html', cliente=None, **_ctx_form())
+    return render_template('clientes/form.html', cliente=None, departamentos_contato=ContatoCliente.departamentos_disponiveis(), **_ctx_form())
 
 
 def _render_editar(cliente, endereco_principal):
     return render_template('clientes/form.html', cliente=cliente,
-                           endereco_principal=endereco_principal, **_ctx_form(cliente))
+                           endereco_principal=endereco_principal,
+                           departamentos_contato=ContatoCliente.departamentos_disponiveis(),
+                           contatos_existentes=len(ContatoCliente.get_by_cliente(cliente['id'])),
+                           **_ctx_form(cliente))
 
 
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])
@@ -1131,6 +1173,7 @@ def novo():
 
         cliente_id = Cliente.create(data)
         if cliente_id:
+            _gravar_contatos_do_formulario(cliente_id)
             # vigia de CNPJ armada no formulário ANTES de salvar ganha o dono
             from utils import cnpj_vigia as VG
             VG.vincular_cliente(cpf_cnpj, cliente_id)
@@ -1904,7 +1947,7 @@ def editar(id):
                 # exigências de cliente (origem da empresa), como no botão
                 # "Converter em cliente" (03/11/2026).
                 _ainda_avulso = bool(cliente.get('avulso')) and not numero_cliente
-                _falta = (_obrigatorios_faltando(request.form, _ainda_avulso)
+                _falta = (_obrigatorios_faltando(request.form, _ainda_avulso, cliente_id=id)
                           + _socios_e_contador_faltando(request.form, id))
                 if _falta:
                     _erro_num = _msg_faltando(_falta)
@@ -1964,6 +2007,7 @@ def editar(id):
 
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
             if sucesso is not None:
+                _gravar_contatos_do_formulario(id)
                 # AUDITORIA (D2): grava só os campos de negócio que mudaram
                 # (o helper calcula o diff; alterado_por/criado_por ficam fora).
                 _campos_log = ('numero_cliente', 'tipo_pessoa', 'nome_razao_social',

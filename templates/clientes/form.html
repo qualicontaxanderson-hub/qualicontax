@@ -464,16 +464,22 @@
         <div class="cf-card cf-after-tipo">
             <p class="cf-seclabel">Contato</p>
             <div class="cf-g12">
-                <div class="cf-fg cf-s6">
-                    {# 05/11/2026 (Anderson): no PJ este e-mail é O QUE ESTÁ NO CNPJ (vem da busca, pode ser vazio);
-                       obrigatório só para pessoa física. O e-mail de cobrança é o dos CONTATOS. #}
-                    <label class="cf-lbl" for="email">E-mail <span class="cf-req pf-only">*</span> <span class="cf-rf pj-only">Receita</span></label>
-                    <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com"
-                           {% if cliente and cliente.tipo_pessoa == 'PF' %}required{% endif %}
-                           value="{{ cliente.email if cliente else '' }}">
-                    <small class="cf-hint pj-only">É o e-mail registrado no CNPJ: vem pela busca, não se digita. Quem recebe boletos e documentos são os <b>contatos</b>.</small>
+                {# 05/11/2026 (Anderson): no PJ o e-mail e o telefone são O QUE ESTÁ NO CNPJ (vêm da busca,
+                   travados, podem ficar vazios). Na pessoa física os dois campos SAEM do cadastro: o que vale é o
+                   CONTATO (obrigatório). Quem recebe boletos e documentos são sempre os contatos. #}
+                <div class="cf-fg cf-s6 pj-only">
+                    <label class="cf-lbl" for="email">E-mail <span class="cf-rf pj-only">Receita</span></label>
+                    <div class="cf-field-btn">
+                        <input type="email" id="email" name="email" class="cf-ctrl" placeholder="vem da busca do CNPJ"
+                               value="{{ cliente.email if cliente else '' }}">
+                        <button type="button" class="cf-btn-sec" id="btnEmailContato" onclick="ctAbrir({email: document.getElementById('email').value})"
+                                title="Transformar este e-mail num contato da empresa: nome, celular e departamentos">
+                            <i class="fas fa-user-plus"></i> Transformar em contato
+                        </button>
+                    </div>
+                    <small class="cf-hint">É o e-mail registrado no CNPJ: vem pela busca, não se digita. Se for o e-mail de quem recebe os documentos, transforme em contato.</small>
                 </div>
-                <div class="cf-fg cf-s3">
+                <div class="cf-fg cf-s3 pj-only">
                     <label class="cf-lbl" for="telefone">Telefone <span class="cf-opt">(fixo)</span> <span class="cf-rf pj-only">Receita</span></label>
                     <input type="text" id="telefone" name="telefone" class="cf-ctrl phone-mask" placeholder="(00) 0000-0000"
                            value="{{ cliente.telefone if cliente else '' }}">
@@ -484,6 +490,20 @@
                            value="{{ cliente.celular if cliente else '' }}">
                 </div>
             </div>
+
+            <p class="cf-seclabel cf-seclabel-sep">Contatos
+                <span class="cf-seclabel-note pj-only">quem recebe boletos, documentos e avisos de cada departamento</span>
+                <span class="cf-seclabel-note pf-only">a pessoa física precisa de ao menos um contato com celular</span>
+            </p>
+            <div id="ctLista" class="ct-lista">
+                {% if cliente and contatos_existentes %}
+                <div class="ct-existentes"><i class="fas fa-users"></i> {{ contatos_existentes }} contato(s) já cadastrado(s) —
+                    veja e edite na aba <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}#contatos">Contatos</a> da ficha.</div>
+                {% endif %}
+                <div id="ctVazio" class="ct-vazio">Nenhum contato novo. Quando salvar o cadastro, os contatos daqui são gravados junto.</div>
+            </div>
+            <button type="button" class="cf-btn-sec" onclick="ctAbrir({})"><i class="fas fa-plus"></i> Adicionar contato</button>
+            <input type="hidden" name="contatos_json" id="contatosJson" value="[]">
 
             <p class="cf-seclabel cf-seclabel-sep">Endereço <span class="cf-seclabel-note">digite o CEP ou busque o CNPJ</span></p>
             <div class="cf-g12">
@@ -626,6 +646,56 @@
 </div>
 
 <!-- Modal Buscar Município (preservado) -->
+<!-- Modal de contato (05/11/2026): guarda no formulário; grava junto com o cadastro -->
+<div id="ctModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+            <h3 id="ctModalTitulo">Adicionar contato</h3>
+            <button type="button" class="modal-close" onclick="ctFechar()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="cf-g12">
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="ct_celular">Celular <span class="cf-req">*</span></label>
+                    <input type="text" id="ct_celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000" onblur="ctPorCelular()" autocomplete="off">
+                    <small class="cf-hint">Obrigatório. Se este celular já é de alguém em outra empresa, o sistema oferece os dados dele.</small>
+                </div>
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="ct_telefone">Telefone fixo</label>
+                    <input type="text" id="ct_telefone" class="cf-ctrl phone-mask" placeholder="(00) 0000-0000">
+                </div>
+            </div>
+            <div id="ctReuso" class="ct-reuso" style="display:none;"></div>
+            <div class="cf-g12">
+                <div class="cf-fg cf-s12">
+                    <label class="cf-lbl" for="ct_nome">Nome <span class="cf-req">*</span></label>
+                    <input type="text" id="ct_nome" class="cf-ctrl">
+                </div>
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="ct_email">E-mail</label>
+                    <input type="email" id="ct_email" class="cf-ctrl" placeholder="quem recebe boletos e documentos">
+                </div>
+                <div class="cf-fg cf-s6">
+                    <label class="cf-lbl" for="ct_cargo">Cargo</label>
+                    <input type="text" id="ct_cargo" class="cf-ctrl" placeholder="ex.: Sócio-Administrador, Financeiro">
+                </div>
+            </div>
+            <label class="cf-lbl" style="display:block; margin:6px 0 8px;">Recebe de quais departamentos
+                <span class="cf-opt">— boletos, documentos e avisos de cada área vão para quem está marcado</span></label>
+            <div class="ct-chips">
+                {% for d in departamentos_contato %}
+                <label class="ct-chip"><input type="checkbox" class="ct-dep-chk" value="{{ d.id }}" data-nome="{{ d.nome }}"><span>{{ d.nome }}</span></label>
+                {% endfor %}
+                <button type="button" class="cf-btn-sec" onclick="ctMarcarTodos()">Todos</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="cf-btn-sec" onclick="ctFechar()">Cancelar</button>
+            <button type="button" class="cf-btn-pri" onclick="ctSalvar()">Guardar contato</button>
+        </div>
+    </div>
+</div>
+
 <div id="municipioModal" class="modal" style="display: none;">
     <div class="modal-content" style="max-width: 700px;">
         <div class="modal-header">
@@ -754,6 +824,23 @@
 textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:vertical; }
 .cf-ctrl:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
 .cf-ctrl[readonly] { background:#f6f8f7; color:#475569; }
+.ct-lista { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+.ct-vazio, .ct-existentes { color:#64748b; font-size:13px; }
+.ct-existentes a { color:#1f6f43; font-weight:600; }
+.ct-item { display:flex; justify-content:space-between; gap:10px; align-items:center; border:1px solid #d7e3dc; border-radius:9px; padding:8px 12px; background:#fbfdfc; }
+.ct-item small { color:#475569; }
+.ct-acoes { display:flex; gap:6px; }
+.ct-dep { display:inline-block; background:#e8f3ec; color:#1f6f43; border:1px solid #cfe5d7; border-radius:999px; font-size:11px; padding:1px 8px; margin:2px 3px 0 0; }
+.ct-falta { color:#b45309; font-size:12px; }
+.ct-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ct-chip { display:inline-flex; cursor:pointer; user-select:none; }
+.ct-chip input { display:none; }
+.ct-chip span { border:1px solid #1f6f43; color:#1f6f43; border-radius:999px; padding:5px 12px; font-size:13px; font-weight:600; }
+.ct-chip input:checked + span { background:#1f6f43; color:#fff; }
+.ct-reuso { background:#fff7e6; border:1px solid #f5d58a; border-radius:9px; padding:8px 10px; margin:0 0 12px; }
+.ct-reuso-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; font-size:13px; }
+.ct-reuso-item + .ct-reuso-item { border-top:1px dashed #f0d9a0; }
+#ctModal .modal-body { padding:14px 18px; }
 .cf-ctrl:disabled { background:#f6f8f7; color:#94a3b8; }
 .cf-hint { font-size:12px; color:#7d968a; margin:0; line-height:1.45; }
 .cf-hint:empty { display:none; }
@@ -918,6 +1005,11 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
                 background:#fff; color:#64748b; border:1px solid #e3ece7; border-radius:10px;
                 padding:11px 20px; font-size:14px; font-weight:600; }
 .cf-btn-ghost:hover { background:#f7faf8; color:#334155; }
+.cf-btn-sec { display:inline-flex; align-items:center; gap:7px; cursor:pointer; white-space:nowrap; border:1px solid #cfe5d7; background:#fff; color:#1f6f43; border-radius:9px; padding:0 12px; height:40px; font-weight:600; font-size:13px; }
+.cf-btn-sec:hover { background:#f2f8f4; }
+.cf-btn-pri { display:inline-flex; align-items:center; gap:7px; cursor:pointer; white-space:nowrap; border:none; background:#1f6f43; color:#fff; border-radius:9px; padding:0 14px; height:40px; font-weight:600; font-size:13px; }
+.cf-btn-pri:hover { background:#12513c; }
+.ct-reuso-item .cf-btn-pri, .ct-acoes .cf-btn-sec { height:32px; padding:0 10px; font-size:12px; }
 .cf-btn-save { display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; border:none;
                background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; border-radius:10px;
                padding:13px 22px; font-size:14.5px; font-weight:800; font-family:inherit; }
@@ -1933,6 +2025,101 @@ function vigiaAplicar() {
 }
 document.addEventListener('DOMContentLoaded', vigiaCarrega);
 
+// ---------------------------------------------------------------- contatos no formulário (05/11/2026)
+// Os contatos ficam GUARDADOS aqui (CONTATOS) e vão no campo contatos_json; o servidor grava junto
+// com o cadastro (novo ou edição). "Transformar em contato" abre o modal com o e-mail do CNPJ.
+const CONTATOS = [];
+const CT_EXISTENTES = {{ contatos_existentes|default(0) }};
+const CT_URL_CELULAR = "{{ url_for('clientes.api_contato_por_celular', digitos='0000000000') }}";
+let ctEditando = -1;
+function ctAbrir(pre) {
+    pre = pre || {};
+    ctEditando = (typeof pre.indice === 'number') ? pre.indice : -1;
+    const c = ctEditando >= 0 ? CONTATOS[ctEditando] : pre;
+    document.getElementById('ctModalTitulo').textContent = ctEditando >= 0 ? 'Editar contato' : 'Adicionar contato';
+    document.getElementById('ct_celular').value = c.celular || '';
+    document.getElementById('ct_telefone').value = c.telefone || '';
+    document.getElementById('ct_nome').value = c.nome || '';
+    document.getElementById('ct_email').value = (c.email || '').toLowerCase();
+    document.getElementById('ct_cargo').value = c.cargo || '';
+    const deps = c.departamentos || [];
+    document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = deps.indexOf(parseInt(k.value, 10)) >= 0; });
+    const r = document.getElementById('ctReuso'); r.style.display = 'none'; r.innerHTML = '';
+    document.getElementById('ctModal').style.display = 'block';
+    document.getElementById(c.celular ? 'ct_nome' : 'ct_celular').focus();
+}
+function ctFechar() {
+    document.getElementById('ctModal').style.display = 'none';
+    // "quando ele salvar, volta para onde ele estava no cadastro, na parte do e-mail"
+    const alvo = document.getElementById('ctLista');
+    if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function ctMarcarTodos() { document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = true; }); }
+function ctPorCelular() {
+    const dig = (document.getElementById('ct_celular').value || '').replace(/\D/g, '');
+    const box = document.getElementById('ctReuso'); box.style.display = 'none'; box.innerHTML = '';
+    if (dig.length < 10) return;
+    const cid = {{ cliente.id if cliente else 'null' }};
+    fetch(CT_URL_CELULAR.replace('0000000000', dig) + (cid ? '?cliente_id=' + cid : ''))
+        .then(function (r) { return r.json(); })
+        .then(function (lista) {
+            if (!lista || !lista.length) return;
+            window._ctReuso = lista;
+            box.innerHTML = lista.map(function (c, i) {
+                return '<div class="ct-reuso-item"><div><b>' + c.nome + '</b>' + (c.email ? ' &middot; ' + c.email : '') +
+                    '<br><small>contato de ' + (c.numero_cliente ? c.numero_cliente + ' - ' : '') + c.empresa +
+                    (c.departamentos.length ? ' (recebe ' + c.departamentos.join(', ') + ')' : '') + '</small></div>' +
+                    '<button type="button" class="cf-btn-pri" onclick="ctUsar(' + i + ')">Usar os dados dele</button></div>';
+            }).join('');
+            box.style.display = 'block';
+        }).catch(function () {});
+}
+function ctUsar(i) {
+    const c = window._ctReuso[i];
+    const nome = document.getElementById('ct_nome'), email = document.getElementById('ct_email'), cargo = document.getElementById('ct_cargo');
+    if (!nome.value) nome.value = c.nome || '';
+    if (!email.value) email.value = c.email || '';
+    if (!cargo.value) cargo.value = c.cargo || '';
+    document.getElementById('ctReuso').style.display = 'none';
+}
+function ctSalvar() {
+    const nome = (document.getElementById('ct_nome').value || '').trim().toUpperCase();
+    const celular = (document.getElementById('ct_celular').value || '').trim();
+    const dig = celular.replace(/\D/g, '');
+    if (!nome) { alert('Falta o nome do contato.'); document.getElementById('ct_nome').focus(); return; }
+    if (dig.length < 10 || dig.length > 11) { alert('O celular é obrigatório (DDD + número).'); document.getElementById('ct_celular').focus(); return; }
+    const deps = [], nomes = [];
+    document.querySelectorAll('.ct-dep-chk:checked').forEach(function (k) { deps.push(parseInt(k.value, 10)); nomes.push(k.dataset.nome); });
+    const msg = nomes.length
+        ? nome + ' é o contato que vai receber boletos, documentos e avisos de: ' + nomes.join(', ') + '.\n\nTem certeza?'
+        : nome + ' fica cadastrado SEM receber nada de nenhum departamento (nenhum marcado).\n\nTem certeza?';
+    if (!confirm(msg)) return;
+    const c = { nome: nome, celular: celular, telefone: (document.getElementById('ct_telefone').value || '').trim(),
+                email: (document.getElementById('ct_email').value || '').trim().toLowerCase(),
+                cargo: (document.getElementById('ct_cargo').value || '').trim(), departamentos: deps, departamentos_nomes: nomes };
+    if (ctEditando >= 0) CONTATOS[ctEditando] = c; else CONTATOS.push(c);
+    ctRender(); ctFechar();
+}
+function ctRemover(i) { CONTATOS.splice(i, 1); ctRender(); }
+function ctRender() {
+    const lista = document.getElementById('ctLista');
+    lista.querySelectorAll('.ct-item').forEach(function (e) { e.remove(); });
+    document.getElementById('ctVazio').style.display = CONTATOS.length ? 'none' : '';
+    CONTATOS.forEach(function (c, i) {
+        const el = document.createElement('div'); el.className = 'ct-item';
+        el.innerHTML = '<div><b>' + c.nome + '</b>' + (c.cargo ? ' <span class="cf-opt">' + c.cargo + '</span>' : '') +
+            '<br><small>' + c.celular + (c.email ? ' &middot; ' + c.email : '') + '</small><br>' +
+            (c.departamentos_nomes.length ? c.departamentos_nomes.map(function (n) { return '<span class="ct-dep">' + n + '</span>'; }).join('') : '<span class="ct-falta">não recebe nada</span>') + '</div>' +
+            '<div class="ct-acoes"><button type="button" class="cf-btn-sec" onclick="ctAbrir({indice:' + i + '})" title="Editar"><i class="fas fa-pen"></i></button>' +
+            '<button type="button" class="cf-btn-sec" onclick="ctRemover(' + i + ')" title="Tirar da lista"><i class="fas fa-trash"></i></button></div>';
+        lista.appendChild(el);
+    });
+    document.getElementById('contatosJson').value = JSON.stringify(CONTATOS.map(function (c) {
+        return { nome: c.nome, celular: c.celular, telefone: c.telefone, email: c.email, cargo: c.cargo, departamentos: c.departamentos };
+    }));
+    if (typeof atualizarChecklist === 'function') atualizarChecklist();
+}
+
 // Município (modal) — preservado
 function buscarMunicipio() {
     document.getElementById('municipioModal').style.display = 'block';
@@ -2172,8 +2359,9 @@ function atualizarResumo() {
     var cel = document.getElementById('celular');
     var eml = document.getElementById('email');
     itens.push([!!(grp && grp.value), 'Grupo de empresas']);
-    // 05/11/2026: no PJ o e-mail é o do CNPJ (pode não existir na Receita); obrigatório só na pessoa física.
-    if (tipo === 'PF') itens.push([!!(eml && eml.value.trim() && eml.checkValidity()), 'E-mail']);
+    // 05/11/2026: no PJ o e-mail é o do CNPJ (pode não existir na Receita); a pessoa física não tem
+    // e-mail no cadastro — precisa de ao menos um CONTATO com celular.
+    if (tipo === 'PF') itens.push([(typeof CONTATOS !== 'undefined' && CONTATOS.length > 0) || (typeof CT_EXISTENTES !== 'undefined' && CT_EXISTENTES > 0), 'Contato com celular']);
     else itens.push([!(eml && eml.value.trim()) || eml.checkValidity(), 'E-mail (o do CNPJ)']);
     itens.push([!!(cel && cel.value.replace(/\D/g, '').length >= 10), 'Celular']);
     itens.push([!!document.querySelector('input[name="ramos_atividade_ids"]:checked'), 'Ramo de atividade']);

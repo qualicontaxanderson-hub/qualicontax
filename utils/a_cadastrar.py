@@ -22,6 +22,7 @@ PENDENCIAS_EMPRESA = [
     ('cobranca', 'Financeiro (cobrança)', 'verm', 'como cobrar: própria, via grupo ou pendente'),
     ('email', 'Contato com e-mail', 'verm', 'nenhum contato com e-mail (é por eles que vão boletos e documentos)'),
     ('contato_celular', 'Celular do contato', 'amb', 'há contato sem celular (obrigatório desde 05/11/2026)'),
+    ('contato', 'Contato', 'verm', 'pessoa física sem nenhum contato (nome + celular)'),
     ('grupo', 'Grupo', 'cinza', 'grupo de empresas'),
     ('celular', 'Celular', 'cinza', 'celular de contato'),
     ('ramo', 'Ramo', 'cinza', 'ramo de atividade'),
@@ -45,6 +46,7 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
        (SELECT COUNT(*) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS n_socios,
        (SELECT COUNT(*) FROM contatos_clientes k WHERE k.cliente_id = c.id AND k.email IS NOT NULL AND k.email <> '' AND k.ativo = 1) AS n_contatos_email,
        (SELECT COUNT(*) FROM contatos_clientes k3 WHERE k3.cliente_id = c.id AND k3.ativo = 1 AND (k3.celular IS NULL OR k3.celular = '')) AS n_contatos_sem_celular,
+       (SELECT COUNT(*) FROM contatos_clientes k4 WHERE k4.cliente_id = c.id AND k4.ativo = 1) AS n_contatos,
        (SELECT COUNT(*) FROM cliente_grupo_relacao g WHERE g.cliente_id = c.id) AS n_grupos,
        (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos,
        (SELECT COUNT(*) FROM cliente_contadores k2 WHERE k2.cliente_id = c.id) AS n_contadores,
@@ -92,8 +94,10 @@ def empresas_pendentes(ocultas=frozenset()):
             p.append('regime')
         if (c['cobranca'] or 'PENDENTE') == 'PENDENTE':
             p.append('cobranca')
-        if _vazio(c['email']) and not c['n_contatos_email']:
+        if pj and _vazio(c['email']) and not c['n_contatos_email']:
             p.append('email')
+        if not pj and not c['n_contatos']:
+            p.append('contato')          # PF: sem e-mail no cadastro, o contato é obrigatório (05/11/2026)
         if c['n_contatos_sem_celular']:
             p.append('contato_celular')
         if not c['n_grupos']:
