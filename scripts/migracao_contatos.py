@@ -136,6 +136,12 @@ def main():
             tot['empresa não está no app (número)'] += 1
             linhas.append((g['num'], '', g['nome'], g['email'] or '', g['celular'] or g['telefone'] or '', '', 'empresa não está no app'))
             continue
+        if not g['email'] and not g['celular'] and not g['telefone']:
+            # 05/11/2026 (Anderson, vendo a aba): "Esses que estão dessa forma nem tem que aparecer aqui...
+            # Só quem tem e-mail e celular ou um ou outro." Contato só com nome não entra.
+            tot['ignorado: só nome (sem e-mail e sem telefone)'] += 1
+            linhas.append((g['num'], cli['nome_razao_social'][:40], g['nome'], '', '', '', 'ignorado: só nome'))
+            continue
         meus = existentes.get(cli['id'], [])
         ex = next((c for c in meus if g['email'] and (c['email'] or '').strip().lower() == g['email']), None) \
             or (next((c for c in meus if not g['email'] and (c['nome'] or '').strip().upper() == g['nome'].upper()), None))
