@@ -2850,6 +2850,35 @@ def socios_da_receita():
     return jsonify(out)
 
 
+def _acad_contagens():
+    """Números das três abas de A CADASTRAR (para a barra de abas)."""
+    from utils import a_cadastrar as AC
+    from utils import socios_fila as SF
+    oc = empresas_ocultas()
+    socios = {r['chave'] for r in SF.linhas_abertas() if r['status'] == 'pendente' and r['cliente_id'] not in oc}
+    return {'empresas': len(AC.empresas_pendentes(oc)), 'socios': len(socios), 'avulsos': len(AC.avulsos_pendentes(oc))}
+
+
+@clientes.route('/clientes/a-cadastrar')
+@login_required
+def a_cadastrar():
+    """A CADASTRAR (05/11/2026) — aba EMPRESA PENDENTE: o que falta em cada empresa, ao vivo."""
+    from utils import a_cadastrar as AC
+    lista = AC.empresas_pendentes(empresas_ocultas())
+    return render_template('clientes/a_cadastrar.html', acad_aba='empresas', acad_n=_acad_contagens(), lista=lista,
+                           catalogo=AC.PENDENCIAS_EMPRESA, contagem=AC.contadores(lista, AC.PENDENCIAS_EMPRESA))
+
+
+@clientes.route('/clientes/a-cadastrar/avulsos')
+@login_required
+def a_cadastrar_avulsos():
+    """A CADASTRAR — aba AVULSOS PENDENTES: todo avulso e o que falta para virar cliente."""
+    from utils import a_cadastrar as AC
+    lista = AC.avulsos_pendentes(empresas_ocultas())
+    return render_template('clientes/a_cadastrar.html', acad_aba='avulsos', acad_n=_acad_contagens(), lista=lista,
+                           catalogo=AC.PENDENCIAS_AVULSO, contagem=AC.contadores(lista, AC.PENDENCIAS_AVULSO))
+
+
 @clientes.route('/clientes/socios-pendentes')
 @login_required
 def socios_fila():
@@ -2891,7 +2920,7 @@ def socios_fila():
              'administradores': sum(1 for p in lista if p['status'] == 'administrador'),
              'vinculados': (execute_query("SELECT COUNT(DISTINCT chave) n FROM socios_fila WHERE status = 'vinculado'",
                                           fetch=True, fetch_one=True) or {}).get('n', 0)}
-    return render_template('clientes/socios_fila.html', pessoas=lista, stats=stats)
+    return render_template('clientes/socios_fila.html', pessoas=lista, stats=stats, acad_aba='socios', acad_n=_acad_contagens())
 
 
 @clientes.route('/clientes/socios-pendentes/vincular', methods=['POST'])

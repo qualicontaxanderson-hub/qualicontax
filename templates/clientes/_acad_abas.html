@@ -1,0 +1,15 @@
+{# Abas de A CADASTRAR (05/11/2026): EMPRESA PENDENTE | SÓCIOS PENDENTES | AVULSOS PENDENTES.
+   Espera: acad_aba ('empresas' | 'socios' | 'avulsos') e acad_n (dict com as três contagens). #}
+<style>
+.acad-abas { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 16px; }
+.acad-abas a { display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; padding:9px 16px; border-radius:99px;
+               border:1.5px solid #d7e3dc; color:#4b6358; text-decoration:none; background:#fff; }
+.acad-abas a b { font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:99px; background:#eef2f0; color:#64748b; }
+.acad-abas a.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.acad-abas a.on b { background:rgba(255,255,255,.18); color:#bbf7d0; }
+</style>
+<div class="acad-abas" role="tablist">
+    <a class="{{ 'on' if acad_aba == 'empresas' }}" href="{{ url_for('clientes.a_cadastrar') }}"><i class="fas fa-building"></i> Empresa pendente <b>{{ acad_n.empresas }}</b></a>
+    <a class="{{ 'on' if acad_aba == 'socios' }}" href="{{ url_for('clientes.socios_fila') }}"><i class="fas fa-user-plus"></i> Sócios pendentes <b>{{ acad_n.socios }}</b></a>
+    <a class="{{ 'on' if acad_aba == 'avulsos' }}" href="{{ url_for('clientes.a_cadastrar_avulsos') }}"><i class="fas fa-user-clock"></i> Avulsos pendentes <b>{{ acad_n.avulsos }}</b></a>
+</div>

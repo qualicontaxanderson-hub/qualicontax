@@ -15,7 +15,7 @@
     ('modulos.cadastros',           '/cadastros',             'INÍCIO'),
     ('clientes.index',              '/clientes',              'CLIENTES'),
     ('clientes.avulsos',            '/clientes/avulsos',      'AVULSOS'),
-    ('clientes.socios_fila',        '/clientes/socios-pendentes', 'SÓCIOS A CADASTRAR'),
+    ('clientes.a_cadastrar',        '/clientes/a-cadastrar',  'A CADASTRAR'),
     ('grupos.index',                '/grupos',                'GRUPOS'),
     ('contabilidades.index',        '/contabilidades',        'CONTABILIDADES'),
     ('ramos_atividade.index',       '/ramodeatividade',       'RAMO DE ATIVIDADE'),
@@ -28,6 +28,8 @@
         {% set _ativa.pref = _pref %}
     {% endif %}
 {% endfor %}
+{# a fila de sócios é uma aba de A CADASTRAR (05/11/2026) #}
+{% if request.path.startswith('/clientes/socios-pendentes') %}{% set _ativa.pref = '/clientes/a-cadastrar' %}{% endif %}
 
 <nav class="nav-fiscal" aria-label="Navegação de Cadastros">
     <div class="nav-fiscal-track">

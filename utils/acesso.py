@@ -94,7 +94,9 @@ MAPA = {
     'clientes.novo_socio':             'clientes.edit',
     'clientes.excluir_socio':          'clientes.edit',
     'clientes.saida_socio':            'clientes.edit',   # ex-sócio com data de saída
-    'clientes.socios_fila':            'clientes.index',  # fila Sócios a cadastrar
+    'clientes.a_cadastrar':            'clientes.index',  # A CADASTRAR: empresa pendente (05/11/2026)
+    'clientes.a_cadastrar_avulsos':    'clientes.index',  # A CADASTRAR: avulsos pendentes
+    'clientes.socios_fila':            'clientes.index',  # A CADASTRAR: sócios pendentes (ex-"Sócios a cadastrar")
     'clientes.socios_fila_vincular':   'clientes.edit',
     'clientes.socios_fila_ignorar':    'clientes.edit',
     'clientes.novo_cadastro_adicional':    'clientes.edit',

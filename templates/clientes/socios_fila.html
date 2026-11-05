@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Sócios a cadastrar - Qualicontax{% endblock %}
+{% block title %}A cadastrar · Sócios pendentes - Qualicontax{% endblock %}
 
 {% block content %}
 {# Fila "Sócios a cadastrar" (12/10/2026). Cartão por PESSOA (o .gc-card de
@@ -11,7 +11,7 @@
 <div class="ef-hero">
     <div class="ef-hero-inner ef-hero-head">
         <div>
-            <h1 class="ef-hero-title">Sócios a cadastrar</h1>
+            <h1 class="ef-hero-title">A cadastrar</h1>
             <p class="ef-hero-sub">Quadro de sócios da Receita das empresas que ainda estão sem sócio no sistema</p>
         </div>
         <div class="ef-hero-actions">
@@ -21,6 +21,7 @@
 </div>
 
 <div class="ef-body">
+    {% include 'clientes/_acad_abas.html' %}
     <div class="cli-kpis">
         <div class="cli-kpi">
             <span class="cli-kpi-ico" style="background:#f5f3ff; color:#6d28d9;"><i class="fas fa-user-plus"></i></span>
