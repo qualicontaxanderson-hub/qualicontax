@@ -471,7 +471,7 @@
                     <input type="email" id="email" name="email" class="cf-ctrl" placeholder="email@exemplo.com"
                            {% if cliente and cliente.tipo_pessoa == 'PF' %}required{% endif %}
                            value="{{ cliente.email if cliente else '' }}">
-                    <small class="cf-hint pj-only">É o e-mail registrado no CNPJ. Quem recebe boletos e documentos são os <b>contatos</b>.</small>
+                    <small class="cf-hint pj-only">É o e-mail registrado no CNPJ: vem pela busca, não se digita. Quem recebe boletos e documentos são os <b>contatos</b>.</small>
                 </div>
                 <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="telefone">Telefone <span class="cf-opt">(fixo)</span> <span class="cf-rf pj-only">Receita</span></label>
@@ -1109,6 +1109,14 @@ function toggleTipoFields() {
     document.getElementById('cfForm').classList.toggle('cf-sem-tipo', !tipo);
     document.querySelectorAll('.pf-only').forEach(function (el) { el.style.display = (tipo === 'PF') ? '' : 'none'; });
     document.querySelectorAll('.pj-only').forEach(function (el) { el.style.display = (tipo === 'PJ') ? '' : 'none'; });
+    // 05/11/2026 (Anderson): "deixar travado o e-mail e telefone" — na empresa os dois são os do CNPJ e
+    // só a busca (ou a vigia) preenche; ninguém digita. Na pessoa física continuam livres.
+    ['email', 'telefone'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.readOnly = (tipo === 'PJ');
+        el.title = (tipo === 'PJ') ? 'Vem do CNPJ pela busca na Receita. Não se digita aqui.' : '';
+    });
 
     const pfNome = document.getElementById('nome_razao_social_pf');
     const pfCpf  = document.getElementById('cpf_cnpj_pf');
@@ -1673,6 +1681,11 @@ function consultarCNPJ() {
 }
 
 // Preencher os campos com dados da Receita
+// 05/11/2026: na empresa o telefone é o do CNPJ; se a Receita não tem, o campo fica vazio.
+function esvaziarTelefonePJ() {
+    const t = document.getElementById('telefone');
+    if (t && tipoPessoa() === 'PJ' && t.value) { t.value = ''; }
+}
 function preencherDadosCNPJ(data) {
     const preenchidos = [];
     const naoPreenchidos = [];
@@ -1780,7 +1793,10 @@ function preencherDadosCNPJ(data) {
         if (wasReadonly) emailField.readOnly = true;
         if (wasDisabled) emailField.disabled = true;
         preenchidos.push('E-mail: ' + emailFinal);
-    } else { naoPreenchidos.push('E-mail (não disponível)'); }
+    } else {
+        naoPreenchidos.push('E-mail (o CNPJ não tem e-mail na Receita)');
+        if (emailField && tipoPessoa() === 'PJ' && emailField.value) { emailField.value = ''; preenchidos.push('E-mail: esvaziado (o CNPJ não tem)'); }
+    }
 
     if (data.ddd_telefone_1) {
         const tel1 = String(data.ddd_telefone_1).replace(/\D/g, '');
@@ -1788,8 +1804,8 @@ function preencherDadosCNPJ(data) {
             let t = tel1.length === 10 ? tel1.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
                   : tel1.length === 11 ? tel1.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : tel1;
             tentarPreencher('telefone', t, 'Telefone');
-        } else { naoPreenchidos.push('Telefone (número inválido)'); }
-    } else { naoPreenchidos.push('Telefone (não disponível)'); }
+        } else { naoPreenchidos.push('Telefone (número inválido)'); esvaziarTelefonePJ(); }
+    } else { naoPreenchidos.push('Telefone (não disponível)'); esvaziarTelefonePJ(); }
 
     if (data.ddd_telefone_2) {
         const tel2 = String(data.ddd_telefone_2).replace(/\D/g, '');
