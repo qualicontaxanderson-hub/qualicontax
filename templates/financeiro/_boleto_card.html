@@ -27,7 +27,10 @@
         </table>
         {% endif %}
         <div class="nd-acoes">
-            {% if boleto.pdf_url %}<a class="btn btn-primary" href="{{ boleto.pdf_url }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF do boleto</a>{% endif %}
+            {% if boleto.pdf_url %}
+            <a class="btn btn-primary" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener" title="Abre o boleto na tela"><i class="fas fa-eye"></i> Ver o boleto</a>
+            <a class="btn btn-primary" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}" title="Salva o PDF com o nome do cliente e o vencimento"><i class="fas fa-download"></i> Baixar PDF</a>
+            {% endif %}
             {% if boleto.link %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
             {% if boleto.situacao in ('waiting', 'unpaid', 'new') %}
             <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="btn btn-outline"><i class="fas fa-sync-alt"></i> Conferir na Efí</button></form>

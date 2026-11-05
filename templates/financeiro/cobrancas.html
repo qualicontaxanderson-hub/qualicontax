@@ -259,7 +259,7 @@
             <div class="nfc-acoes">
                 <a class="fin-btn-tag" href="{{ abrir_url }}" title="Detalhes"><i class="fas fa-eye"></i> Abrir</a>
                 {% if so_boleto %}
-                    {% if n.pdf_url %}<a class="fin-btn-tag" href="{{ n.pdf_url }}" title="PDF do boleto" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
+                    {% if n.pdf_url %}<a class="fin-btn-tag" href="{{ url_for('financeiro.boleto_pdf', boleto_id=n.id, baixar=1) }}" title="Baixar o PDF do boleto"><i class="fas fa-download"></i> PDF</a>{% endif %}
                 {% elif n.situacao in ('autorizada', 'cancelada') %}
                     {% if n.emissor != 'sp' %}<a class="fin-btn-tag" href="{{ url_for('financeiro.nota_pdf', nota_id=n.id) }}" title="PDF da nota" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
                     <a class="fin-btn-tag" href="{{ url_for('financeiro.nota_xml', nota_id=n.id) }}" title="XML da NFS-e"><i class="fas fa-file-code"></i> XML</a>

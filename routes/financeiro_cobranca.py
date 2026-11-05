@@ -449,6 +449,29 @@ def emitir_boleto_avulso(empresa_id, conta, pagador, itens, total, competencia, 
     return boleto_id, ok, msg, aviso
 
 
+@financeiro.route('/financeiro/boletos/<int:boleto_id>/pdf')
+@permission_required(PERM)
+def boleto_pdf(boleto_id):
+    """PDF do boleto para o ESCRITÓRIO (Anderson, 04/11/2026: 'salvar com o nome certinho'): ?baixar=1
+    entrega como download, senão abre na tela. Nome: '{Cliente} - Boleto venc dd-mm-aaaa.pdf'. Não carimba
+    'o cliente abriu' — quem está abrindo é o escritório."""
+    from flask import Response
+    from utils import cobranca_email
+    from utils.texto import nome_proprio
+    b = FinBoleto.get(boleto_id)
+    if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    if not (b.get('pdf_url') or b.get('link')):
+        abort(404)
+    pdf = cobranca_email.pdf_do_boleto(b) if b.get('pdf_url') else None
+    if not pdf:
+        return redirect(b.get('pdf_url') or b['link'])
+    nome, _ = cobranca_email.nomes_dos_pdfs(b, None, nome_proprio(b.get('pagador_nome') or '') or 'Cliente')
+    disp = 'attachment' if request.args.get('baixar') else 'inline'
+    return Response(pdf, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'{disp}; filename="{nome}"', 'Cache-Control': 'private, no-store'})
+
+
 @financeiro.route('/financeiro/boletos/<int:boleto_id>')
 @permission_required(PERM)
 def boleto_detalhe(boleto_id):
