@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Responsáveis de {{ convite.nome_razao_social }} - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Página do link dos responsáveis (06/11/2026): a MESMA janela "Responsáveis no escritório" da ficha, fixa na tela.
+   Quem abre escolhe só o próprio departamento; os outros aparecem travados (quem gerou o link, a Diretoria e o admin
+   escolhem todos). */
+.rs-page { max-width:720px; margin:18px auto; }
+.rs-modal { border-radius:16px; overflow:hidden; background:#fff; border:1px solid #e3ece7; box-shadow:0 10px 30px rgba(15,61,46,.08); }
+.rs-mhead { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); }
+.rs-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
+.rs-mhead h3 { margin:0; font-size:16px; color:#fff; }
+.rs-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
+.rs-mbody { padding:14px 16px 8px; }
+.rs-row { display:grid; grid-template-columns:38px 150px 1fr; align-items:center; gap:12px; padding:8px 10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; transition:background .15s, border-color .15s; }
+.rs-row:hover { background:#f8fbf9; }
+.rs-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; }
+.rs-rlbl { font-size:13px; font-weight:700; color:#0f172a; margin:0; }
+.rs-rlbl small { display:block; font-size:11px; font-weight:500; color:#94a3b8; }
+.rs-sel { position:relative; display:flex; align-items:center; margin:0; }
+.rs-av { position:absolute; left:8px; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#fff; background:var(--rs-c, #15803d); pointer-events:none; }
+.rs-sel select { width:100%; appearance:none; -webkit-appearance:none; height:42px; padding:0 36px 0 42px; border:1px solid #dbe7df; border-radius:11px; background:#fff; font-size:13px; font-weight:600; color:#0f172a; cursor:pointer; }
+.rs-sel select:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+.rs-sel select:disabled { background:#f8fafc; color:#64748b; cursor:not-allowed; }
+.rs-chev { position:absolute; right:14px; font-size:11px; color:#64748b; pointer-events:none; }
+.rs-row-falta { background:#fff7f7; border-color:#fecaca; }
+.rs-row-falta .rs-rico, .rs-row-falta .rs-av { background:#fee2e2; color:#dc2626; }
+.rs-row-falta select { border-color:#fca5a5; color:#b91c1c; }
+.rs-row-trava { opacity:.75; }
+.rs-row-trava .rs-rlbl small { color:#b45309; }
+.rs-row-minha { background:#f0fdf4; border-color:#bbf7d0; }
+.rs-mfoot { display:flex; align-items:center; gap:10px; padding:14px 22px; border-top:1px solid #eef2ef; background:#fafcfb; flex-wrap:wrap; }
+.rs-mnote { display:flex; align-items:center; gap:7px; font-size:12px; color:#15803d; margin-right:auto; }
+.rs-mnote-erro { color:#b91c1c; font-weight:600; }
+.rs-mfoot .btn { border-radius:10px; padding:9px 18px; font-weight:600; }
+.rs-quem { font-size:12px; color:#7d968a; margin:12px 4px 0; line-height:1.6; }
+@media (max-width:640px) { .rs-row { grid-template-columns:38px 1fr; } .rs-row .rs-sel { grid-column:1 / -1; } .rs-page { margin:8px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set rs_icones = {'Contábil': 'fa-book', 'Fiscal': 'fa-file-invoice-dollar', 'Pessoal': 'fa-users', 'Financeiro': 'fa-coins',
+                    'Legalização': 'fa-stamp', 'Certificado Digital': 'fa-certificate', 'Visita': 'fa-car-side'} %}
+{% set rs_cores = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'] %}
+{% macro rs_ini(nome) %}{% set p = (nome or '').split() %}{% if p %}{{ (p[0][0] ~ (p[-1][0] if p|length > 1 else ''))|upper }}{% else %}?{% endif %}{% endmacro %}
+<div class="rs-page">
+<div class="rs-modal" id="respModal">
+    <div class="rs-mhead">
+        <span class="rs-mico"><i class="fas fa-user-tie"></i></span>
+        <div>
+            <h3>Responsáveis no escritório</h3>
+            <p>{{ convite.numero_cliente }} · {{ convite.nome_razao_social }} · link de {{ convite.criado_por_nome }}, vale até {{ convite.expira_em.strftime('%d/%m') }}</p>
+        </div>
+    </div>
+    <form id="rs-form" action="{{ url_for('clientes.responsaveis_convite_salvar', token=convite.token) }}" method="POST" novalidate>
+        <div class="rs-mbody">
+            {% for r in responsaveis %}
+            {% set pode = (permitidos is none) or (r.departamento_id in permitidos) %}
+            <div class="rs-row{% if not r.usuario_id and pode %} rs-row-falta{% endif %}{% if not pode %} rs-row-trava{% elif permitidos is not none %} rs-row-minha{% endif %}">
+                <span class="rs-rico"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i></span>
+                <label class="rs-rlbl" for="resp_{{ r.departamento_id }}">{{ r.departamento }}
+                    <small>{% if not pode %}{% if r.usuario_id %}já definido{% else %}quem é do {{ r.departamento }} escolhe{% endif %}{% elif r.usuario_id %}quem responde hoje{% else %}escolha quem responde{% endif %}</small></label>
+                <span class="rs-sel">
+                    <span class="rs-av"></span>
+                    <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}" {% if not pode %}disabled{% endif %}>
+                        <option value="">Escolher…</option>
+                        {% for dep, us in funcionarios|groupby('departamento') %}
+                        <optgroup label="{{ dep }}">
+                            {% for u in us %}
+                            <option value="{{ u.id }}" data-ini="{{ rs_ini(u.nome) }}" data-cor="{{ rs_cores[u.id % 8] }}"{% if u.id == r.usuario_id %} selected{% endif %}>{{ u.nome }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                    <i class="fas fa-chevron-down rs-chev"></i>
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="rs-mfoot">
+            <span class="rs-mnote" id="rs-nota"></span>
+            <a class="btn btn-secondary" href="/">Depois</a>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar{% if permitidos is not none %} o meu{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% if convite.respostas %}
+<p class="rs-quem"><i class="fas fa-clock-rotate-left"></i> Já responderam por este link:
+    {% for r in convite.respostas %}{{ r.departamento }}: {{ r.escolhido_nome }} (por {{ r.usuario_nome }}, {{ r.respondido_em.strftime('%d/%m %H:%M') }}){% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var modal = document.getElementById('respModal'), nota = document.getElementById('rs-nota');
+    var TODOS = {{ 'true' if permitidos is none else 'false' }};
+    function revisar() {
+        var faltam = 0, meus = 0;
+        modal.querySelectorAll('.rs-row').forEach(function (row) {
+            var sel = row.querySelector('select'), av = row.querySelector('.rs-av'), op = sel.options[sel.selectedIndex];
+            var vazio = !sel.value;
+            if (!sel.disabled) { if (vazio) faltam++; else meus++; row.classList.toggle('rs-row-falta', vazio); }
+            av.innerHTML = vazio ? '<i class="fas fa-user-slash"></i>' : (op.dataset.ini || '?');
+            av.style.setProperty('--rs-c', vazio ? '#fee2e2' : (op.dataset.cor || '#15803d'));
+        });
+        nota.classList.toggle('rs-mnote-erro', faltam > 0);
+        nota.innerHTML = faltam
+            ? '<i class="fas fa-circle-exclamation"></i> ' + (TODOS ? (faltam === 1 ? 'Falta escolher 1 departamento' : 'Faltam escolher ' + faltam + ' departamentos') : 'Escolha o responsável do seu departamento')
+            : '<i class="fas fa-circle-check"></i> ' + (TODOS ? 'Todos os departamentos têm responsável' : 'Pronto para salvar');
+        return faltam;
+    }
+    modal.addEventListener('change', function (e) { if (e.target.tagName === 'SELECT') revisar(); });
+    document.getElementById('rs-form').addEventListener('submit', function (e) {
+        if (!revisar()) return;
+        e.preventDefault();
+        var p = modal.querySelector('.rs-row-falta select'); if (p) p.focus();
+    });
+    revisar();
+})();
+</script>
+{% endblock %}

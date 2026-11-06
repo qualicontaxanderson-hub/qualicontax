@@ -566,6 +566,13 @@
                             {% if rs_faltam %}<span class="rs-badge"><i class="fas fa-circle-exclamation"></i> {{ rs_faltam }} sem responsável</span>
                             {% else %}<span class="rs-badge rs-badge-ok"><i class="fas fa-circle-check"></i> todos definidos</span>{% endif %}
                             <span class="rs-sp"></span>
+                            {% if rs_faltam and pode_rota('clientes.responsaveis_convite_novo') %}
+                            {% if rs_convite %}
+                            <button type="button" class="btn btn-outline rs-btn" onclick="navigator.clipboard.writeText({{ url_for('clientes.responsaveis_convite', token=rs_convite.token, _external=True) | tojson }}).then(function(){ alert('Link copiado. Vale até {{ rs_convite.expira_em.strftime('%d/%m') }}.'); })" title="Link em aberto, de {{ rs_convite.criado_por_nome }}: cada departamento entra com login e escolhe o seu"><i class="fas fa-link"></i> Copiar link ({{ rs_convite.respostas | length }}/{{ rs_faltam + (rs_convite.respostas | length) }} responderam)</button>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('clientes.responsaveis_convite_novo', id=cliente.id) }}" style="display:inline;"><button type="submit" class="btn btn-outline rs-btn" title="Gera um link para mandar aos departamentos: cada um entra com login e escolhe o seu responsável"><i class="fas fa-paper-plane"></i> Pedir aos departamentos</button></form>
+                            {% endif %}
+                            {% endif %}
                             <button type="button" class="btn btn-outline rs-btn" onclick="abrirResponsaveis()" title="Trocar quem responde por cada departamento"><i class="fas fa-pen"></i> Editar</button>
                         </div>
                         <div class="rs-grid">

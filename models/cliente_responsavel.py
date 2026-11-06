@@ -62,6 +62,71 @@ class ClienteResponsavel:
                  FROM clientes_responsaveis r JOIN departamentos d ON d.id = r.departamento_id
                 WHERE r.usuario_id = %s GROUP BY d.nome ORDER BY n DESC""", (usuario_id,), fetch=True) or []
 
+    # ---------------- link para os departamentos elegerem (06/11/2026) ----------------
+    @staticmethod
+    def convite_criar(cliente_id, criado_por, dias=7):
+        import secrets
+        token = secrets.token_urlsafe(24)
+        cid = execute_query(
+            'INSERT INTO clientes_responsaveis_convites (token, cliente_id, criado_por, expira_em) '
+            'VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL %s DAY))', (token, cliente_id, criado_por, dias), fetch=False)
+        return cid, token
+
+    @staticmethod
+    def convite_por_token(token):
+        return execute_query(
+            """SELECT v.*, c.numero_cliente, c.nome_razao_social, u.nome AS criado_por_nome
+                 FROM clientes_responsaveis_convites v JOIN clientes c ON c.id = v.cliente_id
+            LEFT JOIN usuarios u ON u.id = v.criado_por WHERE v.token = %s""", (token,), fetch=True, fetch_one=True)
+
+    @staticmethod
+    def convite_ativo(cliente_id):
+        """O link em aberto da empresa (não concluído e não vencido), com quem já respondeu o quê."""
+        v = execute_query(
+            """SELECT v.*, u.nome AS criado_por_nome FROM clientes_responsaveis_convites v LEFT JOIN usuarios u ON u.id = v.criado_por
+                WHERE v.cliente_id = %s AND v.concluido_em IS NULL AND v.expira_em > NOW() ORDER BY v.id DESC LIMIT 1""",
+            (cliente_id,), fetch=True, fetch_one=True)
+        if v:
+            v['respostas'] = ClienteResponsavel.convite_respostas(v['id'])
+        return v
+
+    @staticmethod
+    def convite_respostas(convite_id):
+        return execute_query(
+            """SELECT r.departamento_id, d.nome AS departamento, r.respondido_em, u.nome AS usuario_nome, e.nome AS escolhido_nome
+                 FROM clientes_responsaveis_respostas r JOIN departamentos d ON d.id = r.departamento_id
+                 JOIN usuarios u ON u.id = r.usuario_id JOIN usuarios e ON e.id = r.escolhido_id
+                WHERE r.convite_id = %s ORDER BY r.id""", (convite_id,), fetch=True) or []
+
+    @staticmethod
+    def departamentos_que_pode(usuario, convite):
+        """Pelo link, cada um escolhe só o responsável do PRÓPRIO departamento. Quem gerou o link, a Diretoria e o
+        admin escolhem todos. A Legalização também responde por Certificado Digital e Visita (são dela)."""
+        if usuario.is_admin() or convite['criado_por'] == usuario.id:
+            return None                                  # None = todos
+        dep = getattr(usuario, 'departamento_id', None)
+        nome = execute_query('SELECT nome FROM departamentos WHERE id = %s', (dep,), fetch=True, fetch_one=True) if dep else None
+        nome = (nome or {}).get('nome')
+        if nome == 'Diretoria':
+            return None
+        if nome == 'Legalização':
+            ids = execute_query("SELECT id FROM departamentos WHERE nome IN ('Legalização', 'Certificado Digital', 'Visita')", fetch=True) or []
+            return {r['id'] for r in ids}
+        return {dep} if dep else set()
+
+    @staticmethod
+    def convite_responder(convite, departamento_id, escolhido_id, usuario_id):
+        ClienteResponsavel.definir(convite['cliente_id'], departamento_id, escolhido_id)
+        execute_query('INSERT INTO clientes_responsaveis_respostas (convite_id, departamento_id, usuario_id, escolhido_id) VALUES (%s, %s, %s, %s)',
+                      (convite['id'], departamento_id, usuario_id, escolhido_id), fetch=False)
+
+    @staticmethod
+    def convite_fechar_se_completo(convite):
+        if all(r['usuario_id'] for r in ClienteResponsavel.por_cliente(convite['cliente_id'])):
+            execute_query('UPDATE clientes_responsaveis_convites SET concluido_em = NOW() WHERE id = %s', (convite['id'],), fetch=False)
+            return True
+        return False
+
     @staticmethod
     def sem_responsavel():
         """Empresas ativas (não avulsas) com algum dos 7 departamentos sem responsável:

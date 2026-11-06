@@ -92,6 +92,11 @@ MAPA = {
     'clientes.novo_contato':           'clientes.edit',
     'clientes.editar_contato':         'clientes.edit',
     'clientes.salvar_responsaveis':    'clientes.edit',
+    # link dos responsáveis (06/11/2026): gerar = quem edita o cliente; responder = qualquer logado (o token diz a empresa,
+    # e a rota só deixa escolher o próprio departamento)
+    'clientes.responsaveis_convite_novo':    'clientes.edit',
+    'clientes.responsaveis_convite':         'LOGIN',
+    'clientes.responsaveis_convite_salvar':  'LOGIN',
     'clientes.excluir_contato':        'clientes.edit',
     'clientes.api_contato_por_celular': 'clientes.edit',   # reaproveitar contato pelo celular (05/11/2026)
     'clientes.novo_socio':             'clientes.edit',
@@ -454,6 +459,7 @@ _EMPRESA_POR_ENDPOINT = {
     'clientes.detalhes':             ('id', None),
     'clientes.editar':               ('id', None),
     'clientes.salvar_responsaveis':  ('id', None),
+    'clientes.responsaveis_convite_novo': ('id', None),
     'clientes.inativar':             ('id', None),
     'clientes.delete':               ('id', None),
     'clientes.historico':            ('id', None),

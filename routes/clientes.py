@@ -1288,6 +1288,7 @@ def detalhes(id):
         f_contadores_disp = executor.submit(ClienteContador.listar_contadores)
         f_responsaveis = executor.submit(ClienteResponsavel.por_cliente, id)
         f_funcionarios = executor.submit(ClienteResponsavel.usuarios_disponiveis)
+        f_rs_convite = executor.submit(ClienteResponsavel.convite_ativo, id)
         f_contrato = executor.submit(FinContrato.por_cliente, id)
 
     enderecos = f_enderecos.result()
@@ -1402,6 +1403,7 @@ def detalhes(id):
                          departamentos_contato=ContatoCliente.departamentos_disponiveis(),
                          responsaveis=f_responsaveis.result(),
                          funcionarios=f_funcionarios.result(),
+                         rs_convite=f_rs_convite.result(),
                          contrato=(f_contrato.result() or [None])[0],
                          areas_atendimento=AREAS_ATENDIMENTO)
 
@@ -2467,6 +2469,91 @@ def salvar_responsaveis(id):
     else:
         flash('Nada mudou nos responsáveis.', 'info')
     return redirect(url_for('clientes.detalhes', id=id))
+
+
+# ── Link para os departamentos elegerem o responsável (06/11/2026) ─────────
+# Anderson: "o Miguel manda o link e os departamentos elegem quem ficará como responsável de cada
+# departamento"; "quando enviar tem que acessar o sistema com Login e Senha". Cada um escolhe só o
+# próprio departamento; quem gerou o link, a Diretoria e o admin escolhem todos. Vale 7 dias e morre
+# quando os 7 estão preenchidos.
+@clientes.route('/clientes/<int:id>/responsaveis/convite', methods=['POST'])
+@login_required
+def responsaveis_convite_novo(id):
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        flash('Cliente não encontrado!', 'danger')
+        return redirect(url_for('clientes.index'))
+    ativo = ClienteResponsavel.convite_ativo(id)
+    if ativo:
+        link = url_for('clientes.responsaveis_convite', token=ativo['token'], _external=True)
+        flash('Já existe um link em aberto para %s (vale até %s): %s' % (cliente['nome_razao_social'], ativo['expira_em'].strftime('%d/%m'), link), 'info')
+        return redirect(url_for('clientes.detalhes', id=id))
+    cid, token = ClienteResponsavel.convite_criar(id, current_user.id, 7)
+    link = url_for('clientes.responsaveis_convite', token=token, _external=True)
+    registrar('escrita.gerou_link_responsaveis', 'cadastros', tabela='clientes_responsaveis_convites', registro_id=cid,
+              depois={'cliente_id': id, 'empresa': cliente['nome_razao_social'], 'dias': 7})
+    flash('Link para os departamentos elegerem os responsáveis de %s (vale 7 dias, exige login): %s'
+          % (cliente['nome_razao_social'], link), 'success')
+    return redirect(url_for('clientes.detalhes', id=id))
+
+
+def _convite_responsaveis(token):
+    v = ClienteResponsavel.convite_por_token(token)
+    if not v:
+        return None, 'Este link não existe.'
+    if v['concluido_em']:
+        return None, 'Este link já cumpriu o papel: todos os departamentos de %s têm responsável.' % v['nome_razao_social']
+    from datetime import datetime as _dt
+    if v['expira_em'] < _dt.now():
+        return None, 'Este link venceu. Peça outro na ficha da empresa.'
+    return v, None
+
+
+@clientes.route('/clientes/responsaveis/convite/<token>')
+@login_required
+def responsaveis_convite(token):
+    v, erro = _convite_responsaveis(token)
+    if erro:
+        flash(erro, 'warning')
+        return redirect('/')
+    v['respostas'] = ClienteResponsavel.convite_respostas(v['id'])
+    return render_template('clientes/responsaveis_convite.html', convite=v,
+                           responsaveis=ClienteResponsavel.por_cliente(v['cliente_id']),
+                           funcionarios=ClienteResponsavel.usuarios_disponiveis(),
+                           permitidos=ClienteResponsavel.departamentos_que_pode(current_user, v))
+
+
+@clientes.route('/clientes/responsaveis/convite/<token>/salvar', methods=['POST'])
+@login_required
+def responsaveis_convite_salvar(token):
+    v, erro = _convite_responsaveis(token)
+    if erro:
+        flash(erro, 'warning')
+        return redirect('/')
+    permitidos = ClienteResponsavel.departamentos_que_pode(current_user, v)
+    validos = {u['id']: u['nome'] for u in ClienteResponsavel.usuarios_disponiveis()}
+    atuais = ClienteResponsavel.por_cliente(v['cliente_id'])
+    mudou, antes, depois = [], {}, {}
+    for r in atuais:
+        if permitidos is not None and r['departamento_id'] not in permitidos:
+            continue
+        uid = request.form.get('resp_%d' % r['departamento_id'], type=int)
+        if not uid or uid not in validos or uid == (r['usuario_id'] or None):
+            continue
+        ClienteResponsavel.convite_responder(v, r['departamento_id'], uid, current_user.id)
+        mudou.append(r['departamento'])
+        antes[r['departamento']] = r['usuario_nome']
+        depois[r['departamento']] = validos[uid]
+    if not mudou:
+        flash('Nada escolhido ainda: marque o responsável do seu departamento.', 'warning')
+        return redirect(url_for('clientes.responsaveis_convite', token=token))
+    registrar('escrita.alterou_responsaveis', 'cadastros', tabela='clientes', registro_id=v['cliente_id'],
+              antes=antes, depois=dict(depois, origem='link dos departamentos'))
+    if ClienteResponsavel.convite_fechar_se_completo(v):
+        flash('Obrigado! %s: todos os departamentos de %s têm responsável e o link foi encerrado.' % (', '.join(mudou), v['nome_razao_social']), 'success')
+        return redirect('/')
+    flash('Salvo: %s de %s. Os outros departamentos ainda escolhem pelo mesmo link.' % (', '.join(mudou), v['nome_razao_social']), 'success')
+    return redirect(url_for('clientes.responsaveis_convite', token=token))
 
 
 @clientes.route('/clientes/<int:cliente_id>/contatos/novo', methods=['POST'])
