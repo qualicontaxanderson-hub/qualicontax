@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block title %}Lançamentos - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Lançamentos de serviço e comissões (06/11/2026) */
+.la-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
+.la-busca { margin-left:auto; display:flex; gap:6px; }
+.la-busca input { width:240px; }
+.la-num { color:#94a3b8; font-size:12px; }
+.la-sub { display:block; font-size:11px; color:#7d968a; }
+.la-pos { color:#15803d; font-weight:700; }
+.la-neg { color:#b91c1c; font-weight:700; }
+.la-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+.la-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
+.la-sec { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; margin:14px 0 8px; display:flex; align-items:center; gap:10px; }
+.la-sec::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+.la-cli { display:flex; align-items:center; gap:10px; background:#f8fbf9; border:1px solid #e3ece7; border-radius:12px; padding:10px 12px; }
+.la-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
+.la-sug div { padding:8px 12px; cursor:pointer; font-size:13px; }
+.la-sug div:hover { background:#f0f7f3; }
+.la-destino { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.la-destino label { display:flex; gap:10px; align-items:flex-start; border:1px solid #e3ece7; border-radius:12px; padding:10px 12px; cursor:pointer; margin:0; font-weight:500; background:#fff; }
+.la-destino label:has(input:checked) { border-color:#15803d; background:#f0f7f3; box-shadow:0 0 0 2px rgba(21,128,61,.12); }
+.la-destino input { margin-top:3px; }
+.la-destino b { display:block; font-size:13px; }
+.la-destino small { color:#64748b; font-size:11px; }
+.la-acoes form { display:inline; }
+.la-caixa { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px 18px; margin-bottom:14px; }
+.la-tot { font-size:15px; font-weight:700; color:#0f3d2e; }
+.modal-body .form-group { margin-bottom:0; }
+@media (max-width:640px) { .la-grid2, .la-grid3, .la-destino { grid-template-columns:1fr; } .la-busca { margin-left:0; width:100%; } .la-busca input { width:100%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-receipt" style="color: var(--primary-green);"></i> Lançamentos</h1>
+        <p class="page-subtitle">Serviço lançado numa empresa: sai como cobrança avulsa ou entra na mensal{% if not admin %} · você vê só o que é seu{% endif %}</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="laNovo()"><i class="fas fa-plus"></i> Lançar serviço</button>
+    </div>
+</div>
+
+{% if resumo and not admin %}
+<div class="fin-kpis">
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando aprovação</div><div class="fin-kpi-val">{{ resumo.aguardando_aprovacao or 0 }}</div><div class="fin-kpi-pe">lançamentos seus</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Comissão a liberar</div><div class="fin-kpi-val">{{ (resumo.v_aguardando or 0) | float | format_currency }}</div><div class="fin-kpi-pe">{{ resumo.aguardando_pagamento or 0 }} cobrança(s) ainda não pagas</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Liberada para fechar</div><div class="fin-kpi-val">{{ (resumo.v_liberadas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">{{ resumo.liberadas or 0 }} cobrança(s) pagas</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Já paga a você</div><div class="fin-kpi-val">{{ (resumo.v_pagas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">em fechamento: {{ (resumo.v_fechadas or 0) | float | format_currency }}</div></div>
+</div>
+{% endif %}
+
+<div class="la-abas">
+    <a class="fin-chip {{ 'ativo' if aba == 'lancamentos' }}" href="{{ url_for('financeiro.lancamentos') }}">{{ 'Todos os lançamentos' if admin else 'Meus lançamentos' }}</a>
+    {% if admin %}<a class="fin-chip {{ 'ativo' if aba == 'aprovar' }}" href="{{ url_for('financeiro.lancamentos', aba='aprovar') }}">Aguardando aprovação <strong>{{ n_aprovar }}</strong></a>{% endif %}
+    <a class="fin-chip {{ 'ativo' if aba == 'comissoes' }}" href="{{ url_for('financeiro.lancamentos', aba='comissoes') }}">{{ 'Comissões' if admin else 'Minhas comissões' }}</a>
+    <a class="fin-chip {{ 'ativo' if aba == 'fechamentos' }}" href="{{ url_for('financeiro.lancamentos', aba='fechamentos') }}">Fechamentos</a>
+    {% if admin %}<a class="fin-chip {{ 'ativo' if aba == 'acordos' }}" href="{{ url_for('financeiro.lancamentos', aba='acordos') }}">Acordos de comissão</a>{% endif %}
+    {% if aba in ('lancamentos', 'aprovar') %}
+    <form class="la-busca" method="GET" action="{{ url_for('financeiro.lancamentos') }}">
+        <input type="hidden" name="aba" value="{{ aba }}">
+        <input type="text" name="busca" class="form-control" placeholder="empresa, número ou serviço" value="{{ busca or '' }}">
+        <button class="btn btn-outline" type="submit"><i class="fas fa-search"></i></button>
+    </form>
+    {% endif %}
+</div>
+
+{# ─── lançamentos / aprovar ─────────────────────────────────────────────── #}
+{% if aba in ('lancamentos', 'aprovar') %}
+<div class="fin-caixa">
+    {% if lista %}
+    <div class="fin-rolar">
+        <table class="fin-tab" id="la-tab">
+            <thead><tr><th>Data</th><th>Empresa</th><th>Serviço</th><th style="text-align:right;">Valor</th><th>Destino</th><th>Quem lançou</th><th>Situação</th><th>Comissão</th><th>Ações</th></tr></thead>
+            <tbody>
+            {% for l in lista %}
+                <tr>
+                    <td class="fin-num fin-td-meta">{{ l.lancado_em.strftime('%d/%m') }}<span class="la-sub">{{ l.lancado_em.strftime('%Y') }}</span></td>
+                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=l.cliente_id) }}">{{ l.nome_razao_social }}</a><span class="la-sub">nº {{ l.numero_cliente or '—' }}</span></td>
+                    <td>{{ l.servico_nome }}{% if l.descricao != l.servico_nome %}<span class="la-sub">{{ l.descricao }}</span>{% endif %}{% if l.quantidade != 1 %}<span class="la-sub">{{ l.quantidade }} × {{ l.valor_unitario | float | format_currency }}</span>{% endif %}</td>
+                    <td class="fin-valor fin-td-valor">{{ l.valor_total | float | format_currency }}</td>
+                    <td class="fin-td-oculta">{% if l.destino == 'MENSAL' %}<span class="fin-pilula aberto">mensal {{ l.competencia.strftime('%m/%Y') }}</span>{% else %}<span class="fin-pilula alerta">avulsa</span>{% if l.vencimento %}<span class="la-sub">vence {{ l.vencimento.strftime('%d/%m/%Y') }}</span>{% endif %}{% endif %}</td>
+                    <td class="fin-td-oculta">{{ l.lancado_por_nome }}</td>
+                    <td class="fin-td-extra"><span class="fin-pilula {{ 'liquidado' if l.status in ('APROVADO','FATURADO') else ('alerta' if l.status == 'LANCADO' else 'cancelado') }}">{{ STATUS.get(l.status, l.status) }}</span>
+                        {% if l.status == 'FATURADO' and l.boleto_id %}<a class="la-sub" href="{{ url_for('financeiro.boleto_detalhe', boleto_id=l.boleto_id) }}">boleto nº {{ l.boleto_id }}{% if l.titulo_status %} · {{ l.titulo_status }}{% endif %}</a>{% endif %}
+                        {% if l.motivo %}<span class="la-sub">{{ l.motivo }}</span>{% endif %}</td>
+                    <td class="fin-td-oculta">{% if l.comissao_valor %}<strong>{{ l.comissao_valor | float | format_currency }}</strong><span class="la-sub">{{ situacao(l) }}</span>{% elif l.status in ('APROVADO','FATURADO') %}<span class="la-num">sem acordo</span>{% else %}<span class="la-num">—</span>{% endif %}</td>
+                    <td class="la-acoes">
+                        {% if admin and l.status == 'LANCADO' %}
+                        <form method="POST" action="{{ url_for('financeiro.lancamento_aprovar', lid=l.id) }}" onsubmit="return confirm('Aprovar: {{ l.servico_nome }} de {{ l.nome_razao_social }}, {{ l.valor_total | float | format_currency }}{{ ' — o boleto sai agora' if l.destino == 'AVULSO' else ' — entra no mensal' }}?')"><button class="btn btn-primary btn-sm" title="Aprovar"><i class="fas fa-check"></i></button></form>
+                        <button class="btn btn-outline btn-sm" title="Reprovar" onclick="laReprovar({{ l.id }})"><i class="fas fa-thumbs-down"></i></button>
+                        {% endif %}
+                        {% if l.status == 'LANCADO' or (admin and l.status == 'APROVADO') %}<button class="btn btn-outline btn-sm" title="Cancelar" onclick="laCancelar({{ l.id }})"><i class="fas fa-times"></i></button>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="fin-vazio"><i class="fas fa-receipt"></i> {{ 'Nada aguardando aprovação.' if aba == 'aprovar' else 'Nenhum lançamento ainda.' }}</div>{% endif %}
+</div>
+
+{# ─── comissões ────────────────────────────────────────────────────────── #}
+{% elif aba == 'comissoes' %}
+{% if admin %}
+<form method="GET" class="la-caixa" style="display:flex; gap:10px; align-items:center;">
+    <input type="hidden" name="aba" value="comissoes">
+    <label style="margin:0;">Pessoa</label>
+    <select name="u" class="form-control" style="width:auto;" onchange="this.form.submit()">
+        <option value="">— escolha —</option>
+        {% for p in pessoas %}<option value="{{ p.id }}" {{ 'selected' if p.id == uid }}>{{ p.nome }}</option>{% endfor %}
+    </select>
+</form>
+{% endif %}
+{% if uid %}
+<div class="fin-kpis">
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando pagamento</div><div class="fin-kpi-val">{{ (resumo.v_aguardando or 0) | float | format_currency }}</div><div class="fin-kpi-pe">{{ resumo.aguardando_pagamento or 0 }} cobrança(s)</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Liberada (pago)</div><div class="fin-kpi-val">{{ (resumo.v_liberadas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">pronta para fechar</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Em fechamento</div><div class="fin-kpi-val">{{ (resumo.v_fechadas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">enviado, aguardando pagamento</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Já paga</div><div class="fin-kpi-val">{{ (resumo.v_pagas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">fechamentos quitados</div></div>
+</div>
+<form method="POST" action="{{ url_for('financeiro.comissoes_fechar') }}" class="fin-caixa" id="la-form-fechar">
+    {% if lista %}
+    <div class="fin-rolar">
+        <table class="fin-tab" id="la-tab-com">
+            <thead><tr><th></th><th>Empresa</th><th>Serviço</th><th style="text-align:right;">Valor cobrado</th><th>Cobrança</th><th style="text-align:right;">Comissão</th><th>Situação</th></tr></thead>
+            <tbody>
+            {% for l in lista %}
+                <tr>
+                    <td>{% if l.comissao_status == 'LIBERADA' and not admin %}<input type="checkbox" name="lanc" value="{{ l.id }}" onchange="laSomaFechar()" data-v="{{ l.comissao_valor }}">{% endif %}</td>
+                    <td class="fin-td-titulo">{{ l.nome_razao_social }}</td>
+                    <td>{{ l.servico_nome }}<span class="la-sub">{{ l.lancado_em.strftime('%d/%m/%Y') }} · {{ 'mensal' if l.destino == 'MENSAL' else 'avulsa' }}</span></td>
+                    <td class="fin-valor fin-td-valor">{{ l.valor_total | float | format_currency }}</td>
+                    <td class="fin-td-oculta">{% if l.titulo_vencimento %}vence {{ l.titulo_vencimento.strftime('%d/%m/%Y') }}{% elif l.destino == 'MENSAL' %}<span class="la-num">no lote de {{ l.competencia.strftime('%m/%Y') }}</span>{% else %}—{% endif %}</td>
+                    <td class="fin-valor fin-td-valor"><strong>{{ l.comissao_valor | float | format_currency }}</strong></td>
+                    <td><span class="fin-pilula {{ 'liquidado' if l.comissao_status in ('LIBERADA','PAGA') else ('cancelado' if situacao(l) == 'Vencido' else 'aberto') }}">{{ situacao(l) }}</span>{% if l.fechamento_id %}<span class="la-sub"><a href="{{ url_for('financeiro.lancamentos', aba='fechamentos', f=l.fechamento_id) }}">fechamento nº {{ l.fechamento_id }}</a></span>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not admin %}
+    <div style="display:flex; gap:12px; align-items:center; justify-content:flex-end; margin-top:12px;">
+        <span class="la-tot">Selecionado: <span id="la-fechar-total">R$ 0,00</span></span>
+        <input type="text" name="observacao" class="form-control" style="width:260px;" placeholder="observação (opcional)">
+        <button class="btn btn-primary" type="submit" id="la-btn-fechar" disabled><i class="fas fa-paper-plane"></i> Fechar e enviar para pagamento</button>
+    </div>
+    {% endif %}
+    {% else %}<div class="fin-vazio"><i class="fas fa-coins"></i> Nenhuma comissão ainda.</div>{% endif %}
+</form>
+{% else %}<div class="fin-vazio">Escolha a pessoa.</div>{% endif %}
+
+{# ─── fechamentos ──────────────────────────────────────────────────────── #}
+{% elif aba == 'fechamentos' %}
+{% if fechamento %}
+<div class="la-caixa">
+    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+        <h3 style="margin:0;">Fechamento nº {{ fechamento.id }} · {{ fechamento.usuario_nome }}</h3>
+        <span class="fin-pilula {{ 'liquidado' if fechamento.status == 'PAGO' else ('alerta' if fechamento.status == 'PAGO_PARCIAL' else 'aberto') }}">{{ fechamento.status | replace('_', ' ') | capitalize }}</span>
+        <span class="la-tot" style="margin-left:auto;">Total {{ fechamento.total | float | format_currency }} · pago {{ fechamento.valor_pago | float | format_currency }}</span>
+    </div>
+    <table class="fin-tab" style="margin-top:10px;">
+        <thead><tr><th>Empresa</th><th>Serviço</th><th style="text-align:right;">Cobrado</th><th style="text-align:right;">Comissão</th></tr></thead>
+        <tbody>{% for l in fech_itens %}<tr><td>{{ l.nome_razao_social }}</td><td>{{ l.servico_nome }} <span class="la-num">{{ l.lancado_em.strftime('%d/%m/%Y') }}</span></td><td class="fin-valor">{{ l.valor_total | float | format_currency }}</td><td class="fin-valor"><strong>{{ l.comissao_valor | float | format_currency }}</strong></td></tr>{% endfor %}</tbody>
+    </table>
+    <p class="la-sec">Pagamentos</p>
+    {% if fech_pagamentos %}<ul style="margin:0 0 10px 18px;">{% for p in fech_pagamentos %}<li>{{ p.data.strftime('%d/%m/%Y') }} · {{ p.valor | float | format_currency }}</li>{% endfor %}</ul>{% else %}<p class="la-num">Nenhum pagamento ainda.</p>{% endif %}
+    {% if admin and fechamento.status not in ('PAGO', 'CANCELADO') %}
+    <form method="POST" action="{{ url_for('financeiro.fechamento_pagar', fid=fechamento.id) }}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="date" name="data" class="form-control" style="width:auto;" value="{{ hoje.isoformat() }}">
+        <input type="text" name="valor" class="form-control dinheiro" style="width:140px;" value="{{ (fechamento.total - fechamento.valor_pago) | float | round(2) }}">
+        <button class="btn btn-primary"><i class="fas fa-money-bill-wave"></i> Registrar pagamento</button>
+        <span class="la-num">pode ser em partes: 2.500 hoje, o resto depois</span>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+<div class="fin-caixa">
+    {% if fechamentos %}
+    <table class="fin-tab">
+        <thead><tr><th>Nº</th><th>Pessoa</th><th>Data</th><th style="text-align:right;">Total</th><th style="text-align:right;">Pago</th><th>Situação</th><th></th></tr></thead>
+        <tbody>{% for f in fechamentos %}<tr><td class="fin-num">{{ f.id }}</td><td>{{ f.usuario_nome }}</td><td>{{ f.criado_em.strftime('%d/%m/%Y') }}</td><td class="fin-valor">{{ f.total | float | format_currency }}</td><td class="fin-valor">{{ f.valor_pago | float | format_currency }}</td><td><span class="fin-pilula {{ 'liquidado' if f.status == 'PAGO' else ('alerta' if f.status == 'PAGO_PARCIAL' else 'aberto') }}">{{ f.status | replace('_', ' ') | capitalize }}</span></td><td><a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.lancamentos', aba='fechamentos', f=f.id) }}">Abrir</a></td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="fin-vazio"><i class="fas fa-paper-plane"></i> Nenhum fechamento ainda.</div>{% endif %}
+</div>
+
+{# ─── acordos (admin) ──────────────────────────────────────────────────── #}
+{% elif aba == 'acordos' %}
+<form method="POST" action="{{ url_for('financeiro.acordo_novo') }}" class="la-caixa">
+    <p class="la-sec" style="margin-top:0;">Novo acordo</p>
+    <div class="la-grid3">
+        <div class="form-group"><label>Pessoa</label><select name="usuario_id" class="form-control" required><option value="">—</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Base</label><select name="base" id="ac-base" class="form-control" onchange="acBase()"><option value="SERVICO">Serviço avulso (quem lança)</option><option value="HONORARIOS">Honorários de um cliente dele</option><option value="INDICACAO">Indicação de cliente</option></select></div>
+        <div class="form-group" id="ac-serv"><label>Serviço</label><select name="servico_id" class="form-control"><option value="">qualquer serviço</option>{% for s in servicos %}<option value="{{ s.id }}">{{ s.nome }}</option>{% endfor %}</select></div>
+        <div class="form-group" id="ac-cli" style="display:none; position:relative;"><label>Empresa</label><input type="text" id="ac-cli-q" class="form-control" placeholder="nome ou número" autocomplete="off"><input type="hidden" name="cliente_id" id="ac-cli-id"><div id="ac-sug" class="la-sug" style="display:none;"></div></div>
+        <div class="form-group"><label>Tipo</label><select name="tipo" class="form-control"><option value="PCT">% do valor</option><option value="FIXO">valor fixo (R$)</option></select></div>
+        <div class="form-group"><label>Valor</label><input type="text" name="valor" class="form-control" placeholder="10 (%) ou 50,00 (R$)" required></div>
+        <div class="form-group"><label>Vale desde</label><input type="date" name="vigencia_inicio" class="form-control" value="{{ hoje.isoformat() }}"></div>
+        <div class="form-group" id="ac-parc" style="display:none;"><label>Parcelas (indicação)</label><select name="parcelas" class="form-control"><option value="1">à vista</option><option value="2">em 2 vezes</option></select></div>
+        <div class="form-group"><label>Observação</label><input type="text" name="observacao" class="form-control"></div>
+    </div>
+    <div style="margin-top:10px; text-align:right;"><button class="btn btn-primary"><i class="fas fa-plus"></i> Cadastrar acordo</button></div>
+</form>
+<div class="fin-caixa">
+    {% if acordos %}
+    <table class="fin-tab">
+        <thead><tr><th>Pessoa</th><th>Base</th><th>Serviço / empresa</th><th>Comissão</th><th>Vigência</th><th>Situação</th><th></th></tr></thead>
+        <tbody>{% for a in acordos %}<tr>
+            <td>{{ a.usuario_nome }}</td><td>{{ a.base | capitalize }}</td>
+            <td>{{ a.servico_nome or a.cliente_nome or 'qualquer serviço' }}</td>
+            <td><strong>{% if a.tipo == 'PCT' %}{{ a.valor | float }}%{% else %}{{ a.valor | float | format_currency }}{% endif %}</strong>{% if a.base == 'INDICACAO' %} <span class="la-num">{{ 'à vista' if a.parcelas == 1 else 'em %dx' % a.parcelas }}</span>{% endif %}</td>
+            <td>{{ a.vigencia_inicio.strftime('%d/%m/%Y') }}{% if a.vigencia_fim %} a {{ a.vigencia_fim.strftime('%d/%m/%Y') }}{% endif %}</td>
+            <td><span class="fin-pilula {{ 'liquidado' if a.ativo else 'cancelado' }}">{{ 'Ativo' if a.ativo else 'Encerrado' }}</span></td>
+            <td>{% if a.ativo %}<form method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" onsubmit="return confirm('Encerrar este acordo?')"><button class="btn btn-outline btn-sm"><i class="fas fa-ban"></i></button></form>{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="fin-vazio"><i class="fas fa-handshake"></i> Nenhum acordo cadastrado.</div>{% endif %}
+</div>
+{% endif %}
+
+<!-- Lançar serviço -->
+<div id="laModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:680px;">
+        <div class="modal-header"><h3>Lançar serviço</h3><button class="modal-close" type="button" onclick="laFechar()">&times;</button></div>
+        <form id="la-form" method="POST" action="{{ url_for('financeiro.lancamento_novo') }}">
+            <input type="hidden" name="cliente_id" id="la-cliente-id">
+            <div class="modal-body">
+                <div id="la-cli-busca" class="form-group" style="position:relative;">
+                    <label>Empresa</label>
+                    <input type="text" id="la-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
+                    <div id="la-sug" class="la-sug" style="display:none;"></div>
+                </div>
+                <div id="la-cli" class="la-cli" style="display:none;">
+                    <i class="fas fa-building" style="color:#15803d;"></i>
+                    <div><strong id="la-cli-nome"></strong><div class="la-num" id="la-cli-num"></div></div>
+                    <button type="button" class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="laSetCliente(null); document.getElementById('la-cli-q').focus();">Trocar</button>
+                </div>
+                <p class="la-sec">Serviço</p>
+                <div class="la-grid3">
+                    <div class="form-group" style="grid-column:span 3;"><label>Serviço</label>
+                        <select name="servico_id" id="la-servico" class="form-control" required onchange="laServico()">
+                            <option value="">— escolha —</option>
+                            {% for s in servicos %}<option value="{{ s.id }}" data-valor="{{ s.valor_padrao or '' }}" data-nota="{{ s.emite_nota }}">{{ s.nome }}{% if not s.emite_nota %} (só boleto){% endif %}</option>{% endfor %}
+                        </select></div>
+                    <div class="form-group"><label>Quantidade</label><input type="text" name="quantidade" id="la-qtd" class="form-control" value="1" oninput="laTotal()"></div>
+                    <div class="form-group"><label>Valor unitário</label><input type="text" name="valor_unitario" id="la-valor" class="form-control dinheiro" oninput="laTotal()" required></div>
+                    <div class="form-group"><label>Total</label><div class="la-tot" id="la-total" style="padding-top:9px;">R$ 0,00</div></div>
+                    <div class="form-group" style="grid-column:span 3;"><label>Descrição na cobrança (opcional)</label><input type="text" name="descricao" id="la-desc" class="form-control" placeholder="o nome do serviço, se vazio"></div>
+                </div>
+                <p class="la-sec">Como cobrar</p>
+                <div class="la-destino">
+                    <label><input type="radio" name="destino" value="MENSAL" checked onchange="laDestino()"><span><b>Entra na cobrança mensal</b><small>junto com os honorários de {{ competencia_aberta.strftime('%m/%Y') }}, no boleto da empresa</small></span></label>
+                    <label><input type="radio" name="destino" value="AVULSO" onchange="laDestino()"><span><b>Cobrança avulsa</b><small>boleto só deste serviço, assim que for aprovado</small></span></label>
+                </div>
+                <div class="la-grid2" style="margin-top:10px;">
+                    <div class="form-group" id="la-venc-box" style="display:none;"><label>Vencimento do boleto</label><input type="date" name="vencimento" id="la-venc" class="form-control"></div>
+                    <div class="form-group"><label>Observação</label><input type="text" name="observacao" class="form-control" placeholder="para quem aprova"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="laFechar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Lançar para aprovação</button>
+            </div>
+        </form>
+    </div>
+</div>
+<form id="la-form-acao" method="POST" style="display:none;"><input type="hidden" name="motivo" id="la-motivo"></form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script>
+function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function laNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+function laTotal() { document.getElementById('la-total').textContent = brl(laNum(document.getElementById('la-qtd').value) * laNum(document.getElementById('la-valor').value)); }
+function laServico() {
+    var o = document.getElementById('la-servico').selectedOptions[0]; if (!o) return;
+    var v = document.getElementById('la-valor'); if (!laNum(v.value) && o.dataset.valor) { v.value = Number(o.dataset.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+    laTotal();
+}
+function laDestino() { document.getElementById('la-venc-box').style.display = document.querySelector('input[name=destino]:checked').value === 'AVULSO' ? 'block' : 'none'; }
+function laSetCliente(id, nome, numero) {
+    document.getElementById('la-cliente-id').value = id || '';
+    document.getElementById('la-cli-nome').textContent = nome || ''; document.getElementById('la-cli-num').textContent = numero ? 'nº ' + numero : '';
+    document.getElementById('la-cli').style.display = id ? 'flex' : 'none'; document.getElementById('la-cli-busca').style.display = id ? 'none' : 'block';
+}
+function laNovo() {
+    laSetCliente(null); document.getElementById('la-form').reset(); document.getElementById('la-qtd').value = '1'; laTotal(); laDestino();
+    var d = new Date(); d.setDate(d.getDate() + 7); document.getElementById('la-venc').value = d.toISOString().slice(0, 10);
+    document.getElementById('laModal').style.display = 'block'; setTimeout(function () { document.getElementById('la-cli-q').focus(); }, 60);
+}
+function laFechar() { document.getElementById('laModal').style.display = 'none'; }
+function laAcao(url, motivo) { var f = document.getElementById('la-form-acao'); f.action = url; document.getElementById('la-motivo').value = motivo || ''; f.submit(); }
+function laReprovar(id) { var m = prompt('Motivo da reprovação (vai para quem lançou):'); if (m === null) return; laAcao('/financeiro/lancamentos/' + id + '/reprovar', m); }
+function laCancelar(id) { var m = prompt('Cancelar este lançamento. Motivo:'); if (m === null) return; laAcao('/financeiro/lancamentos/' + id + '/cancelar', m); }
+function laSomaFechar() {
+    var t = 0, n = 0; document.querySelectorAll('#la-tab-com input[name=lanc]:checked').forEach(function (c) { t += parseFloat(c.dataset.v || 0); n++; });
+    document.getElementById('la-fechar-total').textContent = brl(t); document.getElementById('la-btn-fechar').disabled = !n;
+}
+function acBase() {
+    var b = document.getElementById('ac-base').value;
+    document.getElementById('ac-serv').style.display = b === 'SERVICO' ? 'block' : 'none';
+    document.getElementById('ac-cli').style.display = b === 'SERVICO' ? 'none' : 'block';
+    document.getElementById('ac-parc').style.display = b === 'INDICACAO' ? 'block' : 'none';
+}
+function laBusca(inputId, sugId, aoEscolher) {
+    var q = document.getElementById(inputId), sug = document.getElementById(sugId), t; if (!q) return;
+    q.addEventListener('input', function () {
+        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
+        t = setTimeout(function () {
+            fetch('/financeiro/notas/buscar?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+                sug.innerHTML = ''; (lista || []).forEach(function (c) {
+                    var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome + '</strong> <span class="la-num">' + (c.cpf_cnpj || '') + '</span>';
+                    d.onclick = function () { aoEscolher(c); sug.style.display = 'none'; }; sug.appendChild(d);
+                });
+                sug.style.display = sug.children.length ? 'block' : 'none';
+            });
+        }, 250);
+    });
+    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
+}
+laBusca('la-cli-q', 'la-sug', function (c) { laSetCliente(c.id, c.nome, c.numero_cliente); });
+laBusca('ac-cli-q', 'ac-sug', function (c) { document.getElementById('ac-cli-id').value = c.id; document.getElementById('ac-cli-q').value = (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome; });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') laFechar(); });
+var _f = document.getElementById('la-form'); if (_f) _f.addEventListener('submit', function (e) { if (!document.getElementById('la-cliente-id').value) { e.preventDefault(); alert('Escolha a empresa.'); } });
+</script>
+{% endblock %}

@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}Honorários - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Honorários (06/11/2026): tabela .fin-tab da identidade; só o que é desta tela fica aqui */
+.ho-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
+.ho-busca { margin-left:auto; display:flex; gap:6px; }
+.ho-busca input { width:260px; }
+.ho-num { color:#94a3b8; font-size:12px; font-variant-numeric:tabular-nums; }
+.ho-plano { font-size:11px; color:#7d968a; display:block; }
+.ho-falta { color:#b91c1c; font-weight:600; }
+.ho-ok { color:#15803d; }
+.ho-itens { width:100%; border-collapse:collapse; margin-bottom:6px; }
+.ho-itens td { padding:3px 4px; vertical-align:middle; }
+.ho-itens input, .ho-itens select { height:36px; }
+.ho-soma { text-align:right; font-weight:700; font-size:15px; color:#0f3d2e; padding:4px 6px 10px; }
+.ho-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+.ho-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
+.ho-sec { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; margin:14px 0 8px; display:flex; align-items:center; gap:10px; }
+.ho-sec::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+.ho-cli { display:flex; align-items:center; gap:10px; background:#f8fbf9; border:1px solid #e3ece7; border-radius:12px; padding:10px 12px; }
+.ho-cli strong { font-size:14px; }
+.ho-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
+.ho-sug div { padding:8px 12px; cursor:pointer; font-size:13px; }
+.ho-sug div:hover { background:#f0f7f3; }
+.ho-dec { display:none; }
+.ho-chk { display:flex; gap:18px; align-items:center; }
+.ho-chk label { display:flex; gap:6px; align-items:center; margin:0; font-weight:500; }
+.modal-body .form-group { margin-bottom:0; }
+@media (max-width:640px) { .ho-grid2, .ho-grid3 { grid-template-columns:1fr; } .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-file-signature" style="color: var(--primary-green);"></i> Honorários</h1>
+        <p class="page-subtitle">O contrato mensal de cada empresa: valor, vencimento, 13º e reajuste</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="hoNovo()"><i class="fas fa-plus"></i> Novo contrato</button>
+    </div>
+</div>
+
+<div class="fin-kpis">
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Contratos ativos</div><div class="fin-kpi-val">{{ resumo.n or 0 }}</div><div class="fin-kpi-pe">empresas com honorários</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Honorários por mês</div><div class="fin-kpi-val">{{ (resumo.total or 0) | float | format_currency }}</div><div class="fin-kpi-pe">soma dos contratos ativos</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Sem honorários</div><div class="fin-kpi-val">{{ resumo.sem_contrato or 0 }}</div><div class="fin-kpi-pe">empresas ativas sem contrato</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Com 13º</div><div class="fin-kpi-val">{{ resumo.com_decimo or 0 }}</div><div class="fin-kpi-pe">parcela única ou duas parcelas</div></div>
+    {% if resumo.pendentes %}<div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando aprovação</div><div class="fin-kpi-val">{{ resumo.pendentes }}</div><div class="fin-kpi-pe">cadastrados por funcionários</div></div>{% endif %}
+</div>
+
+<div class="ho-abas">
+    <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
+    <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>
+    <form class="ho-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}">
+        <input type="hidden" name="aba" value="{{ aba }}">
+        <input type="text" name="busca" class="form-control" placeholder="empresa, número ou CNPJ" value="{{ busca or '' }}">
+        <button class="btn btn-outline" type="submit"><i class="fas fa-search"></i></button>
+    </form>
+</div>
+
+<div class="fin-caixa">
+{% if aba == 'sem' %}
+    {% if sem_contrato %}
+    <div class="fin-rolar">
+        <table class="fin-tab" id="ho-tab-sem">
+            <thead><tr><th>Nº</th><th>Empresa</th><th>CPF/CNPJ</th><th>Tipo</th><th></th></tr></thead>
+            <tbody>
+            {% for c in sem_contrato %}
+                <tr>
+                    <td class="fin-num">{{ c.numero_cliente }}</td>
+                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.id) }}">{{ c.nome_razao_social }}</a></td>
+                    <td class="fin-td-oculta ho-num">{{ c.cpf_cnpj or '—' }}</td>
+                    <td class="fin-td-oculta">{{ c.tipo_pessoa or '' }}</td>
+                    <td><button class="btn btn-outline btn-sm" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="fin-vazio"><i class="fas fa-check-circle"></i> Todas as empresas ativas têm contrato de honorários.</div>{% endif %}
+{% else %}
+    {% if contratos %}
+    <div class="fin-rolar">
+        <table class="fin-tab" id="ho-tab-com">
+            <thead>
+                <tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Honorários</th><th>Vence dia</th><th>Início</th><th>13º</th><th>Próximo reajuste</th><th>Cobrança vai para</th><th>Situação</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+            {% for c in contratos %}
+                <tr>
+                    <td class="fin-num fin-td-meta">{{ c.numero_cliente }}</td>
+                    <td class="fin-td-titulo">
+                        <a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.nome_razao_social }}</a>
+                        {% if c.plano %}<span class="ho-plano">{{ c.plano }}{% if c.n_itens > 1 %} · {{ c.n_itens }} discriminações{% endif %}</span>{% endif %}
+                    </td>
+                    <td class="fin-valor fin-td-valor">{{ c.valor | float | format_currency }}</td>
+                    <td class="fin-td-oculta"><strong>dia {{ c.dia_vencimento }}</strong> <span class="ho-num">do mês seguinte</span></td>
+                    <td class="fin-td-oculta">{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}{% if c.fim %} <span class="ho-num">até {{ c.fim.strftime('%m/%Y') }}</span>{% endif %}</td>
+                    <td class="fin-td-oculta">{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}parcela única{% elif c.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}<span class="ho-num">sem 13º</span>{% endif %}</td>
+                    <td class="fin-td-oculta">{% if c.reajuste_tipo == 'SALARIO_MINIMO' %}{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else '—' }} <span class="ho-num">sal. mínimo</span>{% else %}{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}{% if c.proximo_reajuste %} <span class="ho-num">{{ c.proximo_reajuste.strftime('%m/%Y') }}</span>{% endif %}{% endif %}</td>
+                    <td class="fin-td-oculta">{% if c.n_contatos_fin %}<span class="ho-ok"><i class="fas fa-envelope"></i> {{ c.n_contatos_fin }} contato{{ 's' if c.n_contatos_fin > 1 }}</span>{% else %}<span class="ho-falta" title="Nenhum contato com e-mail marcado no departamento Financeiro"><i class="fas fa-triangle-exclamation"></i> sem contato Financeiro</span>{% endif %}</td>
+                    <td class="fin-td-extra"><span class="fin-pilula {{ 'liquidado' if c.situacao == 'ATIVO' else ('alerta' if c.situacao == 'PENDENTE' else 'cancelado') }}">{{ c.situacao | capitalize }}</span>{% if c.cliente_situacao != 'ATIVO' %} <span class="fin-pilula cancelado" title="Cadastro do cliente">{{ c.cliente_situacao | capitalize }}</span>{% endif %}</td>
+                    <td>
+                        <button class="btn btn-outline btn-sm" onclick="hoEditar({{ c.id }})" title="Editar"><i class="fas fa-pen"></i></button>
+                        {% if c.situacao in ('ATIVO', 'PENDENTE') %}<button class="btn btn-outline btn-sm" onclick="hoEncerrar({{ c.id }}, {{ c.nome_razao_social | tojson }})" title="Encerrar contrato"><i class="fas fa-ban"></i></button>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="fin-vazio"><i class="fas fa-file-signature"></i> Nenhum contrato{% if busca %} para "{{ busca }}"{% endif %}.</div>{% endif %}
+{% endif %}
+</div>
+
+<!-- Novo / editar contrato -->
+<div id="hoModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:760px;">
+        <div class="modal-header">
+            <h3 id="ho-titulo">Contrato de honorários</h3>
+            <button class="modal-close" type="button" onclick="hoFechar()">&times;</button>
+        </div>
+        <form id="ho-form" method="POST" action="{{ url_for('financeiro.honorarios_salvar') }}">
+            <input type="hidden" name="contrato_id" id="ho-id">
+            <input type="hidden" name="cliente_id" id="ho-cliente-id">
+            <input type="hidden" name="aba" value="{{ aba }}">
+            <div class="modal-body">
+                <div id="ho-cli-busca" class="form-group" style="position:relative;">
+                    <label>Empresa</label>
+                    <input type="text" id="ho-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
+                    <div id="ho-sug" class="ho-sug" style="display:none;"></div>
+                </div>
+                <div id="ho-cli" class="ho-cli" style="display:none;">
+                    <i class="fas fa-building" style="color:#15803d;"></i>
+                    <div><strong id="ho-cli-nome"></strong><div class="ho-num" id="ho-cli-num"></div></div>
+                    <button type="button" class="btn btn-outline btn-sm" id="ho-cli-trocar" style="margin-left:auto;" onclick="hoTrocarCliente()">Trocar</button>
+                </div>
+
+                <p class="ho-sec">Discriminações <span class="ho-num" style="letter-spacing:0; text-transform:none; font-weight:500;">a soma é o valor do contrato</span></p>
+                <table class="ho-itens" id="ho-itens">
+                    <tbody></tbody>
+                </table>
+                <button type="button" class="btn btn-outline btn-sm" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
+                <div class="ho-soma">Total mensal: <span id="ho-total">R$ 0,00</span></div>
+
+                <p class="ho-sec">Vencimento e vigência</p>
+                <div class="ho-grid3">
+                    <div class="form-group"><label>Vence no dia</label><input type="number" name="dia_vencimento" id="ho-dia" class="form-control" min="1" max="31" required><small class="ho-num">do mês seguinte à competência</small></div>
+                    <div class="form-group"><label>Início</label><input type="date" name="inicio" id="ho-inicio" class="form-control" required></div>
+                    <div class="form-group"><label>Fim (se houver)</label><input type="date" name="fim" id="ho-fim" class="form-control"></div>
+                </div>
+                <div class="ho-grid2" style="margin-top:10px;">
+                    <div class="form-group"><label>Plano / faixa (opcional)</label><input type="text" name="plano" id="ho-plano" class="form-control" placeholder="ex.: Mensalidade Rede Pavão"></div>
+                    <div class="form-group ho-chk" style="padding-top:26px;">
+                        <label><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked> Emite nota fiscal</label>
+                        <label><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked> Emite boleto</label>
+                    </div>
+                </div>
+
+                <p class="ho-sec">13º honorário <span class="ho-num" style="letter-spacing:0; text-transform:none; font-weight:500;">sempre proporcional aos meses de casa</span></p>
+                <div class="ho-grid2">
+                    <div class="form-group"><label>Modo</label>
+                        <select name="decimo_tipo" id="ho-decimo" class="form-control" onchange="hoDecimo()">
+                            {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group ho-dec" id="ho-dec-box"><label>Frações (competência · %)</label>
+                        <div id="ho-dec-rows"></div>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
+                    </div>
+                </div>
+
+                <p class="ho-sec">Reajuste</p>
+                <div class="ho-grid3">
+                    <div class="form-group"><label>Regra</label>
+                        <select name="reajuste_tipo" id="ho-reajuste" class="form-control">
+                            {% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Próximo reajuste</label><input type="date" name="proximo_reajuste" id="ho-prox" class="form-control"><small class="ho-num">salário mínimo: em branco = primeiro janeiro após 12 meses</small></div>
+                    <div class="form-group"><label>Observação</label><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" placeholder="índice, degraus, motivo"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="hoFechar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar contrato</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<form id="ho-form-encerrar" method="POST" style="display:none;"><input type="hidden" name="fim" id="ho-enc-fim"></form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script>
+var HO_SERVICOS = {{ servicos | tojson }};
+var HO_SERV_HON = {{ SERVICO_HONORARIOS }};
+function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function hoNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+function hoSoma() {
+    var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); });
+    document.getElementById('ho-total').textContent = brl(t);
+}
+function hoAddItem(desc, valor, servico) {
+    var tb = document.querySelector('#ho-itens tbody'); var tr = document.createElement('tr');
+    var opts = '<option value="">— serviço (opcional) —</option>' + HO_SERVICOS.map(function (s) { return '<option value="' + s.id + '"' + (String(s.id) === String(servico) ? ' selected' : '') + '>' + s.nome + '</option>'; }).join('');
+    tr.innerHTML = '<td style="width:44%"><input type="text" name="item_desc" class="form-control" placeholder="Honorários contábeis" value=""></td>'
+        + '<td style="width:30%"><select name="item_servico" class="form-control">' + opts + '</select></td>'
+        + '<td style="width:20%"><input type="text" name="item_valor" class="form-control dinheiro" value=""></td>'
+        + '<td style="width:6%"><button type="button" class="btn btn-outline btn-sm" title="Tirar" onclick="this.closest(\'tr\').remove(); hoSoma();"><i class="fas fa-times"></i></button></td>';
+    tb.appendChild(tr);
+    tr.querySelector('[name=item_desc]').value = desc || '';
+    var iv = tr.querySelector('[name=item_valor]'); iv.value = valor ? Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
+    if (window.Dinheiro && window.Dinheiro.ligar) window.Dinheiro.ligar();
+    iv.addEventListener('input', hoSoma); iv.addEventListener('change', hoSoma);
+    hoSoma();
+}
+function hoAddDec(mes, pct) {
+    var d = document.createElement('div'); d.style.cssText = 'display:flex; gap:6px; margin-bottom:6px;';
+    var meses = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    var o = ''; for (var m = 1; m <= 12; m++) o += '<option value="' + m + '"' + (m === (mes || 11) ? ' selected' : '') + '>' + meses[m] + '</option>';
+    d.innerHTML = '<select name="dec_mes" class="form-control" style="width:90px;">' + o + '</select><input type="number" name="dec_pct" class="form-control" style="width:90px;" step="0.01" min="0" max="100" placeholder="%" value="' + (pct || '') + '"><button type="button" class="btn btn-outline btn-sm" onclick="this.parentNode.remove()"><i class="fas fa-times"></i></button>';
+    document.getElementById('ho-dec-rows').appendChild(d);
+}
+function hoDecimo() { document.getElementById('ho-dec-box').style.display = document.getElementById('ho-decimo').value === 'PERSONALIZADO' ? 'block' : 'none'; }
+function hoLimpar() {
+    ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-plano', 'ho-prox', 'ho-reaj-obs'].forEach(function (i) { document.getElementById(i).value = ''; });
+    document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
+    document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
+    document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
+    document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
+    hoDecimo();
+}
+function hoSetCliente(id, nome, numero) {
+    document.getElementById('ho-cliente-id').value = id || '';
+    document.getElementById('ho-cli-nome').textContent = nome || ''; document.getElementById('ho-cli-num').textContent = numero ? 'nº ' + numero : '';
+    document.getElementById('ho-cli').style.display = id ? 'flex' : 'none'; document.getElementById('ho-cli-busca').style.display = id ? 'none' : 'block';
+}
+function hoTrocarCliente() { hoSetCliente(null); document.getElementById('ho-cli-q').focus(); }
+function hoNovo(id, nome, numero) {
+    hoLimpar(); document.getElementById('ho-titulo').textContent = 'Novo contrato de honorários';
+    hoSetCliente(id, nome, numero); hoAddItem('Honorários contábeis', '', HO_SERV_HON);
+    document.getElementById('ho-cli-trocar').style.display = 'inline-flex';
+    document.getElementById('hoModal').style.display = 'block';
+    setTimeout(function () { (id ? document.querySelector('#ho-itens [name=item_valor]') : document.getElementById('ho-cli-q')).focus(); }, 60);
+}
+function hoEditar(cid) {
+    fetch('/financeiro/honorarios/' + cid + '/json').then(function (r) { return r.json(); }).then(function (c) {
+        hoLimpar(); document.getElementById('ho-titulo').textContent = 'Contrato de honorários';
+        document.getElementById('ho-id').value = c.id; hoSetCliente(c.cliente_id, c.nome_razao_social, c.numero_cliente);
+        document.getElementById('ho-cli-trocar').style.display = 'none';
+        (c.itens || []).forEach(function (i) { hoAddItem(i.descricao, i.valor, i.servico_id); });
+        document.getElementById('ho-dia').value = c.dia_vencimento; document.getElementById('ho-inicio').value = c.inicio || '';
+        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-plano').value = c.plano || '';
+        document.getElementById('ho-decimo').value = c.decimo_tipo || 'NENHUM';
+        var parc = c.decimo_parcelas; if (typeof parc === 'string') { try { parc = JSON.parse(parc); } catch (e) { parc = []; } }
+        (parc || []).forEach(function (p) { hoAddDec(p.mes, p.pct); });
+        document.getElementById('ho-reajuste').value = c.reajuste_tipo || 'SALARIO_MINIMO';
+        document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
+        document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
+        hoDecimo(); document.getElementById('hoModal').style.display = 'block';
+    });
+}
+function hoFechar() { document.getElementById('hoModal').style.display = 'none'; }
+function hoEncerrar(cid, nome) {
+    var fim = prompt('Encerrar o contrato de ' + nome + '.\nData do fim (AAAA-MM-DD):', '{{ hoje.isoformat() }}');
+    if (!fim) return;
+    var f = document.getElementById('ho-form-encerrar'); f.action = '/financeiro/honorarios/' + cid + '/encerrar';
+    document.getElementById('ho-enc-fim').value = fim; f.submit();
+}
+document.getElementById('ho-form').addEventListener('submit', function (e) {
+    if (!document.getElementById('ho-cliente-id').value) { e.preventDefault(); alert('Escolha a empresa.'); return; }
+    var ok = false; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { if (hoNum(i.value) > 0) ok = true; });
+    if (!ok) { e.preventDefault(); alert('Informe ao menos uma discriminação com valor.'); }
+});
+// busca da empresa (mesma rota das notas)
+(function () {
+    var q = document.getElementById('ho-cli-q'), sug = document.getElementById('ho-sug'), t;
+    q.addEventListener('input', function () {
+        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
+        t = setTimeout(function () {
+            fetch('/financeiro/notas/buscar?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+                sug.innerHTML = ''; (lista || []).forEach(function (c) {
+                    var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome + '</strong> <span class="ho-num">' + (c.cpf_cnpj || '') + (c.situacao !== 'ATIVO' ? ' · ' + c.situacao : '') + '</span>';
+                    d.onclick = function () { hoSetCliente(c.id, c.nome, c.numero_cliente); sug.style.display = 'none'; };
+                    sug.appendChild(d);
+                });
+                sug.style.display = sug.children.length ? 'block' : 'none';
+            });
+        }, 250);
+    });
+    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hoFechar(); });
+})();
+</script>
+{% endblock %}

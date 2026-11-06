@@ -310,6 +310,32 @@ def montar(boleto, nota, empresa_nome, com_anexos=False, telefone=''):
     return assunto, html, '\n'.join(t), anexos, faltas
 
 
+def emails_financeiro(cliente_id):
+    """E-mails dos contatos ativos da empresa que recebem o departamento Financeiro (id 8), sem repetir."""
+    if not cliente_id:
+        return []
+    rows = execute_query(
+        """SELECT DISTINCT LOWER(TRIM(c.email)) AS email FROM contatos_clientes c
+             JOIN contatos_departamentos cd ON cd.contato_id = c.id
+            WHERE c.cliente_id = %s AND c.ativo = 1 AND cd.departamento_id = 8 AND c.email LIKE '%%@%%'
+            ORDER BY email""", (cliente_id,), fetch=True) or []
+    return [r['email'] for r in rows]
+
+
+def emails_financeiro_do_boleto(b):
+    """O cliente do boleto vem pelo título; sem título, pelo CPF/CNPJ do pagador."""
+    cliente_id = None
+    if b.get('titulo_id'):
+        t = execute_query('SELECT cliente_id FROM fin_titulos WHERE id = %s', (b['titulo_id'],), fetch=True, fetch_one=True)
+        cliente_id = (t or {}).get('cliente_id')
+    if not cliente_id and b.get('pagador_doc'):
+        doc = ''.join(ch for ch in str(b['pagador_doc']) if ch.isdigit())
+        c = execute_query("SELECT id FROM clientes WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '/', ''), '-', '') = %s "
+                          "ORDER BY (situacao = 'ATIVO') DESC LIMIT 1", (doc,), fetch=True, fetch_one=True)
+        cliente_id = (c or {}).get('id')
+    return emails_financeiro(cliente_id)
+
+
 def enviar_boleto(boleto_id, para=None, usuario_id=None):
     """Manda o e-mail de cobrança do boleto pela caixa da conta. Devolve (ok, mensagem para a tela)."""
     from models.fin_cobranca import FinBoleto, FinCobrancaConta
@@ -320,9 +346,14 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
         return False, 'Boleto não encontrado.'
     if b.get('situacao') in ('canceled', 'erro'):
         return False, 'Este boleto está cancelado; não vai por e-mail.'
+    # Regra do Anderson (05/11/2026): sem destinatário escolhido, a cobrança vai para TODOS os contatos
+    # da empresa marcados no departamento Financeiro; o e-mail do cadastro (o do CNPJ) é só o recurso
+    # de quem não tem contato financeiro.
+    if not para:
+        para = ', '.join(emails_financeiro_do_boleto(b)) or None
     destinos = [p.strip().lower() for p in str(para or b.get('pagador_email') or '').replace(';', ',').split(',') if p.strip()]
     if not destinos:
-        return False, 'O pagador não tem e-mail: informe um endereço para enviar.'
+        return False, 'A empresa não tem contato do Financeiro com e-mail nem e-mail no cadastro: informe um endereço para enviar.'
     if any('@' not in p for p in destinos):
         return False, 'Há um endereço de e-mail inválido.'
     try:

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Lote mensal - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Lote mensal (06/11/2026) */
+.lo-barra { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
+.lo-sub { display:block; font-size:11px; color:#7d968a; }
+.lo-item { display:block; font-size:12px; color:#334155; }
+.lo-item.decimo { color:#7c3aed; } .lo-item.lancamento { color:#0369a1; }
+.lo-falta { color:#b91c1c; font-weight:600; }
+.lo-ok { color:#15803d; }
+.lo-prog { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px; margin-bottom:14px; display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+.lo-prog-bar { flex:1; min-width:200px; height:10px; background:#eef2ef; border-radius:999px; overflow:hidden; }
+.lo-prog-bar > div { height:100%; background:linear-gradient(90deg,#16a34a,#22c55e); width:0; transition:width .4s; }
+.lo-sel { width:18px; height:18px; }
+.lo-emitido { background:#ecfdf3; border:1px solid #bbf7d0; color:#15803d; border-radius:12px; padding:10px 14px; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-layer-group" style="color: var(--primary-green);"></i> Lote mensal</h1>
+        <p class="page-subtitle">Honorários + 13º + lançamentos do mês, numa cobrança por empresa: nota, boleto e e-mail aos contatos do Financeiro</p>
+    </div>
+    <div class="page-actions">
+        <form method="GET" action="{{ url_for('financeiro.lote') }}" style="display:flex; gap:8px; align-items:center;">
+            <label style="margin:0;">Competência</label>
+            <select name="competencia" class="form-control" style="width:auto;" onchange="this.form.submit()">
+                {% for m in meses %}<option value="{{ m.strftime('%Y-%m') }}" {{ 'selected' if m == competencia }}>{{ m.strftime('%m/%Y') }}</option>{% endfor %}
+                {% if competencia not in meses %}<option value="{{ competencia.strftime('%Y-%m') }}" selected>{{ competencia.strftime('%m/%Y') }}</option>{% endif %}
+            </select>
+        </form>
+    </div>
+</div>
+
+<div class="fin-kpis">
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Empresas no lote</div><div class="fin-kpi-val">{{ tot.empresas }}</div><div class="fin-kpi-pe">contratos ativos em {{ competencia.strftime('%m/%Y') }}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Total a cobrar</div><div class="fin-kpi-val">{{ tot.valor | float | format_currency }}</div><div class="fin-kpi-pe">{{ tot.com_decimo }} com 13º · {{ tot.com_lanc }} com lançamento</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Sem contato Financeiro</div><div class="fin-kpi-val">{{ tot.sem_contato }}</div><div class="fin-kpi-pe">o e-mail vai para o do cadastro</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-lbl">Já cobradas</div><div class="fin-kpi-val">{{ tot.feitos }}</div><div class="fin-kpi-pe">{{ tot.erros }} com erro</div></div>
+</div>
+
+{% if lote %}
+<div class="lo-prog" id="lo-prog" data-lote="{{ lote.id }}" data-rodando="{{ 1 if status and status.rodando else 0 }}">
+    <strong>Lote {{ competencia.strftime('%m/%Y') }} · {{ 'EMITIDO' if lote.status == 'EMITIDO' else 'aberto' }}</strong>
+    <div class="lo-prog-bar"><div id="lo-bar"></div></div>
+    <span id="lo-txt">{{ status.ok or 0 }} cobradas · {{ status.erro or 0 }} com erro · {{ status.pendente or 0 }} em andamento</span>
+    {% if lote.status == 'EMITIDO' %}
+    <form method="POST" action="{{ url_for('financeiro.lote_reabrir', lote_id=lote.id) }}" onsubmit="return confirm('Reabrir o lote? Lançamentos novos voltam a cair nesta competência.')"><button class="btn btn-outline btn-sm"><i class="fas fa-lock-open"></i> Reabrir</button></form>
+    {% endif %}
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('financeiro.lote_emitir') }}" id="lo-form" onsubmit="return loConfirma()">
+<input type="hidden" name="competencia" value="{{ competencia.strftime('%Y-%m') }}">
+<div class="lo-barra">
+    <label style="margin:0; display:flex; gap:6px; align-items:center;"><input type="checkbox" class="lo-sel" id="lo-todos" onchange="loTodos(this)"> marcar todas que faltam</label>
+    <span class="lo-sub" id="lo-cont">nenhuma marcada</span>
+    <span style="flex:1;"></span>
+    <button type="submit" class="btn btn-primary" id="lo-btn" {{ 'disabled' if status and status.rodando }}><i class="fas fa-paper-plane"></i> Emitir as marcadas</button>
+</div>
+<div class="fin-caixa">
+    {% if linhas %}
+    <div class="fin-rolar">
+        <table class="fin-tab" id="lo-tab">
+            <thead><tr><th></th><th>Nº</th><th>Empresa</th><th>O que vai na cobrança</th><th style="text-align:right;">Total</th><th>Vence</th><th>Nota</th><th>E-mail para</th><th>Situação</th></tr></thead>
+            <tbody>
+            {% for l in linhas %}
+            {% set feito = l.feito %}
+            <tr>
+                <td>{% if not feito or feito.status != 'ok' %}<input type="checkbox" class="lo-sel" name="cliente" value="{{ l.cliente_id }}" onchange="loConta()">{% else %}<i class="fas fa-check lo-ok"></i>{% endif %}</td>
+                <td class="fin-num fin-td-meta">{{ l.numero }}</td>
+                <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=l.cliente_id) }}">{{ l.empresa }}</a>{% if l.contrato.plano %}<span class="lo-sub">{{ l.contrato.plano }}</span>{% endif %}</td>
+                <td>{% for i in l.itens %}<span class="lo-item {{ i.origem }}">{{ i.nome }} · {{ i.valor | float | format_currency }}</span>{% endfor %}</td>
+                <td class="fin-valor fin-td-valor"><strong>{{ l.total | float | format_currency }}</strong></td>
+                <td class="fin-td-oculta">{{ l.vencimento.strftime('%d/%m/%Y') }}</td>
+                <td class="fin-td-oculta">{{ 'nota + boleto' if l.nota and l.boleto else ('só boleto' if l.boleto else ('só nota' if l.nota else '—')) }}</td>
+                <td class="fin-td-oculta">{% if l.contatos %}<span class="lo-ok">{{ l.contatos }} contato{{ 's' if l.contatos > 1 }}</span>{% else %}<span class="lo-falta" title="Nenhum contato do Financeiro com e-mail">e-mail do cadastro</span>{% endif %}</td>
+                <td>{% if feito %}
+                    {% if feito.status == 'ok' %}<span class="fin-pilula liquidado">cobrada</span>{% if feito.boleto_id %}<span class="lo-sub"><a href="{{ url_for('financeiro.boleto_detalhe', boleto_id=feito.boleto_id) }}">boleto nº {{ feito.boleto_id }}</a>{% if feito.nfse_id %} · nota {{ feito.nfse_id }}{% endif %}</a></span>{% endif %}{% if feito.email %}<span class="lo-sub">{{ feito.email }}</span>{% endif %}
+                    {% elif feito.status == 'erro' %}<span class="fin-pilula cancelado">erro</span><span class="lo-sub">{{ feito.erro }}</span>
+                    {% elif feito.status == 'pulado' %}<span class="fin-pilula alerta">pulada</span><span class="lo-sub">{{ feito.erro }}</span>
+                    {% else %}<span class="fin-pilula aberto">em andamento</span>{% endif %}
+                    {% else %}<span class="lo-sub">a emitir</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="fin-vazio"><i class="fas fa-layer-group"></i> Nenhum contrato ativo na competência {{ competencia.strftime('%m/%Y') }}.</div>{% endif %}
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loConta() {
+    var n = document.querySelectorAll('#lo-tab input[name=cliente]:checked').length;
+    document.getElementById('lo-cont').textContent = n ? n + ' marcada(s)' : 'nenhuma marcada';
+}
+function loTodos(c) { document.querySelectorAll('#lo-tab input[name=cliente]').forEach(function (i) { i.checked = c.checked; }); loConta(); }
+function loConfirma() {
+    var n = document.querySelectorAll('#lo-tab input[name=cliente]:checked').length;
+    if (!n) { alert('Marque as empresas que vão ser cobradas.'); return false; }
+    return confirm('Emitir a cobrança de ' + n + ' empresa(s) agora? Sai nota (quando o contrato emite), boleto na Efí e e-mail aos contatos do Financeiro.');
+}
+(function () {
+    var p = document.getElementById('lo-prog'); if (!p || p.dataset.rodando !== '1') return;
+    function tick() {
+        fetch('/financeiro/lote/' + p.dataset.lote + '/status').then(function (r) { return r.json(); }).then(function (s) {
+            var tot = s.total || 0, feito = (s.ok || 0) + (s.erro || 0) + (s.pulado || 0);
+            document.getElementById('lo-bar').style.width = (tot ? Math.round(100 * feito / tot) : 0) + '%';
+            document.getElementById('lo-txt').textContent = (s.ok || 0) + ' cobradas · ' + (s.erro || 0) + ' com erro · ' + (s.pendente || 0) + ' em andamento';
+            if (s.rodando) setTimeout(tick, 4000); else location.reload();
+        }).catch(function () { setTimeout(tick, 6000); });
+    }
+    tick();
+})();
+</script>
+{% endblock %}

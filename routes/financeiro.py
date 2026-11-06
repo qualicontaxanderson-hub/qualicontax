@@ -3172,3 +3172,6 @@ def _preserve_filters():
 # e ``_empresas_ctx`` daqui.
 from routes import financeiro_notas  # noqa: E402,F401
 from routes import financeiro_cobranca  # noqa: E402,F401  (cobrança Efí e boletos, 02/11/2026)
+from routes import financeiro_honorarios  # noqa: E402,F401  (contratos de honorários, 06/11/2026)
+from routes import financeiro_lancamentos  # noqa: E402,F401  (lançamentos avulsos, aprovação e comissões, 06/11/2026)
+from routes import financeiro_lote  # noqa: E402,F401  (lote mensal de honorários, 06/11/2026)

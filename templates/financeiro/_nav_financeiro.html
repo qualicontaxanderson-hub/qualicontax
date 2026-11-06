@@ -11,6 +11,9 @@
     ('financeiro.index',             '/financeiro/',             'INÍCIO'),
     ('financeiro.titulos',           '/financeiro/titulos',      'TÍTULOS'),
     ('financeiro.cobrancas',         '/financeiro/cobranca',     'COBRANÇAS'),
+    ('financeiro.honorarios',        '/financeiro/honorarios',   'HONORÁRIOS'),
+    ('financeiro.lancamentos',       '/financeiro/lancamentos',  'LANÇAMENTOS'),
+    ('financeiro.lote',              '/financeiro/lote',         'LOTE MENSAL'),
     ('financeiro.extrato',           '/financeiro/extrato',      'EXTRATO'),
     ('financeiro.contas',            '/financeiro/contas',       'CONTAS'),
     ('financeiro.programacoes',      '/financeiro/programacoes', 'PROGRAMAÇÕES'),
@@ -32,7 +35,7 @@
     <div class="nav-fiscal-track">
         {% for _ep, _pref, _label in _abas %}
         {# NOTAS FISCAIS nasceu só-admin (01/11/2026): a aba só aparece para quem o portão deixa entrar #}
-        {% if _ep != 'financeiro.cobrancas' or pode_rota(_ep) %}
+        {% if _ep not in ('financeiro.cobrancas', 'financeiro.honorarios', 'financeiro.lancamentos', 'financeiro.lote') or pode_rota(_ep) %}
         <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
            href="{{ url_for(_ep) }}"
            {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>

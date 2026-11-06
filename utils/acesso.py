@@ -195,6 +195,26 @@ MAPA = {
     # --- Financeiro ---------------------------------------------------------
     'financeiro.recebimento_excluir':      'financeiro.recebimento',
     'financeiro.recebimento_excluir_lote': 'financeiro.recebimento',
+    # Honorários (06/11/2026): a permissão nasce sem perfil — só admin até marcar em Perfis
+    'financeiro.honorarios':               'financeiro.honorarios',
+    'financeiro.honorarios_json':          'financeiro.honorarios',
+    'financeiro.honorarios_salvar':        'financeiro.honorarios',
+    'financeiro.honorarios_encerrar':      'financeiro.honorarios',
+    # Lançamentos de serviço e comissões (06/11/2026): quem lança vê só o seu; aprovar/pagar/acordos = admin na rota
+    'financeiro.lancamentos':              'financeiro.lancamentos',
+    'financeiro.lancamento_novo':          'financeiro.lancamentos',
+    'financeiro.lancamento_aprovar':       'financeiro.lancamentos',
+    'financeiro.lancamento_reprovar':      'financeiro.lancamentos',
+    'financeiro.lancamento_cancelar':      'financeiro.lancamentos',
+    'financeiro.comissoes_fechar':         'financeiro.lancamentos',
+    'financeiro.fechamento_pagar':         'financeiro.lancamentos',
+    'financeiro.acordo_novo':              'financeiro.lancamentos',
+    'financeiro.acordo_encerrar':          'financeiro.lancamentos',
+    # Lote mensal (06/11/2026): só o Anderson emite o mensal — permissão sem perfil
+    'financeiro.lote':                     'financeiro.lote',
+    'financeiro.lote_emitir':              'financeiro.lote',
+    'financeiro.lote_status':              'financeiro.lote',
+    'financeiro.lote_reabrir':             'financeiro.lote',
 
     # --- Relatórios ---------------------------------------------------------
     'relatorios.processos_report':     'relatorios.processos',

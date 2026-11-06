@@ -18,6 +18,7 @@ from models.endereco_cliente import EnderecoCliente
 from utils.cnpj_receita import limpar_logradouro
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
 from models.cliente_responsavel import ClienteResponsavel
+from models.fin_contrato import FinContrato
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusada_pj
 from utils.qualificacao import qualificacao
@@ -1287,6 +1288,7 @@ def detalhes(id):
         f_contadores_disp = executor.submit(ClienteContador.listar_contadores)
         f_responsaveis = executor.submit(ClienteResponsavel.por_cliente, id)
         f_funcionarios = executor.submit(ClienteResponsavel.usuarios_disponiveis)
+        f_contrato = executor.submit(FinContrato.por_cliente, id)
 
     enderecos = f_enderecos.result()
     contatos = f_contatos.result()
@@ -1400,6 +1402,7 @@ def detalhes(id):
                          departamentos_contato=ContatoCliente.departamentos_disponiveis(),
                          responsaveis=f_responsaveis.result(),
                          funcionarios=f_funcionarios.result(),
+                         contrato=(f_contrato.result() or [None])[0],
                          areas_atendimento=AREAS_ATENDIMENTO)
 
 

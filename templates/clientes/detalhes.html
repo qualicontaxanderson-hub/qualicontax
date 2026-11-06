@@ -539,6 +539,24 @@
                         </dl>
                     </div>
 
+                    <!-- Honorários (06/11/2026): o contrato mensal da empresa, resumido; edição no Financeiro -->
+                    <div class="fv-card" data-copiar-bloco>
+                        <p class="fv-seclabel">Honorários
+                            {% if pode_rota('financeiro.honorarios') %}<a class="btn btn-outline rs-btn" style="order:2; text-decoration:none; text-transform:none; letter-spacing:0; font-weight:600;" href="{{ url_for('financeiro.honorarios', aba='sem' if not contrato else 'com', busca=cliente.numero_cliente or cliente.nome_razao_social) }}"><i class="fas fa-file-signature"></i> {{ 'Cadastrar' if not contrato else 'Editar' }}</a>{% endif %}</p>
+                        {% if contrato %}
+                        <dl class="fv-dl">
+                            <dt>Valor mensal</dt><dd class="fv-num-hl">{{ contrato.valor | float | format_currency }}</dd>
+                            <dt>Vencimento</dt><dd>dia {{ contrato.dia_vencimento }} do mês seguinte à competência</dd>
+                            <dt>Desde</dt><dd>{{ contrato.inicio.strftime('%m/%Y') if contrato.inicio else '—' }}{% if contrato.fim %} até {{ contrato.fim.strftime('%m/%Y') }}{% endif %}</dd>
+                            <dt>13º</dt><dd data-nocopiar>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas (vencem em novembro e dezembro){% elif contrato.decimo_tipo == 'UNICA' %}parcela única (vence em dezembro){% elif contrato.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}sem 13º{% endif %}</dd>
+                            <dt>Reajuste</dt><dd data-nocopiar>{% if contrato.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% if contrato.proximo_reajuste %}, próximo em {{ contrato.proximo_reajuste.strftime('%m/%Y') }}{% endif %}{% else %}{{ contrato.reajuste_tipo | lower | replace('_', ' ') }}{% if contrato.reajuste_obs %} · {{ contrato.reajuste_obs }}{% endif %}{% endif %}</dd>
+                            {% if contrato.situacao != 'ATIVO' %}<dt>Situação</dt><dd data-nocopiar><span class="rs-falta">{{ contrato.situacao | capitalize }}</span></dd>{% endif %}
+                        </dl>
+                        {% else %}
+                        <p style="margin:0; color:#b91c1c; font-weight:600; font-size:13px;"><i class="fas fa-triangle-exclamation"></i> sem contrato de honorários</p>
+                        {% endif %}
+                    </div>
+
                     <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento,
                          em mosaico; departamento vazio vira azulejo vermelho que abre a janela já nele -->
                     {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
