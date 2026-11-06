@@ -9,10 +9,59 @@
 .ct-dep { display:inline-block; background:#e8f3ec; color:#1f6f43; border:1px solid #cfe5d7; border-radius:999px; font-size:11px; padding:1px 8px; margin:1px 3px 1px 0; }
 .ct-dep-todos { background:#1f6f43; color:#fff; border-color:#1f6f43; }
 .ct-falta { color:#b45309; font-size:12px; white-space:nowrap; }
-.rs-falta { color:#b91c1c; font-weight:600; }
-.rs-inativo { color:#b45309; font-size:12px; }
-.rs-btn { margin-left:auto; font-size:11px; padding:3px 10px; }
-.fv-seclabel .rs-btn { font-weight:600; letter-spacing:0; text-transform:none; }
+/* Responsáveis no escritório — mosaico de 7 departamentos + janela (redesenho 05/11/2026) */
+.rs-card { grid-column:1 / -1; }
+.rs-head { display:flex; align-items:center; gap:10px; margin:0 0 14px; flex-wrap:wrap; }
+.rs-title { font-size:10px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; color:#15803d; }
+.rs-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; border-radius:999px; padding:2px 9px; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+.rs-badge-ok { background:#ecfdf3; color:#15803d; border-color:#bbf7d0; }
+.rs-sp { flex:1; }
+.rs-head .cp-tudo { margin-left:0; }
+.rs-btn { order:2; font-size:12px; font-weight:600; padding:5px 12px; border-radius:9px; }
+.rs-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
+.rs-tile { display:flex; flex-direction:column; gap:10px; padding:12px; border:1px solid #e3ece7; border-radius:12px; background:#f8fbf9; min-width:0; text-align:left; font:inherit; }
+.rs-dep { display:flex; align-items:center; gap:6px; font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#7d968a; line-height:1.2; }
+.rs-dep i { color:#15803d; width:13px; text-align:center; font-size:11px; }
+.rs-who { display:flex; align-items:center; gap:9px; min-width:0; }
+.rs-av { flex:0 0 34px; width:34px; height:34px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; background:var(--rs-c, #15803d); letter-spacing:.3px; }
+.rs-txt { min-width:0; line-height:1.25; }
+.rs-nome { font-size:13px; font-weight:600; color:#0f172a; }
+.rs-inativo { display:block; font-size:11px; color:#b45309; margin-top:2px; }
+.rs-tile-falta { background:#fff7f7; border:1px dashed #fca5a5; cursor:pointer; transition:background .15s, border-color .15s; }
+.rs-tile-falta:hover { background:#fff1f1; border-color:#f87171; }
+.rs-tile-falta .rs-av { background:#fee2e2; color:#dc2626; }
+.rs-tile-falta .rs-nome { color:#b91c1c; }
+.rs-escolher { display:block; font-size:11px; font-weight:600; color:#b91c1c; margin-top:2px; }
+/* janela */
+.rs-modal { max-width:680px; border-radius:16px; overflow:hidden; }
+.rs-mhead { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); }
+.rs-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
+.rs-mhead h3 { margin:0; font-size:16px; color:#fff; }
+.rs-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
+.rs-mhead .modal-close { margin-left:auto; color:#d7f3e2; }
+.rs-mhead .modal-close:hover { background:rgba(255,255,255,.14); color:#fff; }
+.rs-mbody { padding:14px 16px 8px; max-height:calc(100vh - 280px); overflow:auto; }
+.rs-row { display:grid; grid-template-columns:38px 150px 1fr; align-items:center; gap:12px; padding:8px 10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; transition:background .15s, border-color .15s; }
+.rs-row:hover { background:#f8fbf9; }
+.rs-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; }
+.rs-rlbl { font-size:13px; font-weight:700; color:#0f172a; margin:0; }
+.rs-rlbl small { display:block; font-size:11px; font-weight:500; color:#94a3b8; }
+.rs-sel { position:relative; display:flex; align-items:center; margin:0; }
+.rs-sel .rs-av { position:absolute; left:8px; width:26px; height:26px; flex-basis:26px; font-size:10px; pointer-events:none; }
+.rs-sel select { width:100%; appearance:none; -webkit-appearance:none; height:42px; padding:0 36px 0 42px; border:1px solid #dbe7df; border-radius:11px; background:#fff; font-size:13px; font-weight:600; color:#0f172a; cursor:pointer; }
+.rs-sel select:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+.rs-chev { position:absolute; right:14px; font-size:11px; color:#64748b; pointer-events:none; }
+.rs-row-falta { background:#fff7f7; border-color:#fecaca; }
+.rs-row-falta:hover { background:#fff1f1; }
+.rs-row-falta .rs-rico, .rs-row-falta .rs-av { background:#fee2e2; color:#dc2626; }
+.rs-row-falta select { border-color:#fca5a5; color:#b91c1c; }
+.rs-mfoot { display:flex; align-items:center; gap:10px; padding:14px 22px; border-top:1px solid #eef2ef; background:#fafcfb; flex-wrap:wrap; }
+.rs-mnote { display:flex; align-items:center; gap:7px; font-size:12px; color:#15803d; margin-right:auto; }
+.rs-mnote-erro { color:#b91c1c; font-weight:600; }
+.rs-mfoot .btn { border-radius:10px; padding:9px 18px; font-weight:600; }
+.rs-shake { animation:rs-shake .35s; }
+@keyframes rs-shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-5px); } 75% { transform:translateX(5px); } }
+@media (max-width:640px) { .rs-row { grid-template-columns:38px 1fr; } .rs-row .rs-sel { grid-column:1 / -1; } }
 /* tabela de contatos cabe a 1380px: padding menor, e-mail quebra, chips não quebram (05/11/2026) */
 #contatos .table th, #contatos .table td { padding:10px 8px; vertical-align:top; font-size:13px; }
 #contatos .table td:nth-child(3) { word-break:break-all; }
@@ -217,6 +266,11 @@
 {% endblock %}
 
 {% block content %}
+{# Responsáveis no escritório: ícone por departamento, cor da bolinha pelo id do usuário e iniciais do nome #}
+{% set rs_icones = {'Contábil': 'fa-book', 'Fiscal': 'fa-file-invoice-dollar', 'Pessoal': 'fa-users', 'Financeiro': 'fa-coins',
+                    'Legalização': 'fa-stamp', 'Certificado Digital': 'fa-certificate', 'Visita': 'fa-handshake'} %}
+{% set rs_cores = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'] %}
+{% macro rs_ini(nome) %}{% set p = (nome or '').split() %}{% if p %}{{ (p[0][0] ~ (p[-1][0] if p|length > 1 else ''))|upper }}{% else %}?{% endif %}{% endmacro %}
 {# Sem .cliente-view-page: aquele wrapper tem max-width:1400px + padding:20px, e o
    padding encaixotava o hero — o -32px do .ef-hero cancela o padding do .content
    (32px), não o do wrapper, então sobravam 20px de faixa clara nas duas bordas.
@@ -485,17 +539,39 @@
                         </dl>
                     </div>
 
-                    <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento -->
-                    <div class="fv-card" data-copiar-bloco>
-                        <p class="fv-seclabel">Responsáveis no escritório
-                            <button type="button" class="btn btn-outline rs-btn" onclick="abrirResponsaveis()" title="Trocar quem responde por cada departamento"><i class="fas fa-pen"></i> Editar</button></p>
-                        <dl class="fv-dl">
+                    <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento,
+                         em mosaico; departamento vazio vira azulejo vermelho que abre a janela já nele -->
+                    {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
+                    <div class="fv-card rs-card" id="rs-card" data-copiar-bloco>
+                        <div class="rs-head" data-copiar-cab>
+                            <span class="rs-title">Responsáveis no escritório</span>
+                            {% if rs_faltam %}<span class="rs-badge"><i class="fas fa-circle-exclamation"></i> {{ rs_faltam }} sem responsável</span>
+                            {% else %}<span class="rs-badge rs-badge-ok"><i class="fas fa-circle-check"></i> todos definidos</span>{% endif %}
+                            <span class="rs-sp"></span>
+                            <button type="button" class="btn btn-outline rs-btn" onclick="abrirResponsaveis()" title="Trocar quem responde por cada departamento"><i class="fas fa-pen"></i> Editar</button>
+                        </div>
+                        <div class="rs-grid">
                             {% for r in responsaveis %}
-                            <dt>{{ r.departamento }}</dt>
-                            <dd{% if not r.usuario_nome %} data-nocopiar{% endif %}>{% if r.usuario_nome %}{{ r.usuario_nome }}{% if r.usuario_situacao == 'INATIVO' %} <span class="rs-inativo">(usuário inativo)</span>{% endif %}
-                                {% else %}<span class="rs-falta">sem responsável</span>{% endif %}</dd>
+                            {% if r.usuario_id %}
+                            <div class="rs-tile">
+                                <span class="rs-dep"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i> {{ r.departamento }}</span>
+                                <div class="rs-who">
+                                    <span class="rs-av" style="--rs-c:{{ rs_cores[r.usuario_id % 8] }}">{{ rs_ini(r.usuario_nome) }}</span>
+                                    <span class="rs-txt"><span class="rs-nome" data-copiar data-copiar-rotulo="{{ r.departamento }}">{{ r.usuario_nome }}</span>
+                                        {% if r.usuario_situacao == 'INATIVO' %}<span class="rs-inativo">usuário inativo</span>{% endif %}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <button type="button" class="rs-tile rs-tile-falta" onclick="abrirResponsaveis({{ r.departamento_id }})" title="Escolher quem responde por {{ r.departamento }}">
+                                <span class="rs-dep"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i> {{ r.departamento }}</span>
+                                <div class="rs-who">
+                                    <span class="rs-av"><i class="fas fa-user-slash"></i></span>
+                                    <span class="rs-txt"><span class="rs-nome">sem responsável</span><span class="rs-escolher">escolher <i class="fas fa-arrow-right"></i></span></span>
+                                </div>
+                            </button>
+                            {% endif %}
                             {% endfor %}
-                        </dl>
+                        </div>
                     </div>
 
                     <!-- Resumo do Certificado (verde se há; claro se não há) — botões só na aba Certificado -->
@@ -1696,39 +1772,89 @@
 
 <!-- Modal de Contato (adicionar e editar) — 05/11/2026: celular obrigatório, o que ele RECEBE por
      departamento, reaproveitamento pelo celular e confirmação antes de salvar (pedido do Anderson). -->
-<!-- Responsáveis no escritório: um select por departamento (05/11/2026) -->
+<!-- Responsáveis no escritório: um select por departamento; só salva com os 7 escolhidos (Anderson, 05/11/2026) -->
 <div id="respModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width:560px;">
-        <div class="modal-header">
-            <h3>Responsáveis no escritório</h3>
-            <button class="modal-close" onclick="fecharResponsaveis()">&times;</button>
+    <div class="modal-content rs-modal">
+        <div class="rs-mhead">
+            <span class="rs-mico"><i class="fas fa-user-tie"></i></span>
+            <div>
+                <h3>Responsáveis no escritório</h3>
+                <p>{{ cliente.numero_cliente }} · {{ cliente.nome_razao_social }}</p>
+            </div>
+            <button type="button" class="modal-close" onclick="fecharResponsaveis()" aria-label="Fechar">&times;</button>
         </div>
-        <form action="{{ url_for('clientes.salvar_responsaveis', id=cliente.id) }}" method="POST">
-            <div class="modal-body">
-                <p style="color:#64748b; font-size:13px; margin:0 0 12px;">Quem do escritório responde por cada departamento desta empresa. Deixe em branco quando ainda não há ninguém.</p>
+        <form id="rs-form" action="{{ url_for('clientes.salvar_responsaveis', id=cliente.id) }}" method="POST" novalidate>
+            <div class="rs-mbody">
                 {% for r in responsaveis %}
-                <div class="form-group" style="display:grid; grid-template-columns:150px 1fr; align-items:center; gap:10px; margin-bottom:8px;">
-                    <label for="resp_{{ r.departamento_id }}" style="margin:0;">{{ r.departamento }}</label>
-                    <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}" class="form-control">
-                        <option value="">— sem responsável —</option>
-                        {% for u in funcionarios %}
-                        <option value="{{ u.id }}" {% if u.id == r.usuario_id %}selected{% endif %}>{{ u.nome }}{% if u.departamento %} · {{ u.departamento }}{% endif %}</option>
-                        {% endfor %}
-                        {% if r.usuario_id and r.usuario_situacao == 'INATIVO' %}<option value="{{ r.usuario_id }}" selected>{{ r.usuario_nome }} (inativo)</option>{% endif %}
-                    </select>
+                <div class="rs-row{% if not r.usuario_id %} rs-row-falta{% endif %}">
+                    <span class="rs-rico"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i></span>
+                    <label class="rs-rlbl" for="resp_{{ r.departamento_id }}">{{ r.departamento }}
+                        <small>{% if r.usuario_id %}quem responde hoje{% else %}ninguém escolhido ainda{% endif %}</small></label>
+                    <span class="rs-sel">
+                        <span class="rs-av"></span>
+                        <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}">
+                            <option value="">Escolher…</option>
+                            {% for dep, us in funcionarios|groupby('departamento') %}
+                            <optgroup label="{{ dep }}">
+                                {% for u in us %}
+                                <option value="{{ u.id }}" data-ini="{{ rs_ini(u.nome) }}" data-cor="{{ rs_cores[u.id % 8] }}"{% if u.id == r.usuario_id %} selected{% endif %}>{{ u.nome }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                            {% if r.usuario_id and r.usuario_situacao == 'INATIVO' %}<option value="{{ r.usuario_id }}" data-ini="{{ rs_ini(r.usuario_nome) }}" data-cor="#94a3b8" selected>{{ r.usuario_nome }} (inativo)</option>{% endif %}
+                        </select>
+                        <i class="fas fa-chevron-down rs-chev"></i>
+                    </span>
                 </div>
                 {% endfor %}
             </div>
-            <div class="modal-footer">
+            <div class="rs-mfoot">
+                <span class="rs-mnote" id="rs-nota"></span>
                 <button type="button" class="btn btn-secondary" onclick="fecharResponsaveis()">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Salvar</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button>
             </div>
         </form>
     </div>
 </div>
 <script>
-function abrirResponsaveis() { document.getElementById('respModal').style.display = 'block'; }
-function fecharResponsaveis() { document.getElementById('respModal').style.display = 'none'; }
+(function () {
+    var modal = document.getElementById('respModal');
+    var nota = document.getElementById('rs-nota');
+    function revisar() {
+        // bolinha com as iniciais de quem está escolhido; linha vermelha enquanto está vazia
+        var faltam = 0;
+        modal.querySelectorAll('.rs-row').forEach(function (row) {
+            var sel = row.querySelector('select'), av = row.querySelector('.rs-av'), op = sel.options[sel.selectedIndex];
+            var vazio = !sel.value;
+            if (vazio) faltam++;
+            row.classList.toggle('rs-row-falta', vazio);
+            av.innerHTML = vazio ? '<i class="fas fa-user-slash"></i>' : (op.dataset.ini || '?');
+            av.style.setProperty('--rs-c', vazio ? '#fee2e2' : (op.dataset.cor || '#15803d'));
+        });
+        nota.classList.toggle('rs-mnote-erro', faltam > 0);
+        nota.innerHTML = faltam
+            ? '<i class="fas fa-circle-exclamation"></i> ' + (faltam === 1 ? 'Falta escolher 1 departamento' : 'Faltam escolher ' + faltam + ' departamentos') + ' para salvar'
+            : '<i class="fas fa-circle-check"></i> Todos os departamentos têm responsável';
+        return faltam;
+    }
+    window.abrirResponsaveis = function (departamentoId) {
+        modal.style.display = 'block';
+        revisar();
+        var alvo = departamentoId ? document.getElementById('resp_' + departamentoId) : (modal.querySelector('.rs-row-falta select') || modal.querySelector('select'));
+        if (alvo) setTimeout(function () { alvo.focus(); }, 60);
+    };
+    window.fecharResponsaveis = function () { modal.style.display = 'none'; };
+    modal.addEventListener('change', function (e) { if (e.target.tagName === 'SELECT') revisar(); });
+    document.getElementById('rs-form').addEventListener('submit', function (e) {
+        if (!revisar()) return;
+        e.preventDefault();
+        var corpo = modal.querySelector('.rs-mbody');
+        corpo.classList.remove('rs-shake'); void corpo.offsetWidth; corpo.classList.add('rs-shake');
+        var p = modal.querySelector('.rs-row-falta select');
+        if (p) p.focus();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.style.display === 'block') fecharResponsaveis(); });
+})();
 </script>
 
 <div id="addContactModal" class="modal" style="display: none;">

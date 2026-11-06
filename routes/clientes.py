@@ -2430,7 +2430,9 @@ def _contato_resumo(dados):
 @login_required
 def salvar_responsaveis(id):
     """Responsáveis do escritório por departamento (05/11/2026, migração Acessórias): um funcionário
-    por departamento, ou vazio = sem responsável."""
+    por departamento. Só salva com TODOS os departamentos escolhidos — Anderson (05/11/2026): "não poderá
+    salvar sem eleger os responsáveis... Mas só nessa etapa"; no futuro o cadastro gera um link e cada
+    departamento elege o seu. O que a migração deixou vazio continua vazio até alguém escolher."""
     cliente = Cliente.get_by_id(id)
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
@@ -2438,15 +2440,23 @@ def salvar_responsaveis(id):
     validos = {u['id']: u['nome'] for u in ClienteResponsavel.usuarios_disponiveis()}
     atuais = ClienteResponsavel.por_cliente(id)
     antes = {r['departamento']: r['usuario_nome'] for r in atuais}
-    depois = {}
+    depois, escolhas, faltando = {}, {}, []
     for r in atuais:
         uid = request.form.get('resp_%d' % r['departamento_id'], type=int)
-        if uid and uid not in validos:
+        if not uid:
+            faltando.append(r['departamento'])
+        elif uid not in validos:
             flash('Funcionário inválido para %s.' % r['departamento'], 'danger')
             return redirect(url_for('clientes.detalhes', id=id))
         depois[r['departamento']] = validos.get(uid) if uid else None
-        if (uid or None) != (r['usuario_id'] or None):
-            ClienteResponsavel.definir(id, r['departamento_id'], uid or None)
+        escolhas[r['departamento_id']] = uid
+    if faltando:
+        flash('Falta escolher o responsável de %s. Todos os departamentos precisam de um para salvar.'
+              % ', '.join(faltando), 'danger')
+        return redirect(url_for('clientes.detalhes', id=id))
+    for r in atuais:
+        if escolhas[r['departamento_id']] != (r['usuario_id'] or None):
+            ClienteResponsavel.definir(id, r['departamento_id'], escolhas[r['departamento_id']])
     if antes != depois:
         registrar('escrita.alterou_responsaveis', 'cadastros', tabela='clientes', registro_id=id,
                   antes=antes, depois=depois)

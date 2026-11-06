@@ -49,7 +49,7 @@ class ClienteResponsavel:
         """Funcionários que podem ser responsáveis: conta de funcionário que não está INATIVA.
         [{id, nome, departamento_id, departamento}]"""
         return execute_query(
-            """SELECT u.id, u.nome, u.departamento_id, d.nome AS departamento
+            """SELECT u.id, u.nome, u.departamento_id, COALESCE(d.nome, 'Sem departamento') AS departamento
                  FROM usuarios u LEFT JOIN departamentos d ON d.id = u.departamento_id
                 WHERE u.classe_conta = 'FUNCIONARIO' AND u.situacao <> 'INATIVO'
              ORDER BY u.nome""", fetch=True) or []
