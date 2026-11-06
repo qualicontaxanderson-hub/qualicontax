@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Contrato nº {{ c.id }} - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+.pv-wrap { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; margin:14px 0; align-items:start; }
+.pv-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; overflow:hidden; }
+.pv-head { display:flex; align-items:center; gap:14px; padding:16px 20px; background:linear-gradient(150deg,#0b3b2b,#147a4b); color:#fff; }
+.pv-head h2 { margin:0; font-size:15px; color:#fff; } .pv-head p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
+.pv-ico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:17px; }
+.pv-st { margin-left:auto; font-size:11.5px; font-weight:700; padding:4px 12px; border-radius:99px; background:rgba(255,255,255,.16); color:#fff; }
+.pv-body { padding:14px 18px; }
+.pv-frame { width:100%; height:78vh; border:0; border-radius:12px; background:#f1f5f9; }
+.pv-ass { list-style:none; margin:0; padding:0; }
+.pv-ass li { display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #eef2f0; }
+.pv-ass li:last-child { border-bottom:0; }
+.pv-av { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex:none; background:#f1f5f9; color:#94a3b8; }
+.pv-av.ok { background:#dcfce7; color:#15803d; } .pv-av.esp { background:#fef3c7; color:#b45309; }
+.pv-txt { flex:1; min-width:0; } .pv-txt b { display:block; font-size:13px; } .pv-txt small { display:block; font-size:11.5px; color:#7d968a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pv-acoes { display:flex; flex-direction:column; gap:8px; }
+.pv-acoes .btn { border-radius:10px; padding:10px 14px; font-weight:600; justify-content:center; }
+.pv-info { font-size:12px; color:#7d968a; line-height:1.6; }
+.pv-info b { color:#0f3d2e; }
+@media (max-width:900px) { .pv-wrap { grid-template-columns:1fr; } .pv-frame { height:60vh; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{% set emp = c.dados.empresas[0] %}
+<div class="pv-wrap">
+    <div class="pv-card">
+        <div class="pv-head"><span class="pv-ico"><i class="fas fa-file-signature"></i></span>
+            <div><h2>{{ c.titulo | title }} · nº {{ c.id }}</h2><p>{{ emp.numero or 'PF' }} · {{ emp.razao }}{% if c.dados.empresas | length > 1 %} + {{ c.dados.empresas | length - 1 }} empresas{% endif %} · {{ c.criado_em.strftime('%d/%m/%Y') }} por {{ c.criado_por_nome }}</p></div>
+            <span class="pv-st">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span></div>
+        <div class="pv-body"><iframe class="pv-frame" src="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}#toolbar=1" title="PDF do contrato"></iframe></div>
+    </div>
+    <div>
+        <div class="pv-card" style="margin-bottom:12px;">
+            <div class="pv-body">
+                <div style="font-size:11px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; margin-bottom:6px;">Assinaturas</div>
+                <ul class="pv-ass">
+                {% for a in assinantes %}
+                    <li><span class="pv-av {{ 'ok' if a.assinado_em else ('esp' if c.status == 'ENVIADO' else '') }}"><i class="fas {{ 'fa-check' if a.assinado_em else ('fa-clock' if c.status == 'ENVIADO' else 'fa-user') }}"></i></span>
+                        <div class="pv-txt"><b>{{ a.nome }}</b><small>{{ a.papel | capitalize }}{% if a.cpf %} · {{ a.cpf }}{% endif %} · {{ a.email or 'SEM E-MAIL' }}</small>
+                            <small>{% if a.assinado_em %}assinou em {{ a.assinado_em.strftime('%d/%m/%Y %H:%M') }} · IP {{ a.assinado_ip }}{% elif a.aviso_enviado_em %}link enviado em {{ a.aviso_enviado_em.strftime('%d/%m %H:%M') }}{% else %}ainda não recebeu o link{% endif %}</small></div>
+                        {% if c.status == 'ENVIADO' and not a.assinado_em %}<button type="button" class="btn btn-outline btn-sm" title="Copiar o link de assinatura" onclick="navigator.clipboard.writeText({{ a.link | tojson }}).then(function(){ alert('Link copiado.'); })"><i class="fas fa-link"></i></button>{% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <div class="pv-card">
+            <div class="pv-body pv-acoes">
+                {% if c.status == 'RASCUNHO' %}
+                <a class="btn btn-outline" href="{{ url_for('financeiro.contrato_editar', cid=c.id) }}"><i class="fas fa-pen"></i> Editar rascunho</a>
+                <form method="POST" action="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}" onsubmit="return confirm('Enviar para assinatura? Cada pessoa recebe o link por e-mail e o PDF fica congelado.');"><button class="btn btn-primary" style="width:100%;" type="submit"><i class="fas fa-paper-plane"></i> Enviar para assinatura</button></form>
+                {% elif c.status == 'ENVIADO' %}
+                <form method="POST" action="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}"><button class="btn btn-outline" style="width:100%;" type="submit"><i class="fas fa-envelope"></i> Reenviar e-mail a quem falta</button></form>
+                {% endif %}
+                <a class="btn btn-outline" href="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}" target="_blank"><i class="fas fa-file-pdf"></i> Abrir PDF</a>
+                {% if c.status in ('RASCUNHO', 'ENVIADO') %}
+                <form method="POST" action="{{ url_for('financeiro.contrato_cancelar', cid=c.id) }}" onsubmit="return confirm('Cancelar este contrato? Os links de assinatura param de funcionar.');"><button class="btn btn-secondary" style="width:100%;" type="submit"><i class="fas fa-ban"></i> Cancelar contrato</button></form>
+                {% endif %}
+                <div class="pv-info">
+                    {% if c.status == 'ASSINADO' %}<b>Assinado por todos em {{ c.assinado_em.strftime('%d/%m/%Y %H:%M') }}.</b> {% if c.pdf_path %}Via assinada guardada no Dropbox em <b>{{ c.pdf_path.split('/')[-2] }}/CONTRATOS</b>.{% else %}O Dropbox não recebeu a cópia; o PDF continua aqui.{% endif %}{% endif %}
+                    {% if c.pdf_sha256 %}<br>Impressão digital do PDF enviado: <span style="font-family:monospace; font-size:10px;">{{ c.pdf_sha256[:24] }}…</span>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Montar contrato - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Formulário do contrato no mesmo desenho das janelas (cabeçalho verde, linhas ícone + rótulo + campo) */
+.pf-wrap { max-width:960px; margin:14px 0; }
+.pf-modal { border-radius:16px; overflow:hidden; background:#fff; border:1px solid #e3ece7; box-shadow:0 10px 30px rgba(15,61,46,.06); }
+.pf-mhead { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); }
+.pf-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
+.pf-mhead h3 { margin:0; font-size:16px; color:#fff; } .pf-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
+.pf-mbody { padding:14px 16px 8px; }
+.pf-row { display:grid; grid-template-columns:38px 170px 1fr; align-items:start; gap:12px; padding:10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; }
+.pf-row:hover { background:#f8fbf9; }
+.pf-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; margin-top:2px; }
+.pf-rlbl { font-size:13px; font-weight:700; color:#0f172a; margin:4px 0 0; } .pf-rlbl small { display:block; font-size:11px; font-weight:500; color:#94a3b8; }
+.pf-rval { min-width:0; }
+.pf-rval input.form-control, .pf-rval select.form-control { height:42px; border:1px solid #dbe7df; border-radius:11px; font-size:13px; font-weight:600; color:#0f172a; }
+.pf-rval input.form-control:focus, .pf-rval select.form-control:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+.pf-g2 { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; } .pf-g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 12px; }
+.pf-lbl { font-size:11px; font-weight:600; color:#94a3b8; margin:8px 0 4px; }
+.pf-chk { display:flex; gap:16px; flex-wrap:wrap; align-items:center; min-height:42px; }
+.pf-chk label { display:flex; gap:7px; align-items:center; margin:0; font-weight:600; font-size:13px; color:#0f172a; }
+.pf-emp { display:flex; gap:8px; align-items:center; margin-bottom:6px; } .pf-emp .nome { flex:1; font-size:13px; font-weight:700; }
+.pf-emp .ho-num { font-size:12px; color:#94a3b8; }
+.pf-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
+.pf-sug div { padding:8px 12px; cursor:pointer; font-size:13px; } .pf-sug div:hover { background:#f0f7f3; }
+.pf-mfoot { display:flex; align-items:center; gap:10px; padding:14px 22px; border-top:1px solid #eef2ef; background:#fafcfb; flex-wrap:wrap; }
+.pf-mnote { font-size:12px; color:#15803d; margin-right:auto; }
+.pf-mfoot .btn { border-radius:10px; padding:9px 18px; font-weight:600; }
+.pf-socio { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; margin:0 6px 6px 0; display:inline-block; }
+@media (max-width:640px) { .pf-row { grid-template-columns:38px 1fr; } .pf-row .pf-rval { grid-column:1 / -1; } .pf-g2, .pf-g3 { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{% set e0 = dados.empresas[0] if dados.empresas else None %}
+<div class="pf-wrap">
+<form method="POST" action="{{ url_for('financeiro.contrato_salvar') }}" id="pf-form">
+<input type="hidden" name="contrato_id" value="{{ contrato.id if contrato else '' }}">
+<input type="hidden" name="fin_contrato_id" value="{{ fin.id if fin else '' }}">
+<div class="pf-modal">
+    <div class="pf-mhead">
+        <span class="pf-mico"><i class="fas fa-file-signature"></i></span>
+        <div><h3>{{ 'Editar rascunho' if contrato else 'Montar contrato de prestação de serviços' }}</h3>
+            <p id="pf-sub">{% if emp %}{{ emp.numero_cliente }} · {{ emp.nome_razao_social }}{% else %}escolha a empresa{% endif %}</p></div>
+    </div>
+    <div class="pf-mbody">
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-building"></i></span>
+            <label class="pf-rlbl">Empresas<small>uma, ou a rede inteira num contrato só</small></label>
+            <div class="pf-rval">
+                <div id="pf-emps">
+                    {% for e in dados.empresas or ([{'cliente_id': emp.id, 'razao': emp.nome_razao_social, 'numero': emp.numero_cliente, 'cnpj': emp.cpf_cnpj, 'endereco': emp.endereco, 'valor': fin.valor if fin else ''}] if emp else []) %}
+                    <div class="pf-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}">
+                        <span class="nome">{{ e.numero or 'PF' }} · {{ e.razao }}</span><span class="ho-num">{{ e.cnpj }}</span>
+                        <input type="text" name="emp_valor" class="form-control dinheiro" style="width:120px;height:36px;" value="{{ e.valor or '' }}" placeholder="valor" title="valor desta empresa (só para rede)">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="this.closest('.pf-emp').remove(); pfSub();"><i class="fas fa-times"></i></button></div>
+                    {% endfor %}
+                </div>
+                <div style="position:relative;"><input type="text" id="pf-busca" class="form-control" placeholder="adicionar empresa: nome, número ou CNPJ" autocomplete="off"><div id="pf-sug" class="pf-sug" style="display:none;"></div></div>
+                <div class="pf-g2" style="margin-top:8px;">
+                    <div><div class="pf-lbl">Como o contrato chama a contratante (rede)</div><input type="text" name="apelido" class="form-control" value="{{ dados.apelido or '' }}" placeholder="ex.: TRANSMASUT (em branco = razão social)"></div>
+                    <div><div class="pf-lbl">&nbsp;</div><label class="pf-chk"><input type="checkbox" name="valores_por_empresa" {% if dados.valores_por_empresa %}checked{% endif %}> Listar o valor de cada empresa no contrato</label></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-user-pen"></i></span>
+            <label class="pf-rlbl">Quem assina pela empresa<small>sócio administrador; a assinatura vai por e-mail</small></label>
+            <div class="pf-rval">
+                {% if emp and emp.socios %}<div>{% for s in emp.socios %}<span class="pf-socio" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }})"><i class="fas fa-user"></i> {{ s.nome }}{% if s.responsavel %} · administrador{% endif %}</span>{% endfor %}</div>{% endif %}
+                <div class="pf-g2">
+                    <div><div class="pf-lbl">Nome completo</div><input type="text" name="rep_nome" id="rep_nome" class="form-control" value="{{ e0.rep_nome if e0 else '' }}" required></div>
+                    <div><div class="pf-lbl">CPF</div><input type="text" name="rep_cpf" id="rep_cpf" class="form-control" value="{{ e0.rep_cpf if e0 else '' }}" placeholder="000.000.000-00"></div>
+                    <div><div class="pf-lbl">Documento (como vai no contrato)</div><input type="text" name="rep_documento" class="form-control" value="{{ e0.rep_documento if e0 else '' }}" placeholder="ex.: CNH nº 02521989143 DETRAN/GO"></div>
+                    <div><div class="pf-lbl">E-mail (recebe o link)</div><input type="email" name="rep_email" id="rep_email" class="form-control" value="{{ e0.rep_email if e0 else '' }}" required></div>
+                    <div><div class="pf-lbl">Cargo</div><input type="text" name="rep_cargo" class="form-control" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-list-check"></i></span>
+            <label class="pf-rlbl">Serviços<small>só fiscal, só DP ou tudo; mais os específicos</small></label>
+            <div class="pf-rval">
+                <div class="pf-chk">
+                    {% for k, v in AREAS.items() %}<label><input type="checkbox" name="areas" value="{{ k }}" {% if (dados.areas and k in dados.areas) or (not dados and not contrato) %}checked{% endif %}> {{ v[0] | capitalize }}</label>{% endfor %}
+                </div>
+                <div id="pf-extras">{% for s in dados.servicos_extras or [] %}<input type="text" name="servico_extra" class="form-control" style="margin-top:6px;" value="{{ s }}">{% endfor %}</div>
+                <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="var i=document.createElement('input'); i.type='text'; i.name='servico_extra'; i.className='form-control'; i.style.marginTop='6px'; i.placeholder='serviço específico, ex.: emissão de notas fiscais em nome da contratante'; document.getElementById('pf-extras').appendChild(i); i.focus();"><i class="fas fa-plus"></i> Serviço específico</button>
+            </div>
+        </div>
+
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-coins"></i></span>
+            <label class="pf-rlbl">Honorários<small>{% if fin %}vindos do contrato de honorários{% else %}sem honorários cadastrados: digite{% endif %}</small></label>
+            <div class="pf-rval pf-g3">
+                <div><div class="pf-lbl">Valor mensal</div><input type="text" name="valor" class="form-control dinheiro" value="{{ dados.valor or (fin.valor if fin else '') }}" required></div>
+                <div><div class="pf-lbl">Vence no dia</div><input type="number" name="dia_vencimento" class="form-control" min="1" max="31" value="{{ dados.dia_vencimento or (fin.dia_vencimento if fin else 10) }}"></div>
+                <div><div class="pf-lbl">Início</div><input type="date" name="inicio" class="form-control" value="{{ dados.inicio or (fin.inicio.isoformat() if fin and fin.inicio else hoje.isoformat()) }}"></div>
+                <div><div class="pf-lbl">Reajuste</div><select name="reajuste_tipo" class="form-control" id="pf-reaj">
+                    {% for k, v in (('SALARIO_MINIMO', 'Salário mínimo, todo janeiro'), ('INDICE', 'Índice próprio'), ('DATA_PROPRIA', 'Data própria'), ('ESCALONADO', 'Escalonado'), ('SEM', 'De comum acordo')) %}
+                    <option value="{{ k }}" {% if (dados.reajuste_tipo or (fin.reajuste_tipo if fin else 'SALARIO_MINIMO')) == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+                <div><div class="pf-lbl">Índice / detalhe</div><input type="text" name="reajuste_indice" class="form-control" value="{{ dados.reajuste_indice or (fin.reajuste_obs if fin else '') or '' }}" placeholder="ex.: IPCA; ou 3.000 → 5.000 em jun/27"></div>
+                <div><div class="pf-lbl">Mês (data própria)</div><input type="text" name="reajuste_mes" class="form-control" value="{{ dados.reajuste_mes or '' }}" placeholder="ex.: julho"></div>
+                <div><div class="pf-lbl">13º honorário</div><select name="decimo" class="form-control">
+                    {% set dec = dados.decimo or ('ISENTO' if fin and fin.decimo_tipo == 'NENHUM' else ('UNICA' if fin and fin.decimo_tipo == 'UNICA' else 'COBRADO')) %}
+                    <option value="COBRADO" {% if dec == 'COBRADO' %}selected{% endif %}>Cobrado em novembro e dezembro</option>
+                    <option value="UNICA" {% if dec == 'UNICA' %}selected{% endif %}>Cobrado em dezembro, parcela única</option>
+                    <option value="ISENTO" {% if dec == 'ISENTO' %}selected{% endif %}>Isento</option></select></div>
+                <div><div class="pf-lbl">Multa %</div><input type="text" name="multa" class="form-control" value="{{ dados.multa or '10' }}"></div>
+                <div><div class="pf-lbl">Juros % ao mês</div><input type="text" name="juros" class="form-control" value="{{ dados.juros or '1' }}"></div>
+            </div>
+        </div>
+
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-scale-balanced"></i></span>
+            <label class="pf-rlbl">Cláusulas<small>aviso prévio, foro, LGPD</small></label>
+            <div class="pf-rval pf-g3">
+                <div><div class="pf-lbl">Aviso prévio (dias)</div><select name="aviso_previo" class="form-control"><option value="30" {% if (dados.aviso_previo or 30) == 30 %}selected{% endif %}>30</option><option value="60" {% if dados.aviso_previo == 60 %}selected{% endif %}>60</option><option value="90" {% if dados.aviso_previo == 90 %}selected{% endif %}>90</option></select></div>
+                <div><div class="pf-lbl">Foro</div><input type="text" name="foro" class="form-control" value="{{ dados.foro or 'São Paulo/SP' }}"></div>
+                <div><div class="pf-lbl">Local da assinatura</div><input type="text" name="local" class="form-control" value="{{ dados.local or 'São Paulo' }}"></div>
+                <div><div class="pf-lbl">&nbsp;</div><label class="pf-chk"><input type="checkbox" name="lgpd" {% if dados.lgpd or not contrato %}checked{% endif %}> Cláusula LGPD</label></div>
+                <div style="grid-column:span 2;"><div class="pf-lbl">Título (em branco = pelos serviços)</div><input type="text" name="titulo" class="form-control" value="{{ dados.titulo or '' }}" placeholder="CONTRATO DE PRESTAÇÃO DE SERVIÇOS CONTÁBEIS"></div>
+            </div>
+        </div>
+
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-pen-nib"></i></span>
+            <label class="pf-rlbl">Quem assina pela Qualicontax<small>e as duas testemunhas</small></label>
+            <div class="pf-rval pf-g3">
+                <div><div class="pf-lbl">Pela Qualicontax</div><select name="assina_qualicontax" class="form-control">{% for k, q in SIGN_Q.items() %}<option value="{{ k }}" {% if (dados.assina_qualicontax or 'albert') == k %}selected{% endif %}>{{ q.nome }}</option>{% endfor %}</select></div>
+                {% set tests = (dados.assinantes or []) | selectattr('papel', 'equalto', 'TESTEMUNHA') | list %}
+                {% for n in (1, 2) %}
+                <div><div class="pf-lbl">Testemunha {{ n }}</div><select name="testemunha_id" class="form-control"><option value="">— nenhuma —</option>
+                    {% for t in testemunhas %}<option value="{{ t.id }}" {% if tests | length >= n and tests[n - 1].usuario_id == t.id %}selected{% elif not contrato and n == 1 and t.id == current_user.id %}selected{% endif %}>{{ t.nome }}{% if not t.email %} (sem e-mail){% endif %}</option>{% endfor %}</select></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="pf-mfoot">
+        <span class="pf-mnote"><i class="fas fa-circle-info"></i> Salva como rascunho: você confere o PDF antes de enviar para assinatura.</span>
+        <a class="btn btn-secondary" href="{{ url_for('financeiro.contratos') }}">Cancelar</a>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar rascunho</button>
+    </div>
+</div>
+</form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script>
+function pfSocio(nome, cpf, email) { document.getElementById('rep_nome').value = nome; document.getElementById('rep_cpf').value = cpf || ''; if (email) document.getElementById('rep_email').value = email; }
+function pfSub() { var n = document.querySelectorAll('#pf-emps .pf-emp').length; var p = document.querySelector('#pf-emps .pf-emp .nome'); document.getElementById('pf-sub').textContent = n ? (p.textContent + (n > 1 ? ' + ' + (n - 1) : '')) : 'escolha a empresa'; }
+(function () {
+    var q = document.getElementById('pf-busca'), sug = document.getElementById('pf-sug'), t;
+    q.addEventListener('input', function () {
+        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
+        t = setTimeout(function () {
+            fetch('/financeiro/notas/buscar?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+                sug.innerHTML = ''; (lista || []).forEach(function (c) {
+                    var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome + '</strong> <span class="ho-num">' + (c.cpf_cnpj || '') + '</span>';
+                    d.onclick = function () {
+                        var w = document.createElement('div'); w.className = 'pf-emp';
+                        w.innerHTML = '<input type="hidden" name="emp_cliente_id" value="' + c.id + '"><input type="hidden" name="emp_endereco" value=""><span class="nome">' + (c.numero_cliente || 'PF') + ' · ' + c.nome + '</span><span class="ho-num">' + (c.cpf_cnpj || '') + '</span><input type="text" name="emp_valor" class="form-control dinheiro" style="width:120px;height:36px;" placeholder="valor"><button type="button" class="btn btn-outline btn-sm" onclick="this.closest(\'.pf-emp\').remove(); pfSub();"><i class="fas fa-times"></i></button>';
+                        document.getElementById('pf-emps').appendChild(w); if (window.Dinheiro && window.Dinheiro.ligar) window.Dinheiro.ligar();
+                        q.value = ''; sug.style.display = 'none'; pfSub();
+                    };
+                    sug.appendChild(d);
+                });
+                sug.style.display = sug.children.length ? 'block' : 'none';
+            });
+        }, 250);
+    });
+    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
+    if (window.Dinheiro && window.Dinheiro.ligar) window.Dinheiro.ligar();
+})();
+</script>
+{% endblock %}

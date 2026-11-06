@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Contratos de prestação - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+.pc-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
+.gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:14px; }
+.gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px 18px 14px; display:flex; flex-direction:column; gap:10px; min-width:0; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+.gc-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.gc-head { display:flex; align-items:center; gap:12px; }
+.gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
+.gc-tit { flex:1; min-width:0; }
+.gc-tit h3 { margin:0; font-size:14.5px; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gc-tit small { display:block; font-size:11.5px; color:#7d968a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pc-st { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; flex-shrink:0; }
+.pc-st.RASCUNHO { background:#f1f5f9; color:#64748b; } .pc-st.ENVIADO { background:#fef3c7; color:#b45309; } .pc-st.ASSINADO { background:#dcfce7; color:#166534; } .pc-st.CANCELADO { background:#fee2e2; color:#b91c1c; }
+.pc-pe { display:flex; justify-content:space-between; font-size:12px; color:#7d968a; }
+.pc-pe b { color:#0f3d2e; }
+.pc-prog { height:6px; background:#f1f5f9; border-radius:99px; overflow:hidden; }
+.pc-prog i { display:block; height:100%; background:#22c55e; }
+.pc-sem { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:14px 18px; }
+.pc-sem h2 { margin:0 0 8px; font-size:13px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; }
+.pc-sem ul { list-style:none; margin:0; padding:0; columns:3; column-gap:18px; }
+.pc-sem li { font-size:13px; padding:4px 0; break-inside:avoid; display:flex; gap:8px; align-items:center; }
+.pc-sem li .n { color:#15803d; font-weight:700; min-width:34px; font-variant-numeric:tabular-nums; }
+.pc-sem li a { margin-left:auto; }
+@media (max-width:900px) { .pc-sem ul { columns:1; } .gc-grid { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<div class="page-header">
+    <div><h1><i class="fas fa-file-signature"></i> Contratos de prestação de serviços</h1>
+        <p class="page-subtitle">Montados do cadastro e dos honorários, assinados eletronicamente pelo link enviado a cada parte.</p></div>
+    <a class="btn btn-primary" href="{{ url_for('financeiro.contrato_novo') }}"><i class="fas fa-plus"></i> Novo contrato</a>
+</div>
+
+<div class="pc-abas">
+    {% for k, rot in (('todos', 'Todos'), ('rascunho', 'Rascunhos'), ('enviado', 'Aguardando assinatura'), ('assinado', 'Assinados'), ('cancelado', 'Cancelados')) %}
+    <a class="fin-chip {{ 'ativo' if aba == k }}" href="{{ url_for('financeiro.contratos', aba=k) }}">{{ rot }}{% if k != 'todos' %} <strong>{{ res.get(k.upper(), 0) }}</strong>{% endif %}</a>
+    {% endfor %}
+</div>
+
+{% if lista %}
+<div class="gc-grid">
+{% for c in lista %}
+    <article class="gc-card" onclick="location.href='{{ url_for('financeiro.contrato_ver', cid=c.id) }}'">
+        <header class="gc-head">
+            <span class="gc-ava">{{ c.numero_cliente or 'PF' }}</span>
+            <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}{% if c.n_empresas > 1 %} +{{ c.n_empresas - 1 }}{% endif %}</h3><small>{{ c.titulo | title }} · nº {{ c.id }} · {{ c.criado_em.strftime('%d/%m/%Y') }}{% if c.criado_por_nome %} · {{ c.criado_por_nome.split()[0] }}{% endif %}</small></div>
+            <span class="pc-st {{ c.status }}">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span>
+        </header>
+        {% if c.status in ('ENVIADO', 'ASSINADO') %}
+        <div class="pc-prog"><i style="width:{{ (100 * c.n_assinados / c.n_assinantes) if c.n_assinantes else 0 }}%"></i></div>
+        <div class="pc-pe"><span>assinaturas <b>{{ c.n_assinados }}/{{ c.n_assinantes }}</b></span><span>{% if c.assinado_em %}assinado em <b>{{ c.assinado_em.strftime('%d/%m/%Y') }}</b>{% elif c.enviado_em %}enviado em <b>{{ c.enviado_em.strftime('%d/%m/%Y') }}</b>{% endif %}</span></div>
+        {% else %}
+        <div class="pc-pe"><span>{{ c.n_assinantes }} assinantes</span><span>{% if c.status == 'RASCUNHO' %}confira e envie{% endif %}</span></div>
+        {% endif %}
+    </article>
+{% endfor %}
+</div>
+{% else %}<div class="fin-vazio">Nenhum contrato {{ {'rascunho': 'em rascunho', 'enviado': 'aguardando assinatura', 'assinado': 'assinado', 'cancelado': 'cancelado'}.get(aba, '') }}.</div>{% endif %}
+
+{% if aba == 'todos' and sem_contrato %}
+<div class="pc-sem" style="margin-top:18px;">
+    <h2><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i> Com honorários e sem contrato assinado ({{ sem_contrato | length }})</h2>
+    <ul>
+    {% for s in sem_contrato %}<li><span class="n">{{ s.numero_cliente or 'PF' }}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.nome_razao_social }}</span><a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}">Montar</a></li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

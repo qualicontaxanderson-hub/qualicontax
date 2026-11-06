@@ -60,6 +60,7 @@ BLUEPRINTS_PUBLICOS = {
     'qrobo',         # Portal do Instalador — login e gate próprios
     'cobranca_webhook',  # aviso de pagamento da Efí (segredo aleatório na URL; os dados vêm de consulta nossa)
     'cobranca_publica',  # links do e-mail de cobrança ao cliente (código aleatório do boleto na URL)
+    'assinatura',        # assinatura eletrônica do contrato de prestação (token do signatário na URL + código por e-mail)
 }
 ENDPOINTS_PUBLICOS = {'static', 'health'}
 
@@ -230,6 +231,14 @@ MAPA = {
     'financeiro.acordo_encerrar':          'financeiro.lancamentos',
     # Lote mensal (06/11/2026): só o Anderson emite o mensal — permissão sem perfil
     'financeiro.lote':                     'financeiro.lote',
+    'financeiro.contratos':                        'financeiro.contratos',
+    'financeiro.contrato_novo':                    'financeiro.contratos',
+    'financeiro.contrato_editar':                  'financeiro.contratos',
+    'financeiro.contrato_salvar':                  'financeiro.contratos',
+    'financeiro.contrato_ver':                     'financeiro.contratos',
+    'financeiro.contrato_pdf':                     'financeiro.contratos',
+    'financeiro.contrato_enviar':                  'financeiro.contratos',
+    'financeiro.contrato_cancelar':                'financeiro.contratos',
     'financeiro.lote_emitir':              'financeiro.lote',
     'financeiro.lote_status':              'financeiro.lote',
     'financeiro.lote_reabrir':             'financeiro.lote',

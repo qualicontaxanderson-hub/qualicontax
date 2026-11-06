@@ -57,6 +57,7 @@ PERMISSION_CATALOG = {
         'financeiro.honorarios_cadastrar': 'Cadastrar honorários da empresa que eu cadastrei (vai para aprovação)',
         'financeiro.lancamentos':         'Lançar serviço avulso e ver minhas comissões',
         'financeiro.lote':                'Lote mensal de honorários (emitir a cobrança do mês)',
+        'financeiro.contratos':           'Contratos de prestação de serviços (montar, enviar e acompanhar a assinatura)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',
