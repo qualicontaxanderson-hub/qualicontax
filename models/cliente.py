@@ -3,6 +3,17 @@ from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, sql_sem_ocultas
 
 
+COBRANCAS = (('PROPRIA', 'Própria: a empresa paga os honorários'),
+             ('VIA_GRUPO', 'Via grupo: outra empresa do grupo paga'),
+             ('PENDENTE', 'Pendente: ainda não definido'))
+
+
+def _cobranca(v):
+    """PROPRIA | VIA_GRUPO | PENDENTE; qualquer outra coisa (vazio, lixo) fica PENDENTE — a pendência aparece em A CADASTRAR."""
+    v = (v or '').strip().upper()
+    return v if v in dict(COBRANCAS) else 'PENDENTE'
+
+
 class Cliente:
     """Classe Cliente para gestão de clientes"""
     
@@ -147,7 +158,7 @@ class Cliente:
                    porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade, data_inicio_contrato,
                    situacao, observacoes, is_contador, aberta_pela_casa, contabilidade_anterior_id,
                    natureza_codigo, natureza_juridica, natureza_em,
-                   avulso, avulso_em, virou_cliente_em
+                   avulso, avulso_em, virou_cliente_em, nire, nire_data_registro, cobranca
             FROM clientes
             WHERE id = %s
         """
@@ -385,10 +396,10 @@ class Cliente:
                 inscricao_municipal, email, telefone, celular, regime_tributario,
                 porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade,
                 data_inicio_contrato, situacao, observacoes, aberta_pela_casa, criado_por,
-                avulso, avulso_em
+                avulso, avulso_em, nire, nire_data_registro, cobranca
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, CASE WHEN %s = 1 THEN NOW() ELSE NULL END)
+                    %s, CASE WHEN %s = 1 THEN NOW() ELSE NULL END, %s, %s, %s)
         """
         params = (
             data.get('numero_cliente') or None,
@@ -412,6 +423,9 @@ class Cliente:
             data.get('criado_por') or None,     # AUTORIA (D2): quem criou
             1 if data.get('avulso') else 0,     # AVULSO: ato explícito da tela
             1 if data.get('avulso') else 0,     # (o mesmo valor decide o carimbo)
+            (data.get('nire') or '').strip()[:20] or None,
+            data.get('nire_data_registro') or None,
+            _cobranca(data.get('cobranca')),
         )
         return execute_query(query, params)
     
@@ -456,6 +470,7 @@ class Cliente:
                 porte_empresa = %s, cnae_fiscal = %s, cnae_fiscal_descricao = %s,
                 data_inicio_atividade = %s, data_inicio_contrato = %s, situacao = %s,
                 observacoes = %s, aberta_pela_casa = %s,
+                nire = %s, nire_data_registro = %s, cobranca = %s,
                 alterado_por = %s, alterado_em = CURRENT_TIMESTAMP
             WHERE id = %s
         """
@@ -478,6 +493,9 @@ class Cliente:
             data.get('situacao'),
             data.get('observacoes') or None,
             1 if data.get('aberta_pela_casa') else 0,
+            (data.get('nire') or '').strip()[:20] or None,
+            data.get('nire_data_registro') or None,
+            _cobranca(data.get('cobranca')),
             data.get('alterado_por') or None,    # AUTORIA (D2): quem alterou
             cliente_id
         )

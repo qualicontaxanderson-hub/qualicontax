@@ -13,7 +13,7 @@ from utils.auditoria_fmt import AUDITORIA_INICIO, hist_preparar
 from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, empresas_ocultas, pode_ver_empresa
-from models.cliente import Cliente
+from models.cliente import Cliente, COBRANCAS
 from models.endereco_cliente import EnderecoCliente
 from utils.cnpj_receita import limpar_logradouro
 from models.contato_cliente import ContatoCliente, AREAS_ATENDIMENTO
@@ -1082,11 +1082,11 @@ def relatorio():
 
 
 def _render_novo():
-    return render_template('clientes/form.html', cliente=None, departamentos_contato=ContatoCliente.departamentos_disponiveis(), **_ctx_form())
+    return render_template('clientes/form.html', COBRANCAS=COBRANCAS, cliente=None, departamentos_contato=ContatoCliente.departamentos_disponiveis(), **_ctx_form())
 
 
 def _render_editar(cliente, endereco_principal):
-    return render_template('clientes/form.html', cliente=cliente,
+    return render_template('clientes/form.html', COBRANCAS=COBRANCAS, cliente=cliente,
                            endereco_principal=endereco_principal,
                            departamentos_contato=ContatoCliente.departamentos_disponiveis(),
                            contatos_existentes=len(ContatoCliente.get_by_cliente(cliente['id'])),
@@ -1166,6 +1166,9 @@ def novo():
             'data_inicio_atividade': request.form.get('data_inicio_atividade'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
+            'nire': request.form.get('nire'),
+            'nire_data_registro': request.form.get('nire_data_registro'),
+            'cobranca': request.form.get('cobranca'),
             'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
             'avulso': eh_avulso,
             'criado_por': current_user.id
@@ -1983,6 +1986,9 @@ def editar(id):
                 'data_inicio_atividade': request.form.get('data_inicio_atividade'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes'),
+                'nire': request.form.get('nire'),
+                'nire_data_registro': request.form.get('nire_data_registro'),
+                'cobranca': request.form.get('cobranca'),
                 'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
                 'alterado_por': current_user.id      # AUDITORIA (D2): quem alterou
             }
@@ -2024,7 +2030,7 @@ def editar(id):
                                'cpf_cnpj', 'inscricao_estadual', 'inscricao_municipal',
                                'email', 'telefone', 'celular', 'regime_tributario',
                                'porte_empresa', 'cnae_fiscal', 'cnae_fiscal_descricao',
-                               'situacao', 'observacoes', 'aberta_pela_casa')
+                               'situacao', 'observacoes', 'aberta_pela_casa', 'nire', 'nire_data_registro', 'cobranca')
                 registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes',
                           registro_id=id,
                           antes={k: cliente.get(k) for k in _campos_log},

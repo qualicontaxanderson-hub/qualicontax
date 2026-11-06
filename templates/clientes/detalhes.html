@@ -2193,6 +2193,8 @@ function irParaAba(hash) {
     document.querySelectorAll('.ef-hero .tabs-link').forEach(function (l) {
         l.addEventListener('click', function () { setTimeout(centralizarAtiva, 0); });
     });
+    // vindo de Editar (abas de lá) ou de um link com #aba: a ficha abre já nessa aba (06/11/2026)
+    if (location.hash && location.hash !== '#dados-gerais' && document.querySelector('.ef-hero .tabs-link[href="' + location.hash + '"]')) irParaAba(location.hash);
     centralizarAtiva();
 })();
 

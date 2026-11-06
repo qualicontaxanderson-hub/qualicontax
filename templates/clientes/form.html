@@ -34,13 +34,39 @@
 <div class="ef-hero">
     <div class="ef-hero-inner ef-hero-head">
         <div>
-            <h1 class="ef-hero-title">{{ 'Editar Cliente' if cliente else ('Cadastrar sócio' if janela else 'Novo Cliente') }}</h1>
-            <p class="ef-hero-sub">{{ 'Atualize os dados do cliente' if cliente else ('Cadastro completo do sócio — ao salvar, esta janela fecha e ele entra na lista de sócios' if janela else 'Cadastre um novo cliente no sistema') }}</p>
+        {% if cliente %}
+            {# EDITAR = a mesma cabeça da ficha (06/11/2026): quem edita sabe onde está e volta com um clique #}
+            {% if cliente.numero_cliente %}<span class="ef-hero-num">#{{ cliente.numero_cliente }}</span>{% endif %}
+            <h1 class="ef-hero-title">{{ cliente.nome_razao_social }}</h1>
+            <p class="ef-hero-sub">{{ cliente.cpf_cnpj }}{% if endereco_principal and endereco_principal.cidade %} · {{ endereco_principal.cidade|title }}{% if endereco_principal.estado %}/{{ endereco_principal.estado }}{% endif %}{% endif %} · editando o cadastro</p>
+            <div class="ef-hero-badges">
+                <span class="ef-hero-badge" style="background:#fbbf24; color:#422006;"><i class="fas fa-pen"></i> Editando</span>
+                <span class="ef-hero-badge">{{ cliente.situacao }}</span>
+                <span class="ef-hero-badge">{{ 'PF' if cliente.tipo_pessoa == 'PF' else 'PJ' }}</span>
+                {% if cliente.regime_tributario %}<span class="ef-hero-badge">{{ cliente.regime_tributario }}</span>{% endif %}
+                {% if cliente.porte_empresa %}<span class="ef-hero-badge">{{ cliente.porte_empresa }}</span>{% endif %}
+            </div>
+        {% else %}
+            <h1 class="ef-hero-title">{{ 'Cadastrar sócio' if janela else 'Novo Cliente' }}</h1>
+            <p class="ef-hero-sub">{{ 'Cadastro completo do sócio — ao salvar, esta janela fecha e ele entra na lista de sócios' if janela else 'Cadastre um novo cliente no sistema' }}</p>
+        {% endif %}
         </div>
         <div class="ef-hero-actions">
+            {% if cliente and not janela %}<a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="ef-btn" title="Volta para a ficha sem salvar"><i class="fas fa-id-card"></i> Ver ficha</a>{% endif %}
             <a href="{{ url_for('clientes.index') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Clientes</a>
         </div>
     </div>
+    {% if cliente and not janela %}
+    {# as mesmas abas da ficha: Dados Gerais é esta tela; as outras abrem a ficha já na aba #}
+    <ul class="tabs-nav ef-tabstrip">
+        <li class="tabs-item active"><a href="#" class="tabs-link nff-tab" onclick="return false;"><i class="fas fa-pen"></i> Dados Gerais · editando</a></li>
+        {% for h, ic, rot in (('enderecos', 'fa-map-marker-alt', 'Endereços'), ('contatos', 'fa-users', 'Contatos'), ('cadastros-adicionais', 'fa-layer-group', 'Cadastros Adicionais'),
+                              ('socios', 'fa-user-tie', 'Sócios'), ('grupos', 'fa-tags', 'Grupos'), ('processos', 'fa-briefcase', 'Processos'), ('tarefas', 'fa-tasks', 'Tarefas'),
+                              ('obrigacoes', 'fa-calendar-check', 'Obrigações'), ('certificado', 'fa-certificate', 'Certificado Digital'), ('historico', 'fa-clock-rotate-left', 'Histórico')) %}
+        <li class="tabs-item"><a href="{{ url_for('clientes.detalhes', id=cliente.id) }}#{{ h }}" class="tabs-link nff-tab" title="Abre esta aba na ficha (o que não foi salvo aqui se perde)"><i class="fas {{ ic }}"></i> {{ rot }}</a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 </div>
 
 <div class="ef-body">
@@ -209,6 +235,26 @@
                         </button>
                     </div>
                     <p class="cf-hint">Abre o portal da prefeitura com o CNPJ copiado.</p>
+                </div>
+
+                {# NIRE e Cobrança (06/11/2026): as colunas vieram da migração, mas não tinham campo — e A CADASTRAR cobrava #}
+                <div class="cf-fg cf-s4 pj-only">
+                    <label class="cf-lbl" for="nire">NIRE <span class="cf-opt">(registro na Junta Comercial)</span></label>
+                    <input type="text" id="nire" name="nire" class="cf-ctrl" maxlength="20" placeholder="35.2.1234567-8"
+                           value="{{ cliente.nire if cliente and cliente.nire else '' }}">
+                    <p class="cf-hint">Está no contrato social registrado ou na ficha cadastral da Junta.</p>
+                </div>
+                <div class="cf-fg cf-s3 pj-only">
+                    <label class="cf-lbl" for="nire_data_registro">Data do registro <span class="cf-opt">(Junta)</span></label>
+                    <input type="date" id="nire_data_registro" name="nire_data_registro" class="cf-ctrl"
+                           value="{{ cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente and cliente.nire_data_registro else '' }}">
+                </div>
+                <div class="cf-fg cf-s5">
+                    <label class="cf-lbl" for="cobranca">Cobrança dos honorários <span class="cf-rf" style="background:#fee2e2;color:#b91c1c;">Financeiro</span></label>
+                    <select id="cobranca" name="cobranca" class="cf-ctrl">
+                        {% for v, rot in COBRANCAS %}<option value="{{ v }}" {% if (cliente.cobranca if cliente else 'PENDENTE') == v %}selected{% endif %}>{{ rot }}</option>{% endfor %}
+                    </select>
+                    <p class="cf-hint">Pendente mantém a empresa em A CADASTRAR (pendência "Financeiro (cobrança)").</p>
                 </div>
 
                 <div class="cf-fg cf-s4">
