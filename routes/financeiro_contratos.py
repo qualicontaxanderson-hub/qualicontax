@@ -71,7 +71,10 @@ def _ler_form(f):
     if float(valor) <= 0:
         raise ValueError('Informe o valor mensal dos honorários.')
     assina_q = f.get('assina_qualicontax') if f.get('assina_qualicontax') in SIGNATARIOS_QUALICONTAX else 'albert'
-    q = SIGNATARIOS_QUALICONTAX[assina_q]
+    q = dict(SIGNATARIOS_QUALICONTAX[assina_q])
+    u = execute_query('SELECT email FROM usuarios WHERE id = %s', (q['usuario_id'],), fetch=True, fetch_one=True)
+    if u and u.get('email'):
+        q['email'] = u['email']                       # o e-mail de quem assina pela Qualicontax é o do cadastro de usuários
     assinantes = [{'papel': 'CONTRATANTE', 'ordem': 1, 'nome': rep['rep_nome'], 'cpf': rep['rep_cpf'], 'documento': rep['rep_documento'],
                    'email': rep['rep_email'], 'empresa': empresas[0]['razao'] if len(empresas) == 1 else (f.get('apelido') or '').strip().upper() or empresas[0]['razao']},
                   {'papel': 'CONTRATADA', 'ordem': 1, 'nome': q['nome'], 'cpf': q['cpf'], 'documento': q['documento'], 'email': q['email'], 'usuario_id': q['usuario_id']}]
