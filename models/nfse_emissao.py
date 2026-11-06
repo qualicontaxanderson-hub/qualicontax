@@ -547,6 +547,17 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
         trava('matriz', 'Pela prefeitura de São Paulo só a Qualicontax foi provada: use o Emissor Nacional.')
     if len(_dig(cfg.get('municipio_ibge'))) != 7:
         trava('matriz', 'Município da empresa (código IBGE, 7 dígitos).')
+    else:
+        # O Emissor Nacional só emite onde a prefeitura aderiu (E0037/E0039, 06/11/2026).
+        from utils.integrations.nfse_adn.convenio import aceita_emissor_nacional
+        aceita = aceita_emissor_nacional(cfg.get('municipio_ibge'), ambiente=1)
+        cidade = emp.get('cidade') or _dig(cfg.get('municipio_ibge'))
+        if aceita in ('nao', 'sem_convenio'):
+            trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: as notas desta empresa '
+                            'só saem pelo sistema da própria prefeitura (integração ainda não feita).')
+        elif aceita is None:
+            aviso('matriz', f'Não consegui consultar se {cidade} aceita o Emissor Nacional agora; '
+                            'a conferência é refeita ao abrir de novo.')
     if len(_dig(cfg.get('cod_trib_nac'))) != 6:
         trava('matriz', 'Código de tributação nacional (6 dígitos).')
     nbs = _dig(cfg.get('cod_nbs'))
