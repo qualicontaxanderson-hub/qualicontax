@@ -302,7 +302,8 @@ class FinContrato:
             for i in execute_query(f'SELECT contrato_id, descricao, valor, servico_id FROM fin_contrato_itens WHERE contrato_id IN ({ids}) ORDER BY id',
                                    fetch=True) or []:
                 por[i['contrato_id']]['itens'].append({'descricao': i['descricao'], 'valor': str(i['valor']), 'servico_id': i['servico_id']})
-        return {'grupo': grupo, 'grupo_sugerido': grupo_sugerido, 'plano': plano, 'fonte': fonte, 'sugestoes': out}
+        rede = grupo['nome'] if grupo else _nome_rede(plano).title()      # nome limpo para a tela (sem "Mensalidade", sem Conexa)
+        return {'grupo': grupo, 'grupo_sugerido': grupo_sugerido, 'plano': plano, 'rede': rede, 'fonte': fonte, 'sugestoes': out}
 
     @staticmethod
     def resumo(empresa_id=EMPRESA_QUALICONTAX):

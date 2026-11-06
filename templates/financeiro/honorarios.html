@@ -12,66 +12,70 @@
 .ho-plano { font-size:11px; color:#7d968a; display:block; }
 .ho-falta { color:#b91c1c; font-weight:600; }
 .ho-ok { color:#15803d; }
-/* ---- modal do contrato, redesenhado 06/11/2026 ("melhorar demais essa tela"): formulário em cartões + resumo vivo ---- */
-.ho-modal { max-width:1060px; }
-.ho-modal .modal-body { padding:16px 20px 8px; background:#f4f8f5; }
-.ho-wrap { display:grid; grid-template-columns:minmax(0,1fr) 296px; gap:16px; align-items:start; }
-.ho-side { position:sticky; top:0; }
-.ho-card { background:#fff; border:1px solid #e1ebe5; border-radius:14px; padding:14px 16px; margin-bottom:12px; }
-.ho-card-h { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-.ho-card-h .ho-ico { width:30px; height:30px; border-radius:9px; background:#e8f5ed; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:13px; flex:none; }
-.ho-card-h h4 { margin:0; font-size:12px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; }
-.ho-card-h small { color:#7d968a; font-size:12px; margin-left:auto; text-align:right; }
-.ho-cli { display:flex; align-items:center; gap:12px; background:linear-gradient(135deg,#0f3d2e,#15803d); color:#fff; border-radius:14px; padding:12px 16px; margin-bottom:14px; }
-.ho-cli .ho-av { width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-size:16px; flex:none; }
-.ho-cli strong { font-size:15px; display:block; }
-.ho-cli .ho-num { color:rgba(255,255,255,.75); }
-.ho-cli .btn { margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.45); }
-.ho-itens { width:100%; border-collapse:collapse; margin-bottom:6px; }
-.ho-itens td { padding:3px 4px; vertical-align:middle; }
-.ho-itens td:first-child { padding-left:0; }
-.ho-itens input, .ho-itens select { height:36px; }
-.ho-soma { text-align:right; font-weight:700; font-size:15px; color:#0f3d2e; }
-.ho-rede { font-size:12px; color:#5f7f6e; margin:0 0 8px; }
+/* ---- modal do contrato (06/11/2026): MESMO desenho da janela "Responsáveis no escritório" da ficha (rs-*): cabeçalho
+   verde, linhas ícone + rótulo + campo, rodapé com a nota e os botões. "Quero que fique similar." ---- */
+.ho-modal { max-width:760px; border-radius:16px; overflow:hidden; }
+.ho-mhead { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); }
+.ho-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
+.ho-mhead h3 { margin:0; font-size:16px; color:#fff; }
+.ho-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
+.ho-mhead .modal-close { margin-left:auto; color:#d7f3e2; }
+.ho-mhead .modal-close:hover { background:rgba(255,255,255,.14); color:#fff; }
+.ho-mbody { padding:14px 16px 8px; max-height:calc(100vh - 230px); overflow:auto; }
+.ho-row { display:grid; grid-template-columns:38px 150px 1fr; align-items:center; gap:12px; padding:8px 10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; transition:background .15s, border-color .15s; }
+.ho-row:hover { background:#f8fbf9; }
+.ho-row-top { align-items:start; }
+.ho-row-top .ho-rico, .ho-row-top .ho-rlbl { margin-top:4px; }
+.ho-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; }
+.ho-rlbl { font-size:13px; font-weight:700; color:#0f172a; margin:0; }
+.ho-rlbl small { display:block; font-size:11px; font-weight:500; color:#94a3b8; }
+.ho-rval { min-width:0; }
+.ho-row-falta { background:#fff7f7; border-color:#fecaca; }
+.ho-row-falta .ho-rico { background:#fee2e2; color:#dc2626; }
+.ho-sel { position:relative; display:flex; align-items:center; margin:0; }
+.ho-sel select { width:100%; appearance:none; -webkit-appearance:none; height:42px; padding:0 36px 0 14px; border:1px solid #dbe7df; border-radius:11px; background:#fff; font-size:13px; font-weight:600; color:#0f172a; cursor:pointer; }
+.ho-sel select:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+.ho-chev { position:absolute; right:14px; font-size:11px; color:#64748b; pointer-events:none; }
+.ho-modal input.form-control, .ho-modal select.form-control { height:42px; border:1px solid #dbe7df; border-radius:11px; font-size:13px; font-weight:600; color:#0f172a; }
+.ho-modal input.form-control:focus, .ho-modal select.form-control:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+.ho-inl { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:#475569; }
+.ho-inl .form-control { width:auto; }
+.ho-inl .ho-w90 { width:90px; }
+.ho-inl .ho-w170 { width:170px; }
+.ho-lbl2 { font-size:11px; font-weight:600; color:#94a3b8; margin:8px 0 4px; }
+.ho-itens { width:100%; border-collapse:collapse; }
+.ho-itens td { padding:3px 4px 3px 0; vertical-align:middle; }
+.ho-itens input, .ho-itens select { height:38px !important; }
+.ho-soma { font-weight:700; font-size:14px; color:#0f3d2e; }
+.ho-rede { font-size:12px; color:#5f7f6e; margin:0 0 6px; }
 .ho-rede b { color:#0f3d2e; }
-.ho-chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }
-.ho-chip { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:6px 12px; font-size:13px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+.ho-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; }
+.ho-chip { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; display:flex; gap:7px; align-items:center; }
 .ho-chip:hover { background:#dcf3e4; }
 .ho-chip b { font-variant-numeric:tabular-nums; }
 .ho-chip span { color:#5f7f6e; font-size:11px; }
 .ho-aviso { font-size:12px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:6px 10px; margin-top:6px; display:none; }
-.ho-res { background:#fff; border:1px solid #e1ebe5; border-radius:14px; overflow:hidden; }
-.ho-res-h { background:#0f3d2e; color:#fff; padding:10px 14px; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
-.ho-res-big { padding:14px 14px 10px; border-bottom:1px solid #eef3f0; }
-.ho-res-big .ho-lbl { font-size:11px; color:#7d968a; text-transform:uppercase; letter-spacing:.6px; }
-.ho-res-big .ho-val { font-size:24px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1.2; }
-.ho-res-row { display:flex; justify-content:space-between; gap:10px; padding:9px 14px; border-bottom:1px solid #eef3f0; font-size:13px; }
-.ho-res-row:last-child { border-bottom:0; }
-.ho-res-row span:first-child { color:#7d968a; flex:none; }
-.ho-res-row b { text-align:right; color:#0f3d2e; font-variant-numeric:tabular-nums; }
-.ho-tag { display:inline-block; font-size:11px; font-weight:700; border-radius:6px; padding:2px 7px; background:#e8f5ed; color:#15803d; margin-left:4px; }
-.ho-tag.off { background:#f1f5f9; color:#94a3b8; text-decoration:line-through; }
-.ho-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
-.ho-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
-.ho-sec { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; margin:14px 0 8px; display:flex; align-items:center; gap:10px; }
-.ho-sec::after { content:''; flex:1; height:1px; background:#e8f1ec; }
+.ho-chk { display:flex; gap:18px; align-items:center; min-height:42px; }
+.ho-chk label { display:flex; gap:7px; align-items:center; margin:0; font-weight:600; font-size:13px; color:#0f172a; }
+.ho-dec { display:none; }
+.ho-cli { display:flex; align-items:center; gap:10px; min-height:42px; font-size:13px; font-weight:700; color:#0f172a; }
+.ho-cli .btn { margin-left:auto; }
 .ho-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
 .ho-sug div { padding:8px 12px; cursor:pointer; font-size:13px; }
 .ho-sug div:hover { background:#f0f7f3; }
-.ho-dec { display:none; }
-.ho-chk { display:flex; gap:18px; align-items:center; }
-.ho-chk label { display:flex; gap:6px; align-items:center; margin:0; font-weight:500; }
+.ho-mfoot { display:flex; align-items:center; gap:10px; padding:14px 22px; border-top:1px solid #eef2ef; background:#fafcfb; flex-wrap:wrap; }
+.ho-mnote { display:flex; align-items:center; gap:7px; font-size:12px; color:#15803d; margin-right:auto; }
+.ho-mnote-erro { color:#b91c1c; font-weight:600; }
+.ho-mfoot .btn { border-radius:10px; padding:9px 18px; font-weight:600; }
 .modal-body .form-group { margin-bottom:0; }
-.ho-modal .modal-body label { font-size:12px; font-weight:600; color:#334155; }
-@media (max-width:900px) { .ho-wrap { grid-template-columns:1fr; } .ho-side { position:static; } .ho-modal { margin:12px 8px; } }
 @media (max-width:640px) {
-    .ho-grid2, .ho-grid3 { grid-template-columns:1fr; } .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; }
-    /* celular: a discriminação vira duas linhas (descrição em cima; serviço, valor e tirar embaixo) em vez de quatro colunas espremidas */
+    .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; }
+    .ho-row { grid-template-columns:38px 1fr; } .ho-row .ho-rval { grid-column:1 / -1; }
+    .ho-modal { margin:12px 8px; }
     .ho-itens, .ho-itens tbody { display:block; }
     .ho-itens tr { display:grid; grid-template-columns:minmax(0,1fr) 120px 42px; gap:6px; padding:6px 0 8px; border-bottom:1px dashed #e3ece7; }
     .ho-itens td { display:block; width:auto !important; padding:0; }
     .ho-itens td:first-child { grid-column:1 / -1; }
-    .ho-card-h small { display:none; }
 }
 </style>
 {% endblock %}
@@ -220,117 +224,140 @@
 <!-- Novo / editar contrato -->
 <div id="hoModal" class="modal" style="display:none;">
     <div class="modal-content ho-modal">
-        <div class="modal-header">
-            <h3 id="ho-titulo">Contrato de honorários</h3>
-            <button class="modal-close" type="button" onclick="hoFechar()">&times;</button>
+        <div class="ho-mhead">
+            <span class="ho-mico"><i class="fas fa-file-signature"></i></span>
+            <div>
+                <h3 id="ho-titulo">Contrato de honorários</h3>
+                <p id="ho-sub">escolha a empresa</p>
+            </div>
+            <button type="button" class="modal-close" onclick="hoFechar()" aria-label="Fechar">&times;</button>
         </div>
-        <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}">
+        <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}" novalidate>
             <input type="hidden" name="contrato_id" id="ho-id">
             <input type="hidden" name="cliente_id" id="ho-cliente-id">
             <input type="hidden" name="aba" value="{{ aba }}">
-            <div class="modal-body">
-                <div id="ho-cli-busca" class="form-group" style="position:relative; margin-bottom:14px;">
-                    <label>Empresa</label>
-                    <input type="text" id="ho-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
-                    <div id="ho-sug" class="ho-sug" style="display:none;"></div>
-                </div>
-                <div id="ho-cli" class="ho-cli" style="display:none;">
-                    <div class="ho-av"><i class="fas fa-building"></i></div>
-                    <div><strong id="ho-cli-nome"></strong><div class="ho-num" id="ho-cli-num"></div></div>
-                    <button type="button" class="btn btn-outline btn-sm" id="ho-cli-trocar" onclick="hoTrocarCliente()">Trocar</button>
+            <div class="ho-mbody">
+                <div class="ho-row" id="ho-row-cli">
+                    <span class="ho-rico"><i class="fas fa-building"></i></span>
+                    <label class="ho-rlbl">Empresa<small id="ho-cli-small">quem paga</small></label>
+                    <div class="ho-rval">
+                        <div id="ho-cli-busca" style="position:relative;">
+                            <input type="text" id="ho-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
+                            <div id="ho-sug" class="ho-sug" style="display:none;"></div>
+                        </div>
+                        <div id="ho-cli" class="ho-cli" style="display:none;">
+                            <span id="ho-cli-nome"></span><span class="ho-num" id="ho-cli-num"></span>
+                            <button type="button" class="btn btn-outline btn-sm" id="ho-cli-trocar" onclick="hoTrocarCliente()">Trocar</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="ho-wrap">
-                <div class="ho-main">
-                    <div class="ho-card">
-                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-list-ul"></i></div><h4>Discriminações</h4><small>a soma é o valor do contrato</small></div>
+                <div class="ho-row ho-row-top" id="ho-row-itens">
+                    <span class="ho-rico"><i class="fas fa-list-ul"></i></span>
+                    <label class="ho-rlbl">Discriminações<small>a soma é o valor mensal</small></label>
+                    <div class="ho-rval">
                         <div id="ho-rede" class="ho-rede" style="display:none;"></div>
                         <div id="ho-chips" class="ho-chips"></div>
-                        <table class="ho-itens" id="ho-itens">
-                            <tbody></tbody>
-                        </table>
-                        <div style="display:flex; align-items:center; gap:10px;">
+                        <table class="ho-itens" id="ho-itens"><tbody></tbody></table>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
                             <button type="button" class="btn btn-outline btn-sm" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
                             <div class="ho-soma" style="margin-left:auto;">Total mensal: <span id="ho-total">R$ 0,00</span></div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="ho-card">
-                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-calendar-check"></i></div><h4>Vencimento e vigência</h4></div>
-                        <div class="ho-grid3">
-                            <div class="form-group"><label>Vence no dia</label><input type="number" name="dia_vencimento" id="ho-dia" class="form-control" min="1" max="31" required><small class="ho-num">do mês seguinte à competência</small></div>
-                            <div class="form-group"><label>Início</label><input type="date" name="inicio" id="ho-inicio" class="form-control" required></div>
-                            <div class="form-group"><label>Fim (se houver)</label><input type="date" name="fim" id="ho-fim" class="form-control"></div>
-                        </div>
-                        <div class="ho-grid2" style="margin-top:10px;">
-                            <div class="form-group"><label>Grupo (rede) da empresa</label>
-                                <select name="grupo_id" id="ho-grupo" class="form-control">
-                                    <option value="">— sem grupo —</option>
-                                    {% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}
-                                </select>
-                                <small class="ho-num">é o grupo do cadastro: trocar aqui troca lá também</small>
-                                <div class="ho-aviso" id="ho-grupo-aviso"></div>
-                            </div>
-                            <div class="form-group ho-chk" style="padding-top:26px;">
-                                <label><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked> Emite nota fiscal</label>
-                                <label><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked> Emite boleto</label>
-                            </div>
-                        </div>
+                <div class="ho-row">
+                    <span class="ho-rico"><i class="fas fa-calendar-check"></i></span>
+                    <label class="ho-rlbl">Vencimento<small>do mês seguinte à competência</small></label>
+                    <div class="ho-rval ho-inl">dia <input type="number" name="dia_vencimento" id="ho-dia" class="form-control ho-w90" min="1" max="31" required> de cada mês</div>
+                </div>
+
+                <div class="ho-row">
+                    <span class="ho-rico"><i class="fas fa-hourglass-half"></i></span>
+                    <label class="ho-rlbl">Vigência<small>início e, se houver, fim</small></label>
+                    <div class="ho-rval ho-inl"><input type="date" name="inicio" id="ho-inicio" class="form-control ho-w170" required> até <input type="date" name="fim" id="ho-fim" class="form-control ho-w170"></div>
+                </div>
+
+                <div class="ho-row">
+                    <span class="ho-rico"><i class="fas fa-layer-group"></i></span>
+                    <label class="ho-rlbl">Grupo<small>é o do cadastro: trocar aqui troca lá</small></label>
+                    <div class="ho-rval">
+                        <span class="ho-sel">
+                            <select name="grupo_id" id="ho-grupo">
+                                <option value="">— sem grupo —</option>
+                                {% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}
+                            </select>
+                            <i class="fas fa-chevron-down ho-chev"></i>
+                        </span>
+                        <div class="ho-aviso" id="ho-grupo-aviso"></div>
                     </div>
+                </div>
 
-                    <div class="ho-card">
-                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-gift"></i></div><h4>13º honorário</h4><small>para cancelar o de quem negociou, troque para "Sem 13º"</small></div>
-                        <div class="ho-grid2">
-                            <div class="form-group"><label>Modo</label>
-                                <select name="decimo_tipo" id="ho-decimo" class="form-control" onchange="hoDecimo()">
-                                    {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-group ho-dec-on"><label>Começa a cobrar</label>
-                                <select name="decimo_inicio" id="ho-dec-inicio" class="form-control" onchange="hoDecimo()">
+                <div class="ho-row">
+                    <span class="ho-rico"><i class="fas fa-file-invoice-dollar"></i></span>
+                    <label class="ho-rlbl">Emite<small>na cobrança de cada mês</small></label>
+                    <div class="ho-rval ho-chk">
+                        <label><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked> Nota fiscal</label>
+                        <label><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked> Boleto</label>
+                    </div>
+                </div>
+
+                <div class="ho-row ho-row-top">
+                    <span class="ho-rico"><i class="fas fa-gift"></i></span>
+                    <label class="ho-rlbl">13º honorário<small>"Sem 13º" também cancela o de quem negociou</small></label>
+                    <div class="ho-rval">
+                        <span class="ho-sel">
+                            <select name="decimo_tipo" id="ho-decimo" onchange="hoDecimo()">
+                                {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            </select>
+                            <i class="fas fa-chevron-down ho-chev"></i>
+                        </span>
+                        <div class="ho-dec-on">
+                            <div class="ho-lbl2">Começa a cobrar</div>
+                            <span class="ho-sel">
+                                <select name="decimo_inicio" id="ho-dec-inicio" onchange="hoDecimo()">
                                     {% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
                                 </select>
-                            </div>
-                            <div class="form-group ho-dec-on" id="ho-dec-desde-box"><label>Na casa desde</label><input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control"><small class="ho-num">base do proporcional: entrou em maio = 8/12</small></div>
-                            <div class="form-group ho-dec" id="ho-dec-box"><label>Frações (competência · %)</label>
-                                <div id="ho-dec-rows"></div>
-                                <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
-                            </div>
+                                <i class="fas fa-chevron-down ho-chev"></i>
+                            </span>
                         </div>
-                    </div>
-
-                    <div class="ho-card">
-                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-arrow-trend-up"></i></div><h4>Reajuste</h4></div>
-                        <div class="ho-grid3">
-                            <div class="form-group"><label>Regra</label>
-                                <select name="reajuste_tipo" id="ho-reajuste" class="form-control">
-                                    {% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-group"><label>Próximo reajuste</label><input type="date" name="proximo_reajuste" id="ho-prox" class="form-control"><small class="ho-num">salário mínimo: em branco = primeiro janeiro após 12 meses</small></div>
-                            <div class="form-group"><label>Observação</label><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" placeholder="índice, degraus, motivo"></div>
+                        <div class="ho-dec-on" id="ho-dec-desde-box">
+                            <div class="ho-lbl2">Na casa desde <span class="ho-num">(base do proporcional: entrou em maio = 8/12)</span></div>
+                            <input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control ho-w170">
                         </div>
-                        {% if modo != 'admin' %}<div class="form-group" style="margin-top:10px;"><label>Recado para quem aprova</label><input type="text" name="observacao" class="form-control" placeholder="ex.: combinado com o cliente em reunião de 05/11"></div>{% endif %}
+                        <div class="ho-dec" id="ho-dec-box">
+                            <div class="ho-lbl2">Frações (competência · %)</div>
+                            <div id="ho-dec-rows"></div>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
+                        </div>
                     </div>
                 </div>
 
-                <aside class="ho-side">
-                    <div class="ho-res">
-                        <div class="ho-res-h">Resumo do contrato</div>
-                        <div class="ho-res-big"><div class="ho-lbl">Total mensal</div><div class="ho-val" id="hr-total">R$ 0,00</div><div class="ho-num" id="hr-itens">—</div></div>
-                        <div class="ho-res-row"><span>Grupo</span><b id="hr-grupo">—</b></div>
-                        <div class="ho-res-row"><span>Vence</span><b id="hr-venc">—</b></div>
-                        <div class="ho-res-row"><span id="hr-13-lbl">13º</span><b id="hr-13">—</b></div>
-                        <div class="ho-res-row"><span>Reajuste</span><b id="hr-reaj">—</b></div>
-                        <div class="ho-res-row"><span>Emite</span><b id="hr-emite">—</b></div>
+                <div class="ho-row ho-row-top">
+                    <span class="ho-rico"><i class="fas fa-arrow-trend-up"></i></span>
+                    <label class="ho-rlbl">Reajuste<small>salário mínimo: em branco = 1º janeiro após 12 meses</small></label>
+                    <div class="ho-rval">
+                        <span class="ho-sel">
+                            <select name="reajuste_tipo" id="ho-reajuste">
+                                {% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            </select>
+                            <i class="fas fa-chevron-down ho-chev"></i>
+                        </span>
+                        <div class="ho-inl" style="margin-top:8px;">próximo em <input type="date" name="proximo_reajuste" id="ho-prox" class="form-control ho-w170"><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" style="flex:1; min-width:160px;" placeholder="índice, degraus, motivo"></div>
                     </div>
-                    <p class="ho-num" style="margin:10px 2px 0; line-height:1.5;">Os valores da rede aparecem como sugestão em Discriminações: clique para usar, ou ignore e digite.</p>
-                </aside>
                 </div>
+                {% if modo != 'admin' %}
+                <div class="ho-row">
+                    <span class="ho-rico"><i class="fas fa-comment-dots"></i></span>
+                    <label class="ho-rlbl">Recado<small>para quem aprova</small></label>
+                    <div class="ho-rval"><input type="text" name="observacao" class="form-control" placeholder="ex.: combinado com o cliente em reunião de 05/11"></div>
+                </div>
+                {% endif %}
             </div>
-            <div class="modal-footer">
+            <div class="ho-mfoot">
+                <span class="ho-mnote" id="ho-nota"></span>
                 <button type="button" class="btn btn-secondary" onclick="hoFechar()">Cancelar</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar contrato</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button>
             </div>
         </form>
     </div>
@@ -402,27 +429,34 @@ function hoLimpar() {
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
     document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
+    document.querySelectorAll('.ho-row-falta').forEach(function (r) { r.classList.remove('ho-row-falta'); });
     hoDecimo(); hoResumo();
 }
 function hoSetCliente(id, nome, numero) {
     document.getElementById('ho-cliente-id').value = id || '';
     document.getElementById('ho-cli-nome').textContent = nome || ''; document.getElementById('ho-cli-num').textContent = numero ? 'nº ' + numero : '';
+    document.getElementById('ho-sub').textContent = id ? ((numero ? numero + ' · ' : '') + nome) : 'escolha a empresa';
     document.getElementById('ho-cli').style.display = id ? 'flex' : 'none'; document.getElementById('ho-cli-busca').style.display = id ? 'none' : 'block';
+    document.getElementById('ho-row-cli').classList.remove('ho-row-falta');
     if (id) hoSugestoes(id); else { document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; }
+    hoResumo();
 }
 // ---- sugestões da rede (06/11/2026): o que as outras empresas do grupo pagam; um clique preenche, ou ignora e digita ----
 var HO_SUG = [];
 function hoSugestoes(cid) {
     fetch('/financeiro/honorarios/sugestoes/' + cid).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
-        if (!d) return;
+        if (!d || document.getElementById('ho-cliente-id').value !== String(cid)) return;
         HO_SUG = d.sugestoes || [];
         var g = document.getElementById('ho-grupo'), av = document.getElementById('ho-grupo-aviso');
         if (d.grupo) { g.value = d.grupo.id; av.style.display = 'none'; }
-        else if (d.grupo_sugerido) { g.value = d.grupo_sugerido.id; av.innerHTML = 'Sem grupo no cadastro. Pelo Conexa (' + d.plano + ') sugerimos <b>' + d.grupo_sugerido.nome + '</b>: ao salvar, a empresa entra nesse grupo.'; av.style.display = 'block'; }
-        else { g.value = ''; if (d.plano) { av.innerHTML = 'Sem grupo no cadastro. No Conexa era "' + d.plano + '" e não existe grupo com esse nome: escolha um ou crie em Cadastros → Grupos.'; av.style.display = 'block'; } else av.style.display = 'none'; }
+        else {
+            g.value = '';
+            av.innerHTML = 'Sem grupo no cadastro' + (d.grupo_sugerido ? ': parece ser <b>' + d.grupo_sugerido.nome + '</b>' : '') + '. Escolha aqui ou arrume no cadastro.';
+            av.style.display = 'block';
+        }
         var rede = document.getElementById('ho-rede'), chips = document.getElementById('ho-chips'); chips.innerHTML = '';
         if (!HO_SUG.length) { rede.style.display = 'none'; hoResumo(); return; }
-        rede.innerHTML = d.fonte === 'grupo' ? 'O que as outras empresas do grupo <b>' + d.grupo.nome + '</b> pagam:' : 'O que as outras empresas do plano <b>' + d.plano + '</b> (Conexa) pagam:';
+        rede.innerHTML = 'O que as outras empresas ' + (d.fonte === 'grupo' ? 'do grupo' : 'da rede') + ' <b>' + d.rede + '</b> pagam:';
         rede.style.display = 'block';
         HO_SUG.forEach(function (s, i) {
             var c = document.createElement('button'); c.type = 'button'; c.className = 'ho-chip'; c.title = 'Usar estes valores';
@@ -442,37 +476,28 @@ function hoAplicar(i) {
     document.getElementById('ho-nfse').checked = !!s.gerar_nfse; document.getElementById('ho-boleto').checked = !!s.gerar_boleto;
     hoDecimo(); hoResumo();
 }
-// ---- resumo vivo (coluna da direita) ----
-var HO_GRUPOS = {{ grupos | tojson }};
-var HO_REAJ = {{ REAJUSTE_TIPOS | tojson }};
+// ---- nota do rodapé (como a janela de Responsáveis): o que vai ser cobrado, ou o que falta ----
 var HO_ANO = {{ hoje.year }};
 function hoData(s) { if (!s) return null; var p = s.split('-'); return p.length === 3 ? { y: +p[0], m: +p[1] } : null; }
-function hoMesAno(y, m) { return ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][m - 1] + '/' + y; }
 function hoResumo() {
-    var t = 0, n = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { var v = hoNum(i.value); if (v > 0) { t += v; n++; } });
-    document.getElementById('hr-total').textContent = brl(t);
-    document.getElementById('hr-itens').textContent = n ? (n === 1 ? '1 discriminação' : n + ' discriminações') : 'nenhuma discriminação ainda';
-    var gid = document.getElementById('ho-grupo').value, g = HO_GRUPOS.filter(function (x) { return String(x.id) === String(gid); })[0];
-    document.getElementById('hr-grupo').textContent = g ? g.nome : 'sem grupo';
-    var dia = document.getElementById('ho-dia').value; document.getElementById('hr-venc').textContent = dia ? 'dia ' + dia + ' do mês seguinte' : '—';
+    var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); });
+    var nota = document.getElementById('ho-nota'), partes = [];
+    if (!document.getElementById('ho-cliente-id').value) { nota.className = 'ho-mnote ho-mnote-erro'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta escolher a empresa'; return; }
+    if (!(t > 0)) { nota.className = 'ho-mnote ho-mnote-erro'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta o valor dos honorários'; return; }
+    partes.push('Mensal ' + brl(t));
     var tipo = document.getElementById('ho-decimo').value, modo = document.getElementById('ho-dec-inicio').value;
     var ini = hoData(document.getElementById('ho-inicio').value), desde = hoData(document.getElementById('ho-dec-desde').value);
-    var lbl = document.getElementById('hr-13-lbl'), v13 = document.getElementById('hr-13');
-    if (tipo === 'NENHUM' || !t) { lbl.textContent = '13º'; v13.textContent = tipo === 'NENHUM' ? 'não cobra' : '—'; }
-    else {
+    if (tipo !== 'NENHUM') {
         var base = ini || { y: HO_ANO, m: 1 };
         if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
         var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m);
         var pct = 100; if (tipo === 'PERSONALIZADO') { pct = 0; document.querySelectorAll('#ho-dec-rows [name=dec_pct]').forEach(function (p) { pct += parseFloat(p.value) || 0; }); }
-        lbl.textContent = '13º de ' + HO_ANO;
-        v13.textContent = meses ? brl(t * meses / 12 * pct / 100) + ' · ' + meses + '/12' : 'só a partir de ' + base.y;
-    }
-    var rt = document.getElementById('ho-reajuste').value, prox = hoData(document.getElementById('ho-prox').value), txt = HO_REAJ[rt] || rt;
-    if (prox) txt = hoMesAno(prox.y, prox.m);
-    else if (rt === 'SALARIO_MINIMO' && ini) txt = 'jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2);
-    document.getElementById('hr-reaj').textContent = txt;
-    var nf = document.getElementById('ho-nfse').checked, bo = document.getElementById('ho-boleto').checked;
-    document.getElementById('hr-emite').innerHTML = '<span class="ho-tag' + (nf ? '' : ' off') + '">nota</span><span class="ho-tag' + (bo ? '' : ' off') + '">boleto</span>';
+        partes.push('13º de ' + HO_ANO + ' ' + (meses ? brl(t * meses / 12 * pct / 100) + ' (' + meses + '/12)' : 'só a partir de ' + base.y));
+    } else partes.push('sem 13º');
+    var rt = document.getElementById('ho-reajuste').value, prox = hoData(document.getElementById('ho-prox').value);
+    if (prox) partes.push('reajuste ' + ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][prox.m - 1] + '/' + prox.y);
+    else if (rt === 'SALARIO_MINIMO' && ini) partes.push('reajuste jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2));
+    nota.className = 'ho-mnote'; nota.innerHTML = '<i class="fas fa-circle-check"></i> ' + partes.join(' · ');
 }
 document.getElementById('ho-form').addEventListener('input', hoResumo);
 document.getElementById('ho-form').addEventListener('change', hoResumo);
@@ -519,9 +544,16 @@ function hoReprovar(cid, nome) {
 document.addEventListener('DOMContentLoaded', function () { hoNovo({{ convite.cliente_id }}, {{ convite.nome_razao_social | tojson }}, {{ convite.numero_cliente | tojson }}); document.getElementById('ho-cli-trocar').style.display = 'none'; });
 {% endif %}
 document.getElementById('ho-form').addEventListener('submit', function (e) {
-    if (!document.getElementById('ho-cliente-id').value) { e.preventDefault(); alert('Escolha a empresa.'); return; }
-    var ok = false; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { if (hoNum(i.value) > 0) ok = true; });
-    if (!ok) { e.preventDefault(); alert('Informe ao menos uma discriminação com valor.'); }
+    // como na janela de Responsáveis: a linha que falta fica vermelha e a nota do rodapé diz o quê
+    var falta = null;
+    if (!document.getElementById('ho-cliente-id').value) falta = 'ho-row-cli';
+    else { var ok = false; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { if (hoNum(i.value) > 0) ok = true; }); if (!ok) falta = 'ho-row-itens'; }
+    if (!document.getElementById('ho-dia').value || !document.getElementById('ho-inicio').value) falta = falta || 'ho-row-cli';
+    if (falta) {
+        e.preventDefault(); hoResumo();
+        var r = document.getElementById(falta); r.classList.add('ho-row-falta'); r.scrollIntoView({ block: 'center' });
+        var inp = r.querySelector('input:not([type=hidden])'); if (inp) inp.focus();
+    }
 });
 // busca da empresa (mesma rota das notas)
 (function () {
