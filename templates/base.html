@@ -100,9 +100,11 @@
                 </a>
             </li>
             {% endif %}
-            {% if current_user.has_permission('financeiro.index') %}
+            {# Quem só lança serviço ou só cadastra honorários (06/11/2026) entra pela própria tela, sem ver o início do Financeiro #}
+            {% set _fin_ep = 'financeiro.index' if current_user.has_permission('financeiro.index') else ('financeiro.lancamentos' if current_user.has_permission('financeiro.lancamentos') else ('financeiro.honorarios_cadastrar' if current_user.has_permission('financeiro.honorarios_cadastrar') else None)) %}
+            {% if _fin_ep %}
             <li>
-                <a href="{{ url_for('financeiro.index') }}" class="rail-link rail-financeiro {% if request.endpoint and 'financeiro' in request.endpoint %}active{% endif %}" title="Financeiro">
+                <a href="{{ url_for(_fin_ep) }}" class="rail-link rail-financeiro {% if request.endpoint and 'financeiro' in request.endpoint %}active{% endif %}" title="Financeiro">
                     <i class="fas fa-dollar-sign"></i>
                     <span>Financeiro</span>
                 </a>

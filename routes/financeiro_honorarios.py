@@ -14,8 +14,8 @@ from decimal import Decimal, InvalidOperation
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from models.fin_contrato import (DECIMO_TIPOS, REAJUSTE_TIPOS, SERVICO_HONORARIOS, FinContrato,
-                                 primeiro_reajuste)
+from models.fin_contrato import (DECIMO_INICIOS, DECIMO_TIPOS, REAJUSTE_TIPOS, SERVICO_HONORARIOS, FinContrato,
+                                 decimo_desde_de, modo_decimo_inicio, primeiro_reajuste)
 from routes.financeiro import financeiro
 from utils.atividade import registrar
 from utils.auth_helper import permission_required
@@ -74,7 +74,7 @@ def honorarios():
             WHERE v.usado_em IS NULL AND v.expira_em > NOW() ORDER BY v.id DESC""", fetch=True) or []
     return render_template('financeiro/honorarios.html', modo='admin', aba=aba, busca=busca, contratos=contratos, sem_contrato=sem,
                            pendentes=pendentes, convites=convites, pessoas=ClienteResponsavel.usuarios_disponiveis(),
-                           resumo=FinContrato.resumo(), servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS,
+                           resumo=FinContrato.resumo(), servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS,
                            REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS)
 
 
@@ -86,6 +86,7 @@ def honorarios_json(cid):
         return jsonify({'erro': 'não encontrado'}), 404
     out = {k: (v.isoformat() if hasattr(v, 'isoformat') else (str(v) if isinstance(v, Decimal) else v)) for k, v in c.items()}
     out['itens'] = [{'descricao': i['descricao'], 'valor': str(i['valor']), 'servico_id': i['servico_id']} for i in FinContrato.itens(cid)]
+    out['decimo_inicio'] = modo_decimo_inicio(c.get('decimo_desde'), c.get('inicio'))
     return jsonify(out)
 
 
@@ -122,7 +123,7 @@ def honorarios_salvar():
             prox = primeiro_reajuste(inicio)
         dados = dict(valor=valor, dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
                      plano=(f.get('plano') or '').strip() or None, decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
-                     decimo_desde=_data(f.get('decimo_desde')),
+                     decimo_desde=decimo_desde_de(f.get('decimo_inicio') or 'PROPORCIONAL', inicio, _data(f.get('decimo_desde'))),
                      reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                      reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
                      gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0)
@@ -198,7 +199,7 @@ def _ler_form(f):
         prox = primeiro_reajuste(inicio)
     dados = dict(valor=sum(i['valor'] for i in itens), dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
                  plano=(f.get('plano') or '').strip() or None, decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
-                 decimo_desde=_data(f.get('decimo_desde')), reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
+                 decimo_desde=decimo_desde_de(f.get('decimo_inicio') or 'PROPORCIONAL', inicio, _data(f.get('decimo_desde'))), reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                  reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
                  gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0,
                  observacao=(f.get('observacao') or '').strip() or None)
@@ -230,7 +231,7 @@ def honorarios_cadastrar():
     aba = request.args.get('aba') or 'sem'
     return render_template('financeiro/honorarios.html', modo='cadastrar', aba=aba, busca=None, contratos=enviados,
                            sem_contrato=minhas, convites_meus=convites, resumo={}, servicos=_servicos(),
-                           DECIMO_TIPOS=DECIMO_TIPOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(),
+                           DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(),
                            SERVICO_HONORARIOS=SERVICO_HONORARIOS, acao_form=url_for('financeiro.honorarios_cadastrar_salvar'))
 
 
@@ -327,7 +328,7 @@ def honorarios_convite(token):
         return redirect('/')
     return render_template('financeiro/honorarios.html', modo='convite', aba='sem', busca=None, contratos=[], sem_contrato=[],
                            convite=dict(v, nome_razao_social=cl['nome_razao_social'], numero_cliente=cl['numero_cliente']),
-                           resumo={}, servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS,
+                           resumo={}, servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS,
                            hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS,
                            acao_form=url_for('financeiro.honorarios_convite_salvar', token=token))
 

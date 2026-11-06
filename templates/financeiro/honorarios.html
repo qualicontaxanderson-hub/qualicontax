@@ -218,14 +218,19 @@
                     </div>
                 </div>
 
-                <p class="ho-sec">13º honorário <span class="ho-num" style="letter-spacing:0; text-transform:none; font-weight:500;">sempre proporcional aos meses de casa</span></p>
+                <p class="ho-sec">13º honorário <span class="ho-num" style="letter-spacing:0; text-transform:none; font-weight:500;">para cancelar o de quem negociou, troque para "Sem 13º"</span></p>
                 <div class="ho-grid2">
                     <div class="form-group"><label>Modo</label>
                         <select name="decimo_tipo" id="ho-decimo" class="form-control" onchange="hoDecimo()">
                             {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
                         </select>
                     </div>
-                    <div class="form-group"><label>Na casa desde (base do 13º)</label><input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control"><small class="ho-num">em branco = início do contrato; entrou em maio = 8/12</small></div>
+                    <div class="form-group ho-dec-on"><label>Começa a cobrar</label>
+                        <select name="decimo_inicio" id="ho-dec-inicio" class="form-control" onchange="hoDecimo()">
+                            {% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group ho-dec-on" id="ho-dec-desde-box"><label>Na casa desde</label><input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control"><small class="ho-num">base do proporcional: entrou em maio = 8/12</small></div>
                     <div class="form-group ho-dec" id="ho-dec-box"><label>Frações (competência · %)</label>
                         <div id="ho-dec-rows"></div>
                         <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
@@ -305,12 +310,17 @@ function hoAddDec(mes, pct) {
     d.innerHTML = '<select name="dec_mes" class="form-control" style="width:90px;">' + o + '</select><input type="number" name="dec_pct" class="form-control" style="width:90px;" step="0.01" min="0" max="100" placeholder="%" value="' + (pct || '') + '"><button type="button" class="btn btn-outline btn-sm" onclick="this.parentNode.remove()"><i class="fas fa-times"></i></button>';
     document.getElementById('ho-dec-rows').appendChild(d);
 }
-function hoDecimo() { document.getElementById('ho-dec-box').style.display = document.getElementById('ho-decimo').value === 'PERSONALIZADO' ? 'block' : 'none'; }
+function hoDecimo() {
+    var tipo = document.getElementById('ho-decimo').value, ini = document.getElementById('ho-dec-inicio').value;
+    document.getElementById('ho-dec-box').style.display = tipo === 'PERSONALIZADO' ? 'block' : 'none';
+    document.querySelectorAll('.ho-dec-on').forEach(function (e) { e.style.display = tipo === 'NENHUM' ? 'none' : 'block'; });
+    document.getElementById('ho-dec-desde-box').style.display = (tipo !== 'NENHUM' && ini === 'DATA') ? 'block' : 'none';
+}
 function hoLimpar() {
     ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-plano', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde'].forEach(function (i) { document.getElementById(i).value = ''; });
     document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
-    document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
+    document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
     hoDecimo();
 }
@@ -336,6 +346,7 @@ function hoEditar(cid) {
         document.getElementById('ho-dia').value = c.dia_vencimento; document.getElementById('ho-inicio').value = c.inicio || '';
         document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-plano').value = c.plano || '';
         document.getElementById('ho-decimo').value = c.decimo_tipo || 'NENHUM';
+        document.getElementById('ho-dec-inicio').value = c.decimo_inicio || 'PROPORCIONAL';
         document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
         var parc = c.decimo_parcelas; if (typeof parc === 'string') { try { parc = JSON.parse(parc); } catch (e) { parc = []; } }
         (parc || []).forEach(function (p) { hoAddDec(p.mes, p.pct); });

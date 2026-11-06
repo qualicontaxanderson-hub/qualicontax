@@ -25,8 +25,14 @@ CATEGORIA_HONORARIOS = 1           # fin_categorias 'Honorários contábeis'
 CATEGORIA_DECIMO = 25              # fin_categorias 'Décimo terceiro'
 SERVICO_HONORARIOS = 1             # nfse_servicos 'Honorários contábeis'
 
-DECIMO_TIPOS = {'NENHUM': 'Sem 13º', 'UNICA': 'Parcela única (vence em dezembro)',
+DECIMO_TIPOS = {'NENHUM': 'Sem 13º (não cobra ou foi cancelado)', 'UNICA': 'Parcela única (vence em dezembro)',
                 'DUAS': 'Duas parcelas (vencem em novembro e dezembro)', 'PERSONALIZADO': 'Personalizado'}
+# Quando o 13º começa a ser cobrado (Anderson, 06/11/2026: "temos que ter a OPÇÃO, já inicia a cobrança no ano
+# ou próximo ano em diante"). Vira a coluna decimo_desde: a base do proporcional.
+DECIMO_INICIOS = {'PROPORCIONAL': 'Já este ano, proporcional aos meses de casa',
+                  'INTEIRO': 'Já este ano, inteiro (12/12)',
+                  'PROXIMO': 'Só a partir do ano que vem',
+                  'DATA': 'Outra data (na casa desde...)'}
 REAJUSTE_TIPOS = {'SALARIO_MINIMO': 'Salário mínimo, todo janeiro', 'INDICE': 'Índice próprio',
                   'DATA_PROPRIA': 'Data própria', 'SEM': 'Sem reajuste / adiado', 'ESCALONADO': 'Escalonado'}
 SITUACOES = ('PENDENTE', 'ATIVO', 'ENCERRADO', 'REPROVADO')
@@ -42,6 +48,28 @@ def primeiro_reajuste(inicio):
         return None
     um_ano = date(inicio.year + 1, inicio.month, 1)
     return date(um_ano.year, 1, 1) if um_ano.month == 1 else date(um_ano.year + 1, 1, 1)
+
+
+def decimo_desde_de(modo, inicio, data=None):
+    """Traduz a opção da tela em decimo_desde. PROPORCIONAL = em branco (vale o início do contrato)."""
+    if modo == 'INTEIRO' and inicio:
+        return date(inicio.year, 1, 1)
+    if modo == 'PROXIMO' and inicio:
+        return date(inicio.year + 1, 1, 1)
+    if modo == 'DATA':
+        return data
+    return None
+
+
+def modo_decimo_inicio(decimo_desde, inicio):
+    """Caminho de volta: qual opção da tela corresponde ao decimo_desde gravado."""
+    if not decimo_desde:
+        return 'PROPORCIONAL'
+    if inicio and decimo_desde == date(inicio.year, 1, 1):
+        return 'INTEIRO'
+    if inicio and decimo_desde == date(inicio.year + 1, 1, 1):
+        return 'PROXIMO'
+    return 'DATA'
 
 
 def meses_de_casa(inicio, fim, ano):
