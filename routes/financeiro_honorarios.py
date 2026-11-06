@@ -12,7 +12,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
-from flask_login import current_user
+from flask_login import current_user, login_required
 
 from models.fin_contrato import (DECIMO_TIPOS, REAJUSTE_TIPOS, SERVICO_HONORARIOS, FinContrato,
                                  primeiro_reajuste)
@@ -65,7 +65,15 @@ def honorarios():
     if busca:
         b = busca.lower()
         sem = [c for c in sem if b in (c['nome_razao_social'] or '').lower() or b == str(c['numero_cliente'])]
-    return render_template('financeiro/honorarios.html', aba=aba, busca=busca, contratos=contratos, sem_contrato=sem,
+    from models.cliente_responsavel import ClienteResponsavel
+    pendentes = [c for c in contratos if c['situacao'] == 'PENDENTE']
+    contratos = [c for c in contratos if c['situacao'] not in ('REPROVADO', 'PENDENTE')]
+    convites = execute_query(
+        """SELECT v.*, cl.nome_razao_social, u.nome AS usuario_nome FROM fin_honorarios_convites v
+             JOIN clientes cl ON cl.id = v.cliente_id LEFT JOIN usuarios u ON u.id = v.usuario_id
+            WHERE v.usado_em IS NULL AND v.expira_em > NOW() ORDER BY v.id DESC""", fetch=True) or []
+    return render_template('financeiro/honorarios.html', modo='admin', aba=aba, busca=busca, contratos=contratos, sem_contrato=sem,
+                           pendentes=pendentes, convites=convites, pessoas=ClienteResponsavel.usuarios_disponiveis(),
                            resumo=FinContrato.resumo(), servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS,
                            REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS)
 
@@ -155,3 +163,188 @@ def honorarios_encerrar(cid):
               antes=_foto(c), depois={'situacao': 'ENCERRADO', 'fim': str(fim), 'empresa': c['nome_razao_social']})
     flash('Contrato de %s encerrado em %s. O 13º sai proporcional aos meses de casa.' % (c['nome_razao_social'], fim.strftime('%d/%m/%Y')), 'success')
     return redirect(url_for('financeiro.honorarios'))
+
+
+# ---------------------------------------------------------------------------
+# Etapa 5 (06/11/2026): funcionário autorizado cadastra (PENDENTE), Anderson aprova; convite por link
+# ---------------------------------------------------------------------------
+PERM_CAD = 'financeiro.honorarios_cadastrar'
+
+
+def _ler_form(f):
+    """(itens, dados) do formulário do contrato — o mesmo para o admin, o autorizado e o convite."""
+    itens = []
+    for d, v, s in zip(f.getlist('item_desc'), f.getlist('item_valor'), f.getlist('item_servico')):
+        d = (d or '').strip()
+        if not d and not (v or '').strip():
+            continue
+        itens.append({'descricao': d, 'valor': _dec(v), 'servico_id': int(s) if (s or '').isdigit() else None})
+    if not itens:
+        raise ValueError('Informe ao menos uma discriminação com valor.')
+    dia = f.get('dia_vencimento', type=int)
+    if not dia or not 1 <= dia <= 31:
+        raise ValueError('Dia de vencimento entre 1 e 31.')
+    inicio = _data(f.get('inicio'))
+    if not inicio:
+        raise ValueError('Informe o início do contrato.')
+    decimo_tipo = f.get('decimo_tipo') or 'NENHUM'
+    parcelas = None
+    if decimo_tipo == 'PERSONALIZADO':
+        parcelas = [{'mes': int(m), 'pct': float(_dec(p))} for m, p in zip(f.getlist('dec_mes'), f.getlist('dec_pct'))
+                    if (m or '').isdigit() and (p or '').strip()]
+    reajuste_tipo = f.get('reajuste_tipo') or 'SALARIO_MINIMO'
+    prox = _data(f.get('proximo_reajuste'))
+    if reajuste_tipo == 'SALARIO_MINIMO' and not prox:
+        prox = primeiro_reajuste(inicio)
+    dados = dict(valor=sum(i['valor'] for i in itens), dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
+                 plano=(f.get('plano') or '').strip() or None, decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
+                 decimo_desde=_data(f.get('decimo_desde')), reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
+                 reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
+                 gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0,
+                 observacao=(f.get('observacao') or '').strip() or None)
+    return itens, dados
+
+
+def _criar_pendente(cliente_id, f):
+    itens, dados = _ler_form(f)
+    cid = FinContrato.criar(cliente_id=cliente_id, itens=itens, criado_por=current_user.id, aprovado_por=None,
+                            situacao='PENDENTE', **dados)
+    novo = FinContrato.get(cid)
+    registrar('escrita.cadastrou_honorarios_pendente', 'financeiro', tabela='fin_contratos', registro_id=cid,
+              depois=dict(_foto(novo), cliente_id=cliente_id, empresa=novo['nome_razao_social']))
+    return novo
+
+
+@financeiro.route('/financeiro/honorarios/cadastrar')
+@permission_required(PERM_CAD)
+def honorarios_cadastrar():
+    """A tela de quem cadastra: as empresas que ELE cadastrou e ainda não têm honorários, e o que já
+    enviou (só a situação, sem valores — 'para eles essa tela não aparecerá mais com os valores')."""
+    minhas = [c for c in FinContrato.clientes_sem_contrato() if c.get('criado_por') == current_user.id]
+    enviados = FinContrato.listar(criado_por=current_user.id)
+    convites = execute_query(
+        """SELECT v.token, v.expira_em, cl.nome_razao_social, cl.numero_cliente FROM fin_honorarios_convites v
+             JOIN clientes cl ON cl.id = v.cliente_id
+            WHERE v.usado_em IS NULL AND v.expira_em > NOW() AND (v.usuario_id = %s OR v.usuario_id IS NULL)
+            ORDER BY v.id DESC""", (current_user.id,), fetch=True) or []
+    aba = request.args.get('aba') or 'sem'
+    return render_template('financeiro/honorarios.html', modo='cadastrar', aba=aba, busca=None, contratos=enviados,
+                           sem_contrato=minhas, convites_meus=convites, resumo={}, servicos=_servicos(),
+                           DECIMO_TIPOS=DECIMO_TIPOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(),
+                           SERVICO_HONORARIOS=SERVICO_HONORARIOS, acao_form=url_for('financeiro.honorarios_cadastrar_salvar'))
+
+
+@financeiro.route('/financeiro/honorarios/cadastrar/salvar', methods=['POST'])
+@permission_required(PERM_CAD)
+def honorarios_cadastrar_salvar():
+    cliente_id = request.form.get('cliente_id', type=int)
+    try:
+        ok = any(c['id'] == cliente_id and c.get('criado_por') == current_user.id for c in FinContrato.clientes_sem_contrato())
+        if not ok:
+            raise ValueError('Você só cadastra honorários das empresas que você mesmo cadastrou e que ainda não têm contrato.')
+        novo = _criar_pendente(cliente_id, request.form)
+        flash('Honorários de %s enviados para aprovação.' % novo['nome_razao_social'], 'success')
+    except (ValueError, InvalidOperation) as e:
+        flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
+    return redirect(url_for('financeiro.honorarios_cadastrar'))
+
+
+@financeiro.route('/financeiro/honorarios/<int:cid>/aprovar', methods=['POST'])
+@permission_required(PERM)
+def honorarios_aprovar(cid):
+    c = FinContrato.get(cid)
+    if not c or c['situacao'] != 'PENDENTE':
+        flash('Este contrato não está aguardando aprovação.', 'danger')
+        return redirect(url_for('financeiro.honorarios', aba='pendentes'))
+    FinContrato.atualizar(cid, {'situacao': 'ATIVO', 'aprovado_por': current_user.id})
+    registrar('escrita.aprovou_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
+              antes={'situacao': 'PENDENTE'}, depois=dict(_foto(FinContrato.get(cid)), empresa=c['nome_razao_social']))
+    flash('Honorários de %s aprovados: entram no próximo lote.' % c['nome_razao_social'], 'success')
+    return redirect(url_for('financeiro.honorarios', aba='pendentes'))
+
+
+@financeiro.route('/financeiro/honorarios/<int:cid>/reprovar', methods=['POST'])
+@permission_required(PERM)
+def honorarios_reprovar(cid):
+    c = FinContrato.get(cid)
+    if not c or c['situacao'] != 'PENDENTE':
+        flash('Este contrato não está aguardando aprovação.', 'danger')
+        return redirect(url_for('financeiro.honorarios', aba='pendentes'))
+    motivo = (request.form.get('motivo') or '').strip()
+    FinContrato.atualizar(cid, {'situacao': 'REPROVADO', 'observacao': ('Reprovado: ' + motivo)[:255] if motivo else 'Reprovado'})
+    registrar('escrita.reprovou_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
+              antes={'situacao': 'PENDENTE'}, depois={'situacao': 'REPROVADO', 'motivo': motivo, 'empresa': c['nome_razao_social']})
+    flash('Honorários de %s reprovados. A empresa volta para "Sem honorários".' % c['nome_razao_social'], 'info')
+    return redirect(url_for('financeiro.honorarios', aba='pendentes'))
+
+
+@financeiro.route('/financeiro/honorarios/convite', methods=['POST'])
+@permission_required(PERM)
+def honorarios_convite_novo():
+    import secrets
+    cliente_id = request.form.get('cliente_id', type=int)
+    usuario_id = request.form.get('usuario_id', type=int) or None
+    dias = request.form.get('dias', type=int) or 7
+    cl = execute_query('SELECT id, nome_razao_social FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
+    if not cl:
+        flash('Empresa não encontrada.', 'danger')
+        return redirect(url_for('financeiro.honorarios', aba='sem'))
+    token = secrets.token_urlsafe(24)
+    execute_query('INSERT INTO fin_honorarios_convites (token, cliente_id, usuario_id, criado_por, expira_em) '
+                  'VALUES (%s, %s, %s, %s, DATE_ADD(NOW(), INTERVAL %s DAY))',
+                  (token, cliente_id, usuario_id, current_user.id, dias), fetch=False)
+    link = url_for('financeiro.honorarios_convite', token=token, _external=True)
+    registrar('escrita.gerou_convite_honorarios', 'financeiro', tabela='fin_honorarios_convites', registro_id=None,
+              depois={'cliente_id': cliente_id, 'empresa': cl['nome_razao_social'], 'usuario_id': usuario_id, 'dias': dias})
+    flash('Link para cadastrar os honorários de %s (vale %d dias, uso único, exige login): %s' % (cl['nome_razao_social'], dias, link), 'success')
+    return redirect(url_for('financeiro.honorarios', aba='sem', busca=cl['nome_razao_social'][:20]))
+
+
+def _convite_valido(token):
+    v = execute_query('SELECT * FROM fin_honorarios_convites WHERE token = %s', (token,), fetch=True, fetch_one=True)
+    if not v:
+        return None, 'Este link não existe.'
+    if v['usado_em']:
+        return None, 'Este link já foi usado: os honorários foram cadastrados e aguardam aprovação.'
+    if v['expira_em'] < datetime.now():
+        return None, 'Este link venceu. Peça outro ao Anderson.'
+    if v['usuario_id'] and v['usuario_id'] != current_user.id:
+        return None, 'Este link foi feito para outra pessoa.'
+    return v, None
+
+
+@financeiro.route('/financeiro/honorarios/convite/<token>')
+@login_required
+def honorarios_convite(token):
+    """Só login: é o token que diz a empresa (e, se houver, a pessoa)."""
+    v, erro = _convite_valido(token)
+    if erro:
+        flash(erro, 'warning')
+        return redirect('/')
+    cl = execute_query('SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE id = %s', (v['cliente_id'],), fetch=True, fetch_one=True)
+    if FinContrato.por_cliente(v['cliente_id']):
+        flash('%s já tem contrato de honorários cadastrado.' % cl['nome_razao_social'], 'info')
+        return redirect('/')
+    return render_template('financeiro/honorarios.html', modo='convite', aba='sem', busca=None, contratos=[], sem_contrato=[],
+                           convite=dict(v, nome_razao_social=cl['nome_razao_social'], numero_cliente=cl['numero_cliente']),
+                           resumo={}, servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS,
+                           hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS,
+                           acao_form=url_for('financeiro.honorarios_convite_salvar', token=token))
+
+
+@financeiro.route('/financeiro/honorarios/convite/<token>/salvar', methods=['POST'])
+@login_required
+def honorarios_convite_salvar(token):
+    v, erro = _convite_valido(token)
+    if erro:
+        flash(erro, 'warning')
+        return redirect('/')
+    try:
+        novo = _criar_pendente(v['cliente_id'], request.form)
+        execute_query('UPDATE fin_honorarios_convites SET usado_em = NOW(), usado_por = %s, contrato_id = %s WHERE id = %s',
+                      (current_user.id, novo['id'], v['id']), fetch=False)
+        flash('Honorários de %s enviados para aprovação do Anderson. Obrigado!' % novo['nome_razao_social'], 'success')
+        return redirect('/')
+    except (ValueError, InvalidOperation) as e:
+        flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
+        return redirect(url_for('financeiro.honorarios_convite', token=token))

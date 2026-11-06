@@ -34,6 +34,7 @@ COLUNAS = [
     ('reajuste_obs', "VARCHAR(255) NULL COMMENT 'indice combinado, degraus do escalonado, motivo do adiamento'"),
     ('situacao', "VARCHAR(12) NOT NULL DEFAULT 'ATIVO' COMMENT 'PENDENTE|ATIVO|ENCERRADO|REPROVADO'"),
     ('conexa_contrato_id', "INT NULL COMMENT 'rastro da migracao (fin_mensalidades.contrato_conexa)'"),
+    ('observacao', "VARCHAR(255) NULL COMMENT 'recado de quem cadastrou / motivo da reprovacao'"),
     ('criado_por', 'INT NULL'),
     ('aprovado_por', 'INT NULL'),
     ('aprovado_em', 'DATETIME NULL'),

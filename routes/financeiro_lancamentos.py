@@ -76,7 +76,7 @@ def lancamentos():
                n_aprovar=len(FinLancamento.listar(EMP, status='LANCADO')) if admin else 0,
                situacao=FinLancamento.situacao_comissao)
     if aba == 'aprovar':
-        ctx['lista'] = FinLancamento.listar(EMP, status='LANCADO', busca=busca)
+        ctx['lista'] = FinLancamento.listar(EMP, status='LANCADO', busca=busca, origem='SERVICO')
     elif aba == 'comissoes':
         uid = request.args.get('u', type=int) if admin else current_user.id
         ctx['uid'] = uid
@@ -97,7 +97,7 @@ def lancamentos():
         ctx['acordos'] = FinComissaoAcordo.listar(so_ativos=False)
         ctx['pessoas'] = ClienteResponsavel.usuarios_disponiveis()
     else:
-        ctx['lista'] = FinLancamento.listar(EMP, lancado_por=quem, status=status, busca=busca)
+        ctx['lista'] = FinLancamento.listar(EMP, lancado_por=quem, status=status, busca=busca, origem='SERVICO')
         ctx['resumo'] = FinLancamento.resumo_pessoa(EMP, current_user.id) if not admin else None
     return render_template('financeiro/lancamentos.html', **ctx)
 

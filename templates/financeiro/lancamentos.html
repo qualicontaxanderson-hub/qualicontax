@@ -135,7 +135,7 @@
                 <tr>
                     <td>{% if l.comissao_status == 'LIBERADA' and not admin %}<input type="checkbox" name="lanc" value="{{ l.id }}" onchange="laSomaFechar()" data-v="{{ l.comissao_valor }}">{% endif %}</td>
                     <td class="fin-td-titulo">{{ l.nome_razao_social }}</td>
-                    <td>{{ l.servico_nome }}<span class="la-sub">{{ l.lancado_em.strftime('%d/%m/%Y') }} · {{ 'mensal' if l.destino == 'MENSAL' else 'avulsa' }}</span></td>
+                    <td>{% if l.origem == 'HONORARIOS' %}<strong>Honorários do cliente</strong>{% elif l.origem == 'INDICACAO' %}<strong>Indicação</strong>{% else %}{{ l.servico_nome }}{% endif %}<span class="la-sub">{{ l.descricao if l.origem != 'SERVICO' else l.lancado_em.strftime('%d/%m/%Y') ~ ' · ' ~ ('mensal' if l.destino == 'MENSAL' else 'avulsa') }}</span></td>
                     <td class="fin-valor fin-td-valor">{{ l.valor_total | float | format_currency }}</td>
                     <td class="fin-td-oculta">{% if l.titulo_vencimento %}vence {{ l.titulo_vencimento.strftime('%d/%m/%Y') }}{% elif l.destino == 'MENSAL' %}<span class="la-num">no lote de {{ l.competencia.strftime('%m/%Y') }}</span>{% else %}—{% endif %}</td>
                     <td class="fin-valor fin-td-valor"><strong>{{ l.comissao_valor | float | format_currency }}</strong></td>

@@ -161,6 +161,12 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     for i in itens:
         if i.get('lancamento_id'):
             FinLancamento.marcar_faturado(i['lancamento_id'], titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, lote_id=lote_id)
+    # comissão de honorários (cliente "dele") e de indicação: nasce aqui, liberada quando o título for pago
+    honor = sum(_d(i['valor']) for i in itens if i['origem'] == 'honorarios')
+    try:
+        FinLancamento.comissoes_do_lote(empresa_id, linha['cliente_id'], competencia, titulo_id, lote_id, honor, nfse_id, boleto_id)
+    except Exception:
+        logger.exception('[lote] comissões da empresa %s', linha['cliente_id'])
     return fechar('ok', titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, email='; '.join(a for a in avisos if a))
 
 

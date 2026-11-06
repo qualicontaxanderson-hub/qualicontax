@@ -56,22 +56,25 @@ def meses_de_casa(inicio, fim, ano):
 class FinContrato:
 
     @staticmethod
-    def listar(empresa_id=EMPRESA_QUALICONTAX, situacao=None, busca=None):
+    def listar(empresa_id=EMPRESA_QUALICONTAX, situacao=None, busca=None, criado_por=None):
         cond, params = ['c.empresa_id = %s'], [empresa_id]
         if situacao:
             cond.append('c.situacao = %s'); params.append(situacao)
+        if criado_por:
+            cond.append('c.criado_por = %s'); params.append(criado_por)
         if busca:
             cond.append('(cl.nome_razao_social LIKE %s OR cl.numero_cliente = %s OR cl.cpf_cnpj LIKE %s)')
             params += ['%%%s%%' % busca, busca, '%%%s%%' % busca]
         return execute_query(
             f"""SELECT c.*, cl.numero_cliente, cl.nome_razao_social, cl.nome_fantasia, cl.cpf_cnpj,
-                       cl.situacao AS cliente_situacao, s.nome AS servico_nome,
+                       cl.situacao AS cliente_situacao, s.nome AS servico_nome, uc.nome AS criado_por_nome,
                        (SELECT COUNT(*) FROM fin_contrato_itens i WHERE i.contrato_id = c.id) AS n_itens,
                        (SELECT COUNT(*) FROM contatos_clientes ct JOIN contatos_departamentos cd ON cd.contato_id = ct.id
                          WHERE ct.cliente_id = c.cliente_id AND ct.ativo = 1 AND cd.departamento_id = 8 AND ct.email <> '') AS n_contatos_fin
                   FROM fin_contratos c
                   JOIN clientes cl ON cl.id = c.cliente_id
                   LEFT JOIN nfse_servicos s ON s.id = c.servico_id
+                  LEFT JOIN usuarios uc ON uc.id = c.criado_por
                  WHERE {' AND '.join(cond)}
                  ORDER BY (cl.numero_cliente IS NULL), cl.numero_cliente + 0, cl.nome_razao_social""", tuple(params), fetch=True) or []
 
@@ -99,7 +102,7 @@ class FinContrato:
               plano=None, decimo_tipo='NENHUM', decimo_parcelas=None, reajuste_tipo='SALARIO_MINIMO',
               proximo_reajuste=None, reajuste_obs=None, situacao='ATIVO', fim=None, decimo_desde=None,
               servico_id=SERVICO_HONORARIOS, categoria_id=CATEGORIA_HONORARIOS, gerar_nfse=1, gerar_boleto=1,
-              conexa_contrato_id=None, criado_por=None, aprovado_por=None, empresa_id=EMPRESA_QUALICONTAX):
+              conexa_contrato_id=None, criado_por=None, aprovado_por=None, empresa_id=EMPRESA_QUALICONTAX, observacao=None):
         """Devolve o id. Recusa (ValueError) se a soma dos itens não bate com o valor ou se a empresa
         já tem contrato vigente (um por empresa)."""
         itens = [i for i in (itens or []) if i.get('descricao') and _d(i.get('valor'))]
@@ -122,14 +125,14 @@ class FinContrato:
             """INSERT INTO fin_contratos (empresa_id, cliente_id, descricao, valor, dia_vencimento, categoria_id,
                    gerar_nfse, gerar_boleto, discriminacao, inicio, fim, reajuste_mes, ativo,
                    servico_id, plano, decimo_tipo, decimo_parcelas, reajuste_tipo, proximo_reajuste, reajuste_obs,
-                   situacao, conexa_contrato_id, criado_por, aprovado_por, aprovado_em, decimo_desde)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   situacao, conexa_contrato_id, criado_por, aprovado_por, aprovado_em, decimo_desde, observacao)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, cliente_id, descricao, _d(valor), int(dia_vencimento), categoria_id, gerar_nfse, gerar_boleto,
              '; '.join('%s = R$ %s' % (i['descricao'], _d(i['valor'])) for i in itens), inicio, fim,
              1 if reajuste_tipo == 'SALARIO_MINIMO' else None, 1 if situacao == 'ATIVO' else 0,
              servico_id, plano, decimo_tipo, json.dumps(decimo_parcelas) if decimo_parcelas else None,
              reajuste_tipo, proximo_reajuste, reajuste_obs, situacao, conexa_contrato_id, criado_por,
-             aprovado_por, None, decimo_desde), fetch=False)
+             aprovado_por, None, decimo_desde, observacao), fetch=False)
         if aprovado_por:
             execute_query('UPDATE fin_contratos SET aprovado_em = NOW() WHERE id = %s', (cid,), fetch=False)
         FinContrato._gravar_itens(cid, itens)
@@ -146,7 +149,7 @@ class FinContrato:
     def atualizar(contrato_id, dados, itens=None):
         """``dados``: só as chaves permitidas abaixo. Itens, quando vêm, substituem os antigos e
         precisam somar o valor."""
-        permitidas = ('valor', 'dia_vencimento', 'inicio', 'fim', 'plano', 'decimo_tipo', 'decimo_parcelas', 'decimo_desde',
+        permitidas = ('valor', 'dia_vencimento', 'inicio', 'fim', 'plano', 'decimo_tipo', 'decimo_parcelas', 'decimo_desde', 'observacao',
                       'reajuste_tipo', 'proximo_reajuste', 'reajuste_obs', 'situacao', 'gerar_nfse', 'gerar_boleto',
                       'servico_id', 'descricao', 'aprovado_por')
         sets, params = [], []
@@ -176,7 +179,7 @@ class FinContrato:
     def clientes_sem_contrato(empresa_id=EMPRESA_QUALICONTAX):
         """Clientes ativos (numerados, não avulsos) sem contrato vigente — a lista da Alessandra."""
         return execute_query(
-            """SELECT cl.id, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj, cl.tipo_pessoa
+            """SELECT cl.id, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj, cl.tipo_pessoa, cl.criado_por
                  FROM clientes cl
                 WHERE cl.situacao = 'ATIVO' AND cl.avulso = 0
                   AND NOT EXISTS (SELECT 1 FROM fin_empresas fe WHERE fe.cliente_id = cl.id)   -- a própria Qualicontax, Brilho, Anderson PF

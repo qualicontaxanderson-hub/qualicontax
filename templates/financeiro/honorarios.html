@@ -38,14 +38,15 @@
 
 <div class="page-header">
     <div>
-        <h1 class="page-title"><i class="fas fa-file-signature" style="color: var(--primary-green);"></i> Honorários</h1>
-        <p class="page-subtitle">O contrato mensal de cada empresa: valor, vencimento, 13º e reajuste</p>
+        <h1 class="page-title"><i class="fas fa-file-signature" style="color: var(--primary-green);"></i> {{ 'Honorários' if modo == 'admin' else 'Cadastrar honorários' }}</h1>
+        <p class="page-subtitle">{% if modo == 'admin' %}O contrato mensal de cada empresa: valor, vencimento, 13º e reajuste{% elif modo == 'convite' %}Cadastro dos honorários de {{ convite.nome_razao_social }} — vai para aprovação do Anderson{% else %}As empresas que você cadastrou e ainda não têm honorários; o que você enviar vai para aprovação do Anderson{% endif %}</p>
     </div>
-    <div class="page-actions">
+    {% if modo == 'admin' %}<div class="page-actions">
         <button class="btn btn-primary" onclick="hoNovo()"><i class="fas fa-plus"></i> Novo contrato</button>
-    </div>
+    </div>{% endif %}
 </div>
 
+{% if modo == 'admin' %}
 <div class="fin-kpis">
     <div class="fin-kpi"><div class="fin-kpi-lbl">Contratos ativos</div><div class="fin-kpi-val">{{ resumo.n or 0 }}</div><div class="fin-kpi-pe">empresas com honorários</div></div>
     <div class="fin-kpi"><div class="fin-kpi-lbl">Honorários por mês</div><div class="fin-kpi-val">{{ (resumo.total or 0) | float | format_currency }}</div><div class="fin-kpi-pe">soma dos contratos ativos</div></div>
@@ -53,15 +54,22 @@
     <div class="fin-kpi"><div class="fin-kpi-lbl">Com 13º</div><div class="fin-kpi-val">{{ resumo.com_decimo or 0 }}</div><div class="fin-kpi-pe">parcela única ou duas parcelas</div></div>
     {% if resumo.pendentes %}<div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando aprovação</div><div class="fin-kpi-val">{{ resumo.pendentes }}</div><div class="fin-kpi-pe">cadastrados por funcionários</div></div>{% endif %}
 </div>
+{% endif %}
 
 <div class="ho-abas">
+    {% if modo == 'admin' %}
     <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>
-    <form class="ho-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}">
+    <a class="fin-chip {{ 'ativo' if aba == 'pendentes' }}" href="{{ url_for('financeiro.honorarios', aba='pendentes') }}">Aguardando aprovação <strong>{{ pendentes | length }}</strong></a>
+    {% elif modo == 'cadastrar' %}
+    <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='sem') }}">Minhas empresas sem honorários <strong>{{ sem_contrato | length }}</strong></a>
+    <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='com') }}">Enviados <strong>{{ contratos | length }}</strong></a>
+    {% endif %}
+    {% if modo == 'admin' %}<form class="ho-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}">
         <input type="hidden" name="aba" value="{{ aba }}">
         <input type="text" name="busca" class="form-control" placeholder="empresa, número ou CNPJ" value="{{ busca or '' }}">
         <button class="btn btn-outline" type="submit"><i class="fas fa-search"></i></button>
-    </form>
+    </form>{% endif %}
 </div>
 
 <div class="fin-caixa">
@@ -77,13 +85,60 @@
                     <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.id) }}">{{ c.nome_razao_social }}</a></td>
                     <td class="fin-td-oculta ho-num">{{ c.cpf_cnpj or '—' }}</td>
                     <td class="fin-td-oculta">{{ c.tipo_pessoa or '' }}</td>
-                    <td><button class="btn btn-outline btn-sm" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button>
+                        {% if modo == 'admin' %}<button class="btn btn-outline btn-sm" title="Gerar link para quem cadastrou a empresa preencher" onclick="hoConvite({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-link"></i> Link</button>{% endif %}</td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
-    {% else %}<div class="fin-vazio"><i class="fas fa-check-circle"></i> Todas as empresas ativas têm contrato de honorários.</div>{% endif %}
+    {% else %}<div class="fin-vazio"><i class="fas fa-check-circle"></i> {{ 'Todas as empresas ativas têm contrato de honorários.' if modo == 'admin' else 'Nenhuma empresa sua sem honorários.' }}</div>{% endif %}
+    {% if modo == 'admin' and convites %}
+    <p class="ho-sec" style="margin-top:16px;">Links em aberto</p>
+    <table class="fin-tab"><thead><tr><th>Empresa</th><th>Para</th><th>Vale até</th><th>Link</th></tr></thead><tbody>
+    {% for v in convites %}<tr><td>{{ v.nome_razao_social }}</td><td>{{ v.usuario_nome or 'qualquer usuário' }}</td><td>{{ v.expira_em.strftime('%d/%m/%Y') }}</td><td><code style="font-size:11px;">{{ url_for('financeiro.honorarios_convite', token=v.token, _external=True) }}</code></td></tr>{% endfor %}
+    </tbody></table>
+    {% endif %}
+    {% if modo == 'cadastrar' and convites_meus %}
+    <p class="ho-sec" style="margin-top:16px;">Links que o Anderson mandou para você</p>
+    <table class="fin-tab"><thead><tr><th>Empresa</th><th>Vale até</th><th></th></tr></thead><tbody>
+    {% for v in convites_meus %}<tr><td>{{ v.numero_cliente }} · {{ v.nome_razao_social }}</td><td>{{ v.expira_em.strftime('%d/%m/%Y') }}</td><td><a class="btn btn-primary btn-sm" href="{{ url_for('financeiro.honorarios_convite', token=v.token) }}">Cadastrar</a></td></tr>{% endfor %}
+    </tbody></table>
+    {% endif %}
+{% elif aba == 'pendentes' and modo == 'admin' %}
+    {% if pendentes %}
+    <div class="fin-rolar">
+        <table class="fin-tab" id="ho-tab-pend">
+            <thead><tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Honorários</th><th>Vence dia</th><th>Início</th><th>13º</th><th>Quem cadastrou</th><th>Recado</th><th>Ações</th></tr></thead>
+            <tbody>
+            {% for c in pendentes %}
+                <tr>
+                    <td class="fin-num">{{ c.numero_cliente }}</td>
+                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.nome_razao_social }}</a>{% if c.plano %}<span class="ho-plano">{{ c.plano }}</span>{% endif %}</td>
+                    <td class="fin-valor">{{ c.valor | float | format_currency }}</td>
+                    <td>dia {{ c.dia_vencimento }}</td>
+                    <td>{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}</td>
+                    <td>{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}única{% elif c.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}<span class="ho-num">sem</span>{% endif %}</td>
+                    <td>{{ c.criado_por_nome or '—' }}<span class="ho-plano">{{ c.criado_em.strftime('%d/%m/%Y %H:%M') if c.criado_em else '' }}</span></td>
+                    <td>{{ c.observacao or '' }}</td>
+                    <td class="la-acoes" style="white-space:nowrap;">
+                        <form method="POST" action="{{ url_for('financeiro.honorarios_aprovar', cid=c.id) }}" style="display:inline;" onsubmit="return confirm('Aprovar os honorários de {{ c.nome_razao_social }} ({{ c.valor | float | format_currency }})?')"><button class="btn btn-primary btn-sm" title="Aprovar"><i class="fas fa-check"></i></button></form>
+                        <button class="btn btn-outline btn-sm" title="Alterar antes de aprovar" onclick="hoEditar({{ c.id }})"><i class="fas fa-pen"></i></button>
+                        <button class="btn btn-outline btn-sm" title="Reprovar" onclick="hoReprovar({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-thumbs-down"></i></button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="fin-vazio"><i class="fas fa-check-circle"></i> Nada aguardando aprovação.</div>{% endif %}
+{% elif modo == 'cadastrar' %}
+    {% if contratos %}
+    <table class="fin-tab">
+        <thead><tr><th>Nº</th><th>Empresa</th><th>Enviado em</th><th>Situação</th></tr></thead>
+        <tbody>{% for c in contratos %}<tr><td class="fin-num">{{ c.numero_cliente }}</td><td>{{ c.nome_razao_social }}</td><td>{{ c.criado_em.strftime('%d/%m/%Y') if c.criado_em else '' }}</td><td><span class="fin-pilula {{ 'liquidado' if c.situacao == 'ATIVO' else ('alerta' if c.situacao == 'PENDENTE' else 'cancelado') }}">{{ {'PENDENTE': 'Aguardando aprovação', 'ATIVO': 'Aprovado', 'REPROVADO': 'Reprovado', 'ENCERRADO': 'Encerrado'}.get(c.situacao, c.situacao) }}</span>{% if c.situacao == 'REPROVADO' and c.observacao %}<span class="ho-plano">{{ c.observacao }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="fin-vazio">Você ainda não enviou nenhum cadastro de honorários.</div>{% endif %}
 {% else %}
     {% if contratos %}
     <div class="fin-rolar">
@@ -126,7 +181,7 @@
             <h3 id="ho-titulo">Contrato de honorários</h3>
             <button class="modal-close" type="button" onclick="hoFechar()">&times;</button>
         </div>
-        <form id="ho-form" method="POST" action="{{ url_for('financeiro.honorarios_salvar') }}">
+        <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}">
             <input type="hidden" name="contrato_id" id="ho-id">
             <input type="hidden" name="cliente_id" id="ho-cliente-id">
             <input type="hidden" name="aba" value="{{ aba }}">
@@ -187,6 +242,7 @@
                     <div class="form-group"><label>Próximo reajuste</label><input type="date" name="proximo_reajuste" id="ho-prox" class="form-control"><small class="ho-num">salário mínimo: em branco = primeiro janeiro após 12 meses</small></div>
                     <div class="form-group"><label>Observação</label><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" placeholder="índice, degraus, motivo"></div>
                 </div>
+                {% if modo != 'admin' %}<div class="form-group" style="margin-top:10px;"><label>Recado para quem aprova</label><input type="text" name="observacao" class="form-control" placeholder="ex.: combinado com o cliente em reunião de 05/11"></div>{% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="hoFechar()">Cancelar</button>
@@ -197,6 +253,24 @@
 </div>
 
 <form id="ho-form-encerrar" method="POST" style="display:none;"><input type="hidden" name="fim" id="ho-enc-fim"></form>
+<form id="ho-form-reprovar" method="POST" style="display:none;"><input type="hidden" name="motivo" id="ho-rep-motivo"></form>
+{% if modo == 'admin' %}
+<div id="hoConviteModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header"><h3>Link para cadastrar honorários</h3><button class="modal-close" type="button" onclick="document.getElementById('hoConviteModal').style.display='none'">&times;</button></div>
+        <form method="POST" action="{{ url_for('financeiro.honorarios_convite_novo') }}">
+            <input type="hidden" name="cliente_id" id="hc-cliente">
+            <div class="modal-body">
+                <p style="margin:0 0 10px; font-weight:600;" id="hc-nome"></p>
+                <div class="form-group"><label>Para quem</label><select name="usuario_id" class="form-control"><option value="">qualquer usuário com login</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}{% if p.departamento %} · {{ p.departamento }}{% endif %}</option>{% endfor %}</select></div>
+                <div class="form-group" style="margin-top:10px;"><label>Vale por (dias)</label><input type="number" name="dias" class="form-control" value="7" min="1" max="60"></div>
+                <p class="ho-num" style="margin:10px 0 0;">A pessoa entra com o login e a senha dela, vê só esta empresa, cadastra e o link morre. O contrato chega para você aprovar.</p>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="document.getElementById('hoConviteModal').style.display='none'">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fas fa-link"></i> Gerar link</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -278,6 +352,14 @@ function hoEncerrar(cid, nome) {
     var f = document.getElementById('ho-form-encerrar'); f.action = '/financeiro/honorarios/' + cid + '/encerrar';
     document.getElementById('ho-enc-fim').value = fim; f.submit();
 }
+function hoConvite(id, nome) { document.getElementById('hc-cliente').value = id; document.getElementById('hc-nome').textContent = nome; document.getElementById('hoConviteModal').style.display = 'block'; }
+function hoReprovar(cid, nome) {
+    var m = prompt('Reprovar os honorários de ' + nome + '. Motivo (vai para quem cadastrou):'); if (m === null) return;
+    var f = document.getElementById('ho-form-reprovar'); f.action = '/financeiro/honorarios/' + cid + '/reprovar'; document.getElementById('ho-rep-motivo').value = m; f.submit();
+}
+{% if modo == 'convite' %}
+document.addEventListener('DOMContentLoaded', function () { hoNovo({{ convite.cliente_id }}, {{ convite.nome_razao_social | tojson }}, {{ convite.numero_cliente | tojson }}); document.getElementById('ho-cli-trocar').style.display = 'none'; });
+{% endif %}
 document.getElementById('ho-form').addEventListener('submit', function (e) {
     if (!document.getElementById('ho-cliente-id').value) { e.preventDefault(); alert('Escolha a empresa.'); return; }
     var ok = false; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { if (hoNum(i.value) > 0) ok = true; });

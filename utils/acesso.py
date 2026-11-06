@@ -200,6 +200,15 @@ MAPA = {
     'financeiro.honorarios_json':          'financeiro.honorarios',
     'financeiro.honorarios_salvar':        'financeiro.honorarios',
     'financeiro.honorarios_encerrar':      'financeiro.honorarios',
+    'financeiro.honorarios_aprovar':       'financeiro.honorarios',
+    'financeiro.honorarios_reprovar':      'financeiro.honorarios',
+    'financeiro.honorarios_convite_novo':  'financeiro.honorarios',
+    # quem cadastra honorários da empresa que cadastrou (Melke, Gabriel, Guilherme, Alessandra): nasce PENDENTE
+    'financeiro.honorarios_cadastrar':     'financeiro.honorarios_cadastrar',
+    'financeiro.honorarios_cadastrar_salvar': 'financeiro.honorarios_cadastrar',
+    # o link de convite exige só login: é o token que diz a empresa e, se houver, a pessoa
+    'financeiro.honorarios_convite':       'LOGIN',
+    'financeiro.honorarios_convite_salvar': 'LOGIN',
     # Lançamentos de serviço e comissões (06/11/2026): quem lança vê só o seu; aprovar/pagar/acordos = admin na rota
     'financeiro.lancamentos':              'financeiro.lancamentos',
     'financeiro.lancamento_novo':          'financeiro.lancamentos',

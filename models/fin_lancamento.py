@@ -154,8 +154,10 @@ class FinLancamento:
 
     @staticmethod
     def listar(empresa_id, lancado_por=None, status=None, destino=None, competencia=None, cliente_id=None,
-               busca=None, comissao_status=None, limite=500):
+               busca=None, comissao_status=None, limite=500, origem=None):
         cond, params = ['l.empresa_id = %s'], [empresa_id]
+        if origem:
+            cond.append('l.origem = %s'); params.append(origem)
         if lancado_por:
             cond.append('l.lancado_por = %s'); params.append(lancado_por)
         if status:
@@ -241,9 +243,43 @@ class FinLancamento:
                          WHERE id = %s""", (titulo_id, nfse_id, boleto_id, lote_id, lid), fetch=False)
 
     @staticmethod
+    def comissoes_do_lote(empresa_id, cliente_id, competencia, titulo_id, lote_id, valor_honorarios, nfse_id=None, boleto_id=None):
+        """Grava as comissões de HONORARIOS e INDICACAO da empresa nesta competência, uma linha por acordo
+        vigente (idempotente por acordo × competência). A comissão fica AGUARDANDO até o título ser pago."""
+        criados = []
+        acordos = execute_query(
+            """SELECT * FROM fin_comissao_acordos WHERE cliente_id = %s AND ativo = 1 AND base IN ('HONORARIOS', 'INDICACAO')
+                  AND vigencia_inicio <= %s AND (vigencia_fim IS NULL OR vigencia_fim >= %s)""",
+            (cliente_id, competencia, competencia), fetch=True) or []
+        for a in acordos:
+            ja = execute_query('SELECT id FROM fin_lancamentos WHERE comissao_acordo_id = %s AND competencia = %s',
+                               (a['id'], competencia), fetch=True)
+            if ja:
+                continue
+            if a['base'] == 'INDICACAO':
+                n = execute_query('SELECT COUNT(*) n FROM fin_lancamentos WHERE comissao_acordo_id = %s', (a['id'],), fetch=True, fetch_one=True)['n']
+                if n >= int(a.get('parcelas') or 1):
+                    continue
+            com = FinComissaoAcordo.calcular(a, valor_honorarios)
+            if a['base'] == 'INDICACAO' and a['tipo'] == 'FIXO' and int(a.get('parcelas') or 1) > 1:
+                com = (_d(a['valor']) / int(a['parcelas'])).quantize(Decimal('0.01'))
+            if com <= 0:
+                continue
+            lid = execute_query(
+                """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, valor_total,
+                       destino, origem, competencia, status, lancado_por, aprovado_por, aprovado_em, titulo_id, nfse_id, boleto_id, lote_id,
+                       comissao_acordo_id, comissao_valor, comissao_status)
+                   VALUES (%s, %s, 1, %s, 1, %s, %s, 'MENSAL', %s, %s, 'FATURADO', %s, %s, NOW(), %s, %s, %s, %s, %s, %s, 'AGUARDANDO')""",
+                (empresa_id, cliente_id, ('Comissão sobre honorários' if a['base'] == 'HONORARIOS' else 'Indicação de cliente') + ' · ' + competencia.strftime('%m/%Y'),
+                 _d(valor_honorarios), _d(valor_honorarios), a['base'], competencia, a['usuario_id'], a.get('aprovado_por') or a['usuario_id'],
+                 titulo_id, nfse_id, boleto_id, lote_id, a['id'], com), fetch=False)
+            criados.append(lid)
+        return criados
+
+    @staticmethod
     def para_o_mensal(empresa_id, competencia, cliente_id=None):
         """Aprovados, destino MENSAL, da competência, ainda não cobrados — o que o lote junta."""
-        cond, params = ["l.empresa_id = %s", "l.status = 'APROVADO'", "l.destino = 'MENSAL'", "l.competencia = %s"], [empresa_id, competencia]
+        cond, params = ["l.empresa_id = %s", "l.status = 'APROVADO'", "l.destino = 'MENSAL'", "l.origem = 'SERVICO'", "l.competencia = %s"], [empresa_id, competencia]
         if cliente_id:
             cond.append('l.cliente_id = %s'); params.append(cliente_id)
         return execute_query(f"{FinLancamento.SELECT} WHERE {' AND '.join(cond)} ORDER BY l.cliente_id, l.id",
