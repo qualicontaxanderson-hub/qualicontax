@@ -271,4 +271,42 @@ def gerar_relatorio_xlsx(ctx):
         larga = (2, 4) if grupos else (3,)
         ws.column_dimensions[get_column_letter(i)].width = 34 if i in larga else 14
     ws.freeze_panes = f'A{hr+1}'
+
+    # Abas extras (ex.: "Vencimentos" das Entradas): cabeçalho na linha 1,
+    # filtro automático, datas como data e total por SUBTOTAL (respeita o filtro).
+    import datetime as _dt
+    for aba in ctx.get('abas') or []:
+        wx = wb.create_sheet(aba['titulo'][:31])
+        acols = aba['colunas']
+        for i, c in enumerate(acols, 1):
+            cell = wx.cell(row=1, column=i, value=c[0])
+            cell.font = white_bold; cell.fill = hdr_fill
+            cell.alignment = Alignment(horizontal='right' if c[1] == 'R' else 'left', vertical='center')
+        if not aba['linhas']:
+            wx.cell(row=2, column=1, value=aba.get('vazio', 'Nada no filtro.')).font = Font(name='Arial', size=10, italic=True)
+        for ri, row in enumerate(aba['linhas'], 2):
+            for i, v in enumerate(row, 1):
+                cell = wx.cell(row=ri, column=i, value=v)
+                cell.font = Font(name='Arial', size=10); cell.border = border
+                if isinstance(v, _dt.date):
+                    cell.number_format = 'DD/MM/YYYY'
+                if acols[i - 1][1] == 'R':
+                    cell.alignment = Alignment(horizontal='right')
+                    if isinstance(v, (int, float)):
+                        cell.number_format = 'R$ #,##0.00'
+        n = len(aba['linhas'])
+        if n:
+            tr = n + 2
+            wx.cell(row=tr, column=1, value='TOTAL').font = Font(name='Arial', bold=True, size=10)
+            for i, c in enumerate(acols, 1):
+                if c[1] == 'R':
+                    L = get_column_letter(i)
+                    cell = wx.cell(row=tr, column=i, value=f'=SUBTOTAL(9,{L}2:{L}{n+1})')
+                    cell.font = Font(name='Arial', bold=True); cell.number_format = 'R$ #,##0.00'
+                    cell.alignment = Alignment(horizontal='right')
+                wx.cell(row=tr, column=i).fill = tot_fill
+            wx.auto_filter.ref = f'A1:{get_column_letter(len(acols))}{n+1}'
+        for i, w in enumerate(aba.get('larguras') or [], 1):
+            wx.column_dimensions[get_column_letter(i)].width = w
+        wx.freeze_panes = 'A2'
     out = io.BytesIO(); wb.save(out); return out.getvalue()

@@ -4001,12 +4001,16 @@ def _rel_nome(escopo, ext):
     return base[:-4] + '.' + ext
 
 
-def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None, com_op=False):
+def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None, com_op=False,
+                parcelas=None):
     """Linhas do relatório (até ``limite``). Colunas 'R' = string BRL no PDF, número
     no Excel (pra somar). Contagens (Itens/NF-e) sempre string (não é moeda).
     ``chaves`` (lista), quando vem, recebe o cliente_id de cada linha, na mesma
     ordem — é por ele que o relatório de GRUPO separa as empresas.
-    ``com_op`` (Excel de Entradas/Saídas) põe a Operação no fim de cada linha."""
+    ``com_op`` (Excel de Entradas/Saídas) põe a Operação no fim de cada linha;
+    nas Entradas também Condição, Forma e Vencimento(s) (utils/nfe_cobranca).
+    ``parcelas`` (lista), quando vem, recebe uma entrada por vencimento das
+    compras — é a aba "Vencimentos" do Excel."""
     pdf = (formato == 'pdf')
     if escopo == 'nfse':
         rows = execute_query(
@@ -4065,12 +4069,17 @@ def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None, com_op=
     partes = ("n.dest_nome AS nome, n.dest_cnpj AS doc, n.dest_uf AS uf"
               if escopo == 'saida' else "n.emit_nome AS nome, n.emit_cnpj AS doc, n.emit_uf AS uf")
     rows = execute_query(
-        f"SELECT n.id, n.cliente_id, n.data_emissao, n.num_nota, n.serie, {partes}, n.cfop, "
+        f"SELECT n.id, n.cliente_id, n.chave_acesso, n.cancelada, n.data_emissao, n.num_nota, "
+        f"n.serie, {partes}, n.cfop, "
         f"n.valor_total, n.valor_icms, n.valor_pis, n.valor_cofins, n.operacao, n.natureza_operacao, "
         f"COALESCE(ic.qtd, 0) AS qtd_itens{hora} FROM nfe_importacoes n "
         f"LEFT JOIN (SELECT nfe_id, COUNT(*) AS qtd FROM nfe_itens GROUP BY nfe_id) ic ON ic.nfe_id = n.id "
         f"{where_sql} ORDER BY n.data_emissao DESC, n.id DESC LIMIT %s",
         tuple(params) + (limite,), fetch=True) or []
+    cobs = None
+    if com_op and escopo == 'entrada':
+        from utils import nfe_cobranca as _cob
+        cobs = _cob.carregar([r['chave_acesso'] for r in rows])
     out = []
     for r in rows:
         if chaves is not None:
@@ -4089,6 +4098,21 @@ def _rel_linhas(escopo, formato, where_sql, params, limite, chaves=None, com_op=
         ]
         if com_op:
             linha.append(_rotulo_operacao(r.get('operacao'), escopo, r.get('natureza_operacao')))
+        if cobs is not None:
+            cob = cobs.get(r['chave_acesso'])
+            cond = _cob.condicao(cob, r['data_emissao'])
+            venc = _cob.vencimentos_rotulo(cob, cond)
+            linha += [cond, _cob.formas_rotulo(cob['tpags']) if cob else '—', venc]
+            if parcelas is not None and cob and not r.get('cancelada'):
+                base = {'cliente_id': r['cliente_id'], 'fornecedor': r['nome'] or r['doc'] or '—',
+                        'cnpj': r['doc'] or '', 'nota': f"{r['num_nota'] or '—'}/{r['serie'] or '—'}",
+                        'emissao': r['data_emissao'], 'forma': _cob.formas_rotulo(cob['tpags'])}
+                datadas = [d for d in cob['dups'] if d[1]]
+                for i, (ndup, dv, vd) in enumerate(datadas, 1):
+                    parcelas.append({**base, 'parcela': f"{i}/{len(datadas)}"
+                                     + (f" ({ndup})" if ndup else ''), 'venc': dv, 'valor': vd})
+                if not datadas and venc == 'Vencimento não informado na nota':
+                    parcelas.append({**base, 'parcela': '—', 'venc': None, 'valor': float(v)})
         out.append(linha)
     return out
 
@@ -4137,6 +4161,43 @@ def _rel_grupos(linhas, chaves, colunas, pdf, doc_nome=('nota', 'notas')):
         grupos.append({'titulo': rotulo + (f' · {doc}' if doc else ''), 'rotulo': rotulo,
                        'linhas': rows, 'subtotal': sub})
     return grupos
+
+
+def _aba_vencimentos(parcelas):
+    """Aba "Vencimentos" do Excel de Entradas: uma linha por parcela das compras,
+    da mais antiga para a mais nova; as notas que dizem "boleto" sem data vão
+    no fim. A situação é pela DATA (o sistema não sabe se foi pago)."""
+    from datetime import timedelta
+    hoje = datetime.now(ZoneInfo('America/Sao_Paulo')).date()
+    ids = sorted({p['cliente_id'] for p in parcelas if p['cliente_id']})
+    nomes = {}
+    if ids:
+        ph = ','.join(['%s'] * len(ids))
+        for c in execute_query(f"SELECT id, numero_cliente, nome_razao_social FROM clientes "
+                               f"WHERE id IN ({ph})", tuple(ids), fetch=True) or []:
+            num = str(c['numero_cliente'] or '').strip()
+            nomes[c['id']] = f"{num} - {c['nome_razao_social']}" if num else c['nome_razao_social']
+
+    def _sit(d):
+        if d is None:
+            return 'Sem data na nota'
+        if d < hoje:
+            return 'Vencido'
+        if d == hoje:
+            return 'Vence hoje'
+        return 'Vence em até 7 dias' if d <= hoje + timedelta(days=7) else 'A vencer'
+
+    parcelas = sorted(parcelas, key=lambda p: (p['venc'] is None, p['venc'] or hoje, p['fornecedor']))
+    linhas = [[p['venc'], _sit(p['venc']), nomes.get(p['cliente_id'], 'Sem empresa vinculada'),
+               p['fornecedor'], p['cnpj'], p['nota'], p['emissao'], p['parcela'], p['forma'],
+               float(p['valor'] or 0)] for p in parcelas]
+    return {'titulo': 'Vencimentos',
+            'colunas': [('Vencimento', 'L'), ('Situação (pela data)', 'L'), ('Empresa', 'L'),
+                        ('Fornecedor', 'L'), ('CNPJ', 'L'), ('Nota', 'L'), ('Emissão', 'L'),
+                        ('Parcela', 'L'), ('Forma', 'L'), ('Valor R$', 'R')],
+            'larguras': [13, 20, 34, 34, 17, 12, 12, 14, 18, 14],
+            'linhas': linhas,
+            'vazio': 'Nenhuma compra a prazo com vencimento no filtro.'}
 
 
 def _exportar_relatorio(escopo, permissao, titulo):
@@ -4206,6 +4267,10 @@ def _exportar_relatorio(escopo, permissao, titulo):
             # no Excel, para filtrar; no PDF a coluna não cabe
             colunas.append(('Operação', 'L'))
             totais.append('')
+            if escopo == 'entrada':
+                # Condição/forma/vencimentos das compras (o time cobra por aqui)
+                colunas += [('Condição', 'L'), ('Forma de Pagamento', 'L'), ('Vencimento(s)', 'L')]
+                totais += ['', '', '']
 
     if total == 0:
         return jsonify({'error': 'Nada no filtro atual para o relatório.'}), 404
@@ -4217,23 +4282,26 @@ def _exportar_relatorio(escopo, permissao, titulo):
     # NFS-e não guarda a empresa na nota (o escopo é pelo documento) — fica como era.
     por_grupo = (escopo != 'nfse'
                  and not request.args.get('cliente_id', '').strip().isdigit())
-    aviso, linhas, grupos = None, [], None
+    aviso, linhas, grupos, parcelas = None, [], None, None
     if formato == 'pdf' and total > _REL_MAX_PDF:
         aviso = (f'Listagem completa no Excel — são {_rel_int(total)} registros '
                  f'(o PDF lista até {_rel_int(_REL_MAX_PDF)}).')
     else:
         limite = _REL_MAX_PDF if formato == 'pdf' else _LOTE_MAX_XML
         com_op = formato == 'xlsx' and escopo in ('entrada', 'saida')
+        parcelas = [] if (com_op and escopo == 'entrada') else None
         if por_grupo:
             # números crus (como no Excel) para somar o subtotal de cada
             # empresa; no PDF viram moeda depois, em _rel_grupos.
             chaves = []
-            linhas = _rel_linhas(escopo, 'xlsx', where_sql, params, limite, chaves, com_op=com_op)
+            linhas = _rel_linhas(escopo, 'xlsx', where_sql, params, limite, chaves, com_op=com_op,
+                                 parcelas=parcelas)
             grupos = _rel_grupos(linhas, chaves, colunas, pdf=(formato == 'pdf'),
                                  doc_nome=('CT-e', 'CT-e') if escopo == 'cte' else ('nota', 'notas'))
             linhas = []
         else:
-            linhas = _rel_linhas(escopo, formato, where_sql, params, limite, com_op=com_op)
+            linhas = _rel_linhas(escopo, formato, where_sql, params, limite, com_op=com_op,
+                                 parcelas=parcelas)
 
     ctx = {
         'titulo': titulo, 'empresa': _rel_empresa(), 'periodo': _rel_periodo(),
@@ -4241,6 +4309,7 @@ def _exportar_relatorio(escopo, permissao, titulo):
         'kpis': kpis, 'colunas': colunas, 'linhas': linhas, 'totais': totais,
         'logo_path': _REL_LOGO if os.path.exists(_REL_LOGO) else None, 'aviso': aviso,
         'grupos': grupos,
+        'abas': [_aba_vencimentos(parcelas)] if formato == 'xlsx' and parcelas is not None else [],
         'operacao': (_filtro_operacao_rotulo(request.args, escopo)
                      if escopo in ('entrada', 'saida') else None),
     }

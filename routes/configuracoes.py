@@ -1223,7 +1223,8 @@ def usuario_pendente_detalhe(pid):
 def _aprovar_pendente(pid, tipo, perfis, deps, admin_id):
     """Cria o usuário a partir da candidatura, em UMA transação (tudo ou nada).
 
-    Devolve o id do usuário criado. Qualquer AprovacaoErro faz a transação inteira
+    Devolve (id do usuário criado, nome da candidatura, login) — a rota usa o
+    nome e o login na mensagem pronta do link de senha. Qualquer AprovacaoErro faz a transação inteira
     reverter (transacao() dá rollback em exceção) — nem usuário, nem perfis, nem
     mudança de status sobrevivem a uma falha no meio.
     """
@@ -1298,7 +1299,7 @@ def _aprovar_pendente(pid, tipo, perfis, deps, admin_id):
         if cur.rowcount != 1:
             raise AprovacaoErro('Esta candidatura já foi decidida por outra pessoa.')
 
-    return uid
+    return uid, (cand.get('nome_completo') or ''), login
 
 
 @configuracoes.route('/usuarios/pendente/<int:pid>/aprovar', methods=['POST'])
@@ -1314,7 +1315,7 @@ def usuario_pendente_aprovar(pid):
     deps = [int(d) for d in request.form.getlist('departamentos') if d.isdigit()]
 
     try:
-        uid = _aprovar_pendente(pid, tipo, perfis, deps, current_user.id)
+        uid, nome, login = _aprovar_pendente(pid, tipo, perfis, deps, current_user.id)
     except AprovacaoErro as exc:
         # Falha esperada: pendência segue na fila para o admin ajustar.
         return jsonify(ok=False, msg=str(exc)), 409
@@ -1340,7 +1341,7 @@ def usuario_pendente_aprovar(pid):
               depois={'usuario_id': uid, 'tipo_usuario': tipo})
     return jsonify(ok=True, usuario_id=uid,
                    senha_url=senha_url, senha_prefixo=senha_prefixo,
-                   senha_nome=cand.get('nome_completo') or '',
+                   senha_nome=nome,
                    senha_login=login)
 
 

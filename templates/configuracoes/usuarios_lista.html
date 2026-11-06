@@ -456,15 +456,16 @@
   <div class="qc-modal">
     <button type="button" class="qc-x" title="Fechar" onclick="fecharSenhaLink()">&times;</button>
     <h3 class="qc-modal-tit">Acesso criado — falta a senha</h3>
-    <p class="qc-modal-sub">Envie este link para a pessoa <strong>definir a senha</strong>.
-       Vale <strong>1 vez</strong> e expira em <strong>72h</strong>. Você pode gerar
+    <p class="qc-modal-sub">O botão copia a <strong>mensagem de boas-vindas</strong> pronta
+       para o WhatsApp, com o login e o link para a pessoa <strong>criar a senha</strong>.
+       O link vale <strong>1 vez</strong> e expira em <strong>72h</strong>. Você pode gerar
        outro pela lista enquanto a senha não for definida.</p>
     <div class="qc-url-area">
       <div class="qc-url-rot">Link de definição de senha</div>
       <div class="qc-url" id="qsUrl"></div>
     </div>
     <button type="button" class="qc-btn-copiar" id="qsBtnCopiar" onclick="copiarSenhaUrl()">
-      COPIAR LINK
+      COPIAR MENSAGEM DE BOAS-VINDAS
     </button>
     <div class="qc-aviso">
       Prefixo <code id="qsPrefixo"></code>. Ao fechar, o link continua recopiável na
@@ -763,9 +764,8 @@ function copiarUrl() {
         btn.textContent = 'COPIE MANUALMENTE — Ctrl+C';
         btn.classList.add('ok');
     }
-    var msg = msgLinkSenha(el.dataset.nome, el.dataset.login, el.textContent.trim());
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(msg).then(copiouEfecha, copieManual);
+        navigator.clipboard.writeText(el.textContent.trim()).then(copiouEfecha, copieManual);
     } else { copieManual(); }
 }
 
@@ -956,10 +956,28 @@ function msgLinkSenha(nome, login, url) {
     // \n ESCAPADO, nunca quebra de linha literal dentro de aspas: uma quebra
     // real aqui é SyntaxError e mata o script INTEIRO da página — foi
     // exatamente o que deixou o botão do Q-Colabore morto em 20/08/2026.
+    // Texto de boas-vindas pedido pelo Anderson em 06/11/2026 (*negrito* e
+    // _itálico_ são do WhatsApp). As regras da senha espelham _senha_invalida
+    // de routes/senha.py: 8+ caracteres, ao menos uma letra e um número.
     return 'Olá, ' + primeiro + '! 👋\n\n'
-         + 'Segue o seu link para definir a sua senha de acesso ao Qualicontax:\n\n'
-         + url + '\n\n'
-         + 'O link é pessoal (usuário: ' + (login || '') + '), vale 1 vez e expira em 72 horas.';
+         + '*Seja muito bem-vindo(a) à Qualicontax!* 🎉\n\n'
+         + 'É uma alegria ter você com a gente. A partir de hoje você faz parte de um time '
+         + 'que cuida, todos os dias, da vida de centenas de empresas, e o seu trabalho '
+         + 'faz diferença nisso. 💚\n\n'
+         + 'O seu acesso ao *Sistema Qualicontax* já está pronto. Falta só um passo, '
+         + 'e ele é seu: *criar a sua senha*. 🔐\n\n'
+         + '👤 Seu login: *' + (login || '') + '*\n'
+         + '🔗 Crie sua senha aqui:\n' + url + '\n\n'
+         + '*Dicas para uma senha forte e só sua:*\n'
+         + '• no mínimo 8 caracteres, com letras e números (maiúsculas e um símbolo como ! @ # deixam ainda melhor);\n'
+         + '• fuja do óbvio: nada de data de nascimento, nome, CPF ou 123456;\n'
+         + '• uma frase curta que só você entende funciona muito bem, ex.: _MeuCafe@7daManha_ (mas crie a sua!);\n'
+         + '• não conte a senha para ninguém, nem para colegas: tudo o que é feito no sistema fica registrado no seu nome.\n\n'
+         + '⏳ O link é pessoal, vale *uma única vez* e expira em *72 horas*. '
+         + 'Se ele vencer, é só pedir um novo.\n\n'
+         + 'Depois de criar a senha, é só entrar em app.qualicontax.com.br com o seu login e a senha nova.\n\n'
+         + 'Qualquer dúvida, conte com a gente. Bom trabalho e seja bem-vindo(a)! 🚀\n'
+         + '*Equipe Qualicontax*';
 }
 function mostrarSenhaLink(url, prefixo, nome, login) {
     var el = document.getElementById('qsUrl');
@@ -968,7 +986,7 @@ function mostrarSenhaLink(url, prefixo, nome, login) {
     el.dataset.login = login || '';
     document.getElementById('qsPrefixo').textContent = (prefixo || '') + '…';
     var btn = document.getElementById('qsBtnCopiar');
-    btn.textContent = 'COPIAR LINK'; btn.classList.remove('ok');
+    btn.textContent = 'COPIAR MENSAGEM DE BOAS-VINDAS'; btn.classList.remove('ok');
     document.getElementById('qcSenhaLink').classList.add('aberto');
 }
 
@@ -988,8 +1006,9 @@ function copiarSenhaUrl() {
         try { document.execCommand('copy'); } catch (e) {}
         btn.textContent = 'COPIE MANUALMENTE — Ctrl+C'; btn.classList.add('ok');
     }
+    var msg = msgLinkSenha(el.dataset.nome, el.dataset.login, el.textContent.trim());
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(el.textContent.trim()).then(copiouEfecha, copieManual);
+        navigator.clipboard.writeText(msg).then(copiouEfecha, copieManual);
     } else { copieManual(); }
 }
 

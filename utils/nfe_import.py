@@ -187,6 +187,11 @@ def _save_nfe(parsed: dict, nome_arquivo: str, origem: str, xml_raw: str,
     if tipo == 'saida':
         from utils.nfe_pagamentos import registrar_saida
         registrar_saida(xml_raw, chave, cli, h['data_emissao'])
+    elif parsed.get('itens'):
+        # Compra completa (resumo da SEFAZ não tem XML): condição, forma e
+        # vencimentos das duplicatas (nfe_cobranca / nfe_duplicatas). Nunca levanta.
+        from utils.nfe_cobranca import registrar_entrada
+        registrar_entrada(xml_raw, chave)
 
     return 'ok'
 
