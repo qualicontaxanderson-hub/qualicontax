@@ -52,6 +52,11 @@ PERMISSION_CATALOG = {
         'financeiro.notas':               'Notas fiscais de serviço (emitir e consultar)',
         # Nasce sem perfil (02/11/2026): credenciais de banco e boletos — só admin até marcar.
         'financeiro.cobranca':            'Cobrança (contas Efí/Bradesco e boletos)',
+        # Parte 6 (06/11/2026): nascem sem perfil — só admin até marcar.
+        'financeiro.honorarios':          'Honorários: ver e editar os contratos de todas as empresas',
+        'financeiro.honorarios_cadastrar': 'Cadastrar honorários da empresa que eu cadastrei (vai para aprovação)',
+        'financeiro.lancamentos':         'Lançar serviço avulso e ver minhas comissões',
+        'financeiro.lote':                'Lote mensal de honorários (emitir a cobrança do mês)',
     },
     'Cadastros': {
         'clientes.index':                 'Listar Clientes',
