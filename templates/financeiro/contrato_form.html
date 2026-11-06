@@ -72,14 +72,19 @@
             <span class="pf-rico"><i class="fas fa-user-pen"></i></span>
             <label class="pf-rlbl">Quem assina pela empresa<small>sócio administrador; a assinatura vai por e-mail</small></label>
             <div class="pf-rval">
-                {% if emp and emp.socios %}<div>{% for s in emp.socios %}<span class="pf-socio" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }})"><i class="fas fa-user"></i> {{ s.nome }}{% if s.responsavel %} · administrador{% endif %}</span>{% endfor %}</div>{% endif %}
+                {% if emp and (emp.socios or emp.contatos) %}<div class="pf-lbl" style="margin-top:0;">Puxar do cadastro</div><div>
+                    {% for s in emp.socios %}<span class="pf-socio" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }}, '')"><i class="fas fa-user-tie"></i> {{ s.nome }}{% if s.responsavel %} · administrador{% else %} · sócio{% endif %}</span>{% endfor %}
+                    {% for s in emp.contatos %}<span class="pf-socio" style="background:#f8fafc; border-color:#cbd5e1;" onclick="pfSocio({{ s.nome | tojson }}, '', {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }})"><i class="fas fa-address-card"></i> {{ s.nome }}{% if s.cargo %} · {{ s.cargo }}{% endif %}</span>{% endfor %}
+                </div>{% endif %}
                 <div class="pf-g2">
                     <div><div class="pf-lbl">Nome completo</div><input type="text" name="rep_nome" id="rep_nome" class="form-control" value="{{ e0.rep_nome if e0 else '' }}" required></div>
                     <div><div class="pf-lbl">CPF</div><input type="text" name="rep_cpf" id="rep_cpf" class="form-control" value="{{ e0.rep_cpf if e0 else '' }}" placeholder="000.000.000-00"></div>
                     <div><div class="pf-lbl">Documento (como vai no contrato)</div><input type="text" name="rep_documento" class="form-control" value="{{ e0.rep_documento if e0 else '' }}" placeholder="ex.: CNH nº 02521989143 DETRAN/GO"></div>
                     <div><div class="pf-lbl">E-mail (recebe o link)</div><input type="email" name="rep_email" id="rep_email" class="form-control" value="{{ e0.rep_email if e0 else '' }}" required></div>
                     <div><div class="pf-lbl">Cargo</div><input type="text" name="rep_cargo" class="form-control" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"></div>
+                    <div><div class="pf-lbl">Celular</div><input type="text" name="rep_celular" id="rep_celular" class="form-control" value="{{ e0.rep_celular if e0 else '' }}" placeholder="(00) 00000-0000"></div>
                 </div>
+                <label class="pf-chk" style="margin-top:8px;"><input type="checkbox" name="guardar_contato" value="1"> Guardar esta pessoa nos contatos da empresa (para puxar da próxima vez)</label>
             </div>
         </div>
 
@@ -155,7 +160,7 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
 <script>
-function pfSocio(nome, cpf, email) { document.getElementById('rep_nome').value = nome; document.getElementById('rep_cpf').value = cpf || ''; if (email) document.getElementById('rep_email').value = email; }
+function pfSocio(nome, cpf, email, cel) { document.getElementById('rep_nome').value = nome; if (cpf) document.getElementById('rep_cpf').value = cpf; if (email) document.getElementById('rep_email').value = email; if (cel) document.getElementById('rep_celular').value = cel; }
 function pfSub() { var n = document.querySelectorAll('#pf-emps .pf-emp').length; var p = document.querySelector('#pf-emps .pf-emp .nome'); document.getElementById('pf-sub').textContent = n ? (p.textContent + (n > 1 ? ' + ' + (n - 1) : '')) : 'escolha a empresa'; }
 (function () {
     var q = document.getElementById('pf-busca'), sug = document.getElementById('pf-sug'), t;

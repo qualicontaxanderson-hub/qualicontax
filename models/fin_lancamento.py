@@ -256,11 +256,6 @@ class FinLancamento:
                                (a['id'], competencia), fetch=True)
             if ja:
                 continue
-            if a['base'] == 'HONORARIOS':
-                # Anderson (05/11): comissão de honorários só com o contrato de prestação ASSINADO pelo sistema
-                from models.prest_contrato import PrestContrato
-                if not PrestContrato.assinado_do_cliente(cliente_id):
-                    continue
             if a['base'] == 'INDICACAO':
                 n = execute_query('SELECT COUNT(*) n FROM fin_lancamentos WHERE comissao_acordo_id = %s', (a['id'],), fetch=True, fetch_one=True)['n']
                 if n >= int(a.get('parcelas') or 1):

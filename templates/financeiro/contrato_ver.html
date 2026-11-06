@@ -11,6 +11,10 @@
 .pv-ico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:17px; }
 .pv-st { margin-left:auto; font-size:11.5px; font-weight:700; padding:4px 12px; border-radius:99px; background:rgba(255,255,255,.16); color:#fff; }
 .pv-body { padding:14px 18px; }
+.pv-res { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px 16px; padding:14px 18px; border-bottom:1px solid #eef2f0; background:#f8fbf9; }
+.pv-res .l { font-size:10.5px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; }
+.pv-res .v { font-size:14px; font-weight:800; color:#0f3d2e; } .pv-res .v small { font-weight:600; color:#475569; font-size:12px; }
+.pv-res > div > small { display:block; font-size:11.5px; color:#7d968a; margin-top:2px; }
 .pv-frame { width:100%; height:78vh; border:0; border-radius:12px; background:#f1f5f9; }
 .pv-ass { list-style:none; margin:0; padding:0; }
 .pv-ass li { display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #eef2f0; }
@@ -34,6 +38,13 @@
         <div class="pv-head"><span class="pv-ico"><i class="fas fa-file-signature"></i></span>
             <div><h2>{{ c.titulo | title }} · nº {{ c.id }}</h2><p>{{ emp.numero or 'PF' }} · {{ emp.razao }}{% if c.dados.empresas | length > 1 %} + {{ c.dados.empresas | length - 1 }} empresas{% endif %} · {{ c.criado_em.strftime('%d/%m/%Y') }} por {{ c.criado_por_nome }}</p></div>
             <span class="pv-st">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span></div>
+        {% set d = c.dados %}
+        <div class="pv-res">
+            <div><div class="l">Contratante</div><div class="v">{{ emp.razao }}{% if d.empresas | length > 1 %} <small>+ {{ d.empresas | length - 1 }}</small>{% endif %}</div><small>assina: {{ emp.rep_nome }}</small></div>
+            <div><div class="l">Serviços</div><div class="v"><small>{% for k in d.areas %}{{ AREAS[k][0] | capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}{% if d.servicos_extras %}{% if d.areas %} + {% endif %}{{ d.servicos_extras | length }} específico{{ 's' if d.servicos_extras | length > 1 }}{% endif %}</small></div></div>
+            <div><div class="l">Honorários</div><div class="v">{{ brl(d.valor) }} <small>/ mês · dia {{ d.dia_vencimento }}</small></div><small>13º: {{ {'COBRADO': 'nov e dez', 'UNICA': 'dez, parcela única', 'ISENTO': 'isento'}.get(d.decimo, d.decimo) }}</small></div>
+            <div><div class="l">Vigência</div><div class="v">{{ d.inicio[8:10] }}/{{ d.inicio[5:7] }}/{{ d.inicio[:4] }}</div><small>aviso prévio {{ d.aviso_previo }} dias · foro {{ d.foro }}</small></div>
+        </div>
         <div class="pv-body"><iframe class="pv-frame" src="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}#toolbar=1" title="PDF do contrato"></iframe></div>
     </div>
     <div>

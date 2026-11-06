@@ -100,10 +100,12 @@ class ClienteResponsavel:
 
     @staticmethod
     def departamentos_que_pode(usuario, convite):
-        """Pelo link, cada um escolhe só o responsável do PRÓPRIO departamento. Quem gerou o link, a Diretoria e o
-        admin escolhem todos. A Legalização também responde por Certificado Digital e Visita (são dela)."""
+        """Pelo link, QUALQUER pessoa logada vincula QUALQUER departamento; o que importa é que fica registrado quem
+        vinculou (Anderson, 06/11: "o Anderson pode vincular o DP, Fiscal e Contábil, a marcação constará que quem
+        vinculou foi o Anderson; a Julian pode vincular o Henrique ou vice-versa"). None = todos."""
+        return None
         if usuario.is_admin() or convite['criado_por'] == usuario.id:
-            return None                                  # None = todos
+            return None                                  # (regra antiga, 1ª versão do dia: só o próprio departamento)
         dep = getattr(usuario, 'departamento_id', None)
         nome = execute_query('SELECT nome FROM departamentos WHERE id = %s', (dep,), fetch=True, fetch_one=True) if dep else None
         nome = (nome or {}).get('nome')

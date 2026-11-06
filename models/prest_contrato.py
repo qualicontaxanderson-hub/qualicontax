@@ -95,6 +95,9 @@ class PrestContrato:
         c['uf'] = (e.get('estado') or '').strip()
         c['socios'] = execute_query("""SELECT nome, cpf, qualificacao, responsavel, email FROM socios_clientes
                                         WHERE cliente_id = %s AND ativo = 1 ORDER BY responsavel DESC, nome""", (cliente_id,), fetch=True) or []
+        # quem assina pode ser um terceiro: os CONTATOS da empresa também viram atalho (Anderson, 06/11)
+        c['contatos'] = execute_query("""SELECT id, nome, cargo, email, celular FROM contatos_clientes
+                                          WHERE cliente_id = %s AND ativo = 1 ORDER BY principal DESC, nome""", (cliente_id,), fetch=True) or []
         return c
 
     @staticmethod

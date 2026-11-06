@@ -25,6 +25,22 @@ PERM = 'financeiro.contratos'
 assinatura = Blueprint('assinatura', __name__)
 
 
+def _remetente():
+    """Os e-mails do contrato saem de financeiro@qualicontax.com.br (Anderson, 06/11): a caixa da conta de cobrança
+    padrão da Qualicontax. Sem ela configurada, cai na caixa do Railway (app@)."""
+    try:
+        from models.fin_cobranca import FinCobrancaConta
+        conta = FinCobrancaConta.padrao_da_empresa(2)
+        return FinCobrancaConta.remetente_email(conta['id']) if conta else None
+    except Exception as e:
+        logger.warning('[contratos] sem caixa financeiro@: %s', e)
+        return None
+
+
+def _enviar(para, assunto, html, texto, anexos=None):
+    return email_envio.enviar(para, assunto, html, texto, remetente=_remetente(), anexos=anexos)
+
+
 # ---------------------------------------------------------------- montagem do formulário
 def _data(raw):
     s = (raw or '').strip()
@@ -59,7 +75,8 @@ def _ler_form(f):
     if not empresas:
         raise ValueError('Escolha ao menos uma empresa.')
     rep = {'rep_nome': (f.get('rep_nome') or '').strip(), 'rep_cpf': (f.get('rep_cpf') or '').strip(), 'rep_documento': (f.get('rep_documento') or '').strip(),
-           'rep_cargo': (f.get('rep_cargo') or 'sócio administrador').strip(), 'rep_email': (f.get('rep_email') or '').strip().lower()}
+           'rep_cargo': (f.get('rep_cargo') or 'sócio administrador').strip(), 'rep_email': (f.get('rep_email') or '').strip().lower(),
+           'rep_celular': (f.get('rep_celular') or '').strip()}
     if not rep['rep_nome'] or not rep['rep_email']:
         raise ValueError('Informe quem assina pela empresa e o e-mail dele (a assinatura vai por e-mail).')
     empresas[0].update(rep)
@@ -101,6 +118,25 @@ def _ler_form(f):
         'assinantes': assinantes, 'titulo': (f.get('titulo') or '').strip() or None,
     }
     return dados
+
+
+def _guardar_contato(dados, f):
+    """Quem assina é um terceiro? Com a caixa marcada, a pessoa entra nos CONTATOS da empresa (Anderson, 06/11: "ter
+    opção para colocar o nome e os dados no cadastro da empresa para puxar de lá, nos contatos")."""
+    if not f.get('guardar_contato'):
+        return
+    e = dados['empresas'][0]
+    ja = execute_query('SELECT id FROM contatos_clientes WHERE cliente_id = %s AND ativo = 1 AND LOWER(email) = %s', (e['cliente_id'], e['rep_email']), fetch=True)
+    if ja:
+        return
+    from models.contato_cliente import ContatoCliente
+    try:
+        ContatoCliente.create(e['cliente_id'], e['rep_nome'], cargo=(e.get('rep_cargo') or 'Representante')[:60], email=e['rep_email'],
+                             celular=(f.get('rep_celular') or '').strip() or None)
+        registrar('escrita.criou_contato_pelo_contrato', 'clientes', tabela='contatos_clientes', registro_id=e['cliente_id'],
+                  depois={'nome': e['rep_nome'], 'email': e['rep_email'], 'empresa': e['razao']})
+    except Exception as ex:                                   # contato é cortesia: não derruba o contrato
+        logger.warning('[contratos] não guardou o contato: %s', ex)
 
 
 def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
@@ -163,6 +199,7 @@ def contrato_salvar():
     cid = f.get('contrato_id', type=int)
     try:
         dados = _ler_form(f)
+        _guardar_contato(dados, f)
         if cid:
             PrestContrato.atualizar(cid, dados)
             registrar('escrita.alterou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, depois={'empresa': dados['empresas'][0]['razao']})
@@ -186,7 +223,7 @@ def contrato_ver(cid):
     ass = PrestContrato.assinantes(cid)
     for a in ass:
         a['link'] = url_for('assinatura.assinar', token=a['token'], _external=True)
-    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, montado=PrestContrato.montar(c['dados']), hoje=date.today())
+    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl)
 
 
 def _pdf_bytes(c):
@@ -216,7 +253,7 @@ def _email_assinatura(a, c, link):
             'Leva menos de dois minutos.</p><p style="color:#64748b;font-size:12px;">Se não reconhece este documento, ignore este e-mail.</p>'
             % (a['nome'], c['titulo'].title(), emp, link))
     texto = 'Olá, %s. A Qualicontax enviou para sua assinatura eletrônica o documento %s (%s). Abra o link para ver e assinar: %s' % (a['nome'], c['titulo'].title(), emp, link)
-    return email_envio.enviar([a['email']], 'Assinatura: %s – %s' % (c['titulo'].title(), emp), html, texto)
+    return _enviar([a['email']], 'Assinatura: %s – %s' % (c['titulo'].title(), emp), html, texto)
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/enviar', methods=['POST'])
@@ -285,7 +322,7 @@ def assinar(token):
     if erro and not a:
         return render_template('assinar.html', erro=erro), 404
     todos = PrestContrato.assinantes(c['id'])
-    return render_template('assinar.html', a=a, c=c, erro=erro, todos=todos, montado=PrestContrato.montar(c['dados']),
+    return render_template('assinar.html', a=a, c=c, erro=erro, todos=todos, montado=PrestContrato.montar(c['dados']), AREAS=AREAS, brl=brl,
                            codigo_pedido=bool(a.get('codigo_enviado_em')) and not a.get('assinado_em'))
 
 
@@ -307,7 +344,7 @@ def assinar_codigo(token):
     codigo = PrestContrato.gerar_codigo(a['id'])
     html = ('<p>Seu código para assinar <b>%s</b>:</p><p style="font-size:28px;letter-spacing:6px;font-weight:800;">%s</p>'
             '<p>Vale por 30 minutos. Se não foi você, ignore.</p>' % (c['titulo'].title(), codigo))
-    ok, err = email_envio.enviar([a['email']], 'Código de assinatura: %s' % codigo, html, 'Seu código para assinar: %s (vale 30 minutos).' % codigo)
+    ok, err = _enviar([a['email']], 'Código de assinatura: %s' % codigo, html, 'Seu código para assinar: %s (vale 30 minutos).' % codigo)
     if not ok:
         return jsonify({'ok': False, 'erro': 'Não consegui enviar o e-mail: %s' % err}), 500
     return jsonify({'ok': True, 'email': _mascara(a['email'])})
@@ -374,7 +411,7 @@ def _concluir(c):
     para = [a['email'] for a in ass if a.get('email')]
     html = ('<p>O documento <b>%s</b> (%s) foi assinado eletronicamente por todas as partes. Segue a via assinada em anexo, com o registro das assinaturas.</p>'
             % (c['titulo'].title(), emp.get('razao')))
-    email_envio.enviar(para, 'Contrato assinado – %s' % emp.get('razao'), html, 'Contrato assinado por todas as partes. Via em anexo.',
-                       anexos=[(nome_arq, pdf, 'application/pdf')])
+    _enviar(para, 'Contrato assinado – %s' % emp.get('razao'), html, 'Contrato assinado por todas as partes. Via em anexo.',
+            anexos=[(nome_arq, pdf, 'application/pdf')])
     registrar('escrita.concluiu_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=c['id'],
               depois={'empresa': emp.get('razao'), 'dropbox': path, 'copias_para': para})

@@ -9,58 +9,81 @@
 :root { --verde:#15803d; --escuro:#0f3d2e; }
 * { box-sizing:border-box; }
 body { margin:0; font-family:'Segoe UI', system-ui, -apple-system, sans-serif; background:#f4f8f5; color:#0f172a; font-size:14px; }
-.as-top { background:linear-gradient(150deg,#0b3b2b,#147a4b); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; }
-.as-top .ico { width:38px; height:38px; border-radius:11px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:16px; }
+.as-top { background:linear-gradient(150deg,#0b3b2b,#147a4b); color:#fff; padding:14px 20px; }
+.as-top-in { max-width:1120px; margin:0 auto; display:flex; align-items:center; gap:14px; }
+.as-logo { background:#fff; border-radius:12px; padding:6px 10px; display:flex; align-items:center; }
+.as-logo img { height:34px; display:block; }
 .as-top h1 { margin:0; font-size:15px; } .as-top p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
-.as-wrap { max-width:1100px; margin:16px auto; padding:0 12px; display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; align-items:start; }
+.as-top .sel { margin-left:auto; font-size:11.5px; font-weight:700; background:rgba(255,255,255,.16); padding:5px 12px; border-radius:99px; white-space:nowrap; }
+.as-wrap { max-width:1120px; margin:16px auto; padding:0 12px; display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:16px; align-items:start; }
 .as-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; overflow:hidden; }
-.as-frame { width:100%; height:78vh; border:0; background:#f1f5f9; }
+.as-res { padding:14px 18px; display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px 16px; border-bottom:1px solid #eef2f0; }
+.as-res .l { font-size:10.5px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; }
+.as-res .v { font-size:14px; font-weight:800; color:var(--escuro); }
+.as-res .v small { font-weight:600; color:#475569; font-size:12px; }
+.as-frame { width:100%; height:72vh; border:0; background:#f1f5f9; display:block; }
+.as-abrir { display:flex; align-items:center; gap:10px; padding:10px 18px; background:#f8fbf9; border-top:1px solid #eef2f0; font-size:12.5px; color:#475569; }
+.as-abrir a { margin-left:auto; }
 .as-body { padding:16px 18px; }
-.as-passo { display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #eef2f0; }
+.as-passo { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid #eef2f0; }
 .as-passo:last-child { border-bottom:0; }
-.as-n { width:26px; height:26px; border-radius:50%; background:#e8f5ed; color:var(--verde); font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; }
-.as-n.ok { background:#dcfce7; } .as-n.off { background:#f1f5f9; color:#94a3b8; }
-.as-lbl { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin:8px 0 4px; }
+.as-n { width:28px; height:28px; border-radius:50%; background:#e8f5ed; color:var(--verde); font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; }
+.as-n.ok { background:var(--verde); color:#fff; }
+.as-lbl { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin:10px 0 4px; }
 input.c { width:100%; height:44px; border:1px solid #dbe7df; border-radius:11px; padding:0 12px; font-size:14px; font-weight:600; }
 input.c:focus { outline:none; border-color:var(--verde); box-shadow:0 0 0 3px rgba(21,128,61,.14); }
 input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:monospace; }
-.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:11px; padding:11px 16px; font-weight:700; font-size:14px; border:1px solid transparent; cursor:pointer; width:100%; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:11px; padding:11px 16px; font-weight:700; font-size:14px; border:1px solid transparent; cursor:pointer; width:100%; text-decoration:none; }
 .btn-p { background:var(--verde); color:#fff; } .btn-p:disabled { background:#cbd5e1; cursor:not-allowed; }
-.btn-o { background:#fff; color:var(--escuro); border-color:#dbe7df; }
+.btn-o { background:#fff; color:var(--escuro); border-color:#dbe7df; } .btn-o.sm { width:auto; padding:7px 12px; font-size:12.5px; }
 .as-msg { font-size:12.5px; color:#64748b; line-height:1.5; }
-.as-ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:12px; padding:14px; font-size:14px; }
+.as-ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:12px; padding:14px; font-size:14px; line-height:1.5; }
 .as-erro { background:#fff1f2; border:1px solid #fecdd3; color:#9f1239; border-radius:12px; padding:12px; font-size:13px; margin-bottom:10px; }
 .as-lista { list-style:none; margin:0; padding:0; font-size:12.5px; }
 .as-lista li { display:flex; gap:8px; align-items:center; padding:5px 0; color:#334155; }
 .as-lista i { width:16px; text-align:center; }
-.as-ace { display:flex; gap:9px; align-items:flex-start; font-size:13px; margin:10px 0; }
-.as-ace input { width:18px; height:18px; margin-top:1px; accent-color:var(--verde); }
-.as-flash { max-width:1100px; margin:12px auto 0; padding:0 12px; }
+.as-ace { display:flex; gap:9px; align-items:flex-start; font-size:13px; margin:12px 0; line-height:1.45; }
+.as-ace input { width:18px; height:18px; margin-top:1px; accent-color:var(--verde); flex:none; }
+.as-flash { max-width:1120px; margin:12px auto 0; padding:0 12px; }
 .as-flash div { border-radius:12px; padding:10px 14px; font-size:13px; margin-bottom:8px; }
-.as-flash .success { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; } .as-flash .danger { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
+.as-flash .success { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; } .as-flash .danger { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; } .as-flash .warning { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
 .as-rodape { text-align:center; font-size:11.5px; color:#94a3b8; padding:18px; }
-@media (max-width:900px) { .as-wrap { grid-template-columns:1fr; } .as-frame { height:55vh; } }
+@media (max-width:900px) { .as-wrap { grid-template-columns:1fr; } .as-frame { height:52vh; } .as-top .sel { display:none; } }
 </style>
 </head>
 <body>
-<div class="as-top"><span class="ico"><i class="fas fa-file-signature"></i></span>
-    <div><h1>Assinatura eletrônica · Qualicontax Assessoria Contábil</h1><p>{% if c %}{{ c.titulo | title }} · {{ c.dados.empresas[0].razao }}{% else %}documento{% endif %}</p></div></div>
+<div class="as-top"><div class="as-top-in">
+    <span class="as-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+    <div><h1>Assinatura eletrônica</h1><p>{% if c %}{{ c.titulo | title }} · {{ c.dados.empresas[0].razao }}{% else %}documento{% endif %}</p></div>
+    {% if a %}<span class="sel"><i class="fas fa-user"></i> {{ a.nome }} · {{ a.papel | capitalize }}</span>{% endif %}
+</div></div>
 {% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}<div class="as-flash">{% for cat, m in msgs %}<div class="{{ cat }}">{{ m }}</div>{% endfor %}</div>{% endif %}{% endwith %}
 
 {% if not a %}
 <div class="as-wrap" style="grid-template-columns:1fr; max-width:560px;"><div class="as-card"><div class="as-body"><div class="as-erro">{{ erro }}</div><p class="as-msg">Se você recebeu este link da Qualicontax, responda o e-mail avisando que ele não abre.</p></div></div></div>
 {% else %}
+{% set d = c.dados %}
 <div class="as-wrap">
-    <div class="as-card"><iframe class="as-frame" src="{{ url_for('assinatura.assinar_pdf', token=a.token) }}#toolbar=1" title="Contrato"></iframe></div>
+    <div class="as-card">
+        <div class="as-res">
+            <div><div class="l">Contratante</div><div class="v">{{ d.empresas[0].razao }}{% if d.empresas | length > 1 %} <small>+ {{ d.empresas | length - 1 }} empresas</small>{% endif %}</div></div>
+            <div><div class="l">Serviços</div><div class="v"><small>{% for k in d.areas %}{{ AREAS[k][0] | capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}{% if d.servicos_extras %}{% if d.areas %}, {% endif %}{{ d.servicos_extras | length }} específico{{ 's' if d.servicos_extras | length > 1 }}{% endif %}</small></div></div>
+            <div><div class="l">Honorários</div><div class="v">{{ brl(d.valor) }} <small>/ mês, dia {{ d.dia_vencimento }}</small></div></div>
+            <div><div class="l">Início</div><div class="v">{{ d.inicio[8:10] }}/{{ d.inicio[5:7] }}/{{ d.inicio[:4] }}</div></div>
+            <div><div class="l">13º honorário</div><div class="v"><small>{{ {'COBRADO': 'novembro e dezembro', 'UNICA': 'dezembro, parcela única', 'ISENTO': 'isento'}.get(d.decimo, d.decimo) }}</small></div></div>
+        </div>
+        <iframe class="as-frame" src="{{ url_for('assinatura.assinar_pdf', token=a.token) }}#toolbar=1" title="Contrato"></iframe>
+        <div class="as-abrir"><i class="fas fa-file-pdf" style="color:#15803d;"></i> O contrato completo está acima. Não aparece? <a class="btn btn-o sm" href="{{ url_for('assinatura.assinar_pdf', token=a.token) }}" target="_blank"><i class="fas fa-up-right-from-square"></i> Abrir o PDF</a></div>
+    </div>
     <div>
         <div class="as-card" style="margin-bottom:12px;"><div class="as-body">
             {% if erro %}<div class="as-erro">{{ erro }}</div>
             {% elif a.assinado_em %}
-            <div class="as-ok"><i class="fas fa-circle-check"></i> <b>Você assinou</b> em {{ a.assinado_em.strftime('%d/%m/%Y às %H:%M') }}.
+            <div class="as-ok"><i class="fas fa-circle-check"></i> <b>Você assinou</b> em {{ a.assinado_em.strftime('%d/%m/%Y às %H:%M') }}.<br>
                 {% if c.status == 'ASSINADO' %}Todas as partes assinaram: a via com o registro das assinaturas foi enviada ao seu e-mail.{% else %}Quando todos assinarem, a via final vai para o seu e-mail.{% endif %}</div>
             {% else %}
-            <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o contrato</b> ao lado (ou <a href="{{ url_for('assinatura.assinar_pdf', token=a.token) }}" target="_blank">abra o PDF</a>).</div></div>
-            <div class="as-passo"><span class="as-n" id="n2">2</span><div style="flex:1;"><b>Receba o código</b> no e-mail <b>{{ a.email }}</b>.
+            <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o contrato</b> ao lado.</div></div>
+            <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Receba o código</b> no e-mail <b>{{ a.email }}</b>.
                 <div style="margin-top:8px;"><button type="button" class="btn btn-o" id="bt-cod" onclick="pedirCodigo()"><i class="fas fa-envelope"></i> {{ 'Enviar outro código' if codigo_pedido else 'Enviar código por e-mail' }}</button></div>
                 <div class="as-msg" id="cod-msg" style="margin-top:6px;">{% if codigo_pedido %}Um código já foi enviado. Não chegou? Olhe o spam ou peça outro.{% endif %}</div></div></div>
             <form method="POST" action="{{ url_for('assinatura.assinar_confirmar', token=a.token) }}" id="f-ass">
@@ -82,7 +105,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
     </div>
 </div>
 {% endif %}
-<div class="as-rodape">Qualicontax Assessoria Contábil Ltda · CNPJ 11.158.475/0001-27 · faleconosco@qualicontax.com.br</div>
+<div class="as-rodape">Qualicontax Assessoria Contábil Ltda · CNPJ 11.158.475/0001-27 · Estrada de Mogi das Cruzes, 221, 1º andar · São Paulo/SP · faleconosco@qualicontax.com.br</div>
 <script>
 function pedirCodigo() {
     var b = document.getElementById('bt-cod'), m = document.getElementById('cod-msg'); b.disabled = true; m.textContent = 'Enviando…';

@@ -65,7 +65,8 @@
 
 {% if aba == 'todos' and sem_contrato %}
 <div class="pc-sem" style="margin-top:18px;">
-    <h2><i class="fas fa-triangle-exclamation" style="color:#b45309;"></i> Com honorários e sem contrato assinado ({{ sem_contrato | length }})</h2>
+    <h2><i class="fas fa-file-circle-plus" style="color:#15803d;"></i> Com honorários e ainda sem contrato no sistema ({{ sem_contrato | length }})</h2>
+    <p style="margin:0 0 10px; font-size:12px; color:#7d968a;">Empresas que pagam honorários e ainda não têm contrato de prestação feito por aqui. Não tem a ver com pagamento: é só a lista do que falta montar.</p>
     <ul>
     {% for s in sem_contrato %}<li><span class="n">{{ s.numero_cliente or 'PF' }}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.nome_razao_social }}</span><a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}">Montar</a></li>{% endfor %}
     </ul>

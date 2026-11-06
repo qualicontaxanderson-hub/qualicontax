@@ -51,7 +51,7 @@
         <span class="rs-mico"><i class="fas fa-user-tie"></i></span>
         <div>
             <h3>Responsáveis no escritório</h3>
-            <p>{{ convite.numero_cliente }} · {{ convite.nome_razao_social }} · link de {{ convite.criado_por_nome }}, vale até {{ convite.expira_em.strftime('%d/%m') }}</p>
+            <p>{{ convite.numero_cliente }} · {{ convite.nome_razao_social }} · link de {{ convite.criado_por_nome }}, vale até {{ convite.expira_em.strftime('%d/%m') }} · fica registrado quem vinculou cada um</p>
         </div>
     </div>
     <form id="rs-form" action="{{ url_for('clientes.responsaveis_convite_salvar', token=convite.token) }}" method="POST" novalidate>
@@ -61,7 +61,7 @@
             <div class="rs-row{% if not r.usuario_id and pode %} rs-row-falta{% endif %}{% if not pode %} rs-row-trava{% elif permitidos is not none %} rs-row-minha{% endif %}">
                 <span class="rs-rico"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i></span>
                 <label class="rs-rlbl" for="resp_{{ r.departamento_id }}">{{ r.departamento }}
-                    <small>{% if not pode %}{% if r.usuario_id %}já definido{% else %}quem é do {{ r.departamento }} escolhe{% endif %}{% elif r.usuario_id %}quem responde hoje{% else %}escolha quem responde{% endif %}</small></label>
+                    <small>{% if r.usuario_id %}quem responde hoje{% else %}escolha quem responde{% endif %}</small></label>
                 <span class="rs-sel">
                     <span class="rs-av"></span>
                     <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}" {% if not pode %}disabled{% endif %}>
@@ -82,7 +82,7 @@
         <div class="rs-mfoot">
             <span class="rs-mnote" id="rs-nota"></span>
             <a class="btn btn-secondary" href="/">Depois</a>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar{% if permitidos is not none %} o meu{% endif %}</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button>
         </div>
     </form>
 </div>
