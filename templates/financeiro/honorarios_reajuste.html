@@ -36,7 +36,30 @@
 .rj-sec small { color:#7d968a; }
 .rj-sec .btn { margin-left:auto; }
 .rj-sec .btn + .btn { margin-left:0; }
-.rj-chk { width:16px; height:16px; }
+.rj-chk { width:18px; height:18px; accent-color:#15803d; cursor:pointer; }
+.gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:14px; }
+.gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px 18px 14px; display:flex; flex-direction:column; gap:10px; transition:border-color .15s, box-shadow .15s; min-width:0; cursor:pointer; }
+.gc-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.gc-card.rj-on { border-color:#86efac; box-shadow:0 0 0 2px rgba(34,197,94,.18); }
+.gc-card.rj-off { opacity:.55; }
+.gc-head { display:flex; align-items:center; gap:12px; }
+.gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; letter-spacing:.5px; flex-shrink:0; }
+.gc-ava.pf { background:linear-gradient(135deg,#8b5cf6,#4c1d95); font-size:12px; }
+.gc-tit { flex:1; min-width:0; }
+.gc-tit h3 { margin:0; font-size:14.5px; font-weight:800; color:#0f172a; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gc-tit small { display:block; font-size:11.5px; color:#7d968a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gc-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.gc-tag { font-size:12px; font-weight:600; border:1px solid; border-radius:7px; padding:2px 9px; background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.gc-tag.cinza { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.rj-val { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; background:#f6f9f7; border-radius:12px; padding:10px 12px; }
+.rj-val .l { font-size:10.5px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; }
+.rj-val .v { font-size:17px; font-weight:800; color:#0f172a; font-variant-numeric:tabular-nums; }
+.rj-val .v.novo { color:#15803d; }
+.rj-val .seta { color:#94a3b8; font-size:14px; }
+.rj-val > div:last-child { text-align:right; }
+.rj-pe { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#7d968a; }
+.rj-pe b { color:#0f3d2e; font-variant-numeric:tabular-nums; }
+@media (max-width:640px) { .gc-grid { grid-template-columns:1fr; } }
 .rj-grupo { display:inline-block; font-size:11px; font-weight:700; border-radius:6px; padding:2px 8px; background:#eef6f1; color:#15803d; }
 @media (max-width:900px) { .rj-hbody { grid-template-columns:1fr; } .rj-hcol + .rj-hcol { border-left:0; border-top:1px solid #eef3f0; } .rj-kpis { grid-template-columns:1fr; } }
 </style>
@@ -82,23 +105,22 @@
     <button type="button" class="btn btn-outline btn-sm" onclick="rjMarcar(true)">marcar todos</button><button type="button" class="btn btn-outline btn-sm" style="margin-left:0;" onclick="rjMarcar(false)">desmarcar</button></div>
 <div class="fin-caixa">
 {% if padrao %}
-<div class="fin-rolar">
-<table class="fin-tab" id="rj-tab">
-    <thead><tr><th></th><th>Nº</th><th>Empresa</th><th>Grupo</th><th style="text-align:right;">Hoje</th><th style="text-align:right;">Reajustado</th><th>Próximo reajuste</th></tr></thead>
-    <tbody>
+<div class="gc-grid" id="rj-grid">
     {% for c in padrao %}
-    <tr>
-        <td><input type="checkbox" class="rj-chk" name="ids" value="{{ c.id }}" checked data-valor="{{ c.valor }}"></td>
-        <td class="fin-num">{{ c.numero_cliente }}</td>
-        <td>{{ c.nome_razao_social }}<span class="ho-plano">{% for i in c.itens %}{{ i.descricao }} R$ {{ '%.2f' | format(i.valor) | replace('.', ',') }}{% if not loop.last %} · {% endif %}{% endfor %}</span></td>
-        <td>{% if c.grupo %}<span class="rj-grupo">{{ c.grupo }}</span>{% endif %}</td>
-        <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
-        <td class="fin-num rj-novo" style="text-align:right;" data-novo>—</td>
-        <td class="fin-num">{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</td>
-    </tr>
+    <article class="gc-card rj-item rj-on" data-id="{{ c.id }}">
+        <header class="gc-head">
+            <span class="gc-ava {% if not c.numero_cliente %}pf{% endif %}">{{ c.numero_cliente or 'PF' }}</span>
+            <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</h3><small>{% for i in c.itens %}{{ i.descricao }} R$ {{ '{:,.2f}'.format(i.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% if not loop.last %} · {% endif %}{% endfor %}</small></div>
+            <input type="checkbox" class="rj-chk" name="ids" value="{{ c.id }}" checked data-valor="{{ c.valor }}" title="Entra no reajuste">
+        </header>
+        <div class="rj-val">
+            <div><div class="l">Hoje</div><div class="v">R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div></div>
+            <i class="fas fa-arrow-right seta"></i>
+            <div><div class="l">Reajustado</div><div class="v novo" data-novo>—</div></div>
+        </div>
+        <div class="rj-pe"><span>{% if c.grupo %}<span class="gc-tag">{{ c.grupo }}</span>{% else %}<span class="gc-tag cinza">sem grupo</span>{% endif %}</span><span>próximo reajuste <b>{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</b></span></div>
+    </article>
     {% endfor %}
-    </tbody>
-</table>
 </div>
 {% else %}<div class="fin-vazio">Nenhum contrato do padrão com reajuste até {{ ate.strftime('%m/%Y') }}.</div>{% endif %}
 </div>
@@ -106,45 +128,37 @@
 
 {% if proprios %}
 <div class="rj-sec"><h2><span class="rj-ico"><i class="fas fa-sliders"></i></span> Regra própria</h2><small>índice próprio, data própria ou escalonado: abra o contrato e ajuste</small></div>
-<div class="fin-caixa">
-<div class="fin-rolar">
-<table class="fin-tab">
-    <thead><tr><th>Nº</th><th>Empresa</th><th>Regra</th><th style="text-align:right;">Hoje</th><th>Próximo reajuste</th><th>Observação</th><th></th></tr></thead>
-    <tbody>
+<div class="gc-grid">
     {% for c in proprios %}
-    <tr>
-        <td class="fin-num">{{ c.numero_cliente }}</td><td>{{ c.nome_razao_social }}</td><td>{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}</td>
-        <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
-        <td class="fin-num">{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</td><td>{{ c.reajuste_obs or '' }}</td>
-        <td><a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.honorarios', busca=c.numero_cliente) }}">Abrir</a></td>
-    </tr>
+    <article class="gc-card" onclick="location.href='{{ url_for('financeiro.honorarios', busca=c.numero_cliente or c.nome_razao_social[:20]) }}'" title="Abrir o contrato">
+        <header class="gc-head">
+            <span class="gc-ava {% if not c.numero_cliente %}pf{% endif %}">{{ c.numero_cliente or 'PF' }}</span>
+            <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</h3><small>{{ c.reajuste_obs or REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}</small></div>
+            <span class="gc-tag cinza">{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}</span>
+        </header>
+        <div class="rj-pe"><span>hoje <b>R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</b></span><span>próximo reajuste <b>{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</b></span></div>
+    </article>
     {% endfor %}
-    </tbody>
-</table>
-</div>
 </div>
 {% endif %}
 
 {% if aplicados %}
 <div class="rj-sec"><h2><span class="rj-ico"><i class="fas fa-clock-rotate-left"></i></span> Já aplicados para {{ ate.strftime('%m/%Y') }}</h2><small>{{ aplicados | length }} contratos · desfazer volta ao valor anterior</small></div>
-<div class="fin-caixa">
-<div class="fin-rolar">
-<table class="fin-tab">
-    <thead><tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Antes</th><th style="text-align:right;">Depois</th><th>%</th><th>Quando</th><th>Por</th><th></th></tr></thead>
-    <tbody>
+<div class="gc-grid">
     {% for r in aplicados %}
-    <tr>
-        <td class="fin-num">{{ r.numero_cliente }}</td><td>{{ r.nome_razao_social }}</td>
-        <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(r.valor_antes).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
-        <td class="fin-num rj-novo" style="text-align:right;">R$ {{ '{:,.2f}'.format(r.valor_depois).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
-        <td class="fin-num">{{ ('%.4f' | format(r.percentual)).rstrip('0').rstrip('.').replace('.', ',') }}%</td>
-        <td class="fin-num">{{ r.aplicado_em.strftime('%d/%m %H:%M') }}</td><td>{{ r.aplicado_por_nome or '' }}</td>
-        <td><form method="POST" action="{{ url_for('financeiro.honorarios_reajuste_desfazer', rid=r.id) }}" onsubmit="return confirm('Desfazer o reajuste de {{ r.nome_razao_social | e }} e voltar a R$ {{ '%.2f' | format(r.valor_antes) }}?');"><button class="btn btn-outline btn-sm" type="submit"><i class="fas fa-rotate-left"></i> Desfazer</button></form></td>
-    </tr>
+    <article class="gc-card" style="cursor:default;">
+        <header class="gc-head">
+            <span class="gc-ava {% if not r.numero_cliente %}pf{% endif %}">{{ r.numero_cliente or 'PF' }}</span>
+            <div class="gc-tit"><h3 title="{{ r.nome_razao_social }}">{{ r.nome_razao_social }}</h3><small>{{ ('%.4f' | format(r.percentual)).rstrip('0').rstrip('.').replace('.', ',') }}% · {{ r.aplicado_em.strftime('%d/%m %H:%M') }}{% if r.aplicado_por_nome %} · {{ r.aplicado_por_nome }}{% endif %}</small></div>
+            <form method="POST" action="{{ url_for('financeiro.honorarios_reajuste_desfazer', rid=r.id) }}" onsubmit="return confirm('Desfazer o reajuste de {{ r.nome_razao_social | e }} e voltar a R$ {{ '%.2f' | format(r.valor_antes) }}?');"><button class="btn btn-outline btn-sm" type="submit"><i class="fas fa-rotate-left"></i> Desfazer</button></form>
+        </header>
+        <div class="rj-val">
+            <div><div class="l">Antes</div><div class="v">R$ {{ '{:,.2f}'.format(r.valor_antes).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div></div>
+            <i class="fas fa-arrow-right seta"></i>
+            <div><div class="l">Depois</div><div class="v novo">R$ {{ '{:,.2f}'.format(r.valor_depois).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div></div>
+        </div>
+    </article>
     {% endfor %}
-    </tbody>
-</table>
-</div>
 </div>
 {% endif %}
 {% endblock %}
@@ -155,8 +169,9 @@ function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFract
 function rjPct() { var s = (document.getElementById('rj-pct').value || '').trim().replace(/\./g, '').replace(',', '.'); var p = parseFloat(s); return isNaN(p) ? null : p; }
 function rjCalc() {
     var p = rjPct(), antes = 0, depois = 0, n = 0;
-    document.querySelectorAll('#rj-tab tbody tr').forEach(function (tr) {
+    document.querySelectorAll('.rj-item').forEach(function (tr) {
         var chk = tr.querySelector('.rj-chk'), v = parseFloat(chk.dataset.valor), cel = tr.querySelector('[data-novo]');
+        tr.classList.toggle('rj-on', chk.checked); tr.classList.toggle('rj-off', !chk.checked);
         var novo = p === null ? null : Math.round(v * (1 + p / 100) * 100) / 100;
         cel.textContent = novo === null ? '—' : brl(novo);
         if (chk.checked) { n++; antes += v; if (novo !== null) depois += novo; }
@@ -168,7 +183,8 @@ function rjCalc() {
 }
 function rjMarcar(on) { document.querySelectorAll('.rj-chk').forEach(function (c) { c.checked = on; }); rjCalc(); }
 document.getElementById('rj-pct').addEventListener('input', rjCalc);
-document.querySelectorAll('.rj-chk').forEach(function (c) { c.addEventListener('change', rjCalc); });
+document.querySelectorAll('.rj-chk').forEach(function (c) { c.addEventListener('change', rjCalc); c.addEventListener('click', function (e) { e.stopPropagation(); }); });
+document.querySelectorAll('.rj-item').forEach(function (card) { card.addEventListener('click', function () { var c = card.querySelector('.rj-chk'); c.checked = !c.checked; rjCalc(); }); });
 document.getElementById('rj-form').addEventListener('submit', function (e) {
     var p = rjPct(), n = document.getElementById('rj-n').textContent;
     if (!confirm('Aplicar ' + p.toLocaleString('pt-BR') + '% em ' + n + ' contratos a partir de ' + document.getElementById('rj-vig').value.split('-').reverse().join('/') + '?\nDá para desfazer um a um depois.')) e.preventDefault();
