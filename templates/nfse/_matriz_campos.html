@@ -129,6 +129,23 @@
             <label style="margin-top:26px;"><input type="checkbox" name="iss_retido" value="1" {{ 'checked' if cfg.iss_retido }}> ISS retido pelo tomador (padrão)</label>
         </div>
     </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>PIS/COFINS da empresa — CST</label>
+            <input type="text" name="piscofins_cst" class="form-control" maxlength="2" value="{{ cfg.piscofins_cst or '' }}" placeholder="01">
+            <span class="nf-ajuda">Só fora do Simples. 01 = tributável. Vazio no Simples.</span>
+        </div>
+        <div class="form-group">
+            <label>Alíquota do PIS (%)</label>
+            <input type="text" name="aliquota_pis" class="form-control" value="{{ cfg.aliquota_pis or '' }}" inputmode="decimal" placeholder="0,65">
+            <span class="nf-ajuda">Presumido 0,65 · Real 1,65.</span>
+        </div>
+        <div class="form-group">
+            <label>Alíquota da COFINS (%)</label>
+            <input type="text" name="aliquota_cofins" class="form-control" value="{{ cfg.aliquota_cofins or '' }}" inputmode="decimal" placeholder="3,00">
+            <span class="nf-ajuda">Presumido 3,00 · Real 7,60.</span>
+        </div>
+    </div>
 </div>
 
 <div class="nf-sec">

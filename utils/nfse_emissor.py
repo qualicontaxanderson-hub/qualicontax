@@ -296,17 +296,23 @@ def _gravar_rascunho(emitida_id, p: Pedido, cfg, emissor, agora):
 
 
 # --- nacional ---------------------------------------------------------------
-def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora):
-    from utils.integrations.nfse_adn import client as adn, dps as D, emissao as E
-    sess = adn.abrir_sessao(cert)
-    x509, chave, _ = sess.material
-    amb = execute_query('SELECT ambiente FROM nfse_emitidas WHERE id = %s', (emitida_id,),
-                        fetch=True, fetch_one=True)['ambiente']
+# Municípios cujo CNC não tem cadastro complementar: mandar a IM do prestador é recusado (E0120).
+MUNICIPIOS_SEM_IM = {'3550308'}      # São Paulo
+
+
+def montar_dps(numero, p: Pedido, cfg, cert, agora, amb):
+    """O ``DPS`` desta nota — única montagem, usada no envio e na prévia (06/11/2026)."""
+    from utils.integrations.nfse_adn import dps as D
+    fora_do_simples = cfg.get('op_simp_nac') == 1
     d = D.DPS(
         tp_amb=int(amb), serie=p.serie, numero=numero, dh_emissao=agora, competencia=p.competencia,
         loc_emissao=_dig(cfg['municipio_ibge']),
-        # IM do prestador NÃO vai: São Paulo não tem cadastro complementar no CNC (E0120, 31/10/2026).
-        prestador=D.Pessoa(documento=cert.cnpj, email=cfg.get('email_remetente') or ''),
+        # IM do prestador: depende do município. São Paulo não tem cadastro complementar no CNC e
+        # RECUSA a IM (E0120, 31/10/2026); Goiatuba EXIGE (E0116, 06/11/2026). Vai quando a matriz
+        # tem e o município não está em MUNICIPIOS_SEM_IM.
+        prestador=D.Pessoa(documento=cert.cnpj, email=cfg.get('email_remetente') or '',
+                           inscricao_municipal=('' if _dig(cfg.get('municipio_ibge')) in MUNICIPIOS_SEM_IM
+                                                else _dig(cfg.get('inscricao_municipal')))),
         op_simp_nac=cfg['op_simp_nac'], reg_ap_trib_sn=cfg.get('reg_ap_trib_sn'), reg_esp_trib=cfg.get('reg_esp_trib') or 0,
         # IM do tomador também NÃO vai no nacional: é opcional no leiaute e o Sefin valida
         # contra o cadastro do município (mesma família do E0120). Só a prefeitura de SP usa.
@@ -320,12 +326,27 @@ def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora):
         valor_servico=p.valor_servico, trib_issqn=p.trib_issqn,
         tp_ret_issqn=2 if p.iss_retido else 1,
         # o Simples não informa alíquota; fora do Simples a alíquota declarada vai
-        p_aliq=p.aliquota_iss if (cfg.get('op_simp_nac') == 1 and p.aliquota_iss is not None) else None,
+        # 0 ou vazio = não informa: o governo aplica a alíquota do município (provado 06/11/2026)
+        p_aliq=p.aliquota_iss if (cfg.get('op_simp_nac') == 1 and p.aliquota_iss) else None,
         ret_pis=p.ret_pis, ret_cofins=p.ret_cofins, ret_inss=p.ret_inss, ret_irrf=p.ret_irrf, ret_csll=p.ret_csll,
         fin_nfse=p.fin_nfse, ind_final=p.ibscbs_ind_final, c_ind_op=p.ibscbs_cind_op, ind_dest=p.ibscbs_ind_dest,
         cst=p.ibscbs_cst, c_class_trib=p.ibscbs_cclasstrib,
         leiaute=D.LEIAUTE_POR_AMBIENTE[int(amb)],
+        # PIS/COFINS próprio da empresa fora do Simples (matriz): vai mesmo sem retenção.
+        pc_cst=(_dig(cfg.get('piscofins_cst')) if fora_do_simples else ''),
+        p_aliq_pis=(cfg.get('aliquota_pis') if fora_do_simples else None),
+        p_aliq_cofins=(cfg.get('aliquota_cofins') if fora_do_simples else None),
     )
+    return d
+
+
+def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora):
+    from utils.integrations.nfse_adn import client as adn, dps as D, emissao as E
+    sess = adn.abrir_sessao(cert)
+    x509, chave, _ = sess.material
+    amb = execute_query('SELECT ambiente FROM nfse_emitidas WHERE id = %s', (emitida_id,),
+                        fetch=True, fetch_one=True)['ambiente']
+    d = montar_dps(numero, p, cfg, cert, agora, amb)
     xml = D.xml_dps(d)
     assinado = D.assinar_dps(xml, d.id, chave, x509)
     execute_query('UPDATE nfse_emitidas SET dps_id = %s, xml_dps = %s WHERE id = %s', (d.id, assinado, emitida_id))

@@ -117,6 +117,12 @@ class DPS:
     ret_inss: Decimal = Decimal('0')      # vRetCP
     ret_irrf: Decimal = Decimal('0')
     ret_csll: Decimal = Decimal('0')
+    # PIS/COFINS PRÓPRIO da empresa fora do Simples (06/11/2026). Notas reais de Presumido/Real
+    # em Goiás trazem piscofins{CST 01, vBCPisCofins, pAliqPis 0.65, pAliqCofins 3.00, vPis,
+    # vCofins, tpRetPisCofins} mesmo SEM retenção. Vazio (Simples) = comportamento antigo.
+    pc_cst: str = ''
+    p_aliq_pis: Decimal = None
+    p_aliq_cofins: Decimal = None
     # IBS/CBS declarado
     fin_nfse: int = 0
     ind_final: int = 0
@@ -146,10 +152,37 @@ class DPS:
 LEIAUTE_POR_AMBIENTE = {1: '1.01', 2: 'nt009'}   # 31/10/2026
 
 
+def _tp_ret_pis_cofins(pc_retido, csll_retida):
+    """Tabela do XSD 1.01: 0 nada retido; 3 PIS/COFINS/CSLL retidos; 4 PIS/COFINS sim, CSLL não;
+    8 PIS/COFINS não, CSLL sim."""
+    return {(False, False): 0, (True, True): 3, (True, False): 4, (False, True): 8}[(pc_retido, csll_retida)]
+
+
+def _piscofins_proprio(d: DPS, pis_ret, cofins_ret, csll_ret) -> str:
+    """Grupo completo da empresa fora do Simples: base = valor do serviço; o valor é o retido
+    quando houve retenção, senão o calculado pelas alíquotas da matriz."""
+    base = _d(d.valor_servico)
+    ap, ac = _d(d.p_aliq_pis or 0), _d(d.p_aliq_cofins or 0)
+    vpis = pis_ret if pis_ret > 0 else (base * ap / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
+    vcof = cofins_ret if cofins_ret > 0 else (base * ac / 100).quantize(Decimal('0.01'), ROUND_HALF_UP)
+    return ''.join(['<piscofins>', _tag('CST', d.pc_cst), _tag('vBCPisCofins', _v2(base)),
+                    _tag('pAliqPis', _v2(ap)), _tag('pAliqCofins', _v2(ac)),
+                    _tag('vPis', _v2(vpis)), _tag('vCofins', _v2(vcof)),
+                    _tag('tpRetPisCofins', _tp_ret_pis_cofins(pis_ret > 0 or cofins_ret > 0, csll_ret > 0)),
+                    '</piscofins>'])
+
+
 def _trib_fed(d: DPS) -> str:
-    """``<tribFed>`` só com o que for maior que zero; vazio quando não há retenção."""
+    """``<tribFed>`` só com o que for maior que zero; vazio quando não há retenção.
+    Fora do Simples (``pc_cst``) o PIS/COFINS próprio vai sempre."""
     pis, cofins = _d(d.ret_pis), _d(d.ret_cofins)
     inss, irrf, csll = _d(d.ret_inss), _d(d.ret_irrf), _d(d.ret_csll)
+    if d.pc_cst:
+        return ''.join(['<tribFed>', _piscofins_proprio(d, pis, cofins, csll),
+                        _tag('vRetCP', _v2(inss)) if inss > 0 else '',
+                        _tag('vRetIRRF', _v2(irrf)) if irrf > 0 else '',
+                        _tag('vRetCSLL', _v2(csll)) if csll > 0 else '',
+                        '</tribFed>'])
     if not any(v > 0 for v in (pis, cofins, inss, irrf, csll)):
         return ''
     partes = ['<tribFed>']

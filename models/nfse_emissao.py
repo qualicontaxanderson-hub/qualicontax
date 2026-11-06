@@ -19,6 +19,7 @@ CAMPOS_CONFIG = (
     'inscricao_municipal', 'municipio_ibge', 'tributacao_sp', 'cod_servico_sp',
     'cod_trib_nac', 'cod_trib_mun', 'cod_nbs',
     'op_simp_nac', 'reg_ap_trib_sn', 'reg_esp_trib', 'aliquota_iss', 'iss_retido',
+    'piscofins_cst', 'aliquota_pis', 'aliquota_cofins',
     'ibscbs_cst', 'ibscbs_cclasstrib', 'ibscbs_cind_op', 'ibscbs_ind_dest', 'ibscbs_ind_final',
     'email_remetente', 'descricao_padrao',
 )
@@ -70,7 +71,7 @@ class NfseConfig:
             v = v.strip() if isinstance(v, str) else v
             if k in _INTEIROS:
                 v = int(v) if str(v).strip().lstrip('-').isdigit() else (0 if k in ('iss_retido', 'ibscbs_ind_dest', 'ibscbs_ind_final', 'reg_esp_trib') else None)
-            elif k == 'aliquota_iss':
+            elif k in ('aliquota_iss', 'aliquota_pis', 'aliquota_cofins'):
                 v = str(v or '0').replace(',', '.') or '0'
             elif k in ('serie_nacional', 'serie_sp'):
                 v = (v or '').upper() or None
@@ -436,9 +437,10 @@ def titulos_para_nota(empresa_id, dias=120):
 REGIME_PARA_OP = {'SIMPLES': 3, 'MEI': 2, 'LUCRO_PRESUMIDO': 1, 'LUCRO_REAL': 1}
 REGIMES = {'SIMPLES': 'Simples Nacional', 'MEI': 'MEI', 'LUCRO_PRESUMIDO': 'Lucro Presumido',
            'LUCRO_REAL': 'Lucro Real'}
-# Só o que já saiu AUTORIZADO pelo Sefin de produção. Presumido/Real (op 1) e MEI (op 2)
-# entram aqui depois da prova na série 99 (etapa 2) — até lá a liberação trava.
-OP_PROVADOS = {3}
+# Só o que já saiu AUTORIZADO pelo Sefin de produção: Simples (op 3, Qualicontax 04/11) e fora do
+# Simples (op 1, NH Goiatuba Lucro Real, NFS-e 1 da série 900, 06/11/2026, cancelada em seguida —
+# Presumido é o mesmo caminho com outras alíquotas). MEI (op 2) ainda não.
+OP_PROVADOS = {1, 3}
 
 
 def empresa_da_matriz(cliente_id):
@@ -478,6 +480,10 @@ def sugestao_da_matriz(emp):
         'inscricao_municipal': emp.get('im') or '', 'email_remetente': emp.get('email') or '',
         'op_simp_nac': op, 'reg_ap_trib_sn': 1 if op == 3 else None, 'reg_esp_trib': 0,
         'aliquota_iss': 0, 'iss_retido': 0,
+        # PIS/COFINS próprio fora do Simples: Presumido cumulativo 0,65/3; Real não cumulativo 1,65/7,6.
+        'piscofins_cst': '01' if op == 1 else None,
+        'aliquota_pis': {'LUCRO_PRESUMIDO': '0.65', 'LUCRO_REAL': '1.65'}.get(emp.get('regime') or '', '0'),
+        'aliquota_cofins': {'LUCRO_PRESUMIDO': '3.00', 'LUCRO_REAL': '7.60'}.get(emp.get('regime') or '', '0'),
         'ibscbs_cst': '000', 'ibscbs_cclasstrib': '000001', 'ibscbs_cind_op': '100301',
         'ibscbs_ind_dest': 0, 'ibscbs_ind_final': 0,
         'descricao_padrao': 'Serviços prestados em {mes} de {ano}',
@@ -541,8 +547,12 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
                         'Libera depois das notas de teste (etapa 2).')
     if op == 3 and not cfg.get('reg_ap_trib_sn'):
         trava('matriz', 'Falta a apuração no Simples.')
-    if op == 1 and not (cfg.get('aliquota_iss') or 0) > 0:
-        trava('matriz', 'Fora do Simples a alíquota do ISS é obrigatória.')
+    if op == 1 and not float(cfg.get('aliquota_iss') or 0) > 0:
+        # Provado 06/11: sem alíquota, o governo aplica a parametrizada pelo município.
+        aviso('matriz', 'Alíquota do ISS em branco: o governo aplica a do município.')
+    if op == 1 and (len(_dig(cfg.get('piscofins_cst'))) != 2 or not float(cfg.get('aliquota_pis') or 0) > 0
+                    or not float(cfg.get('aliquota_cofins') or 0) > 0):
+        trava('matriz', 'Fora do Simples: CST e alíquotas do PIS/COFINS da empresa.')
     if (cfg.get('emissor') or 'nacional') != 'nacional':
         trava('matriz', 'Pela prefeitura de São Paulo só a Qualicontax foi provada: use o Emissor Nacional.')
     if len(_dig(cfg.get('municipio_ibge'))) != 7:
@@ -552,6 +562,9 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
         from utils.integrations.nfse_adn.convenio import aceita_emissor_nacional
         aceita = aceita_emissor_nacional(cfg.get('municipio_ibge'), ambiente=1)
         cidade = emp.get('cidade') or _dig(cfg.get('municipio_ibge'))
+        if (_dig(cfg.get('municipio_ibge')) != '3550308' and not _dig(cfg.get('inscricao_municipal'))
+                and aceita == 'sim'):
+            aviso('matriz', 'Sem inscrição municipal: alguns municípios exigem na nota (Goiatuba recusou sem ela).')
         if aceita in ('nao', 'sem_convenio'):
             trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: as notas desta empresa '
                             'só saem pelo sistema da própria prefeitura (integração ainda não feita).')
