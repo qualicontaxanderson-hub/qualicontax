@@ -24,6 +24,8 @@ PERMISSION_CATALOG = {
         'escrita_fiscal.q_robo':          'Painel do Q-Robô',
         'escrita_fiscal.produtos_catalogo': 'Cadastro de Produtos',
         'escrita_fiscal.memorizacoes':    'Memorizações',
+        # Matriz fiscal das empresas dos clientes (06/11/2026): nasce sem perfil.
+        'escrita_fiscal.nfse_matriz':     'Configurar emissão de NFS-e',
     },
     'Q-Robô': {
         # Portal do Instalador (/qrobo): quem pode entrar na sessão de escopo

@@ -10112,3 +10112,6 @@ def lote_pdf_nfse():
     nome_pdf = re.sub(r'[\\/:*?"<>|]', '', f'NFSe - {quem} - {rotulo}.pdf')
     return send_file(buf, as_attachment=True, download_name=nome_pdf,
                      mimetype='application/pdf')
+
+
+from routes import fiscal_emissao  # noqa: E402,F401  (matriz fiscal / emissão de NFS-e dos clientes, 06/11/2026)

@@ -43,6 +43,15 @@ def _dig(v):
     return re.sub(r'\D', '', str(v or ''))
 
 
+def _mesmo_numero(a, b):
+    """2.0000 do banco e '2' do formulário são o mesmo valor (alíquota, inteiros)."""
+    try:
+        from decimal import Decimal
+        return a is not None and b is not None and Decimal(str(a)) == Decimal(str(b))
+    except Exception:
+        return False
+
+
 class NfseConfig:
 
     @staticmethod
@@ -69,17 +78,27 @@ class NfseConfig:
                 v = None
             limpos[k] = v
         if not limpos:
-            return
+            return False
         atual = NfseConfig.get(empresa_id)
         if atual:
             sets = ', '.join(f'{k} = %s' for k in limpos)
+            # Mudou algo numa empresa LIBERADA? A liberação cai: o Fiscal confere de novo
+            # (06/11/2026). Vale para quem gravar — Fiscal ou Financeiro — porque a regra
+            # mora aqui, no único escritor da matriz.
+            revoga = bool(atual.get('liberado_em')) and any(
+                str(atual.get(k) if atual.get(k) is not None else '') != str(v if v is not None else '')
+                and not _mesmo_numero(atual.get(k), v) for k, v in limpos.items())
+            if revoga:
+                sets += ', liberado_em = NULL, liberado_por = NULL'
             execute_query(f'UPDATE nfse_emissao_config SET {sets}, atualizado_em = NOW(), alterado_por = %s '
                           ' WHERE empresa_id = %s', tuple(limpos.values()) + (usuario_id, empresa_id))
+            return revoga
         else:
             cols = ', '.join(limpos) + ', empresa_id, alterado_por'
             marks = ', '.join(['%s'] * (len(limpos) + 2))
             execute_query(f'INSERT INTO nfse_emissao_config ({cols}) VALUES ({marks})',
                           tuple(limpos.values()) + (empresa_id, usuario_id))
+            return False
 
     @staticmethod
     def descricao_para(cfg, competencia: date):
@@ -406,3 +425,164 @@ def titulos_para_nota(empresa_id, dias=120):
               AND t.emissao >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
             ORDER BY t.vencimento DESC, t.id DESC LIMIT 200""",
         (empresa_id, int(dias)), fetch=True) or []
+
+
+# ---------------------------------------------------------------------------
+# Matriz fiscal da empresa — o que falta para emitir e a marca de liberação
+# (06/11/2026). UM lugar só: o Fiscal (empresas dos clientes) e o Financeiro (as
+# do escritório) leem e gravam a MESMA linha de nfse_emissao_config.
+# ---------------------------------------------------------------------------
+# Regime do cadastro -> opSimpNac do leiaute nacional.
+REGIME_PARA_OP = {'SIMPLES': 3, 'MEI': 2, 'LUCRO_PRESUMIDO': 1, 'LUCRO_REAL': 1}
+REGIMES = {'SIMPLES': 'Simples Nacional', 'MEI': 'MEI', 'LUCRO_PRESUMIDO': 'Lucro Presumido',
+           'LUCRO_REAL': 'Lucro Real'}
+# Só o que já saiu AUTORIZADO pelo Sefin de produção. Presumido/Real (op 1) e MEI (op 2)
+# entram aqui depois da prova na série 99 (etapa 2) — até lá a liberação trava.
+OP_PROVADOS = {3}
+
+
+def empresa_da_matriz(cliente_id):
+    """O que o CADASTRO diz da empresa (o Cadastro começa, o Fiscal termina)."""
+    c = execute_query(
+        'SELECT id, numero_cliente, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_municipal, email, '
+        '       regime_tributario, situacao, COALESCE(avulso, 0) AS avulso '
+        '  FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
+    if not c:
+        return None
+    t = tomador_do_cliente(cliente_id) or {}        # mesmo leitor do endereço/IBGE do tomador
+    from models.dfe_certificado import DfeCertificado
+    cert = DfeCertificado.get_by_cliente(cliente_id) or None
+    if cert:
+        cert = dict(cert)
+        cert['status'] = DfeCertificado.classificar_validade(cert.get('validade'))
+        cert['cnpj_dig'] = _dig(cert.get('cnpj'))
+    doc = _dig(c['cpf_cnpj'])
+    return {
+        'id': c['id'], 'numero_cliente': c['numero_cliente'], 'nome': c['nome_razao_social'],
+        'fantasia': c.get('nome_fantasia') or '', 'documento': doc, 'doc_fmt': formatar_documento(doc),
+        'im': c.get('inscricao_municipal') or '', 'email': c.get('email') or '',
+        'regime': c.get('regime_tributario') or '',
+        'regime_rotulo': REGIMES.get(c.get('regime_tributario') or '', 'não preenchido'),
+        'situacao': c.get('situacao') or '', 'avulso': bool(c.get('avulso')),
+        'cidade': t.get('cidade') or '', 'uf': t.get('uf') or '', 'ibge': t.get('ibge') or '',
+        'certificado': cert,
+    }
+
+
+def sugestao_da_matriz(emp):
+    """Primeiro preenchimento: o que dá para tirar do cadastro (regime, município, IM,
+    e-mail) + o padrão da reforma que domina as notas (CST 000 / 000001 / 100301)."""
+    op = REGIME_PARA_OP.get(emp.get('regime') or '')
+    return {
+        'emissor': 'nacional', 'municipio_ibge': emp.get('ibge') or '',
+        'inscricao_municipal': emp.get('im') or '', 'email_remetente': emp.get('email') or '',
+        'op_simp_nac': op, 'reg_ap_trib_sn': 1 if op == 3 else None, 'reg_esp_trib': 0,
+        'aliquota_iss': 0, 'iss_retido': 0,
+        'ibscbs_cst': '000', 'ibscbs_cclasstrib': '000001', 'ibscbs_cind_op': '100301',
+        'ibscbs_ind_dest': 0, 'ibscbs_ind_final': 0,
+        'descricao_padrao': 'Serviços prestados em {mes} de {ano}',
+    }
+
+
+def faltas_da_matriz(emp, cfg, series, sugestao=None):
+    """Tudo o que impede (``trava``) ou merece atenção (``aviso``) antes de liberar.
+    Cada item: {nivel, onde, texto}. ``onde``: cadastro | certificado | matriz | serie.
+    Sem configuração salva, confere a ``sugestao`` (o que a tela mostra) para a lista já
+    sair inteira na primeira visita — e trava por não estar salva."""
+    f = []
+
+    def trava(onde, texto):
+        f.append({'nivel': 'trava', 'onde': onde, 'texto': texto})
+
+    def aviso(onde, texto):
+        f.append({'nivel': 'aviso', 'onde': onde, 'texto': texto})
+
+    # --- cadastro (o Cadastro resolve) ---
+    if len(emp['documento']) == 11:
+        trava('cadastro', 'Pessoa física: a emissão pelo CPF ainda não existe no sistema.')
+    elif len(emp['documento']) != 14:
+        trava('cadastro', 'CNPJ do cadastro incompleto.')
+    if emp['situacao'] != 'ATIVO':
+        trava('cadastro', f"Empresa {(emp['situacao'] or 'sem situação').lower()} no cadastro.")
+    if emp['regime'] not in REGIME_PARA_OP:
+        trava('cadastro', 'Regime tributário não preenchido no cadastro.')
+
+    # --- certificado (é ele que assina a nota; o CNPJ do prestador sai dele) ---
+    cert = emp.get('certificado')
+    if not cert:
+        trava('certificado', 'Sem certificado digital da empresa.')
+    else:
+        st = cert.get('status') or {}
+        if st.get('nivel') == 'vencido':
+            trava('certificado', 'Certificado digital vencido.')
+        elif st.get('nivel') == 'sem_data':
+            trava('certificado', 'Certificado sem validade conhecida: suba o arquivo de novo.')
+        elif st.get('nivel') == 'laranja':
+            aviso('certificado', f"Certificado vence em {st.get('dias')} dia(s).")
+        if not cert.get('dropbox_path'):
+            trava('certificado', 'O arquivo do certificado não está guardado.')
+        if cert.get('cnpj_dig') and cert['cnpj_dig'] != emp['documento']:
+            trava('certificado', 'O certificado é de outro CNPJ (procuração ou matriz): a nota sairia '
+                                 'no CNPJ errado. Precisa do e-CNPJ desta empresa.')
+
+    # --- matriz (o Fiscal resolve) ---
+    if not cfg:
+        trava('matriz', 'Configuração ainda não salva.')
+        if not sugestao:
+            return f
+        cfg = sugestao
+    op = cfg.get('op_simp_nac')
+    esperado = REGIME_PARA_OP.get(emp['regime'])
+    if esperado and op != esperado:
+        trava('matriz', f"Simples Nacional da configuração ({OP_SIMP_NAC.get(op, 'vazio')}) não bate "
+                        f"com o regime do cadastro ({emp['regime_rotulo']}).")
+    if op not in OP_PROVADOS:
+        trava('matriz', f"{OP_SIMP_NAC.get(op, 'Este regime')}: ainda não provado no emissor. "
+                        'Libera depois das notas de teste (etapa 2).')
+    if op == 3 and not cfg.get('reg_ap_trib_sn'):
+        trava('matriz', 'Falta a apuração no Simples.')
+    if op == 1 and not (cfg.get('aliquota_iss') or 0) > 0:
+        trava('matriz', 'Fora do Simples a alíquota do ISS é obrigatória.')
+    if (cfg.get('emissor') or 'nacional') != 'nacional':
+        trava('matriz', 'Pela prefeitura de São Paulo só a Qualicontax foi provada: use o Emissor Nacional.')
+    if len(_dig(cfg.get('municipio_ibge'))) != 7:
+        trava('matriz', 'Município da empresa (código IBGE, 7 dígitos).')
+    if len(_dig(cfg.get('cod_trib_nac'))) != 6:
+        trava('matriz', 'Código de tributação nacional (6 dígitos).')
+    nbs = _dig(cfg.get('cod_nbs'))
+    if len(nbs) != 9 or nbs == '999999999':
+        trava('matriz', 'NBS (9 dígitos; o governo recusa 999999999).')
+    if not (cfg.get('email_remetente') or '').strip():
+        aviso('matriz', 'Sem e-mail remetente: a nota sai sem contato do prestador.')
+
+    # --- série de produção ---
+    serie = (cfg.get('serie_nacional') or '').strip().upper()
+    if not serie:
+        trava('serie', 'Escolha a série do emissor nacional.')
+    else:
+        s = next((x for x in series if str(x['serie']).upper() == serie), None)
+        if not s:
+            trava('serie', f'A série {serie} ainda não foi aberta.')
+        elif not s['ativo']:
+            trava('serie', f'A série {serie} está desligada.')
+        elif int(s['ambiente']) != 1:
+            trava('serie', f'A série {serie} é de TESTE: a padrão tem que ser de produção.')
+    return f
+
+
+def liberar_matriz(empresa_id, usuario_id):
+    """Marca 'Conferido e liberado'. Quem chama confere antes que não há trava.
+    Devolve False se o banco recusou (ex.: migração nfse_emissao_05 ainda não aplicada)."""
+    return execute_query('UPDATE nfse_emissao_config SET liberado_em = NOW(), liberado_por = %s WHERE empresa_id = %s',
+                  (usuario_id, empresa_id))
+
+
+def revogar_matriz(empresa_id):
+    return execute_query('UPDATE nfse_emissao_config SET liberado_em = NULL, liberado_por = NULL WHERE empresa_id = %s',
+                  (empresa_id,))
+
+
+def situacao_das_matrizes():
+    """{empresa_id: 'liberada' | 'configurada'} para a lista do Fiscal (sem linha = sem configuração)."""
+    rows = execute_query('SELECT * FROM nfse_emissao_config', fetch=True) or []
+    return {r['empresa_id']: ('liberada' if r.get('liberado_em') else 'configurada') for r in rows}
