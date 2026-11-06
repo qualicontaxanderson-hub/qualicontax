@@ -175,12 +175,22 @@ class PrestContrato:
 
     # ---------------- gravação ----------------
     @staticmethod
+    def gerar_numero():
+        """QC-XXXXXX: seis caracteres aleatórios sem letras ambíguas (0/O, 1/I), único na tabela."""
+        alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        for _ in range(20):
+            n = 'QC-' + ''.join(secrets.choice(alfabeto) for _ in range(6))
+            if not execute_query('SELECT 1 FROM prest_contratos WHERE numero = %s', (n,), fetch=True):
+                return n
+        raise RuntimeError('não consegui um número livre')
+
+    @staticmethod
     def criar(cliente_id, dados, criado_por, fin_contrato_id=None, tipo='CONTRATO', anterior_id=None):
         titulo = dados.get('titulo') or PrestContrato.titulo_de(dados)
         cid = execute_query(
-            """INSERT INTO prest_contratos (cliente_id, fin_contrato_id, tipo, anterior_id, titulo, dados, criado_por)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (cliente_id, fin_contrato_id, tipo, anterior_id, titulo[:120], json.dumps(dados, ensure_ascii=False, default=str), criado_por), fetch=False)
+            """INSERT INTO prest_contratos (numero, cliente_id, fin_contrato_id, tipo, anterior_id, titulo, dados, criado_por)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (PrestContrato.gerar_numero(), cliente_id, fin_contrato_id, tipo, anterior_id, titulo[:120], json.dumps(dados, ensure_ascii=False, default=str), criado_por), fetch=False)
         PrestContrato._gravar_empresas(cid, dados)
         PrestContrato._gravar_assinantes(cid, dados)
         return cid
@@ -240,7 +250,7 @@ class PrestContrato:
             cond.append('(p.cliente_id = %s OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas WHERE cliente_id = %s))'); params += [cliente_id, cliente_id]
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         rows = execute_query(
-            f"""SELECT p.id, p.cliente_id, p.tipo, p.titulo, p.status, p.criado_em, p.enviado_em, p.assinado_em, p.pdf_path,
+            f"""SELECT p.id, p.numero, p.cliente_id, p.tipo, p.titulo, p.status, p.criado_em, p.enviado_em, p.assinado_em, p.pdf_path,
                        cl.numero_cliente, cl.nome_razao_social, u.nome AS criado_por_nome,
                        (SELECT COUNT(*) FROM prest_contrato_empresas e WHERE e.contrato_id = p.id) AS n_empresas,
                        (SELECT COUNT(*) FROM prest_assinantes a WHERE a.contrato_id = p.id) AS n_assinantes,

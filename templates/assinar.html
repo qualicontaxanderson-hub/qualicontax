@@ -54,7 +54,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 <body>
 <div class="as-top"><div class="as-top-in">
     <span class="as-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
-    <div><h1>Assinatura eletrônica</h1><p>{% if c %}{{ c.titulo | title }} · {{ c.dados.empresas[0].razao }}{% else %}documento{% endif %}</p></div>
+    <div><h1>Assinatura eletrônica</h1><p>{% if c %}{{ c.titulo | title }} nº {{ c.numero or c.id }} · {{ c.dados.empresas[0].razao }}{% else %}documento{% endif %}</p></div>
     {% if a %}<span class="sel"><i class="fas fa-user"></i> {{ a.nome }} · {{ a.papel | capitalize }}</span>{% endif %}
 </div></div>
 {% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}<div class="as-flash">{% for cat, m in msgs %}<div class="{{ cat }}">{{ m }}</div>{% endfor %}</div>{% endif %}{% endwith %}

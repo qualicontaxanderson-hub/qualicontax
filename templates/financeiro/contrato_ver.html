@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Contrato nº {{ c.id }} - Financeiro - Qualicontax{% endblock %}
+{% block title %}Contrato {{ c.numero or c.id }} - Financeiro - Qualicontax{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -36,7 +36,7 @@
 <div class="pv-wrap">
     <div class="pv-card">
         <div class="pv-head"><span class="pv-ico"><i class="fas fa-file-signature"></i></span>
-            <div><h2>{{ c.titulo | title }} · nº {{ c.id }}</h2><p>{{ emp.numero or 'PF' }} · {{ emp.razao }}{% if c.dados.empresas | length > 1 %} + {{ c.dados.empresas | length - 1 }} empresas{% endif %} · {{ c.criado_em.strftime('%d/%m/%Y') }} por {{ c.criado_por_nome }}</p></div>
+            <div><h2>{{ c.titulo | title }} · nº {{ c.numero or c.id }}</h2><p>{{ emp.numero or 'PF' }} · {{ emp.razao }}{% if c.dados.empresas | length > 1 %} + {{ c.dados.empresas | length - 1 }} empresas{% endif %} · {{ c.criado_em.strftime('%d/%m/%Y') }} por {{ c.criado_por_nome }}</p></div>
             <span class="pv-st">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span></div>
         {% set d = c.dados %}
         <div class="pv-res">

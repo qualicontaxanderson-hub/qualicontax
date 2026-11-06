@@ -154,7 +154,8 @@ MAPA = {
     'municipios.novo':                 'clientes.edit',
     'municipios.editar':               'clientes.edit',
     'municipios.deletar':              'clientes.edit',
-    'contratos.create':                'contratos.create_contrato',
+    'contratos.create':                'LOGIN',   # redireciona para financeiro.contrato_novo (06/11/2026)
+    'contratos.list_contratos':        'LOGIN',   # redireciona para financeiro.contratos
     'processos.list_processos':        'processos.index',
     'processos.view':                  'processos.index',
     'processos.create':                'processos.index',

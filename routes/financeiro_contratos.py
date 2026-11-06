@@ -240,8 +240,8 @@ def _pdf_bytes(c):
     registro = None
     if c['status'] == 'ASSINADO':
         registro = [a for a in PrestContrato.assinantes(c['id']) if a['assinado_em']]
-    return gerar_pdf(PrestContrato.montar(c['dados']), registro=registro,
-                     rodape='Contrato nº %d · %s' % (c['id'], 'assinado eletronicamente' if registro else 'minuta'))
+    return gerar_pdf(PrestContrato.montar(c['dados']), registro=registro, numero=c.get('numero'),
+                     rodape='Contrato nº %s · %s' % (c.get('numero') or c['id'], 'assinado eletronicamente' if registro else 'minuta'))
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/pdf')
@@ -251,16 +251,20 @@ def contrato_pdf(cid):
     if not c:
         abort(404)
     b = _pdf_bytes(c)
-    return Response(b, mimetype='application/pdf', headers={'Content-Disposition': 'inline; filename="contrato_%d.pdf"' % cid})
+    return Response(b, mimetype='application/pdf', headers={'Content-Disposition': 'inline; filename="contrato_%s.pdf"' % (c.get('numero') or cid)})
+
+
+def _esc_html(s):
+    return str(s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 def _email_assinatura(a, c, link):
     emp = c['dados']['empresas'][0]['razao']
-    html = ('<p>Olá, %s.</p><p>A <b>Qualicontax</b> enviou para sua assinatura eletrônica o documento <b>%s</b> (%s).</p>'
+    html = ('<p>Olá, %s.</p><p>A <b>Qualicontax</b> enviou para sua assinatura eletrônica o documento <b>%s</b> (%s), contrato nº <b>%s</b>.</p>'
             '<p><a href="%s" style="background:#15803d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;">Ver e assinar o contrato</a></p>'
             '<p>Ao abrir o link, você verá o contrato completo, pedirá um código de 6 dígitos (que chega neste e-mail) e confirmará com seu nome e CPF. '
             'Leva menos de dois minutos.</p><p style="color:#64748b;font-size:12px;">Se não reconhece este documento, ignore este e-mail.</p>'
-            % (a['nome'], c['titulo'].title(), emp, link))
+            % (_esc_html(a['nome']), _esc_html(c['titulo'].title()), _esc_html(emp), _esc_html(c.get('numero') or ''), link))
     texto = 'Olá, %s. A Qualicontax enviou para sua assinatura eletrônica o documento %s (%s). Abra o link para ver e assinar: %s' % (a['nome'], c['titulo'].title(), emp, link)
     return _enviar([a['email']], 'Assinatura: %s – %s' % (c['titulo'].title(), emp), html, texto)
 
@@ -401,8 +405,8 @@ def _concluir(c):
     c = PrestContrato.get(c['id'])
     pdf = _pdf_bytes(c)
     emp = c['dados']['empresas'][0]
-    nome_arq = 'Contrato de prestacao de servicos - %s - %s.pdf' % (c['assinado_em'].strftime('%Y-%m-%d') if c.get('assinado_em') else date.today().isoformat(),
-                                                                   (emp.get('razao') or '')[:60].replace('/', '-'))
+    nome_arq = 'Contrato %s - %s - %s.pdf' % (c.get('numero') or c['id'], c['assinado_em'].strftime('%Y-%m-%d') if c.get('assinado_em') else date.today().isoformat(),
+                                             (emp.get('razao') or '')[:60].replace('/', '-'))
     path = None
     try:
         from utils import dropbox_sync

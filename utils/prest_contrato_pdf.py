@@ -116,7 +116,7 @@ def _bloco_assinatura(a, f, st, razao_contratada=None):
     return linhas
 
 
-def gerar_pdf(montado, registro=None, rodape=None):
+def gerar_pdf(montado, registro=None, rodape=None, numero=None):
     """``montado`` = PrestContrato.montar(dados). ``registro`` = assinaturas feitas (página final). Devolve bytes."""
     st = _estilos()
     buf = io.BytesIO()
@@ -125,7 +125,10 @@ def gerar_pdf(montado, registro=None, rodape=None):
     doc.rodape = rodape
     doc.cabecalho = montado.get('cabecalho')
     ap = montado.get('apelido')
-    el = [_faixa_titulo(montado['titulo'], st), Spacer(1, 10)]
+    el = [_faixa_titulo(montado['titulo'], st)]
+    if numero:
+        el.append(Spacer(1, 4)); el.append(Paragraph('Contrato nº <b>%s</b>' % _esc(numero), st['centro']))
+    el.append(Spacer(1, 10))
     for i, p in enumerate(montado['partes'], 1):
         el.append(Paragraph('%d · %s' % (i, 'CONTRATANTE' if i == 1 else 'CONTRATADA'), st['parte_n']))
         el.append(Paragraph(_rico(p, ap, parte=True), st['base']))

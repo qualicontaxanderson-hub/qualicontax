@@ -49,7 +49,7 @@
     <article class="gc-card" onclick="location.href='{{ url_for('financeiro.contrato_ver', cid=c.id) }}'">
         <header class="gc-head">
             <span class="gc-ava">{{ c.numero_cliente or 'PF' }}</span>
-            <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}{% if c.n_empresas > 1 %} +{{ c.n_empresas - 1 }}{% endif %}</h3><small>{{ c.titulo | title }} · nº {{ c.id }} · {{ c.criado_em.strftime('%d/%m/%Y') }}{% if c.criado_por_nome %} · {{ c.criado_por_nome.split()[0] }}{% endif %}</small></div>
+            <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}{% if c.n_empresas > 1 %} +{{ c.n_empresas - 1 }}{% endif %}</h3><small>{{ c.titulo | title }} · nº {{ c.numero or c.id }} · {{ c.criado_em.strftime('%d/%m/%Y') }}{% if c.criado_por_nome %} · {{ c.criado_por_nome.split()[0] }}{% endif %}</small></div>
             <span class="pc-st {{ c.status }}">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span>
         </header>
         {% if c.status in ('ENVIADO', 'ASSINADO') %}
