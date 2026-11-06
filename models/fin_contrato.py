@@ -50,6 +50,16 @@ def primeiro_reajuste(inicio):
     return date(um_ano.year, 1, 1) if um_ano.month == 1 else date(um_ano.year + 1, 1, 1)
 
 
+def _nome_rede(s):
+    """'Mensalidade Rede M6' e 'REDE M6' viram 'M6'; 'Mensalidade Empresas SP' e 'EMPRESAS SP' viram 'EMPRESAS SP'."""
+    import re
+    import unicodedata
+    s = unicodedata.normalize('NFKD', str(s or '')).encode('ascii', 'ignore').decode().upper()
+    s = re.sub(r'^\s*MENSALIDADE\s+', '', s)
+    s = re.sub(r'^\s*(REDE|GRUPO)\s+', '', s)
+    return re.sub(r'\s+', ' ', s).strip()
+
+
 def decimo_desde_de(modo, inicio, data=None):
     """Traduz a opção da tela em decimo_desde. PROPORCIONAL = em branco (vale o início do contrato)."""
     if modo == 'INTEIRO' and inicio:
@@ -243,6 +253,56 @@ class FinContrato:
             acumulado += v
             out.append((date(ano, mes, 1), v))
         return out
+
+    @staticmethod
+    def sugestoes(cliente_id, empresa_id=EMPRESA_QUALICONTAX):
+        """O que a REDE da empresa paga, para o cadastro sugerir e a pessoa não errar (Anderson, 06/11/2026:
+        "já vir os valores sugeridos dessa rede... caso não sejam esses valores ignora e digita").
+        Rede = grupo do cadastro. Sem grupo, vale o plano que veio do Conexa (ex. 'Mensalidade Rede Nicoleti'),
+        e o grupo de nome parecido é SUGERIDO para a pessoa confirmar ao salvar."""
+        grupos = execute_query(
+            """SELECT g.id, g.nome FROM grupos_clientes g JOIN cliente_grupo_relacao r ON r.grupo_id = g.id
+                WHERE r.cliente_id = %s ORDER BY r.id LIMIT 1""", (cliente_id,), fetch=True) or []
+        grupo = grupos[0] if grupos else None
+        atual = execute_query('SELECT plano FROM fin_contratos WHERE cliente_id = %s AND empresa_id = %s ORDER BY (situacao = %s) DESC, id DESC LIMIT 1',
+                              (cliente_id, empresa_id, 'ATIVO'), fetch=True, fetch_one=True)
+        plano = (atual or {}).get('plano')
+        grupo_sugerido = None
+        if not grupo and plano:
+            alvo = _nome_rede(plano)
+            for g in execute_query("SELECT id, nome FROM grupos_clientes WHERE situacao = 'ATIVO'", fetch=True) or []:
+                if alvo and _nome_rede(g['nome']) == alvo:
+                    grupo_sugerido = g
+                    break
+        if grupo:
+            fonte, cond, par = 'grupo', 'c.cliente_id IN (SELECT cliente_id FROM cliente_grupo_relacao WHERE grupo_id = %s)', (grupo['id'],)
+        elif plano:
+            fonte, cond, par = 'conexa', 'c.plano = %s', (plano,)
+        else:
+            return {'grupo': None, 'grupo_sugerido': None, 'plano': None, 'fonte': None, 'sugestoes': []}
+        linhas = execute_query(
+            f"""SELECT c.id, c.valor, c.dia_vencimento, c.decimo_tipo, c.gerar_nfse, c.gerar_boleto,
+                       COUNT(*) OVER (PARTITION BY c.valor) AS n
+                  FROM fin_contratos c
+                 WHERE c.empresa_id = %s AND c.situacao = 'ATIVO' AND c.cliente_id <> %s AND {cond}
+                 ORDER BY n DESC, c.valor DESC, c.id DESC""", (empresa_id, cliente_id) + par, fetch=True) or []
+        out, vistos = [], set()
+        for l in linhas:
+            if l['valor'] in vistos:
+                continue
+            vistos.add(l['valor'])
+            out.append({'contrato_id': l['id'], 'valor': str(l['valor']), 'n': int(l['n']), 'dia_vencimento': l['dia_vencimento'],
+                        'decimo_tipo': l['decimo_tipo'], 'gerar_nfse': int(l['gerar_nfse'] or 0), 'gerar_boleto': int(l['gerar_boleto'] or 0),
+                        'itens': []})
+            if len(out) == 3:
+                break
+        if out:                                            # itens das 3 numa consulta só (cada ida ao banco custa no Railway)
+            ids = ','.join(str(o['contrato_id']) for o in out)
+            por = {o['contrato_id']: o for o in out}
+            for i in execute_query(f'SELECT contrato_id, descricao, valor, servico_id FROM fin_contrato_itens WHERE contrato_id IN ({ids}) ORDER BY id',
+                                   fetch=True) or []:
+                por[i['contrato_id']]['itens'].append({'descricao': i['descricao'], 'valor': str(i['valor']), 'servico_id': i['servico_id']})
+        return {'grupo': grupo, 'grupo_sugerido': grupo_sugerido, 'plano': plano, 'fonte': fonte, 'sugestoes': out}
 
     @staticmethod
     def resumo(empresa_id=EMPRESA_QUALICONTAX):

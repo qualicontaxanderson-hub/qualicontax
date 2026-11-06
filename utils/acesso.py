@@ -209,6 +209,7 @@ MAPA = {
     # o link de convite exige só login: é o token que diz a empresa e, se houver, a pessoa
     'financeiro.honorarios_convite':       'LOGIN',
     'financeiro.honorarios_convite_salvar': 'LOGIN',
+    'financeiro.honorarios_sugestoes':     'LOGIN',   # a rota confere permissão ou convite da empresa
     # Lançamentos de serviço e comissões (06/11/2026): quem lança vê só o seu; aprovar/pagar/acordos = admin na rota
     'financeiro.lancamentos':              'financeiro.lancamentos',
     'financeiro.lancamento_novo':          'financeiro.lancamentos',

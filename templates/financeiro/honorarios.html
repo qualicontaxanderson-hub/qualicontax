@@ -12,16 +12,49 @@
 .ho-plano { font-size:11px; color:#7d968a; display:block; }
 .ho-falta { color:#b91c1c; font-weight:600; }
 .ho-ok { color:#15803d; }
+/* ---- modal do contrato, redesenhado 06/11/2026 ("melhorar demais essa tela"): formulário em cartões + resumo vivo ---- */
+.ho-modal { max-width:1060px; }
+.ho-modal .modal-body { padding:16px 20px 8px; background:#f4f8f5; }
+.ho-wrap { display:grid; grid-template-columns:minmax(0,1fr) 296px; gap:16px; align-items:start; }
+.ho-side { position:sticky; top:0; }
+.ho-card { background:#fff; border:1px solid #e1ebe5; border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+.ho-card-h { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.ho-card-h .ho-ico { width:30px; height:30px; border-radius:9px; background:#e8f5ed; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:13px; flex:none; }
+.ho-card-h h4 { margin:0; font-size:12px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; }
+.ho-card-h small { color:#7d968a; font-size:12px; margin-left:auto; text-align:right; }
+.ho-cli { display:flex; align-items:center; gap:12px; background:linear-gradient(135deg,#0f3d2e,#15803d); color:#fff; border-radius:14px; padding:12px 16px; margin-bottom:14px; }
+.ho-cli .ho-av { width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-size:16px; flex:none; }
+.ho-cli strong { font-size:15px; display:block; }
+.ho-cli .ho-num { color:rgba(255,255,255,.75); }
+.ho-cli .btn { margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.45); }
 .ho-itens { width:100%; border-collapse:collapse; margin-bottom:6px; }
 .ho-itens td { padding:3px 4px; vertical-align:middle; }
+.ho-itens td:first-child { padding-left:0; }
 .ho-itens input, .ho-itens select { height:36px; }
-.ho-soma { text-align:right; font-weight:700; font-size:15px; color:#0f3d2e; padding:4px 6px 10px; }
+.ho-soma { text-align:right; font-weight:700; font-size:15px; color:#0f3d2e; }
+.ho-rede { font-size:12px; color:#5f7f6e; margin:0 0 8px; }
+.ho-rede b { color:#0f3d2e; }
+.ho-chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }
+.ho-chip { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:6px 12px; font-size:13px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+.ho-chip:hover { background:#dcf3e4; }
+.ho-chip b { font-variant-numeric:tabular-nums; }
+.ho-chip span { color:#5f7f6e; font-size:11px; }
+.ho-aviso { font-size:12px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:6px 10px; margin-top:6px; display:none; }
+.ho-res { background:#fff; border:1px solid #e1ebe5; border-radius:14px; overflow:hidden; }
+.ho-res-h { background:#0f3d2e; color:#fff; padding:10px 14px; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
+.ho-res-big { padding:14px 14px 10px; border-bottom:1px solid #eef3f0; }
+.ho-res-big .ho-lbl { font-size:11px; color:#7d968a; text-transform:uppercase; letter-spacing:.6px; }
+.ho-res-big .ho-val { font-size:24px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1.2; }
+.ho-res-row { display:flex; justify-content:space-between; gap:10px; padding:9px 14px; border-bottom:1px solid #eef3f0; font-size:13px; }
+.ho-res-row:last-child { border-bottom:0; }
+.ho-res-row span:first-child { color:#7d968a; flex:none; }
+.ho-res-row b { text-align:right; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.ho-tag { display:inline-block; font-size:11px; font-weight:700; border-radius:6px; padding:2px 7px; background:#e8f5ed; color:#15803d; margin-left:4px; }
+.ho-tag.off { background:#f1f5f9; color:#94a3b8; text-decoration:line-through; }
 .ho-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
 .ho-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
 .ho-sec { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; margin:14px 0 8px; display:flex; align-items:center; gap:10px; }
 .ho-sec::after { content:''; flex:1; height:1px; background:#e8f1ec; }
-.ho-cli { display:flex; align-items:center; gap:10px; background:#f8fbf9; border:1px solid #e3ece7; border-radius:12px; padding:10px 12px; }
-.ho-cli strong { font-size:14px; }
 .ho-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
 .ho-sug div { padding:8px 12px; cursor:pointer; font-size:13px; }
 .ho-sug div:hover { background:#f0f7f3; }
@@ -29,7 +62,17 @@
 .ho-chk { display:flex; gap:18px; align-items:center; }
 .ho-chk label { display:flex; gap:6px; align-items:center; margin:0; font-weight:500; }
 .modal-body .form-group { margin-bottom:0; }
-@media (max-width:640px) { .ho-grid2, .ho-grid3 { grid-template-columns:1fr; } .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; } }
+.ho-modal .modal-body label { font-size:12px; font-weight:600; color:#334155; }
+@media (max-width:900px) { .ho-wrap { grid-template-columns:1fr; } .ho-side { position:static; } .ho-modal { margin:12px 8px; } }
+@media (max-width:640px) {
+    .ho-grid2, .ho-grid3 { grid-template-columns:1fr; } .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; }
+    /* celular: a discriminação vira duas linhas (descrição em cima; serviço, valor e tirar embaixo) em vez de quatro colunas espremidas */
+    .ho-itens, .ho-itens tbody { display:block; }
+    .ho-itens tr { display:grid; grid-template-columns:minmax(0,1fr) 120px 42px; gap:6px; padding:6px 0 8px; border-bottom:1px dashed #e3ece7; }
+    .ho-itens td { display:block; width:auto !important; padding:0; }
+    .ho-itens td:first-child { grid-column:1 / -1; }
+    .ho-card-h small { display:none; }
+}
 </style>
 {% endblock %}
 
@@ -176,7 +219,7 @@
 
 <!-- Novo / editar contrato -->
 <div id="hoModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:760px;">
+    <div class="modal-content ho-modal">
         <div class="modal-header">
             <h3 id="ho-titulo">Contrato de honorários</h3>
             <button class="modal-close" type="button" onclick="hoFechar()">&times;</button>
@@ -186,68 +229,104 @@
             <input type="hidden" name="cliente_id" id="ho-cliente-id">
             <input type="hidden" name="aba" value="{{ aba }}">
             <div class="modal-body">
-                <div id="ho-cli-busca" class="form-group" style="position:relative;">
+                <div id="ho-cli-busca" class="form-group" style="position:relative; margin-bottom:14px;">
                     <label>Empresa</label>
                     <input type="text" id="ho-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
                     <div id="ho-sug" class="ho-sug" style="display:none;"></div>
                 </div>
                 <div id="ho-cli" class="ho-cli" style="display:none;">
-                    <i class="fas fa-building" style="color:#15803d;"></i>
+                    <div class="ho-av"><i class="fas fa-building"></i></div>
                     <div><strong id="ho-cli-nome"></strong><div class="ho-num" id="ho-cli-num"></div></div>
-                    <button type="button" class="btn btn-outline btn-sm" id="ho-cli-trocar" style="margin-left:auto;" onclick="hoTrocarCliente()">Trocar</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="ho-cli-trocar" onclick="hoTrocarCliente()">Trocar</button>
                 </div>
 
-                <p class="ho-sec">Discriminações <span class="ho-num" style="letter-spacing:0; text-transform:none; font-weight:500;">a soma é o valor do contrato</span></p>
-                <table class="ho-itens" id="ho-itens">
-                    <tbody></tbody>
-                </table>
-                <button type="button" class="btn btn-outline btn-sm" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
-                <div class="ho-soma">Total mensal: <span id="ho-total">R$ 0,00</span></div>
+                <div class="ho-wrap">
+                <div class="ho-main">
+                    <div class="ho-card">
+                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-list-ul"></i></div><h4>Discriminações</h4><small>a soma é o valor do contrato</small></div>
+                        <div id="ho-rede" class="ho-rede" style="display:none;"></div>
+                        <div id="ho-chips" class="ho-chips"></div>
+                        <table class="ho-itens" id="ho-itens">
+                            <tbody></tbody>
+                        </table>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <button type="button" class="btn btn-outline btn-sm" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
+                            <div class="ho-soma" style="margin-left:auto;">Total mensal: <span id="ho-total">R$ 0,00</span></div>
+                        </div>
+                    </div>
 
-                <p class="ho-sec">Vencimento e vigência</p>
-                <div class="ho-grid3">
-                    <div class="form-group"><label>Vence no dia</label><input type="number" name="dia_vencimento" id="ho-dia" class="form-control" min="1" max="31" required><small class="ho-num">do mês seguinte à competência</small></div>
-                    <div class="form-group"><label>Início</label><input type="date" name="inicio" id="ho-inicio" class="form-control" required></div>
-                    <div class="form-group"><label>Fim (se houver)</label><input type="date" name="fim" id="ho-fim" class="form-control"></div>
-                </div>
-                <div class="ho-grid2" style="margin-top:10px;">
-                    <div class="form-group"><label>Plano / faixa (opcional)</label><input type="text" name="plano" id="ho-plano" class="form-control" placeholder="ex.: Mensalidade Rede Pavão"></div>
-                    <div class="form-group ho-chk" style="padding-top:26px;">
-                        <label><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked> Emite nota fiscal</label>
-                        <label><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked> Emite boleto</label>
+                    <div class="ho-card">
+                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-calendar-check"></i></div><h4>Vencimento e vigência</h4></div>
+                        <div class="ho-grid3">
+                            <div class="form-group"><label>Vence no dia</label><input type="number" name="dia_vencimento" id="ho-dia" class="form-control" min="1" max="31" required><small class="ho-num">do mês seguinte à competência</small></div>
+                            <div class="form-group"><label>Início</label><input type="date" name="inicio" id="ho-inicio" class="form-control" required></div>
+                            <div class="form-group"><label>Fim (se houver)</label><input type="date" name="fim" id="ho-fim" class="form-control"></div>
+                        </div>
+                        <div class="ho-grid2" style="margin-top:10px;">
+                            <div class="form-group"><label>Grupo (rede) da empresa</label>
+                                <select name="grupo_id" id="ho-grupo" class="form-control">
+                                    <option value="">— sem grupo —</option>
+                                    {% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}
+                                </select>
+                                <small class="ho-num">é o grupo do cadastro: trocar aqui troca lá também</small>
+                                <div class="ho-aviso" id="ho-grupo-aviso"></div>
+                            </div>
+                            <div class="form-group ho-chk" style="padding-top:26px;">
+                                <label><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked> Emite nota fiscal</label>
+                                <label><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked> Emite boleto</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ho-card">
+                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-gift"></i></div><h4>13º honorário</h4><small>para cancelar o de quem negociou, troque para "Sem 13º"</small></div>
+                        <div class="ho-grid2">
+                            <div class="form-group"><label>Modo</label>
+                                <select name="decimo_tipo" id="ho-decimo" class="form-control" onchange="hoDecimo()">
+                                    {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group ho-dec-on"><label>Começa a cobrar</label>
+                                <select name="decimo_inicio" id="ho-dec-inicio" class="form-control" onchange="hoDecimo()">
+                                    {% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group ho-dec-on" id="ho-dec-desde-box"><label>Na casa desde</label><input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control"><small class="ho-num">base do proporcional: entrou em maio = 8/12</small></div>
+                            <div class="form-group ho-dec" id="ho-dec-box"><label>Frações (competência · %)</label>
+                                <div id="ho-dec-rows"></div>
+                                <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ho-card">
+                        <div class="ho-card-h"><div class="ho-ico"><i class="fas fa-arrow-trend-up"></i></div><h4>Reajuste</h4></div>
+                        <div class="ho-grid3">
+                            <div class="form-group"><label>Regra</label>
+                                <select name="reajuste_tipo" id="ho-reajuste" class="form-control">
+                                    {% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Próximo reajuste</label><input type="date" name="proximo_reajuste" id="ho-prox" class="form-control"><small class="ho-num">salário mínimo: em branco = primeiro janeiro após 12 meses</small></div>
+                            <div class="form-group"><label>Observação</label><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" placeholder="índice, degraus, motivo"></div>
+                        </div>
+                        {% if modo != 'admin' %}<div class="form-group" style="margin-top:10px;"><label>Recado para quem aprova</label><input type="text" name="observacao" class="form-control" placeholder="ex.: combinado com o cliente em reunião de 05/11"></div>{% endif %}
                     </div>
                 </div>
 
-                <p class="ho-sec">13º honorário <span class="ho-num" style="letter-spacing:0; text-transform:none; font-weight:500;">para cancelar o de quem negociou, troque para "Sem 13º"</span></p>
-                <div class="ho-grid2">
-                    <div class="form-group"><label>Modo</label>
-                        <select name="decimo_tipo" id="ho-decimo" class="form-control" onchange="hoDecimo()">
-                            {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                        </select>
+                <aside class="ho-side">
+                    <div class="ho-res">
+                        <div class="ho-res-h">Resumo do contrato</div>
+                        <div class="ho-res-big"><div class="ho-lbl">Total mensal</div><div class="ho-val" id="hr-total">R$ 0,00</div><div class="ho-num" id="hr-itens">—</div></div>
+                        <div class="ho-res-row"><span>Grupo</span><b id="hr-grupo">—</b></div>
+                        <div class="ho-res-row"><span>Vence</span><b id="hr-venc">—</b></div>
+                        <div class="ho-res-row"><span id="hr-13-lbl">13º</span><b id="hr-13">—</b></div>
+                        <div class="ho-res-row"><span>Reajuste</span><b id="hr-reaj">—</b></div>
+                        <div class="ho-res-row"><span>Emite</span><b id="hr-emite">—</b></div>
                     </div>
-                    <div class="form-group ho-dec-on"><label>Começa a cobrar</label>
-                        <select name="decimo_inicio" id="ho-dec-inicio" class="form-control" onchange="hoDecimo()">
-                            {% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group ho-dec-on" id="ho-dec-desde-box"><label>Na casa desde</label><input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control"><small class="ho-num">base do proporcional: entrou em maio = 8/12</small></div>
-                    <div class="form-group ho-dec" id="ho-dec-box"><label>Frações (competência · %)</label>
-                        <div id="ho-dec-rows"></div>
-                        <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
-                    </div>
+                    <p class="ho-num" style="margin:10px 2px 0; line-height:1.5;">Os valores da rede aparecem como sugestão em Discriminações: clique para usar, ou ignore e digite.</p>
+                </aside>
                 </div>
-
-                <p class="ho-sec">Reajuste</p>
-                <div class="ho-grid3">
-                    <div class="form-group"><label>Regra</label>
-                        <select name="reajuste_tipo" id="ho-reajuste" class="form-control">
-                            {% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group"><label>Próximo reajuste</label><input type="date" name="proximo_reajuste" id="ho-prox" class="form-control"><small class="ho-num">salário mínimo: em branco = primeiro janeiro após 12 meses</small></div>
-                    <div class="form-group"><label>Observação</label><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" placeholder="índice, degraus, motivo"></div>
-                </div>
-                {% if modo != 'admin' %}<div class="form-group" style="margin-top:10px;"><label>Recado para quem aprova</label><input type="text" name="observacao" class="form-control" placeholder="ex.: combinado com o cliente em reunião de 05/11"></div>{% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="hoFechar()">Cancelar</button>
@@ -317,18 +396,86 @@ function hoDecimo() {
     document.getElementById('ho-dec-desde-box').style.display = (tipo !== 'NENHUM' && ini === 'DATA') ? 'block' : 'none';
 }
 function hoLimpar() {
-    ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-plano', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde'].forEach(function (i) { document.getElementById(i).value = ''; });
+    ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo'].forEach(function (i) { document.getElementById(i).value = ''; });
     document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
+    document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none';
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
     document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
-    hoDecimo();
+    hoDecimo(); hoResumo();
 }
 function hoSetCliente(id, nome, numero) {
     document.getElementById('ho-cliente-id').value = id || '';
     document.getElementById('ho-cli-nome').textContent = nome || ''; document.getElementById('ho-cli-num').textContent = numero ? 'nº ' + numero : '';
     document.getElementById('ho-cli').style.display = id ? 'flex' : 'none'; document.getElementById('ho-cli-busca').style.display = id ? 'none' : 'block';
+    if (id) hoSugestoes(id); else { document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; }
 }
+// ---- sugestões da rede (06/11/2026): o que as outras empresas do grupo pagam; um clique preenche, ou ignora e digita ----
+var HO_SUG = [];
+function hoSugestoes(cid) {
+    fetch('/financeiro/honorarios/sugestoes/' + cid).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+        if (!d) return;
+        HO_SUG = d.sugestoes || [];
+        var g = document.getElementById('ho-grupo'), av = document.getElementById('ho-grupo-aviso');
+        if (d.grupo) { g.value = d.grupo.id; av.style.display = 'none'; }
+        else if (d.grupo_sugerido) { g.value = d.grupo_sugerido.id; av.innerHTML = 'Sem grupo no cadastro. Pelo Conexa (' + d.plano + ') sugerimos <b>' + d.grupo_sugerido.nome + '</b>: ao salvar, a empresa entra nesse grupo.'; av.style.display = 'block'; }
+        else { g.value = ''; if (d.plano) { av.innerHTML = 'Sem grupo no cadastro. No Conexa era "' + d.plano + '" e não existe grupo com esse nome: escolha um ou crie em Cadastros → Grupos.'; av.style.display = 'block'; } else av.style.display = 'none'; }
+        var rede = document.getElementById('ho-rede'), chips = document.getElementById('ho-chips'); chips.innerHTML = '';
+        if (!HO_SUG.length) { rede.style.display = 'none'; hoResumo(); return; }
+        rede.innerHTML = d.fonte === 'grupo' ? 'O que as outras empresas do grupo <b>' + d.grupo.nome + '</b> pagam:' : 'O que as outras empresas do plano <b>' + d.plano + '</b> (Conexa) pagam:';
+        rede.style.display = 'block';
+        HO_SUG.forEach(function (s, i) {
+            var c = document.createElement('button'); c.type = 'button'; c.className = 'ho-chip'; c.title = 'Usar estes valores';
+            c.innerHTML = '<b>' + brl(Number(s.valor)) + '</b><span>' + s.n + (s.n === 1 ? ' empresa' : ' empresas') + (s.decimo_tipo !== 'NENHUM' ? ' · com 13º' : '') + '</span>';
+            c.onclick = function () { hoAplicar(i); }; chips.appendChild(c);
+        });
+        hoResumo();
+    });
+}
+function hoAplicar(i) {
+    var s = HO_SUG[i]; if (!s) return;
+    document.querySelector('#ho-itens tbody').innerHTML = '';
+    (s.itens || []).forEach(function (it) { hoAddItem(it.descricao, it.valor, it.servico_id); });
+    if (!s.itens || !s.itens.length) hoAddItem('Honorários contábeis', s.valor, HO_SERV_HON);
+    if (s.dia_vencimento) document.getElementById('ho-dia').value = s.dia_vencimento;
+    document.getElementById('ho-decimo').value = s.decimo_tipo || 'NENHUM';
+    document.getElementById('ho-nfse').checked = !!s.gerar_nfse; document.getElementById('ho-boleto').checked = !!s.gerar_boleto;
+    hoDecimo(); hoResumo();
+}
+// ---- resumo vivo (coluna da direita) ----
+var HO_GRUPOS = {{ grupos | tojson }};
+var HO_REAJ = {{ REAJUSTE_TIPOS | tojson }};
+var HO_ANO = {{ hoje.year }};
+function hoData(s) { if (!s) return null; var p = s.split('-'); return p.length === 3 ? { y: +p[0], m: +p[1] } : null; }
+function hoMesAno(y, m) { return ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][m - 1] + '/' + y; }
+function hoResumo() {
+    var t = 0, n = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { var v = hoNum(i.value); if (v > 0) { t += v; n++; } });
+    document.getElementById('hr-total').textContent = brl(t);
+    document.getElementById('hr-itens').textContent = n ? (n === 1 ? '1 discriminação' : n + ' discriminações') : 'nenhuma discriminação ainda';
+    var gid = document.getElementById('ho-grupo').value, g = HO_GRUPOS.filter(function (x) { return String(x.id) === String(gid); })[0];
+    document.getElementById('hr-grupo').textContent = g ? g.nome : 'sem grupo';
+    var dia = document.getElementById('ho-dia').value; document.getElementById('hr-venc').textContent = dia ? 'dia ' + dia + ' do mês seguinte' : '—';
+    var tipo = document.getElementById('ho-decimo').value, modo = document.getElementById('ho-dec-inicio').value;
+    var ini = hoData(document.getElementById('ho-inicio').value), desde = hoData(document.getElementById('ho-dec-desde').value);
+    var lbl = document.getElementById('hr-13-lbl'), v13 = document.getElementById('hr-13');
+    if (tipo === 'NENHUM' || !t) { lbl.textContent = '13º'; v13.textContent = tipo === 'NENHUM' ? 'não cobra' : '—'; }
+    else {
+        var base = ini || { y: HO_ANO, m: 1 };
+        if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+        var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m);
+        var pct = 100; if (tipo === 'PERSONALIZADO') { pct = 0; document.querySelectorAll('#ho-dec-rows [name=dec_pct]').forEach(function (p) { pct += parseFloat(p.value) || 0; }); }
+        lbl.textContent = '13º de ' + HO_ANO;
+        v13.textContent = meses ? brl(t * meses / 12 * pct / 100) + ' · ' + meses + '/12' : 'só a partir de ' + base.y;
+    }
+    var rt = document.getElementById('ho-reajuste').value, prox = hoData(document.getElementById('ho-prox').value), txt = HO_REAJ[rt] || rt;
+    if (prox) txt = hoMesAno(prox.y, prox.m);
+    else if (rt === 'SALARIO_MINIMO' && ini) txt = 'jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2);
+    document.getElementById('hr-reaj').textContent = txt;
+    var nf = document.getElementById('ho-nfse').checked, bo = document.getElementById('ho-boleto').checked;
+    document.getElementById('hr-emite').innerHTML = '<span class="ho-tag' + (nf ? '' : ' off') + '">nota</span><span class="ho-tag' + (bo ? '' : ' off') + '">boleto</span>';
+}
+document.getElementById('ho-form').addEventListener('input', hoResumo);
+document.getElementById('ho-form').addEventListener('change', hoResumo);
 function hoTrocarCliente() { hoSetCliente(null); document.getElementById('ho-cli-q').focus(); }
 function hoNovo(id, nome, numero) {
     hoLimpar(); document.getElementById('ho-titulo').textContent = 'Novo contrato de honorários';
@@ -344,7 +491,7 @@ function hoEditar(cid) {
         document.getElementById('ho-cli-trocar').style.display = 'none';
         (c.itens || []).forEach(function (i) { hoAddItem(i.descricao, i.valor, i.servico_id); });
         document.getElementById('ho-dia').value = c.dia_vencimento; document.getElementById('ho-inicio').value = c.inicio || '';
-        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-plano').value = c.plano || '';
+        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-grupo').value = c.grupo_id || '';
         document.getElementById('ho-decimo').value = c.decimo_tipo || 'NENHUM';
         document.getElementById('ho-dec-inicio').value = c.decimo_inicio || 'PROPORCIONAL';
         document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
@@ -353,7 +500,7 @@ function hoEditar(cid) {
         document.getElementById('ho-reajuste').value = c.reajuste_tipo || 'SALARIO_MINIMO';
         document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
         document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
-        hoDecimo(); document.getElementById('hoModal').style.display = 'block';
+        hoDecimo(); hoResumo(); document.getElementById('hoModal').style.display = 'block';
     });
 }
 function hoFechar() { document.getElementById('hoModal').style.display = 'none'; }

@@ -43,6 +43,25 @@ def _servicos():
     return execute_query("SELECT id, nome FROM nfse_servicos WHERE ativo = 1 ORDER BY ordem, nome", fetch=True) or []
 
 
+def _grupos():
+    return execute_query("SELECT id, nome FROM grupos_clientes WHERE situacao = 'ATIVO' ORDER BY nome", fetch=True) or []
+
+
+def _gravar_grupo(cliente_id, f):
+    """O campo Grupo do contrato É o grupo do CADASTRO: trocar aqui troca lá (Anderson, 06/11/2026: "com a opção
+    de alterar aí já altera até no cadastro em tudo"). Em branco não tira de grupo nenhum."""
+    if 'grupo_id' not in f:
+        return
+    gid = f.get('grupo_id', type=int)
+    if not gid:
+        return
+    from routes.clientes import _salvar_grupo
+    mudou = _salvar_grupo(cliente_id, gid)
+    if mudou:
+        registrar('escrita.alterou_grupo_cliente', 'clientes', tabela='cliente_grupo_relacao', registro_id=cliente_id,
+                  antes={'grupos': mudou[0]}, depois={'grupo': mudou[1], 'origem': 'contrato de honorários'})
+
+
 def _foto(c):
     """O que vai para o log: só o que importa, em texto."""
     if not c:
@@ -74,7 +93,7 @@ def honorarios():
             WHERE v.usado_em IS NULL AND v.expira_em > NOW() ORDER BY v.id DESC""", fetch=True) or []
     return render_template('financeiro/honorarios.html', modo='admin', aba=aba, busca=busca, contratos=contratos, sem_contrato=sem,
                            pendentes=pendentes, convites=convites, pessoas=ClienteResponsavel.usuarios_disponiveis(),
-                           resumo=FinContrato.resumo(), servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS,
+                           resumo=FinContrato.resumo(), servicos=_servicos(), grupos=_grupos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS,
                            REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS)
 
 
@@ -87,7 +106,25 @@ def honorarios_json(cid):
     out = {k: (v.isoformat() if hasattr(v, 'isoformat') else (str(v) if isinstance(v, Decimal) else v)) for k, v in c.items()}
     out['itens'] = [{'descricao': i['descricao'], 'valor': str(i['valor']), 'servico_id': i['servico_id']} for i in FinContrato.itens(cid)]
     out['decimo_inicio'] = modo_decimo_inicio(c.get('decimo_desde'), c.get('inicio'))
+    from models.cliente import Cliente
+    g = Cliente.get_grupos(c['cliente_id'])
+    out['grupo_id'] = g[0]['id'] if g else None
     return jsonify(out)
+
+
+@financeiro.route('/financeiro/honorarios/sugestoes/<int:cliente_id>')
+@login_required
+def honorarios_sugestoes(cliente_id):
+    """Valores da rede para o modal (grupo do cadastro ou, sem grupo, o plano do Conexa). Quem cadastra por
+    link só tem login: o convite válido daquela empresa é o que libera."""
+    pode = current_user.is_admin() or current_user.has_permission(PERM) or current_user.has_permission(PERM_CAD)
+    if not pode:
+        pode = bool(execute_query(
+            """SELECT 1 FROM fin_honorarios_convites WHERE cliente_id = %s AND usado_em IS NULL AND expira_em > NOW()
+                  AND (usuario_id IS NULL OR usuario_id = %s) LIMIT 1""", (cliente_id, current_user.id), fetch=True))
+    if not pode:
+        return jsonify({'erro': 'sem acesso'}), 403
+    return jsonify(FinContrato.sugestoes(cliente_id))
 
 
 @financeiro.route('/financeiro/honorarios/salvar', methods=['POST'])
@@ -122,7 +159,7 @@ def honorarios_salvar():
         if reajuste_tipo == 'SALARIO_MINIMO' and not prox:
             prox = primeiro_reajuste(inicio)
         dados = dict(valor=valor, dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
-                     plano=(f.get('plano') or '').strip() or None, decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
+                     decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
                      decimo_desde=decimo_desde_de(f.get('decimo_inicio') or 'PROPORCIONAL', inicio, _data(f.get('decimo_desde'))),
                      reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                      reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
@@ -132,6 +169,7 @@ def honorarios_salvar():
             if not antes:
                 raise ValueError('Contrato não encontrado.')
             FinContrato.atualizar(cid, dados, itens)
+            _gravar_grupo(antes['cliente_id'], f)
             depois = FinContrato.get(cid)
             registrar('escrita.alterou_contrato_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
                       antes=_foto(antes), depois=_foto(depois))
@@ -142,6 +180,7 @@ def honorarios_salvar():
                 raise ValueError('Escolha a empresa.')
             cid = FinContrato.criar(cliente_id=cliente_id, itens=itens, criado_por=current_user.id,
                                     aprovado_por=current_user.id, situacao='ATIVO', **dados)
+            _gravar_grupo(cliente_id, f)
             novo = FinContrato.get(cid)
             registrar('escrita.criou_contrato_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
                       depois=dict(_foto(novo), cliente_id=cliente_id, empresa=novo['nome_razao_social']))
@@ -198,7 +237,7 @@ def _ler_form(f):
     if reajuste_tipo == 'SALARIO_MINIMO' and not prox:
         prox = primeiro_reajuste(inicio)
     dados = dict(valor=sum(i['valor'] for i in itens), dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
-                 plano=(f.get('plano') or '').strip() or None, decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
+                 decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
                  decimo_desde=decimo_desde_de(f.get('decimo_inicio') or 'PROPORCIONAL', inicio, _data(f.get('decimo_desde'))), reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                  reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
                  gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0,
@@ -210,6 +249,7 @@ def _criar_pendente(cliente_id, f):
     itens, dados = _ler_form(f)
     cid = FinContrato.criar(cliente_id=cliente_id, itens=itens, criado_por=current_user.id, aprovado_por=None,
                             situacao='PENDENTE', **dados)
+    _gravar_grupo(cliente_id, f)
     novo = FinContrato.get(cid)
     registrar('escrita.cadastrou_honorarios_pendente', 'financeiro', tabela='fin_contratos', registro_id=cid,
               depois=dict(_foto(novo), cliente_id=cliente_id, empresa=novo['nome_razao_social']))
@@ -230,7 +270,7 @@ def honorarios_cadastrar():
             ORDER BY v.id DESC""", (current_user.id,), fetch=True) or []
     aba = request.args.get('aba') or 'sem'
     return render_template('financeiro/honorarios.html', modo='cadastrar', aba=aba, busca=None, contratos=enviados,
-                           sem_contrato=minhas, convites_meus=convites, resumo={}, servicos=_servicos(),
+                           sem_contrato=minhas, convites_meus=convites, resumo={}, servicos=_servicos(), grupos=_grupos(),
                            DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(),
                            SERVICO_HONORARIOS=SERVICO_HONORARIOS, acao_form=url_for('financeiro.honorarios_cadastrar_salvar'))
 
@@ -328,7 +368,7 @@ def honorarios_convite(token):
         return redirect('/')
     return render_template('financeiro/honorarios.html', modo='convite', aba='sem', busca=None, contratos=[], sem_contrato=[],
                            convite=dict(v, nome_razao_social=cl['nome_razao_social'], numero_cliente=cl['numero_cliente']),
-                           resumo={}, servicos=_servicos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS,
+                           resumo={}, servicos=_servicos(), grupos=_grupos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS, REAJUSTE_TIPOS=REAJUSTE_TIPOS,
                            hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS,
                            acao_form=url_for('financeiro.honorarios_convite_salvar', token=token))
 
