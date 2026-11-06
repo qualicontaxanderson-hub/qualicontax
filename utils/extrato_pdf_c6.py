@@ -169,9 +169,13 @@ def _valor(txt):
 
 
 def e_extrato_c6(texto_pag1):
+    """Dois cabeçalhos, o mesmo corpo: o PDF que chega por e-mail abre com
+    "Extrato exportado"; o que o aplicativo do C6 exporta (06/11/2026, arquivo
+    ``extrato-da-sua-conta-<id>.pdf``) abre com "Extrato da conta" e
+    "Exportado em". Agência/conta e as linhas de lançamento são iguais."""
     t = texto_pag1 or ''
-    return ('Extrato exportado' in t and _RE_CONTA.search(t) is not None
-            and 'Saldo' in t)
+    cabecalho = 'Extrato exportado' in t or ('Extrato da conta' in t and 'Exportado em' in t)
+    return cabecalho and _RE_CONTA.search(t) is not None and 'Saldo' in t
 
 
 def parse_pdf_c6(raw, senhas=()):
@@ -192,7 +196,9 @@ def parse_pdf_c6(raw, senhas=()):
     titular = None
     if mc:
         linha = next((l for l in cab.splitlines() if mc.group(1) in l), '')
-        titular = linha.split(mc.group(1))[0].strip(' ·-•\xa0') or None
+        titular = linha.split(mc.group(1))[0].strip(' ·-•\xa0')
+        # o PDF do aplicativo escreve "NOME • CPF: 291..." — o rótulo não é parte do nome
+        titular = re.sub(r'[\s·•-]*(CPF|CNPJ):?\s*$', '', titular, flags=re.I).strip(' ·-•\xa0') or None
 
     lancs = []
     ano = None
