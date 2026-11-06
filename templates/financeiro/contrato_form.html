@@ -11,7 +11,22 @@
 .pf-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
 .pf-mhead h3 { margin:0; font-size:16px; color:#fff; } .pf-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
 .pf-mbody { padding:14px 16px 8px; }
-@media (min-width:1200px) { .pf-mbody { display:grid; grid-template-columns:1fr 1fr; gap:4px 18px; align-items:start; } .pf-row { margin-bottom:0; } .pf-row.pf-largo { grid-column:1 / -1; } }
+/* formulário à esquerda, prévia do contrato à direita (acompanha a rolagem) */
+.pf-cols { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:18px; align-items:start; }
+.pf-prev { position:sticky; top:14px; }
+.pf-pv { background:#fff; border:1px solid #e3ece7; border-radius:14px; overflow:hidden; }
+.pf-pv-h { background:#0f3d2e; color:#fff; padding:11px 14px; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+.pf-pv-big { padding:14px 14px 10px; border-bottom:1px solid #eef3f0; }
+.pf-pv-big .l { font-size:10.5px; color:#7d968a; text-transform:uppercase; letter-spacing:.6px; }
+.pf-pv-big .v { font-size:15px; font-weight:800; color:#0f3d2e; line-height:1.3; }
+.pf-pv-row { display:flex; justify-content:space-between; gap:12px; padding:9px 14px; border-bottom:1px solid #eef3f0; font-size:13px; }
+.pf-pv-row:last-child { border-bottom:0; }
+.pf-pv-row span:first-child { color:#7d968a; flex:none; }
+.pf-pv-row b { text-align:right; color:#0f3d2e; font-variant-numeric:tabular-nums; min-width:0; }
+.pf-pv-falta { color:#b91c1c !important; font-weight:700; }
+.pf-pv-ok { display:flex; align-items:center; gap:7px; font-size:12px; color:#15803d; padding:10px 14px; background:#f0fdf4; }
+.pf-pv-ok.erro { color:#b91c1c; background:#fff1f2; }
+@media (max-width:1100px) { .pf-cols { grid-template-columns:1fr; } .pf-prev { position:static; } }
 .pf-row { display:grid; grid-template-columns:38px 170px 1fr; align-items:start; gap:12px; padding:10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; }
 .pf-row:hover { background:#f8fbf9; }
 .pf-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; margin-top:2px; }
@@ -48,7 +63,7 @@
         <div><h3>{{ 'Editar rascunho' if contrato else 'Montar contrato de prestação de serviços' }}</h3>
             <p id="pf-sub">{% if emp %}{{ emp.numero_cliente }} · {{ emp.nome_razao_social }}{% else %}escolha a empresa{% endif %}</p></div>
     </div>
-    <div class="pf-mbody">
+    <div class="pf-mbody"><div class="pf-cols"><div class="pf-main">
         <div class="pf-row pf-largo">
             <span class="pf-rico"><i class="fas fa-building"></i></span>
             <label class="pf-rlbl">Empresas<small>uma, ou a rede inteira num contrato só</small></label>
@@ -149,6 +164,26 @@
             </div>
         </div>
     </div>
+    <aside class="pf-prev">
+        <div class="pf-pv">
+            <div class="pf-pv-h"><i class="fas fa-eye"></i> Prévia do contrato</div>
+            <div class="pf-pv-big"><div class="l">Título</div><div class="v" id="pv-titulo">—</div></div>
+            <div class="pf-pv-row"><span>Contratante</span><b id="pv-emp">—</b></div>
+            <div class="pf-pv-row"><span>Assina</span><b id="pv-rep">—</b></div>
+            <div class="pf-pv-row"><span>Serviços</span><b id="pv-serv">—</b></div>
+            <div class="pf-pv-row"><span>Honorários</span><b id="pv-valor">—</b></div>
+            <div class="pf-pv-row"><span>Vencimento</span><b id="pv-venc">—</b></div>
+            <div class="pf-pv-row"><span>Início</span><b id="pv-ini">—</b></div>
+            <div class="pf-pv-row"><span>13º</span><b id="pv-13">—</b></div>
+            <div class="pf-pv-row"><span>Reajuste</span><b id="pv-reaj">—</b></div>
+            <div class="pf-pv-row"><span>Multa / juros</span><b id="pv-multa">—</b></div>
+            <div class="pf-pv-row"><span>Aviso prévio</span><b id="pv-aviso">—</b></div>
+            <div class="pf-pv-row"><span>Pela Qualicontax</span><b id="pv-q">—</b></div>
+            <div class="pf-pv-row"><span>Testemunhas</span><b id="pv-test">—</b></div>
+            <div class="pf-pv-ok" id="pv-nota"></div>
+        </div>
+    </aside>
+    </div></div>
     <div class="pf-mfoot">
         <span class="pf-mnote"><i class="fas fa-circle-info"></i> Salva como rascunho: você confere o PDF antes de enviar para assinatura.</span>
         <a class="btn btn-secondary" href="{{ url_for('financeiro.contratos') }}">Cancelar</a>
@@ -187,5 +222,38 @@ function pfSub() { var n = document.querySelectorAll('#pf-emps .pf-emp').length;
     document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
     if (window.Dinheiro && window.Dinheiro.ligar) window.Dinheiro.ligar();
 })();
+// ---- prévia viva: o que o contrato vai dizer, conforme se preenche ----
+function pfNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+function pfBrl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function pfSel(name) { var s = document.querySelector('[name=' + name + ']'); return s ? (s.options ? (s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : '') : s.value) : ''; }
+function pfVal(name) { var s = document.querySelector('[name=' + name + ']'); return s ? s.value : ''; }
+function pfPrevia() {
+    var set = function (id, v, falta) { var e = document.getElementById(id); e.textContent = v || '—'; e.classList.toggle('pf-pv-falta', !!falta); };
+    var emps = Array.prototype.map.call(document.querySelectorAll('#pf-emps .pf-emp .nome'), function (x) { return x.textContent; });
+    var apelido = pfVal('apelido');
+    set('pv-emp', emps.length ? (emps[0].replace(/^[^·]+· /, '') + (emps.length > 1 ? ' + ' + (emps.length - 1) : '')) + (apelido ? ' (' + apelido.toUpperCase() + ')' : '') : 'escolha a empresa', !emps.length);
+    var rep = pfVal('rep_nome'); set('pv-rep', rep ? rep + (pfVal('rep_email') ? '' : ' (sem e-mail)') : 'quem assina pela empresa', !rep || !pfVal('rep_email'));
+    var areas = Array.prototype.map.call(document.querySelectorAll('[name=areas]:checked'), function (c) { return c.parentNode.textContent.trim(); });
+    var extras = Array.prototype.filter.call(document.querySelectorAll('[name=servico_extra]'), function (i) { return i.value.trim(); }).length;
+    set('pv-serv', areas.join(', ') + (extras ? (areas.length ? ' + ' : '') + extras + ' específico' + (extras > 1 ? 's' : '') : ''), !areas.length && !extras);
+    var v = pfNum(pfVal('valor')); set('pv-valor', v ? pfBrl(v) + ' / mês' : 'informe o valor', !v);
+    set('pv-venc', pfVal('dia_vencimento') ? 'dia ' + pfVal('dia_vencimento') + ' do mês' : '');
+    var ini = pfVal('inicio'); set('pv-ini', ini ? ini.split('-').reverse().join('/') : '');
+    set('pv-13', pfSel('decimo')); set('pv-reaj', pfSel('reajuste_tipo') + (pfVal('reajuste_indice') ? ' · ' + pfVal('reajuste_indice') : ''));
+    set('pv-multa', pfVal('multa') + '% · ' + pfVal('juros') + '% ao mês'); set('pv-aviso', pfVal('aviso_previo') + ' dias');
+    set('pv-q', pfSel('assina_qualicontax'));
+    var tests = Array.prototype.map.call(document.querySelectorAll('[name=testemunha_id]'), function (s) { return s.value ? s.options[s.selectedIndex].text.split(' ')[0] : null; }).filter(Boolean);
+    set('pv-test', tests.length ? tests.join(' e ') : 'nenhuma');
+    var titulo = pfVal('titulo') || (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
+    document.getElementById('pv-titulo').textContent = titulo;
+    var faltas = [];
+    if (!emps.length) faltas.push('empresa'); if (!rep || !pfVal('rep_email')) faltas.push('quem assina e e-mail'); if (!areas.length && !extras) faltas.push('serviços'); if (!v) faltas.push('valor');
+    var nota = document.getElementById('pv-nota'); nota.classList.toggle('erro', faltas.length > 0);
+    nota.innerHTML = faltas.length ? '<i class="fas fa-circle-exclamation"></i> Falta: ' + faltas.join(', ') : '<i class="fas fa-circle-check"></i> Pronto para salvar o rascunho e conferir o PDF';
+}
+document.getElementById('pf-form').addEventListener('input', pfPrevia);
+document.getElementById('pf-form').addEventListener('change', pfPrevia);
+var _pfSub = pfSub; pfSub = function () { _pfSub(); pfPrevia(); };
+pfPrevia();
 </script>
 {% endblock %}

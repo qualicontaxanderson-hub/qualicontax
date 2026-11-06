@@ -31,12 +31,17 @@
 .pc-sem-h h2 { margin:0; font-size:15px; color:#fff; } .pc-sem-h p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
 .pc-sem-h input { margin-left:auto; height:38px; border-radius:10px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff; padding:0 12px; width:280px; font-size:13px; }
 .pc-sem-h input::placeholder { color:#bfe8cf; }
-.pc-sem-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:0; padding:6px 10px 10px; }
-.pc-item { display:flex; align-items:center; gap:10px; padding:9px 8px; border-bottom:1px dashed #eef2f0; min-width:0; }
-.pc-item .n { width:40px; height:30px; border-radius:8px; background:#eef6f1; color:#15803d; font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; font-variant-numeric:tabular-nums; }
-.pc-item .n.pf { background:#f5f3ff; color:#6d28d9; }
-.pc-item .t { flex:1; min-width:0; } .pc-item .t b { display:block; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .pc-item .t small { color:#7d968a; font-size:11.5px; }
-.pc-item .btn { flex:none; }
+/* cada empresa é um card (mesmo cartão de Clientes/Grupos), clicável para montar */
+.pc-sem-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; padding:14px; background:#f4f8f5; }
+.pc-item { background:#fff; border:1px solid #e3ece7; border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; min-width:0; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+.pc-item:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.pc-item .h { display:flex; align-items:center; gap:10px; }
+.pc-item .n { width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; flex:none; font-variant-numeric:tabular-nums; }
+.pc-item .n.pf { background:linear-gradient(135deg,#8b5cf6,#4c1d95); font-size:11px; }
+.pc-item .t { flex:1; min-width:0; } .pc-item .t b { display:block; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#0f172a; } .pc-item .t small { color:#7d968a; font-size:11.5px; }
+.pc-item .pe { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.pc-item .val { font-size:14px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; } .pc-item .val small { font-weight:600; color:#7d968a; font-size:11px; }
+.pc-item .gr { font-size:11px; font-weight:700; border-radius:6px; padding:2px 8px; background:#eef6f1; color:#15803d; } .pc-item .gr.sem { background:#f1f5f9; color:#94a3b8; }
 .pc-sem-pe { padding:8px 18px 12px; font-size:12px; color:#7d968a; }
 @media (max-width:900px) { .gc-grid, .pc-sem-grid { grid-template-columns:1fr; } .pc-sem-h input { margin-left:0; width:100%; } }
 </style>
@@ -93,11 +98,13 @@
     </div>
     <div class="pc-sem-grid" id="pc-sem-grid">
     {% for s in sem_contrato %}
-        <div class="pc-item" data-q="{{ ((s.numero_cliente or '') ~ ' ' ~ s.nome_razao_social ~ ' ' ~ (s.grupo or '')) | lower }}">
-            <span class="n {% if not s.numero_cliente %}pf{% endif %}">{{ s.numero_cliente or 'PF' }}</span>
-            <span class="t"><b title="{{ s.nome_razao_social }}">{{ s.nome_razao_social }}</b><small>R$ {{ '{:,.2f}'.format(s.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }} / mês{% if s.grupo %} · {{ s.grupo }}{% endif %}</small></span>
-            <a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}">Montar</a>
-        </div>
+        <article class="pc-item" data-q="{{ ((s.numero_cliente or '') ~ ' ' ~ s.nome_razao_social ~ ' ' ~ (s.grupo or '')) | lower }}" onclick="location.href='{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}'" title="Montar o contrato">
+            <div class="h"><span class="n {% if not s.numero_cliente %}pf{% endif %}">{{ s.numero_cliente or 'PF' }}</span>
+                <span class="t"><b title="{{ s.nome_razao_social }}">{{ s.nome_razao_social }}</b><small>honorários cadastrados · sem contrato</small></span></div>
+            <div class="pe"><span class="val">R$ {{ '{:,.2f}'.format(s.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }} <small>/ mês</small></span>
+                {% if s.grupo %}<span class="gr">{{ s.grupo }}</span>{% else %}<span class="gr sem">sem grupo</span>{% endif %}
+                <a class="btn btn-primary btn-sm" href="{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}" onclick="event.stopPropagation();"><i class="fas fa-file-signature"></i> Montar</a></div>
+        </article>
     {% endfor %}
     </div>
     <div class="pc-sem-pe" id="pc-sem-pe"></div>
