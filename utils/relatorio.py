@@ -271,6 +271,11 @@ def gerar_relatorio_xlsx(ctx):
         larga = (2, 4) if grupos else (3,)
         ws.column_dimensions[get_column_letter(i)].width = 34 if i in larga else 14
     ws.freeze_panes = f'A{hr+1}'
+    # Filtro automático no cabeçalho (até a última linha de dados, sem o TOTAL):
+    # o time abre e já filtra por fornecedor, condição, vencimento — pedido do
+    # Anderson em 06/11/2026.
+    if last >= hr + 1:
+        ws.auto_filter.ref = f'A{hr}:{get_column_letter(len(cols))}{last}'
 
     # Abas extras (ex.: "Vencimentos" das Entradas): cabeçalho na linha 1,
     # filtro automático, datas como data e total por SUBTOTAL (respeita o filtro).
