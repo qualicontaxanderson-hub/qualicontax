@@ -33,6 +33,12 @@
             </select>
         </div>
     </div>
+    <div class="form-group">
+        <label>Webservice da prefeitura (ISSWeb/Fiorilli)</label>
+        <input type="url" name="ws_url" class="form-control" maxlength="255" value="{{ cfg.ws_url or '' }}"
+               placeholder="https://…/IssWeb-ejb/IssWebWSNacional/IssWebWSNacionalPortType">
+        <span class="nf-ajuda">Só quando o emissor é o ISSWeb da prefeitura (ex.: Senador Canedo). O endereço é a prefeitura que informa.</span>
+    </div>
 </div>
 
 <div class="nf-sec">

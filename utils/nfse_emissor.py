@@ -222,8 +222,11 @@ def pedido_do_form(f, empresa_id, cfg):
 
 
 def emissor_da_serie(cfg, serie):
-    """A série diz o caminho: a série da prefeitura vai pelo RPS; as demais, pelo nacional."""
-    return 'sp' if cfg.get('serie_sp') and str(serie).upper() == str(cfg['serie_sp']).upper() else 'nacional'
+    """A série diz o caminho: a série da prefeitura de SP vai pelo RPS; as demais vão pela DPS
+    nacional — ao Sefin ou, quando a matriz diz 'fiorilli', ao ISSWeb do município (06/11/2026)."""
+    if cfg.get('serie_sp') and str(serie).upper() == str(cfg['serie_sp']).upper():
+        return 'sp'
+    return 'fiorilli' if (cfg.get('emissor') or '') == 'fiorilli' else 'nacional'
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +245,9 @@ def emitir(pedido: Pedido, cfg: dict, usuario_id=None) -> dict:
         raise PedidoInvalido('A prefeitura de São Paulo exige a inscrição municipal da empresa na configuração.')
     if emissor == 'sp' and not pedido.cod_servico_sp:
         raise PedidoInvalido('Informe o código de serviço da prefeitura (ex.: 3476).')
-    if emissor == 'nacional' and len(pedido.cod_trib_nac) != 6:
+    if emissor == 'fiorilli' and not (cfg.get('ws_url') or '').strip():
+        raise PedidoInvalido('Falta o endereço do webservice da prefeitura (ISSWeb) na configuração.')
+    if emissor in ('nacional', 'fiorilli') and len(pedido.cod_trib_nac) != 6:
         raise PedidoInvalido('Código de tributação nacional precisa ter 6 dígitos (ex.: 171901).')
 
     cert = adn.resolver_certificado(pedido.empresa_id)      # SemCertificado se não houver
@@ -254,8 +259,8 @@ def emitir(pedido: Pedido, cfg: dict, usuario_id=None) -> dict:
     _gravar_rascunho(emitida_id, pedido, cfg, emissor, agora)
 
     try:
-        if emissor == 'nacional':
-            _enviar_nacional(emitida_id, numero, pedido, cfg, cert, agora)
+        if emissor in ('nacional', 'fiorilli'):
+            _enviar_nacional(emitida_id, numero, pedido, cfg, cert, agora, via=emissor)
         else:
             _enviar_sp(emitida_id, numero, pedido, cfg, agora)
     except Exception as exc:                      # rede, certificado, bug — nunca some
@@ -340,7 +345,9 @@ def montar_dps(numero, p: Pedido, cfg, cert, agora, amb):
     return d
 
 
-def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora):
+def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora, via='nacional'):
+    """A DPS nacional — ao Sefin (``via='nacional'``) ou ao ISSWeb da Fiorilli do município
+    (``via='fiorilli'``): mesma montagem, mesma assinatura, mesmo resultado; só o destino muda."""
     from utils.integrations.nfse_adn import client as adn, dps as D, emissao as E
     sess = adn.abrir_sessao(cert)
     x509, chave, _ = sess.material
@@ -351,7 +358,11 @@ def _enviar_nacional(emitida_id, numero, p: Pedido, cfg, cert, agora):
     assinado = D.assinar_dps(xml, d.id, chave, x509)
     execute_query('UPDATE nfse_emitidas SET dps_id = %s, xml_dps = %s WHERE id = %s', (d.id, assinado, emitida_id))
 
-    r = E.emitir(sess, assinado, int(amb))
+    if via == 'fiorilli':
+        from utils.integrations.nfse_fiorilli import nacional as FIO
+        r = FIO.enviar_dps(cfg['ws_url'].strip(), assinado)
+    else:
+        r = E.emitir(sess, assinado, int(amb))
     bruto = json.dumps(r.bruto, ensure_ascii=False)
     if not r.ok:
         execute_query(
@@ -462,7 +473,8 @@ def cancelar_nota(nota_id: int, c_motivo, x_motivo, usuario_id=None) -> dict:
         raise CancelamentoRecusado('Nota não encontrada.')
     if n['situacao'] != 'autorizada':
         raise CancelamentoRecusado('Só nota autorizada pode ser cancelada.')
-    if (n.get('emissor') or 'nacional') != 'nacional':
+    via = n.get('emissor') or 'nacional'
+    if via not in ('nacional', 'fiorilli'):
         raise CancelamentoRecusado('O cancelamento pela prefeitura de São Paulo ainda não está no sistema.')
     if not n.get('chave_acesso'):
         raise CancelamentoRecusado('A nota não tem chave de acesso.')
@@ -476,16 +488,19 @@ def cancelar_nota(nota_id: int, c_motivo, x_motivo, usuario_id=None) -> dict:
     xml, pid = EV.xml_pedido_cancelamento(n['chave_acesso'], cert.cnpj, amb, int(c_motivo), x_motivo, agora)
     assinado = EV.assinar_pedido(xml, pid, chave_priv, x509)
 
-    try:
-        r = EV.registrar(sess, n['chave_acesso'], assinado, amb)
-    except Exception:
-        # Rede caiu depois do envio? Pergunta ao Sefin antes de dizer que falhou.
+    if via == 'fiorilli':
+        from models.nfse_emissao import NfseConfig
+        from utils.integrations.nfse_fiorilli import nacional as FIO
+        cfg = NfseConfig.get(n['empresa_id']) or {}
+        r = FIO.cancelar((cfg.get('ws_url') or '').strip(), cfg.get('inscricao_municipal'), assinado, pid)
+    else:
         try:
-            r = EV.consultar(sess, n['chave_acesso'], amb)
+            r = EV.registrar(sess, n['chave_acesso'], assinado, amb)
         except Exception:
-            raise
-        if not r.ok:
-            raise
+            # Rede caiu depois do envio? Pergunta ao Sefin antes de dizer que falhou.
+            r = EV.consultar(sess, n['chave_acesso'], amb)
+            if not r.ok:
+                raise
     bruto = json.dumps(r.bruto, ensure_ascii=False)
     if not r.ok:
         execute_query("UPDATE nfse_emitidas SET erro_ultimo = %s, atualizado_em = NOW() WHERE id = %s",

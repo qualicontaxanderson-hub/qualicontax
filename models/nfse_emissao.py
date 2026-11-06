@@ -19,7 +19,7 @@ CAMPOS_CONFIG = (
     'inscricao_municipal', 'municipio_ibge', 'tributacao_sp', 'cod_servico_sp',
     'cod_trib_nac', 'cod_trib_mun', 'cod_nbs',
     'op_simp_nac', 'reg_ap_trib_sn', 'reg_esp_trib', 'aliquota_iss', 'iss_retido',
-    'piscofins_cst', 'aliquota_pis', 'aliquota_cofins',
+    'piscofins_cst', 'aliquota_pis', 'aliquota_cofins', 'ws_url',
     'ibscbs_cst', 'ibscbs_cclasstrib', 'ibscbs_cind_op', 'ibscbs_ind_dest', 'ibscbs_ind_final',
     'email_remetente', 'descricao_padrao',
 )
@@ -35,7 +35,8 @@ TRIB_ISSQN = {1: 'Tributável', 2: 'Imunidade', 3: 'Exportação de serviço', 4
 TP_RET_ISSQN = {1: 'ISS não retido', 2: 'Retido pelo tomador', 3: 'Retido pelo intermediário'}
 IND_DEST = {0: 'Destinatário é o tomador', 1: 'Destinatário é outro'}
 IND_FINAL = {0: 'Não é consumidor final', 1: 'Consumidor final'}
-EMISSORES = {'nacional': 'Emissor Nacional (Sefin)', 'sp': 'Prefeitura de São Paulo (RPS)'}
+EMISSORES = {'nacional': 'Emissor Nacional (Sefin)', 'fiorilli': 'ISSWeb da prefeitura (Fiorilli)',
+             'sp': 'Prefeitura de São Paulo (RPS)'}
 SITUACOES = {'rascunho': 'Rascunho', 'autorizada': 'Autorizada', 'rejeitada': 'Rejeitada',
              'erro': 'Falha no envio', 'cancelada': 'Cancelada'}
 
@@ -441,6 +442,9 @@ REGIMES = {'SIMPLES': 'Simples Nacional', 'MEI': 'MEI', 'LUCRO_PRESUMIDO': 'Lucr
 # Simples (op 1, NH Goiatuba Lucro Real, NFS-e 1 da série 900, 06/11/2026, cancelada em seguida —
 # Presumido é o mesmo caminho com outras alíquotas). MEI (op 2) ainda não.
 OP_PROVADOS = {1, 3}
+# Municípios fora do Emissor Nacional cujo sistema próprio já fala com o motor (DPS nacional no
+# webservice do município). Senador Canedo = ISSWeb/Fiorilli (provado na homologação, 06/11/2026).
+PROVEDOR_DO_MUNICIPIO = {'5220454': 'fiorilli'}
 
 
 def empresa_da_matriz(cliente_id):
@@ -476,7 +480,8 @@ def sugestao_da_matriz(emp):
     e-mail) + o padrão da reforma que domina as notas (CST 000 / 000001 / 100301)."""
     op = REGIME_PARA_OP.get(emp.get('regime') or '')
     return {
-        'emissor': 'nacional', 'municipio_ibge': emp.get('ibge') or '',
+        'emissor': PROVEDOR_DO_MUNICIPIO.get(emp.get('ibge') or '', 'nacional'),
+        'municipio_ibge': emp.get('ibge') or '',
         'inscricao_municipal': emp.get('im') or '', 'email_remetente': emp.get('email') or '',
         'op_simp_nac': op, 'reg_ap_trib_sn': 1 if op == 3 else None, 'reg_esp_trib': 0,
         'aliquota_iss': 0, 'iss_retido': 0,
@@ -553,8 +558,16 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
     if op == 1 and (len(_dig(cfg.get('piscofins_cst'))) != 2 or not float(cfg.get('aliquota_pis') or 0) > 0
                     or not float(cfg.get('aliquota_cofins') or 0) > 0):
         trava('matriz', 'Fora do Simples: CST e alíquotas do PIS/COFINS da empresa.')
-    if (cfg.get('emissor') or 'nacional') != 'nacional':
+    emissor = cfg.get('emissor') or 'nacional'
+    if emissor == 'sp':
         trava('matriz', 'Pela prefeitura de São Paulo só a Qualicontax foi provada: use o Emissor Nacional.')
+    if emissor == 'fiorilli':
+        if not (cfg.get('ws_url') or '').strip().lower().startswith('http'):
+            trava('matriz', 'ISSWeb (Fiorilli): falta o endereço do webservice, que a prefeitura informa.')
+        if not _dig(cfg.get('inscricao_municipal')):
+            trava('matriz', 'ISSWeb (Fiorilli): a inscrição municipal é obrigatória.')
+        aviso('matriz', 'ISSWeb (Fiorilli): a prefeitura precisa ter credenciado a empresa para emitir por sistema '
+                        'e a atividade da nota tem que estar no cadastro municipal dela.')
     if len(_dig(cfg.get('municipio_ibge'))) != 7:
         trava('matriz', 'Município da empresa (código IBGE, 7 dígitos).')
     else:
@@ -565,7 +578,9 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
         if (_dig(cfg.get('municipio_ibge')) != '3550308' and not _dig(cfg.get('inscricao_municipal'))
                 and aceita == 'sim'):
             aviso('matriz', 'Sem inscrição municipal: alguns municípios exigem na nota (Goiatuba recusou sem ela).')
-        if aceita in ('nao', 'sem_convenio'):
+        if aceita in ('nao', 'sem_convenio') and emissor == 'fiorilli':
+            pass                     # o município não aceita o nacional, mas a nota vai pelo ISSWeb dele
+        elif aceita in ('nao', 'sem_convenio'):
             trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: as notas desta empresa '
                             'só saem pelo sistema da própria prefeitura (integração ainda não feita).')
         elif aceita is None:
