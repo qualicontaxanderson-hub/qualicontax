@@ -103,7 +103,7 @@
 </div>
 {% endif %}
 
-<div class="ho-abas">
+<div class="ho-abas fin-abas-claras">
     {% if modo == 'admin' %}
     <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>

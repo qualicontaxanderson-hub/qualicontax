@@ -5,12 +5,13 @@
 {% block extra_css %}
 <style>
 /* Formulário do contrato no mesmo desenho das janelas (cabeçalho verde, linhas ícone + rótulo + campo) */
-.pf-wrap { max-width:960px; margin:14px 0; }
+.pf-wrap { margin:14px 0; }
 .pf-modal { border-radius:16px; overflow:hidden; background:#fff; border:1px solid #e3ece7; box-shadow:0 10px 30px rgba(15,61,46,.06); }
 .pf-mhead { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); }
 .pf-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
 .pf-mhead h3 { margin:0; font-size:16px; color:#fff; } .pf-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
 .pf-mbody { padding:14px 16px 8px; }
+@media (min-width:1200px) { .pf-mbody { display:grid; grid-template-columns:1fr 1fr; gap:4px 18px; align-items:start; } .pf-row { margin-bottom:0; } .pf-row.pf-largo { grid-column:1 / -1; } }
 .pf-row { display:grid; grid-template-columns:38px 170px 1fr; align-items:start; gap:12px; padding:10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; }
 .pf-row:hover { background:#f8fbf9; }
 .pf-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; margin-top:2px; }
@@ -48,7 +49,7 @@
             <p id="pf-sub">{% if emp %}{{ emp.numero_cliente }} · {{ emp.nome_razao_social }}{% else %}escolha a empresa{% endif %}</p></div>
     </div>
     <div class="pf-mbody">
-        <div class="pf-row">
+        <div class="pf-row pf-largo">
             <span class="pf-rico"><i class="fas fa-building"></i></span>
             <label class="pf-rlbl">Empresas<small>uma, ou a rede inteira num contrato só</small></label>
             <div class="pf-rval">

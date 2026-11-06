@@ -177,7 +177,9 @@ def contratos():
     for r in PrestContrato.listar():
         res[r['status']] = res.get(r['status'], 0) + 1
     sem = execute_query(
-        """SELECT c.id, c.numero_cliente, c.nome_razao_social, fc.valor FROM fin_contratos fc JOIN clientes c ON c.id = fc.cliente_id
+        """SELECT c.id, c.numero_cliente, c.nome_razao_social, fc.valor,
+                  (SELECT g.nome FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id WHERE r.cliente_id = c.id ORDER BY r.id LIMIT 1) AS grupo
+             FROM fin_contratos fc JOIN clientes c ON c.id = fc.cliente_id
             WHERE fc.situacao = 'ATIVO' AND fc.empresa_id = 2 AND NOT EXISTS (
                   SELECT 1 FROM prest_contratos p WHERE p.status IN ('ENVIADO', 'ASSINADO')
                      AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id)))

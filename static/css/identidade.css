@@ -472,6 +472,11 @@
   text-decoration:none; white-space:nowrap; }
 .fin-chip:hover { background:rgba(255,255,255,.2); color:#fff; }
 .fin-chip.ativo { background:#fff; color:#0f3d2e; border-color:#fff; font-weight:800; }
+/* abas em fundo claro (Honorários, Contratos, 06/11/2026): mesma pílula, cores invertidas */
+.fin-abas-claras .fin-chip { background:#fff; color:#0f3d2e; border-color:#cfe5d8; }
+.fin-abas-claras .fin-chip:hover { background:#f0f7f3; color:#0f3d2e; }
+.fin-abas-claras .fin-chip.ativo { background:#0f3d2e; color:#fff; border-color:#0f3d2e; }
+.fin-abas-claras .fin-chip strong { opacity:.85; }
 .fin-selo { display:inline-flex; align-items:center; gap:5px; padding:5px 12px;
   border-radius:99px; font-size:12px; font-weight:700; margin-left:auto;
   background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
