@@ -49,7 +49,7 @@ def _foto(c):
         return None
     return {'valor': str(c.get('valor')), 'dia_vencimento': c.get('dia_vencimento'),
             'inicio': str(c.get('inicio') or ''), 'fim': str(c.get('fim') or ''), 'plano': c.get('plano'),
-            'decimo_tipo': c.get('decimo_tipo'), 'decimo_parcelas': c.get('decimo_parcelas'),
+            'decimo_tipo': c.get('decimo_tipo'), 'decimo_parcelas': c.get('decimo_parcelas'), 'decimo_desde': str(c.get('decimo_desde') or ''),
             'reajuste_tipo': c.get('reajuste_tipo'), 'proximo_reajuste': str(c.get('proximo_reajuste') or ''),
             'reajuste_obs': c.get('reajuste_obs'), 'situacao': c.get('situacao'),
             'itens': ['%s = %s' % (i['descricao'], i['valor']) for i in FinContrato.itens(c['id'])] if c.get('id') else None}
@@ -114,6 +114,7 @@ def honorarios_salvar():
             prox = primeiro_reajuste(inicio)
         dados = dict(valor=valor, dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
                      plano=(f.get('plano') or '').strip() or None, decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
+                     decimo_desde=_data(f.get('decimo_desde')),
                      reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                      reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
                      gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0)

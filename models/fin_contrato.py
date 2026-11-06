@@ -97,7 +97,7 @@ class FinContrato:
     @staticmethod
     def criar(cliente_id, valor, dia_vencimento, inicio, itens, descricao='Honorários contábeis',
               plano=None, decimo_tipo='NENHUM', decimo_parcelas=None, reajuste_tipo='SALARIO_MINIMO',
-              proximo_reajuste=None, reajuste_obs=None, situacao='ATIVO', fim=None,
+              proximo_reajuste=None, reajuste_obs=None, situacao='ATIVO', fim=None, decimo_desde=None,
               servico_id=SERVICO_HONORARIOS, categoria_id=CATEGORIA_HONORARIOS, gerar_nfse=1, gerar_boleto=1,
               conexa_contrato_id=None, criado_por=None, aprovado_por=None, empresa_id=EMPRESA_QUALICONTAX):
         """Devolve o id. Recusa (ValueError) se a soma dos itens não bate com o valor ou se a empresa
@@ -122,14 +122,14 @@ class FinContrato:
             """INSERT INTO fin_contratos (empresa_id, cliente_id, descricao, valor, dia_vencimento, categoria_id,
                    gerar_nfse, gerar_boleto, discriminacao, inicio, fim, reajuste_mes, ativo,
                    servico_id, plano, decimo_tipo, decimo_parcelas, reajuste_tipo, proximo_reajuste, reajuste_obs,
-                   situacao, conexa_contrato_id, criado_por, aprovado_por, aprovado_em)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   situacao, conexa_contrato_id, criado_por, aprovado_por, aprovado_em, decimo_desde)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, cliente_id, descricao, _d(valor), int(dia_vencimento), categoria_id, gerar_nfse, gerar_boleto,
              '; '.join('%s = R$ %s' % (i['descricao'], _d(i['valor'])) for i in itens), inicio, fim,
              1 if reajuste_tipo == 'SALARIO_MINIMO' else None, 1 if situacao == 'ATIVO' else 0,
              servico_id, plano, decimo_tipo, json.dumps(decimo_parcelas) if decimo_parcelas else None,
              reajuste_tipo, proximo_reajuste, reajuste_obs, situacao, conexa_contrato_id, criado_por,
-             aprovado_por, None), fetch=False)
+             aprovado_por, None, decimo_desde), fetch=False)
         if aprovado_por:
             execute_query('UPDATE fin_contratos SET aprovado_em = NOW() WHERE id = %s', (cid,), fetch=False)
         FinContrato._gravar_itens(cid, itens)
@@ -146,7 +146,7 @@ class FinContrato:
     def atualizar(contrato_id, dados, itens=None):
         """``dados``: só as chaves permitidas abaixo. Itens, quando vêm, substituem os antigos e
         precisam somar o valor."""
-        permitidas = ('valor', 'dia_vencimento', 'inicio', 'fim', 'plano', 'decimo_tipo', 'decimo_parcelas',
+        permitidas = ('valor', 'dia_vencimento', 'inicio', 'fim', 'plano', 'decimo_tipo', 'decimo_parcelas', 'decimo_desde',
                       'reajuste_tipo', 'proximo_reajuste', 'reajuste_obs', 'situacao', 'gerar_nfse', 'gerar_boleto',
                       'servico_id', 'descricao', 'aprovado_por')
         sets, params = [], []
@@ -191,7 +191,7 @@ class FinContrato:
         tipo = contrato.get('decimo_tipo') or 'NENHUM'
         if tipo == 'NENHUM':
             return []
-        meses = meses_de_casa(contrato.get('inicio'), contrato.get('fim'), ano)
+        meses = meses_de_casa(contrato.get('decimo_desde') or contrato.get('inicio'), contrato.get('fim'), ano)
         if not meses:
             return []
         base = _d(contrato['valor']) * meses / 12

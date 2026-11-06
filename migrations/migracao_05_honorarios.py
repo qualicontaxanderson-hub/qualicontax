@@ -28,6 +28,7 @@ COLUNAS = [
     ('plano', "VARCHAR(60) NULL COMMENT 'faixa/rede do Conexa (Mensalidade Rede Pavao...)'"),
     ('decimo_tipo', "VARCHAR(14) NOT NULL DEFAULT 'NENHUM' COMMENT 'NENHUM|UNICA|DUAS|PERSONALIZADO'"),
     ('decimo_parcelas', "JSON NULL COMMENT 'PERSONALIZADO: [{\"mes\":10,\"pct\":50},{\"mes\":11,\"pct\":50}] (mes = competencia)'"),
+    ('decimo_desde', "DATE NULL COMMENT 'na casa desde: base do 13o proporcional (vazio = inicio do contrato); migrados = 2025-01-01, o Conexa cobrava inteiro'"),
     ('reajuste_tipo', "VARCHAR(16) NOT NULL DEFAULT 'SALARIO_MINIMO' COMMENT 'SALARIO_MINIMO|INDICE|DATA_PROPRIA|SEM|ESCALONADO'"),
     ('proximo_reajuste', "DATE NULL COMMENT 'competencia a partir da qual vale o proximo reajuste'"),
     ('reajuste_obs', "VARCHAR(255) NULL COMMENT 'indice combinado, degraus do escalonado, motivo do adiamento'"),
