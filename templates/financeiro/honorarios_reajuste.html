@@ -5,28 +5,40 @@
 {% block extra_css %}
 <style>
 /* Reajuste de janeiro (06/11/2026): o Anderson digita o percentual e aplica a todos do padrão de uma vez */
-.rj-topo { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
-.rj-card { background:#fff; border:1px solid #e1ebe5; border-radius:14px; padding:16px 18px; }
-.rj-card h3 { margin:0 0 4px; font-size:14px; font-weight:800; color:#0f3d2e; display:flex; align-items:center; gap:10px; }
-.rj-card h3 .rj-ico { width:30px; height:30px; border-radius:9px; background:#e8f5ed; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:13px; }
-.rj-card p { margin:0 0 12px; font-size:12px; color:#7d968a; }
-.rj-form { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
-.rj-form label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:4px; }
-.rj-form input { height:44px; font-size:16px; font-weight:700; border-radius:11px; }
+/* mesmo desenho das janelas de Responsáveis e do contrato: cabeçalho verde, corpo em cartão, nota verde */
+.rj-hero { background:#fff; border:1px solid #e1ebe5; border-radius:16px; overflow:hidden; margin:14px 0 18px; box-shadow:0 6px 18px rgba(15,61,46,.06); }
+.rj-hhead { display:flex; align-items:center; gap:14px; padding:16px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); color:#fff; }
+.rj-hico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:17px; }
+.rj-hhead h2 { margin:0; font-size:16px; color:#fff; }
+.rj-hhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
+.rj-hbody { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); }
+.rj-hcol { padding:18px 22px; }
+.rj-hcol + .rj-hcol { border-left:1px solid #eef3f0; background:#f8fbf9; }
+.rj-form { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+.rj-form label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:5px; }
+.rj-form input { height:48px; font-size:20px; font-weight:800; border-radius:12px; border:1px solid #dbe7df; color:#0f3d2e; }
+.rj-form input:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+.rj-form .btn-primary { height:48px; border-radius:12px; padding:0 20px; font-weight:700; font-size:14px; }
+.rj-dica { margin:12px 0 0; font-size:12px; color:#7d968a; display:flex; gap:8px; align-items:center; }
+.rj-dica i { color:#15803d; }
 .rj-kpis { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
-.rj-kpi { background:#f6f9f7; border-radius:12px; padding:10px 12px; }
+.rj-kpi { background:#fff; border:1px solid #e1ebe5; border-radius:12px; padding:10px 12px; }
 .rj-kpi .l { font-size:11px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; }
-.rj-kpi .v { font-size:20px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1.2; }
-.rj-kpi .v small { font-size:12px; color:#15803d; font-weight:700; margin-left:4px; }
+.rj-kpi .v { font-size:19px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1.25; }
+.rj-kpi .v small { display:block; font-size:12px; color:#15803d; font-weight:700; }
+.rj-kpi.dest { background:#0f3d2e; border-color:#0f3d2e; }
+.rj-kpi.dest .l { color:#bfe8cf; } .rj-kpi.dest .v { color:#fff; } .rj-kpi.dest .v small { color:#86efac; }
 .rj-novo { font-weight:700; color:#15803d; }
 .ho-plano { font-size:11px; color:#7d968a; display:block; }
-.rj-kpi .v { font-size:18px; }
 .rj-sec { display:flex; align-items:center; gap:10px; margin:18px 0 8px; }
-.rj-sec h2 { margin:0; font-size:13px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; }
+.rj-sec h2 { margin:0; font-size:13px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; display:flex; align-items:center; gap:10px; }
+.rj-sec h2 .rj-ico { width:30px; height:30px; border-radius:9px; background:#e8f5ed; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:13px; }
 .rj-sec small { color:#7d968a; }
 .rj-sec .btn { margin-left:auto; }
+.rj-sec .btn + .btn { margin-left:0; }
 .rj-chk { width:16px; height:16px; }
-@media (max-width:900px) { .rj-topo { grid-template-columns:1fr; } .rj-kpis { grid-template-columns:1fr; } }
+.rj-grupo { display:inline-block; font-size:11px; font-weight:700; border-radius:6px; padding:2px 8px; background:#eef6f1; color:#15803d; }
+@media (max-width:900px) { .rj-hbody { grid-template-columns:1fr; } .rj-hcol + .rj-hcol { border-left:0; border-top:1px solid #eef3f0; } .rj-kpis { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
 
@@ -36,34 +48,37 @@
 <div class="page-header">
     <div>
         <h1><i class="fas fa-arrow-trend-up"></i> Reajuste dos honorários</h1>
-        <p class="page-subtitle">Salário mínimo, todo janeiro: digite o percentual e aplique a todos de uma vez. Aplique ANTES de emitir o lote de {{ ate.strftime('%m/%Y') }}: o 13º e as cobranças seguintes já saem pelo valor novo.</p>
+        <p class="page-subtitle">Salário mínimo, todo janeiro: digite o percentual e aplique a todos de uma vez.</p>
     </div>
     <a class="btn btn-outline" href="{{ url_for('financeiro.honorarios') }}"><i class="fas fa-arrow-left"></i> Honorários</a>
 </div>
 
 <form method="POST" action="{{ url_for('financeiro.honorarios_reajuste_aplicar') }}" id="rj-form">
-<div class="rj-topo">
-    <div class="rj-card">
-        <h3><span class="rj-ico"><i class="fas fa-percent"></i></span> Percentual do salário mínimo</h3>
-        <p>Vale a partir da competência escolhida. O próximo reajuste de cada contrato passa para um ano depois.</p>
-        <div class="rj-form">
-            <div><label>Percentual</label><input type="text" name="percentual" id="rj-pct" class="form-control" style="width:120px;" placeholder="ex.: 7,5" autocomplete="off" inputmode="decimal"></div>
-            <div><label>Vale a partir de</label><input type="month" name="vigencia" id="rj-vig" class="form-control" value="{{ ate.strftime('%Y-%m') }}"></div>
-            <div><label>&nbsp;</label><button type="submit" class="btn btn-primary" id="rj-aplicar" disabled><i class="fas fa-check"></i> Aplicar a <span id="rj-n">0</span> contratos</button></div>
-        </div>
+<div class="rj-hero">
+    <div class="rj-hhead">
+        <span class="rj-hico"><i class="fas fa-percent"></i></span>
+        <div><h2>Reajuste pelo salário mínimo</h2><p>vale a partir de {{ ate.strftime('%m/%Y') }} · aplique antes de emitir o lote desse mês: o 13º e as cobranças seguintes já saem pelo valor novo</p></div>
     </div>
-    <div class="rj-card">
-        <h3><span class="rj-ico"><i class="fas fa-calculator"></i></span> O que muda</h3>
-        <p>Só os contratos marcados abaixo. Os de regra própria ficam na segunda lista, um a um.</p>
-        <div class="rj-kpis">
-            <div class="rj-kpi"><div class="l">Contratos no padrão</div><div class="v">{{ padrao | length }}</div></div>
-            <div class="rj-kpi"><div class="l">Mensal hoje</div><div class="v" id="rj-antes">R$ 0,00</div></div>
-            <div class="rj-kpi"><div class="l">Mensal reajustado</div><div class="v" id="rj-depois">R$ 0,00<small id="rj-dif"></small></div></div>
+    <div class="rj-hbody">
+        <div class="rj-hcol">
+            <div class="rj-form">
+                <div><label>Percentual</label><input type="text" name="percentual" id="rj-pct" class="form-control" style="width:130px;" placeholder="7,5" autocomplete="off" inputmode="decimal"></div>
+                <div><label>Vale a partir de</label><input type="month" name="vigencia" id="rj-vig" class="form-control" style="width:240px;" value="{{ ate.strftime('%Y-%m') }}"></div>
+                <div><label>&nbsp;</label><button type="submit" class="btn btn-primary" id="rj-aplicar" disabled><i class="fas fa-check"></i> Aplicar a <span id="rj-n">0</span> contratos</button></div>
+            </div>
+            <p class="rj-dica"><i class="fas fa-circle-info"></i> O próximo reajuste de cada contrato passa para um ano depois. Dá para desfazer um a um.</p>
+        </div>
+        <div class="rj-hcol">
+            <div class="rj-kpis">
+                <div class="rj-kpi"><div class="l">Contratos no padrão</div><div class="v">{{ padrao | length }}</div></div>
+                <div class="rj-kpi"><div class="l">Mensal hoje</div><div class="v" id="rj-antes">R$ 0,00</div></div>
+                <div class="rj-kpi dest"><div class="l">Mensal reajustado</div><div class="v" id="rj-depois">R$ 0,00<small id="rj-dif"></small></div></div>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="rj-sec"><h2>Padrão: salário mínimo</h2><small>próximo reajuste até {{ ate.strftime('%m/%Y') }}</small>
+<div class="rj-sec"><h2><span class="rj-ico"><i class="fas fa-list-check"></i></span> Padrão: salário mínimo</h2><small>próximo reajuste até {{ ate.strftime('%m/%Y') }}</small>
     <button type="button" class="btn btn-outline btn-sm" onclick="rjMarcar(true)">marcar todos</button><button type="button" class="btn btn-outline btn-sm" style="margin-left:0;" onclick="rjMarcar(false)">desmarcar</button></div>
 <div class="fin-caixa">
 {% if padrao %}
@@ -76,7 +91,7 @@
         <td><input type="checkbox" class="rj-chk" name="ids" value="{{ c.id }}" checked data-valor="{{ c.valor }}"></td>
         <td class="fin-num">{{ c.numero_cliente }}</td>
         <td>{{ c.nome_razao_social }}<span class="ho-plano">{% for i in c.itens %}{{ i.descricao }} R$ {{ '%.2f' | format(i.valor) | replace('.', ',') }}{% if not loop.last %} · {% endif %}{% endfor %}</span></td>
-        <td>{{ c.grupo or '' }}</td>
+        <td>{% if c.grupo %}<span class="rj-grupo">{{ c.grupo }}</span>{% endif %}</td>
         <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
         <td class="fin-num rj-novo" style="text-align:right;" data-novo>—</td>
         <td class="fin-num">{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</td>
@@ -90,7 +105,7 @@
 </form>
 
 {% if proprios %}
-<div class="rj-sec"><h2>Regra própria</h2><small>índice próprio, data própria ou escalonado: abra o contrato e ajuste</small></div>
+<div class="rj-sec"><h2><span class="rj-ico"><i class="fas fa-sliders"></i></span> Regra própria</h2><small>índice próprio, data própria ou escalonado: abra o contrato e ajuste</small></div>
 <div class="fin-caixa">
 <div class="fin-rolar">
 <table class="fin-tab">
@@ -111,7 +126,7 @@
 {% endif %}
 
 {% if aplicados %}
-<div class="rj-sec"><h2>Já aplicados para {{ ate.strftime('%m/%Y') }}</h2><small>{{ aplicados | length }} contratos · desfazer volta ao valor anterior</small></div>
+<div class="rj-sec"><h2><span class="rj-ico"><i class="fas fa-clock-rotate-left"></i></span> Já aplicados para {{ ate.strftime('%m/%Y') }}</h2><small>{{ aplicados | length }} contratos · desfazer volta ao valor anterior</small></div>
 <div class="fin-caixa">
 <div class="fin-rolar">
 <table class="fin-tab">

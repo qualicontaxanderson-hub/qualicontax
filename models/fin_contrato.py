@@ -361,12 +361,12 @@ class FinContrato:
                 if alvo and _nome_rede(g['nome']) == alvo:
                     grupo_sugerido = g
                     break
+        # Só o grupo do NOSSO cadastro conta (Anderson, 06/11: "Santa Clara não tem nada com o Nicoleti no NOSSO APP, só no
+        # Conexa"). Sem grupo, não há sugestão: o plano antigo fica só como pista do grupo que pode ser.
         if grupo:
             fonte, cond, par = 'grupo', 'c.cliente_id IN (SELECT cliente_id FROM cliente_grupo_relacao WHERE grupo_id = %s)', (grupo['id'],)
-        elif plano:
-            fonte, cond, par = 'conexa', 'c.plano = %s', (plano,)
         else:
-            return {'grupo': None, 'grupo_sugerido': None, 'plano': None, 'fonte': None, 'sugestoes': []}
+            return {'grupo': None, 'grupo_sugerido': grupo_sugerido, 'plano': plano, 'rede': None, 'fonte': None, 'sugestoes': []}
         linhas = execute_query(
             f"""SELECT c.id, c.valor, c.dia_vencimento, c.decimo_tipo, c.gerar_nfse, c.gerar_boleto,
                        COUNT(*) OVER (PARTITION BY c.valor) AS n

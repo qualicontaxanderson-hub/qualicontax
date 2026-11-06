@@ -452,12 +452,12 @@ function hoSugestoes(cid) {
         if (d.grupo) { g.value = d.grupo.id; av.style.display = 'none'; }
         else {
             g.value = '';
-            av.innerHTML = 'Sem grupo no cadastro' + (d.grupo_sugerido ? ': parece ser <b>' + d.grupo_sugerido.nome + '</b>' : '') + '. Escolha aqui ou arrume no cadastro.';
+            av.innerHTML = 'Sem grupo no cadastro' + (d.grupo_sugerido ? ': parece ser <b>' + d.grupo_sugerido.nome + '</b>' : '') + '. Escolha aqui ou arrume no cadastro; com o grupo, os valores da rede aparecem como sugestão.';
             av.style.display = 'block';
         }
         var rede = document.getElementById('ho-rede'), chips = document.getElementById('ho-chips'); chips.innerHTML = '';
         if (!HO_SUG.length) { rede.style.display = 'none'; hoResumo(); return; }
-        rede.innerHTML = 'O que as outras empresas ' + (d.fonte === 'grupo' ? 'do grupo' : 'da rede') + ' <b>' + d.rede + '</b> pagam:';
+        rede.innerHTML = 'O que as outras empresas do grupo <b>' + d.rede + '</b> pagam:';
         rede.style.display = 'block';
         HO_SUG.forEach(function (s, i) {
             var c = document.createElement('button'); c.type = 'button'; c.className = 'ho-chip'; c.title = 'Usar estes valores';
