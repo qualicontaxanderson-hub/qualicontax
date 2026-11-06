@@ -75,6 +75,23 @@ def _esc(s):
     return (str(s or '')).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+def _rico(s, apelido=None, parte=False):
+    """Dá vida ao texto: nomes das partes, valores, datas, prazos e percentuais em negrito (Anderson, 06/11:
+    "está seco, nomes em negrito, dar vida ao contrato")."""
+    import re
+    t = _esc(s)
+    if parte:                                                       # razão social até a primeira vírgula
+        t = re.sub(r'^([^,]+),', r'<b>\1</b>,', t, count=1)
+    for pat in (r'(CNPJ nº [\d./-]+)', r'(CPF nº [\d.-]+)', r'(CRC nº [\w./-]+)', r'(R\$ [\d.]+,\d{2}(?: \([^)]+\))?)',
+                r'(\d{2}/\d{2}/\d{4})', r'(\d+%? \([a-zç ]+\)(?: (?:dias|meses|testemunhas?|honorário mensal))?)', r'(dia \d+ \([a-z]+\))'):
+        t = re.sub(pat, r'<b>\1</b>', t)
+    t = re.sub(r'(?<![\w>])(QUALICONTAX)(?![\w<])', r'<b>\1</b>', t)
+    if apelido:
+        t = re.sub(r'(?<![\w>])(%s)(?![\w<])' % re.escape(_esc(apelido)), r'<b>\1</b>', t)
+    t = re.sub(r'(neste ato representad[ao]s? por seu [^,]+, )([^,]+), portador', r'\1<b>\2</b>, portador', t)
+    return t
+
+
 def _faixa_titulo(texto, st):
     t = Table([[Paragraph(_esc(texto), st['titulo'])]], colWidths=[W - ML - MR])
     t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), _VERDE), ('TOPPADDING', (0, 0), (-1, -1), 9), ('BOTTOMPADDING', (0, 0), (-1, -1), 9),
@@ -106,27 +123,40 @@ def gerar_pdf(montado, registro=None, rodape=None):
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=ML, rightMargin=MR, topMargin=3.1 * cm, bottomMargin=2.1 * cm,
                             title=montado['titulo'], author='Qualicontax Assessoria Contábil', invariant=1)
     doc.rodape = rodape
+    ap = montado.get('apelido')
     el = [_faixa_titulo(montado['titulo'], st), Spacer(1, 10)]
     for i, p in enumerate(montado['partes'], 1):
         el.append(Paragraph('%d · %s' % (i, 'CONTRATANTE' if i == 1 else 'CONTRATADA'), st['parte_n']))
-        el.append(Paragraph(_esc(p), st['base']))
-    el.append(Spacer(1, 8)); el.append(Paragraph(_esc(montado['preambulo']), st['base'])); el.append(Spacer(1, 2))
+        el.append(Paragraph(_rico(p, ap, parte=True), st['base']))
+    # quadro-resumo: o que importa do contrato, de relance
+    if montado.get('resumo'):
+        el.append(Spacer(1, 8))
+        linhas = [[Paragraph('<b>%s</b>' % _esc(k), st['reg']), Paragraph(_rico(v, ap), st['reg'])] for k, v in montado['resumo']]
+        q = Table(linhas, colWidths=[3.6 * cm, W - ML - MR - 3.6 * cm])
+        q.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f1f8f4')), ('BOX', (0, 0), (-1, -1), 0.6, _LINHA),
+                               ('LINEBELOW', (0, 0), (-1, -2), 0.3, _LINHA), ('TEXTCOLOR', (0, 0), (0, -1), _VERDE),
+                               ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('LEFTPADDING', (0, 0), (-1, -1), 8)]))
+        el.append(KeepTogether([Paragraph('RESUMO', st['parte_n']), q]))
+    el.append(Spacer(1, 8)); el.append(Paragraph(_rico(montado['preambulo'], ap), st['base'])); el.append(Spacer(1, 2))
     for titulo, paras in montado['clausulas']:
         primeiro = True
         for p in paras:
             if primeiro:
-                el.append(Paragraph('<font color="#0f3d2e"><b>%s</b></font> %s' % (_esc(titulo), _esc(p)), st['clausula'])); primeiro = False
+                el.append(Paragraph('<font color="#0f3d2e"><b>%s</b></font> %s' % (_esc(titulo), _rico(p, ap)), st['clausula'])); primeiro = False
             elif p[:1].isdigit():
                 import re
                 cabeca = bool(re.match(r'^\d+\. [A-ZÀ-Ú ]+$', p))          # "1. CONTABILIDADE" vira título da área
-                el.append(Paragraph(('<b>%s</b>' % _esc(p)) if cabeca else _esc(p), st['item']))
+                el.append(Paragraph(('<font color="#15803d"><b>%s</b></font>' % _esc(p)) if cabeca else _rico(p, ap), st['item']))
             elif p.startswith('PARÁGRAFO'):
                 pt, _, resto = p.partition('. ')
-                el.append(Paragraph('<b>%s.</b> %s' % (_esc(pt), _esc(resto)), st['clausula']))
+                el.append(Paragraph('<b>%s.</b> %s' % (_esc(pt), _rico(resto, ap)), st['clausula']))
             else:
-                el.append(Paragraph(_esc(p), st['clausula']))
-    el.append(Spacer(1, 10)); el.append(Paragraph(_esc(montado['fecho']), st['base']))
-    el.append(Spacer(1, 14)); el.append(Paragraph(_esc(montado['local_data']), st['centro'])); el.append(Spacer(1, 20))
+                el.append(Paragraph(_rico(p, ap), st['clausula']))
+    el.append(Spacer(1, 10)); el.append(Paragraph(_rico(montado['fecho'], ap), st['base']))
+    # local/data + ASSINATURAS + todos os blocos ficam JUNTOS na mesma página (testemunha sozinha numa folha é feio)
+    bloco_final = [Spacer(1, 14), Paragraph('<b>%s</b>' % _esc(montado['local_data']), st['centro']), Spacer(1, 12),
+                   Table([['']], colWidths=[W - ML - MR], style=[('LINEBELOW', (0, 0), (-1, -1), 1.0, _VERDE2)]),
+                   Paragraph('ASSINATURAS', st['parte_n']), Spacer(1, 14)]
     ass = montado.get('assinantes') or []
     feitas = {(a['papel'], int(a['ordem'])): a for a in (registro or [])}
     blocos = [_bloco_assinatura(a, feitas.get((a['papel'], int(a.get('ordem') or 1))), st) for a in ass]
@@ -134,7 +164,8 @@ def gerar_pdf(montado, registro=None, rodape=None):
         par = blocos[i:i + 2]
         t = Table([[par[0], par[1] if len(par) > 1 else '']], colWidths=[(W - ML - MR) / 2] * 2)
         t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-        el.append(KeepTogether([t, Spacer(1, 18)]))
+        bloco_final += [t, Spacer(1, 18)]
+    el.append(KeepTogether(bloco_final))
     if registro:
         el.append(PageBreak())
         el.append(_faixa_titulo('REGISTRO DE ASSINATURAS ELETRÔNICAS', st)); el.append(Spacer(1, 10))

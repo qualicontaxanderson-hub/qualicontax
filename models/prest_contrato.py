@@ -376,8 +376,14 @@ class PrestContrato:
                  + (', na presença de %d (%s) testemunha%s.' % (n_test, {1: 'uma', 2: 'duas'}.get(n_test, _dia_extenso(n_test)), 's' if n_test > 1 else '') if n_test else '.'))
         # a data do fecho é a da assinatura (quando o contrato é fechado); antes disso, a de hoje
         local = '%s, %s' % (dados.get('local') or 'São Paulo', data_extenso(_data(dados.get('data_assinatura')) or date.today()))
+        areas_txt = ', '.join(AREAS[a][0].capitalize() for a in areas) + ((' + ' + '; '.join(dados.get('servicos_extras'))) if dados.get('servicos_extras') else '')
+        decimo_txt = {'COBRADO': '1 honorário mensal, em duas parcelas (novembro e dezembro)', 'UNICA': '1 honorário mensal, em dezembro'}.get(dados.get('decimo'), 'isento')
+        resumo = [('Objeto', areas_txt or '—'), ('Honorários mensais', '%s, com vencimento todo dia %d' % (brl(valor), dia)),
+                  ('Início', inicio_d.strftime('%d/%m/%Y')), ('13º honorário', decimo_txt),
+                  ('Reajuste', {'SALARIO_MINIMO': 'salário mínimo, todo janeiro', 'INDICE': 'índice próprio', 'DATA_PROPRIA': 'data própria', 'SEM': 'de comum acordo', 'ESCALONADO': 'escalonado'}.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO')),
+                  ('Aviso prévio', '%d dias' % aviso), ('Foro', dados.get('foro') or 'São Paulo/SP')]
         return {'titulo': titulo, 'partes': partes, 'preambulo': preambulo, 'clausulas': clausulas, 'fecho': fecho, 'local_data': local,
-                'assinantes': dados.get('assinantes') or [], 'empresas': empresas}
+                'assinantes': dados.get('assinantes') or [], 'empresas': empresas, 'apelido': apelido, 'resumo': resumo}
 
 
 def _data(s):
