@@ -242,6 +242,56 @@ class PrestContrato:
         return c
 
     @staticmethod
+    def prontas():
+        """Empresas que PODEM receber contrato (Anderson, 06/11/2026): "aqui tem que aparecer só quem está completo no
+        AVULSO ou no CLIENTES, se tiver no A CADASTRAR esquece". Nunca se digita um contrato: ele nasce de um cadastro
+        completo. Lista Clientes (avulso = 0, com número, ATIVO) e Avulsos (avulso = 1) sem nenhuma pendência de
+        utils/a_cadastrar.py e sem contrato ENVIADO/ASSINADO; cada um diz se tem honorários (fin_contratos ATIVO)."""
+        from utils import a_cadastrar as AC
+        pend_e = {c['id'] for c in AC.empresas_pendentes()}
+        pend_a = {c['id'] for c in AC.avulsos_pendentes()}
+        pendentes = pend_e | pend_a
+        rows = execute_query(
+            """SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj, c.tipo_pessoa, c.avulso, c.regime_tributario,
+                      (SELECT MAX(e.cidade) FROM enderecos_clientes e WHERE e.cliente_id = c.id) AS cidade,
+                      (SELECT MAX(e.estado) FROM enderecos_clientes e WHERE e.cliente_id = c.id) AS uf,
+                      (SELECT g.nome FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id
+                        WHERE r.cliente_id = c.id ORDER BY r.id LIMIT 1) AS grupo,
+                      (SELECT fc.valor FROM fin_contratos fc WHERE fc.cliente_id = c.id AND fc.situacao = 'ATIVO' AND fc.empresa_id = 2
+                        ORDER BY fc.id DESC LIMIT 1) AS valor,
+                      (SELECT COUNT(*) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS n_socios,
+                      (SELECT COUNT(*) FROM prest_contratos p WHERE p.status = 'RASCUNHO'
+                         AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id))) AS n_rascunhos
+                 FROM clientes c
+                WHERE ((c.avulso = 0 AND c.numero_cliente IS NOT NULL AND c.situacao = 'ATIVO') OR c.avulso = 1)
+                  AND NOT EXISTS (SELECT 1 FROM prest_contratos p WHERE p.status IN ('ENVIADO', 'ASSINADO')
+                                     AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id)))
+                ORDER BY c.avulso, CAST(c.numero_cliente AS UNSIGNED), c.nome_razao_social""", fetch=True) or []
+        return {'lista': [r for r in rows if r['id'] not in pendentes], 'pendentes_empresas': len(pend_e), 'pendentes_avulsos': len(pend_a)}
+
+    @staticmethod
+    def impedimentos(ids):
+        """{cliente_id: 'motivo'} do que impede montar contrato: cadastro inexistente/inativo ou pendência em A CADASTRAR.
+        Quem não está no dicionário pode receber contrato."""
+        from utils import a_cadastrar as AC
+        ids = [int(i) for i in ids]
+        out = {}
+        if not ids:
+            return out
+        marks = ','.join(['%s'] * len(ids))
+        rows = execute_query(f"SELECT id, avulso, numero_cliente, situacao FROM clientes WHERE id IN ({marks})", tuple(ids), fetch=True) or []
+        achados = {r['id']: r for r in rows}
+        for i in ids:
+            r = achados.get(i)
+            if not r:
+                out[i] = 'cadastro não encontrado'
+            elif not r['avulso'] and (r['numero_cliente'] is None or r['situacao'] != 'ATIVO'):
+                out[i] = 'cadastro sem número de cliente ou inativo'
+        for i, p in AC.pendencias_de([i for i in ids if i not in out]).items():
+            out[i] = 'pendência em A CADASTRAR: ' + ', '.join(p)
+        return out
+
+    @staticmethod
     def listar(status=None, cliente_id=None):
         cond, params = [], []
         if status:

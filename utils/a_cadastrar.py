@@ -39,21 +39,31 @@ PENDENCIAS_AVULSO = [
     ('conferir', 'Conferir', 'verm', 'há uma observação pedindo conferência'),
 ]
 
+# Tabelas derivadas em vez de subconsulta por linha: 5,2 s → 1,1 s no Railway, mesmo resultado (medido 06/11/2026).
 _SQL_EMPRESAS = """
 SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj, c.tipo_pessoa, c.situacao,
        c.nire, c.inscricao_municipal, c.inscricao_estadual, c.email, c.celular, c.cobranca, c.conexa_id,
        c.aberta_pela_casa, c.contabilidade_anterior_id, c.regime_tributario, c.observacoes,
-       (SELECT COUNT(*) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS n_socios,
-       (SELECT COUNT(*) FROM contatos_clientes k WHERE k.cliente_id = c.id AND k.email IS NOT NULL AND k.email <> '' AND k.ativo = 1) AS n_contatos_email,
-       (SELECT COUNT(*) FROM contatos_clientes k3 WHERE k3.cliente_id = c.id AND k3.ativo = 1 AND (k3.celular IS NULL OR k3.celular = '')) AS n_contatos_sem_celular,
-       (SELECT COUNT(*) FROM contatos_clientes k4 WHERE k4.cliente_id = c.id AND k4.ativo = 1) AS n_contatos,
-       (SELECT COUNT(*) FROM cliente_grupo_relacao g WHERE g.cliente_id = c.id) AS n_grupos,
-       (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos,
-       (SELECT COUNT(*) FROM cliente_contadores k2 WHERE k2.cliente_id = c.id) AS n_contadores,
-       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais ie WHERE ie.cliente_id = c.id AND ie.isenta = 1) AS n_ie_isenta,
-       (SELECT MAX(e.cidade) FROM enderecos_clientes e WHERE e.cliente_id = c.id) AS cidade,
-       (SELECT MAX(e.estado) FROM enderecos_clientes e WHERE e.cliente_id = c.id) AS uf
+       COALESCE(s.n, 0) AS n_socios,
+       COALESCE(k.n_email, 0) AS n_contatos_email,
+       COALESCE(k.n_sem_cel, 0) AS n_contatos_sem_celular,
+       COALESCE(k.n, 0) AS n_contatos,
+       COALESCE(g.n, 0) AS n_grupos,
+       COALESCE(r.n, 0) AS n_ramos,
+       COALESCE(k2.n, 0) AS n_contadores,
+       COALESCE(ie.n, 0) AS n_ie_isenta,
+       e.cidade, e.uf
   FROM clientes c
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM socios_clientes WHERE ativo = 1 GROUP BY cliente_id) s ON s.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n,
+                    SUM(email IS NOT NULL AND email <> '') AS n_email,
+                    SUM(celular IS NULL OR celular = '') AS n_sem_cel
+               FROM contatos_clientes WHERE ativo = 1 GROUP BY cliente_id) k ON k.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM cliente_grupo_relacao GROUP BY cliente_id) g ON g.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM cliente_ramo_atividade_relacao GROUP BY cliente_id) r ON r.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM cliente_contadores GROUP BY cliente_id) k2 ON k2.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM clientes_inscricoes_estaduais WHERE isenta = 1 GROUP BY cliente_id) ie ON ie.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, MAX(cidade) AS cidade, MAX(estado) AS uf FROM enderecos_clientes GROUP BY cliente_id) e ON e.cliente_id = c.id
  WHERE c.avulso = 0 AND c.numero_cliente IS NOT NULL AND c.situacao = 'ATIVO'
  ORDER BY CAST(c.numero_cliente AS UNSIGNED), c.numero_cliente
 """
@@ -139,6 +149,22 @@ def avulsos_pendentes(ocultas=frozenset()):
         if p:  # avulso completo fica só na aba Avulsos (Anderson, 05/11/2026)
             c['pendencias'] = p
             out.append(c)
+    return out
+
+
+def pendencias_de(ids):
+    """{cliente_id: [rótulos]} das pendências dos cadastros pedidos (Clientes e Avulsos). Quem não está no dicionário
+    está completo. Usado pelo contrato de prestação: "se tiver no A CADASTRAR esquece" (Anderson, 06/11/2026)."""
+    ids = set(ids)
+    rot_e = {k: r for k, r, *_ in PENDENCIAS_EMPRESA}
+    rot_a = {k: r for k, r, *_ in PENDENCIAS_AVULSO}
+    out = {}
+    for c in empresas_pendentes():
+        if c['id'] in ids:
+            out[c['id']] = [rot_e[k] for k in c['pendencias']]
+    for c in avulsos_pendentes():
+        if c['id'] in ids:
+            out[c['id']] = [rot_a[k] for k in c['pendencias']]
     return out
 
 
