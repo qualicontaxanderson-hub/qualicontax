@@ -87,11 +87,18 @@ def _ler_form(f):
     valor = _dec_str(f.get('valor'))
     if float(valor) <= 0:
         raise ValueError('Informe o valor mensal dos honorários.')
-    assina_q = f.get('assina_qualicontax') if f.get('assina_qualicontax') in SIGNATARIOS_QUALICONTAX else 'albert'
-    q = dict(SIGNATARIOS_QUALICONTAX[assina_q])
-    u = execute_query('SELECT email FROM usuarios WHERE id = %s', (q['usuario_id'],), fetch=True, fetch_one=True)
-    if u and u.get('email'):
-        q['email'] = u['email']                       # o e-mail de quem assina pela Qualicontax é o do cadastro de usuários
+    sign = PrestContrato.signatarios_qualicontax()
+    assina_q = str(f.get('assina_qualicontax') or '')
+    if assina_q not in sign:
+        if not sign:
+            raise ValueError('A Qualicontax não tem sócios no cadastro (cliente nº 1): cadastre quem assina por ela.')
+        assina_q = next(iter(sign))
+    q = dict(sign[assina_q])
+    if not q.get('email'):
+        raise ValueError('%s não tem e-mail no cadastro: a assinatura vai por e-mail.' % q['nome'])
+    if q.get('docs_faltam'):
+        raise ValueError('%s não tem documento (RG/CNH) marcado para contrato no cadastro PF.' % q['nome'])
+    contratada = PrestContrato.contratada()
     assinantes = [{'papel': 'CONTRATANTE', 'ordem': 1, 'nome': rep['rep_nome'], 'cpf': rep['rep_cpf'], 'documento': rep['rep_documento'],
                    'email': rep['rep_email'], 'empresa': empresas[0]['razao'] if len(empresas) == 1 else (f.get('apelido') or '').strip().upper() or empresas[0]['razao']},
                   {'papel': 'CONTRATADA', 'ordem': 1, 'nome': q['nome'], 'cpf': q['cpf'], 'documento': q['documento'], 'email': q['email'], 'usuario_id': q['usuario_id']}]
@@ -115,6 +122,7 @@ def _ler_form(f):
         'multa': (f.get('multa') or '10').strip(), 'juros': (f.get('juros') or '1').strip(), 'aviso_previo': int(f.get('aviso_previo') or 30),
         'foro': (f.get('foro') or 'São Paulo/SP').strip(), 'local': (f.get('local') or 'São Paulo').strip(),
         'inicio': (f.get('inicio') or date.today().isoformat()), 'lgpd': bool(f.get('lgpd')), 'assina_qualicontax': assina_q,
+        'assina': q, 'contratada': contratada,            # congelados: o contrato diz o que o cadastro dizia na hora
         'assinantes': assinantes, 'titulo': (f.get('titulo') or '').strip() or None,
     }
     return dados
@@ -154,7 +162,8 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
         fin = (FinContrato.por_cliente(emp['id']) or [None])[0]
     if fin:
         fin['itens'] = FinContrato.itens(fin['id'])
-    return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': SIGNATARIOS_QUALICONTAX,
+    return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': PrestContrato.signatarios_qualicontax(),
+            'contratada': PrestContrato.contratada(),
             'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today()}
 
 

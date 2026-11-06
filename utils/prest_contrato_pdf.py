@@ -57,7 +57,7 @@ def _cabecalho(canvas, doc):
     except Exception:
         canvas.setFont('Helvetica-Bold', 13); canvas.setFillColor(_VERDE); canvas.drawString(ML, topo - 0.9 * cm, 'QUALICONTAX')
     canvas.setFont('Helvetica', 7.6); canvas.setFillColor(_CINZA)
-    for i, linha in enumerate(QUALICONTAX['cabecalho']):
+    for i, linha in enumerate(getattr(doc, 'cabecalho', None) or QUALICONTAX['cabecalho']):
         canvas.drawRightString(W - MR, topo - 0.32 * cm - i * 9.2, linha)
     canvas.setStrokeColor(_VERDE2); canvas.setLineWidth(1.2)
     canvas.line(ML, topo - 1.65 * cm, W - MR, topo - 1.65 * cm)
@@ -99,9 +99,9 @@ def _faixa_titulo(texto, st):
     return t
 
 
-def _bloco_assinatura(a, f, st):
+def _bloco_assinatura(a, f, st, razao_contratada=None):
     """Um assinante: linha (ou "assinado eletronicamente"), nome, CPF, papel/empresa e data."""
-    papel = {'CONTRATANTE': (a.get('empresa') or 'Contratante'), 'CONTRATADA': QUALICONTAX['razao'].split(' –')[0], 'TESTEMUNHA': 'Testemunha'}.get(a['papel'], '')
+    papel = {'CONTRATANTE': (a.get('empresa') or 'Contratante'), 'CONTRATADA': razao_contratada or QUALICONTAX['razao'].split(' –')[0], 'TESTEMUNHA': 'Testemunha'}.get(a['papel'], '')
     linhas = []
     if f:
         linhas.append(Paragraph('assinado eletronicamente', st['ass_ok']))
@@ -123,6 +123,7 @@ def gerar_pdf(montado, registro=None, rodape=None):
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=ML, rightMargin=MR, topMargin=3.1 * cm, bottomMargin=2.1 * cm,
                             title=montado['titulo'], author='Qualicontax Assessoria Contábil', invariant=1)
     doc.rodape = rodape
+    doc.cabecalho = montado.get('cabecalho')
     ap = montado.get('apelido')
     el = [_faixa_titulo(montado['titulo'], st), Spacer(1, 10)]
     for i, p in enumerate(montado['partes'], 1):
@@ -159,7 +160,7 @@ def gerar_pdf(montado, registro=None, rodape=None):
                    Paragraph('ASSINATURAS', st['parte_n']), Spacer(1, 14)]
     ass = montado.get('assinantes') or []
     feitas = {(a['papel'], int(a['ordem'])): a for a in (registro or [])}
-    blocos = [_bloco_assinatura(a, feitas.get((a['papel'], int(a.get('ordem') or 1))), st) for a in ass]
+    blocos = [_bloco_assinatura(a, feitas.get((a['papel'], int(a.get('ordem') or 1))), st, (montado.get('contratada') or {}).get('razao')) for a in ass]
     for i in range(0, len(blocos), 2):
         par = blocos[i:i + 2]
         t = Table([[par[0], par[1] if len(par) > 1 else '']], colWidths=[(W - ML - MR) / 2] * 2)

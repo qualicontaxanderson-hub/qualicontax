@@ -73,7 +73,7 @@
             <label class="pf-rlbl">Quem assina pela empresa<small>sócio administrador; a assinatura vai por e-mail</small></label>
             <div class="pf-rval">
                 {% if emp and (emp.socios or emp.contatos) %}<div class="pf-lbl" style="margin-top:0;">Puxar do cadastro</div><div>
-                    {% for s in emp.socios %}<span class="pf-socio" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }}, '')"><i class="fas fa-user-tie"></i> {{ s.nome }}{% if s.responsavel %} · administrador{% else %} · sócio{% endif %}</span>{% endfor %}
+                    {% for s in emp.socios %}<span class="pf-socio" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }}, '', {{ (s.documento or '') | tojson }})" title="{{ s.documento or 'sem documento marcado para contrato no cadastro PF' }}"><i class="fas fa-user-tie"></i> {{ s.nome }}{% if s.responsavel %} · administrador{% else %} · sócio{% endif %}{% if not s.documento %} · <i class="fas fa-triangle-exclamation" style="color:#b45309;"></i>{% endif %}</span>{% endfor %}
                     {% for s in emp.contatos %}<span class="pf-socio" style="background:#f8fafc; border-color:#cbd5e1;" onclick="pfSocio({{ s.nome | tojson }}, '', {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }})"><i class="fas fa-address-card"></i> {{ s.nome }}{% if s.cargo %} · {{ s.cargo }}{% endif %}</span>{% endfor %}
                 </div>{% endif %}
                 <div class="pf-g2">
@@ -138,7 +138,8 @@
             <span class="pf-rico"><i class="fas fa-pen-nib"></i></span>
             <label class="pf-rlbl">Quem assina pela Qualicontax<small>e as duas testemunhas</small></label>
             <div class="pf-rval pf-g3">
-                <div><div class="pf-lbl">Pela Qualicontax</div><select name="assina_qualicontax" class="form-control">{% for k, q in SIGN_Q.items() %}<option value="{{ k }}" {% if (dados.assina_qualicontax or 'albert') == k %}selected{% endif %}>{{ q.nome }}</option>{% endfor %}</select></div>
+                <div><div class="pf-lbl">Pela Qualicontax <span style="font-weight:500;">(sócios do cadastro nº 1)</span></div><select name="assina_qualicontax" class="form-control">{% for k, q in SIGN_Q.items() %}<option value="{{ k }}" {% if (dados.assina_qualicontax or '') | string == k or (not dados.assina_qualicontax and loop.first) %}selected{% endif %}>{{ q.nome }}{% if q.docs_faltam %} (sem documento no cadastro){% endif %}{% if not q.email %} (sem e-mail){% endif %}</option>{% endfor %}</select>
+                    <small class="ho-num" style="display:block; margin-top:4px;">{{ contratada.razao }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% else %} · <span style="color:#b45309;">sem CRC no cadastro</span>{% endif %}</small></div>
                 {% set tests = (dados.assinantes or []) | selectattr('papel', 'equalto', 'TESTEMUNHA') | list %}
                 {% for n in (1, 2) %}
                 <div><div class="pf-lbl">Testemunha {{ n }}</div><select name="testemunha_id" class="form-control"><option value="">— nenhuma —</option>
@@ -160,7 +161,7 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
 <script>
-function pfSocio(nome, cpf, email, cel) { document.getElementById('rep_nome').value = nome; if (cpf) document.getElementById('rep_cpf').value = cpf; if (email) document.getElementById('rep_email').value = email; if (cel) document.getElementById('rep_celular').value = cel; }
+function pfSocio(nome, cpf, email, cel, doc) { document.getElementById('rep_nome').value = nome; if (cpf) document.getElementById('rep_cpf').value = cpf; if (email) document.getElementById('rep_email').value = email; if (cel) document.getElementById('rep_celular').value = cel; if (doc) document.querySelector('[name=rep_documento]').value = doc; }
 function pfSub() { var n = document.querySelectorAll('#pf-emps .pf-emp').length; var p = document.querySelector('#pf-emps .pf-emp .nome'); document.getElementById('pf-sub').textContent = n ? (p.textContent + (n > 1 ? ' + ' + (n - 1) : '')) : 'escolha a empresa'; }
 (function () {
     var q = document.getElementById('pf-busca'), sug = document.getElementById('pf-sug'), t;

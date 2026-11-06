@@ -75,7 +75,68 @@ def data_extenso(d):
     return '%d de %s de %d' % (d.day, meses[d.month - 1], d.year)
 
 
+QUALICONTAX_CLIENTE_ID = 2        # a própria Qualicontax no cadastro de clientes (nº 1)
+
+
+def _doc_texto(docs):
+    """'RG nº 28.486.559-X SSP/SP e CRC 1SP263.139/O-5' a partir dos documentos da pessoa (o marcado para contrato primeiro)."""
+    partes = []
+    for d in docs:
+        org = '/'.join(x for x in (d.get('orgao'), d.get('uf')) if x)
+        if d['tipo'] in ('CRC', 'OAB', 'CRM', 'CREA', 'CRO', 'CRF', 'CRBM', 'CRA'):
+            partes.append('%s %s' % (d['tipo'], d['numero']))
+        else:
+            partes.append('%s nº %s%s' % (d['tipo'], d['numero'], (' ' + org) if org else ''))
+    return ' e '.join(partes)
+
+
+def _email_da_pessoa(pf_cliente_id, cpf):
+    """E-mail de quem assina: o do USUÁRIO (se é alguém do escritório, pelo CPF), senão o do cadastro PF."""
+    dig = ''.join(ch for ch in (cpf or '') if ch.isdigit())
+    if dig:
+        u = execute_query('SELECT id, email FROM usuarios WHERE cpf = %s AND situacao = %s', (dig, 'ATIVO'), fetch=True, fetch_one=True)
+        if u and u.get('email'):
+            return u['email'], u['id']
+    if pf_cliente_id:
+        c = execute_query('SELECT email FROM clientes WHERE id = %s', (pf_cliente_id,), fetch=True, fetch_one=True)
+        if c and c.get('email'):
+            return c['email'], None
+    return None, None
+
+
 class PrestContrato:
+
+    # ---------------- a CONTRATADA e quem assina por ela, do cadastro ----------------
+    @staticmethod
+    def contratada():
+        """Razão, endereço, CNPJ e CRC da Qualicontax, do cadastro de clientes (nº 1). Sem o cadastro, cai nos fixos."""
+        e = PrestContrato.empresa(QUALICONTAX_CLIENTE_ID)
+        if not e:
+            return dict(QUALICONTAX, cabecalho=QUALICONTAX['cabecalho'], cliente_id=None)
+        crc = execute_query("SELECT valor FROM cadastros_adicionais_clientes WHERE cliente_id = %s AND campo = 'CRC' AND ativo = 1 ORDER BY id DESC LIMIT 1",
+                            (QUALICONTAX_CLIENTE_ID,), fetch=True, fetch_one=True)
+        end = e.get('endereco_dict') or {}
+        from utils.texto import nome_proprio
+        linha1 = ' '.join(x for x in [nome_proprio(end.get('logradouro') or ''), (end.get('numero') or '')] if x) + ((' – ' + nome_proprio(end['complemento'])) if end.get('complemento') else '')
+        linha2 = ' – '.join(x for x in [nome_proprio(end.get('bairro') or ''), nome_proprio(end.get('cidade') or ''), end.get('estado') or '', end.get('cep') or ''] if x)
+        return {'cliente_id': e['id'], 'razao': e['nome_razao_social'], 'cnpj': e['cpf_cnpj'], 'endereco': e['endereco'], 'crc': (crc or {}).get('valor') or '',
+                'email': e.get('email') or '', 'telefone': e.get('telefone') or '',
+                'cabecalho': [x for x in (linha1, linha2, e.get('email') or '', 'www.qualicontax.com.br') if x]}
+
+    @staticmethod
+    def signatarios_qualicontax():
+        """Os sócios da Qualicontax no cadastro (Albert, Anderson), cada um com CPF, documentos e e-mail. {pf_cliente_id: {...}}"""
+        from models.pessoa_dados import Documentos
+        out = {}
+        for s in execute_query("""SELECT nome, cpf, pf_cliente_id, responsavel FROM socios_clientes WHERE cliente_id = %s AND ativo = 1
+                                     ORDER BY responsavel DESC, nome""", (QUALICONTAX_CLIENTE_ID,), fetch=True) or []:
+            pf = s.get('pf_cliente_id')
+            docs = Documentos.listar(pf) if pf else []
+            email, uid = _email_da_pessoa(pf, s.get('cpf'))
+            chave = str(pf or s['nome'])
+            out[chave] = {'pf_cliente_id': pf, 'usuario_id': uid, 'nome': (s['nome'] or '').title(), 'cpf': s.get('cpf') or '', 'documento': _doc_texto(docs),
+                          'email': email or '', 'cargo': 'sócio e administrador' if s.get('responsavel') else 'sócio', 'docs_faltam': not docs}
+        return out
 
     # ---------------- dados do cadastro para pré-preencher ----------------
     @staticmethod
@@ -91,10 +152,17 @@ class PrestContrato:
                               ' – '.join(x for x in [(e.get('cidade') or '').strip(), (e.get('estado') or '').strip()] if x),
                               (e.get('cep') or '').strip()) if p]
         c['endereco'] = ' – '.join(partes)
+        c['endereco_dict'] = e
         c['cidade'] = (e.get('cidade') or '').strip()
         c['uf'] = (e.get('estado') or '').strip()
-        c['socios'] = execute_query("""SELECT nome, cpf, qualificacao, responsavel, email FROM socios_clientes
+        c['socios'] = execute_query("""SELECT nome, cpf, qualificacao, responsavel, email, pf_cliente_id FROM socios_clientes
                                         WHERE cliente_id = %s AND ativo = 1 ORDER BY responsavel DESC, nome""", (cliente_id,), fetch=True) or []
+        from models.pessoa_dados import Documentos
+        for s in c['socios']:                              # documento marcado para contrato e e-mail vêm do cadastro PF do sócio
+            pf = s.get('pf_cliente_id')
+            s['documento'] = _doc_texto(Documentos.listar(pf)) if pf else ''
+            if not s.get('email'):
+                s['email'] = _email_da_pessoa(pf, s.get('cpf'))[0] or ''
         # quem assina pode ser um terceiro: os CONTATOS da empresa também viram atalho (Anderson, 06/11)
         c['contatos'] = execute_query("""SELECT id, nome, cargo, email, celular FROM contatos_clientes
                                           WHERE cliente_id = %s AND ativo = 1 ORDER BY principal DESC, nome""", (cliente_id,), fetch=True) or []
@@ -275,10 +343,11 @@ class PrestContrato:
             partes.append('%s; neste ato representadas por seu %s, %s, portador(a) %s e CPF nº %s, ora e doravante denominadas em conjunto de %s.'
                           % (lista, e.get('rep_cargo') or 'sócio administrador', e['rep_nome'], e.get('rep_documento') or 'de documento de identidade',
                              e.get('rep_cpf') or '', apelido))
-        q = SIGNATARIOS_QUALICONTAX.get(dados.get('assina_qualicontax') or 'albert')
-        partes.append('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s, CRC nº %s, neste ato representada por seu %s, %s, portador %s e CPF nº %s, '
-                      'ora e doravante denominada de QUALICONTAX.' % (QUALICONTAX['razao'], QUALICONTAX['endereco'], QUALICONTAX['cnpj'], QUALICONTAX['crc'],
-                                                                      q['cargo'], q['nome'], q['documento'], q['cpf']))
+        qc = dados.get('contratada') or PrestContrato.contratada()
+        q = dados.get('assina') or PrestContrato.signatarios_qualicontax().get(str(dados.get('assina_qualicontax'))) or SIGNATARIOS_QUALICONTAX['albert']
+        partes.append('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s%s, neste ato representada por seu %s, %s, portador(a) %s e CPF nº %s, '
+                      'ora e doravante denominada de QUALICONTAX.' % (qc['razao'], qc['endereco'], qc['cnpj'], (', CRC nº ' + qc['crc']) if qc.get('crc') else '',
+                                                                      q['cargo'], q['nome'], q.get('documento') or 'de documento de identidade', q['cpf']))
         titulo = dados.get('titulo') or PrestContrato.titulo_de(dados)
         preambulo = 'Celebram entre si um %s, nos seguintes termos:' % titulo
         # ---- cláusulas ----
@@ -383,7 +452,8 @@ class PrestContrato:
                   ('Reajuste', {'SALARIO_MINIMO': 'salário mínimo, todo janeiro', 'INDICE': 'índice próprio', 'DATA_PROPRIA': 'data própria', 'SEM': 'de comum acordo', 'ESCALONADO': 'escalonado'}.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO')),
                   ('Aviso prévio', '%d dias' % aviso), ('Foro', dados.get('foro') or 'São Paulo/SP')]
         return {'titulo': titulo, 'partes': partes, 'preambulo': preambulo, 'clausulas': clausulas, 'fecho': fecho, 'local_data': local,
-                'assinantes': dados.get('assinantes') or [], 'empresas': empresas, 'apelido': apelido, 'resumo': resumo}
+                'assinantes': dados.get('assinantes') or [], 'empresas': empresas, 'apelido': apelido, 'resumo': resumo,
+                'contratada': qc, 'cabecalho': qc.get('cabecalho') or QUALICONTAX['cabecalho']}
 
 
 def _data(s):
