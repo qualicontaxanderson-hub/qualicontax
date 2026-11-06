@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Reajuste de honorários - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Reajuste de janeiro (06/11/2026): o Anderson digita o percentual e aplica a todos do padrão de uma vez */
+.rj-topo { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
+.rj-card { background:#fff; border:1px solid #e1ebe5; border-radius:14px; padding:16px 18px; }
+.rj-card h3 { margin:0 0 4px; font-size:14px; font-weight:800; color:#0f3d2e; display:flex; align-items:center; gap:10px; }
+.rj-card h3 .rj-ico { width:30px; height:30px; border-radius:9px; background:#e8f5ed; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:13px; }
+.rj-card p { margin:0 0 12px; font-size:12px; color:#7d968a; }
+.rj-form { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+.rj-form label { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:4px; }
+.rj-form input { height:44px; font-size:16px; font-weight:700; border-radius:11px; }
+.rj-kpis { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+.rj-kpi { background:#f6f9f7; border-radius:12px; padding:10px 12px; }
+.rj-kpi .l { font-size:11px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; }
+.rj-kpi .v { font-size:20px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1.2; }
+.rj-kpi .v small { font-size:12px; color:#15803d; font-weight:700; margin-left:4px; }
+.rj-novo { font-weight:700; color:#15803d; }
+.ho-plano { font-size:11px; color:#7d968a; display:block; }
+.rj-kpi .v { font-size:18px; }
+.rj-sec { display:flex; align-items:center; gap:10px; margin:18px 0 8px; }
+.rj-sec h2 { margin:0; font-size:13px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#0f3d2e; }
+.rj-sec small { color:#7d968a; }
+.rj-sec .btn { margin-left:auto; }
+.rj-chk { width:16px; height:16px; }
+@media (max-width:900px) { .rj-topo { grid-template-columns:1fr; } .rj-kpis { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-arrow-trend-up"></i> Reajuste dos honorários</h1>
+        <p class="page-subtitle">Salário mínimo, todo janeiro: digite o percentual e aplique a todos de uma vez. Aplique ANTES de emitir o lote de {{ ate.strftime('%m/%Y') }}: o 13º e as cobranças seguintes já saem pelo valor novo.</p>
+    </div>
+    <a class="btn btn-outline" href="{{ url_for('financeiro.honorarios') }}"><i class="fas fa-arrow-left"></i> Honorários</a>
+</div>
+
+<form method="POST" action="{{ url_for('financeiro.honorarios_reajuste_aplicar') }}" id="rj-form">
+<div class="rj-topo">
+    <div class="rj-card">
+        <h3><span class="rj-ico"><i class="fas fa-percent"></i></span> Percentual do salário mínimo</h3>
+        <p>Vale a partir da competência escolhida. O próximo reajuste de cada contrato passa para um ano depois.</p>
+        <div class="rj-form">
+            <div><label>Percentual</label><input type="text" name="percentual" id="rj-pct" class="form-control" style="width:120px;" placeholder="ex.: 7,5" autocomplete="off" inputmode="decimal"></div>
+            <div><label>Vale a partir de</label><input type="month" name="vigencia" id="rj-vig" class="form-control" value="{{ ate.strftime('%Y-%m') }}"></div>
+            <div><label>&nbsp;</label><button type="submit" class="btn btn-primary" id="rj-aplicar" disabled><i class="fas fa-check"></i> Aplicar a <span id="rj-n">0</span> contratos</button></div>
+        </div>
+    </div>
+    <div class="rj-card">
+        <h3><span class="rj-ico"><i class="fas fa-calculator"></i></span> O que muda</h3>
+        <p>Só os contratos marcados abaixo. Os de regra própria ficam na segunda lista, um a um.</p>
+        <div class="rj-kpis">
+            <div class="rj-kpi"><div class="l">Contratos no padrão</div><div class="v">{{ padrao | length }}</div></div>
+            <div class="rj-kpi"><div class="l">Mensal hoje</div><div class="v" id="rj-antes">R$ 0,00</div></div>
+            <div class="rj-kpi"><div class="l">Mensal reajustado</div><div class="v" id="rj-depois">R$ 0,00<small id="rj-dif"></small></div></div>
+        </div>
+    </div>
+</div>
+
+<div class="rj-sec"><h2>Padrão: salário mínimo</h2><small>próximo reajuste até {{ ate.strftime('%m/%Y') }}</small>
+    <button type="button" class="btn btn-outline btn-sm" onclick="rjMarcar(true)">marcar todos</button><button type="button" class="btn btn-outline btn-sm" style="margin-left:0;" onclick="rjMarcar(false)">desmarcar</button></div>
+<div class="fin-caixa">
+{% if padrao %}
+<div class="fin-rolar">
+<table class="fin-tab" id="rj-tab">
+    <thead><tr><th></th><th>Nº</th><th>Empresa</th><th>Grupo</th><th style="text-align:right;">Hoje</th><th style="text-align:right;">Reajustado</th><th>Próximo reajuste</th></tr></thead>
+    <tbody>
+    {% for c in padrao %}
+    <tr>
+        <td><input type="checkbox" class="rj-chk" name="ids" value="{{ c.id }}" checked data-valor="{{ c.valor }}"></td>
+        <td class="fin-num">{{ c.numero_cliente }}</td>
+        <td>{{ c.nome_razao_social }}<span class="ho-plano">{% for i in c.itens %}{{ i.descricao }} R$ {{ '%.2f' | format(i.valor) | replace('.', ',') }}{% if not loop.last %} · {% endif %}{% endfor %}</span></td>
+        <td>{{ c.grupo or '' }}</td>
+        <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+        <td class="fin-num rj-novo" style="text-align:right;" data-novo>—</td>
+        <td class="fin-num">{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}<div class="fin-vazio">Nenhum contrato do padrão com reajuste até {{ ate.strftime('%m/%Y') }}.</div>{% endif %}
+</div>
+</form>
+
+{% if proprios %}
+<div class="rj-sec"><h2>Regra própria</h2><small>índice próprio, data própria ou escalonado: abra o contrato e ajuste</small></div>
+<div class="fin-caixa">
+<div class="fin-rolar">
+<table class="fin-tab">
+    <thead><tr><th>Nº</th><th>Empresa</th><th>Regra</th><th style="text-align:right;">Hoje</th><th>Próximo reajuste</th><th>Observação</th><th></th></tr></thead>
+    <tbody>
+    {% for c in proprios %}
+    <tr>
+        <td class="fin-num">{{ c.numero_cliente }}</td><td>{{ c.nome_razao_social }}</td><td>{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}</td>
+        <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(c.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+        <td class="fin-num">{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else 'em branco' }}</td><td>{{ c.reajuste_obs or '' }}</td>
+        <td><a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.honorarios', busca=c.numero_cliente) }}">Abrir</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+{% endif %}
+
+{% if aplicados %}
+<div class="rj-sec"><h2>Já aplicados para {{ ate.strftime('%m/%Y') }}</h2><small>{{ aplicados | length }} contratos · desfazer volta ao valor anterior</small></div>
+<div class="fin-caixa">
+<div class="fin-rolar">
+<table class="fin-tab">
+    <thead><tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Antes</th><th style="text-align:right;">Depois</th><th>%</th><th>Quando</th><th>Por</th><th></th></tr></thead>
+    <tbody>
+    {% for r in aplicados %}
+    <tr>
+        <td class="fin-num">{{ r.numero_cliente }}</td><td>{{ r.nome_razao_social }}</td>
+        <td class="fin-num" style="text-align:right;">R$ {{ '{:,.2f}'.format(r.valor_antes).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+        <td class="fin-num rj-novo" style="text-align:right;">R$ {{ '{:,.2f}'.format(r.valor_depois).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+        <td class="fin-num">{{ ('%.4f' | format(r.percentual)).rstrip('0').rstrip('.').replace('.', ',') }}%</td>
+        <td class="fin-num">{{ r.aplicado_em.strftime('%d/%m %H:%M') }}</td><td>{{ r.aplicado_por_nome or '' }}</td>
+        <td><form method="POST" action="{{ url_for('financeiro.honorarios_reajuste_desfazer', rid=r.id) }}" onsubmit="return confirm('Desfazer o reajuste de {{ r.nome_razao_social | e }} e voltar a R$ {{ '%.2f' | format(r.valor_antes) }}?');"><button class="btn btn-outline btn-sm" type="submit"><i class="fas fa-rotate-left"></i> Desfazer</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function rjPct() { var s = (document.getElementById('rj-pct').value || '').trim().replace(/\./g, '').replace(',', '.'); var p = parseFloat(s); return isNaN(p) ? null : p; }
+function rjCalc() {
+    var p = rjPct(), antes = 0, depois = 0, n = 0;
+    document.querySelectorAll('#rj-tab tbody tr').forEach(function (tr) {
+        var chk = tr.querySelector('.rj-chk'), v = parseFloat(chk.dataset.valor), cel = tr.querySelector('[data-novo]');
+        var novo = p === null ? null : Math.round(v * (1 + p / 100) * 100) / 100;
+        cel.textContent = novo === null ? '—' : brl(novo);
+        if (chk.checked) { n++; antes += v; if (novo !== null) depois += novo; }
+    });
+    document.getElementById('rj-n').textContent = n;
+    document.getElementById('rj-antes').textContent = brl(antes);
+    document.getElementById('rj-depois').innerHTML = (p === null ? '—' : brl(depois)) + '<small id="rj-dif">' + (p === null || !n ? '' : '+' + brl(depois - antes)) + '</small>';
+    document.getElementById('rj-aplicar').disabled = !(p !== null && p > 0 && n > 0);
+}
+function rjMarcar(on) { document.querySelectorAll('.rj-chk').forEach(function (c) { c.checked = on; }); rjCalc(); }
+document.getElementById('rj-pct').addEventListener('input', rjCalc);
+document.querySelectorAll('.rj-chk').forEach(function (c) { c.addEventListener('change', rjCalc); });
+document.getElementById('rj-form').addEventListener('submit', function (e) {
+    var p = rjPct(), n = document.getElementById('rj-n').textContent;
+    if (!confirm('Aplicar ' + p.toLocaleString('pt-BR') + '% em ' + n + ' contratos a partir de ' + document.getElementById('rj-vig').value.split('-').reverse().join('/') + '?\nDá para desfazer um a um depois.')) e.preventDefault();
+});
+rjCalc();
+</script>
+{% endblock %}

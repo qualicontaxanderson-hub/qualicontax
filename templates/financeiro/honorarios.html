@@ -108,6 +108,7 @@
     <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'pendentes' }}" href="{{ url_for('financeiro.honorarios', aba='pendentes') }}">Aguardando aprovação <strong>{{ pendentes | length }}</strong></a>
+    <a class="fin-chip" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>
     {% elif modo == 'cadastrar' %}
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='sem') }}">Minhas empresas sem honorários <strong>{{ sem_contrato | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='com') }}">Enviados <strong>{{ contratos | length }}</strong></a>

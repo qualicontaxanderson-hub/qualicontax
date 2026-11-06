@@ -190,6 +190,77 @@ def honorarios_salvar():
     return volta
 
 
+# ---------------- reajuste de janeiro (06/11/2026) ----------------
+def _proximo_janeiro(hoje=None):
+    """Janeiro corrente enquanto estamos em janeiro; depois disso, o próximo."""
+    hoje = hoje or date.today()
+    return date(hoje.year, 1, 1) if hoje.month == 1 else date(hoje.year + 1, 1, 1)
+
+
+@financeiro.route('/financeiro/honorarios/reajuste')
+@permission_required(PERM)
+def honorarios_reajuste():
+    """O Anderson digita o percentual do salário mínimo e aplica a todos do padrão de uma vez (decisão de 05/11)."""
+    ate = _data((request.args.get('ate') or '') + ('-01' if len(request.args.get('ate') or '') == 7 else '')) or _proximo_janeiro()
+    lista = FinContrato.a_reajustar(ate)
+    padrao = [c for c in lista if c['reajuste_tipo'] == 'SALARIO_MINIMO']
+    proprios = [c for c in lista if c['reajuste_tipo'] != 'SALARIO_MINIMO']
+    lote = 'SM-%s' % ate.strftime('%Y-%m')
+    return render_template('financeiro/honorarios_reajuste.html', ate=ate, padrao=padrao, proprios=proprios, lote=lote,
+                           aplicados=FinContrato.reajustes_aplicados(lote), REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today())
+
+
+@financeiro.route('/financeiro/honorarios/reajuste/aplicar', methods=['POST'])
+@permission_required(PERM)
+def honorarios_reajuste_aplicar():
+    f = request.form
+    vig = f.get('vigencia') or ''
+    vigencia = _data(vig + '-01') if len(vig) == 7 else _data(vig)
+    volta = redirect(url_for('financeiro.honorarios_reajuste', ate=vigencia.strftime('%Y-%m') if vigencia else None))
+    try:
+        pct = _dec(f.get('percentual'))
+        if not vigencia:
+            raise ValueError('Informe a partir de quando vale.')
+        if not (Decimal('0') < pct <= Decimal('100')):
+            raise ValueError('Percentual entre 0 e 100.')
+        ids = [int(i) for i in f.getlist('ids') if (i or '').isdigit()]
+        if not ids:
+            raise ValueError('Marque ao menos um contrato.')
+        lote = 'SM-%s' % vigencia.strftime('%Y-%m')
+        n, antes_t, depois_t = 0, Decimal('0'), Decimal('0')
+        for cid in ids:
+            r = FinContrato.aplicar_reajuste(cid, pct, vigencia, current_user.id, lote)
+            if not r:
+                continue
+            antes, depois = r
+            n += 1; antes_t += _dec(antes['valor']); depois_t += _dec(depois['valor'])
+            registrar('escrita.reajustou_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
+                      antes={'valor': str(antes['valor']), 'proximo_reajuste': str(antes.get('proximo_reajuste') or '')},
+                      depois={'valor': str(depois['valor']), 'proximo_reajuste': str(depois.get('proximo_reajuste') or ''),
+                              'percentual': str(pct), 'vigencia': str(vigencia), 'empresa': depois['nome_razao_social']})
+        flash('%d contratos reajustados em %s%% a partir de %s: de R$ %s para R$ %s por mês.'
+              % (n, str(pct).rstrip('0').rstrip('.').replace('.', ','), vigencia.strftime('%m/%Y'),
+                 '{:,.2f}'.format(antes_t).replace(',', 'X').replace('.', ',').replace('X', '.'),
+                 '{:,.2f}'.format(depois_t).replace(',', 'X').replace('.', ',').replace('X', '.')), 'success')
+    except (ValueError, InvalidOperation) as e:
+        flash(str(e) if isinstance(e, ValueError) else 'Percentual inválido.', 'danger')
+    return volta
+
+
+@financeiro.route('/financeiro/honorarios/reajuste/<int:rid>/desfazer', methods=['POST'])
+@permission_required(PERM)
+def honorarios_reajuste_desfazer(rid):
+    r = FinContrato.desfazer_reajuste(rid, current_user.id)
+    if not r:
+        flash('Este reajuste já foi desfeito ou não existe.', 'warning')
+        return redirect(url_for('financeiro.honorarios_reajuste'))
+    c = FinContrato.get(r['contrato_id'])
+    registrar('escrita.desfez_reajuste_honorarios', 'financeiro', tabela='fin_contratos', registro_id=r['contrato_id'],
+              antes={'valor': str(r['valor_depois'])}, depois={'valor': str(r['valor_antes']), 'lote': r['lote'], 'empresa': c['nome_razao_social']})
+    flash('Reajuste de %s desfeito: voltou a R$ %s.' % (c['nome_razao_social'], '{:,.2f}'.format(r['valor_antes']).replace(',', 'X').replace('.', ',').replace('X', '.')), 'info')
+    return redirect(url_for('financeiro.honorarios_reajuste', ate=r['vigencia'].strftime('%Y-%m')))
+
+
 @financeiro.route('/financeiro/honorarios/<int:cid>/encerrar', methods=['POST'])
 @permission_required(PERM)
 def honorarios_encerrar(cid):

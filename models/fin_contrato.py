@@ -50,6 +50,11 @@ def primeiro_reajuste(inicio):
     return date(um_ano.year, 1, 1) if um_ano.month == 1 else date(um_ano.year + 1, 1, 1)
 
 
+def _pct(p):
+    """Percentual digitado ('7,5', '3.3333', Decimal) com quatro casas; _d() arredondaria a centavos."""
+    return Decimal(str(p or 0).strip().replace(',', '.')).quantize(Decimal('0.0001'))
+
+
 def _nome_rede(s):
     """'Mensalidade Rede M6' e 'REDE M6' viram 'M6'; 'Mensalidade Empresas SP' e 'EMPRESAS SP' viram 'EMPRESAS SP'."""
     import re
@@ -253,6 +258,88 @@ class FinContrato:
             acumulado += v
             out.append((date(ano, mes, 1), v))
         return out
+
+    # ---------------- reajuste (06/11/2026) ----------------
+    @staticmethod
+    def a_reajustar(ate, empresa_id=EMPRESA_QUALICONTAX):
+        """Contratos ATIVOS cujo próximo reajuste cai até ``ate`` (ou está em branco), com as discriminações.
+        'SEM' (sem reajuste / adiado) fica de fora: é decisão de não reajustar."""
+        rows = execute_query(
+            """SELECT c.*, cl.numero_cliente, cl.nome_razao_social,
+                      (SELECT g.nome FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id
+                        WHERE r.cliente_id = c.cliente_id ORDER BY r.id LIMIT 1) AS grupo
+                 FROM fin_contratos c JOIN clientes cl ON cl.id = c.cliente_id
+                WHERE c.empresa_id = %s AND c.situacao = 'ATIVO' AND c.reajuste_tipo <> 'SEM'
+                  AND (c.proximo_reajuste IS NULL OR c.proximo_reajuste <= %s)
+                ORDER BY (c.reajuste_tipo <> 'SALARIO_MINIMO'), c.proximo_reajuste, cl.numero_cliente + 0""", (empresa_id, ate), fetch=True) or []
+        if rows:
+            ids = ','.join(str(r['id']) for r in rows)
+            por = {r['id']: r for r in rows}
+            for r in rows:
+                r['itens'] = []
+            for i in execute_query(f'SELECT * FROM fin_contrato_itens WHERE contrato_id IN ({ids}) ORDER BY contrato_id, ordem, id', fetch=True) or []:
+                por[i['contrato_id']]['itens'].append(i)
+        return rows
+
+    @staticmethod
+    def valores_reajustados(itens, valor, percentual):
+        """Novo valor do contrato e das discriminações: cada uma sobe o percentual, arredondada ao centavo, e a
+        última fecha a diferença para a soma bater com o contrato novo (também arredondado)."""
+        fator = Decimal(1) + _pct(percentual) / 100
+        novo = (_d(valor) * fator).quantize(Decimal('0.01'))
+        out, acumulado = [], Decimal('0')
+        for n, i in enumerate(itens):
+            v = (_d(i['valor']) * fator).quantize(Decimal('0.01'))
+            if n == len(itens) - 1:
+                v = novo - acumulado
+            acumulado += v
+            out.append(dict(i, valor=v))
+        return novo, out
+
+    @staticmethod
+    def aplicar_reajuste(contrato_id, percentual, vigencia, usuario_id, lote, tipo='SALARIO_MINIMO'):
+        """Aplica o percentual a um contrato, guarda o antes em fin_contrato_reajustes e empurra o próximo reajuste
+        em um ano. Idempotente por contrato × lote (rodar duas vezes não dobra). Devolve (antes, depois) ou None."""
+        c = FinContrato.get(contrato_id)
+        if not c or c['situacao'] != 'ATIVO':
+            return None
+        if execute_query('SELECT 1 FROM fin_contrato_reajustes WHERE contrato_id = %s AND lote = %s AND desfeito_em IS NULL',
+                         (contrato_id, lote), fetch=True):
+            return None
+        itens = FinContrato.itens(contrato_id)
+        novo, itens_novos = FinContrato.valores_reajustados(itens, c['valor'], percentual)
+        execute_query(
+            """INSERT INTO fin_contrato_reajustes (contrato_id, cliente_id, lote, tipo, vigencia, percentual, valor_antes, valor_depois,
+                                                   itens_antes, proximo_antes, aplicado_por)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (contrato_id, c['cliente_id'], lote, tipo, vigencia, _pct(percentual), c['valor'], novo,
+             json.dumps([{'descricao': i['descricao'], 'valor': str(i['valor']), 'servico_id': i['servico_id']} for i in itens]),
+             c.get('proximo_reajuste'), usuario_id), fetch=False)
+        proximo = date(vigencia.year + 1, vigencia.month, 1)
+        FinContrato.atualizar(contrato_id, {'valor': novo, 'proximo_reajuste': proximo},
+                              [{'descricao': i['descricao'], 'valor': i['valor'], 'servico_id': i.get('servico_id')} for i in itens_novos])
+        return c, FinContrato.get(contrato_id)
+
+    @staticmethod
+    def desfazer_reajuste(reajuste_id, usuario_id):
+        """Volta o contrato ao que era antes daquele reajuste (valor, discriminações e próximo reajuste)."""
+        r = execute_query('SELECT * FROM fin_contrato_reajustes WHERE id = %s AND desfeito_em IS NULL', (reajuste_id,), fetch=True, fetch_one=True)
+        if not r:
+            return None
+        itens = json.loads(r['itens_antes'] or '[]')
+        FinContrato.atualizar(r['contrato_id'], {'valor': r['valor_antes'], 'proximo_reajuste': r['proximo_antes']}, itens)
+        execute_query('UPDATE fin_contrato_reajustes SET desfeito_em = NOW(), desfeito_por = %s WHERE id = %s', (usuario_id, reajuste_id), fetch=False)
+        return r
+
+    @staticmethod
+    def reajustes_aplicados(lote=None, limite=300):
+        cond, params = ['r.desfeito_em IS NULL'], []
+        if lote:
+            cond.append('r.lote = %s'); params.append(lote)
+        return execute_query(
+            f"""SELECT r.*, cl.numero_cliente, cl.nome_razao_social, u.nome AS aplicado_por_nome
+                  FROM fin_contrato_reajustes r JOIN clientes cl ON cl.id = r.cliente_id LEFT JOIN usuarios u ON u.id = r.aplicado_por
+                 WHERE {' AND '.join(cond)} ORDER BY r.id DESC LIMIT {int(limite)}""", tuple(params), fetch=True) or []
 
     @staticmethod
     def sugestoes(cliente_id, empresa_id=EMPRESA_QUALICONTAX):
