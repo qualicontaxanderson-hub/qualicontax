@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% block title %}Nova NFS-e - Fiscal - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Fiscal → NOVA NFS-E (08/11/2026). Prefixo nn-; moldura igual à EMISSÃO NFS-E (em-). */
+.nn-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:6px 0 16px; }
+.nn-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.nn-header p { margin:2px 0 0; color:#64748b; font-size:13px; }
+.nn-bar { background:linear-gradient(120deg,#0b3b2b,#116a43); border-radius:12px; padding:14px 18px; margin-bottom:16px;
+          display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.nn-bar label { font-size:11px; font-weight:700; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.5px; }
+.nn-bar input { flex:1; min-width:0; max-width:520px; padding:8px 12px; border-radius:8px; border:1.5px solid rgba(255,255,255,.25);
+                font-size:13px; font-weight:600; color:#14532d; background:rgba(255,255,255,.94); box-sizing:border-box; }
+.nn-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-bottom:18px; }
+.nn-card { display:block; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; color:inherit; text-decoration:none; min-width:0; }
+.nn-card:hover { border-color:#16a34a; box-shadow:0 2px 10px rgba(22,163,74,.12); }
+.nn-card strong { display:block; font-size:14px; color:#0f172a; overflow-wrap:anywhere; }
+.nn-card small { color:#64748b; font-size:12px; }
+.nn-cols { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; align-items:start; }
+.nn-box { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:14px; min-width:0; }
+.nn-box h3 { font-size:15px; margin:0 0 12px; color:#0f172a; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.nn-box h3 small { font-weight:500; color:#64748b; font-size:12px; }
+.nn-passo { display:inline-flex; width:24px; height:24px; border-radius:50%; background:#16a34a; color:#fff; font-size:12px;
+            font-weight:700; align-items:center; justify-content:center; flex:none; }
+.nn-box textarea, .nn-box input[type=month] { font-family:inherit; font-size:14px; }
+.nn-dados { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 12px; font-size:13px; margin:0; }
+.nn-dados dt { color:#64748b; font-weight:600; }
+.nn-dados dd { margin:0; color:#0f172a; overflow-wrap:anywhere; }
+.nn-erro { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
+.nn-aviso { background:#fffbeb; border:1px solid #fcd34d; color:#78350f; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
+.nn-info { background:#eff6ff; border:1px solid #93c5fd; color:#1e3a8a; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
+.nn-busca { position:relative; margin-bottom:12px; }
+.nn-sug { position:absolute; left:0; right:0; top:100%; z-index:20; background:#fff; border:1px solid #cbd5e1; border-radius:10px;
+          box-shadow:0 8px 24px rgba(15,23,42,.12); max-height:300px; overflow:auto; display:none; }
+.nn-sug button { display:block; width:100%; text-align:left; background:none; border:0; border-bottom:1px solid #f1f5f9;
+                 padding:9px 12px; font-size:13px; cursor:pointer; }
+.nn-sug button:hover { background:#f0fdf4; }
+.nn-sug small { color:#64748b; }
+.nn-origem { display:none; font-size:12px; font-weight:600; border-radius:8px; padding:6px 10px; margin:-4px 0 10px; }
+.nn-origem.ok { display:block; background:#dcfce7; color:#14532d; }
+.nn-origem.av { display:block; background:#fef3c7; color:#78350f; }
+.nn-origem.er { display:block; background:#fee2e2; color:#991b1b; }
+.nn-doc { display:flex; gap:8px; }
+.nn-doc input { flex:1; min-width:0; }
+.nn-ret summary { cursor:pointer; font-size:13px; font-weight:600; color:#0369a1; margin:6px 0 10px; }
+.nn-total { font-size:13px; color:#334155; border-top:1px dashed #e2e8f0; padding-top:10px; margin-top:6px; }
+.nn-total b { font-size:18px; color:#0f172a; }
+.nn-acoes { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+.nn-pill { display:inline-block; border-radius:99px; padding:2px 9px; font-size:11px; font-weight:700; white-space:nowrap; }
+.nn-pill.autorizada { background:#dcfce7; color:#15803d; }
+.nn-pill.rejeitada, .nn-pill.erro { background:#fee2e2; color:#b91c1c; }
+.nn-pill.cancelada { background:#e2e8f0; color:#475569; }
+.nn-pill.rascunho { background:#fef3c7; color:#92400e; }
+.nn-pill.teste { background:#ede9fe; color:#5b21b6; }
+.nn-notas { width:100%; border-collapse:collapse; font-size:13px; }
+.nn-notas th { text-align:left; color:#64748b; font-size:11px; text-transform:uppercase; padding:6px 8px; border-bottom:1px solid #e2e8f0; }
+.nn-notas td { padding:8px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+.nn-notas tr:hover td { background:#f8fafc; }
+.nn-notas a { color:inherit; text-decoration:none; }
+.nn-mini { list-style:none; margin:0; padding:0; }
+.nn-mini li { border-bottom:1px solid #f1f5f9; padding:8px 0; font-size:13px; }
+.nn-mini li:last-child { border-bottom:none; }
+.nn-mini a { color:inherit; text-decoration:none; display:block; }
+.nn-mini small { color:#64748b; }
+@media (max-width: 980px) { .nn-cols { grid-template-columns:minmax(0,1fr); } }
+@media (max-width: 640px) {
+  .nn-notas thead { display:none; }
+  .nn-notas tr { display:block; border-bottom:1px solid #e2e8f0; padding:6px 0; }
+  .nn-notas td { display:block; border:0; padding:2px 8px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
+
+<div class="nn-header">
+    <div>
+        <h1><i class="fas fa-file-invoice" style="color:#16a34a;"></i> Nova NFS-e</h1>
+        <p>Nota de serviço das empresas dos clientes. Só aparecem as empresas que o Fiscal conferiu e liberou.</p>
+    </div>
+    {% if emp %}<a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_emitir') }}"><i class="fas fa-arrow-left"></i> Todas</a>{% endif %}
+</div>
+
+<div class="nn-bar">
+    <label for="nnBusca">Empresa que emite</label>
+    <input id="nnBusca" list="nnLista" autocomplete="off" placeholder="Digite o número ou o nome e escolha na lista"
+           value="{{ (emp.numero_cliente ~ ' - ' ~ emp.nome) if emp else '' }}">
+    <datalist id="nnLista">
+        {% for e in empresas %}<option data-id="{{ e.id }}" value="{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}"></option>{% endfor %}
+    </datalist>
+</div>
+
+{% macro tabela_notas(lista, com_empresa) %}
+<div style="overflow-x:auto;">
+<table class="nn-notas">
+    <thead><tr><th>Data</th>{% if com_empresa %}<th>Empresa</th>{% endif %}<th>Tomador</th><th>Nº</th><th style="text-align:right;">Valor</th><th>Situação</th></tr></thead>
+    <tbody>
+    {% for n in lista %}
+    {% set url = url_for('escrita_fiscal.nfse_nota', nota_id=n.id) %}
+    <tr>
+        <td><a href="{{ url }}">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y %H:%M') }}</a></td>
+        {% if com_empresa %}<td><a href="{{ url }}">{% set e = nomes.get(n.empresa_id) %}{{ (e.numero_cliente ~ ' - ' ~ e.nome_razao_social) if e else n.empresa_id }}</a></td>{% endif %}
+        <td><a href="{{ url }}">{{ n.tomador_nome or '—' }}</a></td>
+        <td><a href="{{ url }}">{{ n.numero_nfse or ('DPS ' ~ n.serie ~ '/' ~ n.numero_dps) }}</a></td>
+        <td style="text-align:right; white-space:nowrap;">{{ n.valor_servico|format_currency }}</td>
+        <td><span class="nn-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
+            {% if n.ambiente == 2 %}<span class="nn-pill teste">TESTE</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% if not emp %}
+    {% if empresas %}
+    <div class="nn-grade">
+        {% for e in empresas %}
+        <a class="nn-card" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=e.id) }}">
+            <strong>{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}</strong>
+            <small>{{ e.cpf_cnpj or '' }}</small>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="nn-info"><i class="fas fa-info-circle"></i> Nenhuma empresa liberada para emitir ainda. A liberação é feita em
+        <a href="{{ url_for('escrita_fiscal.emissao_nfse') }}">EMISSÃO NFS-E</a>: o Fiscal confere a configuração da empresa e marca <b>Conferido e liberado</b>.</div>
+    {% endif %}
+    {% if notas %}
+    <div class="nn-box"><h3><i class="fas fa-clock-rotate-left" style="color:#0369a1;"></i> Últimas notas</h3>{{ tabela_notas(notas, true) }}</div>
+    {% endif %}
+
+{% elif motivo %}
+    <div class="nn-aviso">
+        <i class="fas fa-lock"></i>
+        {% if motivo == 'financeiro' %}<b>{{ emp.nome }}</b> é empresa do Financeiro: as notas dela saem por <b>Financeiro → Cobranças</b>.
+        {% elif motivo == 'sem_matriz' %}Esta empresa ainda não tem a configuração da nota. O Fiscal configura em <b>EMISSÃO NFS-E</b>.
+        {% elif motivo == 'nao_liberada' %}A configuração desta empresa ainda não foi <b>conferida e liberada</b> pelo Fiscal.
+        {% else %}A empresa estava liberada, mas hoje há pendência(s) que impedem a nota:{% endif %}
+        {% if travas %}<ul style="margin:8px 0 0 18px;">{% for t in travas %}<li>{{ t.texto }}</li>{% endfor %}</ul>{% endif %}
+        {% if motivo != 'financeiro' %}<div style="margin-top:8px;"><a href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=emp.id) }}">Abrir a configuração desta empresa</a></div>{% endif %}
+    </div>
+
+{% else %}
+{% if erro %}<div class="nn-erro"><i class="fas fa-circle-xmark"></i> <b>A nota não foi emitida.</b> {{ erro }}</div>{% endif %}
+{% set serie_atual = series|selectattr('serie', 'equalto', pre.serie)|first %}
+
+<form method="POST" action="{{ url_for('escrita_fiscal.nfse_emitir_post', cliente_id=emp.id) }}" id="nnForm" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<input type="hidden" name="t_fonte" id="t_fonte" value="{{ pre.t_fonte or 'manual' }}">
+<div class="nn-cols">
+<div>
+    <div class="nn-box">
+        <h3><span class="nn-passo">1</span> Para quem é a nota (tomador)
+            <small>{{ n_tomadores }} na lista desta empresa ·
+            <a href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id) }}">ver a lista</a></small></h3>
+        {% if n_tomadores %}
+        <div class="nn-busca">
+            <input type="text" id="tBusca" class="form-control" placeholder="Procurar na lista: nome, CNPJ/CPF ou e-mail">
+            <div class="nn-sug" id="tSug"></div>
+        </div>
+        {% endif %}
+        <div class="form-row">
+            <div class="form-group">
+                <label>CNPJ ou CPF *</label>
+                <div class="nn-doc">
+                    <input type="text" name="t_documento" id="t_documento" class="form-control" required maxlength="18"
+                           value="{{ pre.t_documento or '' }}" inputmode="numeric" placeholder="Só os números">
+                    <button type="button" class="btn btn-outline" id="tBuscarDoc"><i class="fas fa-magnifying-glass"></i> Buscar</button>
+                </div>
+            </div>
+            <div class="form-group" style="flex:2;">
+                <label>Nome / razão social *</label>
+                <input type="text" name="t_nome" id="t_nome" class="form-control" required maxlength="150" value="{{ pre.t_nome or '' }}">
+            </div>
+        </div>
+        <div class="nn-origem" id="tOrigem"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>E-mail <small style="font-weight:400;">(opcional: para mandar a nota)</small></label>
+                <input type="email" name="t_email" id="t_email" class="form-control" maxlength="255" value="{{ pre.t_email or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Telefone</label>
+                <input type="text" name="t_fone" id="t_fone" class="form-control" maxlength="20" value="{{ pre.t_fone or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Nome fantasia</label>
+                <input type="text" name="t_nome_fantasia" id="t_nome_fantasia" class="form-control" maxlength="150" value="{{ pre.t_nome_fantasia or '' }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>CEP</label>
+                <input type="text" name="t_cep" id="t_cep" class="form-control" maxlength="9" inputmode="numeric" value="{{ pre.t_cep or '' }}">
+            </div>
+            <div class="form-group" style="flex:2;">
+                <label>Rua</label>
+                <input type="text" name="t_logradouro" id="t_logradouro" class="form-control" maxlength="255" value="{{ pre.t_logradouro or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Número</label>
+                <input type="text" name="t_numero" id="t_numero" class="form-control" maxlength="60" value="{{ pre.t_numero or '' }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Complemento</label>
+                <input type="text" name="t_complemento" id="t_complemento" class="form-control" maxlength="156" value="{{ pre.t_complemento or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Bairro</label>
+                <input type="text" name="t_bairro" id="t_bairro" class="form-control" maxlength="60" value="{{ pre.t_bairro or '' }}">
+            </div>
+            <div class="form-group">
+                <label>Cidade / UF</label>
+                <div class="nn-doc">
+                    <input type="text" name="t_cidade" id="t_cidade" class="form-control" maxlength="80" value="{{ pre.t_cidade or '' }}">
+                    <input type="text" name="t_uf" id="t_uf" class="form-control" maxlength="2" style="max-width:64px;" value="{{ pre.t_uf or '' }}">
+                </div>
+            </div>
+        </div>
+        <input type="hidden" name="t_municipio_ibge" id="t_municipio_ibge" value="{{ pre.t_municipio_ibge or '' }}">
+        <input type="hidden" name="t_inscricao_municipal" id="t_inscricao_municipal" value="{{ pre.t_inscricao_municipal or '' }}">
+        <span class="nf-ajuda">Endereço incompleto não trava: a nota sai sem o endereço do tomador (o governo só aceita o endereço inteiro). O tomador fica salvo na lista desta empresa.</span>
+    </div>
+
+    <div class="nn-box">
+        <h3><span class="nn-passo">2</span> O serviço</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Competência *</label>
+                <input type="month" id="nnMes" class="form-control" value="{{ (pre.competencia or '')[:7] }}" max="{{ hoje.strftime('%Y-%m') }}" required>
+                <input type="hidden" name="competencia" id="nnComp" value="{{ pre.competencia }}">
+            </div>
+            <div class="form-group">
+                <label>Valor do serviço (R$) *</label>
+                <input type="text" name="valor_servico" id="nnValor" class="form-control" required inputmode="decimal"
+                       value="{{ pre.valor_servico or '' }}" placeholder="0,00">
+            </div>
+            <div class="form-group">
+                <label>Onde o serviço foi prestado</label>
+                <select name="local" class="form-control">
+                    {% for k, v in LOCAIS.items() %}<option value="{{ k }}" {{ 'selected' if pre.local == k }}>{{ v }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Descrição do serviço *</label>
+            <textarea name="descricao" id="nnDesc" class="form-control" rows="3" maxlength="1000" required>{{ pre.descricao or '' }}</textarea>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label style="margin-top:6px;"><input type="checkbox" name="iss_retido" value="1" {{ 'checked' if pre.iss_retido }}> ISS retido pelo tomador</label>
+            </div>
+            {% if cfg.op_simp_nac == 1 %}
+            <div class="form-group">
+                <label>Alíquota do ISS (%)</label>
+                <input type="text" name="aliquota_iss" class="form-control" inputmode="decimal" value="{{ pre.aliquota_iss or '' }}" placeholder="vazio = a do município">
+            </div>
+            {% endif %}
+            <div class="form-group">
+                <label>Tomador é consumidor final?</label>
+                <select name="ind_final" id="nnFinal" class="form-control">
+                    <option value="0" {{ 'selected' if (pre.ind_final or ('1' if (pre.t_documento or '')|length == 11 else '0'))|string == '0' }}>Não (empresa)</option>
+                    <option value="1" {{ 'selected' if (pre.ind_final or ('1' if (pre.t_documento or '')|length == 11 else '0'))|string == '1' }}>Sim (pessoa física)</option>
+                </select>
+            </div>
+        </div>
+        <details class="nn-ret" {{ 'open' if (pre.ret_pis or pre.ret_cofins or pre.ret_inss or pre.ret_irrf or pre.ret_csll) }}>
+            <summary>Retenções federais (só se o tomador reteve)</summary>
+            <div class="form-row">
+                {% for k, rot in [('ret_irrf', 'IR'), ('ret_pis', 'PIS'), ('ret_cofins', 'COFINS'), ('ret_csll', 'CSLL'), ('ret_inss', 'INSS')] %}
+                <div class="form-group">
+                    <label>{{ rot }} retido (R$)</label>
+                    <input type="text" name="{{ k }}" class="form-control nn-ret-v" inputmode="decimal" value="{{ pre[k] or '' }}" placeholder="0,00">
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Série</label>
+                <select name="serie" class="form-control">
+                    {% for s in series %}<option value="{{ s.serie }}" {{ 'selected' if s.serie|string == pre.serie|string }}>{{ s.serie }} — {{ 'produção' if s.ambiente == 1 else 'TESTE' }} (próximo nº {{ s.ultimo_numero + 1 }})</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="nn-total">Valor da nota: <b id="nnTotal">R$ 0,00</b> · líquido a receber: <span id="nnLiq">R$ 0,00</span></div>
+    </div>
+
+    <div class="nn-acoes">
+        <button type="submit" class="btn btn-primary" id="nnEmitir"><i class="fas fa-paper-plane"></i> Emitir a nota</button>
+    </div>
+</div>
+
+<div>
+    <div class="nn-box">
+        <h3><i class="fas fa-building" style="color:#0369a1;"></i> Quem emite</h3>
+        <dl class="nn-dados">
+            <dt>Empresa</dt><dd>{{ emp.numero_cliente or '' }} - {{ emp.nome }}</dd>
+            <dt>CNPJ</dt><dd>{{ emp.doc_fmt }}</dd>
+            <dt>Regime</dt><dd>{{ OP_SIMP_NAC.get(cfg.op_simp_nac, '—') }}</dd>
+            <dt>Município</dt><dd>{{ emp.cidade or '—' }}{{ ' / ' ~ emp.uf if emp.uf }}</dd>
+            <dt>Serviço</dt><dd>{{ cfg.cod_trib_nac or '—' }} · NBS {{ cfg.cod_nbs or '—' }}</dd>
+            <dt>Sai por</dt><dd>{{ 'ISSWeb da prefeitura' if cfg.emissor == 'fiorilli' else 'Emissor Nacional' }}</dd>
+        </dl>
+        <p class="nf-ajuda" style="margin-top:10px;">Regime e códigos vêm da configuração conferida pelo Fiscal. Para mudar:
+            <a href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=emp.id) }}">EMISSÃO NFS-E</a> (a liberação cai e precisa conferir de novo).</p>
+    </div>
+    <div class="nn-box">
+        <h3><i class="fas fa-clock-rotate-left" style="color:#0369a1;"></i> Notas desta empresa</h3>
+        {% if notas %}
+        <ul class="nn-mini">
+            {% for n in notas %}
+            <li><a href="{{ url_for('escrita_fiscal.nfse_nota', nota_id=n.id) }}">
+                <span class="nn-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
+                {% if n.ambiente == 2 %}<span class="nn-pill teste">TESTE</span>{% endif %}
+                <b>{{ n.valor_servico|format_currency }}</b><br>
+                <small>{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y') }} · {{ n.tomador_nome or '—' }}</small></a></li>
+            {% endfor %}
+        </ul>
+        {% else %}<p style="color:#64748b; font-size:13px; margin:0;">Nenhuma nota ainda.</p>{% endif %}
+    </div>
+</div>
+</div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var inp = document.getElementById('nnBusca'), lista = document.getElementById('nnLista');
+    var base = {{ url_for('escrita_fiscal.nfse_emitir')|tojson }};
+    function ir() {
+        var v = inp.value.trim();
+        for (var i = 0; i < lista.options.length; i++) {
+            if (lista.options[i].value === v) { location.href = base + lista.options[i].dataset.id; return; }
+        }
+    }
+    if (inp && lista) {
+        inp.addEventListener('change', ir);
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ir(); } });
+    }
+
+    var form = document.getElementById('nnForm');
+    if (!form) return;
+    var URL_DOC = {{ (url_for('escrita_fiscal.nfse_tomador_doc', cliente_id=emp.id) if emp else '')|tojson }};
+    var URL_LISTA = {{ (url_for('escrita_fiscal.nfse_tomadores_json', cliente_id=emp.id) if emp else '')|tojson }};
+    var URL_CEP = {{ url_for('escrita_fiscal.nfse_cep', cep='00000000')|tojson }};
+    var MODELO = {{ ((cfg.descricao_padrao or 'Serviços prestados em {mes} de {ano}') if emp else '')|tojson }};
+    var MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    var CAMPOS = ['documento','nome','nome_fantasia','email','fone','cep','logradouro','numero','complemento','bairro','cidade','uf','municipio_ibge','inscricao_municipal'];
+    function $(id) { return document.getElementById(id); }
+    function dig(s) { return String(s || '').replace(/\D/g, ''); }
+    function origem(cls, txt) { var o = $('tOrigem'); o.className = 'nn-origem ' + (cls || ''); o.textContent = txt || ''; }
+
+    function preencher(d, tudo) {
+        CAMPOS.forEach(function (k) {
+            var el = $('t_' + k), v = d[k] != null ? d[k] : (k === 'municipio_ibge' ? d.ibge : null);
+            if (!el || v == null) return;
+            if (tudo || !el.value) el.value = v;
+        });
+        var fin = $('nnFinal'); if (fin) fin.value = dig($('t_documento').value).length === 11 ? '1' : '0';
+    }
+
+    // 1) digitou o CNPJ/CPF: lista desta empresa -> cadastro do escritório -> Receita
+    function buscarDoc() {
+        var d = dig($('t_documento').value);
+        if (d.length !== 11 && d.length !== 14) { origem('er', 'Digite os 14 números do CNPJ ou os 11 do CPF.'); return; }
+        origem('av', 'Procurando…');
+        fetch(URL_DOC + '?doc=' + d, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+            if (j.dados) preencher(j.dados, j.origem !== 'nada');
+            if (j.origem === 'lista') { $('t_fonte').value = 'manual'; origem('ok', 'Já está na lista desta empresa. Confira e siga.'); }
+            else if (j.origem === 'cadastro') { $('t_fonte').value = 'cadastro'; origem('ok', 'É cliente do escritório: dados copiados do nosso cadastro.'); }
+            else if (j.origem === 'receita') { $('t_fonte').value = 'receita'; origem(j.dados.situacao_receita && j.dados.situacao_receita.toUpperCase() !== 'ATIVA' ? 'av' : 'ok',
+                'Dados da Receita' + (j.dados.situacao_receita ? ' (situação: ' + j.dados.situacao_receita + ')' : '') + '. Confira o e-mail: na Receita costuma ser o do contador.'); }
+            else { $('t_fonte').value = 'manual'; origem(j.erro ? 'er' : 'av', j.erro || j.aviso || 'Preencha os dados.'); }
+        }).catch(function () { origem('er', 'A busca não respondeu. Preencha os dados à mão.'); });
+    }
+    $('tBuscarDoc').addEventListener('click', buscarDoc);
+    $('t_documento').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); buscarDoc(); } });
+    $('t_documento').addEventListener('change', function () { var d = dig(this.value); if ((d.length === 14 || d.length === 11) && !$('t_nome').value) buscarDoc(); });
+
+    // procurar na lista desta empresa
+    var tb = $('tBusca'), sug = $('tSug'), timer;
+    if (tb) {
+        tb.addEventListener('input', function () {
+            clearTimeout(timer);
+            var q = tb.value.trim();
+            if (q.length < 2) { sug.style.display = 'none'; return; }
+            timer = setTimeout(function () {
+                fetch(URL_LISTA + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
+                    sug.innerHTML = '';
+                    if (!rows.length) { sug.innerHTML = '<button type="button" disabled>Nada na lista. Digite o CNPJ/CPF abaixo.</button>'; }
+                    rows.forEach(function (t) {
+                        var b = document.createElement('button'); b.type = 'button';
+                        b.innerHTML = '<b></b><br><small></small>';
+                        b.querySelector('b').textContent = t.nome;
+                        b.querySelector('small').textContent = t.doc_fmt + (t.cidade ? ' · ' + t.cidade + '/' + t.uf : '') + (t.email ? ' · ' + t.email : '');
+                        b.addEventListener('click', function () { preencher(t, true); $('t_fonte').value = 'manual'; origem('ok', 'Da lista desta empresa.'); sug.style.display = 'none'; tb.value = ''; });
+                        sug.appendChild(b);
+                    });
+                    sug.style.display = 'block';
+                });
+            }, 250);
+        });
+        document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== tb) sug.style.display = 'none'; });
+    }
+
+    // CEP preenche rua, bairro, cidade e o código do município
+    $('t_cep').addEventListener('change', function () {
+        var c = dig(this.value); if (c.length !== 8) return;
+        fetch(URL_CEP.replace('00000000', c), { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+            if (!j) return;
+            if (j.logradouro) $('t_logradouro').value = j.logradouro;
+            if (j.bairro) $('t_bairro').value = j.bairro;
+            $('t_cidade').value = j.cidade || ''; $('t_uf').value = j.uf || ''; $('t_municipio_ibge').value = j.ibge || '';
+        });
+    });
+    // mudou a cidade à mão sem CEP: o código do município não vale mais
+    ['t_cidade', 't_uf'].forEach(function (id) { $(id).addEventListener('input', function () { $('t_municipio_ibge').value = ''; }); });
+
+    // competência -> data e descrição
+    var mes = $('nnMes'), desc = $('nnDesc');
+    function textoDe(v) { var p = (v || '').split('-'); if (p.length < 2) return ''; return MODELO.replace('{mes}', MESES[+p[1] - 1]).replace('{ano}', p[0]).replace('{competencia}', p[1] + '/' + p[0]); }
+    var ultimo = textoDe(mes.value);
+    mes.addEventListener('change', function () {
+        $('nnComp').value = mes.value ? mes.value + '-01' : '';
+        if (desc.value.trim() === ultimo.trim() || !desc.value.trim()) desc.value = textoDe(mes.value);
+        ultimo = textoDe(mes.value);
+    });
+    if (mes.value && !$('nnComp').value) $('nnComp').value = mes.value + '-01';
+
+    // total e líquido
+    function num(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); var n = parseFloat(s); return isNaN(n) ? 0 : n; }
+    function brl(n) { return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function somar() {
+        var v = num($('nnValor').value), r = 0;
+        document.querySelectorAll('.nn-ret-v').forEach(function (el) { r += num(el.value); });
+        $('nnTotal').textContent = brl(v); $('nnLiq').textContent = brl(v - r);
+    }
+    form.addEventListener('input', somar); somar();
+
+    form.addEventListener('submit', function (e) {
+        var prod = form.serie.selectedOptions[0] && form.serie.selectedOptions[0].textContent.indexOf('TESTE') < 0;
+        var msg = 'Emitir a nota de ' + $('nnTotal').textContent + ' para ' + ($('t_nome').value || '—') + '?' +
+                  (prod ? '\n\nÉ PRODUÇÃO: a nota vale de verdade e só sai cancelando.' : '\n\nSérie de TESTE: a nota não vale.');
+        if (!confirm(msg)) { e.preventDefault(); return; }
+        var b = $('nnEmitir'); setTimeout(function () { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando…'; }, 0);
+    });
+})();
+</script>
+{% endblock %}

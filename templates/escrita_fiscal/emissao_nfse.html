@@ -133,6 +133,7 @@
         <div class="em-lib">
             {% if salva and cfg.liberado_em %}
             <span><span class="em-pill liberada">LIBERADA</span> por {{ liberado_por or '—' }} em {{ cfg.liberado_em.strftime('%d/%m/%Y %H:%M') }}</span>
+            {% if not financeiro %}<a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-file-invoice"></i> Emitir nota</a>{% endif %}
             <form method="POST" action="{{ url_for('escrita_fiscal.emissao_nfse_liberar', cliente_id=emp.id) }}"
                   onsubmit="return confirm('Retirar a liberação? A empresa para de emitir até ser conferida de novo.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="revogar">

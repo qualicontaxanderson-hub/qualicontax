@@ -26,6 +26,7 @@ PERMISSION_CATALOG = {
         'escrita_fiscal.memorizacoes':    'Memorizações',
         # Matriz fiscal das empresas dos clientes (06/11/2026): nasce sem perfil.
         'escrita_fiscal.nfse_matriz':     'Configurar emissão de NFS-e',
+        'escrita_fiscal.nfse_emitir':     'Emitir NFS-e dos clientes',
     },
     'Q-Robô': {
         # Portal do Instalador (/qrobo): quem pode entrar na sessão de escopo

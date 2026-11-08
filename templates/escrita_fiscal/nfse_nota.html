@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}NFS-e {{ n.numero_nfse or (n.serie ~ '/' ~ n.numero_dps) }} - Fiscal - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* A nota emitida pelo Fiscal — 08/11/2026. Prefixo nd-. */
+.nd-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:6px 0 16px; }
+.nd-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.nd-header p { margin:2px 0 0; color:#64748b; font-size:13px; }
+.nd-cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+.nd-box { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:14px; min-width:0; }
+.nd-box h3 { font-size:15px; margin:0 0 12px; color:#0f172a; }
+.nd-dados { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 14px; font-size:13px; margin:0; }
+.nd-dados dt { color:#64748b; font-weight:600; }
+.nd-dados dd { margin:0; color:#0f172a; overflow-wrap:anywhere; }
+.nd-pill { display:inline-block; border-radius:99px; padding:3px 12px; font-size:12px; font-weight:700; }
+.nd-pill.autorizada { background:#dcfce7; color:#15803d; }
+.nd-pill.rejeitada, .nd-pill.erro { background:#fee2e2; color:#b91c1c; }
+.nd-pill.cancelada { background:#e2e8f0; color:#475569; }
+.nd-pill.rascunho { background:#fef3c7; color:#92400e; }
+.nd-pill.teste { background:#ede9fe; color:#5b21b6; }
+.nd-erro { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
+.nd-erro li { margin-bottom:4px; }
+.nd-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+@media (max-width: 860px) { .nd-cols { grid-template-columns:minmax(0,1fr); } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
+
+<div class="nd-header">
+    <div>
+        <h1><i class="fas fa-file-invoice" style="color:#16a34a;"></i>
+            {% if n.numero_nfse %}NFS-e nº {{ n.numero_nfse }}{% else %}DPS série {{ n.serie }} nº {{ n.numero_dps }}{% endif %}
+            <span class="nd-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
+            {% if n.ambiente == 2 %}<span class="nd-pill teste">TESTE</span>{% endif %}</h1>
+        <p>{{ n.empresa_numero or '' }} - {{ n.empresa_nome }} · série {{ n.serie }} nº {{ n.numero_dps }}</p>
+    </div>
+    <div class="nd-acoes">
+        <a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=n.empresa_id) }}"><i class="fas fa-plus"></i> Nova nota</a>
+        {% if n.situacao in ('autorizada', 'cancelada') %}
+        <a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nota_pdf', nota_id=n.id, inline=1) }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_nota_xml', nota_id=n.id) }}"><i class="fas fa-code"></i> XML</a>
+        {% endif %}
+        {% if n.situacao in ('rejeitada', 'erro') %}
+        <a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=n.empresa_id, de=n.id) }}"><i class="fas fa-rotate-right"></i> Corrigir e emitir de novo</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if n.situacao in ('rejeitada', 'erro') %}
+<div class="nd-erro">
+    <b>{{ 'O governo recusou a nota:' if n.situacao == 'rejeitada' else 'A nota não chegou ao governo:' }}</b>
+    {% if erros %}<ul style="margin:6px 0 0 18px;">{% for e in erros %}<li>{{ e[0] }} — {{ e[1] }}{% if e[2] %} ({{ e[2] }}){% endif %}</li>{% endfor %}</ul>
+    {% else %}<div style="margin-top:4px;">{{ n.erro_ultimo or 'sem detalhe' }}</div>{% endif %}
+    <div style="margin-top:8px;">O número {{ n.numero_dps }} ficou registrado como recusado. A próxima nota sai com o número seguinte.</div>
+</div>
+{% endif %}
+
+<div class="nd-cols">
+    <div class="nd-box">
+        <h3>Tomador</h3>
+        <dl class="nd-dados">
+            <dt>Nome</dt><dd>{{ n.tomador_nome or '—' }}</dd>
+            <dt>CNPJ/CPF</dt><dd>{{ (n.tomador_doc|format_cnpj if (n.tomador_doc or '')|length == 14 else n.tomador_doc|format_cpf) if n.tomador_doc else '—' }}</dd>
+            <dt>E-mail</dt><dd>{{ n.tomador_email or '—' }}</dd>
+            <dt>Município</dt><dd>{{ n.tomador_municipio or '—' }}</dd>
+        </dl>
+    </div>
+    <div class="nd-box">
+        <h3>Valores</h3>
+        <dl class="nd-dados">
+            <dt>Serviço</dt><dd>{{ n.valor_servico|format_currency }}</dd>
+            {% if n.total_retencoes %}<dt>Retenções</dt><dd>{{ n.total_retencoes|format_currency }}</dd>{% endif %}
+            {% if n.valor_liquido %}<dt>Líquido</dt><dd>{{ n.valor_liquido|format_currency }}</dd>{% endif %}
+            <dt>ISS</dt><dd>{{ 'retido pelo tomador' if n.iss_retido else 'não retido' }}</dd>
+            {% if n.ibs_total or n.cbs_valor %}<dt>IBS / CBS</dt><dd>{{ (n.ibs_total or 0)|format_currency }} / {{ (n.cbs_valor or 0)|format_currency }}</dd>{% endif %}
+            <dt>Competência</dt><dd>{{ n.competencia.strftime('%m/%Y') if n.competencia else '—' }}</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="nd-box">
+    <h3>Serviço</h3>
+    <dl class="nd-dados">
+        <dt>Descrição</dt><dd style="white-space:pre-wrap;">{{ n.descricao or '—' }}</dd>
+        <dt>Código</dt><dd>{{ n.cod_trib_nac or '—' }} · NBS {{ n.cod_nbs or '—' }}</dd>
+        <dt>Emitida em</dt><dd>{{ n.dh_emissao.strftime('%d/%m/%Y %H:%M') if n.dh_emissao else '—' }}</dd>
+        {% if n.chave_acesso %}<dt>Chave</dt><dd style="font-family:monospace; font-size:12px;">{{ n.chave_acesso }}</dd>{% endif %}
+        {% if n.situacao == 'cancelada' %}<dt>Cancelada</dt><dd>{{ n.cancelada_em.strftime('%d/%m/%Y %H:%M') if n.cancelada_em else '' }} · {{ n.cancelamento_motivo or '' }}</dd>{% endif %}
+        <dt>Sai por</dt><dd>{{ 'ISSWeb da prefeitura' if n.emissor == 'fiorilli' else 'Emissor Nacional' }}</dd>
+    </dl>
+</div>
+
+{% if n.situacao == 'autorizada' %}
+<div class="nd-box">
+    <h3>Cancelar a nota</h3>
+    <form method="POST" action="{{ url_for('escrita_fiscal.nfse_nota_cancelar', nota_id=n.id) }}"
+          onsubmit="return confirm('Cancelar esta nota no governo? Não tem volta.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label>Motivo</label>
+                <select name="c_motivo" class="form-control" required>
+                    <option value="">— escolha —</option>
+                    {% for k, v in MOTIVOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="flex:3;">
+                <label>Explique (pelo menos 15 letras; o governo exige)</label>
+                <input type="text" name="x_motivo" class="form-control" minlength="15" maxlength="255" required>
+            </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end;"><button class="btn btn-outline" style="color:#b91c1c; border-color:#fca5a5;"><i class="fas fa-ban"></i> Cancelar a nota</button></div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

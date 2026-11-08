@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Tomadores - {{ emp.nome }} - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Tomadores da empresa (os clientes do cliente) — 08/11/2026. Prefixo tm-. */
+.tm-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:6px 0 16px; }
+.tm-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.tm-header p { margin:2px 0 0; color:#64748b; font-size:13px; }
+.tm-filtro { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+.tm-filtro input[type=text] { flex:1; min-width:0; max-width:420px; }
+.tm-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+.tm-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; min-width:0; font-size:13px; }
+.tm-card.inativo { opacity:.55; }
+.tm-card strong { display:block; font-size:14px; color:#0f172a; overflow-wrap:anywhere; }
+.tm-card small { color:#64748b; display:block; overflow-wrap:anywhere; }
+.tm-card .tm-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.tm-box { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:16px; }
+.tm-box h3 { font-size:15px; margin:0 0 12px; }
+.tm-sem { color:#b45309; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
+
+<div class="tm-header">
+    <div>
+        <h1><i class="fas fa-address-book" style="color:#16a34a;"></i> Tomadores</h1>
+        <p>Para quem <b>{{ emp.numero_cliente or '' }} - {{ emp.nome }}</b> emite nota. A lista é só desta empresa. Quem recebe uma nota entra aqui sozinho.</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        {% if liberada %}<a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-file-invoice"></i> Nova nota</a>{% endif %}
+        <a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id, novo=1) }}"><i class="fas fa-plus"></i> Novo tomador</a>
+    </div>
+</div>
+
+{% if editar or novo %}
+{% set t = editar or {} %}
+<div class="tm-box">
+    <h3>{{ 'Editar tomador' if editar else 'Novo tomador' }}</h3>
+    <form method="POST" action="{{ url_for('escrita_fiscal.nfse_tomadores_salvar', cliente_id=emp.id) }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        {% if editar %}<input type="hidden" name="tomador_id" value="{{ t.id }}">{% endif %}
+        <input type="hidden" name="t_fonte" id="t_fonte" value="manual">
+        <div class="form-row">
+            <div class="form-group">
+                <label>CNPJ ou CPF *</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" name="t_documento" id="t_documento" class="form-control" required value="{{ t.documento or '' }}" inputmode="numeric" style="flex:1; min-width:0;">
+                    <button type="button" class="btn btn-outline" id="tBuscarDoc"><i class="fas fa-magnifying-glass"></i> Buscar</button>
+                </div>
+                <span class="nf-ajuda" id="tOrigem"></span>
+            </div>
+            <div class="form-group" style="flex:2;"><label>Nome / razão social *</label><input type="text" name="t_nome" id="t_nome" class="form-control" required maxlength="150" value="{{ t.nome or '' }}"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>E-mail (opcional)</label><input type="email" name="t_email" id="t_email" class="form-control" maxlength="255" value="{{ t.email or '' }}"></div>
+            <div class="form-group"><label>Telefone</label><input type="text" name="t_fone" id="t_fone" class="form-control" maxlength="20" value="{{ t.fone or '' }}"></div>
+            <div class="form-group"><label>Nome fantasia</label><input type="text" name="t_nome_fantasia" id="t_nome_fantasia" class="form-control" maxlength="150" value="{{ t.nome_fantasia or '' }}"></div>
+            <div class="form-group"><label>Inscrição municipal</label><input type="text" name="t_inscricao_municipal" id="t_inscricao_municipal" class="form-control" maxlength="20" value="{{ t.inscricao_municipal or '' }}"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>CEP</label><input type="text" name="t_cep" id="t_cep" class="form-control" maxlength="9" value="{{ t.cep or '' }}"></div>
+            <div class="form-group" style="flex:2;"><label>Rua</label><input type="text" name="t_logradouro" id="t_logradouro" class="form-control" maxlength="255" value="{{ t.logradouro or '' }}"></div>
+            <div class="form-group"><label>Número</label><input type="text" name="t_numero" id="t_numero" class="form-control" maxlength="60" value="{{ t.numero or '' }}"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Complemento</label><input type="text" name="t_complemento" id="t_complemento" class="form-control" maxlength="156" value="{{ t.complemento or '' }}"></div>
+            <div class="form-group"><label>Bairro</label><input type="text" name="t_bairro" id="t_bairro" class="form-control" maxlength="60" value="{{ t.bairro or '' }}"></div>
+            <div class="form-group"><label>Cidade</label><input type="text" name="t_cidade" id="t_cidade" class="form-control" maxlength="80" value="{{ t.cidade or '' }}"></div>
+            <div class="form-group"><label>UF</label><input type="text" name="t_uf" id="t_uf" class="form-control" maxlength="2" value="{{ t.uf or '' }}"></div>
+        </div>
+        <input type="hidden" name="t_municipio_ibge" id="t_municipio_ibge" value="{{ t.municipio_ibge or '' }}">
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id) }}">Cancelar</a>
+            <button class="btn btn-primary"><i class="fas fa-save"></i> Salvar tomador</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<form class="tm-filtro" method="GET">
+    <input type="text" name="q" class="form-control" value="{{ busca }}" placeholder="Procurar: nome, CNPJ/CPF ou e-mail">
+    <label style="font-size:13px;"><input type="checkbox" name="inativos" value="1" {{ 'checked' if inativos }} onchange="this.form.submit()"> mostrar desativados</label>
+    <button class="btn btn-outline"><i class="fas fa-magnifying-glass"></i> Procurar</button>
+    <span style="color:#64748b; font-size:13px;">{{ tomadores|length }} tomador(es)</span>
+</form>
+
+{% if tomadores %}
+<div class="tm-grade">
+    {% for t in tomadores %}
+    <div class="tm-card {{ 'inativo' if not t.ativo }}">
+        <strong>{{ t.nome }}</strong>
+        <small>{{ t.documento|format_cnpj if t.documento|length == 14 else t.documento|format_cpf }}{{ ' · ' ~ t.cidade ~ '/' ~ t.uf if t.cidade }}</small>
+        <small>{% if t.email %}{{ t.email }}{% else %}<span class="tm-sem">sem e-mail</span>{% endif %}</small>
+        <small>{{ ('Última nota em ' ~ t.ultima_nota_em.strftime('%d/%m/%Y')) if t.ultima_nota_em else 'Nenhuma nota ainda' }}</small>
+        <div class="tm-acoes">
+            {% if liberada and t.ativo %}<a class="btn btn-primary btn-sm" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id, tomador=t.id) }}">Emitir para este</a>{% endif %}
+            <a class="btn btn-outline btn-sm" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id, editar=t.id) }}">Editar</a>
+            <form method="POST" action="{{ url_for('escrita_fiscal.nfse_tomadores_salvar', cliente_id=emp.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="alternar">
+                <input type="hidden" name="tomador_id" value="{{ t.id }}">
+                <button class="btn btn-outline btn-sm">{{ 'Desativar' if t.ativo else 'Reativar' }}</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p style="color:#64748b;">{{ 'Nada encontrado.' if busca else 'Nenhum tomador ainda. Eles entram aqui ao emitir a primeira nota, ou pelo botão Novo tomador.' }}</p>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var b = document.getElementById('tBuscarDoc');
+    if (!b) return;
+    var URL_DOC = {{ url_for('escrita_fiscal.nfse_tomador_doc', cliente_id=emp.id)|tojson }};
+    var CAMPOS = ['nome','nome_fantasia','email','fone','cep','logradouro','numero','complemento','bairro','cidade','uf','municipio_ibge','inscricao_municipal'];
+    function $(id) { return document.getElementById(id); }
+    b.addEventListener('click', function () {
+        var d = $('t_documento').value.replace(/\D/g, '');
+        $('tOrigem').textContent = 'Procurando…';
+        fetch(URL_DOC + '?doc=' + d, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+            var dd = j.dados || {};
+            CAMPOS.forEach(function (k) { var v = dd[k] != null ? dd[k] : (k === 'municipio_ibge' ? dd.ibge : null); if (v != null && $('t_' + k)) $('t_' + k).value = v; });
+            $('t_fonte').value = j.origem === 'receita' ? 'receita' : (j.origem === 'cadastro' ? 'cadastro' : 'manual');
+            $('tOrigem').textContent = { lista: 'Já está na lista.', cadastro: 'Copiado do cadastro do escritório.', receita: 'Dados da Receita: confira o e-mail.' }[j.origem] || j.erro || j.aviso || '';
+        }).catch(function () { $('tOrigem').textContent = 'A busca não respondeu.'; });
+    });
+})();
+</script>
+{% endblock %}

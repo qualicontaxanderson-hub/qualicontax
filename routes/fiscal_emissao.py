@@ -175,3 +175,7 @@ def emissao_nfse_serie(cliente_id):
                       registro_id=int(sid))
             flash('Série atualizada.', 'success')
     return _volta(cliente_id, '#series')
+
+
+# Nova nota + tomadores (08/11/2026): arquivo próprio, mesmo blueprint.
+from routes import fiscal_nfse_nova  # noqa: E402,F401
