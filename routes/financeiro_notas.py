@@ -149,20 +149,27 @@ def notas_config():
         antes = NfseConfig.get(emp_id) or {}
         dados = {k: request.form.get(k, '') for k in CAMPOS_CONFIG}
         dados['iss_retido'] = '1' if request.form.get('iss_retido') else '0'
-        NfseConfig.salvar(emp_id, dados, usuario_id=current_user.id)
+        revogou = NfseConfig.salvar(emp_id, dados, usuario_id=current_user.id)
         depois = NfseConfig.get(emp_id) or {}
         registrar('escrita.alterou_config_nfse', 'financeiro', tabela='nfse_emissao_config',
                   registro_id=depois.get('id'),
                   antes={k: str(antes.get(k)) for k in CAMPOS_CONFIG},
                   depois={k: str(depois.get(k)) for k in CAMPOS_CONFIG})
+        if request.headers.get('X-Requested-With') == 'fetch':      # cartões: salva sozinho (08/11/2026)
+            return jsonify({'ok': True, 'revogou': bool(revogou)})
         flash('Configuração fiscal salva.', 'success')
         return redirect(url_for('financeiro.notas_config', emp=emp_id))
-    cfg = NfseConfig.get(emp_id) or {}
+    # Matriz em cartões (08/11/2026): o MESMO pedaço de tela e o mesmo montador do Fiscal.
+    from models.nfse_emissao import contexto_da_matriz
+    ctx = contexto_da_matriz(emp_id)
+    if not ctx:
+        abort(404)
     empresa = next((e for e in emps if e['cliente_id'] == emp_id), None)
     return render_template(
-        'financeiro/notas_config.html', cfg=cfg, empresa=empresa, emp_id=emp_id,
-        series=NfseEmitida.series(emp_id), servicos=NfseServico.listar(emp_id),
-        fin_empresas=emps, sel_empresas=[emp_id], emp_mapa=mapa, **_LISTAS)
+        'financeiro/notas_config.html', empresa=empresa, emp_id=emp_id, servicos=NfseServico.listar(emp_id),
+        fin_empresas=emps, sel_empresas=[emp_id], emp_mapa=mapa, csrf=None,
+        acao_salvar=url_for('financeiro.notas_config', emp=emp_id), acao_serie=url_for('financeiro.notas_serie'),
+        serie_campos={'emp': emp_id}, **ctx, **_LISTAS)
 
 
 @financeiro.route('/financeiro/notas/config/servico', methods=['POST'])
@@ -231,6 +238,9 @@ def notas_serie():
                                         observacao=(request.form.get('observacao') or '').strip()[:255] or None)
             registrar('escrita.abriu_serie_nfse', 'financeiro', tabela='nfse_dps_controle', registro_id=sid,
                       depois={'empresa_id': emp_id, 'serie': serie, 'ambiente': ambiente, 'inicial': inicial})
+            cfg_atual = NfseConfig.get(emp_id) or {}
+            if ambiente == 1 and not cfg_atual.get('serie_nacional') and serie.isdigit():
+                NfseConfig.salvar(emp_id, {'serie_nacional': serie}, usuario_id=current_user.id)
             flash(f'Série {serie} aberta.', 'success')
         except ValueError as exc:
             flash(str(exc), 'danger')

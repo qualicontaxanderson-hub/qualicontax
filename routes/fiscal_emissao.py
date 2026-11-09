@@ -4,7 +4,7 @@
 Pedido do Anderson: "quero somente um lugar para codar". Por isso aqui NÃO há regra
 fiscal nenhuma — só a tela:
 
-* os campos são o mesmo pedaço de tela do Financeiro (``templates/nfse/_matriz_campos.html``);
+* os campos são o mesmo pedaço de tela do Financeiro (``templates/nfse/_matriz_cartoes.html`` (cartões, 08/11/2026));
 * quem grava é o mesmo ``NfseConfig.salvar`` (e é ele que derruba a liberação quando algo muda);
 * o que falta para emitir é ``faltas_da_matriz`` (models/nfse_emissao.py);
 * série é ``numeracao.abrir_serie``, a mesma do Financeiro.
@@ -18,7 +18,8 @@ from flask_login import current_user
 
 from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC, REG_AP_TRIB_SN,
                                  REG_ESP_TRIB, NfseConfig, NfseEmitida, empresa_da_matriz, faltas_da_matriz,
-                                 liberar_matriz, revogar_matriz, situacao_das_matrizes, sugestao_da_matriz)
+                                 liberar_matriz, revogar_matriz, situacao_das_matrizes, sugestao_da_matriz,
+                                 REGIMES)
 from routes.escrita_fiscal import _get_empresas, escrita_fiscal
 from utils.atividade import registrar
 from utils.auth_helper import permission_required
@@ -59,41 +60,70 @@ def emissao_nfse():
     com = [dict(e, situacao=sit[e['id']]) for e in empresas if e['id'] in sit]
     com.sort(key=lambda e: (e['situacao'] != 'liberada', e.get('avulso') or 0,
                             int(e['numero_cliente']) if str(e.get('numero_cliente') or '').isdigit() else 10 ** 9))
+    # Quanto falta em cada uma (os 5 cartões) e a primeira pendência, para o cartão da lista.
+    from models.nfse_emissao import cartoes_da_matriz
+    for e in com:
+        emp = empresa_da_matriz(e['id'])
+        cfg = NfseConfig.get(e['id'])
+        cs = cartoes_da_matriz(faltas_da_matriz(emp, cfg, NfseEmitida.series(e['id']))) if emp else []
+        e['prontos'] = sum(1 for c in cs if c['ok'])
+        e['falta'] = next((c['travas'][0]['texto'] for c in cs if c['travas']), '')
+        e['regime'] = (emp or {}).get('regime_rotulo', '')
+        e['cidade'] = (emp or {}).get('cidade', '')
+    ids_com = {e['id'] for e in com}
+    # Começar uma nova: certificado válido, regime preenchido, sem configuração e fora do Financeiro.
+    fin = {r['cliente_id'] for r in (execute_query('SELECT cliente_id FROM fin_empresas WHERE ativo = 1', fetch=True) or [])}
+    cert_ok = {r['cliente_id'] for r in (execute_query(
+        'SELECT DISTINCT cliente_id FROM dfe_certificados WHERE validade >= CURDATE()', fetch=True) or [])}
+    from utils.nfse_servicos import CNAE_SERVICO
+    dados = {r['id']: r for r in (execute_query(
+        "SELECT id, regime_tributario, cnae_fiscal, cnae_fiscal_descricao FROM clientes "
+        " WHERE situacao = 'ATIVO' AND regime_tributario IS NOT NULL", fetch=True) or [])}
+    # Só quem PRESTA serviço pela atividade principal (posto de combustível vende mercadoria).
+    novas = [dict(e, regime=REGIMES.get(dados[e['id']]['regime_tributario'] or '', ''),
+                  atividade=dados[e['id']].get('cnae_fiscal_descricao') or '')
+             for e in empresas
+             if e['id'] not in ids_com and e['id'] not in fin and e['id'] in cert_ok and e['id'] in dados
+             and (dados[e['id']].get('cnae_fiscal') or '') in CNAE_SERVICO and not e.get('avulso')]
     resumo = {'liberadas': sum(1 for e in com if e['situacao'] == 'liberada'),
               'configuradas': sum(1 for e in com if e['situacao'] == 'configurada'),
-              'sem': len(empresas) - len(com)}
+              'aptas': len(novas), 'sem': len(empresas) - len(com)}
     from routes.fiscal_nfse_nova import hub_ctx
     return render_template('escrita_fiscal/emissao_nfse.html', empresas=empresas, com=com, resumo=resumo,
-                           emp=None, **hub_ctx('config'))
+                           novas=novas[:9], emp=None, **hub_ctx('config'))
 
 
 @escrita_fiscal.route('/emissao-nfse/<int:cliente_id>')
 @permission_required(PERM)
 def emissao_nfse_empresa(cliente_id):
-    emp = empresa_da_matriz(cliente_id)
-    if not emp:
-        abort(404)
+    from models.nfse_emissao import contexto_da_matriz
     from routes.qrobo import csrf_token
-    cfg = NfseConfig.get(cliente_id)
-    series = NfseEmitida.series(cliente_id)
-    sugestao = sugestao_da_matriz(emp)
-    faltas = faltas_da_matriz(emp, cfg, series, sugestao=sugestao)
-    travas = [f for f in faltas if f['nivel'] == 'trava']
+    ctx = contexto_da_matriz(cliente_id)
+    if not ctx:
+        abort(404)
+    cfg = ctx['cfg']
     liberado_por = None
-    if cfg and cfg.get('liberado_por'):
+    if cfg.get('liberado_por'):
         r = execute_query('SELECT nome FROM usuarios WHERE id = %s', (cfg['liberado_por'],), fetch=True, fetch_one=True)
         liberado_por = (r or {}).get('nome')
+    financeiro = _do_financeiro(cliente_id)
     return render_template(
-        'escrita_fiscal/emissao_nfse.html', empresas=_get_empresas(), emp=emp,
-        cfg=cfg or sugestao, salva=bool(cfg), series=series, faltas=faltas, travas=travas,
-        liberado_por=liberado_por, financeiro=_do_financeiro(cliente_id), csrf=csrf_token(), **_LISTAS,
-        **_hub('config', cliente_id, emp))
+        'escrita_fiscal/emissao_nfse.html', empresas=_get_empresas(), liberado_por=liberado_por,
+        financeiro=financeiro, csrf=csrf_token(),
+        acao_salvar=url_for('escrita_fiscal.emissao_nfse_salvar', cliente_id=cliente_id),
+        acao_serie=url_for('escrita_fiscal.emissao_nfse_serie', cliente_id=cliente_id), serie_campos={},
+        # empresa do Financeiro emite por lá, sem a liberação do Fiscal
+        acao_liberar=None if financeiro else url_for('escrita_fiscal.emissao_nfse_liberar', cliente_id=cliente_id),
+        **ctx, **_LISTAS, **_hub('config', cliente_id, ctx['emp']))
 
 
 @escrita_fiscal.route('/emissao-nfse/<int:cliente_id>/salvar', methods=['POST'])
 @permission_required(PERM)
 def emissao_nfse_salvar(cliente_id):
     if not _csrf_ok():
+        if request.headers.get('X-Requested-With') == 'fetch':
+            from flask import jsonify
+            return jsonify({'ok': False, 'erro': 'formulário expirado'}), 400
         flash('Formulário expirado. Abra a empresa de novo e salve.', 'danger')
         return _volta(cliente_id)
     if not empresa_da_matriz(cliente_id):
@@ -107,6 +137,9 @@ def emissao_nfse_salvar(cliente_id):
               registro_id=depois.get('id'),
               antes={k: str(antes.get(k)) for k in CAMPOS_CONFIG},
               depois={k: str(depois.get(k)) for k in CAMPOS_CONFIG})
+    if request.headers.get('X-Requested-With') == 'fetch':      # cartões: salva sozinho (08/11/2026)
+        from flask import jsonify
+        return jsonify({'ok': True, 'revogou': bool(revogou)})
     if revogou:
         flash('Configuração salva. Como mudou, a liberação caiu: confira e libere de novo.', 'warning')
     else:
@@ -172,6 +205,9 @@ def emissao_nfse_serie(cliente_id):
             return _volta(cliente_id, '#series')
         registrar('escrita.abriu_serie_nfse', 'fiscal', tabela='nfse_dps_controle', registro_id=sid,
                   depois={'empresa_id': cliente_id, 'serie': serie, 'ambiente': ambiente, 'inicial': inicial})
+        cfg_atual = NfseConfig.get(cliente_id) or {}
+        if ambiente == 1 and not cfg_atual.get('serie_nacional'):      # a numeração criada já é a das notas
+            NfseConfig.salvar(cliente_id, {'serie_nacional': serie}, usuario_id=current_user.id)
         flash(f"Série {serie} aberta ({'produção' if ambiente == 1 else 'teste'}).", 'success')
     elif acao == 'alternar':
         sid = request.form.get('serie_id', '')

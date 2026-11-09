@@ -29,19 +29,7 @@
     <span class="fin-selo"><i class="fas fa-id-card"></i> {{ empresa.nome_razao_social if empresa else emp_id }}</span>
 </div>
 
-{% if not cfg %}
-<div class="nf-teste on" style="background:#eff6ff; border-color:#93c5fd; color:#1e3a8a;">
-    Esta empresa ainda não tem configuração. Preencha e salve: a primeira nota só sai depois disso.
-</div>
-{% endif %}
-
-<form method="POST" action="{{ url_for('financeiro.notas_config', emp=emp_id) }}">
-{% include 'nfse/_matriz_campos.html' %}
-
-<div class="nf-acoes" style="justify-content:flex-end; margin-bottom:18px;">
-    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar configuração</button>
-</div>
-</form>
+{% include 'nfse/_matriz_cartoes.html' %}
 
 <div class="nf-sec" id="servicos">
     <h3><i class="fas fa-concierge-bell" style="color:#6d28d9;"></i> Serviços <small>a lista que a nota escolhe: o nome vai na lista, a descrição vira o texto da nota</small></h3>
@@ -134,8 +122,8 @@
     </form>
 </div>
 
-<div class="nf-sec">
-    <h3><i class="fas fa-list-ol" style="color:#1d4ed8;"></i> Séries <small>cada série tem numeração própria e um ambiente</small></h3>
+<div class="nf-sec" id="series">
+    <h3><i class="fas fa-list-ol" style="color:#1d4ed8;"></i> Séries <small>todas as numerações, inclusive as de teste e a da prefeitura de SP</small></h3>
     {% if series %}
     <div class="fin-rolar">
         <table class="fin-tab" style="min-width:0;">

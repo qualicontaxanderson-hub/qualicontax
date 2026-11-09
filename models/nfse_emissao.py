@@ -87,9 +87,14 @@ class NfseConfig:
             # Mudou algo numa empresa LIBERADA? A liberação cai: o Fiscal confere de novo
             # (06/11/2026). Vale para quem gravar — Fiscal ou Financeiro — porque a regra
             # mora aqui, no único escritor da matriz.
+            # Vazio e zero são o mesmo valor (08/11/2026): o formulário manda '' e a gravação guarda 0 —
+            # sem isso a primeira gravação dos cartões derrubaria a liberação sem nada ter mudado.
+            def _vz(x):
+                return x is None or (str(x).strip() in ('', '0') or _mesmo_numero(x, 0))
             revoga = bool(atual.get('liberado_em')) and any(
                 str(atual.get(k) if atual.get(k) is not None else '') != str(v if v is not None else '')
-                and not _mesmo_numero(atual.get(k), v) for k, v in limpos.items())
+                and not _mesmo_numero(atual.get(k), v) and not (_vz(atual.get(k)) and _vz(v))
+                for k, v in limpos.items())
             if revoga:
                 sets += ', liberado_em = NULL, liberado_por = NULL'
             execute_query(f'UPDATE nfse_emissao_config SET {sets}, atualizado_em = NOW(), alterado_por = %s '
@@ -451,7 +456,7 @@ def empresa_da_matriz(cliente_id):
     """O que o CADASTRO diz da empresa (o Cadastro começa, o Fiscal termina)."""
     c = execute_query(
         'SELECT id, numero_cliente, nome_razao_social, nome_fantasia, cpf_cnpj, inscricao_municipal, email, '
-        '       regime_tributario, situacao, COALESCE(avulso, 0) AS avulso '
+        '       regime_tributario, situacao, COALESCE(avulso, 0) AS avulso, cnae_fiscal, cnae_fiscal_descricao '
         '  FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
     if not c:
         return None
@@ -472,6 +477,7 @@ def empresa_da_matriz(cliente_id):
         'situacao': c.get('situacao') or '', 'avulso': bool(c.get('avulso')),
         'cidade': t.get('cidade') or '', 'uf': t.get('uf') or '', 'ibge': t.get('ibge') or '',
         'certificado': cert,
+        'cnae': _dig(c.get('cnae_fiscal')), 'cnae_descricao': c.get('cnae_fiscal_descricao') or '',
     }
 
 
@@ -479,7 +485,10 @@ def sugestao_da_matriz(emp):
     """Primeiro preenchimento: o que dá para tirar do cadastro (regime, município, IM,
     e-mail) + o padrão da reforma que domina as notas (CST 000 / 000001 / 100301)."""
     op = REGIME_PARA_OP.get(emp.get('regime') or '')
+    from utils.nfse_servicos import sugerir_servico
+    ctrib, nbs = sugerir_servico(emp.get('id'), emp.get('documento'), emp.get('cnae'))
     return {
+        'cod_trib_nac': ctrib, 'cod_nbs': nbs,
         'emissor': PROVEDOR_DO_MUNICIPIO.get(emp.get('ibge') or '', 'nacional'),
         'municipio_ibge': emp.get('ibge') or '',
         'inscricao_municipal': emp.get('im') or '', 'email_remetente': emp.get('email') or '',
@@ -495,18 +504,25 @@ def sugestao_da_matriz(emp):
     }
 
 
-def faltas_da_matriz(emp, cfg, series, sugestao=None):
+CARTOES = (('empresa', 'A empresa'), ('prefeitura', 'Prefeitura'), ('servico', 'Serviço'),
+           ('impostos', 'Impostos'), ('numeracao', 'Numeração'))
+
+
+def faltas_da_matriz(emp, cfg, series, sugestao=None, aceita=False):
     """Tudo o que impede (``trava``) ou merece atenção (``aviso``) antes de liberar.
-    Cada item: {nivel, onde, texto}. ``onde``: cadastro | certificado | matriz | serie.
-    Sem configuração salva, confere a ``sugestao`` (o que a tela mostra) para a lista já
-    sair inteira na primeira visita — e trava por não estar salva."""
+    Cada item: {nivel, onde, cartao, texto}. ``onde``: cadastro | certificado | matriz | serie
+    (quem resolve); ``cartao``: empresa | prefeitura | servico | impostos | numeracao (onde a
+    tela de cartões mostra — 08/11/2026). Sem configuração salva, confere a ``sugestao`` (o que
+    a tela mostra) para a lista já sair inteira na primeira visita — e trava por não estar salva.
+    ``aceita``: resultado já consultado de ``aceita_emissor_nacional`` (False = consultar aqui)."""
     f = []
+    _cartao = {'cadastro': 'empresa', 'certificado': 'empresa', 'serie': 'numeracao', 'matriz': 'prefeitura'}
 
-    def trava(onde, texto):
-        f.append({'nivel': 'trava', 'onde': onde, 'texto': texto})
+    def trava(onde, texto, cartao=None):
+        f.append({'nivel': 'trava', 'onde': onde, 'cartao': cartao or _cartao[onde], 'texto': texto})
 
-    def aviso(onde, texto):
-        f.append({'nivel': 'aviso', 'onde': onde, 'texto': texto})
+    def aviso(onde, texto, cartao=None):
+        f.append({'nivel': 'aviso', 'onde': onde, 'cartao': cartao or _cartao[onde], 'texto': texto})
 
     # --- cadastro (o Cadastro resolve) ---
     if len(emp['documento']) == 11:
@@ -538,79 +554,93 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
 
     # --- matriz (o Fiscal resolve) ---
     if not cfg:
-        trava('matriz', 'Configuração ainda não salva.')
+        trava('matriz', 'Configuração ainda não salva.', 'empresa')
         if not sugestao:
             return f
         cfg = sugestao
     op = cfg.get('op_simp_nac')
     esperado = REGIME_PARA_OP.get(emp['regime'])
     if esperado and op != esperado:
-        trava('matriz', f"Simples Nacional da configuração ({OP_SIMP_NAC.get(op, 'vazio')}) não bate "
-                        f"com o regime do cadastro ({emp['regime_rotulo']}).")
+        trava('matriz', f"O regime da configuração ({OP_SIMP_NAC.get(op, 'vazio')}) não bate "
+                        f"com o do cadastro ({emp['regime_rotulo']}).", 'impostos')
     if op not in OP_PROVADOS:
-        trava('matriz', f"{OP_SIMP_NAC.get(op, 'Este regime')}: ainda não provado no emissor. "
-                        'Libera depois das notas de teste (etapa 2).')
+        trava('matriz', f"{OP_SIMP_NAC.get(op, 'Este regime')}: ainda não foi provado no emissor.", 'impostos')
     if op == 3 and not cfg.get('reg_ap_trib_sn'):
-        trava('matriz', 'Falta a apuração no Simples.')
-    if op == 1 and not float(cfg.get('aliquota_iss') or 0) > 0:
-        # Provado 06/11: sem alíquota, o governo aplica a parametrizada pelo município.
-        aviso('matriz', 'Alíquota do ISS em branco: o governo aplica a do município.')
+        trava('matriz', 'Falta a apuração no Simples.', 'impostos')
     if op == 1 and (len(_dig(cfg.get('piscofins_cst'))) != 2 or not float(cfg.get('aliquota_pis') or 0) > 0
                     or not float(cfg.get('aliquota_cofins') or 0) > 0):
-        trava('matriz', 'Fora do Simples: CST e alíquotas do PIS/COFINS da empresa.')
+        trava('matriz', 'Fora do Simples: preencha o PIS e a COFINS da empresa.', 'impostos')
     emissor = cfg.get('emissor') or 'nacional'
     if emissor == 'sp':
         trava('matriz', 'Pela prefeitura de São Paulo só a Qualicontax foi provada: use o Emissor Nacional.')
     if emissor == 'fiorilli':
         if not (cfg.get('ws_url') or '').strip().lower().startswith('http'):
-            trava('matriz', 'ISSWeb (Fiorilli): falta o endereço do webservice, que a prefeitura informa.')
+            trava('matriz', 'Falta o endereço do sistema da prefeitura (a prefeitura informa).')
         if not _dig(cfg.get('inscricao_municipal')):
-            trava('matriz', 'ISSWeb (Fiorilli): a inscrição municipal é obrigatória.')
-        aviso('matriz', 'ISSWeb (Fiorilli): a prefeitura precisa ter credenciado a empresa para emitir por sistema '
-                        'e a atividade da nota tem que estar no cadastro municipal dela.')
+            trava('matriz', 'A inscrição municipal é obrigatória para o sistema da prefeitura.')
+        aviso('matriz', 'A prefeitura precisa ter credenciado a empresa para emitir por sistema, e o serviço '
+                        'tem que estar no cadastro municipal dela.')
     if len(_dig(cfg.get('municipio_ibge'))) != 7:
-        trava('matriz', 'Município da empresa (código IBGE, 7 dígitos).')
+        trava('matriz', 'Falta o município da empresa (código IBGE).')
     else:
         # O Emissor Nacional só emite onde a prefeitura aderiu (E0037/E0039, 06/11/2026).
-        from utils.integrations.nfse_adn.convenio import aceita_emissor_nacional
-        aceita = aceita_emissor_nacional(cfg.get('municipio_ibge'), ambiente=1)
+        if aceita is False:
+            from utils.integrations.nfse_adn.convenio import aceita_emissor_nacional
+            aceita = aceita_emissor_nacional(cfg.get('municipio_ibge'), ambiente=1)
         cidade = emp.get('cidade') or _dig(cfg.get('municipio_ibge'))
         if (_dig(cfg.get('municipio_ibge')) != '3550308' and not _dig(cfg.get('inscricao_municipal'))
                 and aceita == 'sim'):
-            aviso('matriz', 'Sem inscrição municipal: alguns municípios exigem na nota (Goiatuba recusou sem ela).')
+            aviso('matriz', 'Sem inscrição municipal: algumas prefeituras recusam a nota sem ela.')
         if aceita in ('nao', 'sem_convenio') and emissor == 'fiorilli':
             pass                     # o município não aceita o nacional, mas a nota vai pelo ISSWeb dele
         elif aceita in ('nao', 'sem_convenio') and _dig(cfg.get('municipio_ibge')) in PROVEDOR_DO_MUNICIPIO:
-            trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: em "Emissor padrão" escolha '
-                            f'"{EMISSORES[PROVEDOR_DO_MUNICIPIO[_dig(cfg.get("municipio_ibge"))]]}" e preencha o '
-                            'endereço do webservice que a prefeitura informar.')
+            trava('matriz', f'{cidade} não aceita o Emissor Nacional: a nota sai pelo sistema da prefeitura. '
+                            'Escolha esse caminho e preencha o endereço que a prefeitura informar.')
         elif aceita in ('nao', 'sem_convenio'):
-            trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: as notas desta empresa '
-                            'só saem pelo sistema da própria prefeitura (integração ainda não feita).')
+            trava('matriz', f'{cidade} não aceita o Emissor Nacional, e a ligação com o sistema dessa '
+                            'prefeitura ainda não foi feita.')
         elif aceita is None:
-            aviso('matriz', f'Não consegui consultar se {cidade} aceita o Emissor Nacional agora; '
+            aviso('matriz', f'Não consegui consultar agora se {cidade} aceita o Emissor Nacional; '
                             'a conferência é refeita ao abrir de novo.')
-    if len(_dig(cfg.get('cod_trib_nac'))) != 6:
-        trava('matriz', 'Código de tributação nacional (6 dígitos).')
+    ctrib = _dig(cfg.get('cod_trib_nac'))
     nbs = _dig(cfg.get('cod_nbs'))
-    if len(nbs) != 9 or nbs == '999999999':
-        trava('matriz', 'NBS (9 dígitos; o governo recusa 999999999).')
+    if len(ctrib) != 6:
+        trava('matriz', 'Escolha o serviço que a empresa presta.', 'servico')
+    else:
+        from utils.nfse_servicos import nbs_ok, nome_servico
+        if not nome_servico(ctrib):
+            trava('matriz', f'O código de serviço {ctrib} não está na lista oficial.', 'servico')
+        if len(nbs) != 9 or nbs == '999999999':
+            trava('matriz', 'Escolha o tipo de serviço (NBS) na lista.', 'servico')
+        elif not nbs_ok(ctrib, nbs):
+            trava('matriz', 'A NBS escolhida não é uma das aceitas pelo governo para esse serviço '
+                            '(tabela oficial): escolha uma da lista.', 'servico')
     if not (cfg.get('email_remetente') or '').strip():
-        aviso('matriz', 'Sem e-mail remetente: a nota sai sem contato do prestador.')
+        aviso('matriz', 'Sem e-mail da empresa: a nota sai sem contato do prestador.')
 
-    # --- série de produção ---
+    # --- numeração (série de produção) ---
     serie = (cfg.get('serie_nacional') or '').strip().upper()
     if not serie:
-        trava('serie', 'Escolha a série do emissor nacional.')
+        trava('serie', 'Falta criar a numeração das notas.')
     else:
         s = next((x for x in series if str(x['serie']).upper() == serie), None)
         if not s:
-            trava('serie', f'A série {serie} ainda não foi aberta.')
+            trava('serie', f'A numeração (série {serie}) ainda não foi criada.')
         elif not s['ativo']:
-            trava('serie', f'A série {serie} está desligada.')
+            trava('serie', f'A numeração (série {serie}) está desligada.')
         elif int(s['ambiente']) != 1:
-            trava('serie', f'A série {serie} é de TESTE: a padrão tem que ser de produção.')
+            trava('serie', f'A série {serie} é de TESTE: a numeração padrão tem que ser de produção.')
     return f
+
+
+def cartoes_da_matriz(faltas):
+    """[{chave, rotulo, travas, avisos, ok}] na ordem da tela; ``prontos`` = quantos sem trava."""
+    out = []
+    for k, rot in CARTOES:
+        tv = [x for x in faltas if x['cartao'] == k and x['nivel'] == 'trava']
+        av = [x for x in faltas if x['cartao'] == k and x['nivel'] == 'aviso']
+        out.append({'chave': k, 'rotulo': rot, 'travas': tv, 'avisos': av, 'ok': not tv})
+    return out
 
 
 def liberar_matriz(empresa_id, usuario_id):
@@ -629,3 +659,37 @@ def situacao_das_matrizes():
     """{empresa_id: 'liberada' | 'configurada'} para a lista do Fiscal (sem linha = sem configuração)."""
     rows = execute_query('SELECT * FROM nfse_emissao_config', fetch=True) or []
     return {r['empresa_id']: ('liberada' if r.get('liberado_em') else 'configurada') for r in rows}
+
+
+def contexto_da_matriz(cliente_id, emp=None):
+    """Tudo o que a tela de cartões precisa (08/11/2026) — UM montador para o Fiscal e o
+    Financeiro: empresa, configuração (salva ou sugerida), séries, o que falta por cartão,
+    se a cidade aceita o Emissor Nacional, atividades do CNPJ e histórico de notas."""
+    from utils import nfse_servicos as S
+    from utils.integrations.nfse_adn.convenio import aceita_emissor_nacional
+    emp = emp or empresa_da_matriz(cliente_id)
+    if not emp:
+        return None
+    salvo = NfseConfig.get(cliente_id)
+    sugestao = sugestao_da_matriz(emp)
+    cfg = dict(salvo) if salvo else dict(sugestao)
+    series = NfseEmitida.series(cliente_id)
+    ibge = _dig(cfg.get('municipio_ibge'))
+    aceita = aceita_emissor_nacional(ibge, ambiente=1) if len(ibge) == 7 else None
+    faltas = faltas_da_matriz(emp, salvo, series, sugestao=sugestao, aceita=aceita)
+    cartoes = cartoes_da_matriz(faltas)
+    ctrib = _dig(cfg.get('cod_trib_nac'))
+    return {
+        'emp': emp, 'cfg': cfg, 'salva': bool(salvo), 'sugestao': sugestao, 'series': series,
+        'faltas': faltas, 'cartoes': {c['chave']: c for c in cartoes}, 'cartoes_lista': cartoes,
+        'prontos': sum(1 for c in cartoes if c['ok']) if salvo else 0,
+        'aceita': aceita, 'provedor': PROVEDOR_DO_MUNICIPIO.get(ibge, ''),
+        'atividades': S.atividades_da_empresa(emp['documento'], emp.get('cnae'), emp.get('cnae_descricao')),
+        'historico': [{'ctrib': c, 'ctrib_fmt': S.fmt_ctrib(c), 'nome': S.nome_servico(c), 'nbs': n, 'qtd': q}
+                      for c, n, q in S.historico_de_notas(cliente_id, emp['documento'])],
+        'servico_atual': {'ctrib': ctrib, 'ctrib_fmt': S.fmt_ctrib(ctrib) if ctrib else '',
+                          'nome': S.nome_servico(ctrib) if ctrib else ''},
+        'nbs_opcoes': S.nbs_sugeridas(ctrib) if ctrib else [],
+        'meta_item': S.meta_do_item(ctrib) if ctrib else {},
+        'fmt_nbs': S.fmt_nbs,
+    }

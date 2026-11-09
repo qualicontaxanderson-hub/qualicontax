@@ -3,7 +3,7 @@
 
 {% block extra_css %}
 <style>
-/* Fiscal → EMISSÃO NFS-E (06/11/2026). Os CAMPOS vêm de nfse/_matriz_campos.html,
+/* Fiscal → EMISSÃO NFS-E (06/11/2026). Os CARTÕES vêm de nfse/_matriz_cartoes.html,
    o mesmo pedaço do Financeiro; aqui só a moldura (prefixo em-). */
 .em-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:6px 0 16px; }
 .em-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
@@ -46,6 +46,23 @@
 .em-lib .btn[disabled] { opacity:.45; cursor:not-allowed; filter:grayscale(.6); }
 .em-aviso { background:#eff6ff; border:1px solid #93c5fd; color:#1e3a8a; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
 .em-aviso.fin { background:#f0fdf4; border-color:#86efac; color:#14532d; }
+.vg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:8px}
+.vg-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:flex;gap:14px;align-items:center}
+.vg-kpi b{font-size:24px;display:block;line-height:1.1;color:#0f172a}.vg-kpi small{color:#64748b;font-size:12.5px}
+.vg-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+.vg-ico.ok{background:#dcfce7;color:#15803d}.vg-ico.warn{background:#fef3c7;color:#b45309}.vg-ico.info{background:#e0f2fe;color:#0369a1}.vg-ico.off{background:#f1f5f9;color:#475569}
+.vg-secao{display:flex;align-items:baseline;gap:10px;margin:22px 0 12px;flex-wrap:wrap}.vg-secao h2{font-size:15px;margin:0;color:#0f172a}.vg-secao span{color:#64748b;font-size:13px}
+.vg-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.vg-emp{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;color:inherit;text-decoration:none;min-width:0}
+a.vg-emp:hover{border-color:#16a34a;box-shadow:0 2px 12px rgba(22,163,74,.12)}
+.vg-emp.vg-linha{flex-direction:row;align-items:center}
+.vg-emp-h{display:flex;gap:12px;align-items:center}.vg-emp-h b{display:block;font-size:14px;color:#0f172a;overflow-wrap:anywhere}.vg-emp-h small{color:#64748b;font-size:12px}
+.vg-av{min-width:38px;height:38px;padding:0 6px;border-radius:10px;background:#eef2ff;color:#4338ca;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box}
+.vg-av.off{background:#f1f5f9;color:#475569}
+.vg-barra{height:6px;border-radius:99px;background:#e2e8f0;overflow:hidden}.vg-barra i{display:block;height:100%;border-radius:99px}
+.vg-emp-p{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#64748b}.vg-emp-p .warn{color:#b45309;text-align:right}.vg-emp-p .ok{color:#15803d}
+.mc-chip{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:4px 11px;font-size:12px;font-weight:700;white-space:nowrap}.mc-chip.ok{background:#dcfce7;color:#15803d}
+.mc-btn{display:inline-flex;align-items:center;gap:8px;border-radius:11px;padding:9px 14px;font-weight:700;font-size:13px;text-decoration:none;white-space:nowrap}.mc-btn-o{background:#fff;border:1.5px solid #e2e8f0;color:#0f172a}
 .em-intro { font-size:13px; color:#475569; margin:0 0 14px; }
 @media (max-width: 860px) { .em-topo { grid-template-columns:minmax(0,1fr); } }
 </style>
@@ -57,24 +74,39 @@
 {% include 'escrita_fiscal/_nfse_hub.html' %}
 
 {% if not emp %}
-<p class="em-intro">O Cadastro começa a ficha; aqui o Fiscal completa a parte da nota e marca <b>Conferido e liberado</b>. Sem a marca, a empresa não emite. Escolha a empresa no alto.</p>
-<div class="em-kpis">
-    <div class="em-kpi"><b>{{ resumo.liberadas }}</b><span>liberadas para emitir</span></div>
-    <div class="em-kpi"><b>{{ resumo.configuradas }}</b><span>configuradas, falta conferir</span></div>
-    <div class="em-kpi"><b>{{ resumo.sem }}</b><span>sem configuração</span></div>
+<div class="vg-kpis">
+    <div class="vg-kpi"><span class="vg-ico ok"><i class="fas fa-circle-check"></i></span><div><b>{{ resumo.liberadas }}</b><small>liberadas para emitir</small></div></div>
+    <div class="vg-kpi"><span class="vg-ico warn"><i class="fas fa-hourglass-half"></i></span><div><b>{{ resumo.configuradas }}</b><small>em configuração</small></div></div>
+    <div class="vg-kpi"><span class="vg-ico info"><i class="fas fa-briefcase"></i></span><div><b>{{ resumo.aptas }}</b><small>prestam serviço e têm certificado, ainda sem configuração</small></div></div>
+    <div class="vg-kpi"><span class="vg-ico off"><i class="fas fa-building"></i></span><div><b>{{ resumo.sem }}</b><small>sem configuração no total</small></div></div>
 </div>
 {% if com %}
-<div class="em-grade">
+<div class="vg-secao"><h2>Configuradas</h2><span>o quanto falta em cada uma</span></div>
+<div class="vg-grade">
     {% for e in com %}
-    <a class="em-card" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}">
-        <strong>{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}</strong>
-        <small>{{ e.cpf_cnpj or '' }}</small><br>
-        <span class="em-pill {{ e.situacao }}">{{ 'LIBERADA' if e.situacao == 'liberada' else 'FALTA CONFERIR' }}</span>
+    <a class="vg-emp" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}">
+        <div class="vg-emp-h"><span class="vg-av">{{ e.numero_cliente or '-' }}</span>
+            <div style="min-width:0"><b>{{ e.nome_razao_social }}</b><small>{{ e.cidade or '—' }}{% if e.regime %} · {{ e.regime }}{% endif %}</small></div>
+            {% if e.situacao == 'liberada' %}<span class="mc-chip ok" style="margin-left:auto"><i class="fas fa-check-double"></i> Liberada</span>{% endif %}</div>
+        <div class="vg-barra"><i style="width:{{ e.prontos * 20 }}%;background:{{ '#16a34a' if e.prontos == 5 else '#f59e0b' }}"></i></div>
+        <div class="vg-emp-p"><span>{{ e.prontos }} de 5 prontos</span>
+            <span class="{{ 'warn' if e.falta else 'ok' }}">{% if e.falta %}{{ e.falta|truncate(48) }}{% elif e.situacao != 'liberada' %}pronta para conferir{% else %}emitindo{% endif %}</span></div>
     </a>
     {% endfor %}
 </div>
-{% else %}
-<p style="color:#64748b;">Nenhuma empresa configurada ainda. Escolha uma na barra verde para começar.</p>
+{% endif %}
+{% if novas %}
+<div class="vg-secao"><h2>Começar uma nova</h2><span>empresas que prestam serviço (pela atividade principal) e têm certificado válido</span></div>
+<div class="vg-grade">
+    {% for e in novas %}
+    <div class="vg-emp vg-linha">
+        <div class="vg-emp-h" style="flex:1;min-width:0"><span class="vg-av off">{{ e.numero_cliente or '-' }}</span>
+            <div style="min-width:0"><b>{{ e.nome_razao_social }}</b><small>{{ e.regime }}{% if e.atividade %} · {{ e.atividade|truncate(40) }}{% endif %}</small></div></div>
+        <a class="mc-btn mc-btn-o" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}"><i class="fas fa-plus"></i> Configurar</a>
+    </div>
+    {% endfor %}
+</div>
+<p class="em-intro" style="margin-top:12px">Não achou? Escolha qualquer empresa no alto da página.</p>
 {% endif %}
 
 {% else %}
@@ -82,127 +114,7 @@
 {% if financeiro %}
 <div class="em-aviso fin"><i class="fas fa-building"></i> <b>{{ financeiro }}</b> é empresa do Financeiro: as notas dela saem por <b>Financeiro → Cobranças</b>. A configuração é a mesma: o que mudar aqui vale lá.</div>
 {% endif %}
-{% if not salva %}
-<div class="em-aviso"><i class="fas fa-magic"></i> Esta empresa ainda não tem configuração. Os campos abaixo vieram do <b>cadastro</b> (regime, município, e-mail): confira, complete os códigos do serviço e salve.</div>
-{% endif %}
-
-<div class="em-topo">
-    <div class="em-box">
-        <h3><i class="fas fa-id-card" style="color:#0369a1;"></i> Do cadastro
-            <a href="{{ url_for('clientes.detalhes', id=emp.id) }}" style="margin-left:auto; font-size:12px; font-weight:600;">Abrir cadastro</a></h3>
-        <dl class="em-dados">
-            <dt>Empresa</dt><dd>{{ emp.numero_cliente or '' }} - {{ emp.nome }}</dd>
-            <dt>CNPJ</dt><dd>{{ emp.doc_fmt or '—' }}</dd>
-            <dt>Regime</dt><dd>{{ emp.regime_rotulo }}</dd>
-            <dt>Município</dt><dd>{{ emp.cidade or '—' }}{{ ' / ' ~ emp.uf if emp.uf }}{{ ' · IBGE ' ~ emp.ibge if emp.ibge }}</dd>
-            <dt>Insc. municipal</dt><dd>{{ emp.im or '—' }}</dd>
-            <dt>Certificado</dt>
-            <dd>{% if emp.certificado %}{% set st = emp.certificado.status %}
-                {% if st.nivel == 'vencido' %}Vencido{% elif st.nivel == 'laranja' %}Vence em {{ st.dias }} dias{% elif st.nivel == 'ok' %}Válido{% else %}Sem validade{% endif %}
-                {% if emp.certificado.validade %} · até {{ emp.certificado.validade|format_date }}{% endif %}
-                {% else %}Sem certificado{% endif %}</dd>
-        </dl>
-    </div>
-
-    <div class="em-box">
-        <h3><i class="fas fa-clipboard-check" style="color:#15803d;"></i> Para emitir</h3>
-        {% if faltas %}
-            {% for f in faltas %}
-            <div class="em-falta {{ f.nivel }}">
-                <i class="fas fa-{{ 'circle-xmark' if f.nivel == 'trava' else 'triangle-exclamation' }}"></i>
-                <em>{{ {'cadastro': 'Cadastro', 'certificado': 'Certificado', 'matriz': 'Configuração', 'serie': 'Série'}[f.onde] }}</em>
-                <span>{{ f.texto }}</span>
-            </div>
-            {% endfor %}
-        {% else %}
-            <p class="em-ok"><i class="fas fa-circle-check"></i> Nada falta.</p>
-        {% endif %}
-        <div class="em-lib">
-            {% if salva and cfg.liberado_em %}
-            <span><span class="em-pill liberada">LIBERADA</span> por {{ liberado_por or '—' }} em {{ cfg.liberado_em.strftime('%d/%m/%Y %H:%M') }}</span>
-            {% if not financeiro %}<a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-file-invoice"></i> Emitir nota</a>{% endif %}
-            <form method="POST" action="{{ url_for('escrita_fiscal.emissao_nfse_liberar', cliente_id=emp.id) }}"
-                  onsubmit="return confirm('Retirar a liberação? A empresa para de emitir até ser conferida de novo.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="revogar">
-                <button class="btn btn-outline"><i class="fas fa-lock"></i> Retirar liberação</button>
-            </form>
-            {% else %}
-            <span>{% if travas %}<span class="em-pill trava">{{ travas|length }} PENDÊNCIA(S)</span> resolva para liberar{% else %}Tudo certo: confira e libere.{% endif %}</span>
-            <form method="POST" action="{{ url_for('escrita_fiscal.emissao_nfse_liberar', cliente_id=emp.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="liberar">
-                <button class="btn btn-primary" {{ 'disabled' if travas }}><i class="fas fa-check-double"></i> Conferido e liberado</button>
-            </form>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<form method="POST" action="{{ url_for('escrita_fiscal.emissao_nfse_salvar', cliente_id=emp.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    {% include 'nfse/_matriz_campos.html' %}
-    <div class="nf-acoes" style="justify-content:flex-end; margin-bottom:18px;">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar configuração</button>
-    </div>
-</form>
-
-<div class="nf-sec" id="series">
-    <h3><i class="fas fa-list-ol" style="color:#1d4ed8;"></i> Séries <small>cada série tem numeração própria; a padrão tem que ser de produção</small></h3>
-    {% if series %}
-    <div style="overflow-x:auto;">
-        <table class="fin-tab" style="min-width:0; width:100%;">
-            <thead><tr><th>Série</th><th>Ambiente</th><th>Último número</th><th>Observação</th><th></th></tr></thead>
-            <tbody>
-            {% for s in series %}
-            <tr style="{{ 'opacity:.55;' if not s.ativo }}">
-                <td><strong>{{ s.serie }}</strong>{% if s.serie|string == (cfg.serie_nacional or '')|string %} <span class="em-pill liberada">PADRÃO</span>{% endif %}</td>
-                <td>{{ 'Produção' if s.ambiente == 1 else 'Teste' }}</td>
-                <td>{{ s.ultimo_numero }}</td>
-                <td>{{ s.observacao or '' }}</td>
-                <td>
-                    <form method="POST" action="{{ url_for('escrita_fiscal.emissao_nfse_serie', cliente_id=emp.id) }}" style="display:inline;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="alternar">
-                        <input type="hidden" name="serie_id" value="{{ s.id }}">
-                        <button class="btn btn-outline btn-sm">{{ 'Desligar' if s.ativo else 'Religar' }}</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p style="color:#64748b;">Nenhuma série aberta. Sem série não há numeração.</p>
-    {% endif %}
-
-    <form method="POST" action="{{ url_for('escrita_fiscal.emissao_nfse_serie', cliente_id=emp.id) }}" style="margin-top:14px; border-top:1px dashed #e2e8f0; padding-top:12px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="abrir">
-        <div class="form-row">
-            <div class="form-group">
-                <label>Nova série</label>
-                <input type="text" name="serie" class="form-control" maxlength="5" required inputmode="numeric" placeholder="Ex.: 1">
-            </div>
-            <div class="form-group">
-                <label>Ambiente</label>
-                <select name="ambiente" class="form-control">
-                    <option value="1">Produção — a nota vale</option>
-                    <option value="2">Teste — ambiente de homologação do governo</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Último número já usado</label>
-                <input type="number" name="numero_inicial" class="form-control" min="0" value="0">
-                <span class="nf-ajuda">Se a empresa já emitia em outro sistema nesta série, o último número de lá. Série nova: 0.</span>
-            </div>
-            <div class="form-group">
-                <label>Observação</label>
-                <input type="text" name="observacao" class="form-control" maxlength="255">
-            </div>
-        </div>
-        <div class="nf-acoes" style="justify-content:flex-end;">
-            <button type="submit" class="btn btn-outline"><i class="fas fa-plus"></i> Abrir série</button>
-        </div>
-    </form>
-</div>
+{% include 'nfse/_matriz_cartoes.html' %}
 {% endif %}
 {% endblock %}
 
