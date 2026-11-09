@@ -219,16 +219,25 @@ def _ibge_do_cep(cep):
         return ''
 
 
-def preencher_por_documento(empresa_id, doc):
+def preencher_por_documento(empresa_id, doc, escritorio=True):
     """O que a tela recebe ao digitar o CPF/CNPJ: {'origem', 'dados'|'erro'}.
-    origem: lista (já é tomador desta empresa) | cadastro (cliente do escritório) | receita | nada."""
+    origem: lista (já é tomador desta empresa) | cadastro (cliente do escritório) | receita | nada.
+
+    Regra do Anderson (09/11/2026) — QUEM emite decide de onde vêm os dados:
+    * ``escritorio=True`` (equipe emitindo pela empresa do cliente): lista da empresa →
+      NOSSO cadastro de clientes → Receita. Pode usar tudo.
+    * ``escritorio=False`` (o próprio cliente, no futuro portal): lista da empresa → Receita.
+      NUNCA o nosso cadastro: "teria que cadastrar seu cliente ... mesmo que tenhamos aqui na
+      nossa BASE". O e-mail da Receita vem preenchido; a pessoa troca se quiser e grava ao salvar.
+    * O que o escritório já gravou na lista da empresa é da lista: o cliente vê no portal (A = c).
+    """
     d = _dig(doc)
     if not documento_valido(d):
         return {'origem': 'nada', 'erro': 'CPF/CNPJ inválido (confira os dígitos).'}
     ja = NfseTomador.por_documento(empresa_id, d)
     if ja:
         return {'origem': 'lista', 'dados': como_tomador(ja)}
-    c = execute_query(
+    c = None if not escritorio else execute_query(
         "SELECT id FROM clientes WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '/', ''), '-', '') = %s "
         " ORDER BY (situacao = 'ATIVO') DESC, id LIMIT 1", (d,), fetch=True, fetch_one=True)
     if c:
