@@ -1370,12 +1370,17 @@ def detalhes(id):
         reserva, reserva_csrf = dados_reserva(id), csrf_token()
         if reserva is not None:
             reserva['quem'] = quem_ve_empresa(id) or []
-            reserva['contagem'] = [sum(1 for u in reserva['quem'] if u['ve'] and u['deps'][i]['tem'])
+            reserva['contagem'] = [sum(1 for u in reserva['quem'] if u['deps'][i]['aberto'])
                                    for i in range(len(reserva['quem'][0]['deps']) if reserva['quem'] else 0)]
 
     _falta = AC.pendencias_do_cadastro(id)   # o "O que falta" da tela única: a regra do A CADASTRAR
+    # 09/11/2026: Financeiro da ficha só para admin + quem vê os honorários de todas as empresas;
+    # empresa reservada mostra só o cadastro a quem não é admin nem exceção.
+    from utils.acesso import empresa_reservada_para_mim
+    bloq_reserva = empresa_reservada_para_mim(id)
+    pode_fin = current_user.is_admin() or current_user.has_permission('financeiro.honorarios')
     return render_template('clientes/detalhes.html',
-                         reserva=reserva,
+                         reserva=reserva, bloq_reserva=bloq_reserva, pode_fin=pode_fin,
                          reserva_csrf=reserva_csrf,
                          dfe_cursor=dfe_cursor,
                          cliente=cliente,
@@ -1458,6 +1463,9 @@ def salvar_campos(id):
     desconhecidos = [k for k in campos if k not in _ROTULO_CAMPO]
     if desconhecidos:
         return jsonify(ok=False, erro='Campo que esta tela não grava: ' + ', '.join(desconhecidos)), 400
+    # Cobrança é do Financeiro (09/11/2026): a ficha esconde o bloco e o servidor recusa.
+    if 'cobranca' in campos and not (current_user.is_admin() or current_user.has_permission('financeiro.honorarios')):
+        return jsonify(ok=False, erro='A cobrança dos honorários é alterada pelo Financeiro.'), 403
 
     pj = cliente.get('tipo_pessoa') != 'PF'
     sets, antes, depois, erros = {}, {}, {}, []

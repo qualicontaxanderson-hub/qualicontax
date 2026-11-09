@@ -394,8 +394,50 @@ class AcessoIndisponivel(Exception):
     """O banco não respondeu quem pode ver o quê. Falha FECHADA."""
 
 
+# Telas de CADASTRO onde a empresa reservada continua visível (09/11/2026). Anderson: "o
+# Acesso ao Cadastro todos podem ter, só o Fiscal, Contábil, Financeiro e outros que não
+# terão". Aqui a reserva não esconde a empresa; no resto do sistema (Fiscal, Contábil,
+# Financeiro, DP, notas, downloads, Q-Robô, histórico, certificado) ela segue escondida.
+# Rota nova de cadastro NÃO entra sozinha: fica fechada até ser posta aqui (nega por padrão).
+RESERVA_VISIVEL_NO_CADASTRO = frozenset({
+    'clientes.index', 'clientes.relatorio', 'clientes.detalhes', 'clientes.salvar_campos',
+    'clientes.editar', 'clientes.avulsos', 'clientes.converter_avulso', 'clientes.inativar',
+    'clientes.novo_endereco', 'clientes.excluir_endereco', 'clientes.salvar_responsaveis',
+    'clientes.responsaveis_convite_novo', 'clientes.novo_contato', 'clientes.editar_contato',
+    'clientes.excluir_contato', 'clientes.novo_cadastro_adicional', 'clientes.excluir_cadastro_adicional',
+    'clientes.socios_buscar_pf', 'clientes.novo_socio', 'clientes.saida_socio', 'clientes.excluir_socio',
+    'clientes.vincular_contador', 'clientes.desvincular_contador', 'clientes.cadastros_buscar',
+    'clientes.socios_da_raiz', 'clientes.socios_da_receita', 'clientes.a_cadastrar',
+    'clientes.a_cadastrar_avulsos', 'clientes.socios_fila', 'clientes.socios_fila_vincular',
+    'clientes.socios_fila_ignorar', 'clientes.adicionar_grupo', 'clientes.remover_grupo',
+    'clientes.anp_importar_pdf', 'clientes.anp_salvar', 'clientes.anp_detalhe', 'clientes.anp_editar',
+    'clientes.anp_excluir', 'clientes.anp_novo',
+    'grupos.index', 'grupos.novo', 'grupos.detalhes', 'grupos.editar', 'grupos.adicionar_cliente',
+    'grupos.remover_cliente', 'grupos.buscar_empresas', 'grupos.incluir_empresa', 'grupos.mover_empresa',
+    'grupos.renomear',
+})
+
+
+def empresa_reservada_para_mim(cliente_id):
+    """True se a empresa é reservada e o usuário NÃO é admin nem exceção — vale em
+    QUALQUER tela, inclusive nas de cadastro. A ficha usa para esconder Financeiro,
+    certificado, notas recebidas, acompanhamento e histórico."""
+    try:
+        return int(cliente_id) in _ocultas_reais()
+    except (TypeError, ValueError):
+        return False
+
+
 def empresas_ocultas():
-    """frozenset dos cliente_id que o usuário da requisição NÃO pode ver.
+    """frozenset dos cliente_id que o usuário da requisição NÃO pode ver NESTA tela.
+    Nas telas de cadastro (RESERVA_VISIVEL_NO_CADASTRO) a reserva não esconde nada."""
+    if has_request_context() and request.endpoint in RESERVA_VISIVEL_NO_CADASTRO:
+        return frozenset()
+    return _ocultas_reais()
+
+
+def _ocultas_reais():
+    """frozenset dos cliente_id reservados que o usuário da requisição não vê.
 
     Vazio para admin, para quem não está logado (as rotas públicas não listam
     empresas e as outras o portão já mandou para o login) e fora de requisição
@@ -692,9 +734,13 @@ def quem_ve_empresa(cliente_id):
         for grupo, rotulo, ico in DEPARTAMENTOS:
             cat = PERMISSION_CATALOG.get(grupo, {})
             tem = sorted((cat[c] for c in cat if c in meus), key=str.lower)
-            deps.append({'rotulo': rotulo, 'ico': ico, 'tem': admin or bool(tem),
+            tem_dep = admin or bool(tem)
+            # Reservada (09/11/2026): o Cadastro continua aberto; o resto só para exceção.
+            deps.append({'rotulo': rotulo, 'ico': ico, 'tem': tem_dep,
+                         'aberto': tem_dep and (ve or grupo == 'Cadastros'),
                          'permissoes': ['tudo (administrador)'] if admin else tem})
-        out.append({'id': u['id'], 'nome': u['nome'], 'login': u['login'], 'admin': admin,
+        so_cadastro = not ve and deps[0]['aberto']
+        out.append({'id': u['id'], 'nome': u['nome'], 'login': u['login'], 'admin': admin, 'so_cadastro': so_cadastro,
                     've': ve, 'excecao': u['id'] in reserva['excecoes'],
                     'perfis': sorted(perfis.get(u['id'], set())), 'deps': deps,
                     'sem_perfil': not admin and not meus})

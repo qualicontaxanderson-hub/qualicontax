@@ -54,7 +54,8 @@
                 <span class="cli-rot">Falta</span>
                 <div class="gc-tags">
                     {% for k, rotulo, cor, ajuda in catalogo if k in c.pendencias %}
-                    <a class="acad-chip acad-{{ cor }}" href="{{ ficha }}#{{ alvo.get(k, '') }}" title="{{ ajuda }} · clique para ir direto ao campo">{{ rotulo }}</a>
+                    {% if k == 'cobranca' and not (current_user.is_admin() or current_user.has_permission('financeiro.honorarios')) %}<span class="acad-chip acad-{{ cor }}" title="{{ ajuda }} · o Financeiro resolve">{{ rotulo }}</span>
+                    {% else %}<a class="acad-chip acad-{{ cor }}" href="{{ ficha }}#{{ alvo.get(k, '') }}" title="{{ ajuda }} · clique para ir direto ao campo">{{ rotulo }}</a>{% endif %}
                     {% endfor %}
                 </div>
             </div>

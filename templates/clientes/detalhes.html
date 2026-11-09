@@ -519,6 +519,7 @@
 .qb .hc-busca { margin-left:auto; display:flex; align-items:center; gap:8px; height:36px; border:1px solid #e2e8f0; border-radius:10px; padding:0 11px; color:#94a3b8; background:#fff; min-width:0; width:260px; max-width:100%; }
 .qb .hc-busca input { border:0; outline:0; font:inherit; font-size:13px; color:#0f172a; flex:1; min-width:0; background:transparent; }
 .qb .hc-busca:focus-within { border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.15); }
+.qb .qb-pend-semlink { cursor:default; }
 .qb .hc-filtros { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
 .qb .hc-f { font:inherit; font-size:12.5px; font-weight:600; color:#475569; background:#f8fafc; border:1px solid #e2e8f0; border-radius:99px; padding:5px 12px; cursor:pointer; }
 .qb .hc-f b { color:#94a3b8; margin-left:3px; } .qb .hc-f.on { background:#0f3d2e; color:#fff; border-color:#0f3d2e; } .qb .hc-f.on b { color:#86efac; }
@@ -801,7 +802,7 @@
         <nav class="qb-pills tu-ind" aria-label="Seções do cadastro">
             <a href="#identificacao"><i class="qb-pt qb-pt-ok"></i>Visão geral</a>
             {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'im', 'ie']) }}"></i>Registros</a>{% endif %}
-            <a href="#financeiro"><i class="qb-pt qb-pt-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro</a>
+            {% if pode_fin %}<a href="#financeiro"><i class="qb-pt qb-pt-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro</a>{% endif %}
             <a href="#regime"><i class="qb-pt qb-pt-{{ bol(['regime', 'origem', 'conferir']) }}"></i>{{ 'Regime' if pj else 'Contrato' }}</a>
             <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
             <a href="#grupo-ramo"><i class="qb-pt qb-pt-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo e ramo</a>
@@ -810,10 +811,10 @@
             <a href="#responsaveis"><i class="qb-pt qb-pt-{{ 'amb' if rs_faltam else 'ok' }}"></i>Responsáveis</a>
             <a href="#enderecos"><i class="qb-pt qb-pt-{{ 'ok' if enderecos else 'amb' }}"></i>Endereços</a>
             <a href="#contatos"><i class="qb-pt qb-pt-{{ bol(['contato_celular', 'contato'] + ([] if falta.avulso else ['email'])) }}"></i>Contatos</a>
-            <a href="#certificado"><i class="qb-pt qb-pt-{{ bol(['contador']) }}"></i>Certificado</a>
+            {% if not bloq_reserva %}<a href="#certificado"><i class="qb-pt qb-pt-{{ bol(['contador']) }}"></i>Certificado</a>{% endif %}
             <a href="#cadastros-adicionais"><i class="qb-pt qb-pt-cinza"></i>Adicionais</a>
-            <a href="#acompanhamento"><i class="qb-pt qb-pt-cinza"></i>Acompanhamento</a>
-            <a href="#historico"><i class="qb-pt qb-pt-cinza"></i>Histórico</a>
+            {% if not bloq_reserva %}<a href="#acompanhamento"><i class="qb-pt qb-pt-cinza"></i>Acompanhamento</a>{% endif %}
+            {% if not bloq_reserva %}<a href="#historico"><i class="qb-pt qb-pt-cinza"></i>Histórico</a>{% endif %}
             {% if reserva is not none %}<a href="#acesso"><i class="qb-pt qb-pt-cinza"></i>Acesso</a>{% endif %}
         </nav>
 
@@ -891,14 +892,19 @@
                 <div class="qb-big">{{ falta.ok|length }}<small> de {{ n_tot }} completos</small></div>
                 <div class="qb-trilho">{% for o in falta.ok %}<i></i>{% endfor %}{% for f in falta.faltam|reverse %}<i class="{{ 'v' if f.cor == 'verm' else 'a' }}"></i>{% endfor %}</div>
                 {% for f in falta.faltam %}
+                {% if f.chave == 'cobranca' and not pode_fin %}
+                <span class="qb-pend qb-pend-semlink qb-pend-{{ 'verm' if f.cor == 'verm' else 'amb' }}" title="{{ f.ajuda }}">
+                    <i class="fas fa-{{ 'circle-xmark' if f.cor == 'verm' else 'circle-exclamation' }}"></i><span>{{ f.rotulo }}</span><em>o Financeiro resolve</em></span>
+                {% else %}
                 <a class="qb-pend qb-pend-{{ 'verm' if f.cor == 'verm' else 'amb' }}" href="#{{ f.alvo }}" title="{{ f.ajuda }}">
                     <i class="fas fa-{{ 'circle-xmark' if f.cor == 'verm' else 'circle-exclamation' }}"></i><span>{{ f.rotulo }}</span><em>resolver</em></a>
+                {% endif %}
                 {% else %}
                 <p class="qb-tudo-ok"><i class="fas fa-circle-check"></i> Cadastro completo.{% if not falta.avulso %} A empresa não aparece no A CADASTRAR.{% endif %}</p>
                 {% endfor %}
                 {% if falta.ok %}
                 <details class="qb-oks"><summary>ver os {{ falta.ok|length }} completos</summary>
-                    <ul>{% for o in falta.ok %}<li><i class="fas fa-circle-check"></i><span>{{ o.rotulo }}{% if o.valor %} <small>· {{ o.valor }}</small>{% endif %}</span></li>{% endfor %}</ul>
+                    <ul>{% for o in falta.ok %}<li><i class="fas fa-circle-check"></i><span>{{ o.rotulo }}{% if o.valor and (pode_fin or o.chave != 'cobranca') %} <small>· {{ o.valor }}</small>{% endif %}</span></li>{% endfor %}</ul>
                 </details>
                 {% endif %}
             </section>
@@ -915,6 +921,7 @@
             {% endif %}
 
             <!-- FINANCEIRO -->
+            {% if pode_fin %}
             <section class="qb-b {{ 's8' if pj else 's8' }}" id="financeiro" data-copiar-bloco>
                 <div class="qb-bh"><span class="qb-ico i-rosa"><i class="fas fa-coins"></i></span><h3>Como {{ 'a empresa' if pj else 'o cliente' }} paga os honorários?</h3>{{ selo(['cobranca']) }}</div>
                 <div id="campo-cobranca" class="tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %} qb-opcoes" data-campo="cobranca" data-tipo="opcoes" data-rotulo="Cobrança" data-valor="{{ cob }}">
@@ -941,6 +948,7 @@
                     {% if pode_rota('financeiro.honorarios') %}<a class="qb-btn-escuro" href="{{ url_for('financeiro.honorarios', aba='sem', busca=cliente.numero_cliente or cliente.nome_razao_social) }}">Cadastrar honorários</a>{% endif %}</div>
                 {% endif %}
             </section>
+            {% endif %}
 
             {% if not pj %}
             <!-- DADOS PESSOAIS (PF) -->
@@ -1060,6 +1068,7 @@
             <!-- CERTIFICADO DA EMPRESA (cartão verde compacto; o texto de instrução fica recolhido) -->
             {% set contador_cert = (contadores | selectattr('tem_certificado') | first) %}
             {% set cs = certificado.cert_status if certificado else None %}
+            {% if not bloq_reserva %}
             <section class="qb-b qb-cert s5" id="certificado">
                 <div class="qb-bh"><span class="qb-ico qb-ico-claro"><i class="fas fa-certificate"></i></span>
                     <div><h3>Certificado da empresa</h3>{% if certificado %}<small class="qb-cert-l" style="margin:0">A1 · {{ certificado.tipo_doc }} {{ certificado.cnpj }}</small>{% endif %}</div>
@@ -1095,6 +1104,7 @@
                 </div>
                 <div id="certMsg" style="margin-top:12px; display:none;"></div>
             </section>
+            {% endif %}
 
             <!-- RESPONSÁVEIS -->
             <section class="qb-b s12" id="responsaveis">
@@ -1240,6 +1250,7 @@
             </section>
 
             <!-- NOTAS RECEBIDAS (busca automática das notas destinadas à empresa) -->
+            {% if not bloq_reserva %}
             <section class="qb-b s6" id="notas-recebidas">
                 <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-cloud-arrow-down"></i></span>
                     <div><h3>Notas recebidas</h3><small class="qb-sub2">o sistema busca sozinho as notas emitidas para esta empresa</small></div></div>
@@ -1279,6 +1290,7 @@
                 <div class="qb-vazio"><i class="fas fa-certificate"></i> Para buscar notas, vincule o certificado da empresa ou um contador com certificado.</div>
                 {% endif %}
             </section>
+            {% endif %}
 
             <!-- CADASTROS ADICIONAIS -->
             <section class="qb-b s6 qb-reuso qb-topo">
@@ -1547,6 +1559,7 @@
             </section>
 
             <!-- ACOMPANHAMENTO -->
+            {% if not bloq_reserva %}
             <section class="qb-b s6 qb-topo" id="acompanhamento">
                 <div class="qb-bh"><span class="qb-ico i-cinza"><i class="fas fa-briefcase"></i></span><h3>Acompanhamento</h3></div>
                 <div class="qb-kpi3">
@@ -1562,14 +1575,17 @@
                     <div class="qb-linha-item"><b>{{ obrigacao.tipo_obrigacao or '—' }}</b><span>{{ obrigacao.descricao }}</span><span class="qb-tag-cinza{{ ' ok' if obrigacao.pago }}">{{ 'Pago' if obrigacao.pago else obrigacao.status }}</span><small>{{ obrigacao.vencimento|format_date if obrigacao.vencimento else '' }}{% if obrigacao.valor %} · {{ obrigacao.valor|format_currency }}{% endif %}</small></div>{% endfor %}{% endif %}</div>
                 {% if not processos and not tarefas and not obrigacoes %}<div class="qb-vazio"><i class="fas fa-mug-hot"></i> Nada em andamento para esta empresa.</div>{% endif %}
             </section>
+            {% endif %}
 
             <!-- HISTÓRICO -->
+            {% if not bloq_reserva %}
             <section class="qb-b s12" id="historico">
                 <div class="qb-bh"><span class="qb-ico i-lima"><i class="fas fa-clock-rotate-left"></i></span><h3>Histórico</h3></div>
                 <div id="hist-box" class="hist-box">
                     <div class="hist-vazio">Carregando…</div>
                 </div>
             </section>
+            {% endif %}
 
             {% if reserva is not none %}
             {# Só do ADMIN: quem vê esta empresa e em quais departamentos (09/11/2026, cartões).
@@ -1587,7 +1603,7 @@
                         <input type="checkbox" name="reservado" value="1" id="acesso-reservado" {% if reserva.reservado %}checked{% endif %}>
                         <span class="ac-reserva-ic"><i class="fas fa-lock"></i></span>
                         <span><b>Empresa reservada</b>
-                            <small>Só administradores veem: some da lista de clientes, das buscas, das notas, dos downloads e do Q-Robô, mesmo para quem tem o perfil do departamento. Marque abaixo quem pode ver mesmo assim.</small></span>
+                            <small>O cadastro continua aberto para quem tem o Cadastro. Fiscal, Contábil, Financeiro, DP, notas, downloads, Q-Robô, certificado e histórico ficam só para administradores e para quem você marcar abaixo.</small></span>
                     </label>
 
                     <div class="ac-resumo">
@@ -1601,28 +1617,31 @@
 
                     <div class="ac-grade">
                         {% for u in quem %}
-                        <article class="ac-p{{ ' ac-nao' if not u.ve }}{{ ' ac-adm' if u.admin }}" data-tem="{% for d in u.deps %}{{ '1' if (d.tem and u.ve) else '0' }}{% endfor %}">
+                        <article class="ac-p{{ ' ac-nao' if not u.ve and not u.so_cadastro }}{{ ' ac-adm' if u.admin }}" data-tem="{% for d in u.deps %}{{ '1' if d.aberto else '0' }}{% endfor %}">
                             <div class="ac-cab">
                                 <span class="qb-av" style="background:{{ rs_cores[u.id % 8] }}">{{ rs_ini(u.nome) }}</span>
                                 <div class="ac-nome"><b>{{ u.nome }}</b>
                                     <small>{{ u.login }}{% if u.perfis %} · {{ u.perfis | join(', ') }}{% endif %}</small></div>
                                 {% if u.admin %}<span class="ac-tag ac-tag-adm"><i class="fas fa-crown"></i> Administrador</span>
+                                {% elif u.so_cadastro %}<span class="ac-tag ac-tag-exc"><i class="fas fa-address-card"></i> Só o cadastro</span>
                                 {% elif not u.ve %}<span class="ac-tag ac-tag-nao"><i class="fas fa-eye-slash"></i> Não vê</span>
                                 {% elif u.excecao and reserva.reservado %}<span class="ac-tag ac-tag-exc"><i class="fas fa-key"></i> Exceção</span>
                                 {% elif u.sem_perfil %}<span class="ac-tag ac-tag-nao">Sem perfil</span>{% endif %}
                             </div>
                             {% if u.admin %}
                             <p class="ac-txt">Vê tudo desta empresa, em todos os departamentos.</p>
+                            {% elif u.so_cadastro %}
+                            <p class="ac-txt">Empresa reservada: vê só o cadastro. Fiscal, Contábil, Financeiro e o resto ficam fechados.</p>
                             {% elif not u.ve %}
-                            <p class="ac-txt">A empresa é reservada: não aparece para esta pessoa em lugar nenhum.</p>
+                            <p class="ac-txt">A empresa é reservada e esta pessoa não tem o Cadastro: não aparece para ela.</p>
                             {% elif u.sem_perfil %}
                             <p class="ac-txt">Sem perfil de acesso: não abre nenhum departamento.</p>
                             {% endif %}
                             {% if not u.admin and not u.sem_perfil %}
                             <div class="ac-deps">
                                 {% for d in u.deps %}
-                                <span class="ac-dep {{ 'sim' if (d.tem and u.ve) else ('bloq' if d.tem else 'nao') }}" title="{{ d.permissoes | join(', ') if d.tem else 'não tem no perfil' }}{{ ' — bloqueado: empresa reservada' if d.tem and not u.ve }}">
-                                    <i class="fas {{ 'fa-check' if (d.tem and u.ve) else ('fa-lock' if d.tem else 'fa-minus') }}"></i>{{ d.rotulo }}</span>
+                                <span class="ac-dep {{ 'sim' if d.aberto else ('bloq' if d.tem else 'nao') }}" title="{{ d.permissoes | join(', ') if d.tem else 'não tem no perfil' }}{{ ' — fechado: empresa reservada' if d.tem and not d.aberto }}">
+                                    <i class="fas {{ 'fa-check' if d.aberto else ('fa-lock' if d.tem else 'fa-minus') }}"></i>{{ d.rotulo }}</span>
                                 {% endfor %}
                             </div>
                             {% if u.deps | selectattr('tem') | list %}
@@ -1634,7 +1653,7 @@
                             {% if not u.admin %}
                             <label class="ac-exc"{% if not reserva.reservado %} hidden{% endif %}>
                                 <input type="checkbox" name="excecao" value="{{ u.id }}" {% if u.excecao %}checked{% endif %}>
-                                Pode ver esta empresa mesmo reservada</label>
+                                Libera tudo desta empresa (o que o perfil permitir)</label>
                             {% endif %}
                         </article>
                         {% endfor %}
