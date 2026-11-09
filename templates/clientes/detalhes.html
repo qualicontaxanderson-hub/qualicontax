@@ -310,6 +310,38 @@
 .qb-add { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:600; color:#15803d; background:#f0fdf4;
     border:1px solid #bbf7d0; border-radius:10px; padding:7px 12px; cursor:pointer; text-decoration:none; white-space:nowrap; }
 .qb-add:hover { background:#dcfce7; }
+/* Inscrições estaduais (09/11/2026) */
+.ie-bloco { gap:6px; }
+.ie-bloco-falta > small { color:#be123c; font-weight:600; }
+.ie-card { border:1px solid #e2e8f0; border-radius:14px; padding:10px 12px; background:#f8fafc; transition:border-color .12s, background .12s; }
+.ie-card.ie-ed { cursor:pointer; } .ie-card.ie-ed:hover { border-color:#86efac; background:#f0fdf4; }
+.ie-card.ie-conf { border-color:#fca5a5; background:#fff1f2; }
+.ie-l1 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ie-l1 b { font-size:15px; font-weight:600; color:#0f172a; }
+.ie-uf { font-size:11.5px; font-weight:800; color:#fff; background:#0f3d2e; border-radius:7px; padding:2px 7px; }
+.ie-tag { font-size:11.5px; font-weight:700; border-radius:99px; padding:2px 9px; }
+.ie-t-pri { background:#dcfce7; color:#166534; } .ie-t-normal { background:#e2e8f0; color:#334155; }
+.ie-t-st { background:#dbeafe; color:#1d4ed8; } .ie-t-rural { background:#ecfccb; color:#4d7c0f; }
+.ie-l2 { margin-top:5px; font-size:12.5px; color:#475569; line-height:1.4; }
+.ie-l2 i { margin-right:5px; } .ie-dica { color:#92400e; } .ie-alerta { color:#9f1239; font-weight:600; }
+.ie-isenta { font-size:14.5px; font-weight:600; color:#0f172a; } .ie-isenta i { color:#94a3b8; margin-right:6px; }
+.ie-acoes { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+.ie-sint { margin-left:auto; font-size:12px; font-weight:600; color:#0f3d2e; background:#fff; border:1px solid #cbd5e1; border-radius:99px; padding:3px 10px; text-decoration:none; white-space:nowrap; }
+.ie-sint:hover { border-color:#16a34a; background:#f0fdf4; } .ie-sint i { margin-right:4px; font-size:11px; }
+.ie-sint.ie-sint-ok { border-color:#16a34a; color:#166534; background:#dcfce7; }
+.ie-form label { display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:#64748b; font-weight:500; }
+.ie-form input[type=text], .ie-form select { height:42px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; padding:0 12px; font-size:14.5px; color:#0f172a; }
+.ie-grade { display:grid; grid-template-columns:110px 1fr; gap:12px; margin-bottom:14px; }
+#ieRural.ie-grade { grid-template-columns:1fr 1fr; }
+#ieRural[hidden] { display:none; }
+.ie-tipos { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.ie-form .ie-tipo { flex-direction:row; flex-wrap:wrap; align-items:center; gap:4px 10px; border:1.5px solid #e2e8f0; border-radius:12px; padding:10px 12px; cursor:pointer; }
+.ie-form .ie-tipo b { color:#0f172a; font-size:14px; } .ie-form .ie-tipo small { flex-basis:100%; padding-left:24px; color:#64748b; }
+.ie-form .ie-tipo:has(input:checked) { border-color:#16a34a; background:#f0fdf4; }
+.ie-form .ie-pri { flex-direction:row; align-items:center; gap:8px; color:#334155; font-size:13.5px; }
+.ie-aviso { margin:10px 0 0; padding:9px 12px; border-radius:10px; background:#fffbeb; color:#92400e; font-size:13px; }
+.ie-erro { margin:10px 0 0; padding:9px 12px; border-radius:10px; background:#fff1f2; color:#9f1239; font-size:13px; font-weight:600; }
+@media (max-width:520px) { .ie-grade, #ieRural.ie-grade { grid-template-columns:1fr; } }
 .qb-add-cinza { color:#475569; background:#f8fafc; border-color:#e2e8f0; } .qb-add-cinza:hover { background:#f1f5f9; }
 .qb-mini { width:32px; height:32px; border-radius:10px; background:#fff; border:1px solid #e2e8f0; display:inline-flex; align-items:center; justify-content:center;
     color:#475569; font-size:13px; cursor:pointer; text-decoration:none; }
@@ -798,6 +830,38 @@
             <b class="tu-txt{{ ' mono' if mono }}">{% if exibe %}{{ exibe }}{% elif valor %}{{ valor }}{% else %}<span class="tu-vazio">{{ 'clique para preencher' if chave and chave in falta_cor else '—' }}</span>{% endif %}</b>
         </div>
     {%- endmacro %}
+{% macro bloco_ie(rural) -%}
+                {# Inscrições estaduais (09/11/2026): uma por cartão — UF, número, tipo (Normal da própria empresa,
+                   Substituto Tributário em outro estado, Produtor rural com a propriedade). Clique abre a alteração. #}
+                {% set pode_ie = pode_rota('clientes.ie_salvar') %}
+                <div id="campo-ie" class="qb-kv ie-bloco{% if 'ie' in falta_cor or 'ie_conferir' in falta_cor or 'ie_rural' in falta_cor %} ie-bloco-falta{% endif %}">
+                    <small>{{ 'Inscrições estaduais de produtor rural' if rural else 'Inscrições estaduais' }}</small>
+                    {% if ie_isenta and not rural %}<div class="ie-isenta"><i class="fas fa-ban"></i> Empresa isenta de inscrição estadual</div>{% endif %}
+                    {% for x in ies if (x.tipo == 'RURAL') == rural or not rural %}
+                    <div class="ie-card{{ ' ie-conf' if x.conferir }}{{ ' ie-ed' if pode_ie }}" data-ie='{{ x | tojson }}'{% if pode_ie %} role="button" tabindex="0" title="Clique para alterar"{% endif %}>
+                        <div class="ie-l1">
+                            <span class="ie-uf">{{ x.uf or '--' }}</span>
+                            <b class="mono" data-copiar="{{ x.ie }}" data-copiar-rotulo="IE {{ x.uf or '' }}">{{ x.ie }}</b>
+                            {% if x.principal %}<span class="ie-tag ie-t-pri">principal</span>{% endif %}
+                            <span class="ie-tag ie-t-{{ x.tipo | lower }}">{{ x.tipo_rotulo }}</span>
+                            <a class="ie-sint" href="{{ x.sintegra }}" target="_blank" rel="noopener" data-ie-num="{{ x.ie }}"
+                               title="Copia o número da IE e abre o Sintegra de {{ x.uf or 'cada estado' }} — é só colar na consulta"><i class="fas fa-up-right-from-square"></i> Copiar e abrir o Sintegra{{ ' ' ~ x.uf if x.uf }}</a>
+                        </div>
+                        {% if x.propriedade %}<div class="ie-l2"><i class="fas fa-tractor"></i> {{ x.propriedade }}{% if x.municipio %} · {{ x.municipio }}{% endif %}</div>{% endif %}
+                        {% if x.tipo == 'NORMAL' and uf_endereco and x.uf and x.uf != uf_endereco and not x.conferir %}<div class="ie-l2 ie-dica"><i class="fas fa-lightbulb"></i> IE de {{ x.uf }} e o endereço é de {{ uf_endereco }}: costuma ser de Substituto Tributário.</div>{% endif %}
+                        {% if x.conferir %}<div class="ie-l2 ie-alerta"><i class="fas fa-triangle-exclamation"></i> Conferir no Sintegra: {{ x.conferir_motivo }}. Abra, confira e salve (ou exclua).</div>{% endif %}
+                    </div>
+                    {% else %}
+                    {% if not ie_isenta or rural %}<b><span class="tu-vazio">{{ 'clique em Incluir IE' if pode_ie else '—' }}</span></b>{% endif %}
+                    {% endfor %}
+                    {% if pode_ie %}
+                    <div class="ie-acoes">
+                        <button type="button" class="qb-add" onclick="ieAbrir(null, {{ 'true' if rural else 'false' }})"><i class="fas fa-plus"></i> Incluir IE</button>
+                        {% if not rural %}<button type="button" class="qb-add qb-add-cinza" onclick="ieIsenta({{ 'false' if ie_isenta else 'true' }})">{% if ie_isenta %}<i class="fas fa-rotate-left"></i> Não é isenta{% else %}<i class="fas fa-ban"></i> Empresa isenta{% endif %}</button>{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+{%- endmacro %}
     {% macro av(nome, n=0) %}<span class="qb-av" style="background:{{ rs_cores[(n or (nome or '')|length) % 8] }}">{{ rs_ini(nome) }}</span>{% endmacro %}
 
     {% include 'cadastros/_nav_cadastros.html' %}
@@ -806,7 +870,7 @@
         <!-- índice em pílulas (acompanha a rolagem) -->
         <nav class="qb-pills tu-ind" aria-label="Seções do cadastro">
             <a href="#identificacao"><i class="qb-pt qb-pt-ok"></i>Visão geral</a>
-            {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'im', 'ie']) }}"></i>Registros</a>{% endif %}
+            {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'im', 'ie', 'ie_conferir']) }}"></i>Registros</a>{% endif %}
             {% if pode_fin %}<a href="#financeiro"><i class="qb-pt qb-pt-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro</a>{% endif %}
             <a href="#regime"><i class="qb-pt qb-pt-{{ bol(['regime', 'origem', 'conferir']) }}"></i>{{ 'Regime' if pj else 'Contrato' }}</a>
             <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
@@ -917,8 +981,8 @@
             {% if pj %}
             <!-- REGISTROS -->
             <section class="qb-b s4" id="registros" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-landmark"></i></span><h3>Registros</h3>{{ selo(['nire', 'im', 'ie']) }}</div>
-                {{ campo('inscricao_estadual', 'Inscrição estadual', cliente.inscricao_estadual, ancora='campo-ie', chave='ie', ph='número ou ISENTO') }}
+                <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-landmark"></i></span><h3>Registros</h3>{{ selo(['nire', 'im', 'ie', 'ie_conferir']) }}</div>
+                {{ bloco_ie(false) }}
                 {{ campo('inscricao_municipal', 'Inscrição municipal', cliente.inscricao_municipal, ancora='campo-im', chave='im', ph='inscrição municipal (CCM)', mono=True) }}
                 {{ campo('nire', 'NIRE', cliente.nire, ancora='campo-nire', chave='nire', ph='35.2.1234567-8', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.', mono=True) }}
                 {{ campo('nire_data_registro', 'Data do registro na Junta', cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente.nire_data_registro else '', exibe=(cliente.nire_data_registro|format_date if cliente.nire_data_registro else ''), tipo='date') }}
@@ -968,6 +1032,12 @@
                 <div class="qb-kv"><small>Nome da mãe</small><b>{{ ps.nome_mae or '—' }}</b></div>
                 <div class="qb-kv"><small>Conta gov.br</small><b>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</b></div>
             </section>
+            {% if produtor_rural or ies %}
+            <section class="qb-b s4" id="ies-rural" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-lima"><i class="fas fa-tractor"></i></span><h3>Produtor rural</h3>{{ selo(['ie_rural', 'ie_conferir']) }}</div>
+                {{ bloco_ie(true) }}
+            </section>
+            {% endif %}
             {% endif %}
 
             <!-- REGIME E ORIGEM -->
@@ -1775,6 +1845,41 @@
 <!-- Modal de Contato (adicionar e editar) — 05/11/2026: celular obrigatório, o que ele RECEBE por
      departamento, reaproveitamento pelo celular e confirmação antes de salvar (pedido do Anderson). -->
 <!-- Responsáveis no escritório: um select por departamento; só salva com os 7 escolhidos (Anderson, 05/11/2026) -->
+<!-- Inscrição estadual (09/11/2026) -->
+<div id="ieModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+            <h3 id="ieTit">Inscrição estadual</h3>
+            <button type="button" class="modal-close" onclick="ieFechar()" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-body ie-form">
+            <input type="hidden" id="ie_id">
+            <div class="ie-grade">
+                <label>UF<select id="ie_uf"><option value="">UF</option>{% for u in IE_UFS %}<option value="{{ u }}">{{ u }}</option>{% endfor %}</select></label>
+                <label class="ie-num">Número da inscrição<input type="text" id="ie_num" maxlength="20" autocomplete="off" placeholder="ex.: 123.456.789.110"></label>
+            </div>
+            <div class="ie-tipos" role="radiogroup" aria-label="Tipo da inscrição">
+                {% for v, r in IE_TIPOS %}
+                <label class="ie-tipo"><input type="radio" name="ie_tipo" value="{{ v }}"><b>{{ r }}</b>
+                    <small>{{ {'NORMAL': 'no estado onde a empresa está (o do endereço)', 'ST': 'em outro estado, para recolher o ICMS-ST das vendas para lá', 'RURAL': 'pessoa física, uma por propriedade'}[v] }}</small></label>
+                {% endfor %}
+            </div>
+            <div id="ieRural" class="ie-grade" hidden>
+                <label class="ie-num">Nome da propriedade<input type="text" id="ie_prop" maxlength="120" placeholder="ex.: FAZENDA SANTA RITA"></label>
+                <label class="ie-num">Município<input type="text" id="ie_mun" maxlength="80" placeholder="ex.: RIO VERDE"></label>
+            </div>
+            <label class="ie-pri" id="iePriBox"><input type="checkbox" id="ie_pri"> É a inscrição principal (a da empresa no estado dela)</label>
+            <p class="ie-aviso" id="ieAviso" hidden></p>
+            <p class="ie-erro" id="ieErro" hidden></p>
+        </div>
+        <div class="modal-footer">
+            {% if pode_rota('clientes.ie_excluir') %}<button type="button" class="btn btn-secondary" id="ieExcluir" onclick="ieExcluir()" style="margin-right:auto;color:#b91c1c;background:#fff;border:1px solid #fecaca;"><i class="fas fa-trash"></i> Excluir</button>{% endif %}
+            <button type="button" class="btn btn-secondary" onclick="ieFechar()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="ieSalvarBtn" onclick="ieSalvar()"><i class="fas fa-check"></i> Salvar</button>
+        </div>
+    </div>
+</div>
+
 <div id="respModal" class="modal" style="display: none;">
     <div class="modal-content rs-modal">
         <div class="rs-mhead">
@@ -3029,4 +3134,88 @@ function dfeSeed(clienteId) {
 <div id="anpWppToast" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#1a1a2e; color:#fff; padding:12px 24px; border-radius:8px; font-size:14px; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.25);">
     <i class="fas fa-check-circle" style="color:#25d366;"></i>&nbsp; Texto copiado! Cole no WhatsApp 📋
 </div>
+<script>
+// Inscrições estaduais (09/11/2026)
+(function () {
+    var URL_IE = {{ url_for('clientes.ie_salvar', id=cliente.id) | tojson }};
+    var URL_IE_ISENTA = {{ url_for('clientes.ie_isenta', id=cliente.id) | tojson }};
+    var UF_END = {{ (uf_endereco or '') | tojson }};
+    var modal = document.getElementById('ieModal');
+    if (!modal) return;
+    var $ = function (id) { return document.getElementById(id); };
+    function tipo() { var r = modal.querySelector('input[name=ie_tipo]:checked'); return r ? r.value : ''; }
+    function rever() {
+        var t = tipo();
+        $('ieRural').hidden = t !== 'RURAL';
+        $('iePriBox').style.display = t === 'NORMAL' ? '' : 'none';
+        var uf = $('ie_uf').value, av = $('ieAviso');
+        if (t === 'NORMAL' && uf && UF_END && uf !== UF_END) {
+            av.textContent = 'O endereço da empresa é de ' + UF_END + '. IE de ' + uf + ' sem filial lá costuma ser de Substituto Tributário.';
+            av.hidden = false;
+        } else av.hidden = true;
+    }
+    modal.addEventListener('change', rever);
+    window.ieAbrir = function (x, rural) {
+        x = x || {};
+        $('ieTit').textContent = x.id ? 'Alterar inscrição estadual' : 'Incluir inscrição estadual';
+        $('ie_id').value = x.id || '';
+        $('ie_uf').value = x.uf || (rural ? '' : (UF_END || ''));
+        $('ie_num').value = x.ie || '';
+        $('ie_prop').value = x.propriedade || '';
+        $('ie_mun').value = x.municipio || '';
+        var t = x.tipo || (rural ? 'RURAL' : 'NORMAL');
+        modal.querySelectorAll('input[name=ie_tipo]').forEach(function (r) { r.checked = r.value === t; });
+        $('ie_pri').checked = x.id ? !!x.principal : !rural;
+        $('ieErro').hidden = true;
+        var ex = $('ieExcluir'); if (ex) ex.style.display = x.id ? '' : 'none';
+        rever();
+        modal.style.display = 'block';
+        setTimeout(function () { $(x.id ? 'ie_num' : 'ie_uf').focus(); }, 60);
+    };
+    window.ieFechar = function () { modal.style.display = 'none'; };
+    function enviar(url, corpo) {
+        return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo || {}) })
+            .then(function (r) { return r.json(); });
+    }
+    function erro(m) { var e = $('ieErro'); e.textContent = m; e.hidden = false; }
+    window.ieSalvar = function () {
+        var b = $('ieSalvarBtn'); b.disabled = true;
+        enviar(URL_IE, { ie_id: $('ie_id').value, uf: $('ie_uf').value, ie: $('ie_num').value, tipo: tipo(),
+                         propriedade: $('ie_prop').value, municipio: $('ie_mun').value, principal: $('ie_pri').checked })
+            .then(function (d) { if (d.ok) location.reload(); else { erro(d.erro || 'Não consegui salvar.'); b.disabled = false; } })
+            .catch(function () { erro('Não consegui falar com o servidor. Tente de novo.'); b.disabled = false; });
+    };
+    window.ieExcluir = function () {
+        var id = $('ie_id').value;
+        if (!id || !confirm('Excluir a inscrição ' + $('ie_num').value + ' (' + $('ie_uf').value + ')?')) return;
+        enviar(URL_IE + '/' + id + '/excluir').then(function (d) { if (d.ok) location.reload(); else erro(d.erro || 'Não consegui excluir.'); });
+    };
+    window.ieIsenta = function (sim) {
+        if (!confirm(sim ? 'Marcar a empresa como ISENTA de inscrição estadual (prestador de serviço)?\nAs IEs da lista continuam guardadas, mas nenhuma fica como principal.'
+                         : 'A empresa deixa de ser isenta: a 1ª IE Normal da lista vira a principal.')) return;
+        enviar(URL_IE_ISENTA, { isenta: sim }).then(function (d) { if (d.ok) location.reload(); else alert(d.erro || 'Não consegui salvar.'); });
+    };
+    document.addEventListener('click', function (e) {
+        var c = e.target.closest('.ie-card.ie-ed');
+        if (!c || e.target.closest('.cp-btn, .cp-tudo, a, button')) return;
+        ieAbrir(JSON.parse(c.getAttribute('data-ie')), false);
+    });
+    // Copiar e abrir o Sintegra: copia o número da IE e deixa o link abrir a consulta do estado em outra aba.
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('.ie-sint');
+        if (!a) return;
+        var num = a.getAttribute('data-ie-num') || '';
+        try {
+            if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(num);
+            else { var t = document.createElement('textarea'); t.value = num; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+        } catch (err) {}
+        a.classList.add('ie-sint-ok');
+        setTimeout(function () { a.classList.remove('ie-sint-ok'); }, 1500);
+    });
+    document.addEventListener('keydown', function (e) {
+        var c = e.target.closest && e.target.closest('.ie-card.ie-ed');
+        if (c && e.target === c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ieAbrir(JSON.parse(c.getAttribute('data-ie')), false); }
+    });
+})();
+</script>
 {% endblock %}

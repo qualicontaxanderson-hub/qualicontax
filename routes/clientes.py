@@ -34,6 +34,7 @@ from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
 from models.cadastro_anp import CadastroAnp
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
+from models import inscricao_estadual as IE
 from utils import certificado_autoria, dropbox_sync
 from utils.certificado_digital import (
     abrir_certificado, cifrar_senha,
@@ -263,6 +264,8 @@ def _travas(form, avulso=False, cliente_id=None):
                 continue
             f = 'celular (número inválido: DDD + número)'
         out.append(f)
+    if form.get('tipo_pessoa') == 'PF':
+        out += IE.erros_rurais(IE.ler_rurais_json(form.get('ies_rurais_json')) or [])
     for f in _socios_e_contador_faltando(form, cliente_id):
         if f in so_falta:
             continue
@@ -803,6 +806,8 @@ def _ctx_form(cliente=None):
         ctx['pessoa'] = PessoaDados.get(cid) if cliente.get('tipo_pessoa') == 'PF' else {}
         ctx['documentos'] = ([dict(d, contrato=bool(d['contrato'])) for d in Documentos.listar(cid)]
                              if cliente.get('tipo_pessoa') == 'PF' else [])
+        ctx['ies_rurais'] = [{'uf': x['uf'] or '', 'ie': x['ie'], 'propriedade': x['propriedade'] or '',
+                              'municipio': x['municipio'] or ''} for x in IE.listar(cid) if x['tipo'] == 'RURAL']
     else:
         ctx['ramos_cliente'] = []
         ctx['grupos_cliente'] = []
@@ -811,7 +816,9 @@ def _ctx_form(cliente=None):
         ctx['raiz'] = None
         ctx['pessoa'] = {}
         ctx['documentos'] = []
+        ctx['ies_rurais'] = []
     ctx['contabilidades_json'] = _contab_combo(cliente.get('contabilidade_anterior_id') if cliente else None)
+    ctx['IE_UFS'] = IE.UFS
     ctx.update(ESTADOS_CIVIS=ESTADOS_CIVIS, REGIMES_BENS=REGIMES_BENS, NIVEIS_GOVBR=NIVEIS_GOVBR,
                COM_REGIME=COM_REGIME, UFS=UFS, OPCOES=Opcoes.todas(),
                TIPOS_DOC=TIPOS_DOC, ORGAO_SUGERIDO=ORGAO_SUGERIDO,
@@ -1225,6 +1232,7 @@ def novo():
             from utils import cnpj_vigia as VG
             VG.vincular_cliente(cpf_cnpj, cliente_id)
             _vigia_concluir_se_aplicada(cpf_cnpj, cliente_id)
+            IE.espelhar_do_cadastro(cliente_id)          # a IE do formulário entra na lista de IEs
 
         if cliente_id:
             # AUDITORIA (D2): quem criou este cadastro.
@@ -1255,6 +1263,9 @@ def novo():
                 _salvar_natureza(cliente_id, request.form)
             else:
                 _salvar_pessoa(cliente_id, request.form)
+                _rur = IE.ler_rurais_json(request.form.get('ies_rurais_json'))
+                if _rur is not None:
+                    IE.salvar_rurais(cliente_id, _rur)
             
             # Salvar endereço se fornecido
             cep = request.form.get('cep', '').strip()
@@ -1420,7 +1431,13 @@ def detalhes(id):
     from utils.acesso import empresa_reservada_para_mim
     bloq_reserva = empresa_reservada_para_mim(id)
     pode_fin = current_user.is_admin() or current_user.has_permission('financeiro.honorarios')
+    # Inscrições estaduais (09/11/2026): várias, com tipo; o produtor rural (PF) tem as dele
+    ies = IE.listar(id)
+    produtor_rural = cliente.get('tipo_pessoa') == 'PF' and any('RURAL' in (r.get('nome') or '').upper() for r in ramos_atividade)
     return render_template('clientes/detalhes.html',
+                         ies=ies, ie_isenta=IE.eh_isento(cliente.get('inscricao_estadual')),
+                         produtor_rural=produtor_rural, uf_endereco=IE.uf_do_endereco(id),
+                         IE_TIPOS=IE.TIPOS, IE_UFS=IE.UFS,
                          reserva=reserva, bloq_reserva=bloq_reserva, pode_fin=pode_fin,
                          reserva_csrf=reserva_csrf,
                          dfe_cursor=dfe_cursor,
@@ -1576,6 +1593,8 @@ def salvar_campos(id):
                       (*sets.values(), current_user.id, id))
         registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=id,
                   antes=antes, depois=depois)
+        if 'inscricao_estadual' in sets:
+            IE.espelhar_do_cadastro(id)
 
     if 'origem' in campos and pj:
         v = str(campos.get('origem') or '').strip()
@@ -2244,6 +2263,8 @@ def editar(id):
                           antes={k: cliente.get(k) for k in _campos_log},
                           depois={k: data.get(k) for k in _campos_log})
                 _vigia_concluir_se_aplicada(cpf_cnpj, id)
+                if (cliente.get('inscricao_estadual') or '') != (data.get('inscricao_estadual') or ''):
+                    IE.espelhar_do_cadastro(id)
 
                 # AVULSO QUE GANHOU NÚMERO AQUI vira cliente de verdade (03/11/2026).
                 # Antes a edição gravava o número e deixava a marca de avulso
@@ -2335,6 +2356,15 @@ def editar(id):
                     _salvar_natureza(id, request.form, cliente)
                 else:
                     _salvar_pessoa(id, request.form)
+                    _rur = IE.ler_rurais_json(request.form.get('ies_rurais_json'))
+                    if _rur is not None:
+                        _antes_r = [x for x in IE.listar(id) if x['tipo'] == 'RURAL']
+                        IE.salvar_rurais(id, _rur)
+                        _depois_r = [x for x in IE.listar(id) if x['tipo'] == 'RURAL']
+                        if [_ie_resumo(x) for x in _antes_r] != [_ie_resumo(x) for x in _depois_r]:
+                            registrar('escrita.alterou_ie', 'cadastros', tabela='clientes', registro_id=id,
+                                      antes={'cliente_id': id, 'inscricoes': [_ie_resumo(x) for x in _antes_r]},
+                                      depois={'cliente_id': id, 'inscricoes': [_ie_resumo(x) for x in _depois_r]})
 
                 # Atualizar/salvar endereço principal
                 cep = request.form.get('cep', '').strip()
@@ -2559,6 +2589,65 @@ def delete(id):
 
 
 # Rotas para Endereços
+# ---------------------------------------------------------------------------
+# Inscrições estaduais (09/11/2026): várias por cadastro, com tipo Normal / Substituto Tributário /
+# Produtor rural. Ver models/inscricao_estadual.py.
+# ---------------------------------------------------------------------------
+def _ie_resumo(x):
+    t = IE.TIPO_ROTULO.get(x.get('tipo'), x.get('tipo'))
+    r = f"{x.get('uf') or '--'} {x.get('ie')} ({t}{', principal' if x.get('principal') else ''})"
+    if x.get('propriedade'):
+        r += f" · {x['propriedade']} / {x.get('municipio') or ''}"
+    return r
+
+
+@clientes.route('/clientes/<int:id>/ies', methods=['POST'])
+@login_required
+def ie_salvar(id):
+    """Inclui (sem ie_id) ou altera uma IE. JSON {ie_id?, uf, ie, tipo, propriedade, municipio, principal}."""
+    if not Cliente.get_by_id(id):
+        return jsonify(ok=False, erro='Cadastro não encontrado.'), 404
+    d = request.get_json(silent=True) or {}
+    iid = int(d['ie_id']) if str(d.get('ie_id') or '').isdigit() else None
+    antes = next((x for x in IE.listar(id) if x['id'] == iid), None) if iid else None
+    if iid and not antes:
+        return jsonify(ok=False, erro='Inscrição não encontrada.'), 404
+    ok, r = IE.salvar(id, d, iid)
+    if not ok:
+        return jsonify(ok=False, erro=r), 400
+    depois = next((x for x in IE.listar(id) if x['id'] == r), None) or {}
+    registrar('escrita.alterou_ie', 'cadastros', tabela='clientes', registro_id=id,
+              antes={'cliente_id': id, 'inscricao': _ie_resumo(antes) if antes else None},
+              depois={'cliente_id': id, 'inscricao': _ie_resumo(depois)})
+    return jsonify(ok=True)
+
+
+@clientes.route('/clientes/<int:id>/ies/<int:ie_id>/excluir', methods=['POST'])
+@login_required
+def ie_excluir(id, ie_id):
+    x = next((x for x in IE.listar(id) if x['id'] == ie_id), None)
+    if not x:
+        return jsonify(ok=False, erro='Inscrição não encontrada.'), 404
+    IE.excluir(id, ie_id)
+    registrar('escrita.excluiu_ie', 'cadastros', tabela='clientes', registro_id=id,
+              antes={'cliente_id': id, 'inscricao': _ie_resumo(x)}, depois={'cliente_id': id})
+    return jsonify(ok=True)
+
+
+@clientes.route('/clientes/<int:id>/ies/isenta', methods=['POST'])
+@login_required
+def ie_isenta(id):
+    c = Cliente.get_by_id(id)
+    if not c:
+        return jsonify(ok=False, erro='Cadastro não encontrado.'), 404
+    isenta = bool((request.get_json(silent=True) or {}).get('isenta'))
+    IE.marcar_isenta(id, isenta)
+    registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=id,
+              antes={'inscricao_estadual': c.get('inscricao_estadual')},
+              depois={'inscricao_estadual': 'ISENTO' if isenta else (Cliente.get_by_id(id) or {}).get('inscricao_estadual')})
+    return jsonify(ok=True)
+
+
 @clientes.route('/clientes/<int:cliente_id>/enderecos/novo', methods=['POST'])
 @login_required
 def novo_endereco(cliente_id):

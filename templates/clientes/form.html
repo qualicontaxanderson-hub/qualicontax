@@ -495,6 +495,17 @@
                     </div>
                     <p class="cf-hint" id="ramosVazio" hidden>Clique no segmento da empresa — Comércio, Prestação de Serviços, Locação ou Indústria — e depois no ramo.</p>
                 </div>
+
+                {# Produtor rural (09/11/2026): marcou o ramo, abre as inscrições estaduais — uma por propriedade. #}
+                <div class="cf-fg cf-s12 pf-only" id="ieRuralBox" hidden>
+                    <div class="pf-docs-cab">
+                        <span class="cf-lbl">Inscrições estaduais de produtor rural <span class="cf-opt">— uma por propriedade (fazenda, sítio, chácara)</span></span>
+                        <button type="button" class="pf-docs-add" onclick="ieRurAdd()"><i class="fas fa-plus"></i> Incluir IE</button>
+                    </div>
+                    <div id="ieRurLista" class="pf-docs"></div>
+                    <input type="hidden" name="ies_rurais_json" id="ies_rurais_json" value="">
+                    <p class="cf-hint">Pode salvar sem a IE: o cadastro fica no A CADASTRAR até ela entrar.</p>
+                </div>
             </div>
         </div>
 
@@ -823,6 +834,8 @@
 /* Uma linha por documento; no celular vira cartão (nunca rola a página). */
 .pf-doc { display:grid; grid-template-columns:minmax(150px,1.2fr) minmax(140px,1.6fr) minmax(120px,1fr) 84px auto 36px;
     gap:8px; align-items:center; }
+.pf-doc.ie-rur-row { grid-template-columns:84px minmax(120px,1fr) minmax(160px,1.6fr) minmax(120px,1fr) 36px; }
+#ieRuralBox[hidden] { display:none !important; }
 .pf-doc input[type=text] { text-transform:uppercase; }
 .pf-doc .pf-vazio { border-color:#fca5a5; background:#fef2f2; }
 .pf-doc-ctr { display:flex; align-items:center; gap:6px; font-size:13px; color:#334155; white-space:nowrap; cursor:pointer; }
@@ -2483,6 +2496,77 @@ function sugerirNumeroPF() {
     }
 }
 
+// ---- Produtor rural: inscrições estaduais (09/11/2026) ----
+const IE_UFS = {{ IE_UFS|tojson }};
+let IE_RUR = {{ (ies_rurais or [])|tojson }};
+function ieRuralMarcado() {
+    if (tipoPessoa() !== 'PF') return false;
+    return [].slice.call(document.querySelectorAll('input[name="ramos_atividade_ids"]:checked')).some(function (cb) {
+        var l = cb.closest('label'); return l && /rural/i.test(l.textContent);
+    });
+}
+function ieRurSync() {
+    document.getElementById('ies_rurais_json').value = JSON.stringify(IE_RUR);
+    document.querySelectorAll('#ieRurLista .pf-doc').forEach(function (row) {
+        row.querySelectorAll('select, input[type=text]').forEach(function (c) { c.classList.toggle('pf-vazio', !String(c.value || '').trim()); });
+    });
+    if (typeof atualizarResumo === 'function') atualizarResumo();
+}
+function ieRurRender() {
+    var box = document.getElementById('ieRurLista');
+    box.innerHTML = '';
+    if (!IE_RUR.length) {
+        var v = document.createElement('div'); v.className = 'pf-docs-vazio';
+        v.textContent = 'Nenhuma IE ainda. Clique em "Incluir IE".'; box.appendChild(v);
+    }
+    IE_RUR.forEach(function (x, i) {
+        var row = document.createElement('div'); row.className = 'pf-doc ie-rur-row';
+        var uf = document.createElement('select'); uf.className = 'cf-ctrl';
+        uf.appendChild(new Option('UF', ''));
+        IE_UFS.forEach(function (u) { uf.appendChild(new Option(u, u, false, u === x.uf)); });
+        uf.onchange = function () { x.uf = uf.value; ieRurSync(); };
+        row.appendChild(uf);
+        [['ie', 'Número da IE', 20], ['propriedade', 'Nome da propriedade', 120], ['municipio', 'Município', 80]].forEach(function (c) {
+            var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'cf-ctrl'; inp.placeholder = c[1];
+            inp.maxLength = c[2]; inp.value = x[c[0]] || ''; inp.style.textTransform = 'uppercase';
+            inp.oninput = function () { x[c[0]] = inp.value; ieRurSync(); };
+            row.appendChild(inp);
+        });
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'pf-doc-del'; del.title = 'Tirar esta IE';
+        del.innerHTML = '<i class="fas fa-times"></i>';
+        del.onclick = function () { IE_RUR.splice(i, 1); ieRurRender(); };
+        row.appendChild(del);
+        box.appendChild(row);
+    });
+    ieRurSync();
+}
+function ieRurAdd() { IE_RUR.push({uf: '', ie: '', propriedade: '', municipio: ''}); ieRurRender(); }
+function ieRurVisivel() {
+    var box = document.getElementById('ieRuralBox');
+    if (!box) return;
+    var on = ieRuralMarcado();
+    box.hidden = !on;
+    // ramo desmarcado com IEs já gravadas: a lista vai como está (não apaga nada sem querer)
+}
+document.addEventListener('DOMContentLoaded', function () {
+    if (!document.getElementById('ieRuralBox')) return;
+    ieRurRender();
+    ieRurVisivel();
+    document.getElementById('cfForm').addEventListener('change', ieRurVisivel);
+});
+document.querySelector('form').addEventListener('submit', function (e) {
+    if (e.defaultPrevented || !ieRuralMarcado()) return;
+    var meio = IE_RUR.filter(function (x) {
+        var n = ['uf', 'ie', 'propriedade', 'municipio'].filter(function (k) { return String(x[k] || '').trim(); }).length;
+        return n > 0 && n < 4;
+    });
+    if (meio.length) {
+        e.preventDefault();
+        alert('Complete a IE de produtor rural — UF, número, propriedade e município — ou tire a linha.');
+        document.getElementById('ieRuralBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
+
 // Prévia da empresa no cartão verde depois da busca (como a cabeça da ficha).
 function nfPrevia(d) {
     var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
@@ -2570,6 +2654,8 @@ function atualizarResumo() {
         else {
             itens.push([temContato, 'Contato (nome e celular)', 'v']);
             itens.push([PF_DOCS.length > 0 && !pfDocFaltas().length, 'Documento de identificação', 'v']);
+            if (typeof ieRuralMarcado === 'function' && ieRuralMarcado())
+                itens.push([IE_RUR.some(function (x) { return x.uf && x.ie && x.propriedade && x.municipio; }), 'IE de produtor rural', 'v']);
         }
         itens.push([typeof CT_SEM_CEL === 'undefined' || !CT_SEM_CEL, 'Celular de todos os contatos', 'a']);
         itens.push([grupo, 'Grupo de empresas', 'c']);

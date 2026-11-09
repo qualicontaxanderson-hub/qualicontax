@@ -26,6 +26,10 @@ PENDENCIAS_EMPRESA = [
     # 09/11/2026 (Anderson): "O A CADASTRAR deve passar a cobrar o documento da pessoa física? SIM" — desde
     # que o Novo grava incompleto, o documento deixou de travar o salvar e passou a ser cobrado aqui.
     ('documento', 'Documento', 'verm', 'pessoa física sem documento de identificação (RG, CNH, CIN...)'),
+    # 09/11/2026 (Anderson): produtor rural sem IE fica no A CADASTRAR ("SIM"); IE que a migração trouxe em
+    # conflito com o cadastro precisa de alguém olhar no Sintegra.
+    ('ie_rural', 'IE de produtor rural', 'verm', 'produtor rural sem inscrição estadual (uma por propriedade)'),
+    ('ie_conferir', 'Conferir IE', 'verm', 'inscrição estadual em conflito: conferir no Sintegra e salvar ou excluir'),
     ('grupo', 'Grupo', 'cinza', 'grupo de empresas'),
     ('celular', 'Celular', 'cinza', 'celular de contato'),
     ('ramo', 'Ramo', 'cinza', 'ramo de atividade'),
@@ -40,6 +44,7 @@ PENDENCIAS_AVULSO = [
     ('grupo', 'Grupo', 'cinza', 'sem grupo de empresas'),
     ('ramo', 'Ramo', 'cinza', 'sem ramo de atividade'),
     ('conferir', 'Conferir', 'verm', 'há uma observação pedindo conferência'),
+    ('ie_conferir', 'Conferir IE', 'verm', 'inscrição estadual em conflito: conferir no Sintegra e salvar ou excluir'),
 ]
 
 # Tabelas derivadas em vez de subconsulta por linha: 5,2 s → 1,1 s no Railway, mesmo resultado (medido 06/11/2026).
@@ -56,6 +61,8 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
        COALESCE(k2.n, 0) AS n_contadores,
        COALESCE(ie.n, 0) AS n_ie_isenta,
        COALESCE(dc.n, 0) AS n_docs,
+       COALESCE(iex.n_conf, 0) AS n_ie_conferir, COALESCE(iex.n_rural, 0) AS n_ie_rural,
+       COALESCE(rr.n, 0) AS n_ramo_rural,
        e.cidade, e.uf
   FROM clientes c
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM socios_clientes WHERE ativo = 1 GROUP BY cliente_id) s ON s.cliente_id = c.id
@@ -68,6 +75,11 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM cliente_contadores GROUP BY cliente_id) k2 ON k2.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM clientes_inscricoes_estaduais WHERE isenta = 1 GROUP BY cliente_id) ie ON ie.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM clientes_pf_documentos GROUP BY cliente_id) dc ON dc.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, SUM(conferir) AS n_conf, SUM(tipo = 'RURAL') AS n_rural
+               FROM clientes_inscricoes_estaduais GROUP BY cliente_id) iex ON iex.cliente_id = c.id
+  LEFT JOIN (SELECT x.cliente_id, COUNT(*) AS n FROM cliente_ramo_atividade_relacao x
+               JOIN ramos_atividade ra ON ra.id = x.ramo_atividade_id
+              WHERE ra.tipo_pessoa = 'PF' AND UPPER(ra.nome) LIKE '%%RURAL%%' GROUP BY x.cliente_id) rr ON rr.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, MAX(cidade) AS cidade, MAX(estado) AS uf FROM enderecos_clientes GROUP BY cliente_id) e ON e.cliente_id = c.id
  WHERE c.avulso = 0 AND c.numero_cliente IS NOT NULL AND c.situacao = 'ATIVO'
  ORDER BY CAST(c.numero_cliente AS UNSIGNED), c.numero_cliente
@@ -78,7 +90,8 @@ SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa, c.situacao, c.email
        c.avulso_em, c.conexa_id, c.emite_nf, c.cobranca, c.observacoes, c.regime_tributario,
        (SELECT COUNT(*) FROM contatos_clientes k3 WHERE k3.cliente_id = c.id AND k3.ativo = 1 AND (k3.celular IS NULL OR k3.celular = '')) AS n_contatos_sem_celular,
        (SELECT COUNT(*) FROM cliente_grupo_relacao g WHERE g.cliente_id = c.id) AS n_grupos,
-       (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos
+       (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos,
+       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais i WHERE i.cliente_id = c.id AND i.conferir = 1) AS n_ie_conferir
   FROM clientes c
  WHERE c.avulso = 1
  ORDER BY c.nome_razao_social
@@ -124,6 +137,10 @@ def _pend_empresa(c):
         p.append('contato')          # PF: sem e-mail no cadastro, o contato é obrigatório (05/11/2026)
     if not pj and not c['n_docs']:
         p.append('documento')        # PF: documento de identificação (09/11/2026)
+    if not pj and c['n_ramo_rural'] and not c['n_ie_rural']:
+        p.append('ie_rural')         # PF produtor rural sem IE (09/11/2026)
+    if c['n_ie_conferir']:
+        p.append('ie_conferir')
     if c['n_contatos_sem_celular']:
         p.append('contato_celular')
     if not c['n_grupos']:
@@ -167,6 +184,8 @@ def _pend_avulso(c):
         p.append('ramo')
     if 'conferir' in (c['observacoes'] or '').lower():
         p.append('conferir')
+    if c['n_ie_conferir']:
+        p.append('ie_conferir')
     return p
 
 
@@ -204,6 +223,7 @@ ALVO = {
     'origem': 'campo-origem', 'conferir': 'campo-observacoes',
     'grupo': 'campo-grupo', 'socios': 'socios', 'email': 'contatos', 'contato_celular': 'contatos',
     'contato': 'contatos', 'contador': 'contadores', 'documento': 'dados-pessoais',
+    'ie_rural': 'ies-rural', 'ie_conferir': 'campo-ie',
 }
 
 _SQL_UM = """
@@ -222,6 +242,10 @@ SELECT c.id, c.avulso, c.tipo_pessoa, c.nire, c.inscricao_municipal, c.inscricao
        (SELECT COUNT(*) FROM cliente_contadores cc WHERE cc.cliente_id = c.id) AS n_contadores,
        (SELECT COUNT(*) FROM clientes_inscricoes_estaduais ie WHERE ie.cliente_id = c.id AND ie.isenta = 1) AS n_ie_isenta,
        (SELECT COUNT(*) FROM clientes_pf_documentos d WHERE d.cliente_id = c.id) AS n_docs,
+       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais i WHERE i.cliente_id = c.id AND i.conferir = 1) AS n_ie_conferir,
+       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais i WHERE i.cliente_id = c.id AND i.tipo = 'RURAL') AS n_ie_rural,
+       (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao x JOIN ramos_atividade ra ON ra.id = x.ramo_atividade_id
+         WHERE x.cliente_id = c.id AND ra.tipo_pessoa = 'PF' AND UPPER(ra.nome) LIKE '%%RURAL%%') AS n_ramo_rural,
        (SELECT nome FROM contabilidades ca WHERE ca.id = c.contabilidade_anterior_id) AS contab_nome
   FROM clientes c
  WHERE c.id = %s
@@ -266,6 +290,10 @@ def pendencias_do_cadastro(cliente_id):
             return f"{c['n_contatos']} contato(s)"
         if k == 'documento':
             return f"{c['n_docs']} documento(s)"
+        if k == 'ie_rural':
+            return f"{c['n_ie_rural']} inscrição(ões)"
+        if k == 'ie_conferir':
+            return 'conferidas'
         if k == 'grupo':
             return c['grupos']
         if k == 'celular':
@@ -280,13 +308,15 @@ def pendencias_do_cadastro(cliente_id):
 
     # O que não se aplica a este cadastro (ex.: NIRE de pessoa física) não entra em nenhuma das listas.
     so_pj = {'nire', 'im', 'ie', 'socios', 'regime', 'email', 'origem'} if not avulso else {'regime'}
-    so_pf = {'contato', 'documento'} if not avulso else set()
+    so_pf = {'contato', 'documento', 'ie_rural'} if not avulso else set()
     faltam, ok = [], []
     for k, rotulo, cor, ajuda in catalogo:
         if (k in so_pj and not pj) or (k in so_pf and pj):
             continue
-        if k == 'conferir' and k not in p:
+        if k in ('conferir', 'ie_conferir') and k not in p:
             continue
+        if k == 'ie_rural' and not c['n_ramo_rural']:
+            continue                      # só o produtor rural precisa de IE
         if k in p:
             faltam.append({'chave': k, 'rotulo': rotulo, 'cor': cor, 'ajuda': ajuda, 'alvo': ALVO.get(k, '')})
         else:
