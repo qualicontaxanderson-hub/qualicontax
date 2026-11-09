@@ -108,8 +108,8 @@ def main():
         if entra or sai:
             registrar_agente('perfil_permissoes_por_acao', 'configuracoes', USUARIO_ID, USUARIO_NOME, USUARIO_LOGIN,
                              tabela='perfis_acesso', registro_id=p['id'],
-                             antes={'permissoes': sorted(tem)},
-                             depois={'permissoes': sorted((tem | set(entra)) - set(sai))})
+                             depois={'entrou': entra, 'saiu': sai,
+                                     'permissoes': sorted((tem | set(entra)) - set(sai))})
     print('\npronto.' if aplicar else '\nSimulação. Para gravar: --aplicar')
 
 
