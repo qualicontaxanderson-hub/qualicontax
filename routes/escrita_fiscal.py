@@ -16,7 +16,7 @@ from flask import (
 )
 from io import BytesIO
 from flask_login import current_user
-from utils.auth_helper import login_required, permission_required
+from utils.auth_helper import login_required, permission_required, admin_required
 from utils.atividade import registrar, rotulo_empresa
 from utils.home_atividade import (card_participacoes, card_trabalhando_agora,
                                   card_chegando_cliente)
@@ -1294,9 +1294,13 @@ def api_home_destaques():
 # nfe_importacoes). NÃO captura, NÃO consome cota — só mostra o que o cron gravou.
 # ---------------------------------------------------------------------------
 @escrita_fiscal.route('/status-sefaz/<int:cliente_id>/ciencia', methods=['POST'])
-@permission_required('escrita_fiscal.conf_compras')
+@admin_required
 def status_sefaz_ciencia(cliente_id):
     """Liga/desliga a Ciência da Operação automática de UMA empresa.
+
+    SÓ ADMIN (09/11/2026). Até aqui bastava a Conferência de Entradas, e 20
+    pessoas da equipe tinham a chave. Anderson (15/10/2026): ligar a Ciência é
+    SEMPRE manual, por ele, empresa por empresa. Nenhum perfil abre esta rota.
 
     O que esta chave declara não é uma preferência técnica: é que **o cliente
     autorizou** manifestar em nome dele. A manifestação é IRREVERSÍVEL e
