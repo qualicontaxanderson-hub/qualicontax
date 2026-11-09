@@ -466,6 +466,8 @@
 .qb #responsaveis .rs-who { flex-direction:column; gap:7px; }
 .qb #responsaveis .rs-av { width:46px; height:46px; flex-basis:46px; font-size:15px; }
 .qb #responsaveis .rs-nome { font-size:13px; font-weight:700; }
+.qb #responsaveis .rs-tile-ok { cursor:pointer; transition:background .15s, box-shadow .15s; }
+.qb #responsaveis .rs-tile-ok:hover { background:#f0fdf4; box-shadow:inset 0 0 0 1.5px #86efac; }
 .qb #responsaveis .rs-tile-falta { background:#fff1f2; outline:1.5px dashed #fda4af; outline-offset:-1.5px; }
 .qb #responsaveis .rs-btn { border-radius:10px; }
 
@@ -1129,7 +1131,7 @@
                         <div class="rs-grid">
                             {% for r in responsaveis %}
                             {% if r.usuario_id %}
-                            <div class="rs-tile">
+                            <div class="rs-tile rs-tile-ok" data-rs-dep="{{ r.departamento_id }}" role="button" tabindex="0" title="Clique para trocar quem responde por {{ r.departamento }}">
                                 <span class="rs-dep"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i> {{ r.departamento }}</span>
                                 <div class="rs-who">
                                     <span class="rs-av" style="--rs-c:{{ rs_cores[r.usuario_id % 8] }}">{{ rs_ini(r.usuario_nome) }}</span>
@@ -1825,6 +1827,16 @@
         if (alvo) setTimeout(function () { alvo.focus(); }, 60);
     };
     window.fecharResponsaveis = function () { modal.style.display = 'none'; };
+    // 09/11/2026: o cartão de quem JÁ responde também abre a troca (antes só o vazio e o "Editar").
+    document.addEventListener('click', function (e) {
+        var t = e.target.closest('.rs-tile-ok[data-rs-dep]');
+        if (!t || e.target.closest('.cp-btn, .cp-tudo, a, button')) return;
+        abrirResponsaveis(parseInt(t.getAttribute('data-rs-dep'), 10));
+    });
+    document.addEventListener('keydown', function (e) {
+        var t = e.target.closest && e.target.closest('.rs-tile-ok[data-rs-dep]');
+        if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); abrirResponsaveis(parseInt(t.getAttribute('data-rs-dep'), 10)); }
+    });
     modal.addEventListener('change', function (e) { if (e.target.tagName === 'SELECT') revisar(); });
     document.getElementById('rs-form').addEventListener('submit', function (e) {
         if (!revisar()) return;
