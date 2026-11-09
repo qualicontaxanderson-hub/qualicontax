@@ -241,6 +241,43 @@ def _msg_faltando(falta):
     return 'Preencha antes de salvar: ' + ', '.join(falta) + '.'
 
 
+def _pode_fin():
+    return current_user.is_admin() or current_user.has_permission('financeiro.honorarios')
+
+
+def _travas(form, avulso=False, cliente_id=None):
+    """O que IMPEDE gravar o formulário (Novo e Editar), desde 09/11/2026. Anderson: "agora vai permitir
+    salvar, e se não tiver completo fica no A CADASTRAR". O que só FALTA (grupo, celular, ramo, contador,
+    sócios, origem, contato, documento) deixa gravar e aparece no A CADASTRAR. Continua barrando o valor
+    ERRADO: celular/telefone inválido, ramo da outra pessoa, data inválida, documento pela metade, grupo ou
+    contador que não existe, sócios que não somam 100%."""
+    so_falta = {'ramo de atividade', 'sócios', 'documento de identificação (RG, CNH, CIN...)'}
+    out = []
+    for f in _obrigatorios_faltando(form, avulso, cliente_id=cliente_id):
+        if f in so_falta or f.startswith('contato (') or f.startswith('contabilidade anterior'):
+            continue
+        if f == 'grupo de empresas' and not form.get('grupo_id', type=int):
+            continue
+        if f == 'celular':
+            if not re.sub(r'\D', '', form.get('celular') or ''):
+                continue
+            f = 'celular (número inválido: DDD + número)'
+        out.append(f)
+    for f in _socios_e_contador_faltando(form, cliente_id):
+        if f in so_falta:
+            continue
+        if f == 'contador responsável':
+            if not form.get('contador_id', type=int):
+                continue
+            f = 'contador responsável (escolha um da lista)'
+        out.append(f)
+    return out
+
+
+def _msg_travas(travas):
+    return 'Não foi salvo: corrija ' + ', '.join(travas) + '.'
+
+
 def _salvar_grupo(cliente_id, grupo_id):
     """Grava o grupo escolhido no formulário. Já está nele: não mexe (e não
     tira de outro grupo que a ficha tenha posto). Trocou: sai dos antigos e
@@ -744,7 +781,7 @@ def _ctx_form(cliente=None):
         k['atende'] = uso.get(k['id'], 0)
     ctx = {'ramos_atividade': RamoAtividade.get_all(situacao='ATIVO'),
            'grupos': GrupoCliente.get_all(situacao='ATIVO'), 'grupos_json': grupos_json,
-           'contadores_json': contadores, 'proximo_pf': _proximo_numero_pf(),
+           'contadores_json': contadores, 'proximo_pf': _proximo_numero_pf(), 'pode_fin': _pode_fin(),
            'janela': request.args.get('janela') == '1' or request.form.get('janela') == '1',
            'pre': {'tipo': request.args.get('tipo', ''), 'nome': request.args.get('nome', ''),
                    'grupo_id': request.args.get('grupo_id', type=int), 'doc': request.args.get('doc', '')}}
@@ -1091,7 +1128,8 @@ def _render_editar(cliente, endereco_principal):
     return render_template('clientes/form.html', COBRANCAS=COBRANCAS, cliente=cliente,
                            endereco_principal=endereco_principal,
                            departamentos_contato=ContatoCliente.departamentos_disponiveis(),
-                           contatos_existentes=len(ContatoCliente.get_by_cliente(cliente['id'])),
+                           contatos_existentes=len(_cts := ContatoCliente.get_by_cliente(cliente['id'])),
+                           contatos_sem_celular=sum(1 for k in _cts if k.get('ativo', 1) and not (k.get('celular') or '').strip()),
                            **_ctx_form(cliente))
 
 
@@ -1143,9 +1181,10 @@ def novo():
         if not request.form.get('tipo_pessoa') or not nome_razao_social or not cpf_cnpj:
             flash('Preencha todos os campos obrigatórios.', 'danger')
             return _render_novo()
-        falta = _obrigatorios_faltando(request.form, eh_avulso) + _socios_e_contador_faltando(request.form)
-        if falta:
-            flash(_msg_faltando(falta), 'danger')
+        # 09/11/2026: grava incompleto (o que falta vai para o A CADASTRAR); só valor errado impede.
+        travas = _travas(request.form, eh_avulso)
+        if travas:
+            flash(_msg_travas(travas), 'danger')
             return _render_novo()
         
         # Criar cliente
@@ -1170,7 +1209,8 @@ def novo():
             'observacoes': request.form.get('observacoes'),
             'nire': request.form.get('nire'),
             'nire_data_registro': request.form.get('nire_data_registro'),
-            'cobranca': request.form.get('cobranca'),
+            # cobrança dos honorários: só admin + financeiro.honorarios (09/11/2026); os demais deixam Pendente
+            'cobranca': request.form.get('cobranca') if _pode_fin() else None,
             'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
             'avulso': eh_avulso,
             'criado_por': current_user.id
@@ -1205,7 +1245,8 @@ def novo():
                     pass  # Ignora erros de duplicação
 
             # Grupo de empresas, contador e sócios (obrigatórios desde 07/10/2026)
-            _salvar_grupo(cliente_id, request.form.get('grupo_id', type=int))
+            if request.form.get('grupo_id', type=int):
+                _salvar_grupo(cliente_id, request.form.get('grupo_id', type=int))
             if not _eh_contador(request.form):
                 _salvar_contador(cliente_id, request.form.get('contador_id', type=int))
             if request.form.get('tipo_pessoa') == 'PJ':
@@ -2127,10 +2168,10 @@ def editar(id):
                 # exigências de cliente (origem da empresa), como no botão
                 # "Converter em cliente" (03/11/2026).
                 _ainda_avulso = bool(cliente.get('avulso')) and not numero_cliente
-                _falta = (_obrigatorios_faltando(request.form, _ainda_avulso, cliente_id=id)
-                          + _socios_e_contador_faltando(request.form, id))
+                # 09/11/2026: grava incompleto (vai para o A CADASTRAR); só valor errado impede.
+                _falta = _travas(request.form, _ainda_avulso, cliente_id=id)
                 if _falta:
-                    _erro_num = _msg_faltando(_falta)
+                    _erro_num = _msg_travas(_falta)
             if _erro_num:
                 flash(_erro_num, 'danger')
                 return _render_editar(cliente, endereco_principal)
@@ -2155,7 +2196,7 @@ def editar(id):
                 'observacoes': request.form.get('observacoes'),
                 'nire': request.form.get('nire'),
                 'nire_data_registro': request.form.get('nire_data_registro'),
-                'cobranca': request.form.get('cobranca'),
+                'cobranca': request.form.get('cobranca') if _pode_fin() else cliente.get('cobranca'),
                 'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
                 'alterado_por': current_user.id      # AUDITORIA (D2): quem alterou
             }
@@ -2278,7 +2319,8 @@ def editar(id):
                               registro_id=id, antes={'ramos': _ramos_antes}, depois={'ramos': _ramos_depois})
 
                 # Grupo de empresas (obrigatório desde 07/10/2026)
-                _mud_grupo = _salvar_grupo(id, request.form.get('grupo_id', type=int))
+                _mud_grupo = (_salvar_grupo(id, request.form.get('grupo_id', type=int))
+                              if request.form.get('grupo_id', type=int) else None)   # em branco não tira do grupo
                 if _mud_grupo:
                     registrar('escrita.alterou_grupo_cliente', 'cadastros', tabela='clientes',
                               registro_id=id, antes={'grupos': _mud_grupo[0]},
@@ -2286,7 +2328,9 @@ def editar(id):
                 if not _contador:
                     _salvar_contador(id, request.form.get('contador_id', type=int))
                 if request.form.get('tipo_pessoa') == 'PJ':
-                    _gravar_quadro(id, request.form)
+                    # lista vazia não vira "todos saíram" (desde 09/11 grava sem sócios): só a ficha tira sócio
+                    if _ler_socios(request.form) or _filial_travada(cpf_cnpj, id)[0]:
+                        _gravar_quadro(id, request.form)
                     _salvar_origem(id, request.form, cliente.get('contabilidade_anterior_id'))
                     _salvar_natureza(id, request.form, cliente)
                 else:
