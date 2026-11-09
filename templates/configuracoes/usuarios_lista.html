@@ -318,139 +318,198 @@
 </style>
 
 {# ==================================================================== #}
-{# Q-COLABORE Parte 2 — links gerados e fila de pendentes              #}
+{# Q-COLABORE Parte 2 — fila de pendentes e links gerados               #}
+{# 09/11/2026 (Anderson): "Links e cadastros pendentes está horrível" —   #}
+{# saem as tabelas; entram cartões de Clientes. Pendentes vêm PRIMEIRO    #}
+{# (pedem ação); links viram cartões pequenos com filtro por situação.    #}
+{# Os onclick (analisarPendente, copiarLista, revogarLink) são os mesmos. #}
 {# ==================================================================== #}
-<div class="card qc-secao">
-    <div class="qc-secao-topo">
+{% set modal_lbl = {'HOME_OFFICE':'Home office','ESCRITORIO':'Escritório','HIBRIDO':'Híbrido'} %}
+{% set modal_ico = {'HOME_OFFICE':'house-laptop','ESCRITORIO':'building','HIBRIDO':'shuffle'} %}
+<section class="usr-sec">
+    <div class="usr-sec-topo">
         <div>
-            <h2 class="qc-secao-tit">Links de cadastro gerados</h2>
-            <p class="qc-secao-sub">Cada link vale <strong>uma única vez</strong> e expira em 72h.
-               Depois de fechado o modal, só o prefixo continua visível.</p>
+            <h2 class="usr-sec-tit"><i class="fas fa-user-clock"></i> Cadastros pendentes
+                <span class="usr-sec-n {{ 'warn' if pendentes else '' }}">{{ pendentes|length }}</span></h2>
+            <p class="usr-sec-sub">Quem preencheu o link de cadastro e está esperando a sua aprovação.
+               Clique no cartão para analisar.</p>
         </div>
     </div>
-    <table class="data-table qc-tbl">
-        <thead>
-            <tr>
-                <th>Prefixo</th>
-                <th>Tipo</th>
-                <th>Destinatário</th>
-                <th>Status</th>
-                <th>Validade</th>
-                <th>Gerado por</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for l in links %}
-            <tr>
-                <td data-label="Prefixo"><code>{{ l.token_prefixo }}…</code></td>
-                <td data-label="Tipo"><span class="badge badge-secondary">{{ l.tipo }}</span></td>
-                <td data-label="Destinatário">{{ l.destinatario or '—' }}</td>
-                <td data-label="Status">
-                    {% set cor = {'pendente':'info', 'usado':'success',
-                                  'expirado':'warning', 'revogado':'danger'} %}
-                    <span class="badge badge-{{ cor.get(l.status, 'secondary') }}">{{ l.status }}</span>
-                </td>
-                <td data-label="Validade">{{ l.expira_em.strftime('%d/%m/%Y %H:%M') if l.expira_em else '—' }}</td>
-                <td data-label="Gerado por">{{ l.criado_por_nome or '—' }}<br>
-                    <small class="text-muted">{{ l.criado_em.strftime('%d/%m/%Y %H:%M') if l.criado_em else '' }}</small></td>
-                <td class="qc-td-act">
-                    {# status 'pendente' já exclui vencido/usado/revogado
-                       (status_do_link). Só aqui o link ainda existe no banco e
-                       tem url_claro para copiar. #}
-                    {% if l.status == 'pendente' %}
-                        {% if l.url_claro %}
-                        <button class="btn btn-sm btn-secondary" title="Copiar link"
-                                data-url="{{ l.url_claro }}" onclick="copiarLista(this)">
-                            <i class="fas fa-copy"></i> Copiar link
-                        </button>
-                        {% endif %}
-                        <button class="btn btn-sm btn-danger" title="Revogar"
-                                onclick="revogarLink({{ l.id }}, '{{ l.token_prefixo }}', this)">
-                            <i class="fas fa-ban"></i> Revogar
-                        </button>
-                    {% else %}
-                    <span class="text-muted">—</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="7" class="text-center text-muted py-4">
-                Nenhum link gerado ainda.
-            </td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+    {% if pendentes %}
+    <div class="gc-grid">
+    {% for p in pendentes %}
+    <article class="gc-card cli-card usr-pend" tabindex="0" role="button" title="Analisar a candidatura"
+             onclick="if(!event.target.closest('button')) analisarPendente({{ p.id }})"
+             onkeydown="if(event.key==='Enter') analisarPendente({{ p.id }})">
+        <header class="gc-head">
+            <span class="gc-ava usr-ava-pend">{{ (p.nome_completo or '?')[:1]|upper }}</span>
+            <div class="gc-tit">
+                <h3 title="{{ p.nome_completo }}">{{ p.nome_completo }}</h3>
+                <span class="cli-doc">Login pedido <span class="mono">{{ p.login_escolhido or '—' }}</span>{% if p.nick_escolhido %} · {{ p.nick_escolhido }}{% endif %}</span>
+            </div>
+            <span class="gc-sit usr-sit-pend">Aguardando</span>
+        </header>
+        <div class="gc-tags">
+            {% if p.modalidade_trabalho %}
+            <span class="gc-tag cfg-tag-info"><i class="fas fa-{{ modal_ico.get(p.modalidade_trabalho, 'briefcase') }}"></i>
+                {{ modal_lbl.get(p.modalidade_trabalho, p.modalidade_trabalho) }}</span>
+            {% endif %}
+            <span class="gc-tag {{ 'cfg-tag-ok' if p.ja_funcionario else 'cfg-tag-sem' }}">
+                <i class="fas fa-{{ 'id-badge' if p.ja_funcionario else 'user-plus' }}"></i>
+                {{ 'Já é funcionário' if p.ja_funcionario else 'Ainda não é funcionário' }}</span>
+        </div>
+        <div class="cli-grade">
+            <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail{% if p.email_corporativo %} corporativo{% endif %}</span>
+                <span class="cli-val" title="{{ p.email_corporativo or p.email_pessoal or '' }}">{{ (p.email_corporativo or p.email_pessoal or '—')|lower }}</span></div>
+            <div class="cli-campo"><span class="cli-rot">Celular</span>
+                <span class="cli-val mono">{{ p.celular_corporativo or '—' }}</span></div>
+            <div class="cli-campo cfg-linha"><span class="cli-rot">Departamentos</span>
+                {% if p.departamentos %}
+                <div class="cfg-nomes">{% for d in p.departamentos.split(', ') %}<span class="cli-ramo">{{ d }}</span>{% endfor %}</div>
+                {% else %}<span class="cli-val cfg-vazio">Não informou</span>{% endif %}
+            </div>
+        </div>
+        <footer class="cli-pe">
+            <span class="cli-selo cli-selo-warn"><i class="fas fa-hourglass-half"></i>
+                <span class="cli-selo-t"><b>Recebido {{ p.criado_em.strftime('%d/%m/%Y') if p.criado_em else '—' }}</b>
+                <small>às {{ p.criado_em.strftime('%H:%M') if p.criado_em else '—' }} · falta aprovar</small></span></span>
+            <button type="button" class="usr-btn-analisar" onclick="analisarPendente({{ p.id }})">
+                <i class="fas fa-clipboard-check"></i> Analisar
+            </button>
+        </footer>
+    </article>
+    {% endfor %}
+    </div>
+    {% else %}
+    <div class="usr-vazio"><i class="fas fa-inbox"></i> Nenhum cadastro esperando aprovação.</div>
+    {% endif %}
+</section>
 
-<div class="card qc-secao">
-    <div class="qc-secao-topo">
+<section class="usr-sec">
+    <div class="usr-sec-topo">
         <div>
-            <h2 class="qc-secao-tit">Cadastros pendentes</h2>
-            <p class="qc-secao-sub">Candidaturas preenchidas por quem recebeu um link,
-               aguardando sua aprovação.</p>
+            <h2 class="usr-sec-tit"><i class="fas fa-link"></i> Links de cadastro gerados
+                <span class="usr-sec-n">{{ links|length }}</span></h2>
+            <p class="usr-sec-sub">Cada link vale <strong>uma vez só</strong> e vence em 72 horas.
+               Depois de fechada a janela em que foi gerado, só o começo do link fica visível.</p>
+        </div>
+        <div class="gc-pills usr-lk-pills" id="lkPills" role="group" aria-label="Situação do link">
+            <button type="button" class="gc-pill" data-v="pendente"><i class="fas fa-circle-play"></i> Valendo <b></b></button>
+            <button type="button" class="gc-pill" data-v="usado"><i class="fas fa-circle-check"></i> Usados <b></b></button>
+            <button type="button" class="gc-pill" data-v="expirado"><i class="fas fa-clock"></i> Vencidos <b></b></button>
+            <button type="button" class="gc-pill" data-v="revogado"><i class="fas fa-ban"></i> Revogados <b></b></button>
+            <button type="button" class="gc-pill" data-v="">Todos <b></b></button>
         </div>
     </div>
-    {% set modal_lbl = {'HOME_OFFICE':'Home office','ESCRITORIO':'Escritório','HIBRIDO':'Híbrido'} %}
-    {% set modal_cor = {'HOME_OFFICE':'info','ESCRITORIO':'secondary','HIBRIDO':'success'} %}
-    <table class="data-table qc-tbl">
-        <thead>
-            <tr>
-                <th>Nome</th>
-                <th>Login pedido</th>
-                <th>Nick</th>
-                <th>Contato</th>
-                <th>Modalidade</th>
-                <th>Departamentos</th>
-                <th>Já funcionário?</th>
-                <th>Recebido em</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in pendentes %}
-            <tr>
-                <td data-label="Nome"><strong>{{ p.nome_completo }}</strong></td>
-                <td data-label="Login"><code>{{ p.login_escolhido }}</code></td>
-                <td data-label="Nick">{{ p.nick_escolhido or '—' }}</td>
-                <td data-label="Contato">
-                    {% if p.email_corporativo or p.celular_corporativo %}
-                        {% if p.email_corporativo %}
-                        <div><span class="badge badge-secondary">corp</span> {{ p.email_corporativo }}</div>
-                        {% endif %}
-                        {% if p.celular_corporativo %}
-                        <div><small class="text-muted">{{ p.celular_corporativo }}</small></div>
-                        {% endif %}
-                    {% elif p.email_pessoal %}
-                        {{ p.email_pessoal }}
-                    {% else %}—{% endif %}
-                </td>
-                <td data-label="Modalidade">
-                    {% if p.modalidade_trabalho %}
-                    <span class="badge badge-{{ modal_cor.get(p.modalidade_trabalho, 'secondary') }}">
-                        {{ modal_lbl.get(p.modalidade_trabalho, p.modalidade_trabalho) }}
-                    </span>
-                    {% else %}<span class="text-muted">—</span>{% endif %}
-                </td>
-                <td data-label="Departamentos">{{ p.departamentos or '—' }}</td>
-                <td data-label="Já funcionário?">{{ 'Sim' if p.ja_funcionario else 'Não' }}</td>
-                <td data-label="Recebido em">{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '—' }}</td>
-                <td class="qc-td-act">
-                    <button class="btn btn-sm btn-primary" title="Analisar candidatura"
-                            onclick="analisarPendente({{ p.id }})">
-                        <i class="fas fa-clipboard-check"></i> Analisar
-                    </button>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="9" class="qc-vazio">
-                <i class="fas fa-inbox"></i>
-                <div>Nenhum cadastro aguardando aprovação.</div>
-            </td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+    {% set lk_sit = {'pendente':('ok','Valendo','fa-circle-play'), 'usado':('sem','Usado','fa-circle-check'),
+                     'expirado':('warn','Vencido','fa-clock'), 'revogado':('bad','Revogado','fa-ban')} %}
+    <div class="usr-lk-grid" id="lkLista">
+    {% for l in links %}
+    {% set st = lk_sit.get(l.status, ('sem', l.status, 'fa-circle')) %}
+    <article class="usr-lk usr-lk-{{ st[0] }}" data-st="{{ l.status }}">
+        <div class="usr-lk-top">
+            <code class="usr-lk-pref">{{ l.token_prefixo }}…</code>
+            <span class="usr-lk-tipo">{{ (l.tipo or '')|capitalize }}</span>
+            <span class="usr-lk-st"><i class="fas {{ st[2] }}"></i> {{ st[1] }}</span>
+        </div>
+        <div class="usr-lk-para">{% if l.destinatario %}<i class="fas fa-user"></i> {{ l.destinatario }}{% else %}<span class="cfg-vazio">sem destinatário</span>{% endif %}</div>
+        <div class="usr-lk-pe">
+            <span title="Gerado por {{ l.criado_por_nome or '—' }}">
+                {{ (l.criado_por_nome or '—').split(' ')[0] }} · {{ l.criado_em.strftime('%d/%m %H:%M') if l.criado_em else '—' }}
+            </span>
+            <span>{{ 'vale até' if l.status == 'pendente' else 'vencia' }} {{ l.expira_em.strftime('%d/%m %H:%M') if l.expira_em else '—' }}</span>
+        </div>
+        {% if l.status == 'pendente' %}
+        <div class="usr-lk-acoes">
+            {% if l.url_claro %}
+            <button type="button" class="lst-act cfg-act-info" title="Copiar link"
+                    data-url="{{ l.url_claro }}" onclick="copiarLista(this)"><i class="fas fa-copy"></i> Copiar</button>
+            {% endif %}
+            <button type="button" class="lst-act cfg-act-warn" title="Revogar"
+                    onclick="revogarLink({{ l.id }}, '{{ l.token_prefixo }}', this)"><i class="fas fa-ban"></i> Revogar</button>
+        </div>
+        {% endif %}
+    </article>
+    {% endfor %}
+    </div>
+    <button type="button" class="usr-lk-mais" id="lkMais" hidden></button>
+    <div class="usr-vazio" id="lkVazio" {% if links %}hidden{% endif %}><i class="fas fa-link-slash"></i> <span>Nenhum link gerado ainda.</span></div>
+</section>
+
+<style>
+.usr-sec { margin-top:28px; }
+.usr-sec-topo { display:flex; align-items:flex-end; justify-content:space-between; gap:12px 20px; flex-wrap:wrap; margin-bottom:12px; }
+.usr-sec-tit { font-size:16px; font-weight:700; color:#0f3d2e; margin:0; display:flex; align-items:center; gap:8px; }
+.usr-sec-tit > i { color:#16a34a; font-size:15px; }
+.usr-sec-n { font-size:12px; font-weight:700; background:#eef2f0; color:#475569; border-radius:99px; padding:2px 9px; }
+.usr-sec-n.warn { background:#fef3c7; color:#b45309; }
+.usr-sec-sub { font-size:12.5px; color:#64748b; margin:4px 0 0; }
+.usr-vazio { background:#fff; border:1px dashed #d7e3dc; border-radius:14px; padding:22px; text-align:center; color:#94a3b8; font-size:13px; }
+.usr-vazio i { margin-right:6px; }
+/* pendente: o cartão de Clientes, em âmbar */
+.usr-ava-pend { background:linear-gradient(135deg,#f59e0b,#b45309); }
+.usr-sit-pend { background:#fef3c7; color:#b45309; }
+.usr-pend { cursor:pointer; }
+.usr-pend .cli-pe { flex-wrap:wrap; gap:8px; }
+.usr-btn-analisar { margin-left:auto; display:inline-flex; align-items:center; gap:6px; background:#16a34a; color:#fff; border:0;
+                     border-radius:9px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; }
+.usr-btn-analisar:hover { background:#15803d; }
+.usr-lk-mais { display:block; margin:12px auto 0; background:#fff; border:1px solid #d7e3dc; color:#0f3d2e; border-radius:9px;
+               padding:7px 16px; font-size:12.5px; font-weight:600; cursor:pointer; }
+.usr-lk-mais:hover { border-color:#22c55e; }
+/* links: cartões pequenos */
+.usr-lk-pills .gc-pill { border-radius:9px; padding:5px 10px; font-size:12.5px; }
+.usr-lk-pills .gc-pill i { font-size:11.5px; margin-right:3px; }
+.usr-lk-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:10px; }
+.usr-lk { background:#fff; border:1px solid #e3ebe6; border-left:4px solid #cbd5e1; border-radius:12px; padding:10px 12px;
+          display:flex; flex-direction:column; gap:6px; font-size:12.5px; min-width:0; }
+.usr-lk[hidden] { display:none; }
+.usr-lk-ok { border-left-color:#22c55e; } .usr-lk-warn { border-left-color:#f59e0b; } .usr-lk-bad { border-left-color:#ef4444; }
+.usr-lk-top { display:flex; align-items:center; gap:6px; min-width:0; }
+.usr-lk-pref { font-size:12.5px; color:#0f172a; background:#f1f5f9; border-radius:6px; padding:1px 6px; }
+.usr-lk-tipo { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
+.usr-lk-st { margin-left:auto; font-size:11px; font-weight:700; border-radius:99px; padding:2px 8px; white-space:nowrap;
+             background:#f1f5f9; color:#64748b; }
+.usr-lk-ok .usr-lk-st { background:#dcfce7; color:#15803d; }
+.usr-lk-warn .usr-lk-st { background:#fef3c7; color:#b45309; }
+.usr-lk-bad .usr-lk-st { background:#fee2e2; color:#b91c1c; }
+.usr-lk-para { color:#0f172a; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.usr-lk-para i { color:#94a3b8; font-size:11px; margin-right:3px; }
+.usr-lk-para .cfg-vazio { color:#94a3b8; font-weight:400; }
+.usr-lk-pe { display:flex; justify-content:space-between; gap:8px; color:#64748b; font-size:11.5px; }
+.usr-lk-acoes { display:flex; gap:6px; }
+.usr-lk-acoes .lst-act { width:auto; padding:0 10px; gap:5px; flex:1; justify-content:center; font-size:12px; }
+@media (max-width:640px) { .usr-lk-grid { grid-template-columns:1fr; } .usr-lk-pills { width:100%; } }
+</style>
+<script>
+(function () {
+    var pills = document.querySelectorAll('#lkPills .gc-pill'), cards = document.querySelectorAll('#lkLista .usr-lk');
+    var vazio = document.getElementById('lkVazio'), mais = document.getElementById('lkMais');
+    var LIM = 12, atual = '', tudo = false;
+    mais.addEventListener('click', function () { tudo = true; aplicar(atual); });
+    if (!cards.length) return;
+    var n = {'': cards.length};
+    cards.forEach(function (c) { n[c.dataset.st] = (n[c.dataset.st] || 0) + 1; });
+    pills.forEach(function (b) {
+        var k = n[b.dataset.v] || 0;
+        b.querySelector('b').textContent = k;
+        if (!k) b.classList.add('gc-pill-zero');
+        b.addEventListener('click', function () { tudo = false; aplicar(b.dataset.v); });
+    });
+    function aplicar(v) {
+        var vis = 0; atual = v;
+        pills.forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+        // os mais recentes primeiro (a lista já vem assim); passa de 12, o resto espera o "mostrar"
+        cards.forEach(function (c) { var ok = !v || c.dataset.st === v; if (ok) vis++; c.hidden = !ok || (!tudo && vis > LIM); });
+        mais.hidden = tudo || vis <= LIM;
+        mais.textContent = 'Mostrar os outros ' + (vis - LIM) + ' links';
+        vazio.hidden = vis > 0;
+        if (!vis) vazio.querySelector('span').textContent = 'Nenhum link nesta situação.';
+    }
+    // abre em "Valendo" quando há link vivo; senão mostra todos
+    aplicar(n.pendente ? 'pendente' : '');
+})();
+</script>
 </div>{# /ef-body #}
 
 {# ---- Modal: gerar link (o token aparece AQUI e em lugar nenhum mais) ---- #}
