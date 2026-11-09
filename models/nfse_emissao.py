@@ -691,6 +691,21 @@ def situacao_das_matrizes():
     return {r['empresa_id']: ('liberada' if r.get('liberado_em') else 'configurada') for r in rows}
 
 
+def resumo_das_notas(cliente_id):
+    """Cartão "Notas desta empresa" da Configuração (09/11/2026): só PRODUÇÃO (ambiente 1)."""
+    r = execute_query(
+        "SELECT SUM(situacao = 'autorizada') autorizadas, SUM(situacao = 'cancelada') canceladas, "
+        "SUM(situacao IN ('rejeitada', 'erro')) recusadas, MAX(criado_em) ultima_em "
+        "FROM nfse_emitidas WHERE empresa_id = %s AND ambiente = 1", (cliente_id,), fetch=True, fetch_one=True) or {}
+    u = execute_query(
+        "SELECT situacao, numero_nfse, criado_em, erro_ultimo FROM nfse_emitidas "
+        "WHERE empresa_id = %s AND ambiente = 1 ORDER BY id DESC LIMIT 1", (cliente_id,), fetch=True, fetch_one=True)
+    if u and u.get('situacao') in ('rejeitada', 'erro'):
+        u['motivo'] = motivo_curto(u.get('erro_ultimo'))[0]
+    return {'autorizadas': int(r.get('autorizadas') or 0), 'canceladas': int(r.get('canceladas') or 0),
+            'recusadas': int(r.get('recusadas') or 0), 'ultima': u}
+
+
 def contexto_da_matriz(cliente_id, emp=None):
     """Tudo o que a tela de cartões precisa (08/11/2026) — UM montador para o Fiscal e o
     Financeiro: empresa, configuração (salva ou sugerida), séries, o que falta por cartão,
@@ -715,6 +730,7 @@ def contexto_da_matriz(cliente_id, emp=None):
         'prontos': sum(1 for c in cartoes if c['ok']) if salvo else 0,
         'aceita': aceita, 'provedor': PROVEDOR_DO_MUNICIPIO.get(ibge, ''),
         'exige_im': MUNICIPIOS_EXIGEM_IM.get(ibge, ''),
+        'notas_resumo': resumo_das_notas(cliente_id),
         'atividades': S.atividades_da_empresa(emp['documento'], emp.get('cnae'), emp.get('cnae_descricao')),
         'historico': [{'ctrib': c, 'ctrib_fmt': S.fmt_ctrib(c), 'nome': S.nome_servico(c), 'nbs': n, 'qtd': q}
                       for c, n, q in S.historico_de_notas(cliente_id, emp['documento'])],

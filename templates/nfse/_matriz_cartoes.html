@@ -1,214 +1,313 @@
 {# =====================================================================
-   MATRIZ FISCAL EM CARTÕES (08/11/2026) — UM pedaço só, incluído pelo Fiscal
+   MATRIZ FISCAL EM CARTÕES — UM pedaço só, incluído pelo Fiscal
    (escrita_fiscal/emissao_nfse.html) e pelo Financeiro (financeiro/notas_config.html).
-   Anderson: "parece um livro chato de escolas antigas... vem dados que os usuários não vão
-   nem saber o que é". Mockup aprovado: 5 cartões, o que falta em amarelo, salva sozinho.
+   08/11/2026: 5 cartões, o que falta em destaque, salva sozinho.
+   09/11/2026: no visual da FICHA DO CLIENTE (modelo aprovado — "Aprovado !"): cartão verde-escuro
+   da empresa + "Para emitir N de 5" ao lado (como "Cadastro 9 de 13"), mosaico de cartões brancos,
+   valor como texto que vira campo ao clicar, o que falta tracejado. Prefixo mc-.
 
    Contexto: o de models.nfse_emissao.contexto_da_matriz (emp, cfg, salva, series, cartoes,
-   prontos, aceita, provedor, atividades, historico, servico_atual, nbs_opcoes, meta_item,
-   fmt_nbs) + listas (OP_SIMP_NAC, REG_AP_TRIB_SN, REG_ESP_TRIB, IND_DEST, IND_FINAL, EMISSORES)
-   + acao_salvar, acao_serie, serie_campos (dict de hidden), csrf, acao_liberar (só Fiscal),
-   liberado_por.
+   prontos, aceita, provedor, exige_im, notas_resumo, atividades, historico, servico_atual,
+   nbs_opcoes, meta_item, fmt_nbs) + listas (OP_SIMP_NAC, REG_AP_TRIB_SN, REG_ESP_TRIB, IND_DEST,
+   IND_FINAL, EMISSORES) + acao_salvar, acao_serie, serie_campos (dict de hidden), csrf,
+   acao_liberar (só Fiscal), liberado_por.
 
    TODOS os campos de CAMPOS_CONFIG saem no formulário (visíveis ou escondidos): a rota grava
-   o que vier, e campo ausente viraria vazio.
+   o que vier, e campo ausente viraria vazio. Os ids usados pelo script não mudam.
    ===================================================================== #}
 {% set ibge = (cfg.municipio_ibge or '')|string %}
 {% set eh_sp = ibge == '3550308' %}
 {% set op = cfg.op_simp_nac %}
 {% set emissor = cfg.emissor or 'nacional' %}
-{% macro estado(c) -%}
-  {%- if c.travas -%}<span class="mc-chip warn"><i class="fas fa-exclamation"></i> Falta</span>
-  {%- elif not salva -%}<span class="mc-chip info"><i class="fas fa-pen"></i> Veio pronto · confira</span>
-  {%- elif c.travas -%}<span class="mc-chip warn"><i class="fas fa-exclamation"></i> Falta</span>
-  {%- elif c.avisos -%}<span class="mc-chip ok"><i class="fas fa-check"></i> Pronto</span>
-  {%- else -%}<span class="mc-chip ok"><i class="fas fa-check"></i> Pronto</span>{%- endif -%}
+{% set no_fiscal = acao_liberar is defined and acao_liberar %}
+{% set _ex = exige_im if exige_im is defined else '' %}
+{% macro selo(c) -%}
+  {%- if c.travas -%}<span class="mc-selo v">{{ 'faltam ' ~ c.travas|length if c.travas|length > 1 else 'falta' }}</span>
+  {%- elif not salva -%}<span class="mc-selo a">veio pronto · confira</span>
+  {%- elif c.avisos -%}<span class="mc-selo a">pronto · com aviso</span>
+  {%- else -%}<span class="mc-selo ok">pronto</span>{%- endif -%}
 {%- endmacro %}
-{% macro pendencias(c) -%}
-  {% if c.travas or c.avisos %}<ul class="mc-pend">
-    {% for t in c.travas %}<li class="t"><i class="fas fa-circle-xmark"></i> {{ t.texto }}</li>{% endfor %}
-    {% for t in c.avisos %}<li class="a"><i class="fas fa-triangle-exclamation"></i> {{ t.texto }}</li>{% endfor %}
+{% macro pendencias(c, campo_marcado=False, sem_salvar=False) -%}
+  {#- o campo tracejado já diz o que falta: a lista só repete se houver mais de uma trava -#}
+  {%- set tv = [] if (campo_marcado and c.travas|length == 1) else c.travas -%}
+  {%- if sem_salvar %}{% set tv = tv|rejectattr('texto', 'equalto', 'Configuração ainda não salva.')|list %}{% endif -%}
+  {% if tv or c.avisos %}<ul class="mc-pend">
+    {% for t in tv %}<li class="t"><i class="fas fa-circle-xmark"></i><span>{{ t.texto }}</span></li>{% endfor %}
+    {% for t in c.avisos %}<li class="a"><i class="fas fa-circle-exclamation"></i><span>{{ t.texto }}</span></li>{% endfor %}
   </ul>{% endif %}
 {%- endmacro %}
 
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-.mc-prog{display:flex;align-items:center;gap:20px;background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:18px 22px;margin-bottom:16px;flex-wrap:wrap}
-.mc-anel{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
-.mc-anel span{width:50px;height:50px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#0f172a}
-.mc-prog h2{margin:0;font-size:17px;color:#0f172a}.mc-prog p{margin:3px 0 0;color:#64748b;font-size:13px}
-.mc-passos{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-.mc-passo{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:99px;padding:6px 12px;text-decoration:none}
-.mc-passo .fa-circle-check{color:#16a34a}.mc-passo .fa-circle-exclamation{color:#d97706}
-.mc-corpo{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
-.mc-col{min-width:0}
-.mc-grade{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-.mc-lado{position:sticky;top:12px;min-width:0}
-.mc-painel{background:#fff;border:1px solid #e3ece7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 22px rgba(16,120,70,.08)}
-.mc-painel h3{margin:0;font-size:15px;color:#0f172a}
-.mc-grande{font-size:38px;font-weight:900;line-height:1;color:#0f172a}.mc-grande small{font-size:15px;font-weight:600;color:#64748b}
-.mc-segs{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
-.mc-segs a{display:block;height:9px;border-radius:99px;background:#f59e0b}.mc-segs a.ok{background:#22c55e}
-.mc-segs-leg{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;font-size:10px;color:#64748b;text-align:center;margin-top:-4px}
-.mc-segs-leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mc-frase{margin:2px 0;font-size:13px;color:#334155}
-.mc-pd{display:flex;align-items:flex-start;gap:9px;border-radius:12px;padding:10px 12px;font-size:13px;text-decoration:none}
-.mc-pd.t{background:#fff1f2;color:#9f1239}.mc-pd.a{background:#fffbeb;color:#92400e}
-.mc-pd:hover{filter:brightness(.97)}
-.mc-pd i{margin-top:2px}.mc-pd span{flex:1;min-width:0}.mc-pd b{display:block;font-size:11px;letter-spacing:.4px;text-transform:uppercase}
-.mc-pd em{font-style:normal;font-size:11.5px;font-weight:800;border:1px solid currentColor;border-radius:99px;padding:1px 9px;background:#fff;white-space:nowrap}
-.mc-st{color:#64748b;font-size:12.5px;display:flex;align-items:center;gap:8px;border-top:1px solid #eef2f0;padding-top:10px}
-.mc-cheio{width:100%;justify-content:center;box-sizing:border-box}
-.mc-painel form{margin:0}
-.mc-ativs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
-.mc-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:14px;min-width:0;scroll-margin-top:90px}
-.mc-card.falta{border-color:#fcd34d;box-shadow:0 0 0 3px #fef3c7}
-.mc-card.largo{grid-column:1/-1}
-.mc-h{display:flex;align-items:flex-start;gap:12px}
-.mc-ico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
-.mc-h h3{margin:0;font-size:16px;color:#0f172a}.mc-h p{margin:2px 0 0;color:#64748b;font-size:13px}
-.mc-h .mc-chip{margin-left:auto}
-.mc-chip{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:4px 11px;font-size:12px;font-weight:700;white-space:nowrap}
-.mc-chip.ok{background:#dcfce7;color:#15803d}.mc-chip.warn{background:#fef3c7;color:#92400e}.mc-chip.info{background:#e0f2fe;color:#075985}.mc-chip.off{background:#f1f5f9;color:#475569}
-.mc-res{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.mc-res div{background:#f8fafc;border-radius:12px;padding:10px 12px;min-width:0}.mc-res small{display:block;color:#64748b;font-size:11.5px;font-weight:600}.mc-res b{font-size:13.5px;color:#0f172a;overflow-wrap:anywhere}
-.mc-campo label{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px;color:#0f172a}
-.mc-campo label small{color:#94a3b8;font-weight:500}
-.mc-campo input,.mc-campo select{width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:11px;padding:9px 12px;font-size:14px;font-family:inherit;background:#fff;color:#0f172a}
-.mc-campo input:focus,.mc-campo select:focus{outline:none;border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-.mc-ajuda{font-size:12.5px;color:#64748b;margin-top:5px}
-.mc-linha{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.mc-aviso{display:flex;gap:10px;background:#f8fafc;border-radius:12px;padding:12px 14px;font-size:13.5px;color:#334155}
-.mc-aviso i{margin-top:2px;color:#16a34a}.mc-aviso.warn i{color:#d97706}.mc-aviso.info i{color:#0369a1}
-.mc-seg{display:flex;gap:8px;flex-wrap:wrap}
-.mc-seg button{border:1.5px solid #e2e8f0;background:#fff;border-radius:11px;padding:8px 12px;font-size:13px;font-weight:600;color:#334155;cursor:pointer}
-.mc-seg button.on{border-color:#16a34a;background:#f0fdf4;color:#15803d}
-.mc-ativ{display:flex;align-items:flex-start;gap:12px;border:1.5px solid #e2e8f0;border-radius:14px;padding:12px 14px;cursor:pointer;margin:0}
-.mc-ativ:hover{border-color:#86efac}
-.mc-ativ.on{border-color:#16a34a;background:#f0fdf4}
-.mc-ativ.apag{opacity:.55;cursor:default}.mc-ativ.apag:hover{border-color:#e2e8f0}
-.mc-ativ input{display:none}
-.mc-ck{width:22px;height:22px;border-radius:50%;border:2px solid #cbd5e1;flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;margin-top:1px}
-.mc-ativ.on .mc-ck{background:#16a34a;border-color:#16a34a}
-.mc-ativ b{display:block;font-size:13.5px;color:#0f172a}.mc-ativ small{display:block;color:#64748b;font-size:12px}
-.mc-ativ em{display:block;font-style:normal;font-size:12px;color:#15803d;margin-top:4px}.mc-ativ.apag em{color:#64748b}
-.mc-ativ .mc-chip{margin-left:auto}
-.mc-hist{font-size:12.5px;color:#334155;background:#f8fafc;border-radius:12px;padding:10px 12px}.mc-hist i{color:#0369a1;margin-right:6px}
-.mc-escolha{display:flex;align-items:center;gap:12px;border-radius:14px;padding:12px 14px;background:#f8fafc;border:1px dashed #cbd5e1}
-.mc-escolha[hidden]{display:none}
-.mc-escolha b{display:block;font-size:13.5px}.mc-escolha small{color:#64748b;font-size:12px}
-.mc-busca{position:relative}
-.mc-sug{position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.14);max-height:280px;overflow:auto;display:none;margin-top:4px}
-.mc-sug button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid #f1f5f9;padding:9px 12px;font-size:13px;cursor:pointer;font-family:inherit}
-.mc-sug button:hover{background:#f0fdf4}.mc-sug small{color:#64748b}
-.mc-sw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px dashed #e2e8f0;font-size:13px;cursor:pointer;margin:0}
-.mc-sw input{display:none}
-.mc-sw i.sw{width:40px;height:22px;border-radius:99px;background:#cbd5e1;position:relative;flex:none;transition:background .15s}
-.mc-sw i.sw::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
-.mc-sw input:checked + i.sw{background:#16a34a}.mc-sw input:checked + i.sw::after{left:21px}
-.mc-sw small{display:block;color:#64748b;font-weight:400}
-.mc-av{border-top:1px solid #f1f5f9;padding-top:10px}
-.mc-av summary{font-size:12.5px;color:#64748b;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
-.mc-av summary::-webkit-details-marker{display:none}
-.mc-av summary::before{content:'\f054';font-family:'Font Awesome 6 Free';font-weight:900;font-size:10px;transition:transform .15s}
-.mc-av[open] summary::before{transform:rotate(90deg)}
-.mc-av .mc-av-corpo{display:flex;flex-direction:column;gap:12px;margin-top:12px}
-.mc-pend{list-style:none;margin:0;padding:10px 0 0;border-top:1px dashed #e2e8f0;font-size:12.5px}
-.mc-pend li{padding:3px 0;color:#334155}.mc-pend li.t i{color:#dc2626;margin-right:6px}.mc-pend li.a i{color:#d97706;margin-right:6px}
-.mc-btn{display:inline-flex;align-items:center;gap:8px;border-radius:11px;padding:10px 16px;font-weight:700;font-size:13px;border:0;cursor:pointer;text-decoration:none;font-family:inherit}
-.mc-btn-p{background:#16a34a;color:#fff}.mc-btn-p[disabled]{background:#cbd5e1;cursor:not-allowed}
-.mc-btn-o{background:#fff;border:1.5px solid #e2e8f0;color:#0f172a}
-.mc-link{background:none;border:0;color:#15803d;font-weight:600;font-size:13px;cursor:pointer;padding:0;text-decoration:none;font-family:inherit}
-.mc-series{display:flex;flex-direction:column;gap:8px}
-.mc-serie{display:flex;align-items:center;gap:12px;background:#f8fafc;border-radius:12px;padding:10px 14px;font-size:13px;flex-wrap:wrap}
-.mc-serie b{font-size:14px}.mc-serie .mc-chip{margin-left:auto}
-.mc-rodape{position:sticky;bottom:12px;z-index:20;margin-top:16px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 -6px 24px rgba(15,23,42,.08)}
-.mc-rodape .mc-st{color:#64748b;font-size:13px;display:flex;align-items:center;gap:8px}
-.mc-rodape form{margin:0}
-.mc-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:99px;padding:9px 16px;font-size:13px;font-weight:600;z-index:999;display:none;box-shadow:0 8px 24px rgba(15,23,42,.25)}
-@media (max-width:1100px){
- .mc-corpo{grid-template-columns:minmax(0,1fr)}
- .mc-lado{position:static;order:-1}
+/* ---- base no estilo da ficha (templates/clientes/detalhes.html, .qb-*) ---- */
+.mc, .mc button, .mc input, .mc select { font-family:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.mc { color:#0f172a; -webkit-font-smoothing:antialiased; }
+.mc .mono { font-variant-numeric:tabular-nums; letter-spacing:.2px; }
+.mc-bento { display:grid; grid-template-columns:repeat(12, minmax(0, 1fr)); gap:16px; }
+.mc-b { background:#fff; border-radius:22px; padding:22px; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06);
+        min-width:0; position:relative; scroll-margin-top:90px; display:flex; flex-direction:column; gap:4px; }
+.mc-b.s4 { grid-column:span 4; } .mc-b.s8 { grid-column:span 8; } .mc-b.s12 { grid-column:span 12; }
+.mc-bh { display:flex; align-items:center; gap:11px; margin-bottom:10px; flex-wrap:wrap; }
+.mc-bh h3 { margin:0; font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:#0f172a; }
+.mc-ico { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 36px; }
+.i-verde { background:#dcfce7; color:#15803d; } .i-azul { background:#dbeafe; color:#1d4ed8; } .i-roxo { background:#ede9fe; color:#6d28d9; }
+.i-ambar { background:#fef3c7; color:#b45309; } .i-cinza { background:#f1f5f9; color:#475569; }
+.mc-selo { margin-left:auto; font-size:12px; font-weight:700; border-radius:99px; padding:4px 10px; white-space:nowrap; }
+.mc-selo.a { background:#fef3c7; color:#92400e; } .mc-selo.v { background:#fee2e2; color:#991b1b; } .mc-selo.ok { background:#dcfce7; color:#166534; }
+
+/* ---- cartão da empresa (verde-escuro, como a identidade da ficha) ---- */
+.mc-id { background:radial-gradient(420px 260px at 100% 0%, rgba(255,255,255,.10), transparent 70%), linear-gradient(140deg,#0b3b2b 0%,#136c46 55%,#1f9a5c 100%);
+         color:#fff; gap:0; }
+.mc-id-acoes { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin:-4px -6px 4px 0; }
+.mc-btn-v { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:600; color:#fff; background:rgba(255,255,255,.13);
+            border:1px solid rgba(255,255,255,.22); border-radius:11px; padding:8px 13px; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.mc-btn-v:hover { background:rgba(255,255,255,.2); color:#fff; }
+.mc-btn-salvar { background:#4ade80; color:#052e16; border-color:#4ade80; font-weight:700; }
+.mc-btn-salvar:hover { background:#86efac; color:#052e16; }
+.mc-num { align-self:flex-start; display:inline-flex; font-size:12px; font-weight:800; background:rgba(255,255,255,.16); border-radius:8px; padding:3px 9px; }
+.mc-id h2 { margin:10px 0 2px; font-size:28px; font-weight:800; letter-spacing:-.6px; line-height:1.12; color:#fff; overflow-wrap:anywhere; }
+.mc-doc { font-size:18px; font-weight:600; color:#bbf7d0; margin-top:4px; }
+.mc-linha { display:flex; gap:12px 28px; margin-top:20px; flex-wrap:wrap; }
+.mc-linha small { display:block; font-size:12px; color:#a7d9c0; font-weight:500; }
+.mc-linha b { font-size:14.5px; font-weight:600; } .mc-linha .r { color:#fecaca; } .mc-linha .l { color:#fde68a; }
+.mc-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:18px; }
+.mc-chips span { font-size:12px; font-weight:600; background:rgba(255,255,255,.14); border-radius:99px; padding:4px 11px; }
+.mc-chips span.ok { background:#4ade80; color:#052e16; }
+.mc-id-pe { display:flex; flex-wrap:wrap; align-items:center; gap:6px 18px; margin-top:auto; padding-top:14px; border-top:1px solid rgba(255,255,255,.14); font-size:13px; font-weight:600; color:#bbf7d0; }
+.mc-id-pe-sp { height:16px; }
+.mc-id .mc-pend { border-top:0; padding:10px 0 0; }
+.mc-id .mc-pend li.t { color:#fecaca; } .mc-id .mc-pend li.t i { color:#fca5a5; }
+.mc-id .mc-pend li.a { color:#fde68a; } .mc-id .mc-pend li.a i { color:#fcd34d; }
+
+/* ---- "Para emitir" (como "Cadastro 9 de 13 completos") ---- */
+.mc-prog h3 { margin:0; font-size:15px; font-weight:700; }
+.mc-big { font-size:44px; font-weight:800; letter-spacing:-1.5px; line-height:1; margin:14px 0 6px; }
+.mc-big small { font-size:16px; color:#64748b; font-weight:600; letter-spacing:0; }
+.mc-trilho { display:flex; gap:4px; margin:12px 0 10px; } .mc-trilho a { flex:1; height:8px; border-radius:99px; background:#22c55e; }
+.mc-trilho a.v { background:#ef4444; } .mc-trilho a.a { background:#f59e0b; }
+.mc-pd { display:flex; align-items:flex-start; gap:10px; border-radius:14px; padding:11px 14px; margin-top:8px; font-size:14px; font-weight:600; text-decoration:none; }
+.mc-pd > i { margin-top:3px; } .mc-pd > span { flex:1; min-width:0; }
+.mc-pd small { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:12.5px; font-weight:500; opacity:.85; margin-top:2px; line-height:1.4; }
+.mc-pd em { margin-left:auto; font-style:normal; font-size:12.5px; font-weight:700; background:#fff; border-radius:99px; padding:4px 10px; white-space:nowrap; }
+.mc-pd.v { background:#fff1f2; color:#9f1239; } .mc-pd.a { background:#fffbeb; color:#92400e; }
+.mc-pd:hover { filter:brightness(.97); color:inherit; }
+.mc-tudo { margin:6px 0 0; font-size:14px; font-weight:600; color:#15803d; }
+.mc-oks { margin-top:12px; } .mc-oks summary { cursor:pointer; font-size:12.5px; font-weight:600; color:#64748b; }
+.mc-oks ul { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
+.mc-oks li { display:flex; gap:8px; font-size:13px; color:#334155; } .mc-oks li i { color:#22c55e; margin-top:2px; }
+.mc-acao { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+.mc-acao form { margin:0; }
+.mc-bt { display:flex; width:100%; justify-content:center; align-items:center; gap:8px; border:0; border-radius:12px; padding:12px; font:inherit; font-size:14px; font-weight:700; cursor:pointer; box-sizing:border-box; text-decoration:none; }
+.mc-bt-v { background:#16a34a; color:#fff; } .mc-bt-v:hover { background:#15803d; color:#fff; }
+.mc-bt-v[disabled] { background:#f1f5f9; color:#94a3b8; cursor:default; }
+.mc-bt-o { background:#fff; color:#0f172a; border:1.5px solid #e2e8f0; }
+.mc-lib { font-size:12.5px; color:#64748b; text-align:center; }
+.mc-liberada { display:flex; gap:10px; align-items:center; padding:11px 14px; border-radius:14px; background:#f0fdf4; color:#166534; font-size:13.5px; font-weight:600; }
+.mc-st { color:#64748b; font-size:12.5px; display:flex; align-items:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid #eef2f0; }
+
+/* ---- valor que vira campo (como .qb-kv da ficha) ---- */
+.mc-kv { display:flex; flex-direction:column; gap:2px; padding:7px 0; min-width:0; }
+.mc-kv > label, .mc-kv > small { font-size:12.5px; color:#64748b; font-weight:500; margin:0; }
+.mc-kv > label small { color:#94a3b8; }
+.mc-kv > b { font-size:15px; font-weight:600; color:#0f172a; line-height:1.35; }
+.mc-kv input, .mc-kv select { width:100%; box-sizing:border-box; margin:0 -11px; width:calc(100% + 22px); font:inherit; font-size:15px; font-weight:600; color:#0f172a;
+    background:transparent; border:1.5px solid transparent; border-radius:12px; padding:7px 11px; transition:background .12s, border-color .12s; cursor:pointer; }
+.mc-kv select { appearance:none; -webkit-appearance:none; background-image:linear-gradient(45deg, transparent 50%, #94a3b8 50%), linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+    background-position:calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size:5px 5px; background-repeat:no-repeat; padding-right:30px; }
+.mc-kv input:hover, .mc-kv select:hover { background-color:#f3faf6; }
+.mc-kv input:focus, .mc-kv select:focus { outline:none; cursor:text; background-color:#fff; border-color:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.12); }
+.mc-kv input::placeholder { color:#94a3b8; font-weight:500; }
+.mc-kv.falta input, .mc-kv.falta select { background-color:#fff1f2; border:1.5px dashed #f87171; }
+.mc-kv.falta input::placeholder { color:#be123c; font-weight:600; }
+.mc-kv.falta select:invalid, .mc-kv.falta select.vazio { color:#be123c; }
+.mc-kv.falta > label { color:#be123c; font-weight:600; }
+.mc-ajuda { font-size:12.5px; color:#64748b; margin-top:2px; line-height:1.45; } .mc-ajuda i { font-style:italic; }
+.mc-grid2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0 24px; }
+.mc-grid3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:0 20px; }
+.mc-ok { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:14px; background:#f0fdf4; color:#166534; font-size:13.5px; line-height:1.45; margin-bottom:6px; }
+.mc-ok i { margin-top:3px; } .mc-ok.info { background:#eff6ff; color:#1e40af; } .mc-ok.warn { background:#fffbeb; color:#92400e; }
+.mc-seg { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+.mc-seg button { border:1.5px solid #e2e8f0; background:#fff; border-radius:11px; padding:8px 12px; font-size:13px; font-weight:600; color:#334155; cursor:pointer; }
+.mc-seg button.on { border-color:#16a34a; background:#f0fdf4; color:#15803d; }
+
+/* ---- ladrilhos (como "Como a empresa paga os honorários?") ---- */
+.mc-ativs { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-bottom:8px; }
+.mc-ativ { position:relative; display:flex; flex-direction:column; gap:3px; border:1.5px solid #e2e8f0; border-radius:16px; padding:14px 16px; cursor:pointer; margin:0; background:#fff; transition:border-color .12s; }
+.mc-ativ:hover { border-color:#86efac; }
+.mc-ativ input { display:none; }
+.mc-ativ b { font-size:14px; font-weight:700; color:#0f172a; line-height:1.3; padding-right:34px; }
+.mc-ativ small { color:#64748b; font-size:12px; line-height:1.4; }
+.mc-ativ em { font-style:normal; font-size:12px; font-weight:600; color:#15803d; margin-top:4px; }
+.mc-ativ .mc-tag { align-self:flex-start; font-size:11px; font-weight:700; color:#166534; background:#dcfce7; border-radius:99px; padding:2px 8px; margin-bottom:2px; }
+.mc-ativ.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 4px rgba(22,163,74,.1); }
+.mc-ativ.on::after { content:'\f00c'; font-family:'Font Awesome 6 Free'; font-weight:900; position:absolute; right:12px; top:12px; width:22px; height:22px; border-radius:50%;
+    background:#16a34a; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; }
+.mc-ativ.apag { opacity:.55; cursor:default; } .mc-ativ.apag:hover { border-color:#e2e8f0; } .mc-ativ.apag em { color:#64748b; }
+.mc-hist { font-size:12.5px; color:#334155; background:#f8fafc; border-radius:12px; padding:10px 12px; margin-bottom:6px; } .mc-hist i { color:#0369a1; margin-right:6px; }
+.mc-escolha { display:flex; align-items:center; gap:12px; border-radius:14px; padding:11px 14px; background:#f0fdf4; margin:4px 0; }
+.mc-escolha[hidden] { display:none; }
+.mc-escolha b { display:block; font-size:13.5px; } .mc-escolha small { color:#64748b; font-size:12px; }
+.mc-busca { position:relative; margin-top:8px; }
+.mc-busca-in { display:flex; align-items:center; gap:8px; border:1px solid #e2e8f0; border-radius:12px; padding:0 12px; background:#f8fafc; }
+.mc-busca-in i { color:#94a3b8; font-size:13px; }
+.mc-busca-in input { flex:1; min-width:0; border:0; outline:0; background:transparent; font:inherit; font-size:13.5px; padding:10px 0; color:#0f172a; }
+.mc-busca-in:focus-within { border-color:#16a34a; background:#fff; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
+.mc-sug { position:absolute; left:0; right:0; top:100%; z-index:30; background:#fff; border:1px solid #cbd5e1; border-radius:12px; box-shadow:0 12px 30px rgba(15,23,42,.14); max-height:280px; overflow:auto; display:none; margin-top:4px; }
+.mc-sug button { display:block; width:100%; text-align:left; background:none; border:0; border-bottom:1px solid #f1f5f9; padding:9px 12px; font-size:13px; cursor:pointer; font-family:inherit; }
+.mc-sug button:hover { background:#f0fdf4; } .mc-sug small { color:#64748b; }
+.mc-num2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+.mc-op { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; font:inherit; background:#fff; border:1.5px solid #e2e8f0; border-radius:16px; padding:14px; cursor:pointer; }
+.mc-op:hover:not([disabled]) { border-color:#86efac; } .mc-op[disabled] { opacity:.55; cursor:not-allowed; }
+.mc-op i { font-size:17px; color:#64748b; margin-bottom:6px; } .mc-op b { font-size:14px; font-weight:700; color:#0f172a; } .mc-op small { color:#64748b; font-size:12px; line-height:1.35; }
+.mc-op.on { border-color:#16a34a; background:#f0fdf4; } .mc-op.on i { color:#16a34a; }
+.mc-series { display:flex; flex-direction:column; gap:8px; }
+.mc-serie { display:flex; align-items:center; gap:10px; background:#f8fafc; border-radius:14px; padding:12px 14px; font-size:13px; flex-wrap:wrap; }
+.mc-serie b { font-size:15px; } .mc-serie .mc-selo { margin-left:auto; }
+.mc-sw { display:flex; align-items:center; gap:12px; padding:9px 0; cursor:pointer; margin:0; }
+.mc-sw > span { flex:1; } .mc-sw small { display:block; font-size:12.5px; color:#64748b; font-weight:500; } .mc-sw b { font-size:15px; font-weight:600; }
+.mc-sw input { display:none; }
+.mc-sw i.sw { width:42px; height:24px; border-radius:99px; background:#cbd5e1; position:relative; flex:0 0 42px; transition:background .15s; }
+.mc-sw i.sw::after { content:''; position:absolute; left:3px; top:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:left .15s; }
+.mc-sw input:checked + i.sw { background:#16a34a; } .mc-sw input:checked + i.sw::after { left:21px; }
+.mc-notas { display:flex; gap:10px; margin-bottom:6px; }
+.mc-notas div { flex:1; background:#f8fafc; border-radius:14px; padding:12px; } .mc-notas small { display:block; font-size:12px; color:#64748b; } .mc-notas b { font-size:22px; font-weight:800; }
+.mc-notas .r b { color:#be123c; }
+.mc-link { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:#15803d; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:7px 12px; cursor:pointer; text-decoration:none; white-space:nowrap; align-self:flex-start; margin-top:6px; }
+.mc-link:hover { background:#dcfce7; color:#15803d; }
+.mc-av { margin-top:10px; border-top:1px solid #f1f5f9; padding-top:10px; }
+.mc-av summary { font-size:12.5px; font-weight:600; color:#64748b; cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; }
+.mc-av summary::-webkit-details-marker { display:none; }
+.mc-av summary::before { content:'\f054'; font-family:'Font Awesome 6 Free'; font-weight:900; font-size:10px; transition:transform .15s; }
+.mc-av[open] summary::before { transform:rotate(90deg); }
+.mc-av-corpo { display:flex; flex-direction:column; gap:2px; margin-top:8px; }
+.mc-pend { list-style:none; margin:8px 0 0; padding:10px 0 0; border-top:1px solid #f1f5f9; font-size:13px; display:flex; flex-direction:column; gap:5px; }
+.mc-pend li { display:flex; gap:8px; } .mc-pend li i { margin-top:3px; }
+.mc-pend li.t { color:#9f1239; } .mc-pend li.a { color:#92400e; }
+.mc-toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#0f172a; color:#fff; border-radius:99px; padding:9px 16px; font-size:13px; font-weight:600; z-index:999; display:none; box-shadow:0 8px 24px rgba(15,23,42,.25); }
+@media (max-width:1280px) {
+    .mc-b.s4 { grid-column:span 6; } .mc-b.s8 { grid-column:span 12; }
+    .mc-b.mc-id { grid-column:span 7; } .mc-b.mc-prog { grid-column:span 5; }
 }
-@media (max-width:860px){
- .mc-grade{grid-template-columns:minmax(0,1fr)}
- .mc-card{padding:16px}
- .mc-res{grid-template-columns:repeat(2,minmax(0,1fr))}
- .mc-linha{grid-template-columns:minmax(0,1fr)}
- .mc-passos{margin-left:0}
+@media (max-width:900px) {
+    .mc-bento { grid-template-columns:minmax(0, 1fr); gap:12px; }
+    .mc-bento > .mc-b { grid-column:1 / -1 !important; padding:18px; border-radius:20px; }
+    .mc-id h2 { font-size:23px; } .mc-id-acoes { justify-content:flex-start; margin:0 0 12px; }
+    .mc-ativs, .mc-grid2, .mc-grid3 { grid-template-columns:minmax(0, 1fr); }
 }
+@media (max-width:420px) { .mc-num2 { grid-template-columns:minmax(0, 1fr); } }
 </style>
 
-{# 09/11/2026: duas colunas como a ficha do cliente — cartões à esquerda, "Para emitir" fixo à direita #}
-<div class="mc-corpo"><div class="mc-col">
-
+{% set ok_n = cartoes_lista|selectattr('ok')|list|length %}
+{% set cert = emp.certificado %}
+<div class="mc">
 <form method="POST" action="{{ acao_salvar }}" id="mcForm" autocomplete="off">
 <input type="hidden" name="csrf_token" value="{{ csrf or '' }}">
-<div class="mc-grade">
+<div class="mc-bento">
 
-{# ---------- 1. A empresa ---------- #}
+{# ---------- A EMPRESA: cartão verde da ficha ---------- #}
 {% set c = cartoes.empresa %}
-<div class="mc-card {{ 'falta' if c.travas }}" id="mc-empresa">
-    <div class="mc-h"><div class="mc-ico" style="background:#eef2ff;color:#4338ca"><i class="fas fa-building"></i></div>
-        <div><h3>1 · A empresa</h3><p>Vem do cadastro. Algo errado? Corrija no cadastro.</p></div>{{ estado(c) }}</div>
-    <div class="mc-res">
-        <div><small>Regime</small><b>{{ emp.regime_rotulo }}</b></div>
-        <div><small>Cidade</small><b>{{ (emp.cidade ~ '/' ~ emp.uf) if emp.cidade else '—' }}</b></div>
-        <div><small>Certificado</small><b>{% if emp.certificado %}{% set st = emp.certificado.status %}{% if st.nivel == 'vencido' %}<span style="color:#b91c1c">Vencido</span>{% elif st.nivel == 'laranja' %}<span style="color:#b45309">Vence em {{ st.dias }} dias</span>{% else %}<span style="color:#15803d">Válido{{ ' até ' ~ emp.certificado.validade.strftime('%d/%m/%y') if emp.certificado.validade }}</span>{% endif %}{% else %}<span style="color:#b91c1c">Não tem</span>{% endif %}</b></div>
+<section class="mc-b mc-id s8" id="mc-empresa">
+    <div class="mc-id-acoes">
+        <a class="mc-btn-v" href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> Abrir cadastro</a>
+        {% if no_fiscal and pode_rota('escrita_fiscal.nfse_emitir') %}<a class="mc-btn-v" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-paper-plane"></i> Emitir nota</a>{% endif %}
+        {% if not salva %}<button type="submit" class="mc-btn-v mc-btn-salvar"><i class="fas fa-check"></i> Salvar</button>{% endif %}
     </div>
-    <a class="mc-link" href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Abrir cadastro</a>
-    {{ pendencias(c) }}
-</div>
+    <span class="mc-num">NFS-e{% if emp.numero_cliente %} · #{{ emp.numero_cliente }}{% endif %}</span>
+    <h2>{{ emp.nome|nome_proprio }}</h2>
+    <div class="mc-doc mono">{{ emp.doc_fmt }}</div>
+    <div class="mc-linha">
+        <div><small>Regime</small><b>{{ emp.regime_rotulo or '—' }}</b></div>
+        <div><small>Cidade</small><b>{{ (emp.cidade|title ~ '/' ~ emp.uf) if emp.cidade else '—' }}</b></div>
+        <div><small>Certificado</small><b>{% if cert %}{% set st = cert.status %}{% if st.nivel == 'vencido' %}<span class="r">Vencido</span>{% elif st.nivel == 'sem_data' %}<span class="r">Sem validade</span>{% elif st.nivel == 'laranja' %}<span class="l">Vence em {{ st.dias }} dias</span>{% else %}Válido{{ ' até ' ~ cert.validade.strftime('%d/%m/%Y') if cert.validade }}{% endif %}{% else %}<span class="r">Não tem</span>{% endif %}</b></div>
+        <div><small>Por onde a nota sai</small><b>{{ EMISSORES.get(emissor, emissor) }}</b></div>
+    </div>
+    <div class="mc-chips">
+        {% if cfg.liberado_em %}<span class="ok"><i class="fas fa-check-double"></i> Liberada para emitir</span>
+        {% elif salva %}<span>Salva · falta o Fiscal liberar</span>
+        {% else %}<span>Sem configuração</span>{% endif %}
+        {% if emp.situacao and emp.situacao != 'ATIVO' %}<span>{{ emp.situacao|capitalize }}</span>{% endif %}
+    </div>
+    {{ pendencias(c, sem_salvar=True) }}
+    <div class="mc-id-pe-sp"></div>
+    <div class="mc-id-pe"><span><i class="fas fa-circle-info"></i> Regime, cidade e certificado vêm do cadastro: corrija lá.</span></div>
+</section>
 
-{# ---------- 2. Prefeitura ---------- #}
+{# ---------- PARA EMITIR: o "Cadastro 9 de 13" da ficha ---------- #}
+<section class="mc-b mc-prog s4" id="mcPainel">
+    <h3>Para emitir</h3>
+    <div class="mc-big">{{ ok_n }}<small> de 5 prontos</small></div>
+    <div class="mc-trilho">{% for c in cartoes_lista %}<a href="#mc-{{ c.chave }}" class="{{ '' if c.ok else 'v' }}" title="{{ c.rotulo }}: {{ 'pronto' if c.ok else 'falta' }}"></a>{% endfor %}</div>
+    {% for c in cartoes_lista %}{% for t in c.travas %}
+    <a class="mc-pd v" href="#mc-{{ c.chave }}"><i class="fas fa-circle-xmark"></i><span>{{ c.rotulo }}<small title="{{ t.texto }}">{{ t.texto }}</small></span><em>resolver</em></a>
+    {% endfor %}{% endfor %}
+    {% for c in cartoes_lista %}{% for t in c.avisos %}
+    <a class="mc-pd a" href="#mc-{{ c.chave }}"><i class="fas fa-circle-exclamation"></i><span>Aviso · {{ c.rotulo }}<small>{{ t.texto }}</small></span></a>
+    {% endfor %}{% endfor %}
+    {% if ok_n == 5 %}<p class="mc-tudo"><i class="fas fa-circle-check"></i> Os 5 estão prontos.</p>{% endif %}
+    {% if ok_n and ok_n < 5 %}
+    <details class="mc-oks"><summary>ver {{ 'o pronto' if ok_n == 1 else 'os ' ~ ok_n ~ ' prontos' }}</summary>
+        <ul>{% for c in cartoes_lista %}{% if c.ok %}<li><i class="fas fa-circle-check"></i><span>{{ c.rotulo }}</span></li>{% endif %}{% endfor %}</ul></details>
+    {% endif %}
+    <div class="mc-acao">
+    {% if not salva %}
+        <button type="submit" class="mc-bt mc-bt-v"><i class="fas fa-check"></i> Salvar o que veio preenchido</button>
+        <div class="mc-lib">Os cartões vieram preenchidos com o que o sistema sabe da empresa.</div>
+    {% elif no_fiscal %}
+        {% if cfg.liberado_em %}
+        <div class="mc-liberada"><i class="fas fa-check-double"></i> Liberada por {{ liberado_por or '—' }} em {{ cfg.liberado_em.strftime('%d/%m/%Y') }}</div>
+        <button type="submit" form="mcRevogar" class="mc-bt mc-bt-o"><i class="fas fa-lock"></i> Retirar liberação</button>
+        {% else %}
+        <button type="submit" form="mcLiberar" class="mc-bt mc-bt-v" {{ 'disabled'|safe if prontos < 5 }}><i class="fas fa-check-double"></i> Conferido e liberado</button>
+        <div class="mc-lib">{{ 'Tudo pronto: confira e libere.' if prontos == 5 else 'O Fiscal libera quando os 5 estiverem prontos.' }}</div>
+        {% endif %}
+    {% endif %}
+    </div>
+    <div class="mc-st"><i class="fas fa-cloud-arrow-up"></i> <span id="mcStatus">{{ 'Salvo. Cada alteração grava sozinha.' if salva else 'Ainda não salva.' }}</span></div>
+</section>
+
+{# ---------- PREFEITURA (como Registros) ---------- #}
 {% set c = cartoes.prefeitura %}
-<div class="mc-card {{ 'falta' if c.travas }}" id="mc-prefeitura">
-    <div class="mc-h"><div class="mc-ico" style="background:#e0f2fe;color:#0369a1"><i class="fas fa-landmark"></i></div>
-        <div><h3>2 · Prefeitura</h3><p>Por onde a nota sai. O sistema descobre pela cidade.</p></div>{{ estado(c) }}</div>
+{% set im_falta = not (cfg.inscricao_municipal or '')|string|trim and (_ex or emissor == 'fiorilli') %}
+<section class="mc-b s4" id="mc-prefeitura">
+    <div class="mc-bh"><span class="mc-ico i-azul"><i class="fas fa-landmark"></i></span><h3>Prefeitura</h3>{{ selo(c) }}</div>
     {% if aceita == 'sim' and emissor == 'nacional' %}
-    <div class="mc-aviso"><i class="fas fa-circle-check"></i><div><b>{{ emp.cidade or 'A cidade' }} aceita o Emissor Nacional.</b> A nota vai direto para o governo.</div></div>
+    <div class="mc-ok"><i class="fas fa-circle-check"></i><span><b>{{ (emp.cidade or 'A cidade')|title }} aceita o Emissor Nacional.</b> A nota vai direto para o governo.</span></div>
     {% elif provedor or emissor == 'fiorilli' %}
-    <div class="mc-aviso info"><i class="fas fa-circle-info"></i><div><b>{{ emp.cidade or 'Esta cidade' }} usa o sistema da própria prefeitura.</b> A nota sai por ele; a prefeitura informa o endereço e credencia a empresa.</div></div>
+    <div class="mc-ok info"><i class="fas fa-circle-info"></i><span><b>{{ (emp.cidade or 'Esta cidade')|title }} usa o sistema da própria prefeitura.</b> A nota sai por ele; a prefeitura informa o endereço e credencia a empresa.</span></div>
     <div class="mc-seg" data-campo="emissor">
         <button type="button" data-v="fiorilli" class="{{ 'on' if emissor == 'fiorilli' }}">Sistema da prefeitura (ISSWeb)</button>
         <button type="button" data-v="nacional" class="{{ 'on' if emissor == 'nacional' }}">Emissor Nacional</button>
     </div>
     {% elif aceita in ('nao', 'sem_convenio') %}
-    <div class="mc-aviso warn"><i class="fas fa-triangle-exclamation"></i><div><b>{{ emp.cidade or 'Esta cidade' }} não aceita o Emissor Nacional</b>, e a ligação com o sistema dessa prefeitura ainda não existe.</div></div>
+    <div class="mc-ok warn"><i class="fas fa-triangle-exclamation"></i><span><b>{{ (emp.cidade or 'Esta cidade')|title }} não aceita o Emissor Nacional</b>, e a ligação com o sistema dessa prefeitura ainda não existe.</span></div>
     {% elif aceita is none and ibge|length == 7 %}
-    <div class="mc-aviso warn"><i class="fas fa-triangle-exclamation"></i><div>Não consegui consultar agora se a cidade aceita o Emissor Nacional. A conferência é refeita ao abrir de novo.</div></div>
+    <div class="mc-ok warn"><i class="fas fa-triangle-exclamation"></i><span>Não consegui consultar agora se a cidade aceita o Emissor Nacional. A conferência é refeita ao abrir de novo.</span></div>
     {% endif %}
     {% if emissor == 'fiorilli' %}
-    <div class="mc-campo"><label>Endereço do sistema da prefeitura</label>
-        <input type="url" name="ws_url" maxlength="255" value="{{ cfg.ws_url or '' }}" placeholder="A prefeitura informa (https://…)">
-        <div class="mc-ajuda">Só para o sistema da prefeitura (ISSWeb).</div></div>
+    <div class="mc-kv {{ 'falta' if not (cfg.ws_url or '')|trim }}"><label for="mcWs">Endereço do sistema da prefeitura</label>
+        <input id="mcWs" type="url" name="ws_url" maxlength="255" value="{{ cfg.ws_url or '' }}" placeholder="clique para preencher (a prefeitura informa)"></div>
     {% else %}<input type="hidden" name="ws_url" value="{{ cfg.ws_url or '' }}">{% endif %}
-    <div class="mc-linha" style="grid-template-columns:repeat(2,minmax(0,1fr));">
-        <div class="mc-campo"><label>Inscrição municipal {% if exige_im is defined and exige_im %}<small>(obrigatória em {{ exige_im }})</small>{% elif emissor != 'fiorilli' %}<small>(recomendado)</small>{% endif %}</label>
-            <input type="text" name="inscricao_municipal" maxlength="15" value="{{ cfg.inscricao_municipal or '' }}" placeholder="Número na prefeitura"></div>
-        <div class="mc-campo"><label>E-mail da empresa na nota <small>(opcional)</small></label>
-            <input type="email" name="email_remetente" maxlength="255" value="{{ cfg.email_remetente or '' }}"></div>
-    </div>
+    <div class="mc-kv {{ 'falta' if im_falta }}"><label for="mcIm">Inscrição municipal {% if _ex %}<small>· obrigatória em {{ _ex }}</small>{% elif emissor == 'fiorilli' %}<small>· obrigatória</small>{% else %}<small>· recomendada</small>{% endif %}</label>
+        <input id="mcIm" type="text" name="inscricao_municipal" maxlength="15" class="mono" value="{{ cfg.inscricao_municipal or '' }}" placeholder="{{ 'clique para preencher' if im_falta else '—  clique para preencher' }}"></div>
+    <div class="mc-kv"><label for="mcMail">E-mail da empresa na nota <small>· opcional</small></label>
+        <input id="mcMail" type="email" name="email_remetente" maxlength="255" value="{{ cfg.email_remetente or '' }}" placeholder="—"></div>
     <details class="mc-av">
         <summary>Avançado: município e caminho da nota</summary>
         <div class="mc-av-corpo">
-            <div class="mc-linha" style="grid-template-columns:repeat(2,minmax(0,1fr));">
-                <div class="mc-campo"><label>Código do município (IBGE)</label>
-                    <input type="text" name="municipio_ibge" maxlength="7" inputmode="numeric" value="{{ cfg.municipio_ibge or '' }}"></div>
-                <div class="mc-campo"><label>Caminho da nota</label>
-                    <select name="emissor" id="mcEmissor">
-                        {% for k, v in EMISSORES.items() %}{% if k != 'sp' or eh_sp %}<option value="{{ k }}" {{ 'selected' if emissor == k }}>{{ v }}</option>{% endif %}{% endfor %}
-                    </select></div>
-            </div>
+            <div class="mc-kv"><label>Código do município (IBGE)</label>
+                <input type="text" name="municipio_ibge" maxlength="7" inputmode="numeric" class="mono" value="{{ cfg.municipio_ibge or '' }}"></div>
+            <div class="mc-kv"><label>Caminho da nota</label>
+                <select name="emissor" id="mcEmissor">
+                    {% for k, v in EMISSORES.items() %}{% if k != 'sp' or eh_sp %}<option value="{{ k }}" {{ 'selected' if emissor == k }}>{{ v }}</option>{% endif %}{% endfor %}
+                </select></div>
             {% if eh_sp %}
             <div class="mc-ajuda" style="font-weight:600;color:#334155;">Prefeitura de São Paulo (RPS)</div>
-            <div class="mc-linha">
-                <div class="mc-campo"><label>Série do RPS</label><input type="text" name="serie_sp" maxlength="5" value="{{ cfg.serie_sp or '' }}"></div>
-                <div class="mc-campo"><label>Leiaute do RPS</label><select name="leiaute_sp">
-                    <option value="1" {{ 'selected' if (cfg.leiaute_sp or 1) == 1 }}>1 — sem IBS/CBS (Simples)</option>
-                    <option value="2" {{ 'selected' if cfg.leiaute_sp == 2 }}>2 — com IBS/CBS</option></select></div>
-                <div class="mc-campo"><label>Código de serviço de SP</label><input type="text" name="cod_servico_sp" maxlength="5" value="{{ cfg.cod_servico_sp or '' }}"></div>
-            </div>
-            <div class="mc-campo"><label>Tributação em SP</label><select name="tributacao_sp">
+            <div class="mc-kv"><label>Série do RPS</label><input type="text" name="serie_sp" maxlength="5" value="{{ cfg.serie_sp or '' }}"></div>
+            <div class="mc-kv"><label>Leiaute do RPS</label><select name="leiaute_sp">
+                <option value="1" {{ 'selected' if (cfg.leiaute_sp or 1) == 1 }}>1 — sem IBS/CBS (Simples)</option>
+                <option value="2" {{ 'selected' if cfg.leiaute_sp == 2 }}>2 — com IBS/CBS</option></select></div>
+            <div class="mc-kv"><label>Código de serviço de SP</label><input type="text" name="cod_servico_sp" maxlength="5" value="{{ cfg.cod_servico_sp or '' }}"></div>
+            <div class="mc-kv"><label>Tributação em SP</label><select name="tributacao_sp">
                 {% for k, v in [('T', 'Tributado em São Paulo'), ('F', 'Tributado fora de São Paulo'), ('I', 'Isento'), ('J', 'ISS suspenso por decisão judicial')] %}
                 <option value="{{ k }}" {{ 'selected' if (cfg.tributacao_sp or 'T') == k }}>{{ v }}</option>{% endfor %}</select></div>
             {% else %}
@@ -217,14 +316,14 @@
             {% endif %}
         </div>
     </details>
-    {{ pendencias(c) }}
-</div>
+    {{ pendencias(c, im_falta) }}
+</section>
 
-{# ---------- 3. Serviços que a empresa presta ---------- #}
+{# ---------- SERVIÇO (ladrilhos, como "Como a empresa paga os honorários?") ---------- #}
 {% set c = cartoes.servico %}
-<div class="mc-card {{ 'falta' if c.travas }}" id="mc-servico">
-    <div class="mc-h"><div class="mc-ico" style="background:#fef3c7;color:#b45309"><i class="fas fa-briefcase"></i></div>
-        <div><h3>3 · Serviço que a empresa presta</h3><p>Vem das atividades do CNPJ. Escolha o que vai na nota.</p></div>{{ estado(c) }}</div>
+{% set nbs_falta = c.travas and not (cfg.cod_nbs or '')|string|trim or ((cfg.cod_nbs or '')|string == '999999999') %}
+<section class="mc-b s8" id="mc-servico">
+    <div class="mc-bh"><span class="mc-ico i-ambar"><i class="fas fa-briefcase"></i></span><h3>Que serviço vai na nota?</h3>{{ selo(c) }}</div>
     <input type="hidden" name="cod_trib_nac" id="mcCtrib" value="{{ cfg.cod_trib_nac or '' }}">
     <div class="mc-ativs">
     {% for a in atividades %}
@@ -232,190 +331,174 @@
             {% for s in a.servicos %}
             <label class="mc-ativ {{ 'on' if s.ctrib == servico_atual.ctrib }}" data-ctrib="{{ s.ctrib }}">
                 <input type="radio" name="mc_servico" value="{{ s.ctrib }}" {{ 'checked' if s.ctrib == servico_atual.ctrib }}>
-                <span class="mc-ck"><i class="fas fa-check"></i></span>
-                <span style="min-width:0;flex:1"><b>{{ a.descricao or ('Atividade ' ~ a.cnae_fmt) }}</b>
-                    <small>Atividade {{ 'principal' if a.principal else 'secundária' }} · CNAE {{ a.cnae_fmt }}</small>
-                    <em>Vai na nota como: {{ s.nome }} · {{ s.ctrib_fmt }}</em></span>
-                {% if a.principal and loop.first %}<span class="mc-chip ok">Principal</span>{% endif %}
+                {% if a.principal and loop.first %}<span class="mc-tag">atividade principal</span>{% endif %}
+                <b>{{ s.nome|trim('.') }}</b>
+                <small>CNAE {{ a.cnae_fmt }} · {{ a.descricao or ('Atividade ' ~ a.cnae_fmt) }}</small>
+                <em>código {{ s.ctrib_fmt }}</em>
             </label>
             {% endfor %}
         {% else %}
-            <div class="mc-ativ apag"><span class="mc-ck"></span>
-                <span style="min-width:0;flex:1"><b>{{ a.descricao or ('Atividade ' ~ a.cnae_fmt) }}</b>
-                    <small>Atividade {{ 'principal' if a.principal else 'secundária' }} · CNAE {{ a.cnae_fmt }}</small>
-                    <em>{{ a.motivo }}</em></span></div>
+            <div class="mc-ativ apag">
+                <b>{{ a.descricao or ('Atividade ' ~ a.cnae_fmt) }}</b>
+                <small>Atividade {{ 'principal' if a.principal else 'secundária' }} · CNAE {{ a.cnae_fmt }}</small>
+                <em>{{ a.motivo }}</em></div>
         {% endif %}
     {% endfor %}
     </div>
-    {% if not atividades %}<div class="mc-aviso warn"><i class="fas fa-triangle-exclamation"></i><div>As atividades do CNPJ não vieram (cadastro sem CNAE e a Receita não respondeu). Escolha o serviço na lista oficial abaixo.</div></div>{% endif %}
+    {% if not atividades %}<div class="mc-ok warn"><i class="fas fa-triangle-exclamation"></i><span>As atividades do CNPJ não vieram (cadastro sem CNAE e a Receita não respondeu). Escolha o serviço na lista oficial abaixo.</span></div>{% endif %}
     {% for h in historico[:1] %}{% if h.nome %}
     <div class="mc-hist"><i class="fas fa-clock-rotate-left"></i> Nas notas que esta empresa já emitiu, o serviço usado foi <b>{{ h.ctrib_fmt }} · {{ h.nome }}</b> ({{ h.qtd }} nota{{ 's' if h.qtd > 1 }}).</div>
     {% endif %}{% endfor %}
-    <div class="mc-busca">
-        <div class="mc-campo"><label>Outro serviço da lista oficial <small>(se nenhum acima servir)</small></label>
-            <input type="text" id="mcBuscaServ" placeholder="Digite: contabilidade, manutenção, transporte… ou o código"></div>
-        <div class="mc-sug" id="mcSugServ"></div>
-    </div>
     <div class="mc-escolha" id="mcEscolha" {{ 'hidden' if not servico_atual.ctrib }}>
         <i class="fas fa-file-signature" style="color:#15803d;font-size:18px"></i>
-        <div><b id="mcEscNome">{{ servico_atual.nome }}</b><small>Código nacional <span id="mcEscCod">{{ servico_atual.ctrib_fmt }}</span></small></div>
+        <div><b id="mcEscNome">{{ servico_atual.nome }}</b><small>Vai na nota com o código nacional <span id="mcEscCod">{{ servico_atual.ctrib_fmt }}</span></small></div>
     </div>
-    <div class="mc-campo"><label>Tipo de serviço (NBS) <small>— só os que o governo aceita para este serviço</small></label>
-        <select name="cod_nbs" id="mcNbs">
-            <option value="">— escolha —</option>
-            {% for n, d in nbs_opcoes %}<option value="{{ n }}" {{ 'selected' if n == (cfg.cod_nbs or '')|string }}>{{ d }} ({{ fmt_nbs(n) }})</option>{% endfor %}
-            {% if cfg.cod_nbs and (cfg.cod_nbs|string) not in nbs_opcoes|map('first')|list %}<option value="{{ cfg.cod_nbs }}" selected>{{ fmt_nbs(cfg.cod_nbs|string) }} — não aceito para este serviço</option>{% endif %}
-        </select></div>
-    <div class="mc-campo"><label>Texto que vai na nota</label>
-        <input type="text" name="descricao_padrao" id="mcDesc" value="{{ cfg.descricao_padrao or 'Serviços prestados em {mes} de {ano}' }}">
-        <div class="mc-ajuda">Prévia: <i id="mcDescPrev"></i> · use {mes} e {ano}</div></div>
+    <div class="mc-grid2">
+        <div class="mc-kv {{ 'falta' if nbs_falta }}"><label for="mcNbs">Tipo de serviço (NBS) <small>· só os que o governo aceita para este serviço</small></label>
+            <select name="cod_nbs" id="mcNbs" class="{{ 'vazio' if not cfg.cod_nbs }}">
+                <option value="">{{ 'clique para escolher' if nbs_falta else '— escolha —' }}</option>
+                {% for n, d in nbs_opcoes %}<option value="{{ n }}" {{ 'selected' if n == (cfg.cod_nbs or '')|string }}>{{ d }} ({{ fmt_nbs(n) }})</option>{% endfor %}
+                {% if cfg.cod_nbs and (cfg.cod_nbs|string) not in nbs_opcoes|map('first')|list %}<option value="{{ cfg.cod_nbs }}" selected>{{ fmt_nbs(cfg.cod_nbs|string) }} — não aceito para este serviço</option>{% endif %}
+            </select></div>
+        <div class="mc-kv"><label for="mcDesc">Texto que vai na nota</label>
+            <input type="text" name="descricao_padrao" id="mcDesc" value="{{ cfg.descricao_padrao or 'Serviços prestados em {mes} de {ano}' }}">
+            <div class="mc-ajuda">Prévia: <i id="mcDescPrev"></i> · use {mes} e {ano}</div></div>
+    </div>
+    <div class="mc-busca">
+        <div class="mc-busca-in"><i class="fas fa-magnifying-glass"></i>
+            <input type="text" id="mcBuscaServ" placeholder="Outro serviço da lista oficial: contabilidade, manutenção, transporte… ou o código" aria-label="Outro serviço da lista oficial"></div>
+        <div class="mc-sug" id="mcSugServ"></div>
+    </div>
     <details class="mc-av"><summary>Avançado: código municipal do serviço</summary>
-        <div class="mc-av-corpo"><div class="mc-campo"><label>Código de tributação municipal <small>(só se a prefeitura pedir)</small></label>
-            <input type="text" name="cod_trib_mun" maxlength="3" value="{{ cfg.cod_trib_mun or '' }}"></div></div></details>
-    {{ pendencias(c) }}
-</div>
+        <div class="mc-av-corpo"><div class="mc-kv"><label>Código de tributação municipal <small>· só se a prefeitura pedir</small></label>
+            <input type="text" name="cod_trib_mun" maxlength="3" value="{{ cfg.cod_trib_mun or '' }}" placeholder="—"></div></div></details>
+    {{ pendencias(c, nbs_falta) }}
+</section>
 
-{# ---------- 4. Impostos ---------- #}
+{# ---------- IMPOSTOS (como Regime e origem) ---------- #}
 {% set c = cartoes.impostos %}
-<div class="mc-card {{ 'falta' if c.travas }}" id="mc-impostos">
-    <div class="mc-h"><div class="mc-ico" style="background:#dcfce7;color:#15803d"><i class="fas fa-percent"></i></div>
-        <div><h3>4 · Impostos</h3><p>Ajustado pelo regime do cadastro ({{ emp.regime_rotulo }}).</p></div>{{ estado(c) }}</div>
+<section class="mc-b s4" id="mc-impostos">
+    <div class="mc-bh"><span class="mc-ico i-verde"><i class="fas fa-percent"></i></span><h3>Impostos</h3>{{ selo(c) }}</div>
+    <div class="mc-kv"><small>Regime na nota</small><b>{{ OP_SIMP_NAC.get(op, '—') }}</b></div>
     {% if op == 3 %}
-    <div class="mc-aviso"><i class="fas fa-circle-check"></i><div><b>Simples Nacional:</b> o governo calcula o ISS e os tributos sozinho. Não há alíquota para preencher.</div></div>
+    <div class="mc-kv"><small>Quem calcula</small><b>O governo calcula o ISS e os tributos</b></div>
     {% elif op == 1 %}
-    <div class="mc-aviso info"><i class="fas fa-circle-info"></i><div><b>Fora do Simples:</b> o PIS e a COFINS da empresa vão na nota. O ISS em branco usa a alíquota do município.</div></div>
+    <div class="mc-ajuda">Fora do Simples: o PIS e a COFINS da empresa vão na nota. O ISS em branco usa a alíquota do município.</div>
     {% elif op == 2 %}
-    <div class="mc-aviso warn"><i class="fas fa-triangle-exclamation"></i><div><b>MEI:</b> ainda não foi provado no emissor.</div></div>
+    <div class="mc-ok warn"><i class="fas fa-triangle-exclamation"></i><span><b>MEI:</b> ainda não foi provado no emissor.</span></div>
     {% endif %}
     {% if op == 1 %}
-    <div class="mc-linha">
-        <div class="mc-campo"><label>PIS (%)</label><input type="text" name="aliquota_pis" inputmode="decimal" value="{{ ('%g'|format(cfg.aliquota_pis|float)).replace('.', ',') if cfg.aliquota_pis and cfg.aliquota_pis|float > 0 else '' }}"></div>
-        <div class="mc-campo"><label>COFINS (%)</label><input type="text" name="aliquota_cofins" inputmode="decimal" value="{{ ('%g'|format(cfg.aliquota_cofins|float)).replace('.', ',') if cfg.aliquota_cofins and cfg.aliquota_cofins|float > 0 else '' }}"></div>
-        <div class="mc-campo"><label>ISS (%) <small>vazio = do município</small></label><input type="text" name="aliquota_iss" inputmode="decimal" value="{{ ('%g'|format(cfg.aliquota_iss|float)).replace('.', ',') if (cfg.aliquota_iss and cfg.aliquota_iss|float > 0) else '' }}"></div>
+    <div class="mc-grid3">
+        <div class="mc-kv {{ 'falta' if not (cfg.aliquota_pis and cfg.aliquota_pis|float > 0) }}"><label>PIS (%)</label><input type="text" name="aliquota_pis" inputmode="decimal" placeholder="clique" value="{{ ('%g'|format(cfg.aliquota_pis|float)).replace('.', ',') if cfg.aliquota_pis and cfg.aliquota_pis|float > 0 else '' }}"></div>
+        <div class="mc-kv {{ 'falta' if not (cfg.aliquota_cofins and cfg.aliquota_cofins|float > 0) }}"><label>COFINS (%)</label><input type="text" name="aliquota_cofins" inputmode="decimal" placeholder="clique" value="{{ ('%g'|format(cfg.aliquota_cofins|float)).replace('.', ',') if cfg.aliquota_cofins and cfg.aliquota_cofins|float > 0 else '' }}"></div>
+        <div class="mc-kv"><label>ISS (%)</label><input type="text" name="aliquota_iss" inputmode="decimal" placeholder="do município" value="{{ ('%g'|format(cfg.aliquota_iss|float)).replace('.', ',') if (cfg.aliquota_iss and cfg.aliquota_iss|float > 0) else '' }}"></div>
     </div>
     <div class="mc-ajuda">Lucro Presumido: PIS 0,65 · COFINS 3,00. Lucro Real: PIS 1,65 · COFINS 7,60.</div>
     {% else %}
     <input type="hidden" name="aliquota_pis" value="{{ cfg.aliquota_pis or '' }}"><input type="hidden" name="aliquota_cofins" value="{{ cfg.aliquota_cofins or '' }}">
     <input type="hidden" name="aliquota_iss" value="{{ cfg.aliquota_iss or '0' }}">
     {% endif %}
-    <label class="mc-sw"><span><b>O tomador costuma reter o ISS?</b><small>Ligue se os clientes desta empresa retêm (ex.: prefeituras, grandes empresas). Na nota dá para mudar.</small></span>
+    <label class="mc-sw"><span><small>O tomador costuma reter o ISS?</small><b>{{ 'Sim' if cfg.iss_retido else 'Não' }}</b></span>
         <input type="checkbox" name="iss_retido" value="1" {{ 'checked' if cfg.iss_retido }}><i class="sw"></i></label>
-    <details class="mc-av"><summary>Avançado: regime e reforma tributária (o padrão serve para quase todos)</summary>
+    <div class="mc-ajuda">Ligue se os clientes desta empresa retêm (prefeituras, grandes empresas). Na nota dá para mudar.</div>
+    <details class="mc-av"><summary>Avançado: regime e reforma tributária</summary>
         <div class="mc-av-corpo">
-            <div class="mc-linha">
-                <div class="mc-campo"><label>Regime na nota</label><select name="op_simp_nac">
-                    {% for k, v in OP_SIMP_NAC.items() %}<option value="{{ k }}" {{ 'selected' if op == k }}>{{ v }}</option>{% endfor %}</select></div>
-                <div class="mc-campo"><label>Apuração no Simples</label><select name="reg_ap_trib_sn">
-                    <option value="" {{ 'selected' if not cfg.reg_ap_trib_sn }}>— não se aplica —</option>
-                    {% for k, v in REG_AP_TRIB_SN.items() %}<option value="{{ k }}" {{ 'selected' if cfg.reg_ap_trib_sn == k }}>{{ v }}</option>{% endfor %}</select></div>
-                <div class="mc-campo"><label>Regime especial</label><select name="reg_esp_trib">
-                    {% for k, v in REG_ESP_TRIB.items() %}<option value="{{ k }}" {{ 'selected' if (cfg.reg_esp_trib or 0) == k }}>{{ v }}</option>{% endfor %}</select></div>
-            </div>
+            <div class="mc-kv"><label>Regime na nota</label><select name="op_simp_nac">
+                {% for k, v in OP_SIMP_NAC.items() %}<option value="{{ k }}" {{ 'selected' if op == k }}>{{ v }}</option>{% endfor %}</select></div>
+            <div class="mc-kv"><label>Apuração no Simples</label><select name="reg_ap_trib_sn">
+                <option value="" {{ 'selected' if not cfg.reg_ap_trib_sn }}>— não se aplica —</option>
+                {% for k, v in REG_AP_TRIB_SN.items() %}<option value="{{ k }}" {{ 'selected' if cfg.reg_ap_trib_sn == k }}>{{ v }}</option>{% endfor %}</select></div>
+            <div class="mc-kv"><label>Regime especial</label><select name="reg_esp_trib">
+                {% for k, v in REG_ESP_TRIB.items() %}<option value="{{ k }}" {{ 'selected' if (cfg.reg_esp_trib or 0) == k }}>{{ v }}</option>{% endfor %}</select></div>
             {% if op == 1 %}
-            <div class="mc-campo" style="max-width:220px"><label>CST do PIS/COFINS</label><input type="text" name="piscofins_cst" maxlength="2" value="{{ cfg.piscofins_cst or '' }}" placeholder="01"></div>
+            <div class="mc-kv"><label>CST do PIS/COFINS</label><input type="text" name="piscofins_cst" maxlength="2" value="{{ cfg.piscofins_cst or '' }}" placeholder="01"></div>
             {% else %}<input type="hidden" name="piscofins_cst" value="{{ cfg.piscofins_cst or '' }}">{% endif %}
-            <div class="mc-linha">
-                <div class="mc-campo"><label>IBS/CBS — CST</label><input type="text" name="ibscbs_cst" maxlength="3" value="{{ cfg.ibscbs_cst or '000' }}"></div>
-                <div class="mc-campo"><label>Classificação (cClassTrib)</label><input type="text" name="ibscbs_cclasstrib" maxlength="10" value="{{ cfg.ibscbs_cclasstrib or '000001' }}"></div>
-                <div class="mc-campo"><label>Indicador da operação</label><input type="text" name="ibscbs_cind_op" maxlength="10" value="{{ cfg.ibscbs_cind_op or '100301' }}"></div>
-            </div>
+            <div class="mc-kv"><label>IBS/CBS — CST</label><input type="text" name="ibscbs_cst" maxlength="3" value="{{ cfg.ibscbs_cst or '000' }}"></div>
+            <div class="mc-kv"><label>Classificação (cClassTrib)</label><input type="text" name="ibscbs_cclasstrib" maxlength="10" value="{{ cfg.ibscbs_cclasstrib or '000001' }}"></div>
+            <div class="mc-kv"><label>Indicador da operação</label><input type="text" name="ibscbs_cind_op" maxlength="10" value="{{ cfg.ibscbs_cind_op or '100301' }}"></div>
             {% if meta_item and (meta_item.indop or meta_item.cclasstrib) %}
             <div class="mc-ajuda">Tabela oficial para este serviço: indicador {{ meta_item.indop or '—' }}, classificação {{ meta_item.cclasstrib or '—' }}. Confira antes de trocar.</div>
             {% endif %}
-            <div class="mc-linha" style="grid-template-columns:repeat(2,minmax(0,1fr));">
-                <div class="mc-campo"><label>Destinatário</label><select name="ibscbs_ind_dest">
-                    {% for k, v in IND_DEST.items() %}<option value="{{ k }}" {{ 'selected' if (cfg.ibscbs_ind_dest or 0) == k }}>{{ v }}</option>{% endfor %}</select></div>
-                <div class="mc-campo"><label>Consumidor final</label><select name="ibscbs_ind_final">
-                    {% for k, v in IND_FINAL.items() %}<option value="{{ k }}" {{ 'selected' if (cfg.ibscbs_ind_final or 0) == k }}>{{ v }}</option>{% endfor %}</select></div>
-            </div>
+            <div class="mc-kv"><label>Destinatário</label><select name="ibscbs_ind_dest">
+                {% for k, v in IND_DEST.items() %}<option value="{{ k }}" {{ 'selected' if (cfg.ibscbs_ind_dest or 0) == k }}>{{ v }}</option>{% endfor %}</select></div>
+            <div class="mc-kv"><label>Consumidor final</label><select name="ibscbs_ind_final">
+                {% for k, v in IND_FINAL.items() %}<option value="{{ k }}" {{ 'selected' if (cfg.ibscbs_ind_final or 0) == k }}>{{ v }}</option>{% endfor %}</select></div>
         </div>
     </details>
     {{ pendencias(c) }}
-</div>
+</section>
 
-{# ---------- 5. Numeração ---------- #}
+{# ---------- NUMERAÇÃO (dois ladrilhos) ---------- #}
 {% set c = cartoes.numeracao %}
 {% set ns = namespace(prod=[]) %}
 {% for s in series %}{% if s.ambiente == 1 and s.ativo and (s.serie|string).isdigit() %}{% set ns.prod = ns.prod + [s] %}{% endif %}{% endfor %}
 {% set prod = ns.prod %}
-<div class="mc-card largo {{ 'falta' if c.travas }}" id="mc-numeracao">
-    <div class="mc-h"><div class="mc-ico" style="background:#fef3c7;color:#b45309"><i class="fas fa-list-ol"></i></div>
-        <div><h3>5 · Numeração das notas</h3><p>Cada nota recebe um número em sequência.</p></div>{{ estado(c) }}</div>
+<section class="mc-b s4" id="mc-numeracao">
+    <div class="mc-bh"><span class="mc-ico i-roxo"><i class="fas fa-list-ol"></i></span><h3>Numeração das notas</h3>{{ selo(c) }}</div>
     {% if prod %}
     <div class="mc-series">
         {% for s in prod %}
-        <div class="mc-serie"><b>Série {{ s.serie }}</b><span>última nota nº {{ s.ultimo_numero }} · a próxima sai com {{ s.ultimo_numero + 1 }}</span>
-            {% if s.serie|string == (cfg.serie_nacional or '')|string %}<span class="mc-chip ok">Usada nas notas</span>{% endif %}</div>
+        <div class="mc-serie"><b>Série {{ s.serie }}</b><span>última nº {{ s.ultimo_numero }} · a próxima sai com {{ s.ultimo_numero + 1 }}</span>
+            {% if s.serie|string == (cfg.serie_nacional or '')|string %}<span class="mc-selo ok">usada nas notas</span>{% endif %}</div>
         {% endfor %}
     </div>
     {% if prod|length > 1 %}
-    <div class="mc-campo" style="max-width:320px"><label>Série usada nas notas</label><select name="serie_nacional">
+    <div class="mc-kv"><label>Série usada nas notas</label><select name="serie_nacional">
         {% for s in prod %}<option value="{{ s.serie }}" {{ 'selected' if s.serie|string == (cfg.serie_nacional or '')|string }}>Série {{ s.serie }}</option>{% endfor %}</select></div>
     {% else %}<input type="hidden" name="serie_nacional" value="{{ cfg.serie_nacional or prod[0].serie }}">{% endif %}
     {% else %}
     <input type="hidden" name="serie_nacional" value="{{ cfg.serie_nacional or '' }}">
-    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <button type="submit" form="mcSerieForm" class="mc-btn mc-btn-p" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-plus"></i> Criar a numeração (série 1, começando no nº 1)</button>
-        <span style="color:#64748b;font-size:13px">A empresa já emitia em outro sistema?
-            <button type="button" class="mc-link" onclick="var d=document.getElementById('mcUltimo');d.hidden=!d.hidden;">Informar o último número usado</button></span>
+    <div class="mc-num2">
+        <button type="submit" form="mcSerieForm" class="mc-op" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-play"></i><b>Começar do nº 1</b><small>Primeira nota da empresa por aqui</small></button>
+        <button type="button" class="mc-op" id="mcJaEmitia" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-forward"></i><b>Já emitia</b><small>Informar o último número usado</small></button>
     </div>
-    <div id="mcUltimo" hidden class="mc-campo" style="max-width:320px"><label>Último número já usado</label>
-        <input type="number" name="numero_inicial" form="mcSerieForm" min="0" value="0"><div class="mc-ajuda">A primeira nota daqui sai com este número + 1.</div></div>
+    <div id="mcUltimo" hidden>
+        <div class="mc-kv"><label>Último número já usado</label>
+            <input type="number" name="numero_inicial" form="mcSerieForm" min="0" value="0"></div>
+        <div class="mc-ajuda">A primeira nota daqui sai com este número + 1.</div>
+        <button type="submit" form="mcSerieForm" class="mc-link"><i class="fas fa-plus"></i> Criar a numeração</button>
+    </div>
+    {% if not salva %}<div class="mc-ajuda">Salve a configuração primeiro; depois a numeração é criada aqui.</div>{% endif %}
     {% endif %}
     {% set teste = series|selectattr('ambiente', 'equalto', 2)|list %}
     {% if teste %}<div class="mc-ajuda">Séries de teste: {% for s in teste %}{{ s.serie }}{{ ', ' if not loop.last }}{% endfor %} (não valem; só para provar a emissão).</div>{% endif %}
-    {{ pendencias(c) }}
-</div>
+    {{ pendencias(c, not prod) }}
+</section>
+
+{# ---------- NOTAS DESTA EMPRESA (só produção) ---------- #}
+{% set nr = notas_resumo if notas_resumo is defined else {} %}
+<section class="mc-b s4">
+    <div class="mc-bh"><span class="mc-ico i-cinza"><i class="fas fa-file-lines"></i></span><h3>Notas desta empresa</h3></div>
+    <div class="mc-notas">
+        <div><small>Autorizadas</small><b>{{ nr.autorizadas or 0 }}</b></div>
+        {% if nr.canceladas %}<div><small>Canceladas</small><b>{{ nr.canceladas }}</b></div>{% endif %}
+        <div class="{{ 'r' if nr.recusadas }}"><small>Recusadas</small><b>{{ nr.recusadas or 0 }}</b></div>
+    </div>
+    {% set u = nr.ultima %}
+    <div class="mc-kv"><small>Última nota</small>
+        {% if u %}<b>{{ u.criado_em.strftime('%d/%m/%Y') if u.criado_em }} · {{ SITUACOES.get(u.situacao, u.situacao) if SITUACOES is defined else u.situacao }}{% if u.numero_nfse %} · nº {{ u.numero_nfse }}{% endif %}</b>
+        {% if u.motivo %}<span class="mc-ajuda">{{ u.motivo }}</span>{% endif %}
+        {% else %}<b style="color:#94a3b8;font-weight:500">Nenhuma nota ainda</b>{% endif %}</div>
+    {% if no_fiscal and (nr.autorizadas or nr.recusadas or nr.canceladas) %}<a class="mc-link" href="{{ url_for('escrita_fiscal.nfse_emitidas', emp=emp.id) }}"><i class="fas fa-list"></i> Ver as notas</a>{% endif %}
+</section>
 
 </div>
 </form>
 
-{# série: formulário à parte (o botão do cartão 5 aponta para ele) #}
+{# série: formulário à parte (os ladrilhos da Numeração apontam para ele) #}
 <form method="POST" action="{{ acao_serie }}" id="mcSerieForm" hidden>
     <input type="hidden" name="csrf_token" value="{{ csrf or '' }}">
     {% for k, v in (serie_campos or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
     <input type="hidden" name="acao" value="abrir"><input type="hidden" name="serie" value="1"><input type="hidden" name="ambiente" value="1">
     <input type="hidden" name="observacao" value="Numeração criada pela configuração">
 </form>
-
-</div>{# /mc-col #}
-
-{# ---------- painel "Para emitir" (como o "Cadastro 10 de 13" da ficha) ---------- #}
-{% set ok_n = cartoes_lista|selectattr('ok')|list|length %}
-<aside class="mc-lado"><div class="mc-painel">
-    <h3>Para emitir</h3>
-    <div class="mc-grande">{{ ok_n }} <small>de 5 prontos</small></div>
-    <div class="mc-segs">{% for c in cartoes_lista %}<a href="#mc-{{ c.chave }}" class="{{ 'ok' if c.ok else 'f' }}" title="{{ c.rotulo }}: {{ 'pronto' if c.ok else 'falta' }}"></a>{% endfor %}</div>
-    <div class="mc-segs-leg">{% for c in cartoes_lista %}<span>{{ c.rotulo }}</span>{% endfor %}</div>
-    <p class="mc-frase">
-        {% if not salva %}Os cartões vieram preenchidos com o que o sistema sabe da empresa. Confira e salve.
-        {% elif prontos == 5 and cfg.liberado_em %}Liberada. A empresa já pode emitir.
-        {% elif prontos == 5 and acao_liberar is defined and acao_liberar %}Tudo pronto. Falta o Fiscal conferir e liberar.
-        {% elif prontos == 5 %}Tudo pronto. A empresa já pode emitir.
-        {% else %}Falta{{ 'm' if 5 - prontos > 1 }} {{ 5 - prontos }} coisa{{ 's' if 5 - prontos > 1 }}. Clique em resolver para ir ao cartão.{% endif %}
-    </p>
-    {% for c in cartoes_lista %}{% for t in c.travas %}
-    <a class="mc-pd t" href="#mc-{{ c.chave }}"><i class="fas fa-circle-xmark"></i><span><b>{{ c.rotulo }}</b>{{ t.texto }}</span><em>resolver</em></a>
-    {% endfor %}{% endfor %}
-    {% for c in cartoes_lista %}{% for t in c.avisos %}
-    <a class="mc-pd a" href="#mc-{{ c.chave }}"><i class="fas fa-circle-exclamation"></i><span><b>Aviso · {{ c.rotulo }}</b>{{ t.texto }}</span></a>
-    {% endfor %}{% endfor %}
-    <div class="mc-st"><i class="fas fa-cloud-arrow-up"></i> <span id="mcStatus">{{ 'Salvo. Cada alteração grava sozinha.' if salva else 'Ainda não salva.' }}</span></div>
-    {% if not salva %}<button type="submit" form="mcForm" class="mc-btn mc-btn-p mc-cheio"><i class="fas fa-save"></i> Salvar o que veio preenchido</button>{% endif %}
-    {% if acao_liberar is defined and acao_liberar and salva %}
-        {% if cfg.liberado_em %}
-        <span class="mc-chip ok mc-cheio"><i class="fas fa-check-double"></i> Liberada por {{ liberado_por or '—' }} em {{ cfg.liberado_em.strftime('%d/%m/%Y') }}</span>
-        <form method="POST" action="{{ acao_liberar }}" onsubmit="return confirm('Retirar a liberação? A empresa para de emitir até ser conferida de novo.');">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="revogar">
-            <button class="mc-btn mc-btn-o mc-cheio"><i class="fas fa-lock"></i> Retirar liberação</button></form>
-        {% else %}
-        <form method="POST" action="{{ acao_liberar }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="liberar">
-            <button class="mc-btn mc-btn-p mc-cheio" {{ 'disabled title="Libera quando os 5 cartões estiverem prontos"'|safe if prontos < 5 }}><i class="fas fa-check-double"></i> Conferido e liberado</button></form>
-        {% endif %}
-    {% endif %}
-</div></aside>
-</div>{# /mc-corpo #}
+{% if no_fiscal and salva %}
+<form method="POST" action="{{ acao_liberar }}" id="mcLiberar" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="liberar"></form>
+<form method="POST" action="{{ acao_liberar }}" id="mcRevogar" hidden onsubmit="return confirm('Retirar a liberação? A empresa para de emitir até ser conferida de novo.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="revogar"></form>
+{% endif %}
+</div>
 <div class="mc-toast" id="mcToast"></div>
 
 <script>
@@ -453,6 +536,10 @@
         clearTimeout(timer); timer = setTimeout(salvar, 350);
     });
     form.addEventListener('submit', function (e) { e.preventDefault(); salvar(); });
+
+    // numeração: "Já emitia" abre o último número usado
+    var je = $('mcJaEmitia');
+    if (je) je.addEventListener('click', function () { var d = $('mcUltimo'); d.hidden = !d.hidden; je.classList.toggle('on', !d.hidden); });
 
     // botões rápidos (caminho da nota)
     document.querySelectorAll('.mc-seg[data-campo="emissor"] button').forEach(function (b) {

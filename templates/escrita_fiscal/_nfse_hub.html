@@ -103,13 +103,57 @@
 .hub-tabs a:hover { border-color:#86efac; color:#0f3d2e; }
 .hub-tabs a.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
 .hub-tabs a i { font-size:12px; }
+/* modo compacto (Configuração): pílulas soltas como as da ficha + busca clara à direita */
+.hub-linha { display:flex; align-items:center; gap:12px; margin:14px 0 16px; }
+.hub-tabs.hub-tabs-lisas { margin:0; background:none; border:0; box-shadow:none; padding:0; flex:1; min-width:0; }
+.hub-esc.hub-esc-claro { flex:0 1 300px; }
+.hub-esc.hub-esc-claro i { color:#94a3b8; }
+.hub-esc.hub-esc-claro input { background:#fff; color:#0f172a; border:1px solid #e2e8f0; border-radius:99px; font-weight:500; }
+.hub-esc.hub-esc-claro input::placeholder { color:#94a3b8; }
+.hub-esc.hub-esc-claro input:focus { border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
 @media (max-width: 600px) {
   .hub-esc { flex:1 1 100%; }
   .hub-tabs { margin-top:-40px; padding:7px; gap:6px; }
   .hub-tabs a { padding:7px 12px; font-size:12.5px; }
+  .hub-linha { flex-direction:column; align-items:stretch; }
+  .hub-esc.hub-esc-claro { flex:auto; }
 }
 </style>
 
+{% macro _seletor(claro=False) %}
+        <div class="hub-esc{{ ' hub-esc-claro' if claro }}" id="hubEsc">
+            <i class="fas fa-magnifying-glass"></i>
+            <input id="hubEmp" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="hubPickLista"
+                   placeholder="{{ 'Trocar de empresa' if _he else 'Escolher a empresa: número, nome ou CNPJ' }}" aria-label="Escolher a empresa">
+            {# Seletor próprio (09/11/2026): o <datalist> do navegador abria uma lista enorme por
+               cima da tela — Anderson: "Horrivel essa consulta da configuração". #}
+            <div class="hub-pick" id="hubPick" hidden>
+                <div class="hub-pick-chips" id="hubPickChips">
+                    {% set _cont = {'liberada': 0, 'configurada': 0, 'financeiro': 0, 'sem': 0} %}
+                    {% for e in _hl %}{% set _ = _cont.update({e.situacao_nfse: _cont[e.situacao_nfse] + 1}) %}{% endfor %}
+                    <button type="button" class="on" data-s="">Todas <em>{{ _hl|length }}</em></button>
+                    {% for k in ('liberada', 'configurada', 'financeiro', 'sem') %}{% if _cont[k] %}
+                    <button type="button" data-s="{{ k }}">{{ {'liberada': 'Liberadas', 'configurada': 'Falta conferir', 'financeiro': 'Pelo Financeiro', 'sem': 'Sem configuração'}[k] }} <em>{{ _cont[k] }}</em></button>
+                    {% endif %}{% endfor %}
+                </div>
+                <div class="hub-pick-lista" id="hubPickLista" role="listbox"></div>
+                <div class="hub-pick-pe" id="hubPickPe"></div>
+            </div>
+        </div>
+{% endmacro %}
+{% macro _abas_nav(cls='') %}
+<nav class="hub-tabs {{ cls }}" aria-label="NFS-e">
+    {% for k, rot, ico, ep, href in _abas %}{% if pode_rota(ep) %}
+    <a href="{{ href }}" class="{{ 'on' if hub_aba == k }}" {{ 'aria-current="page"'|safe if hub_aba == k }}><i class="fas {{ ico }}"></i> {{ rot }}</a>
+    {% endif %}{% endfor %}
+</nav>
+{% endmacro %}
+{# 09/11/2026: na Configuração com empresa escolhida a faixa verde sai — a empresa vai para o
+   cartão verde da ficha dentro de nfse/_matriz_cartoes.html (modelo aprovado: "Aprovado !") #}
+{% set _compacto = _he and hub_aba == 'config' %}
+{% if _compacto %}
+<div class="hub-linha">{{ _abas_nav('hub-tabs-lisas') }}{% if _hl %}{{ _seletor(True) }}{% endif %}</div>
+{% else %}
 <div class="ef-hero hub-hero">
     <div class="ef-hero-inner ef-hero-head">
         <div class="hub-hero-tit">
@@ -132,35 +176,12 @@
             <p class="ef-hero-sub">{{ _sub.get(hub_aba, '') }}</p>
             {% endif %}
         </div>
-        {% if hub_aba != 'conferencia' and _hl %}
-        <div class="hub-esc" id="hubEsc">
-            <i class="fas fa-magnifying-glass"></i>
-            <input id="hubEmp" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="hubPickLista"
-                   placeholder="{{ 'Trocar de empresa' if _he else 'Escolher a empresa: número, nome ou CNPJ' }}" aria-label="Escolher a empresa">
-            {# Seletor próprio (09/11/2026): o <datalist> do navegador abria uma lista enorme por
-               cima da tela — Anderson: "Horrivel essa consulta da configuração". #}
-            <div class="hub-pick" id="hubPick" hidden>
-                <div class="hub-pick-chips" id="hubPickChips">
-                    {% set _cont = {'liberada': 0, 'configurada': 0, 'financeiro': 0, 'sem': 0} %}
-                    {% for e in _hl %}{% set _ = _cont.update({e.situacao_nfse: _cont[e.situacao_nfse] + 1}) %}{% endfor %}
-                    <button type="button" class="on" data-s="">Todas <em>{{ _hl|length }}</em></button>
-                    {% for k in ('liberada', 'configurada', 'financeiro', 'sem') %}{% if _cont[k] %}
-                    <button type="button" data-s="{{ k }}">{{ {'liberada': 'Liberadas', 'configurada': 'Falta conferir', 'financeiro': 'Pelo Financeiro', 'sem': 'Sem configuração'}[k] }} <em>{{ _cont[k] }}</em></button>
-                    {% endif %}{% endfor %}
-                </div>
-                <div class="hub-pick-lista" id="hubPickLista" role="listbox"></div>
-                <div class="hub-pick-pe" id="hubPickPe"></div>
-            </div>
-        </div>
-        {% endif %}
+        {% if hub_aba != 'conferencia' and _hl %}{{ _seletor() }}{% endif %}
     </div>
 </div>
 
-<nav class="hub-tabs" aria-label="NFS-e">
-    {% for k, rot, ico, ep, href in _abas %}{% if pode_rota(ep) %}
-    <a href="{{ href }}" class="{{ 'on' if hub_aba == k }}" {{ 'aria-current="page"'|safe if hub_aba == k }}><i class="fas {{ ico }}"></i> {{ rot }}</a>
-    {% endif %}{% endfor %}
-</nav>
+{{ _abas_nav() }}
+{% endif %}
 
 {% if hub_aba != 'conferencia' and _hl %}
 <script>
