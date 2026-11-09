@@ -3,6 +3,8 @@
 {% block title %}{{ cliente.nome_razao_social }} - Qualicontax{% endblock %}
 
 {% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ── Area-chip checkboxes ─────────────────────────────────────────────────── */
 .area-chip { display:inline-flex; cursor:pointer; user-select:none; }
@@ -263,140 +265,340 @@
 .acesso-excecoes[disabled] { opacity:.5; }
 .acesso-form .btn { align-self:flex-start; }
 
-/* ══════ TELA ÚNICA (Modelo C, 08/11/2026): índice | página que rola | O que falta ══════ */
-.tu { --tu-topo:122px; display:grid; grid-template-columns:196px minmax(0, 1fr) 284px; gap:16px; align-items:start; }
-.tu-ind { position:sticky; top:var(--tu-topo); display:flex; flex-direction:column; gap:1px; max-height:calc(100vh - var(--tu-topo) - 14px); overflow-y:auto; scrollbar-width:thin; }
-.tu-ind-tit { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#94a3b8; margin:12px 10px 5px; }
-.tu-ind-tit:first-child { margin-top:2px; }
-.tu-ind a { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:9px; font-size:13px; color:#334155; text-decoration:none; min-width:0; }
-.tu-ind a small { margin-left:auto; padding-left:6px; font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:92px; }
-.tu-ind a:hover { background:#f1f7f3; }
-.tu-ind a.on { background:#e7f5ec; color:#0f3d2e; font-weight:700; }
-.tu-dot { width:8px; height:8px; border-radius:50%; flex:0 0 8px; background:#22c55e; }
-.tu-dot-amb { background:#f59e0b; } .tu-dot-verm { background:#ef4444; } .tu-dot-cinza { background:#cbd5e1; }
 
-.tu-main { min-width:0; }
-.tu-main .tab-pane { display:block !important; animation:none !important; scroll-margin-top:var(--tu-topo); }
-.tu-main .tab-pane + .tab-pane { margin-top:14px; }
-.tu-sec, .tu-main .card { scroll-margin-top:var(--tu-topo); }
-.tu-sec { margin-bottom:14px; }
-.tu-sec:last-child { margin-bottom:0; }
-.tu-main .card { border:1px solid #e3ece7; border-radius:15px; box-shadow:none; overflow:visible; }
-.tu-main .card + .card { margin-top:14px; }
-.tu-main .card-header { background:transparent; border-bottom:1px solid #eef3f0; }
-.tu-main .card-header .card-title { font-size:11px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; }
-.tu-main .fv-cert-hero .card-header .card-title { color:#fff; }
-.tu-main .fv-seclabel { flex-wrap:wrap; }
-.tu-tag { font-size:10px; font-weight:700; letter-spacing:.4px; color:#15803d; background:#ecfdf3; border:1px solid #bbf7d0; border-radius:6px; padding:1px 7px; }
-.tu-selo { font-size:10px; font-weight:800; letter-spacing:.5px; border-radius:6px; padding:2px 8px; }
-.tu-selo-amb { color:#b45309; background:#fffbeb; border:1px solid #fcd34d; }
-.tu-selo-verm { color:#b91c1c; background:#fef2f2; border:1px solid #fca5a5; }
-.tu-acao { font-size:12px; font-weight:600; letter-spacing:0; text-transform:none; color:#15803d; background:#f0fdf4; border:1px solid #bbf7d0;
-    border-radius:8px; padding:4px 10px; text-decoration:none; white-space:nowrap; }
-.tu-acao:hover { background:#dcfce7; }
-.tu-dl { grid-template-columns:150px minmax(0, 1fr); gap:6px 16px; align-items:baseline; }
-.tu-dl dt { padding-top:5px; }
-.tu-dl dd { padding:4px 0; min-height:22px; }
-.tu-muted { color:#94a3b8; }
-.tu-link { margin-left:8px; font-size:12px; font-weight:600; color:#15803d; text-decoration:none; white-space:nowrap; }
-.tu-alerta { color:#b91c1c; font-weight:600; }
-/* seção vazia não ocupa meia tela: uma linha só */
-.tu-main .empty-state { display:flex; align-items:center; gap:10px; padding:4px 0; text-align:left; min-height:0; }
-.tu-main .empty-state i { font-size:16px; margin:0; opacity:.5; }
-.tu-main .empty-state p { margin:0; font-size:13px; }
-.tu-main .card-body { padding-top:14px; padding-bottom:14px; }
-/* sócios cabem na coluna do meio (como os contatos) */
-#socios .table th, #socios .table td { padding:9px 6px; font-size:13px; vertical-align:top; }
-#socios .table th { font-size:11.5px; }
-#socios .table td:last-child { white-space:nowrap; }
+/* ══════════ FICHA — MODELO B (mosaico), aprovado 08/11/2026 ══════════
+   Fonte Inter, rótulo pequeno em cima e valor grande embaixo, cartões com ícone colorido, sem linhas tracejadas.
+   As janelas (modais) desta página ganham o mesmo estilo. */
+.qb, .qb button, .qb input, .qb select, .qb textarea, .tu-aviso, .tu-barra,
+.modal, .modal button, .modal input, .modal select, .modal textarea { font-family:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.qb { --qb-topo:122px; color:#0f172a; -webkit-font-smoothing:antialiased; }
+.qb .mono { font-variant-numeric:tabular-nums; letter-spacing:.2px; }
+.qb-muted { color:#94a3b8; font-weight:500; }
+.qb-verde { color:#15803d; } .qb-verm { color:#be123c; }
+.qb-wrap { padding:0 0 40px; }
+.qb-pills { position:sticky; top:var(--qb-topo, 109px); z-index:20; display:flex; gap:6px; margin:-8px -32px 10px; padding:10px 32px 12px;
+    background:rgba(243,246,244,.92); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); overflow-x:auto; scrollbar-width:none; }
+.qb-pills::-webkit-scrollbar { display:none; }
+.qb-pills a { flex:0 0 auto; display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:#334155; background:#fff;
+    border:1px solid #e2e8f0; border-radius:99px; padding:7px 14px; text-decoration:none; transition:background .15s, color .15s; }
+.qb-pills a:hover { border-color:#86efac; }
+.qb-pills a.on { background:#0f3d2e; color:#fff; border-color:#0f3d2e; }
+.qb-pt { width:7px; height:7px; border-radius:50%; flex:0 0 7px; background:#22c55e; }
+.qb-pt-amb { background:#f59e0b; } .qb-pt-verm { background:#ef4444; } .qb-pt-cinza { background:#cbd5e1; }
+.qb-pills a.on .qb-pt-cinza { background:#94a3b8; }
 
-/* valor editável: sublinhado pontilhado; clicou, vira campo */
-.tu-v.tu-ed { cursor:pointer; border-bottom:1px dashed #cbd5e1; padding-left:6px; padding-right:6px; margin-left:-6px; border-radius:6px 6px 0 0; transition:background .12s; }
-.tu-v.tu-ed:hover, .tu-v.tu-ed:focus-visible { background:#f3faf6; border-bottom-color:#15803d; outline:none; }
-.tu-v.tu-abrindo { cursor:default; background:transparent !important; border-bottom-color:transparent; }
-.tu-vazio { color:#94a3b8; }
-.tu-falta { border:1px solid #fcd34d; border-radius:8px; background:#fffbeb; }
-.tu-falta.tu-ed { border-bottom:1px solid #fcd34d; border-radius:8px; }
-.tu-falta .tu-vazio { color:#b45309; font-weight:600; }
-.tu-falta-verm { border-color:#fca5a5 !important; background:#fef2f2; }
-.tu-falta-verm .tu-vazio { color:#b91c1c; }
-.tu-vazio-falta { color:#b45309; font-weight:600; }
-.tu-mudou, .tu-mudou.tu-falta { background:#fefce8 !important; border-color:#eab308 !important; border-style:solid !important; }
-.tu-mudou .tu-txt::after { content:'alterado'; margin-left:8px; font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#a16207; }
-.tu-editor { display:flex; flex-direction:column; gap:4px; }
-.tu-ctl { width:100%; max-width:440px; height:36px; padding:0 10px; border:1px solid #15803d; border-radius:9px; font:inherit; font-size:13px; color:#0f172a; background:#fff;
-    box-shadow:0 0 0 3px rgba(21,128,61,.12); outline:none; }
-textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none; resize:vertical; }
-.tu-ajuda { font-size:11.5px; color:#64748b; line-height:1.4; }
-.tu-multi { max-width:440px; border:1px solid #15803d; border-radius:10px; padding:8px; box-shadow:0 0 0 3px rgba(21,128,61,.12); background:#fff; display:flex; flex-direction:column; gap:6px; }
-.tu-multi-busca { height:32px; border:1px solid #dbe7df; border-radius:8px; padding:0 9px; font:inherit; font-size:13px; }
-.tu-multi-lista { max-height:210px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
-.tu-multi-lista label { display:flex; align-items:center; gap:8px; font-size:13px; padding:4px 6px; border-radius:6px; cursor:pointer; }
-.tu-multi-lista label:hover { background:#f3faf6; }
-.tu-multi-ok { align-self:flex-end; padding:5px 16px; border-radius:8px; }
-.tu-piscar { animation:tu-piscar 1.4s ease; }
-@keyframes tu-piscar { 0%, 60% { box-shadow:0 0 0 4px rgba(245,158,11,.35); } 100% { box-shadow:0 0 0 0 rgba(245,158,11,0); } }
+.qb-bento { display:grid; grid-template-columns:repeat(12, minmax(0, 1fr)); gap:16px; }
+.qb-b { background:#fff; border-radius:22px; padding:22px; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06);
+    min-width:0; position:relative; scroll-margin-top:calc(var(--qb-topo, 109px) + 64px); }
+.qb-b.s3 { grid-column:span 3; } .qb-b.s4 { grid-column:span 4; } .qb-b.s5 { grid-column:span 5; } .qb-b.s6 { grid-column:span 6; }
+.qb-b.s7 { grid-column:span 7; } .qb-b.s8 { grid-column:span 8; } .qb-b.s12 { grid-column:span 12; }
+.qb-b.qb-topo { align-self:start; }
+.qb [id] { scroll-margin-top:calc(var(--qb-topo, 109px) + 64px); }
 
-/* lado direito */
-.tu-lado { position:sticky; top:var(--tu-topo); max-height:calc(100vh - var(--tu-topo) - 14px); overflow-y:auto; scrollbar-width:thin; display:flex; flex-direction:column; gap:14px; }
-.tu-box { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px; }
-.tu-box-tit { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:14px; font-weight:800; color:#0f172a; }
-.tu-n { font-size:11px; font-weight:800; color:#b91c1c; background:#fee2e2; border-radius:99px; padding:1px 8px; }
-.tu-pend { display:flex; align-items:center; gap:9px; padding:9px 11px; margin-bottom:8px; border-radius:10px; text-decoration:none; font-size:13px; font-weight:700; }
-.tu-pend em { margin-left:auto; font-style:normal; font-size:11.5px; font-weight:700; white-space:nowrap; }
-.tu-pend-amb { background:#fffbeb; border:1px solid #fcd34d; color:#92400e; } .tu-pend-amb i:first-child { color:#f59e0b; }
-.tu-pend-verm { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; } .tu-pend-verm i:first-child { color:#ef4444; }
-.tu-pend:hover { filter:brightness(.97); }
-.tu-tudo-ok { margin:0 0 6px; font-size:13px; font-weight:600; color:#15803d; }
-.tu-ok-tit { margin:14px 0 6px; font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#94a3b8; }
-.tu-ok { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
-.tu-ok li { display:flex; gap:8px; font-size:12.5px; color:#334155; line-height:1.35; min-width:0; }
-.tu-ok li i { color:#22c55e; margin-top:2px; }
-.tu-ok li span { min-width:0; word-break:break-word; }
-.tu-ok small { color:#64748b; }
-.tu-nota { margin:12px 0 0; font-size:11.5px; color:#7d968a; line-height:1.45; }
-.tu-dica p { margin:0 0 8px; font-size:12px; color:#475569; line-height:1.45; display:grid; grid-template-columns:16px 1fr; gap:6px; }
-.tu-dica p:last-child { margin:0; }
-.tu-dica i { color:#15803d; margin-top:2px; }
-.tu-pont { text-decoration:none; border-bottom:1px dashed #94a3b8; }
+/* cabeçalho de cartão */
+.qb-bh { display:flex; align-items:center; gap:11px; margin-bottom:12px; flex-wrap:wrap; }
+.qb-bh h3 { margin:0; font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:#0f172a; }
+.qb-bh .qb-selo { margin-left:auto; }
+.qb-bh-dir { margin-left:auto; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.qb-bh .qb-selo + .qb-bh-dir { margin-left:8px; }
+.qb-ico { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 36px; }
+.i-verde { background:#dcfce7; color:#15803d; } .i-azul { background:#dbeafe; color:#1d4ed8; } .i-roxo { background:#ede9fe; color:#6d28d9; }
+.i-ambar { background:#fef3c7; color:#b45309; } .i-rosa { background:#fce7f3; color:#be185d; } .i-ciano { background:#cffafe; color:#0e7490; }
+.i-cinza { background:#f1f5f9; color:#475569; } .i-lima { background:#ecfccb; color:#4d7c0f; }
+.qb-selo { font-size:12px; font-weight:700; border-radius:99px; padding:4px 10px; white-space:nowrap; }
+.qb-selo-amb { background:#fef3c7; color:#92400e; } .qb-selo-verm { background:#fee2e2; color:#991b1b; } .qb-selo-ok { background:#dcfce7; color:#166534; }
+.qb-add { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:600; color:#15803d; background:#f0fdf4;
+    border:1px solid #bbf7d0; border-radius:10px; padding:7px 12px; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.qb-add:hover { background:#dcfce7; }
+.qb-add-cinza { color:#475569; background:#f8fafc; border-color:#e2e8f0; } .qb-add-cinza:hover { background:#f1f5f9; }
+.qb-mini { width:32px; height:32px; border-radius:10px; background:#fff; border:1px solid #e2e8f0; display:inline-flex; align-items:center; justify-content:center;
+    color:#475569; font-size:13px; cursor:pointer; text-decoration:none; }
+.qb-mini:hover { border-color:#86efac; color:#15803d; }
+.qb-mini-perigo:hover { border-color:#fca5a5; color:#dc2626; }
+.qb-link { margin-left:8px; font-size:12.5px; font-weight:600; color:#15803d; text-decoration:none; white-space:nowrap; }
+.qb-vazio { display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; border:1.5px dashed #e2e8f0; color:#64748b; font-size:13.5px; }
+.qb-sub { margin:16px 0 6px; font-size:12px; font-weight:700; color:#64748b; letter-spacing:.3px; text-transform:uppercase; }
 
-/* botão Salvar do topo e aviso */
-.tu-salvar[disabled] { opacity:.55; cursor:default; }
-.tu-salvar b { font-weight:800; }
-.tu-hero-pend { background:#fee2e2 !important; color:#b91c1c !important; border-color:#fecaca !important; }
-.tu-hero-ok { background:#dcfce7 !important; color:#15803d !important; }
+/* valor: rótulo pequeno em cima, valor grande embaixo */
+.qb-kv { display:flex; flex-direction:column; gap:2px; padding:9px 12px; margin:0 -12px; border-radius:12px; min-width:0; }
+.qb-kv > small { font-size:12.5px; color:#64748b; font-weight:500; }
+.qb-kv > b { font-size:15px; font-weight:600; color:#0f172a; word-break:break-word; line-height:1.35; }
+.qb-kv.tu-ed { cursor:pointer; transition:background .12s; position:relative; }
+.qb-kv.tu-ed:hover, .qb-kv.tu-ed:focus-visible { background:#f3faf6; outline:none; }
+.qb-kv.tu-ed:hover::after { content:'\f303'; font-family:'Font Awesome 6 Free'; font-weight:900; position:absolute; right:12px; top:12px; font-size:11px; color:#16a34a; }
+.qb .tu-vazio { color:#94a3b8; font-weight:500; }
+.qb-kv.tu-falta { background:#fffbeb; outline:1.5px dashed #f59e0b; outline-offset:-1.5px; margin-top:4px; margin-bottom:4px; }
+.qb-kv.tu-falta .tu-vazio { color:#b45309; font-weight:600; }
+.qb-kv.tu-falta-verm { background:#fff1f2; outline-color:#f87171; } .qb-kv.tu-falta-verm .tu-vazio { color:#be123c; }
+.qb-kv.tu-mudou { background:#fefce8 !important; outline:1.5px solid #eab308 !important; outline-offset:-1.5px; }
+.qb-kv.tu-mudou > b::after { content:'alterado'; margin-left:8px; font-size:10.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#a16207; }
+.qb-kv.tu-abrindo { background:#f0fdf4 !important; outline:0 !important; cursor:default; padding:12px; }
+.qb-kv.tu-abrindo::after { content:none !important; }
+.qb-kv.tu-abrindo > small { color:#15803d; font-weight:600; }
+/* editor do campo */
+.tu-editor { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.tu-inp { display:flex; align-items:center; gap:6px; background:#fff; border:1.5px solid #16a34a; border-radius:12px; padding:0 6px 0 0;
+    box-shadow:0 0 0 4px rgba(22,163,74,.13); }
+.tu-inp .tu-ctl { flex:1; min-width:0; height:44px; border:0; outline:0; background:transparent; font:inherit; font-size:15px; font-weight:600; color:#0f172a; padding:0 12px; }
+.tu-inp textarea.tu-ctl { height:auto; min-height:84px; padding:10px 12px; resize:vertical; }
+.tu-inp-bt { width:32px; height:32px; border-radius:9px; border:0; display:inline-flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; flex:0 0 32px; }
+.tu-inp-ok { background:#16a34a; color:#fff; } .tu-inp-x { background:#f1f5f9; color:#64748b; }
+.tu-ajuda { font-size:12.5px; color:#4b7a5e; line-height:1.45; }
+.tu-ajuda kbd { font:inherit; font-size:11px; font-weight:700; background:#fff; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:5px; padding:0 5px; color:#334155; }
+/* lista suspensa (regime, porte, origem, grupo) */
+.tu-dd { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 18px 40px rgba(15,23,42,.14); padding:6px; }
+.tu-dd-busca { display:flex; align-items:center; gap:8px; height:40px; border:1.5px solid #16a34a; border-radius:11px; padding:0 11px; margin-bottom:6px; box-shadow:0 0 0 4px rgba(22,163,74,.12); }
+.tu-dd-busca i { color:#94a3b8; } .tu-dd-busca input { flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:14px; background:transparent; }
+.tu-dd-lista { max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:1px; }
+.tu-dd-op { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; font-size:14.5px; font-weight:500; color:#0f172a; cursor:pointer; text-align:left; background:none; border:0; font-family:inherit; width:100%; }
+.tu-dd-op:hover, .tu-dd-op:focus-visible { background:#f8fafc; outline:none; }
+.tu-dd-op.on { background:#f0fdf4; color:#166534; font-weight:700; }
+.tu-dd-op .tu-dd-ck { width:16px; color:#16a34a; font-size:12px; }
+.tu-dd-op small { margin-left:auto; color:#94a3b8; font-size:12px; font-weight:500; }
+.tu-dd-nada { padding:10px 12px; color:#94a3b8; font-size:13px; }
+/* ramo: etiquetas + busca + caixas */
+.tu-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.tu-chip { display:inline-flex; align-items:center; gap:7px; background:#dbeafe; color:#1d4ed8; border-radius:99px; padding:5px 6px 5px 12px; font-size:13px; font-weight:600; }
+.tu-chip button { width:18px; height:18px; border-radius:50%; border:0; background:rgba(29,78,216,.15); color:#1d4ed8; font-size:10px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.tu-ck { width:20px; height:20px; border-radius:6px; border:2px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:#fff; flex:0 0 20px; }
+.tu-dd-op.on .tu-ck { background:#16a34a; border-color:#16a34a; }
+.tu-pronto { align-self:flex-end; font:inherit; font-size:13px; font-weight:700; background:#16a34a; color:#fff; border:0; border-radius:10px; padding:8px 18px; cursor:pointer; }
+
+/* identidade */
+.qb-id { background:radial-gradient(420px 260px at 100% 0%, rgba(255,255,255,.10), transparent 70%), linear-gradient(140deg,#0b3b2b 0%,#136c46 55%,#1f9a5c 100%);
+    color:#fff; padding:24px 28px; overflow:hidden; }
+.qb-id-acoes { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin:-4px -6px 4px 0; position:relative; z-index:1; }
+.qb-btn-v { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:600; color:#fff; background:rgba(255,255,255,.13);
+    border:1px solid rgba(255,255,255,.22); border-radius:10px; padding:8px 13px; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.qb-btn-v:hover { background:rgba(255,255,255,.2); color:#fff; }
+.qb-btn-salvar { background:#4ade80; color:#052e16; border-color:#4ade80; font-weight:700; }
+.qb-btn-salvar:hover { background:#86efac; color:#052e16; }
+.qb-btn-salvar[disabled] { opacity:.5; cursor:default; }
+.qb-num { display:inline-flex; font-size:12px; font-weight:800; background:rgba(255,255,255,.16); border-radius:8px; padding:3px 9px; }
+.qb-id h1 { margin:10px 0 2px; font-size:30px; font-weight:800; letter-spacing:-.6px; line-height:1.12; color:#fff; }
+.qb-fantasia { color:#bbf7d0; font-size:14px; font-weight:500; }
+.qb-doc { font-size:18px; font-weight:600; color:#bbf7d0; margin-top:4px; }
+.qb-linha { display:flex; gap:12px 28px; margin-top:20px; flex-wrap:wrap; }
+.qb-linha small { display:block; font-size:12px; color:#a7d9c0; font-weight:500; }
+.qb-linha b { font-size:14.5px; font-weight:600; } .qb-linha a { color:#fff; }
+.qb-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:18px; }
+.qb-chips span { font-size:12px; font-weight:600; background:rgba(255,255,255,.14); border-radius:99px; padding:4px 11px; }
+.qb-id-pe { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.14); }
+.qb-link-claro { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:600; color:#bbf7d0; background:none; border:0; padding:0; cursor:pointer; text-decoration:none; }
+.qb-link-claro:hover { color:#fff; } .qb-link-perigo { color:#fecaca; } .qb-link-perigo:hover { color:#fff; }
+
+/* o que falta */
+.qb-prog h3 { margin:0; font-size:15px; font-weight:700; }
+.qb-big { font-size:44px; font-weight:800; letter-spacing:-1.5px; line-height:1; margin:14px 0 6px; }
+.qb-big small { font-size:16px; color:#64748b; font-weight:600; letter-spacing:0; }
+.qb-trilho { display:flex; gap:4px; margin:12px 0 14px; } .qb-trilho i { flex:1; height:8px; border-radius:99px; background:#22c55e; }
+.qb-trilho i.a { background:#f59e0b; } .qb-trilho i.v { background:#ef4444; }
+.qb-pend { display:flex; align-items:center; gap:10px; border-radius:14px; padding:11px 14px; margin-top:8px; font-weight:600; font-size:14px; text-decoration:none; }
+.qb-pend em { margin-left:auto; font-style:normal; font-size:12.5px; font-weight:700; background:#fff; border-radius:99px; padding:4px 10px; }
+.qb-pend-verm { background:#fff1f2; color:#9f1239; } .qb-pend-amb { background:#fffbeb; color:#92400e; }
+.qb-pend:hover { filter:brightness(.97); }
+.qb-tudo-ok { margin:6px 0 0; font-size:14px; font-weight:600; color:#15803d; }
+.qb-oks { margin-top:12px; } .qb-oks summary { cursor:pointer; font-size:12.5px; font-weight:600; color:#64748b; }
+.qb-oks ul { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
+.qb-oks li { display:flex; gap:8px; font-size:13px; color:#334155; } .qb-oks li i { color:#22c55e; margin-top:2px; } .qb-oks small { color:#94a3b8; }
+
+/* financeiro */
+.qb-cobr { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
+.qb-op { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; font:inherit; background:#fff;
+    border:1.5px solid #e2e8f0; border-radius:16px; padding:14px; cursor:pointer; transition:border-color .15s, background .15s; }
+.qb-op:hover:not([disabled]) { border-color:#86efac; }
+.qb-op[disabled] { cursor:default; }
+.qb-op i { font-size:18px; color:#64748b; margin-bottom:6px; }
+.qb-op b { font-size:14px; font-weight:700; color:#0f172a; } .qb-op small { color:#64748b; font-size:12px; line-height:1.35; }
+.qb-op.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 4px rgba(22,163,74,.1); } .qb-op.on i { color:#16a34a; }
+.qb-op.on::after { content:'\f00c'; font-family:'Font Awesome 6 Free'; font-weight:900; position:absolute; right:12px; top:12px; width:22px; height:22px; border-radius:50%;
+    background:#16a34a; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; }
+.qb-op.on.qb-op-pend { border-color:#ef4444; background:#fff1f2; box-shadow:none; } .qb-op.on.qb-op-pend i { color:#ef4444; }
+.qb-op.on.qb-op-pend::after { content:'!'; font-family:inherit; background:#ef4444; font-weight:800; }
+.qb-opcoes.tu-mudou .qb-op.on::before { content:'alterado'; position:absolute; right:42px; top:15px; font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#a16207; }
+.qb-hon { display:flex; align-items:center; gap:10px 26px; flex-wrap:wrap; margin-top:14px; padding:14px 16px; border-radius:16px; background:#f8fafc; }
+.qb-hon small { display:block; font-size:12px; color:#64748b; font-weight:500; } .qb-hon b { font-size:15px; font-weight:700; } .qb-hon b span { font-size:12px; color:#64748b; font-weight:500; }
+.qb-hon-sem { color:#be123c; font-weight:600; font-size:14px; } .qb-hon-sem i { font-size:15px; }
+.qb-btn-escuro { margin-left:auto; display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:700; color:#fff; background:#0f3d2e; border-radius:11px; padding:9px 15px; text-decoration:none; white-space:nowrap; }
+.qb-btn-escuro:hover { background:#14532d; color:#fff; }
+
+/* contato */
+.qb-acoes-c { display:flex; gap:8px; margin-top:10px; }
+.qb-acoes-c a { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; border-radius:14px; padding:11px 6px; font-size:12px; font-weight:600; text-decoration:none; }
+.qb-acoes-c a i { font-size:17px; } .qb-acoes-c a:hover { filter:brightness(.96); }
+
+/* sócios */
+.qb-donut { display:flex; align-items:center; gap:22px; }
+.qb-donut svg { flex:0 0 118px; }
+.qb-socios { flex:1; min-width:0; }
+.qb-socio { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid #f1f5f9; }
+.qb-socio:last-child { border:0; }
+.qb-av { width:38px; height:38px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:13px; flex:0 0 38px; }
+.qb-socio-t { flex:1; min-width:0; }
+.qb-socio-t > b { font-size:14.5px; } .qb-socio-t > b a { color:#0f172a; text-decoration:none; } .qb-socio-t > b a:hover { color:#15803d; text-decoration:underline; }
+.qb-socio-t small { display:block; color:#64748b; font-size:12.5px; margin-top:2px; }
+.qb-tag-resp { font-size:11px; font-weight:700; color:#166534; background:#dcfce7; border-radius:99px; padding:2px 8px; margin-left:6px; vertical-align:2px; }
+.qb-socio-acs { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.qb-socio-acs button { font:inherit; font-size:12px; font-weight:600; color:#475569; background:#f8fafc; border:1px solid #e2e8f0; border-radius:9px; padding:5px 10px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+.qb-socio-acs button:hover { border-color:#86efac; color:#15803d; }
+.qb-pct { font-size:18px; font-weight:800; white-space:nowrap; }
+.qb-aviso-amb { margin:10px 0 0; font-size:13px; font-weight:600; color:#b45309; }
+.qb-ex { margin-top:12px; border-top:1px solid #f1f5f9; padding-top:10px; }
+.qb-ex summary { cursor:pointer; font-size:13px; font-weight:600; color:#64748b; }
+.qb-ex-l { padding:8px 0; } .qb-ex-l b { font-size:13.5px; } .qb-ex-l a { color:#0f172a; } .qb-ex-l small { display:block; color:#64748b; font-size:12.5px; margin-top:1px; }
+
+/* certificado (resumo) */
+.qb-cert { background:linear-gradient(140deg,#052e16,#14532d); color:#ecfdf5; display:flex; flex-direction:column; }
+.qb-cert .qb-bh h3 { color:#fff; }
+.qb-ico-claro { background:rgba(255,255,255,.12); color:#86efac; }
+.qb-cert-l { display:block; color:#a7f3d0; font-size:13px; margin-top:4px; }
+.qb-cert-data { font-size:26px; font-weight:800; letter-spacing:-.4px; margin:2px 0 6px; color:#fff; }
+.qb-cert .qb-link-claro { margin-top:auto; padding-top:14px; }
+
+/* responsáveis (bloco existente, no estilo novo) */
+.qb #responsaveis .rs-card { background:none; border:0; padding:0; box-shadow:none; }
+.qb #responsaveis .rs-title { font-size:15.5px; font-weight:700; letter-spacing:-.2px; text-transform:none; color:#0f172a; }
+.qb #responsaveis .rs-head::before { content:'\f0c0'; font-family:'Font Awesome 6 Free'; font-weight:900; width:36px; height:36px; border-radius:11px; background:#cffafe; color:#0e7490;
+    display:inline-flex; align-items:center; justify-content:center; font-size:15px; }
+.qb #responsaveis .rs-grid { grid-template-columns:repeat(7, minmax(0, 1fr)); gap:12px; }
+.qb #responsaveis .rs-tile { align-items:center; text-align:center; border:0; background:#f8fafc; border-radius:16px; padding:14px 8px; gap:8px; }
+.qb #responsaveis .rs-dep { justify-content:center; font-size:11px; color:#64748b; }
+.qb #responsaveis .rs-who { flex-direction:column; gap:7px; }
+.qb #responsaveis .rs-av { width:46px; height:46px; flex-basis:46px; font-size:15px; }
+.qb #responsaveis .rs-nome { font-size:13px; font-weight:700; }
+.qb #responsaveis .rs-tile-falta { background:#fff1f2; outline:1.5px dashed #fda4af; outline-offset:-1.5px; }
+.qb #responsaveis .rs-btn { border-radius:10px; }
+
+/* endereços e contatos */
+.qb-lista2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+.qb-end { padding:14px 16px; border-radius:16px; background:#f8fafc; min-width:0; }
+.qb-end-h { display:flex; align-items:center; gap:8px; }
+.qb-end-tp { font-size:11px; font-weight:700; letter-spacing:.3px; color:#475569; background:#e2e8f0; border-radius:99px; padding:3px 9px; }
+.qb-end-tp.on { color:#15803d; background:#dcfce7; }
+.qb-end p { margin:10px 0 0; font-size:14px; line-height:1.55; word-break:break-word; }
+.qb-novo { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; min-height:118px; font:inherit; font-size:13.5px; font-weight:600;
+    color:#64748b; background:#fff; border:1.5px dashed #cbd5e1; border-radius:16px; cursor:pointer; }
+.qb-novo i { width:38px; height:38px; border-radius:12px; background:#f0fdf4; color:#16a34a; display:flex; align-items:center; justify-content:center; font-size:15px; }
+.qb-novo:hover { border-color:#86efac; color:#15803d; }
+.qb-novo-linha { flex-direction:row; min-height:52px; } .qb-novo-linha i { width:30px; height:30px; }
+.qb-pessoas { display:flex; flex-direction:column; gap:10px; }
+.qb-pessoa { display:flex; gap:12px; align-items:flex-start; padding:14px; border-radius:16px; background:#f8fafc; }
+.qb-pessoa-t { flex:1; min-width:0; }
+.qb-pessoa-t > b { font-size:14.5px; } .qb-cargo { display:block; font-size:12.5px; color:#64748b; margin-top:1px; }
+.qb-linha2 { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:8px; font-size:13px; color:#334155; }
+.qb-linha2 > span { min-width:0; word-break:break-word; } .qb-linha2 i { color:#16a34a; margin-right:6px; } .qb-linha2 .qb-verm i { color:#be123c; }
+.qb-deps { display:flex; flex-wrap:wrap; gap:5px; margin-top:9px; }
+.qb-deps span { font-size:11.5px; font-weight:600; border-radius:99px; padding:3px 9px; background:#e0f2fe; color:#0369a1; }
+.qb-deps span.todos { background:#0f3d2e; color:#fff; } .qb-deps span.nada { background:#fee2e2; color:#b91c1c; }
+.qb-pessoa-acs { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+
+/* blocos que já existiam (certificado, cadastros adicionais, acesso) no estilo novo */
+.qb-reuso .tab-pane { display:block !important; animation:none !important; }
+.qb-reuso .card { background:none; border:0; box-shadow:none; padding:0; margin:0; border-radius:0; overflow:visible; }
+.qb-reuso .card + .card { margin-top:22px; padding-top:20px; border-top:1px solid #eef2f0; border-radius:0; }
+.qb-reuso .card-header { background:none; border:0; padding:0 0 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.qb-reuso .card-title { margin:0; font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:#0f172a; text-transform:none; display:flex; align-items:center; gap:10px; }
+.qb-reuso .card-body { padding:0; }
+.qb-reuso .card-header .btn { margin-left:auto; }
+.qb-reuso .btn { border-radius:10px; font-weight:600; font-size:13px; }
+.qb-reuso .table { font-size:13.5px; }
+.qb-reuso .table th { font-size:12px; font-weight:600; color:#64748b; text-transform:none; letter-spacing:0; background:#f8fafc; border:0; }
+.qb-reuso .table td { border-color:#f1f5f9; }
+.qb-reuso .fv-cert-hero { border-radius:18px; padding:20px 22px; border-top:0 !important; margin-top:22px !important; }
+.qb-reuso .fv-cert-hero + * { margin-top:0; }
+.qb-reuso .empty-state { display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; border:1.5px dashed #e2e8f0; color:#64748b; text-align:left; min-height:0; }
+.qb-reuso .empty-state i { font-size:16px; margin:0; opacity:.6; } .qb-reuso .empty-state p { margin:0; font-size:13.5px; }
+.qb-reuso .anp-list-card { border-radius:16px; }
+.qb-reuso .acesso-form { max-width:none; }
+.qb #historico .hist-box { max-width:none; }
+.qb .hist-card { border:0; border-left:3px solid #22c55e; background:#f8fafc; border-radius:14px; }
+.qb .hist-tab { border-radius:10px; font-size:12.5px; }
+
+/* aviso e barra de salvar */
 .tu-aviso { position:fixed; left:50%; bottom:22px; transform:translate(-50%, 30px); opacity:0; pointer-events:none; z-index:3000;
-    background:#0f3d2e; color:#fff; font-size:13px; font-weight:600; padding:11px 18px; border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.2);
+    background:#0f3d2e; color:#fff; font-size:13.5px; font-weight:600; padding:12px 18px; border-radius:14px; box-shadow:0 12px 30px rgba(0,0,0,.2);
     transition:opacity .2s, transform .2s; max-width:calc(100vw - 32px); }
-.tu-aviso.on { opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
-.tu-aviso.erro { background:#991b1b; }
-/* barra de baixo: aparece quando algo mudou, para salvar sem voltar ao topo */
-.tu-barra { position:fixed; left:50%; bottom:18px; transform:translate(-50%, 90px); z-index:2900; display:flex; align-items:center; gap:10px;
-    background:#0f3d2e; color:#eafff3; border-radius:14px; padding:8px 8px 8px 16px; box-shadow:0 14px 34px rgba(0,0,0,.25);
-    font-size:13px; font-weight:600; transition:transform .2s; max-width:calc(100vw - 32px); }
+.tu-aviso.on { opacity:1; transform:translate(-50%, 0); pointer-events:auto; } .tu-aviso.erro { background:#991b1b; }
+.tu-barra { position:fixed; left:50%; bottom:18px; transform:translate(-50%, 110px); z-index:2900; display:flex; align-items:center; gap:12px;
+    background:#0f3d2e; color:#eafff3; border-radius:16px; padding:10px 10px 10px 18px; box-shadow:0 14px 34px rgba(0,0,0,.25); font-size:13.5px; font-weight:600;
+    transition:transform .2s; max-width:calc(100vw - 24px); }
 .tu-barra.on { transform:translate(-50%, 0); }
-.tu-barra button { font:inherit; font-size:13px; font-weight:700; border-radius:10px; padding:8px 14px; cursor:pointer; white-space:nowrap; }
-.tu-barra-desf { background:transparent; color:#bfe8cf; border:1px solid rgba(255,255,255,.25); }
-.tu-barra-salvar { background:#22c55e; color:#052e16; border:0; }
+.tu-barra small { display:block; color:#a7d9c0; font-weight:500; font-size:12px; max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #tuBarraTxt { white-space:nowrap; }
-@media (max-width:480px) { .tu-barra { gap:8px; padding-left:12px; } .tu-barra-sem { display:none; } .tu-barra button { padding:8px 11px; } }
-.tu-barra.on ~ .tu-aviso.on, .tu-barra.on + .tu-aviso { bottom:84px; }
+.tu-barra button { font:inherit; font-size:13.5px; font-weight:700; border-radius:11px; padding:9px 15px; cursor:pointer; white-space:nowrap; }
+.tu-barra-desf { margin-left:6px; background:transparent; color:#bfe8cf; border:1px solid rgba(255,255,255,.25); }
+.tu-barra-salvar { background:#4ade80; color:#052e16; border:0; }
+.tu-barra.on ~ .tu-aviso { bottom:92px; }
 
-@media (max-width:1320px) {
-    .tu { grid-template-columns:190px minmax(0, 1fr); }
-    .tu-ind { grid-row:1 / span 2; }
-    .tu-lado { grid-column:2; grid-row:1; position:static; }
-    .tu-main { grid-column:2; grid-row:2; }
-    .tu-dica { display:none; }
+/* janelas desta página (adicionar endereço, contato, sócio, cadastro adicional, saída de sócio) */
+.modal .modal-content { border-radius:24px; overflow:hidden; border:0; box-shadow:0 30px 70px rgba(15,23,42,.28); padding:0; }
+.modal .modal-header { background:linear-gradient(140deg,#0b3b2b,#16804f); border:0; padding:20px 24px; display:flex; align-items:center; gap:12px; }
+.modal .modal-header h3 { color:#fff; font-size:17px; font-weight:700; margin:0; }
+.modal .modal-close { color:#d7f3e2; background:rgba(255,255,255,.12); border-radius:10px; width:34px; height:34px; margin-left:auto; }
+.modal .modal-close:hover { background:rgba(255,255,255,.22); color:#fff; }
+.modal .modal-body { padding:22px 24px 8px; }
+.modal .form-group { margin-bottom:16px; }
+.modal .form-group > label, .modal .form-label { display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:6px; }
+.modal .form-control { height:44px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:14.5px; padding:0 13px; color:#0f172a; background:#fff; box-shadow:none; }
+.modal textarea.form-control { height:auto; padding:10px 13px; }
+.modal .form-control:focus { border-color:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.13); outline:none; }
+.modal .form-row { gap:14px; }
+.modal input[type=checkbox] { width:18px; height:18px; accent-color:#16a34a; vertical-align:-3px; margin-right:6px; }
+.modal .modal-footer { padding:16px 24px; border-top:1px solid #eef2f0; background:#fafcfb; display:flex; gap:10px; justify-content:flex-end; }
+.modal .modal-footer .btn { border-radius:12px; padding:11px 18px; font-size:14px; font-weight:600; }
+.modal .btn-primary { background:#16a34a; border-color:#16a34a; }
+.modal .area-chip-body { border-radius:12px; padding:8px 12px; font-size:13.5px; font-weight:600; border-width:1.5px; }
+
+@media (max-width:1280px) {
+    .qb-b.s4 { grid-column:span 6; } .qb-b.s8 { grid-column:span 12; } .qb-b.s5, .qb-b.s7 { grid-column:span 12; }
+    .qb #responsaveis .rs-grid { grid-template-columns:repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width:900px) {
-    .tu { grid-template-columns:minmax(0, 1fr); }
-    .tu-ind { display:none; }
-    .tu-lado, .tu-main { grid-column:1; }
-    .tu-dl { grid-template-columns:minmax(0, 1fr); gap:0; }
-    .tu-dl dt { padding-top:10px; }
-    .tu-v.tu-ed { margin-left:0; }
+    .qb-pills { margin:-8px -16px 10px; padding:10px 16px 12px; }
+    .qb-bento { grid-template-columns:minmax(0, 1fr); gap:12px; }
+    .qb-bento > .qb-b { grid-column:1 / -1 !important; padding:18px; border-radius:20px; }
+    .qb-id h1 { font-size:23px; } .qb-id-acoes { justify-content:flex-start; margin:0 0 12px; }
+    .qb-linha { gap:12px 20px; }
+    .qb-cobr, .qb-lista2 { grid-template-columns:minmax(0, 1fr); }
+    .qb #responsaveis .rs-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .qb-donut { flex-direction:column; align-items:stretch; } .qb-donut svg { align-self:center; width:96px; height:96px; flex-basis:auto; }
+    .qb-pessoa { flex-wrap:wrap; } .qb-pessoa-acs { width:100%; justify-content:flex-start; padding-left:50px; }
+    .qb-hon .qb-btn-escuro { margin-left:0; }
+    .qb-reuso .table-responsive { overflow-x:auto; }
+    .tu-barra { left:12px; right:12px; transform:translateY(110px); max-width:none; gap:8px; padding-left:14px; }
+    .tu-barra.on { transform:translateY(0); }
+    .tu-barra small { display:none; } .tu-barra > i { display:none; }
+    .tu-barra button { padding:9px 12px; }
+    .tu-barra-desf { margin-left:auto; }
 }
+.qb-piscar { animation:qb-piscar 1.4s ease; }
+/* certificado: o cartão verde de antes continua verde (o reaproveitamento tirava o fundo) */
+.qb-reuso .card.fv-cert-hero { background:linear-gradient(150deg,#0b3b2b 0%,#147a4b 100%) !important; border:0 !important; border-radius:18px !important;
+    padding:20px 22px !important; margin-top:22px !important; }
+.qb-reuso .card.fv-cert-hero .card-title { color:#fff; }
+.qb #contadores .card-title::before { font-family:'Font Awesome 6 Free'; font-weight:900; width:36px; height:36px; border-radius:11px;
+    display:inline-flex; align-items:center; justify-content:center; font-size:15px; }
+.qb #contadores .card-title::before { content:'\f4fc'; background:#ede9fe; color:#6d28d9; }
+/* acompanhamento */
+.qb-kpi3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.qb-kpi3 a { display:flex; align-items:center; gap:12px; border-radius:16px; background:#f8fafc; padding:14px; text-decoration:none; color:#0f172a; }
+.qb-kpi3 a:hover { background:#f1f5f9; }
+.qb-kpi3 b { display:block; font-size:22px; font-weight:800; line-height:1; } .qb-kpi3 small { color:#64748b; font-size:12.5px; }
+.qb-linha-item { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; padding:9px 12px; border-radius:12px; background:#f8fafc; margin-top:6px; font-size:13.5px; }
+.qb-linha-item small { margin-left:auto; color:#64748b; font-size:12.5px; }
+.qb-tag-cinza { font-size:11.5px; font-weight:700; background:#e2e8f0; color:#475569; border-radius:99px; padding:2px 9px; } .qb-tag-cinza.ok { background:#dcfce7; color:#166534; }
+#acompanhamento .qb-vazio { margin-top:14px; }
+/* acesso: exceções em etiquetas, não numa coluna comprida */
+.qb-reuso .acesso-excecoes { display:flex; flex-wrap:wrap; gap:8px; border:0; padding:0; }
+.qb-reuso .acesso-excecoes legend { font-size:13px; font-weight:700; padding:0; margin-bottom:6px; width:100%; }
+.qb-reuso .acesso-excecoes .acesso-ajuda { width:100%; margin:0 0 4px; }
+.qb-reuso .acesso-pessoa { border:1px solid #e2e8f0; border-radius:99px; padding:6px 12px; font-size:13px; background:#fff; }
+.qb-reuso .acesso-pessoa:has(input:checked) { border-color:#16a34a; background:#f0fdf4; color:#166534; font-weight:600; }
+.qb-reuso .acesso-pessoa input { accent-color:#16a34a; }
+.qb-reuso .acesso-opcao input { width:18px; height:18px; accent-color:#16a34a; }
+.tu-barra:not(.on) { visibility:hidden; transition:transform .2s, visibility 0s .2s; }
+@media (max-width:900px) { .qb-kpi3 { grid-template-columns:minmax(0, 1fr); } }
+@keyframes qb-piscar { 0%, 55% { box-shadow:0 0 0 4px rgba(245,158,11,.4); } 100% { box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06); } }
 </style>
 {% endblock %}
 
@@ -411,41 +613,74 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
    (32px), não o do wrapper, então sobravam 20px de faixa clara nas duas bordas.
    A lista e o form não usam wrapper nenhum; a ficha passa a seguir o mesmo modelo.
    Todo o conteúdo visível mora no .ef-body, que já tem padding próprio. #}
-<div class="cliente-ficha">
+<div class="cliente-ficha qb">
     {% set end_princ = (enderecos | selectattr('principal') | first) if enderecos else None %}
     {% if not end_princ and enderecos %}{% set end_princ = enderecos[0] %}{% endif %}
+    {% set pj = cliente.tipo_pessoa != 'PF' %}
+    {% set fcor = falta_cor %}
+    {% set REGIMES = [('SIMPLES', 'Simples Nacional'), ('LUCRO_PRESUMIDO', 'Lucro Presumido'), ('LUCRO_REAL', 'Lucro Real'), ('MEI', 'MEI')] %}
+    {% set PORTES = [('MEI', 'MEI'), ('ME', 'Microempresa (ME)'), ('EPP', 'Empresa de Pequeno Porte (EPP)'), ('MEDIO', 'Médio Porte'), ('GRANDE', 'Grande Porte')] %}
+    {% set origem_ops = [['CASA', 'Aberta pela Qualicontax']] %}{% for ca in contabilidades %}{% set _x = origem_ops.append([ca.id|string, ca.nome]) %}{% endfor %}
+    {% set grupo_ops = [] %}{% for g in grupos_todos %}{% set _x = grupo_ops.append([g.id|string, g.nome]) %}{% endfor %}
+    {% set ramo_ops = [] %}{% for r in ramos_todos %}{% set _x = ramo_ops.append([r.id|string, r.nome]) %}{% endfor %}
+    {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
+    {% set cob = cliente.cobranca or 'PENDENTE' %}
+
+    {% macro bol(chaves) -%}
+        {%- set fs = falta.faltam | selectattr('chave', 'in', chaves) | list -%}
+        {{- 'verm' if fs | selectattr('cor', 'equalto', 'verm') | list else ('amb' if fs else 'ok') -}}
+    {%- endmacro %}
+    {% macro selo(chaves, ok='') -%}
+        {%- set fs = falta.faltam | selectattr('chave', 'in', chaves) | list -%}
+        {%- if fs -%}<span class="qb-selo qb-selo-{{ 'verm' if fs | selectattr('cor', 'equalto', 'verm') | list else 'amb' }}">falta {{ fs | map(attribute='rotulo') | join(', ') }}</span>
+        {%- elif ok -%}<span class="qb-selo qb-selo-ok">{{ ok }}</span>{%- endif -%}
+    {%- endmacro %}
+    {# Um valor editável (tela única): rótulo pequeno em cima, valor grande embaixo. Clicou, vira campo ali mesmo. #}
+    {% macro campo(nome, rotulo, valor, exibe='', tipo='text', ops=None, ancora='', chave='', ph='', ajuda='', mono=False) -%}
+        <div{% if ancora %} id="{{ ancora }}"{% endif %} class="qb-kv tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %}{% if chave and chave in falta_cor %} tu-falta tu-falta-{{ 'verm' if falta_cor[chave] == 'verm' else 'amb' }}{% endif %}"
+             data-campo="{{ nome }}" data-tipo="{{ tipo }}" data-rotulo="{{ rotulo }}"
+             data-valor="{{ valor if valor is not none else '' }}"{% if ops is not none %} data-ops="{{ ops | tojson | forceescape }}"{% endif %}{% if ph %} data-ph="{{ ph }}"{% endif %}{% if ajuda %} data-ajuda="{{ ajuda }}"{% endif %}
+             {% if pode_rota('clientes.salvar_campos') %}tabindex="0" title="Clique para alterar"{% endif %}>
+            <small>{{ rotulo }}</small>
+            <b class="tu-txt{{ ' mono' if mono }}">{% if exibe %}{{ exibe }}{% elif valor %}{{ valor }}{% else %}<span class="tu-vazio">{{ 'clique para preencher' if chave and chave in falta_cor else '—' }}</span>{% endif %}</b>
+        </div>
+    {%- endmacro %}
+    {% macro av(nome, n=0) %}<span class="qb-av" style="background:{{ rs_cores[(n or (nome or '')|length) % 8] }}">{{ rs_ini(nome) }}</span>{% endmacro %}
 
     {% include 'cadastros/_nav_cadastros.html' %}
 
-    <!-- HERO (identidade compartilhada) -->
-    <div class="ef-hero">
-        <div class="ef-hero-inner ef-hero-head">
-            <div>
-                {% if cliente.numero_cliente %}<span class="ef-hero-num">#{{ cliente.numero_cliente }}</span>{% endif %}
-                <h1 class="ef-hero-title" data-copiar data-copiar-rotulo="{{ 'Nome' if cliente.tipo_pessoa == 'PF' else 'Razão social' }}">{{ cliente.nome_razao_social }}</h1>
-                <p class="ef-hero-sub">
-                    <span data-copiar data-copiar-rotulo="{{ 'CPF' if cliente.tipo_pessoa == 'PF' else 'CNPJ' }}">{{ cliente.cpf_cnpj }}</span>{% if end_princ and end_princ.cidade %} · {{ end_princ.cidade|title }}{% if end_princ.estado %}/{{ end_princ.estado }}{% endif %}{% endif %}{% if cliente.data_inicio_contrato %} · cliente desde {{ cliente.data_inicio_contrato.strftime('%m/%Y') }}{% endif %}
-                </p>
-                <div class="ef-hero-badges">
-                    <span class="ef-hero-badge">{{ cliente.situacao }}</span>
-                    <span class="ef-hero-badge">{{ 'PF' if cliente.tipo_pessoa == 'PF' else 'PJ' }}</span>
-                    {% if cliente.regime_tributario %}<span class="ef-hero-badge">{{ cliente.regime_tributario }}</span>{% endif %}
-                    {% if cliente.porte_empresa %}<span class="ef-hero-badge">{{ cliente.porte_empresa }}</span>{% endif %}
-                    {% if falta.faltam %}<a href="#tuFalta" class="ef-hero-badge tu-hero-pend" style="text-decoration:none;"><i class="fas fa-circle-exclamation"></i> {{ falta.faltam|length }} pendência{{ 's' if falta.faltam|length > 1 }} · {{ falta.faltam | map(attribute='rotulo') | join(', ') }}</a>
-                    {% else %}<span class="ef-hero-badge tu-hero-ok"><i class="fas fa-circle-check"></i> cadastro completo</span>{% endif %}
-                    {% if reserva and reserva.reservado %}<span class="ef-hero-badge" title="Só administradores e as exceções veem esta empresa"><i class="fas fa-lock"></i> Reservada</span>{% endif %}
+    <div class="qb-wrap" id="tu">
+        <!-- índice em pílulas (acompanha a rolagem) -->
+        <nav class="qb-pills tu-ind" aria-label="Seções do cadastro">
+            <a href="#identificacao"><i class="qb-pt qb-pt-ok"></i>Visão geral</a>
+            {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'im', 'ie']) }}"></i>Registros</a>{% endif %}
+            <a href="#financeiro"><i class="qb-pt qb-pt-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro</a>
+            <a href="#regime"><i class="qb-pt qb-pt-{{ bol(['regime', 'origem', 'conferir']) }}"></i>{{ 'Regime' if pj else 'Contrato' }}</a>
+            <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
+            <a href="#grupo-ramo"><i class="qb-pt qb-pt-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo e ramo</a>
+            {% if not pj %}<a href="#dados-pessoais"><i class="qb-pt qb-pt-ok"></i>Dados pessoais</a>{% endif %}
+            <a href="#socios"><i class="qb-pt qb-pt-{{ bol(['socios']) }}"></i>Sócios</a>
+            <a href="#responsaveis"><i class="qb-pt qb-pt-{{ 'amb' if rs_faltam else 'ok' }}"></i>Responsáveis</a>
+            <a href="#enderecos"><i class="qb-pt qb-pt-{{ 'ok' if enderecos else 'amb' }}"></i>Endereços</a>
+            <a href="#contatos"><i class="qb-pt qb-pt-{{ bol(['contato_celular', 'contato'] + ([] if falta.avulso else ['email'])) }}"></i>Contatos</a>
+            <a href="#certificado"><i class="qb-pt qb-pt-{{ bol(['contador']) }}"></i>Certificado</a>
+            <a href="#cadastros-adicionais"><i class="qb-pt qb-pt-cinza"></i>Adicionais</a>
+            <a href="#acompanhamento"><i class="qb-pt qb-pt-cinza"></i>Acompanhamento</a>
+            <a href="#historico"><i class="qb-pt qb-pt-cinza"></i>Histórico</a>
+            {% if reserva is not none %}<a href="#acesso"><i class="qb-pt qb-pt-cinza"></i>Acesso</a>{% endif %}
+        </nav>
+
+        <div class="qb-bento">
+            <!-- IDENTIDADE -->
+            <section class="qb-b qb-id s8" id="identificacao" data-copiar-bloco>
+                <div class="qb-id-acoes">
+                    <a href="#" id="btnVoltarGrupo" class="qb-btn-v" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
+                    <a href="{{ url_for('clientes.index') }}" id="btnVoltar" class="qb-btn-v"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
+                    {% if qualif[0] %}<button type="button" class="qb-btn-v" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
+                            title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Qualificação{% if qualif[1] %} <i class="fas fa-triangle-exclamation" style="color:#fbbf24;"></i>{% endif %}</button>{% endif %}
+                    <button type="button" class="qb-btn-v" data-copiar-ficha="{{ cliente.nome_razao_social }}" title="Copia identificação, contato, dados fiscais e endereços"><i class="far fa-copy"></i> Copiar ficha</button>
+                    {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuSalvar" class="qb-btn-v qb-btn-salvar tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar <b id="tuN"></b></button>{% endif %}
                 </div>
-            </div>
-            <div class="ef-hero-actions">
-                {# Veio da caixa do grupo (08/10/2026): "Voltar ao grupo" reabre o grupo com a
-                   busca que estava na tela; "Voltar" vira "Clientes". A origem fica na aba
-                   (sessionStorage), então sobrevive a Editar → salvar. #}
-                <a href="#" id="btnVoltarGrupo" class="ef-btn" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
-                {% if qualif[0] %}<button type="button" class="ef-btn" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
-                        title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> <span>Copiar qualificação</span>{% if qualif[1] %} <i class="fas fa-triangle-exclamation" style="color:#fbbf24;"></i>{% endif %}</button>{% endif %}
-                <button type="button" class="ef-btn" data-copiar-ficha="{{ cliente.nome_razao_social }}"
-                        title="Copia identificação, contato, dados fiscais e endereços — para colar num documento"><i class="far fa-copy"></i> <span>Copiar ficha</span></button>
-                <a href="{{ url_for('clientes.index') }}" id="btnVoltar" class="ef-btn"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
                 <script>
                 (function () {
                     var K = 'qcx_volta_grupo', cid = {{ cliente.id|int }}, v = null;
@@ -468,199 +703,228 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
                     b.querySelector('span').textContent = 'Clientes';
                 })();
                 </script>
-                {% if pode_rota('clientes.salvar_campos') %}
-                <button type="button" id="tuSalvar" class="ef-btn ef-btn-primary tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar alterações <b id="tuN"></b></button>
+                <span class="qb-num">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}avulso{% endif %}</span>
+                <h1 data-copiar data-copiar-rotulo="{{ 'Nome' if not pj else 'Razão social' }}">{{ cliente.nome_razao_social | nome_proprio }}</h1>
+                {% if pj and cliente.nome_fantasia %}<div class="qb-fantasia">{{ cliente.nome_fantasia }}</div>{% endif %}
+                <div class="qb-doc mono" data-copiar data-copiar-rotulo="{{ 'CPF' if not pj else 'CNPJ' }}">{{ cliente.cpf_cnpj or '—' }}</div>
+                <div class="qb-linha">
+                    {% if pj %}
+                    <div><small>Natureza</small><b>{% if cliente.natureza_juridica %}{{ cliente.natureza_juridica }}{% else %}—{% endif %}</b></div>
+                    {% if cliente.cnae_fiscal %}<div><small>Atividade</small><b>{{ cliente.cnae_fiscal_descricao or '' }} · {{ cliente.cnae_fiscal }}</b></div>{% endif %}
+                    <div><small>Desde</small><b>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '—' }}</b></div>
+                    {% endif %}
+                    {% if end_princ and end_princ.cidade %}<div><small>Cidade</small><b>{{ end_princ.cidade|title }}{% if end_princ.estado %}/{{ end_princ.estado }}{% endif %}</b></div>{% endif %}
+                    {% if cliente.data_inicio_contrato %}<div><small>Cliente desde</small><b>{{ cliente.data_inicio_contrato.strftime('%m/%Y') }}</b></div>{% endif %}
+                    {% if raiz_papel and raiz_papel[0] %}<div><small>Matriz / filial</small><b>
+                        {% if raiz_papel[0] == 'matriz' %}Matriz · {{ raiz_papel[1] }} filia{{ 'l' if raiz_papel[1] == 1 else 'is' }}
+                        {% elif raiz_papel[1] %}Filial de <a href="{{ url_for('clientes.detalhes', id=raiz_papel[1].id) }}">{{ raiz_papel[1].numero }}</a>
+                        {% else %}Filial (matriz não cadastrada){% endif %}</b></div>{% endif %}
+                </div>
+                <div class="qb-chips">
+                    <span>{{ cliente.situacao | capitalize }}</span>
+                    <span>{{ 'Pessoa física' if not pj else 'PJ' }}</span>
+                    {% if pj and cliente.regime_tributario %}<span>{{ (REGIMES | selectattr(0, 'equalto', cliente.regime_tributario) | map(attribute=1) | first) or cliente.regime_tributario }}</span>{% endif %}
+                    {% if cliente.porte_empresa %}<span>{{ cliente.porte_empresa }}</span>{% endif %}
+                    {% if reserva and reserva.reservado %}<span title="Só administradores e as exceções veem esta empresa"><i class="fas fa-lock"></i> Reservada</span>{% endif %}
+                </div>
+                <div class="qb-id-pe">
+                    {% if pode_rota('clientes.editar') %}<a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="qb-link-claro" title="Número, razão social e CNPJ mudam a pasta da empresa no Dropbox: ficam no editor completo, com a busca na Receita"><i class="fas fa-rotate"></i> {{ 'Receita, número e razão social' if pj else 'Nome, CPF e número' }}</a>{% endif %}
+                    {% if cliente.situacao == 'ATIVO' and pode_rota('clientes.inativar') %}
+                    <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST" style="display:inline;">
+                        <button type="submit" class="qb-link-claro qb-link-perigo" onclick="return confirm('Deseja realmente inativar este cliente?')"><i class="fas fa-ban"></i> Inativar</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </section>
+
+            <!-- O QUE FALTA (a regra do A CADASTRAR) -->
+            {% set n_tot = falta.faltam|length + falta.ok|length %}
+            <section class="qb-b qb-prog s4" id="tuFalta">
+                <h3>Cadastro</h3>
+                <div class="qb-big">{{ falta.ok|length }}<small> de {{ n_tot }} completos</small></div>
+                <div class="qb-trilho">{% for o in falta.ok %}<i></i>{% endfor %}{% for f in falta.faltam|reverse %}<i class="{{ 'v' if f.cor == 'verm' else 'a' }}"></i>{% endfor %}</div>
+                {% for f in falta.faltam %}
+                <a class="qb-pend qb-pend-{{ 'verm' if f.cor == 'verm' else 'amb' }}" href="#{{ f.alvo }}" title="{{ f.ajuda }}">
+                    <i class="fas fa-{{ 'circle-xmark' if f.cor == 'verm' else 'circle-exclamation' }}"></i><span>{{ f.rotulo }}</span><em>resolver</em></a>
+                {% else %}
+                <p class="qb-tudo-ok"><i class="fas fa-circle-check"></i> Cadastro completo.{% if not falta.avulso %} A empresa não aparece no A CADASTRAR.{% endif %}</p>
+                {% endfor %}
+                {% if falta.ok %}
+                <details class="qb-oks"><summary>ver os {{ falta.ok|length }} completos</summary>
+                    <ul>{% for o in falta.ok %}<li><i class="fas fa-circle-check"></i><span>{{ o.rotulo }}{% if o.valor %} <small>· {{ o.valor }}</small>{% endif %}</span></li>{% endfor %}</ul>
+                </details>
                 {% endif %}
-                {% if cliente.situacao == 'ATIVO' and pode_rota('clientes.inativar') %}
-                <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST">
-                    <button type="submit" class="ef-btn ef-btn-danger" onclick="return confirm('Deseja realmente inativar este cliente?')">
-                        <i class="fas fa-ban"></i> Inativar
-                    </button>
-                </form>
+            </section>
+
+            {% if pj %}
+            <!-- REGISTROS -->
+            <section class="qb-b s4" id="registros" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-landmark"></i></span><h3>Registros</h3>{{ selo(['nire', 'im', 'ie']) }}</div>
+                {{ campo('inscricao_estadual', 'Inscrição estadual', cliente.inscricao_estadual, ancora='campo-ie', chave='ie', ph='número ou ISENTO') }}
+                {{ campo('inscricao_municipal', 'Inscrição municipal', cliente.inscricao_municipal, ancora='campo-im', chave='im', ph='inscrição municipal (CCM)', mono=True) }}
+                {{ campo('nire', 'NIRE', cliente.nire, ancora='campo-nire', chave='nire', ph='35.2.1234567-8', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.', mono=True) }}
+                {{ campo('nire_data_registro', 'Data do registro na Junta', cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente.nire_data_registro else '', exibe=(cliente.nire_data_registro|format_date if cliente.nire_data_registro else ''), tipo='date') }}
+            </section>
+            {% endif %}
+
+            <!-- FINANCEIRO -->
+            <section class="qb-b {{ 's8' if pj else 's8' }}" id="financeiro" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-rosa"><i class="fas fa-coins"></i></span><h3>Como {{ 'a empresa' if pj else 'o cliente' }} paga os honorários?</h3>{{ selo(['cobranca']) }}</div>
+                <div id="campo-cobranca" class="tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %} qb-opcoes" data-campo="cobranca" data-tipo="opcoes" data-rotulo="Cobrança" data-valor="{{ cob }}">
+                    <div class="qb-cobr">
+                        {% for v, ic, tit, sub in [('PROPRIA', 'fa-building', 'Própria', 'A própria empresa paga os honorários' if pj else 'O próprio cliente paga os honorários'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo', 'Outra empresa do grupo paga por ela'), ('PENDENTE', 'fa-hourglass-half', 'Pendente', 'Ainda não definido — segura a empresa no A CADASTRAR')] %}
+                        <button type="button" class="qb-op{{ ' on' if cob == v }}{{ ' qb-op-pend' if v == 'PENDENTE' }}" data-v="{{ v }}"{% if not pode_rota('clientes.salvar_campos') %} disabled{% endif %}>
+                            <i class="fas {{ ic }}"></i><b>{{ tit }}</b><small>{{ sub }}</small></button>
+                        {% endfor %}
+                    </div>
+                    <span hidden data-copiar="{{ (cobrancas | selectattr(0, 'equalto', cob) | map(attribute=1) | first) }}" data-copiar-rotulo="Cobrança"></span>
+                </div>
+                {% if contrato %}
+                <div class="qb-hon">
+                    <div><small>Honorários</small><b class="qb-verde">{{ contrato.valor | float | format_currency }}<span>/mês</span></b></div>
+                    <div><small>Vencimento</small><b>dia {{ contrato.dia_vencimento }}</b></div>
+                    <div><small>Desde</small><b>{{ contrato.inicio.strftime('%m/%Y') if contrato.inicio else '—' }}{% if contrato.fim %} até {{ contrato.fim.strftime('%m/%Y') }}{% endif %}</b></div>
+                    <div data-nocopiar><small>13º</small><b>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas{% elif contrato.decimo_tipo == 'UNICA' %}parcela única{% elif contrato.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}sem 13º{% endif %}</b></div>
+                    <div data-nocopiar><small>Reajuste</small><b>{% if contrato.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% else %}{{ contrato.reajuste_tipo | lower | replace('_', ' ') }}{% endif %}</b></div>
+                    {% if contrato.situacao != 'ATIVO' %}<div data-nocopiar><small>Situação</small><b class="qb-verm">{{ contrato.situacao | capitalize }}</b></div>{% endif %}
+                    {% if pode_rota('financeiro.honorarios') %}<a class="qb-btn-escuro" href="{{ url_for('financeiro.honorarios', aba='com', busca=cliente.numero_cliente or cliente.nome_razao_social) }}">Editar honorários</a>{% endif %}
+                </div>
+                {% else %}
+                <div class="qb-hon qb-hon-sem"><i class="fas fa-file-signature"></i><span>Sem contrato de honorários</span>
+                    {% if pode_rota('financeiro.honorarios') %}<a class="qb-btn-escuro" href="{{ url_for('financeiro.honorarios', aba='sem', busca=cliente.numero_cliente or cliente.nome_razao_social) }}">Cadastrar honorários</a>{% endif %}</div>
                 {% endif %}
-            </div>
-        </div>
+            </section>
 
-    </div><!-- /fv-hero -->
+            {% if not pj %}
+            <!-- DADOS PESSOAIS (PF) -->
+            {% set ps = pessoa or {} %}
+            <section class="qb-b s4" id="dados-pessoais" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-id-card"></i></span><h3>Dados pessoais</h3>
+                    {% if pode_rota('clientes.editar') %}<a class="qb-add" href="{{ url_for('clientes.editar', id=cliente.id) }}"><i class="fas fa-pen"></i> Alterar</a>{% endif %}</div>
+                <div class="qb-kv"><small>Nascimento</small><b>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</b></div>
+                <div class="qb-kv"><small>Documentos</small><b>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</b></div>
+                <div class="qb-kv"><small>Estado civil</small><b>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %} <small class="qb-muted">· {{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</b></div>
+                <div class="qb-kv"><small>Nacionalidade · profissão</small><b>{{ ps.nacionalidade or '—' }} · {{ ps.profissao or '—' }}</b></div>
+                <div class="qb-kv"><small>Nome da mãe</small><b>{{ ps.nome_mae or '—' }}</b></div>
+                <div class="qb-kv"><small>Conta gov.br</small><b>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</b></div>
+            </section>
+            {% endif %}
 
-    <div class="ef-body">
-        {# ══ TELA ÚNICA (Modelo C, 08/11/2026) — Anderson (07/11): "Ficha e Cadastro não está legal... uma tela só".
-           Índice à esquerda (bolinha onde falta), tudo numa página que rola, "O que falta" à direita com a MESMA
-           regra do A CADASTRAR. Valor com sublinhado pontilhado vira campo ao clicar; um só "Salvar alterações". #}
-        {% set pode_ed = pode_rota('clientes.salvar_campos') %}
-        {% set pj = cliente.tipo_pessoa != 'PF' %}
-        {% set fcor = falta_cor %}
-        {% set REGIMES = [('SIMPLES', 'Simples Nacional'), ('LUCRO_PRESUMIDO', 'Lucro Presumido'), ('LUCRO_REAL', 'Lucro Real'), ('MEI', 'MEI')] %}
-        {% set PORTES = [('MEI', 'MEI'), ('ME', 'Microempresa (ME)'), ('EPP', 'Empresa de Pequeno Porte (EPP)'), ('MEDIO', 'Médio Porte'), ('GRANDE', 'Grande Porte')] %}
-        {% set origem_ops = [['CASA', 'Aberta pela Qualicontax']] %}{% for ca in contabilidades %}{% set _x = origem_ops.append([ca.id|string, ca.nome]) %}{% endfor %}
-        {% set grupo_ops = [] %}{% for g in grupos_todos %}{% set _x = grupo_ops.append([g.id|string, g.nome]) %}{% endfor %}
-        {% set ramo_ops = [] %}{% for r in ramos_todos %}{% set _x = ramo_ops.append([r.id|string, r.nome]) %}{% endfor %}
-        {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
-
-        {% macro bol(chaves) -%}
-            {%- set fs = falta.faltam | selectattr('chave', 'in', chaves) | list -%}
-            {{- 'verm' if fs | selectattr('cor', 'equalto', 'verm') | list else ('amb' if fs else 'ok') -}}
-        {%- endmacro %}
-        {% macro selo(chaves) -%}
-            {%- set fs = falta.faltam | selectattr('chave', 'in', chaves) | list -%}
-            {%- if fs -%}<span class="tu-selo tu-selo-{{ 'verm' if fs | selectattr('cor', 'equalto', 'verm') | list else 'amb' }}">falta: {{ fs | map(attribute='rotulo') | join(', ') }}</span>{%- endif -%}
-        {%- endmacro %}
-        {# Um valor da tela única. tipo: text | date | select | textarea | multi. "valor" é o que vai para o servidor;
-           "exibe" é o que se lê. Sem permissão de editar, é só texto. #}
-        {% macro campo(nome, rotulo, valor, exibe='', tipo='text', ops=None, ancora='', chave='', ph='', ajuda='') -%}
-            <dt>{{ rotulo }}</dt>
-            <dd{% if ancora %} id="{{ ancora }}"{% endif %} class="tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %}{% if chave and chave in falta_cor %} tu-falta tu-falta-{{ 'verm' if falta_cor[chave] == 'verm' else 'amb' }}{% endif %}"
-                data-campo="{{ nome }}" data-tipo="{{ tipo }}" data-rotulo="{{ rotulo }}"
-                data-valor="{{ valor if valor is not none else '' }}"{% if ops is not none %} data-ops="{{ ops | tojson | forceescape }}"{% endif %}{% if ph %} data-ph="{{ ph }}"{% endif %}{% if ajuda %} data-ajuda="{{ ajuda }}"{% endif %}
-                {% if pode_rota('clientes.salvar_campos') %}tabindex="0" title="Clique para alterar"{% endif %}>
-                <span class="tu-txt">{% if exibe %}{{ exibe }}{% elif valor %}{{ valor }}{% else %}<span class="tu-vazio">{{ 'falta preencher' if chave and chave in falta_cor else '—' }}</span>{% endif %}</span>
-            </dd>
-        {%- endmacro %}
-
-        <div class="tu" id="tu">
-            <!-- índice -->
-            <nav class="tu-ind" aria-label="Índice do cadastro">
-                <p class="tu-ind-tit">Cadastro</p>
-                <a href="#identificacao"><i class="tu-dot tu-dot-ok"></i>Identificação</a>
-                {% if pj %}<a href="#registros"><i class="tu-dot tu-dot-{{ bol(['nire', 'im', 'ie']) }}"></i>Registros e Junta<small>{{ falta.faltam | selectattr('chave', 'in', ['nire', 'im', 'ie']) | map(attribute='rotulo') | join(', ') }}</small></a>{% endif %}
-                <a href="#regime"><i class="tu-dot tu-dot-{{ bol(['regime', 'origem']) }}"></i>{{ 'Regime e origem' if pj else 'Situação e contrato' }}<small>{{ falta.faltam | selectattr('chave', 'in', ['regime', 'origem']) | map(attribute='rotulo') | join(', ') }}</small></a>
-                <a href="#financeiro"><i class="tu-dot tu-dot-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro<small>{% if 'cobranca' in fcor %}cobrança{% elif not contrato %}sem honorários{% endif %}</small></a>
-                <a href="#contato-empresa"><i class="tu-dot tu-dot-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato da empresa</a>
-                <a href="#grupo-ramo"><i class="tu-dot tu-dot-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo, ramo e contador<small>{{ falta.faltam | selectattr('chave', 'in', ['grupo', 'ramo', 'contador']) | map(attribute='rotulo') | join(', ') }}</small></a>
-                {% if not pj %}<a href="#dados-pessoais"><i class="tu-dot tu-dot-ok"></i>Dados pessoais</a>{% endif %}
-                <a href="#responsaveis"><i class="tu-dot tu-dot-{{ 'amb' if rs_faltam else 'ok' }}"></i>Responsáveis<small>{% if rs_faltam %}{{ rs_faltam }} sem{% endif %}</small></a>
-                <a href="#enderecos"><i class="tu-dot tu-dot-{{ 'ok' if enderecos else 'amb' }}"></i>Endereços<small>{{ enderecos|length }}</small></a>
-                <a href="#contatos"><i class="tu-dot tu-dot-{{ bol(['contato_celular', 'contato'] + ([] if falta.avulso else ['email'])) }}"></i>Contatos<small>{{ contatos|length }}</small></a>
-                <a href="#socios"><i class="tu-dot tu-dot-{{ bol(['socios']) }}"></i>Sócios<small>{{ socios|length }}{% if socios %} · {{ '%g' % socios_total_percentual }}%{% endif %}</small></a>
-                <a href="#contadores"><i class="tu-dot tu-dot-{{ bol(['contador']) }}"></i>Contador e certificado</a>
-                <a href="#cadastros-adicionais"><i class="tu-dot tu-dot-cinza"></i>Cadastros adicionais<small>{{ cadastros_adicionais|length + cadastros_anp|length }}</small></a>
-                <p class="tu-ind-tit">Acompanhamento</p>
-                <a href="#processos"><i class="tu-dot tu-dot-cinza"></i>Processos<small>{{ processos|length }}</small></a>
-                <a href="#tarefas"><i class="tu-dot tu-dot-cinza"></i>Tarefas<small>{{ tarefas|length }}</small></a>
-                <a href="#obrigacoes"><i class="tu-dot tu-dot-cinza"></i>Obrigações<small>{{ obrigacoes|length }}</small></a>
-                <a href="#historico"><i class="tu-dot tu-dot-cinza"></i>Histórico</a>
-                {% if reserva is not none %}<a href="#acesso"><i class="tu-dot tu-dot-cinza"></i>Acesso</a>{% endif %}
-            </nav>
-
-            <div class="tu-main">
-        <div class="tabs-content">
-            <div id="dados-gerais" class="tab-pane active">
-                <!-- Identificação (vem da Receita: muda no editor, que busca o CNPJ e renomeia a pasta) -->
-                <section class="fv-card tu-sec" id="identificacao" data-copiar-bloco>
-                    <p class="fv-seclabel">Identificação <span class="tu-tag">Receita</span>
-                        {% if pode_rota('clientes.editar') %}<a class="tu-acao" style="order:2" href="{{ url_for('clientes.editar', id=cliente.id) }}" title="Número, razão social e CNPJ mudam a pasta da empresa no Dropbox: ficam no editor completo, com a busca na Receita"><i class="fas fa-search"></i> Receita, número e razão</a>{% endif %}</p>
-                    <dl class="fv-dl tu-dl">
-                        <dt>Nº Cliente</dt><dd class="fv-num-hl">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}— <small>(avulso)</small>{% endif %}</dd>
-                        <dt>{{ 'Nome' if not pj else 'Razão social' }}</dt><dd>{{ cliente.nome_razao_social or '—' }}</dd>
-                        {% if pj %}<dt>Nome fantasia</dt><dd>{{ cliente.nome_fantasia or '—' }}</dd>{% endif %}
-                        <dt>{{ 'CPF' if not pj else 'CNPJ' }}</dt><dd class="fv-num-hl">{{ cliente.cpf_cnpj or '—' }}</dd>
-                        {% if raiz_papel and raiz_papel[0] %}
-                        <dt>Matriz / filial</dt><dd>
-                            {% if raiz_papel[0] == 'matriz' %}<b>Matriz</b> · {{ raiz_papel[1] }} filia{{ 'l' if raiz_papel[1] == 1 else 'is' }} cadastrada{{ '' if raiz_papel[1] == 1 else 's' }}
-                            {% elif raiz_papel[1] %}<b>Filial</b> de <a href="{{ url_for('clientes.detalhes', id=raiz_papel[1].id) }}">{{ raiz_papel[1].numero }} - {{ raiz_papel[1].nome }}</a>
-                            {% else %}<b>Filial</b> — a matriz (0001) não está cadastrada{% endif %}</dd>
-                        {% endif %}
-                        {% if pj %}
-                        <dt>Natureza</dt><dd>
-                            {% if cliente.natureza_juridica %}<b>{{ natureza[2] }}</b> {{ cliente.natureza_juridica }} <small class="tu-muted">· {{ natureza[0] }}</small>
-                            {% else %}— <small class="tu-muted">(Receita, número e razão → Buscar na Receita)</small>{% endif %}</dd>
-                        {% if cliente.cnae_fiscal %}<dt>CNAE</dt><dd>{{ cliente.cnae_fiscal }}{% if cliente.cnae_fiscal_descricao %} · {{ cliente.cnae_fiscal_descricao }}{% endif %}</dd>{% endif %}
-                        <dt>Início atividade</dt><dd>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '—' }}</dd>
-                        {% endif %}
-                    </dl>
-                </section>
-
+            <!-- REGIME E ORIGEM -->
+            <section class="qb-b s4" id="regime" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-scale-balanced"></i></span><h3>{{ 'Regime e origem' if pj else 'Contrato' }}</h3>{{ selo(['regime', 'origem', 'conferir']) }}</div>
                 {% if pj %}
-                <!-- Registros e Junta -->
-                <section class="fv-card tu-sec" id="registros" data-copiar-bloco>
-                    <p class="fv-seclabel">Registros e Junta {{ selo(['nire', 'im', 'ie']) }}</p>
-                    <dl class="fv-dl tu-dl">
-                        {{ campo('inscricao_estadual', 'Insc. Estadual', cliente.inscricao_estadual, ancora='campo-ie', chave='ie', ph='número ou ISENTO') }}
-                        {{ campo('inscricao_municipal', 'Insc. Municipal', cliente.inscricao_municipal, ancora='campo-im', chave='im', ph='inscrição municipal (CCM)') }}
-                        {{ campo('nire', 'NIRE', cliente.nire, ancora='campo-nire', chave='nire', ph='35.2.1234567-8', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.') }}
-                        {{ campo('nire_data_registro', 'Data do registro', cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente.nire_data_registro else '', exibe=(cliente.nire_data_registro|format_date if cliente.nire_data_registro else ''), tipo='date') }}
-                    </dl>
-                </section>
+                {{ campo('regime_tributario', 'Regime tributário', cliente.regime_tributario, exibe=(REGIMES | selectattr(0, 'equalto', cliente.regime_tributario) | map(attribute=1) | first) if cliente.regime_tributario else '', tipo='select', ops=REGIMES, ancora='campo-regime', chave='regime') }}
+                {{ campo('porte_empresa', 'Porte', cliente.porte_empresa, exibe=(PORTES | selectattr(0, 'equalto', cliente.porte_empresa) | map(attribute=1) | first) if cliente.porte_empresa else '', tipo='select', ops=PORTES) }}
+                {{ campo('origem', 'Origem', 'CASA' if cliente.aberta_pela_casa else (cliente.contabilidade_anterior_id|string if cliente.contabilidade_anterior_id else ''),
+                         exibe=('Aberta pela Qualicontax' if cliente.aberta_pela_casa else (contab_anterior.nome if contab_anterior else '')),
+                         tipo='select', ops=origem_ops, ancora='campo-origem', chave='origem', ajuda='Aberta pela Qualicontax, ou o escritório de onde a empresa veio.') }}
                 {% endif %}
+                {{ campo('data_inicio_contrato', 'Início do contrato', cliente.data_inicio_contrato.strftime('%Y-%m-%d') if cliente.data_inicio_contrato else '', exibe=(cliente.data_inicio_contrato|format_date if cliente.data_inicio_contrato else ''), tipo='date') }}
+                {% if cliente.data_fim_contrato %}<div class="qb-kv"><small>Fim do contrato</small><b>{{ cliente.data_fim_contrato|format_date }}</b></div>{% endif %}
+                {{ campo('observacoes', 'Observações', cliente.observacoes, tipo='textarea', ancora='campo-observacoes', chave='conferir') }}
+            </section>
 
-                <!-- Regime e origem -->
-                <section class="fv-card tu-sec" id="regime" data-copiar-bloco>
-                    <p class="fv-seclabel">{{ 'Regime e origem' if pj else 'Situação e contrato' }} {{ selo(['regime', 'origem']) }}</p>
-                    <dl class="fv-dl tu-dl">
-                        {% if pj %}
-                        {{ campo('regime_tributario', 'Regime', cliente.regime_tributario, exibe=(REGIMES | selectattr(0, 'equalto', cliente.regime_tributario) | map(attribute=1) | first) if cliente.regime_tributario else '', tipo='select', ops=REGIMES, ancora='campo-regime', chave='regime') }}
-                        {{ campo('porte_empresa', 'Porte', cliente.porte_empresa, exibe=(PORTES | selectattr(0, 'equalto', cliente.porte_empresa) | map(attribute=1) | first) if cliente.porte_empresa else '', tipo='select', ops=PORTES) }}
-                        {{ campo('origem', 'Origem', 'CASA' if cliente.aberta_pela_casa else (cliente.contabilidade_anterior_id|string if cliente.contabilidade_anterior_id else ''),
-                                 exibe=('Aberta pela Qualicontax' if cliente.aberta_pela_casa else (contab_anterior.nome if contab_anterior else '')),
-                                 tipo='select', ops=origem_ops, ancora='campo-origem', chave='origem', ajuda='Aberta pela Qualicontax, ou o escritório de onde a empresa veio.') }}
-                        {% endif %}
-                        <dt>Situação</dt><dd>{{ cliente.situacao }} {% if cliente.situacao == 'ATIVO' %}<small class="tu-muted">(Inativar no topo)</small>{% endif %}</dd>
-                        {{ campo('data_inicio_contrato', 'Início do contrato', cliente.data_inicio_contrato.strftime('%Y-%m-%d') if cliente.data_inicio_contrato else '', exibe=(cliente.data_inicio_contrato|format_date if cliente.data_inicio_contrato else ''), tipo='date') }}
-                        {% if cliente.data_fim_contrato %}<dt>Fim do contrato</dt><dd>{{ cliente.data_fim_contrato|format_date }}</dd>{% endif %}
-                        {{ campo('observacoes', 'Observações', cliente.observacoes, tipo='textarea', ancora='campo-observacoes', chave='conferir') }}
-                    </dl>
-                </section>
-
-                <!-- Financeiro: como cobrar + o contrato de honorários -->
-                <section class="fv-card tu-sec" id="financeiro" data-copiar-bloco>
-                    <p class="fv-seclabel">Financeiro {{ selo(['cobranca']) }}
-                        {% if pode_rota('financeiro.honorarios') %}<a class="tu-acao" style="order:2" href="{{ url_for('financeiro.honorarios', aba='sem' if not contrato else 'com', busca=cliente.numero_cliente or cliente.nome_razao_social) }}"><i class="fas fa-file-signature"></i> {{ 'Cadastrar honorários' if not contrato else 'Editar honorários' }}</a>{% endif %}</p>
-                    <dl class="fv-dl tu-dl">
-                        {{ campo('cobranca', 'Cobrança', cliente.cobranca or 'PENDENTE', exibe=(cobrancas | selectattr(0, 'equalto', cliente.cobranca or 'PENDENTE') | map(attribute=1) | first),
-                                 tipo='select', ops=cobrancas, ancora='campo-cobranca', chave='cobranca', ajuda='Pendente segura a empresa em A CADASTRAR e fora de CONTRATOS.') }}
-                        {% if contrato %}
-                        <dt>Valor mensal</dt><dd class="fv-num-hl">{{ contrato.valor | float | format_currency }}</dd>
-                        <dt>Vencimento</dt><dd>dia {{ contrato.dia_vencimento }} do mês seguinte à competência</dd>
-                        <dt>Desde</dt><dd>{{ contrato.inicio.strftime('%m/%Y') if contrato.inicio else '—' }}{% if contrato.fim %} até {{ contrato.fim.strftime('%m/%Y') }}{% endif %}</dd>
-                        <dt>13º</dt><dd data-nocopiar>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas (novembro e dezembro){% elif contrato.decimo_tipo == 'UNICA' %}parcela única (dezembro){% elif contrato.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}sem 13º{% endif %}</dd>
-                        <dt>Reajuste</dt><dd data-nocopiar>{% if contrato.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% if contrato.proximo_reajuste %}, próximo em {{ contrato.proximo_reajuste.strftime('%m/%Y') }}{% endif %}{% else %}{{ contrato.reajuste_tipo | lower | replace('_', ' ') }}{% if contrato.reajuste_obs %} · {{ contrato.reajuste_obs }}{% endif %}{% endif %}</dd>
-                        {% if contrato.situacao != 'ATIVO' %}<dt>Situação</dt><dd data-nocopiar><span class="rs-falta">{{ contrato.situacao | capitalize }}</span></dd>{% endif %}
-                        {% else %}
-                        <dt>Honorários</dt><dd><span class="tu-alerta"><i class="fas fa-triangle-exclamation"></i> sem contrato de honorários</span></dd>
-                        {% endif %}
-                    </dl>
-                </section>
-
-                <!-- Contato da empresa -->
-                <section class="fv-card tu-sec" id="contato-empresa" data-copiar-bloco>
-                    <p class="fv-seclabel">Contato da empresa {{ selo(['celular'] + (['email'] if falta.avulso else [])) }}</p>
-                    <dl class="fv-dl tu-dl">
-                        {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph='nome@empresa.com.br', ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
-                        {{ campo('telefone', 'Telefone', cliente.telefone, ph='(11) 3333-4444') }}
-                        {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda='Obrigatório: DDD + número.') }}
-                    </dl>
-                </section>
-
-                <!-- Grupo, ramo e contador -->
-                <section class="fv-card tu-sec" id="grupo-ramo" data-copiar-bloco>
-                    <p class="fv-seclabel">Grupo, ramo e contador {{ selo(['grupo', 'ramo', 'contador']) }}</p>
-                    <dl class="fv-dl tu-dl">
-                        {% set g1 = grupos | first if grupos else None %}
-                        {{ campo('grupo', 'Grupo', g1.id|string if g1 else '', exibe=(grupos | map(attribute='nome') | join(', ') if grupos else ''), tipo='select', ops=grupo_ops, ancora='campo-grupo', chave='grupo', ajuda='Trocar o grupo tira a empresa do grupo antigo.') }}
-                        {{ campo('ramos', 'Ramo', ramos_atividade | map(attribute='id') | join(','), exibe=(ramos_atividade | map(attribute='nome') | join(', ') if ramos_atividade else ''), tipo='multi', ops=ramo_ops, ancora='campo-ramos', chave='ramo') }}
-                        <dt>Contador</dt><dd>{% if contadores %}{{ contadores | map(attribute='nome_razao_social') | join(', ') }}{% elif 'contador' in fcor %}<span class="tu-vazio tu-vazio-falta">falta</span>{% else %}—{% endif %}
-                            <a class="tu-link" href="#contadores">{{ 'trocar' if contadores else 'vincular' }} <i class="fas fa-arrow-down"></i></a></dd>
-                    </dl>
-                </section>
-
-                {% if not pj %}
-                <!-- Dados pessoais (PF) -->
-                {% set ps = pessoa or {} %}
-                <section class="fv-card tu-sec" id="dados-pessoais" data-copiar-bloco>
-                    <p class="fv-seclabel">Dados pessoais
-                        {% if pode_rota('clientes.editar') %}<a class="tu-acao" style="order:2" href="{{ url_for('clientes.editar', id=cliente.id) }}"><i class="fas fa-pen"></i> Alterar documentos</a>{% endif %}</p>
-                    <dl class="fv-dl tu-dl">
-                        <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
-                        <dt>Documentos</dt><dd>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if d.contrato %} <small>(contrato)</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
-                        <dt>Estado civil</dt><dd>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %}<br><small>{{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</dd>
-                        <dt>Nacionalidade</dt><dd>{{ ps.nacionalidade or '—' }}</dd>
-                        <dt>Profissão</dt><dd>{{ ps.profissao or '—' }}</dd>
-                        <dt>Nome da mãe</dt><dd>{{ ps.nome_mae or '—' }}</dd>
-                        <dt>Conta gov.br</dt><dd>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</dd>
-                    </dl>
-                </section>
+            <!-- CONTATO DA EMPRESA -->
+            {% set cel_dig = (cliente.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
+            <section class="qb-b s4" id="contato-empresa" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>Contato da empresa</h3>{{ selo(['celular'] + (['email'] if falta.avulso else [])) }}</div>
+                {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda='Obrigatório: DDD + número.', mono=True) }}
+                {{ campo('telefone', 'Telefone', cliente.telefone, ph='(11) 3333-4444', mono=True) }}
+                {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph='nome@empresa.com.br', ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
+                {% if cliente.celular or cliente.email %}
+                <div class="qb-acoes-c" data-nocopiar>
+                    {% if cel_dig %}<a class="i-verde" href="https://wa.me/55{{ cel_dig }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp</a>
+                    <a class="i-azul" href="tel:+55{{ cel_dig }}"><i class="fas fa-phone"></i>Ligar</a>{% endif %}
+                    {% if cliente.email %}<a class="i-roxo" href="mailto:{{ cliente.email }}"><i class="fas fa-envelope"></i>E-mail</a>{% endif %}
+                </div>
                 {% endif %}
-                <section class="tu-sec" id="responsaveis">
+            </section>
+
+            <!-- GRUPO, RAMO E CONTADOR -->
+            <section class="qb-b s4" id="grupo-ramo" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-lima"><i class="fas fa-tags"></i></span><h3>Grupo, ramo e contador</h3>{{ selo(['grupo', 'ramo', 'contador']) }}</div>
+                {% set g1 = grupos | first if grupos else None %}
+                {{ campo('grupo', 'Grupo', g1.id|string if g1 else '', exibe=(grupos | map(attribute='nome') | join(', ') if grupos else ''), tipo='select', ops=grupo_ops, ancora='campo-grupo', chave='grupo', ajuda='Trocar o grupo tira a empresa do grupo antigo.') }}
+                {{ campo('ramos', 'Ramo de atividade', ramos_atividade | map(attribute='id') | join(','), exibe=(ramos_atividade | map(attribute='nome') | join(', ') if ramos_atividade else ''), tipo='multi', ops=ramo_ops, ancora='campo-ramos', chave='ramo') }}
+                <div class="qb-kv{% if 'contador' in fcor %} tu-falta tu-falta-amb{% endif %}"><small>Contador responsável</small>
+                    <b>{% if contadores %}{{ contadores | map(attribute='nome_razao_social') | join(', ') | nome_proprio }}{% else %}<span class="tu-vazio">{{ 'falta vincular' if 'contador' in fcor else '—' }}</span>{% endif %}
+                    <a class="qb-link" href="#contadores">{{ 'trocar' if contadores else 'vincular' }} <i class="fas fa-arrow-down"></i></a></b></div>
+            </section>
+
+            <!-- SÓCIOS -->
+            {% set total_s = socios_total_percentual or 0 %}
+            <section class="qb-b s7" id="socios" data-copiar-secao>
+                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-user-tie"></i></span><h3>Sócios</h3>
+                    {% if socios %}<span class="qb-selo {{ 'qb-selo-ok' if total_s == 100 else 'qb-selo-amb' }}">{{ '%g' % total_s }}%</span>{% else %}{{ selo(['socios']) }}{% endif %}
+                    <span class="qb-bh-dir">
+                        {% if qualif_todos %}<button type="button" class="qb-add qb-add-cinza" data-copiar-texto="{{ qualif_todos }}" data-copiar-rotulo="Qualificação dos sócios" title="Copia a qualificação de todos os sócios, uma por parágrafo"><i class="fas fa-file-signature"></i> Qualificação de todos</button>{% endif %}
+                        {% if socios %}<button type="button" class="qb-add qb-add-cinza" data-copiar-secao-btn title="Copia os dados de todos os sócios"><i class="far fa-copy"></i></button>{% endif %}
+                        <button type="button" class="qb-add" onclick="showAddSocioModal()"><i class="fas fa-plus"></i> Sócio</button>
+                    </span></div>
+                {% if socios %}
+                <div class="qb-donut">
+                    {% set ns = namespace(acum=0) %}
+                    <svg width="118" height="118" viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="#eef2f6" stroke-width="6"/>
+                        {% for s in socios %}{% set pct = (s.percentual_participacao or 0)|float %}
+                        <circle cx="21" cy="21" r="15.9155" fill="none" stroke="{{ rs_cores[loop.index0 % 8] }}" stroke-width="6" stroke-dasharray="{{ pct }} {{ 100 - pct }}" stroke-dashoffset="{{ 25 - ns.acum }}"/>
+                        {% set ns.acum = ns.acum + pct %}{% endfor %}
+                        <text x="21" y="23.6" text-anchor="middle" font-size="7.5" font-weight="800" fill="#0f172a">{{ socios|length }}</text></svg>
+                    <div class="qb-socios">
+                        {% for socio in socios %}
+                        {% set q = qualif_socios.get(socio.pf_cliente_id) or ('', []) %}
+                        <div class="qb-socio" data-copiar-bloco data-copiar-titulo="Sócio: {{ socio.nome }}">
+                            <span class="qb-av" style="background:{{ rs_cores[loop.index0 % 8] }}">{{ rs_ini(socio.nome) }}</span>
+                            <div class="qb-socio-t">
+                                <b data-copiar="{{ socio.nome }}" data-copiar-rotulo="Nome do sócio">{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome | nome_proprio }}</a>{% else %}{{ socio.nome | nome_proprio }}{% endif %}</b>
+                                {% if socio.responsavel %}<span class="qb-tag-resp">responsável</span>{% endif %}
+                                <small><span data-copiar data-copiar-rotulo="CPF/CNPJ do sócio">{{ socio.cpf }}</span>{% if socio.qualificacao %} · <span data-copiar data-copiar-rotulo="Qualificação">{{ socio.qualificacao }}</span>{% endif %}{% if socio.data_entrada %} · desde <span data-copiar data-copiar-rotulo="Entrada">{{ socio.data_entrada.strftime('%d/%m/%Y') }}</span>{% endif %}</small>
+                                <small>{% if socio.capital_valor is not none %}capital <span data-copiar data-copiar-rotulo="Capital">{{ socio.capital_valor|format_currency }}</span>{% endif %}{% if socio.pro_labore is not none %}{% if socio.capital_valor is not none %} · {% endif %}pró-labore <span data-copiar data-copiar-rotulo="Pró-labore">{{ socio.pro_labore|format_currency }}</span>/mês{% endif %}{% if socio.email or socio.telefone %}{% if socio.capital_valor is not none or socio.pro_labore is not none %} · {% endif %}{{ socio.email or '' }}{% if socio.email and socio.telefone %} · {% endif %}{{ socio.telefone or '' }}{% endif %}</small>
+                                {% if socio.responsavel %}<span hidden data-copiar="Sim" data-copiar-rotulo="Responsável"></span>{% endif %}
+                                {% if q[0] %}<span hidden data-copiar="{{ q[0] }}" data-copiar-rotulo="Qualificação completa"></span>{% endif %}
+                                <div class="qb-socio-acs">
+                                    {% if q[0] %}<button type="button" class="soc-qualif-btn" data-copiar-texto="{{ q[0] }}" data-copiar-rotulo="Qualificação" title="Copia o parágrafo de qualificação para contrato{% if q[1] %} — falta no cadastro: {{ q[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Qualificação{% if q[1] %} <i class="fas fa-triangle-exclamation" style="color:#d97706;"></i>{% endif %}</button>{% endif %}
+                                    <button type="button" data-copiar-bloco-btn title="Copiar os dados deste sócio"><i class="far fa-copy"></i> Copiar</button>
+                                    <button type="button" class="soc-saida-btn" data-id="{{ socio.id }}" data-nome="{{ socio.nome }}" data-entrada="{{ socio.data_entrada.isoformat() if socio.data_entrada else '' }}" onclick="abrirSaidaSocio(this)" title="Registrar a saída deste sócio"><i class="fas fa-right-from-bracket"></i> Saída</button>
+                                </div>
+                            </div>
+                            <strong class="qb-pct" style="color:{{ rs_cores[loop.index0 % 8] }}" data-copiar data-copiar-rotulo="Participação">{{ '%g' % ((socio.percentual_participacao or 0)|float) }}%</strong>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% if total_s != 100 %}<p class="qb-aviso-amb"><i class="fas fa-triangle-exclamation"></i> A participação soma {{ '%g' % total_s }}%: precisa fechar em 100%.</p>{% endif %}
+                {% else %}
+                <div class="qb-vazio"><i class="fas fa-user-tie"></i> Nenhum sócio cadastrado{% if pj %} — toda empresa precisa de ao menos um{% endif %}.</div>
+                {% endif %}
+                {% if ex_socios %}
+                <details class="qb-ex"><summary><i class="fas fa-clock-rotate-left"></i> Ex-sócios ({{ ex_socios|length }})</summary>
+                    {% for socio in ex_socios %}
+                    <div class="qb-ex-l"><b>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome | nome_proprio }}</a>{% else %}{{ socio.nome | nome_proprio }}{% endif %}</b>
+                        <small>{{ socio.cpf }}{% if socio.qualificacao %} · {{ socio.qualificacao }}{% endif %} · {{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }} até <b>{{ socio.data_saida.strftime('%d/%m/%Y') if socio.data_saida else '—' }}</b> · tinha {{ '%g' % ((socio.percentual_participacao or 0)|float) }}%</small></div>
+                    {% endfor %}
+                </details>
+                {% endif %}
+            </section>
+
+            <!-- CERTIFICADO (resumo; os detalhes e a captura ficam no bloco Certificado, mais abaixo) -->
+            <section class="qb-b qb-cert s5">
+                <div class="qb-bh"><span class="qb-ico qb-ico-claro"><i class="fas fa-certificate"></i></span><h3>Certificado digital</h3>
+                    {% if certificado %}{% set cs = certificado.cert_status %}<span class="qb-selo {{ 'qb-selo-verm' if cs and cs.nivel == 'vencido' else 'qb-selo-amb' if cs and cs.nivel == 'laranja' else 'qb-selo-ok' }}">{% if cs and cs.nivel == 'vencido' %}vencido{% elif cs and cs.nivel == 'laranja' %}vence em {{ cs.dias }} dias{% else %}válido{% endif %}</span>{% endif %}</div>
+                {% if certificado %}
+                <small class="qb-cert-l">{{ certificado.tipo_doc }} {{ certificado.cnpj }} · vence em</small>
+                <div class="qb-cert-data">{{ certificado.validade|format_date if certificado.validade else '—' }}</div>
+                {% if dfe_cursor %}<div class="qb-cert-l"><i class="fas fa-{{ 'triangle-exclamation' if dfe_cursor.travado or dfe_cursor.atraso else 'circle-check' }}"></i>
+                    {% if dfe_cursor.travado %}Captura de NF-e travada (656){% elif dfe_cursor.atraso %}Captura com {{ dfe_cursor.atraso }} NSU de atraso{% else %}Captura de NF-e em dia · cursor {{ dfe_cursor.ult_nsu }}{% endif %}</div>{% endif %}
+                {% else %}
+                <div class="qb-cert-data" style="font-size:20px">Sem certificado</div>
+                <small class="qb-cert-l">Nenhum certificado vinculado a esta empresa.</small>
+                {% endif %}
+                <a class="qb-link-claro" href="#certificado" style="margin-top:14px">{{ 'Ver certificado e captura' if certificado else 'Vincular certificado' }} <i class="fas fa-arrow-down"></i></a>
+            </section>
+
+            <!-- RESPONSÁVEIS -->
+            <section class="qb-b s12" id="responsaveis">
                     <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento,
                          em mosaico; departamento vazio vira azulejo vermelho que abre a janela já nele -->
                     {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
@@ -702,267 +966,74 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
                             {% endfor %}
                         </div>
                     </div>
-                </section>
-            </div>
+            </section>
 
-            <!-- Endereços Tab -->
-            <div id="enderecos" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Endereços</h3>
-                        <button class="btn btn-primary" onclick="showAddAddressModal()">
-                            <i class="fas fa-plus"></i>
-                            Adicionar Endereço
-                        </button>
+            <!-- ENDEREÇOS -->
+            <section class="qb-b s6 qb-topo" id="enderecos">
+                <div class="qb-bh"><span class="qb-ico i-verde"><i class="fas fa-location-dot"></i></span><h3>Endereços</h3>
+                    <span class="qb-bh-dir"><button type="button" class="qb-add" onclick="showAddAddressModal()"><i class="fas fa-plus"></i> Endereço</button></span></div>
+                <div class="qb-lista2">
+                    {% for endereco in enderecos %}
+                    {% set _end = [endereco.logradouro ~ (', ' ~ endereco.numero if endereco.numero else ''), endereco.complemento, endereco.bairro,
+                                   (endereco.cidade or '') ~ ('/' ~ endereco.estado if endereco.estado else ''), ('CEP ' ~ endereco.cep) if endereco.cep else '']|select|join(' - ') %}
+                    <div class="qb-end" data-copiar-bloco="{{ _end }}" data-copiar-titulo="Endereço {{ (endereco.tipo or '')|lower }}{{ ' (principal)' if endereco.principal else '' }}">
+                        <div class="qb-end-h" data-copiar-cab><span class="qb-end-tp{{ ' on' if endereco.principal }}">{{ endereco.tipo }}{{ ' · PRINCIPAL' if endereco.principal else '' }}</span>
+                            <form action="{{ url_for('clientes.excluir_endereco', id=endereco.id) }}" method="POST" style="display:inline;margin-left:auto;">
+                                <button type="submit" class="qb-mini qb-mini-perigo" onclick="return confirm('Deseja excluir este endereço?')" title="Excluir endereço"><i class="fas fa-trash"></i></button>
+                            </form></div>
+                        <p><b>{{ endereco.logradouro }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}</b><br>
+                            {% if endereco.complemento %}{{ endereco.complemento }} · {% endif %}{{ endereco.bairro }}<br>
+                            {{ endereco.cidade }}/{{ endereco.estado }} <span class="qb-muted">· CEP <span data-copiar data-copiar-rotulo="CEP">{{ endereco.cep }}</span></span></p>
                     </div>
-                    <div class="card-body">
-                        {% if enderecos %}
-                            <div class="addresses-list">
-                                {% for endereco in enderecos %}
-                                {% set _end = [endereco.logradouro ~ (', ' ~ endereco.numero if endereco.numero else ''), endereco.complemento, endereco.bairro,
-                                               (endereco.cidade or '') ~ ('/' ~ endereco.estado if endereco.estado else ''), ('CEP ' ~ endereco.cep) if endereco.cep else '']|select|join(' - ') %}
-                                <div class="address-item" data-copiar-bloco="{{ _end }}"
-                                     data-copiar-titulo="Endereço {{ (endereco.tipo or '')|lower }}{{ ' (principal)' if endereco.principal else '' }}">
-                                    <div class="address-header" data-copiar-cab>
-                                        <span class="badge badge-{{ 'primary' if endereco.principal else 'secondary' }}">
-                                            {{ endereco.tipo }}{{ ' - Principal' if endereco.principal else '' }}
-                                        </span>
-                                        <form action="{{ url_for('clientes.excluir_endereco', id=endereco.id) }}" method="POST" style="display: inline;">
-                                            <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este endereço?')">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                    <div class="address-content">
-                                        <p>{{ endereco.logradouro }}, {{ endereco.numero }}</p>
-                                        {% if endereco.complemento %}
-                                        <p>{{ endereco.complemento }}</p>
-                                        {% endif %}
-                                        <p>{{ endereco.bairro }} - {{ endereco.cidade }}/{{ endereco.estado }}</p>
-                                        <p>CEP: <span data-copiar data-copiar-rotulo="CEP">{{ endereco.cep }}</span></p>
-                                        {% if endereco.pais %}
-                                        <p>{{ endereco.pais }}</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-map-marker-alt"></i>
-                                <p>Nenhum endereço cadastrado</p>
-                            </div>
-                        {% endif %}
-                    </div>
+                    {% endfor %}
+                    <button type="button" class="qb-novo" onclick="showAddAddressModal()"><i class="fas fa-plus"></i>{{ 'Outro endereço' if enderecos else 'Adicionar endereço' }}</button>
                 </div>
-            </div>
+            </section>
 
-            <!-- Contatos Tab -->
-            <div id="contatos" class="tab-pane" data-copiar-secao>
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Contatos</h3>
-                        {% if contatos %}<button type="button" class="btn btn-outline" data-copiar-secao-btn style="margin-left:auto; margin-right:8px;" title="Copia os dados de todos os contatos"><i class="far fa-copy"></i> Copiar contatos</button>{% endif %}
-                        <button class="btn btn-primary" onclick="showAddContactModal()">
-                            <i class="fas fa-plus"></i>
-                            Adicionar Contato
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        {% if contatos %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Nome</th>
-                                            <th>Cargo</th>
-                                            <th>E-mail</th>
-                                            <th>Celular</th>
-                                            <th>Telefone</th>
-                                            <th>Recebe</th>
-                                            <th>Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for contato in contatos %}
-                                        <tr data-copiar-bloco data-copiar-titulo="Contato: {{ contato.nome }}">
-                                            <td>
-                                                <span data-copiar="{{ contato.nome }}" data-copiar-rotulo="Nome">{{ contato.nome }}</span>
-                                                {% if contato.principal %}
-                                                <span class="badge badge-primary">Principal</span>
-                                                {% endif %}
-                                            </td>
-                                            <td><span data-copiar data-copiar-rotulo="Cargo">{{ contato.cargo or '-' }}</span></td>
-                                            <td><span data-copiar data-copiar-rotulo="E-mail">{{ contato.email or '-' }}</span></td>
-                                            <td>
-                                                {% if contato.celular %}<span data-copiar data-copiar-rotulo="Celular">{{ contato.celular }}</span>
-                                                {% else %}<span class="ct-falta" title="Celular é obrigatório no contato: aparece em A CADASTRAR até ser preenchido"><i class="fas fa-triangle-exclamation"></i> sem celular</span>{% endif %}
-                                            </td>
-                                            <td><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone or '-' }}</span></td>
-                                            <td data-copiar="{{ contato.departamentos|join(', ') or 'nenhum' }}" data-copiar-rotulo="Recebe">
-                                                {% if contato.departamentos|length >= departamentos_contato|length %}
-                                                    <span class="ct-dep ct-dep-todos" title="Recebe de todos os departamentos: {{ contato.departamentos|join(', ') }}"><i class="fas fa-check-double"></i> Todos</span>
-                                                {% elif contato.departamentos %}
-                                                    {% for d in contato.departamentos %}<span class="ct-dep">{{ d }}</span>{% endfor %}
-                                                {% else %}
-                                                    <span class="ct-falta"><i class="fas fa-circle-xmark"></i> não recebe nada</span>
-                                                {% endif %}
-                                            </td>
-                                            <td style="white-space:nowrap;">
-                                                <button type="button" class="btn-icon" data-copiar-bloco-btn title="Copiar os dados deste contato"><i class="far fa-copy"></i></button>
-                                                <button type="button" class="btn-icon" title="Editar este contato"
-                                                        onclick='editarContato({{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos}|tojson }})'>
-                                                    <i class="fas fa-pen"></i>
-                                                </button>
-                                                <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display: inline;">
-                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este contato?')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+            <!-- CONTATOS -->
+            {% set sem_cel = contatos | rejectattr('celular') | list | length %}
+            <section class="qb-b s6 qb-topo" id="contatos" data-copiar-secao>
+                <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-address-book"></i></span><h3>Contatos</h3>
+                    {% if contatos %}<span class="qb-selo {{ 'qb-selo-amb' if sem_cel else 'qb-selo-ok' }}">{{ contatos|length }} · {{ (sem_cel ~ ' sem celular') if sem_cel else 'todos com celular' }}</span>{% else %}{{ selo(['contato', 'email']) }}{% endif %}
+                    <span class="qb-bh-dir">{% if contatos %}<button type="button" class="qb-add qb-add-cinza" data-copiar-secao-btn title="Copia os dados de todos os contatos"><i class="far fa-copy"></i></button>{% endif %}
+                        <button type="button" class="qb-add" onclick="showAddContactModal()"><i class="fas fa-plus"></i> Contato</button></span></div>
+                <div class="qb-pessoas">
+                    {% for contato in contatos %}
+                    {% set dig = (contato.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
+                    <div class="qb-pessoa" data-copiar-bloco data-copiar-titulo="Contato: {{ contato.nome }}">
+                        <span class="qb-av" style="background:{{ rs_cores[(contato.id or 0) % 8] }}">{{ rs_ini(contato.nome) }}</span>
+                        <div class="qb-pessoa-t">
+                            <b data-copiar="{{ contato.nome }}" data-copiar-rotulo="Nome">{{ contato.nome | nome_proprio }}</b>{% if contato.principal %} <span class="qb-tag-resp">principal</span>{% endif %}
+                            <span class="qb-cargo" data-copiar="{{ contato.cargo or '' }}" data-copiar-rotulo="Cargo">{{ contato.cargo or 'sem cargo' }}</span>
+                            <div class="qb-linha2">
+                                {% if contato.email %}<span><i class="fas fa-envelope"></i><span data-copiar data-copiar-rotulo="E-mail">{{ contato.email }}</span></span>{% endif %}
+                                {% if contato.celular %}<span><i class="fas fa-mobile-screen"></i><span data-copiar data-copiar-rotulo="Celular">{{ contato.celular }}</span></span>
+                                {% else %}<span class="qb-verm" title="Celular é obrigatório no contato: aparece em A CADASTRAR até ser preenchido"><i class="fas fa-triangle-exclamation"></i>sem celular</span>{% endif %}
+                                {% if contato.telefone %}<span><i class="fas fa-phone"></i><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone }}</span></span>{% endif %}
                             </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-users"></i>
-                                <p>Nenhum contato cadastrado</p>
+                            <div class="qb-deps" data-copiar="{{ contato.departamentos|join(', ') or 'nenhum' }}" data-copiar-rotulo="Recebe">
+                                {% if contato.departamentos|length >= departamentos_contato|length %}<span class="todos"><i class="fas fa-check-double"></i> Recebe tudo</span>
+                                {% elif contato.departamentos %}{% for d in contato.departamentos %}<span>{{ d }}</span>{% endfor %}
+                                {% else %}<span class="nada"><i class="fas fa-circle-xmark"></i> não recebe nada</span>{% endif %}
                             </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sócios Tab -->
-            <div id="socios" class="tab-pane" data-copiar-secao>
-                <div class="card">
-                    <div class="card-header" style="display:block;">
-                        <div style="display:flex; width:100%; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
-                            <h3 class="card-title">Sócios</h3>
-                            <span style="display:flex; gap:8px; flex-wrap:wrap; margin-left:auto;">
-                            {% if qualif_todos %}<button type="button" class="btn btn-outline" data-copiar-texto="{{ qualif_todos }}" data-copiar-rotulo="Qualificação dos sócios"
-                                    title="Copia a qualificação de todos os sócios, uma por parágrafo — para o preâmbulo do contrato"><i class="fas fa-file-signature"></i> Qualificação de todos</button>{% endif %}
-                            {% if socios %}<button type="button" class="btn btn-outline" data-copiar-secao-btn title="Copia os dados de todos os sócios"><i class="far fa-copy"></i> Copiar sócios</button>{% endif %}
-                            <button class="btn btn-primary" onclick="showAddSocioModal()">
-                                <i class="fas fa-plus"></i>
-                                Adicionar Sócio
-                            </button>
-                            </span>
                         </div>
-                        {% set total_s = socios_total_percentual or 0 %}
-                        {% set total_ok = total_s == 100 %}
-                        <div style="width:100%;">
-                            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
-                                <span>Total de participação</span>
-                                <strong style="color: {{ 'var(--primary-green)' if total_ok else 'var(--accent-orange)' }};">{{ '%.2f'|format(total_s) }}%</strong>
-                            </div>
-                            <div style="height:10px; background:rgba(0,0,0,.08); border-radius:8px; overflow:hidden;">
-                                <div style="height:100%; width:{{ 100 if total_s > 100 else total_s }}%; background:{{ 'var(--primary-green)' if total_ok else 'var(--accent-orange)' }};"></div>
-                            </div>
-                            <small style="color:var(--text-secondary);">
-                                {% if total_ok %}
-                                    Total fechado em 100%.
-                                {% else %}
-                                    O total precisa fechar em 100% para consistência dos dados.
-                                {% endif %}
-                            </small>
+                        <div class="qb-pessoa-acs">
+                            {% if dig %}<a class="qb-mini" href="https://wa.me/55{{ dig }}" target="_blank" rel="noopener" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>{% endif %}
+                            <button type="button" class="qb-mini" data-copiar-bloco-btn title="Copiar os dados deste contato"><i class="far fa-copy"></i></button>
+                            <button type="button" class="qb-mini" title="Editar este contato"
+                                    onclick='editarContato({{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos}|tojson }})'><i class="fas fa-pen"></i></button>
+                            <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="qb-mini qb-mini-perigo" onclick="return confirm('Deseja excluir este contato?')" title="Excluir contato"><i class="fas fa-trash"></i></button>
+                            </form>
                         </div>
                     </div>
-                    <div class="card-body">
-                        {% if socios %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Nome</th>
-                                            <th>CPF / CNPJ</th>
-                                            <th>Qualificação</th>
-                                            <th>Entrada</th>
-                                            <th>Participação</th>
-                                            <th>Capital</th>
-                                            <th>Pró-labore/mês</th>
-                                            <th>Responsável</th>
-                                            <th>Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for socio in socios %}
-                                        {% set q = qualif_socios.get(socio.pf_cliente_id) or ('', []) %}
-                                        <tr data-copiar-bloco data-copiar-titulo="Sócio: {{ socio.nome }}">
-                                            <td><span data-copiar="{{ socio.nome }}" data-copiar-rotulo="Nome do sócio">{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</span>
-                                                {% if socio.email or socio.telefone %}<br><small class="soc-contato">{{ socio.email or '' }}{% if socio.email and socio.telefone %} · {% endif %}{{ socio.telefone or '' }}</small>{% endif %}</td>
-                                            <td><span data-copiar data-copiar-rotulo="CPF/CNPJ do sócio">{{ socio.cpf }}</span></td>
-                                            <td><span data-copiar data-copiar-rotulo="Qualificação">{{ socio.qualificacao or '—' }}</span></td>
-                                            <td><span data-copiar data-copiar-rotulo="Entrada">{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</span></td>
-                                            <td><strong data-copiar data-copiar-rotulo="Participação">{{ '%.2f'|format(socio.percentual_participacao or 0)|replace('.', ',') }}%</strong></td>
-                                            <td><span data-copiar data-copiar-rotulo="Capital">{{ socio.capital_valor|format_currency if socio.capital_valor is not none else '—' }}</span></td>
-                                            <td><span data-copiar data-copiar-rotulo="Pró-labore">{{ socio.pro_labore|format_currency if socio.pro_labore is not none else '—' }}</span></td>
-                                            <td>
-                                                <span class="badge badge-{{ 'success' if socio.responsavel else 'secondary' }}">
-                                                    {{ 'Sim' if socio.responsavel else 'Não' }}
-                                                </span>
-                                                {% if socio.responsavel %}<span hidden data-copiar="Sim" data-copiar-rotulo="Responsável"></span>{% endif %}
-                                                {% if q[0] %}<span hidden data-copiar="{{ q[0] }}" data-copiar-rotulo="Qualificação completa"></span>{% endif %}
-                                            </td>
-                                            <td style="white-space:nowrap;">
-                                                {% if q[0] %}<button type="button" class="btn btn-outline btn-sm soc-qualif-btn" data-copiar-texto="{{ q[0] }}" data-copiar-rotulo="Qualificação"
-                                                        title="Copia o parágrafo de qualificação para contrato{% if q[1] %} — falta no cadastro: {{ q[1]|join(', ') }}{% endif %}">
-                                                    <i class="fas fa-file-signature"></i> Qualificação{% if q[1] %} <i class="fas fa-triangle-exclamation" style="color:#d97706;"></i>{% endif %}
-                                                </button>{% endif %}
-                                                <button type="button" class="btn-icon" data-copiar-bloco-btn title="Copiar os dados deste sócio"><i class="far fa-copy"></i></button>
-                                                <button type="button" class="btn btn-outline btn-sm soc-saida-btn"
-                                                        data-id="{{ socio.id }}" data-nome="{{ socio.nome }}"
-                                                        data-entrada="{{ socio.data_entrada.isoformat() if socio.data_entrada else '' }}"
-                                                        onclick="abrirSaidaSocio(this)" title="Registrar a saída deste sócio da sociedade">
-                                                    <i class="fas fa-right-from-bracket"></i> Saída
-                                                </button>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-user-tie"></i>
-                                <p>Nenhum sócio cadastrado</p>
-                            </div>
-                        {% endif %}
-                        {% if ex_socios %}
-                            <h4 class="soc-ex-tit"><i class="fas fa-clock-rotate-left"></i> Ex-sócios ({{ ex_socios|length }})</h4>
-                            <div class="table-responsive">
-                                <table class="table soc-ex">
-                                    <thead>
-                                        <tr>
-                                            <th>Nome</th>
-                                            <th>CPF / CNPJ</th>
-                                            <th>Qualificação</th>
-                                            <th>Entrada</th>
-                                            <th>Saída</th>
-                                            <th>Tinha</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for socio in ex_socios %}
-                                        <tr>
-                                            <td>{% if socio.pf_cliente_id %}<a href="{{ url_for('clientes.detalhes', id=socio.pf_cliente_id) }}">{{ socio.nome }}</a>{% else %}{{ socio.nome }}{% endif %}</td>
-                                            <td>{{ socio.cpf }}</td>
-                                            <td>{{ socio.qualificacao or '—' }}</td>
-                                            <td>{{ socio.data_entrada.strftime('%d/%m/%Y') if socio.data_entrada else '—' }}</td>
-                                            <td><strong>{{ socio.data_saida.strftime('%d/%m/%Y') if socio.data_saida else '—' }}</strong></td>
-                                            <td>{{ '%.2f'|format(socio.percentual_participacao or 0) }}%</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% endif %}
-                    </div>
+                    {% endfor %}
+                    <button type="button" class="qb-novo qb-novo-linha" onclick="showAddContactModal()"><i class="fas fa-plus"></i>Adicionar contato</button>
                 </div>
-            </div>
+            </section>
 
+            <!-- CERTIFICADO E CONTADOR (detalhes, vínculo e captura) -->
+            <section class="qb-b s12 qb-reuso" id="certificado-bloco">
             <!-- Certificado Digital Tab -->
             <div id="certificado" class="tab-pane">
                 <div class="card" id="contadores">
@@ -1278,6 +1349,11 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
                 </div>
             </div>
 
+
+            </section>
+
+            <!-- CADASTROS ADICIONAIS -->
+            <section class="qb-b s6 qb-reuso qb-topo">
             <!-- Cadastros Adicionais Tab -->
             <div id="cadastros-adicionais" class="tab-pane">
 
@@ -1539,149 +1615,37 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
                 </div>
             </div>
 
-            <!-- Processos Tab -->
-            <div id="processos" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Processos</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if processos %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Número</th>
-                                            <th>Tipo</th>
-                                            <th>Status</th>
-                                            <th>Abertura</th>
-                                            <th>Conclusão</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for processo in processos %}
-                                        <tr>
-                                            <td>{{ processo.numero_processo }}</td>
-                                            <td>{{ processo.tipo }}</td>
-                                            <td><span class="badge badge-info">{{ processo.status }}</span></td>
-                                            <td>{{ processo.data_abertura|format_date if processo.data_abertura else '-' }}</td>
-                                            <td>{{ processo.data_conclusao|format_date if processo.data_conclusao else '-' }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-briefcase"></i>
-                                <p>Nenhum processo cadastrado</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
 
-            <!-- Tarefas Tab -->
-            <div id="tarefas" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Tarefas</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if tarefas %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Título</th>
-                                            <th>Processo</th>
-                                            <th>Prazo</th>
-                                            <th>Prioridade</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for tarefa in tarefas %}
-                                        <tr>
-                                            <td>{{ tarefa.titulo }}</td>
-                                            <td>{{ tarefa.numero_processo }}</td>
-                                            <td>{{ tarefa.prazo|format_date if tarefa.prazo else '-' }}</td>
-                                            <td><span class="badge badge-warning">{{ tarefa.prioridade }}</span></td>
-                                            <td><span class="badge badge-info">{{ tarefa.status }}</span></td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-tasks"></i>
-                                <p>Nenhuma tarefa encontrada</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+            </section>
 
-            <!-- Obrigações Tab -->
-            <div id="obrigacoes" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Obrigações Fiscais</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if obrigacoes %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tipo</th>
-                                            <th>Descrição</th>
-                                            <th>Vencimento</th>
-                                            <th>Valor</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for obrigacao in obrigacoes %}
-                                        <tr>
-                                            <td>{{ obrigacao.tipo_obrigacao or '-' }}</td>
-                                            <td>{{ obrigacao.descricao }}</td>
-                                            <td>{{ obrigacao.vencimento|format_date if obrigacao.vencimento else '-' }}</td>
-                                            <td>{{ obrigacao.valor|format_currency if obrigacao.valor else '-' }}</td>
-                                            <td>
-                                                <span class="badge badge-{{ 'success' if obrigacao.pago else 'warning' }}">
-                                                    {{ 'Pago' if obrigacao.pago else obrigacao.status }}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-calendar-check"></i>
-                                <p>Nenhuma obrigação cadastrada</p>
-                            </div>
-                        {% endif %}
-                    </div>
+            <!-- ACOMPANHAMENTO -->
+            <section class="qb-b s6 qb-topo" id="acompanhamento">
+                <div class="qb-bh"><span class="qb-ico i-cinza"><i class="fas fa-briefcase"></i></span><h3>Acompanhamento</h3></div>
+                <div class="qb-kpi3">
+                    <a href="#processos"><span class="qb-ico i-azul"><i class="fas fa-briefcase"></i></span><span><b>{{ processos|length }}</b><small>processo{{ 's' if processos|length != 1 }}</small></span></a>
+                    <a href="#tarefas"><span class="qb-ico i-ambar"><i class="fas fa-list-check"></i></span><span><b>{{ tarefas|length }}</b><small>tarefa{{ 's' if tarefas|length != 1 }}</small></span></a>
+                    <a href="#obrigacoes"><span class="qb-ico i-rosa"><i class="fas fa-calendar-check"></i></span><span><b>{{ obrigacoes|length }}</b><small>obrigaç{{ 'ões' if obrigacoes|length != 1 else 'ão' }}</small></span></a>
                 </div>
-            </div>
+                <div id="processos">{% if processos %}<p class="qb-sub">Processos</p>{% for processo in processos %}
+                    <div class="qb-linha-item"><b>{{ processo.numero_processo }}</b><span>{{ processo.tipo }}</span><span class="qb-tag-cinza">{{ processo.status }}</span><small>{{ processo.data_abertura|format_date if processo.data_abertura else '' }}{% if processo.data_conclusao %} → {{ processo.data_conclusao|format_date }}{% endif %}</small></div>{% endfor %}{% endif %}</div>
+                <div id="tarefas">{% if tarefas %}<p class="qb-sub">Tarefas</p>{% for tarefa in tarefas %}
+                    <div class="qb-linha-item"><b>{{ tarefa.titulo }}</b><span>{{ tarefa.numero_processo or '' }}</span><span class="qb-tag-cinza">{{ tarefa.status }}</span><small>{{ tarefa.prioridade }}{% if tarefa.prazo %} · até {{ tarefa.prazo|format_date }}{% endif %}</small></div>{% endfor %}{% endif %}</div>
+                <div id="obrigacoes">{% if obrigacoes %}<p class="qb-sub">Obrigações</p>{% for obrigacao in obrigacoes %}
+                    <div class="qb-linha-item"><b>{{ obrigacao.tipo_obrigacao or '—' }}</b><span>{{ obrigacao.descricao }}</span><span class="qb-tag-cinza{{ ' ok' if obrigacao.pago }}">{{ 'Pago' if obrigacao.pago else obrigacao.status }}</span><small>{{ obrigacao.vencimento|format_date if obrigacao.vencimento else '' }}{% if obrigacao.valor %} · {{ obrigacao.valor|format_currency }}{% endif %}</small></div>{% endfor %}{% endif %}</div>
+                {% if not processos and not tarefas and not obrigacoes %}<div class="qb-vazio"><i class="fas fa-mug-hot"></i> Nada em andamento para esta empresa.</div>{% endif %}
+            </section>
 
-            <!-- Histórico Tab (D3) — lazy-load via AJAX -->
-            <div id="historico" class="tab-pane">
-                <div class="fv-card">
-                    <p class="fv-seclabel">Histórico de alterações</p>
-                    <div id="hist-box" class="hist-box">
-                        <div class="hist-vazio">Carregando…</div>
-                    </div>
+            <!-- HISTÓRICO -->
+            <section class="qb-b s12" id="historico">
+                <div class="qb-bh"><span class="qb-ico i-lima"><i class="fas fa-clock-rotate-left"></i></span><h3>Histórico</h3></div>
+                <div id="hist-box" class="hist-box">
+                    <div class="hist-vazio">Carregando…</div>
                 </div>
-            </div>
+            </section>
 
             {% if reserva is not none %}
             {# Aba só do ADMIN: empresa reservada + exceções (utils/acesso.py). #}
-            <div id="acesso" class="tab-pane">
+            <section class="qb-b s12 qb-reuso"><div id="acesso" class="tab-pane">
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Quem vê esta empresa</h3>
@@ -1719,40 +1683,17 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
                     </div>
                 </div>
             </div>
+            </section>
             {% endif %}
-        </div><!-- /tabs-content -->
-            </div><!-- /tu-main -->
 
-            <!-- O que falta: a MESMA lista do A CADASTRAR -->
-            <aside class="tu-lado">
-                <div class="tu-box" id="tuFalta">
-                    <p class="tu-box-tit">O que falta {% if falta.faltam %}<span class="tu-n">{{ falta.faltam|length }}</span>{% endif %}</p>
-                    {% for f in falta.faltam %}
-                    <a class="tu-pend tu-pend-{{ 'verm' if f.cor == 'verm' else 'amb' }}" href="#{{ f.alvo }}" title="{{ f.ajuda }}">
-                        <i class="fas fa-circle-xmark"></i><span>{{ f.rotulo }}</span><em>ir ao campo <i class="fas fa-arrow-right"></i></em></a>
-                    {% else %}
-                    <p class="tu-tudo-ok"><i class="fas fa-circle-check"></i> Cadastro completo.{% if not falta.avulso %} A empresa não aparece no A CADASTRAR.{% endif %}</p>
-                    {% endfor %}
-                    {% if falta.ok %}
-                    <p class="tu-ok-tit">Completo · {{ falta.ok|length }}</p>
-                    <ul class="tu-ok">{% for o in falta.ok %}<li><i class="fas fa-circle-check"></i><span>{{ o.rotulo }}{% if o.valor %} <small>· {{ o.valor }}</small>{% endif %}</span></li>{% endfor %}</ul>
-                    {% endif %}
-                    <p class="tu-nota">A mesma lista do A CADASTRAR, calculada na hora: zerou aqui, a empresa sai de lá.</p>
-                </div>
-                {% if pode_rota('clientes.salvar_campos') %}
-                <div class="tu-box tu-dica">
-                    <p><i class="fas fa-i-cursor"></i><span>Valor com <u class="tu-pont">sublinhado pontilhado</u>: clique e altere. Enter confirma, Esc desfaz.</span></p>
-                    <p><i class="fas fa-floppy-disk"></i><span>Depois, <b>Salvar alterações</b> no topo grava tudo de uma vez.</span></p>
-                </div>
-                {% endif %}
-            </aside>
-        </div><!-- /tu -->
-    </div><!-- /ef-body -->
+        </div><!-- /qb-bento -->
+    </div><!-- /qb-wrap -->
 </div>
 <div class="tu-aviso" id="tuAviso" role="status" aria-live="polite"></div>
 {% if pode_rota('clientes.salvar_campos') %}
 <div class="tu-barra" id="tuBarra" aria-hidden="true">
-    <span id="tuBarraTxt"></span>
+    <i class="fas fa-pen-to-square"></i>
+    <span><span id="tuBarraTxt"></span><small id="tuBarraLista"></small></span>
     <button type="button" class="tu-barra-desf" id="tuDesfazer">Desfazer</button>
     <button type="button" class="tu-barra-salvar" id="tuSalvar2"><i class="fas fa-check"></i> Salvar</button>
 </div>
@@ -2152,20 +2093,31 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
 
 {% block extra_js %}
 <script>
-// ══ TELA ÚNICA (Modelo C, 08/11/2026): clique no valor edita, um só "Salvar alterações", índice e "ir ao campo" ══
+// ══ FICHA — MODELO B (08/11/2026): clique no valor edita, um só Salvar, pílulas que acompanham a rolagem ══
 (function () {
     var tu = document.getElementById('tu');
     if (!tu) return;
+    var raiz = document.querySelector('.qb');
     var URL_SALVAR = {{ url_for('clientes.salvar_campos', id=cliente.id) | tojson }};
-    function medirTopo() {
-        var fixos = document.querySelectorAll('.top-bar, .nav-fiscal'), base = 0;
-        fixos.forEach(function (f) { var st = getComputedStyle(f).position; if (st === 'sticky' || st === 'fixed') base = Math.max(base, f.getBoundingClientRect().bottom); });
-        tu.style.setProperty('--tu-topo', Math.round((base || 108) + 14) + 'px');
-    }
-    medirTopo(); window.addEventListener('resize', medirTopo);
     var pend = {};                       // campo -> valor novo (só o que mudou)
     var btn = document.getElementById('tuSalvar'), nEl = document.getElementById('tuN');
     var avisoEl = document.getElementById('tuAviso'), avisoT = null;
+    var barra = document.getElementById('tuBarra');
+    var tem = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+    var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+
+    // a barra fixa do app (top-bar + testeira) decide onde as pílulas colam
+    function medirTopo() {
+        var base = 0;
+        document.querySelectorAll('.top-bar, .nav-fiscal').forEach(function (f) {
+            var st = getComputedStyle(f).position;
+            if (st === 'sticky' || st === 'fixed') base = Math.max(base, f.getBoundingClientRect().height + (f.classList.contains('nav-fiscal') ? 60 : 0));
+        });
+        var tb = document.querySelector('.top-bar'), nf = document.querySelector('.nav-fiscal');
+        var h = (tb ? tb.offsetHeight : 60) + (nf && getComputedStyle(nf).position === 'sticky' ? nf.offsetHeight : 0);
+        raiz.style.setProperty('--qb-topo', Math.round(h || base || 109) + 'px');
+    }
+    medirTopo(); window.addEventListener('resize', medirTopo);
 
     function aviso(txt, erro) {
         avisoEl.textContent = txt;
@@ -2179,144 +2131,194 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
         if (a0) { sessionStorage.removeItem('tu_aviso'); setTimeout(function () { aviso(a0); }, 150); }
     } catch (e) {}
 
-    var barra = document.getElementById('tuBarra');
+    function rotulos() {
+        return Object.keys(pend).map(function (k) { var el = tu.querySelector('[data-campo="' + k + '"]'); return el ? el.dataset.rotulo : k; });
+    }
     function atualizarBotao() {
         var n = Object.keys(pend).length;
-        if (!btn) return;
-        btn.disabled = !n;
-        nEl.textContent = n ? '· ' + n : '';
+        if (btn) { btn.disabled = !n; nEl.textContent = n ? '· ' + n : ''; }
         if (barra) {
             barra.classList.toggle('on', n > 0);
             barra.setAttribute('aria-hidden', n ? 'false' : 'true');
-            document.getElementById('tuBarraTxt').innerHTML = n + (n > 1 ? ' alterações' : ' alteração') + '<span class="tu-barra-sem"> sem salvar</span>';
+            document.getElementById('tuBarraTxt').textContent = n + (n > 1 ? ' alterações sem salvar' : ' alteração sem salvar');
+            document.getElementById('tuBarraLista').textContent = rotulos().join(' · ');
         }
     }
-    function ops(dd) { try { return JSON.parse(dd.getAttribute('data-ops') || '[]'); } catch (e) { return []; } }
-    function valorAtual(dd) { var n = dd.dataset.campo; return Object.prototype.hasOwnProperty.call(pend, n) ? pend[n] : (dd.dataset.valor || ''); }
-    function rotuloDe(dd, v) {
-        var t = dd.dataset.tipo;
-        if (t === 'select') { var o = ops(dd).filter(function (x) { return String(x[0]) === String(v); })[0]; return o ? o[1] : ''; }
+    function ops(el) { try { return JSON.parse(el.getAttribute('data-ops') || '[]'); } catch (e) { return []; } }
+    function valorAtual(el) { var n = el.dataset.campo; return tem(pend, n) ? pend[n] : (el.dataset.valor || ''); }
+    function rotuloDe(el, v) {
+        var t = el.dataset.tipo;
+        if (t === 'select') { var o = ops(el).filter(function (x) { return String(x[0]) === String(v); })[0]; return o ? o[1] : ''; }
         if (t === 'multi') {
             var ids = String(v).split(',').filter(Boolean);
-            return ops(dd).filter(function (x) { return ids.indexOf(String(x[0])) >= 0; }).map(function (x) { return x[1]; }).join(', ');
+            return ops(el).filter(function (x) { return ids.indexOf(String(x[0])) >= 0; }).map(function (x) { return x[1]; }).join(', ');
         }
         if (t === 'date' && v) { var p = v.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : v; }
         return v;
     }
-    function mostrar(dd) {
-        var txt = dd.querySelector('.tu-txt'), r = rotuloDe(dd, valorAtual(dd));
+    function mostrar(el) {
+        var mudou = tem(pend, el.dataset.campo);
+        el.classList.toggle('tu-mudou', mudou);
+        if (el.dataset.tipo === 'opcoes') {
+            var v = valorAtual(el);
+            el.querySelectorAll('.qb-op').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+            return;
+        }
+        var txt = el.querySelector('.tu-txt'), r = rotuloDe(el, valorAtual(el));
         txt.textContent = '';
         if (r) { txt.textContent = r; }
         else {
             var s = document.createElement('span');
             s.className = 'tu-vazio';
-            s.textContent = dd.classList.contains('tu-falta') ? 'falta preencher' : '—';
+            s.textContent = el.classList.contains('tu-falta') ? 'clique para preencher' : '—';
             txt.appendChild(s);
         }
-        dd.classList.toggle('tu-mudou', Object.prototype.hasOwnProperty.call(pend, dd.dataset.campo));
     }
-    function fechar(dd) {
-        var ed = dd.querySelector('.tu-editor');
+    function fechar(el) {
+        var ed = el.querySelector('.tu-editor');
         if (ed) ed.remove();
-        dd.querySelector('.tu-txt').style.display = '';
-        dd.classList.remove('tu-abrindo');
-        dd._confirmar = null;
+        var txt = el.querySelector('.tu-txt'); if (txt) txt.style.display = '';
+        el.classList.remove('tu-abrindo');
+        el._confirmar = null;
     }
-    function confirmar(dd, v) {
-        var n = dd.dataset.campo;
-        if (String(v) === String(dd.dataset.valor || '')) delete pend[n]; else pend[n] = v;
-        fechar(dd); mostrar(dd); atualizarBotao();
+    function confirmar(el, v) {
+        var n = el.dataset.campo;
+        if (String(v) === String(el.dataset.valor || '')) delete pend[n]; else pend[n] = v;
+        fechar(el); mostrar(el); atualizarBotao();
     }
-    function desfazer(dd) { delete pend[dd.dataset.campo]; fechar(dd); mostrar(dd); atualizarBotao(); }
+    function desfazer(el) { delete pend[el.dataset.campo]; fechar(el); mostrar(el); atualizarBotao(); }
 
-    function abrir(dd) {
-        if (dd.classList.contains('tu-abrindo')) return;
-        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
-        dd.classList.add('tu-abrindo');
-        var t = dd.dataset.tipo, v = valorAtual(dd), box = document.createElement('div'), ctl, foco;
-        box.className = 'tu-editor';
-        if (t === 'select') {
-            ctl = document.createElement('select');
-            var o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Selecione…'; ctl.appendChild(o0);
-            ops(dd).forEach(function (o) {
-                var e = document.createElement('option'); e.value = o[0]; e.textContent = o[1];
-                if (String(o[0]) === String(v)) e.selected = true;
-                ctl.appendChild(e);
-            });
-            ctl.addEventListener('change', function () { confirmar(dd, ctl.value); });
-        } else if (t === 'multi') {
-            ctl = document.createElement('div'); ctl.className = 'tu-multi';
-            var sel = String(v).split(',').filter(Boolean);
-            var busca = document.createElement('input'); busca.type = 'search'; busca.placeholder = 'Filtrar ramos…'; busca.className = 'tu-multi-busca';
-            var lista = document.createElement('div'); lista.className = 'tu-multi-lista';
-            ops(dd).forEach(function (o) {
-                var l = document.createElement('label'), c = document.createElement('input');
-                c.type = 'checkbox'; c.value = o[0]; c.checked = sel.indexOf(String(o[0])) >= 0;
-                l.appendChild(c); l.appendChild(document.createTextNode(o[1])); lista.appendChild(l);
-            });
-            busca.addEventListener('input', function () {
-                var q = busca.value.toLowerCase();
-                lista.querySelectorAll('label').forEach(function (l) { l.style.display = l.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none'; });
-            });
-            var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'btn btn-primary tu-multi-ok'; ok.textContent = 'OK';
-            ctl.appendChild(busca); ctl.appendChild(lista); ctl.appendChild(ok);
-            var ler = function () {
-                return Array.prototype.map.call(lista.querySelectorAll('input:checked'), function (c) { return c.value; })
-                    .sort(function (a, b) { return a - b; }).join(',');
-            };
-            ok.addEventListener('click', function (e) { e.stopPropagation(); confirmar(dd, ler()); });
-            dd._confirmar = function () { confirmar(dd, ler()); };
-            foco = busca;
-        } else if (t === 'textarea') {
-            ctl = document.createElement('textarea'); ctl.rows = 3; ctl.value = v;
-        } else {
-            ctl = document.createElement('input'); ctl.type = t === 'date' ? 'date' : 'text'; ctl.value = v;
-            if (dd.dataset.ph) ctl.placeholder = dd.dataset.ph;
+    function linhaDica(el, extra) {
+        var d = el.dataset.ajuda || '';
+        if (!d && !extra) return null;
+        var a = document.createElement('div'); a.className = 'tu-ajuda';
+        a.innerHTML = (d ? '<i class="fas fa-circle-info"></i> ' + esc(d) + ' ' : '') + (extra || '');
+        return a;
+    }
+    // lista de opções (select): com busca quando passa de 8; multi = caixas de marcar + etiquetas
+    function montarLista(el, multi, sel, aoEscolher) {
+        var box = document.createElement('div'); box.className = 'tu-dd';
+        var todas = ops(el), busca = null;
+        if (todas.length > 8 || multi) {
+            var b = document.createElement('div'); b.className = 'tu-dd-busca';
+            b.innerHTML = '<i class="fas fa-search"></i><input type="search" placeholder="Buscar…" autocomplete="off">';
+            box.appendChild(b); busca = b.querySelector('input');
         }
-        if (t !== 'multi') {
-            ctl.className = 'tu-ctl';
-            dd._confirmar = function () { confirmar(dd, (ctl.value || '').trim()); };
+        var lista = document.createElement('div'); lista.className = 'tu-dd-lista'; box.appendChild(lista);
+        function desenhar(q) {
+            q = (q || '').toLowerCase();
+            lista.innerHTML = '';
+            var vis = todas.filter(function (o) { return !q || String(o[1]).toLowerCase().indexOf(q) >= 0; });
+            vis.slice(0, 200).forEach(function (o) {
+                var on = multi ? sel.indexOf(String(o[0])) >= 0 : String(o[0]) === String(sel);
+                var it = document.createElement('button'); it.type = 'button';
+                it.className = 'tu-dd-op' + (on ? ' on' : '');
+                it.innerHTML = multi ? '<span class="tu-ck">' + (on ? '<i class="fas fa-check"></i>' : '') + '</span>' + esc(o[1])
+                                     : '<span class="tu-dd-ck">' + (on ? '<i class="fas fa-check"></i>' : '') + '</span>' + esc(o[1]) + (on ? '<small>atual</small>' : '');
+                it.addEventListener('click', function (e) { e.stopPropagation(); aoEscolher(String(o[0]), it); });
+                lista.appendChild(it);
+            });
+            if (!vis.length) { var n = document.createElement('div'); n.className = 'tu-dd-nada'; n.textContent = 'Nada encontrado.'; lista.appendChild(n); }
+        }
+        desenhar('');
+        if (busca) busca.addEventListener('input', function () { desenhar(busca.value); });
+        box._redesenhar = function () { desenhar(busca ? busca.value : ''); };
+        box._foco = busca || lista.querySelector('.tu-dd-op.on') || lista.querySelector('.tu-dd-op');
+        return box;
+    }
+
+    function abrir(el) {
+        if (el.classList.contains('tu-abrindo') || el.dataset.tipo === 'opcoes') return;
+        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
+        el.classList.add('tu-abrindo');
+        var t = el.dataset.tipo, v = valorAtual(el), ed = document.createElement('div'), foco;
+        ed.className = 'tu-editor';
+        if (t === 'select') {
+            var dd = montarLista(el, false, v, function (val) { confirmar(el, val); el.focus(); });
+            ed.appendChild(dd); foco = dd._foco;
+            el._confirmar = function () { fechar(el); mostrar(el); };
+        } else if (t === 'multi') {
+            var sel = String(v).split(',').filter(Boolean);
+            var chips = document.createElement('div'); chips.className = 'tu-chips';
+            var ler = function () { return sel.slice().sort(function (a, b) { return a - b; }).join(','); };
+            var nomes = {}; ops(el).forEach(function (o) { nomes[String(o[0])] = o[1]; });
+            var dd2;
+            var pintar = function () {
+                chips.innerHTML = '';
+                sel.forEach(function (id) {
+                    var c = document.createElement('span'); c.className = 'tu-chip';
+                    c.innerHTML = esc(nomes[id] || id) + '<button type="button" title="Tirar"><i class="fas fa-xmark"></i></button>';
+                    c.querySelector('button').addEventListener('click', function (e) { e.stopPropagation(); sel.splice(sel.indexOf(id), 1); pintar(); dd2._redesenhar(); });
+                    chips.appendChild(c);
+                });
+            };
+            dd2 = montarLista(el, true, sel, function (id) {
+                var i = sel.indexOf(id); if (i >= 0) sel.splice(i, 1); else sel.push(id);
+                pintar(); dd2._redesenhar();
+            });
+            var pr = document.createElement('button'); pr.type = 'button'; pr.className = 'tu-pronto'; pr.textContent = 'Pronto';
+            pr.addEventListener('click', function (e) { e.stopPropagation(); confirmar(el, ler()); el.focus(); });
+            pintar(); ed.appendChild(chips); ed.appendChild(dd2); ed.appendChild(pr);
+            el._confirmar = function () { confirmar(el, ler()); };
+            foco = dd2._foco;
+        } else {
+            var w = document.createElement('div'); w.className = 'tu-inp';
+            var ctl = t === 'textarea' ? document.createElement('textarea') : document.createElement('input');
+            if (t !== 'textarea') ctl.type = t === 'date' ? 'date' : 'text';
+            if (t === 'textarea') ctl.rows = 3;
+            ctl.className = 'tu-ctl'; ctl.value = v;
+            if (el.dataset.ph) ctl.placeholder = el.dataset.ph;
+            var bx = document.createElement('button'); bx.type = 'button'; bx.className = 'tu-inp-bt tu-inp-x'; bx.title = 'Desfazer (Esc)'; bx.innerHTML = '<i class="fas fa-xmark"></i>';
+            var bo = document.createElement('button'); bo.type = 'button'; bo.className = 'tu-inp-bt tu-inp-ok'; bo.title = 'Confirmar (Enter)'; bo.innerHTML = '<i class="fas fa-check"></i>';
+            w.appendChild(ctl); w.appendChild(bx); w.appendChild(bo); ed.appendChild(w);
+            el._confirmar = function () { confirmar(el, (ctl.value || '').trim()); };
+            bx.addEventListener('click', function (e) { e.stopPropagation(); desfazer(el); el.focus(); });
+            bo.addEventListener('click', function (e) { e.stopPropagation(); el._confirmar(); el.focus(); });
             foco = ctl;
         }
-        box.appendChild(ctl);
-        var dica = dd.dataset.ajuda || '';
-        if (t === 'text' || t === 'date') dica += (dica ? ' ' : '') + 'Enter confirma, Esc desfaz.';
-        if (dica) { var a = document.createElement('small'); a.className = 'tu-ajuda'; a.textContent = dica; box.appendChild(a); }
-        dd.querySelector('.tu-txt').style.display = 'none';
-        dd.appendChild(box);
-        box.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') { e.preventDefault(); desfazer(dd); dd.focus(); }
-            else if (e.key === 'Enter' && t !== 'textarea' && t !== 'multi') { e.preventDefault(); dd._confirmar(); dd.focus(); }
+        var dica = linhaDica(el, t === 'text' || t === 'date' ? '<kbd>Enter</kbd> confirma · <kbd>Esc</kbd> desfaz' : (t === 'textarea' ? '<kbd>Esc</kbd> desfaz' : ''));
+        if (dica) ed.appendChild(dica);
+        el.querySelector('.tu-txt').style.display = 'none';
+        el.appendChild(ed);
+        ed.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); desfazer(el); el.focus(); }
+            else if (e.key === 'Enter' && (t === 'text' || t === 'date')) { e.preventDefault(); el._confirmar(); el.focus(); }
         });
-        foco.focus();
-        if (foco.select && t === 'text') foco.select();
+        if (foco) { foco.focus(); if (foco.select && t === 'text') foco.select(); }
     }
 
-    // clique (ou Enter no valor focado) abre; clique fora confirma o que estava aberto
+    // clique (ou Enter no valor focado) abre; cobrança: um clique escolhe; clique fora confirma o que estava aberto
     tu.addEventListener('click', function (e) {
-        var dd = e.target.closest('.tu-v.tu-ed');
-        if (dd && !dd.classList.contains('tu-abrindo') && !e.target.closest('a')) abrir(dd);
+        var op = e.target.closest('.qb-opcoes.tu-ed .qb-op');
+        if (op) {
+            var box = op.closest('.qb-opcoes'), n = box.dataset.campo;
+            if (op.dataset.v === (box.dataset.valor || '')) delete pend[n]; else pend[n] = op.dataset.v;
+            mostrar(box); atualizarBotao();
+            return;
+        }
+        var el = e.target.closest('.tu-v.tu-ed');
+        if (el && !el.classList.contains('tu-abrindo') && !e.target.closest('a, button')) abrir(el);
     });
     tu.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && e.target.matches && e.target.matches('.tu-v.tu-ed')) { e.preventDefault(); abrir(e.target); }
+        if (e.key === 'Enter' && e.target.matches && e.target.matches('.tu-v.tu-ed:not(.qb-opcoes)')) { e.preventDefault(); abrir(e.target); }
     });
     document.addEventListener('mousedown', function (e) {
         document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (!o.contains(e.target) && o._confirmar) o._confirmar(); });
     });
     tu.addEventListener('focusout', function (e) {
-        var dd = e.target.closest && e.target.closest('.tu-v.tu-abrindo');
-        if (dd && e.relatedTarget && !dd.contains(e.relatedTarget) && dd._confirmar) dd._confirmar();
+        var el = e.target.closest && e.target.closest('.tu-v.tu-abrindo');
+        if (el && e.relatedTarget && !el.contains(e.relatedTarget) && el._confirmar) el._confirmar();
     });
 
-    // Salvar alterações: manda só o que mudou; deu certo, recarrega (a lista "O que falta" e o índice se refazem)
-    function restaurarBtn() { btn.innerHTML = '<i class="fas fa-check"></i> Salvar alterações <b id="tuN"></b>'; nEl = document.getElementById('tuN'); atualizarBotao(); }
-    if (btn) btn.addEventListener('click', function () {
+    // Salvar: manda só o que mudou; deu certo, recarrega (O que falta, selos e pílulas se refazem)
+    function restaurarBtn() { if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Salvar <b id="tuN"></b>'; nEl = document.getElementById('tuN'); } atualizarBotao(); }
+    function salvar() {
         document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
         var campos = {};
         Object.keys(pend).forEach(function (k) { campos[k] = k === 'ramos' ? String(pend[k]).split(',').filter(Boolean) : pend[k]; });
         if (!Object.keys(campos).length) return;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…'; }
+        var b2 = document.getElementById('tuSalvar2'); if (b2) b2.disabled = true;
         fetch(URL_SALVAR, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campos: campos }) })
             .then(function (r) { return r.json().catch(function () { return { ok: false, erro: 'O servidor respondeu algo inesperado (' + r.status + '). Nada foi salvo.' }; }); })
             .then(function (j) {
@@ -2324,12 +2326,13 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
                     pend = {};
                     try { sessionStorage.setItem('tu_aviso', j.salvos && j.salvos.length ? 'Salvo: ' + j.salvos.join(', ') + '.' : 'Nada mudou.'); } catch (e) {}
                     location.reload();
-                } else { aviso(j.erro || 'Não foi possível salvar.', true); restaurarBtn(); }
+                } else { aviso(j.erro || 'Não foi possível salvar.', true); restaurarBtn(); if (b2) b2.disabled = false; }
             })
-            .catch(function () { aviso('Sem conexão com o servidor. Nada foi salvo.', true); restaurarBtn(); });
-    });
+            .catch(function () { aviso('Sem conexão com o servidor. Nada foi salvo.', true); restaurarBtn(); if (b2) b2.disabled = false; });
+    }
+    if (btn) btn.addEventListener('click', salvar);
     if (barra) {
-        document.getElementById('tuSalvar2').addEventListener('click', function () { btn.click(); });
+        document.getElementById('tuSalvar2').addEventListener('click', salvar);
         document.getElementById('tuDesfazer').addEventListener('click', function () {
             document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { fechar(o); });
             pend = {};
@@ -2341,16 +2344,18 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
         if (Object.keys(pend).length) { e.preventDefault(); e.returnValue = ''; }
     });
 
-    // índice e "ir ao campo": rola até o bloco; se for campo, já abre
-    var APELIDO = { 'grupos': 'campo-grupo', 'dados-gerais': 'identificacao' };   // âncoras das abas antigas (links do Editar)
+    // pílulas e "resolver": rolam até o bloco; se for campo, já abre
+    var travaPilula = null;
+    var APELIDO = { 'grupos': 'campo-grupo', 'dados-gerais': 'identificacao', 'regime-origem': 'regime' };
     function irPara(id) {
         id = APELIDO[id] || id;
         var el = id && document.getElementById(id);
         if (!el || !tu.contains(el)) return false;
         var campo = el.matches('.tu-v');
         el.scrollIntoView({ behavior: 'smooth', block: campo ? 'center' : 'start' });
-        el.classList.remove('tu-piscar'); void el.offsetWidth; el.classList.add('tu-piscar');
-        if (campo && el.matches('.tu-ed')) setTimeout(function () { abrir(el); }, 380);
+        var alvo = el.closest('.qb-b') && campo ? el : (el.closest('.qb-b') || el);
+        alvo.classList.remove('qb-piscar'); void alvo.offsetWidth; alvo.classList.add('qb-piscar');
+        if (campo && el.matches('.tu-ed')) setTimeout(function () { abrir(el); }, 420);
         return true;
     }
     window.irParaAba = function (hash) { irPara(String(hash || '').replace(/^#/, '')); };
@@ -2358,19 +2363,28 @@ textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none
         var a = e.target.closest('a[href^="#"]');
         if (!a) return;
         var id = a.getAttribute('href').slice(1);
-        if (id && irPara(id)) { e.preventDefault(); history.replaceState(null, '', '#' + id); }
+        if (id && irPara(id)) {
+            e.preventDefault(); history.replaceState(null, '', '#' + id);
+            if (a.closest('.qb-pills')) { travaPilula = a; setTimeout(function () { travaPilula = null; }, 900);
+                tu.querySelectorAll('.qb-pills a').forEach(function (l) { l.classList.toggle('on', l === a); }); }
+        }
     });
     if (location.hash.length > 1) setTimeout(function () { irPara(decodeURIComponent(location.hash.slice(1))); }, 250);
     window.addEventListener('hashchange', function () { if (location.hash.length > 1) irPara(decodeURIComponent(location.hash.slice(1))); });
 
-    // índice acompanha a rolagem
-    var links = Array.prototype.slice.call(document.querySelectorAll('.tu-ind a'));
+    // a pílula do bloco que está na tela fica acesa (e a fileira rola até ela no celular)
+    var nav = tu.querySelector('.qb-pills');
+    var links = Array.prototype.slice.call(nav.querySelectorAll('a'));
     var alvos = links.map(function (l) { return document.getElementById(l.getAttribute('href').slice(1)); });
+    var ultimo = -1;
     var marcar = function () {
-        var at = 0, melhor = -Infinity;
-        alvos.forEach(function (s, i) { if (!s) return; var t = s.getBoundingClientRect().top; if (t < parseInt(getComputedStyle(tu).getPropertyValue('--tu-topo'), 10) + 40 && t > melhor) { melhor = t; at = i; } });
+        if (travaPilula) return;
+        var lim = nav.getBoundingClientRect().bottom + 120, at = 0, melhor = -Infinity;
+        alvos.forEach(function (s, i) { if (!s) return; var t = s.getBoundingClientRect().top; if (t < lim && t >= melhor - 2) { melhor = Math.max(melhor, t); at = i; } });
         if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) at = alvos.length - 1;
+        if (at === ultimo) return; ultimo = at;
         links.forEach(function (l, i) { l.classList.toggle('on', i === at); });
+        var a = links[at]; if (a) nav.scrollTo({ left: a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2, behavior: 'smooth' });
     };
     var pedido = false;
     window.addEventListener('scroll', function () {
