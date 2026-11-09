@@ -331,6 +331,40 @@ def capturar_empresa(empresa_id, cnpj, ambiente=client.Ambiente.PRODUCAO_RESTRIT
             'por_raiz': cert.por_raiz}
 
 
+_SQL_NOVAS = """
+    SELECT c.id AS empresa_id, c.numero_cliente, c.nome_razao_social,
+           REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '/', ''), '-', '') AS cnpj
+      FROM clientes c
+     WHERE c.situacao = 'ATIVO' AND c.tipo_pessoa = 'PJ'
+       AND LENGTH(REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '/', ''), '-', '')) = 14
+       AND NOT EXISTS (SELECT 1 FROM dfe_nsu_nfse n
+                        WHERE n.cnpj = REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '/', ''), '-', '')
+                              COLLATE utf8mb4_0900_ai_ci)
+       AND EXISTS (SELECT 1 FROM dfe_certificados d JOIN clientes c2 ON c2.id = d.cliente_id
+                    WHERE d.validade >= CURDATE()
+                      AND LEFT(REPLACE(REPLACE(REPLACE(c2.cpf_cnpj, '.', ''), '/', ''), '-', ''), 8)
+                        = LEFT(REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '/', ''), '-', ''), 8))
+     ORDER BY CAST(c.numero_cliente AS UNSIGNED), c.id
+"""
+
+
+def inscrever_novas(aplicar=True):
+    """Empresa ativa com certificado válido (dela ou da mesma raiz) que ainda não está na
+    captura de NFS-e entra sozinha, em backfill (08/11/2026). Anderson: "quando cadastrar uma
+    empresa nova já colocar para verificar para puxar as informações". Roda no começo de cada
+    ciclo do cron — cobre cadastro novo, certificado novo e filial nova sem tocar no cadastro.
+    Quem foi DESLIGADO (ativo=0) continua na tabela e não volta: a linha existe."""
+    novas = execute_query(_SQL_NOVAS, fetch=True) or []
+    if aplicar:
+        for e in novas:
+            execute_query(
+                'INSERT IGNORE INTO dfe_nsu_nfse (empresa_id, cnpj, ult_nsu, modo) VALUES (%s, %s, 0, %s)',
+                (e['empresa_id'], e['cnpj'], 'backfill'), fetch=False)
+        if novas:
+            logger.info('[nfse-captura] %d empresa(s) inscrita(s) na captura', len(novas))
+    return novas
+
+
 def executar_incremental(deadline_seg=DEADLINE_PADRAO_S,
                          ambiente=client.Ambiente.PRODUCAO_RESTRITA) -> dict:
     """O ciclo do cron: todas as empresas ativas, na ordem de quem esperou mais.
@@ -349,10 +383,17 @@ def executar_incremental(deadline_seg=DEADLINE_PADRAO_S,
     de ouro garante), mas jogaria fora a sessão mTLS já aberta.
     """
     t0 = time.monotonic()
+    try:
+        inscrever_novas()
+    except Exception:                       # inscrição é cortesia: nunca derruba o ciclo
+        logger.exception('[nfse-captura] falha ao inscrever empresas novas')
+    # Quem já está em dia vem PRIMEIRO (08/11/2026): com 200 backfills entrando de uma vez, a
+    # ordem antiga (nunca teve sucesso = primeiro) faria as empresas já em dia esperarem dias.
+    # O backfill fica com o tempo que sobra e drena em alguns ciclos, retomando de onde parou.
     empresas = execute_query(
         "SELECT n.empresa_id, n.cnpj, n.modo FROM dfe_nsu_nfse n "
         " WHERE n.ativo = 1 "
-        " ORDER BY n.ultimo_sucesso IS NOT NULL, n.ultimo_sucesso", fetch=True) or []
+        " ORDER BY (n.modo = 'backfill'), n.ultimo_sucesso IS NOT NULL, n.ultimo_sucesso", fetch=True) or []
 
     resultados = []
     for e in empresas:
