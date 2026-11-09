@@ -640,3 +640,62 @@ def salvar_reserva(cliente_id, reservado, usuario_ids):
                       "VALUES (%s, %s, %s)", (cliente_id, uid, autor), fetch=False)
     return ({'reservado': antes['reservado'], 'excecoes': sorted(antes['excecoes'])},
             {'reservado': bool(reservado), 'excecoes': sorted(novos)})
+
+
+# ---------------------------------------------------------------------------
+# Quem vê esta empresa, por departamento (09/11/2026)
+# ---------------------------------------------------------------------------
+# Anderson (09/11/2026): "queria que me mostrasse quem tem acesso... Cadastro, Fiscal,
+# Financeiro... Só para eu ter a garantia que não estão tendo acesso ao fiscal de uma ou
+# outra empresa". A resposta junta as DUAS regras do portão: o perfil (o que a pessoa abre)
+# e a reserva (se esta empresa aparece para ela). Mesma fonte de verdade do portão:
+# perfil_permissoes + catálogo, reserva + exceção. Nada é inventado aqui.
+DEPARTAMENTOS = [
+    ('Cadastros', 'Cadastro', 'fa-address-card'),
+    ('Escrita Fiscal', 'Fiscal', 'fa-file-invoice'),
+    ('Contábil', 'Contábil', 'fa-book'),
+    ('Financeiro', 'Financeiro', 'fa-coins'),
+    ('DP / Legalização', 'DP e Legalização', 'fa-briefcase'),
+    ('Processos', 'Processos', 'fa-list-check'),
+    ('Relatórios', 'Relatórios', 'fa-chart-column'),
+    ('Q-Robô', 'Q-Robô', 'fa-robot'),
+    ('Configurações', 'Configurações', 'fa-gear'),
+]
+
+
+def quem_ve_empresa(cliente_id):
+    """Uma linha por usuário ativo da equipe (admins primeiro): vê a empresa? e, se vê,
+    em quais departamentos e com quais permissões. None se a migração da reserva faltar."""
+    from utils.permissions import PERMISSION_CATALOG
+    reserva = dados_reserva(cliente_id)
+    if reserva is None:
+        return None
+    usuarios = execute_query(
+        "SELECT u.id, u.nome, u.login, u.tipo_usuario FROM usuarios u "
+        " WHERE u.situacao = 'ATIVO' AND COALESCE(u.classe_conta, 'FUNCIONARIO') <> 'CLIENTE' "
+        " ORDER BY (u.tipo_usuario = 'ADMIN') DESC, u.nome", fetch=True) or []
+    perms, perfis = {}, {}
+    for r in execute_query(
+            "SELECT up.usuario_id, pa.nome AS perfil, pp.permissao_codigo "
+            "  FROM usuario_perfis up JOIN perfis_acesso pa ON pa.id = up.perfil_id "
+            "  LEFT JOIN perfil_permissoes pp ON pp.perfil_id = pa.id "
+            " WHERE pa.situacao = 'ATIVO'", fetch=True) or []:
+        perfis.setdefault(r['usuario_id'], set()).add(r['perfil'])
+        if r.get('permissao_codigo'):
+            perms.setdefault(r['usuario_id'], set()).add(r['permissao_codigo'])
+    out = []
+    for u in usuarios:
+        admin = u['tipo_usuario'] == 'ADMIN'
+        ve = admin or not reserva['reservado'] or u['id'] in reserva['excecoes']
+        meus = perms.get(u['id'], set())
+        deps = []
+        for grupo, rotulo, ico in DEPARTAMENTOS:
+            cat = PERMISSION_CATALOG.get(grupo, {})
+            tem = sorted((cat[c] for c in cat if c in meus), key=str.lower)
+            deps.append({'rotulo': rotulo, 'ico': ico, 'tem': admin or bool(tem),
+                         'permissoes': ['tudo (administrador)'] if admin else tem})
+        out.append({'id': u['id'], 'nome': u['nome'], 'login': u['login'], 'admin': admin,
+                    've': ve, 'excecao': u['id'] in reserva['excecoes'],
+                    'perfis': sorted(perfis.get(u['id'], set())), 'deps': deps,
+                    'sem_perfil': not admin and not meus})
+    return out

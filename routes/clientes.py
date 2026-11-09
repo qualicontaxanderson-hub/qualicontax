@@ -1365,9 +1365,13 @@ def detalhes(id):
     # Aba "Acesso" (empresa reservada) — só o admin a vê e só ele a grava.
     reserva, reserva_csrf = None, None
     if current_user.is_admin():
-        from utils.acesso import dados_reserva
+        from utils.acesso import dados_reserva, quem_ve_empresa
         from routes.qrobo import csrf_token
         reserva, reserva_csrf = dados_reserva(id), csrf_token()
+        if reserva is not None:
+            reserva['quem'] = quem_ve_empresa(id) or []
+            reserva['contagem'] = [sum(1 for u in reserva['quem'] if u['ve'] and u['deps'][i]['tem'])
+                                   for i in range(len(reserva['quem'][0]['deps']) if reserva['quem'] else 0)]
 
     _falta = AC.pendencias_do_cadastro(id)   # o "O que falta" da tela única: a regra do A CADASTRAR
     return render_template('clientes/detalhes.html',

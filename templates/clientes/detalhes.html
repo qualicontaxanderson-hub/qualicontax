@@ -567,6 +567,44 @@
 .qb .hc-quem small { color:#94a3b8; }
 .qb .hc-av { width:24px; height:24px; flex:0 0 24px; border-radius:50%; background:#0f3d2e; color:#fff; font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; }
 .qb .hist-pg { border-radius:10px; }
+/* Quem vê esta empresa — cartões por pessoa (09/11/2026) */
+.qb .ac-form { display:flex; flex-direction:column; gap:14px; }
+.qb .ac-reserva { display:flex; gap:12px; align-items:flex-start; cursor:pointer; background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:12px 14px; }
+.qb .ac-reserva.on { background:#fffbeb; border-color:#fcd34d; }
+.qb .ac-reserva input { margin-top:10px; width:17px; height:17px; flex:0 0 auto; accent-color:#0f3d2e; }
+.qb .ac-reserva-ic { width:36px; height:36px; flex:0 0 36px; border-radius:11px; background:#f1f5f9; color:#475569; display:flex; align-items:center; justify-content:center; }
+.qb .ac-reserva.on .ac-reserva-ic { background:#fef3c7; color:#b45309; }
+.qb .ac-reserva b { font-size:14px; } .qb .ac-reserva small { display:block; color:#64748b; font-size:12.5px; line-height:1.5; margin-top:2px; }
+.qb .ac-resumo { display:flex; flex-wrap:wrap; gap:6px; }
+.qb .ac-res { font:inherit; font-size:12.5px; font-weight:600; color:#475569; background:#fff; border:1px solid #e2e8f0; border-radius:99px; padding:5px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+.qb .ac-res i { color:#94a3b8; font-size:11px; } .qb .ac-res b { color:#15803d; }
+.qb .ac-res.on { background:#0f3d2e; color:#fff; border-color:#0f3d2e; } .qb .ac-res.on i { color:#86efac; } .qb .ac-res.on b { color:#86efac; }
+.qb .ac-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; align-items:start; }
+.qb .ac-p { background:#f8fafc; border:1px solid #eef2f0; border-radius:16px; padding:13px 14px; display:flex; flex-direction:column; gap:10px; min-width:0; }
+.qb .ac-p.ac-adm { background:#f0fdf4; border-color:#bbf7d0; }
+.qb .ac-p.ac-nao { opacity:.72; }
+.qb .ac-p.ac-nao .ac-deps, .qb .ac-p.ac-nao .ac-det { display:none; }   /* não vê: o cartão fica curto */
+.qb .ac-cab { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; }
+.qb .ac-nome b { display:block; font-size:14px; color:#0f172a; overflow-wrap:anywhere; }
+.qb .ac-nome small { display:block; font-size:12px; color:#64748b; overflow-wrap:anywhere; }
+.qb .ac-tag { font-size:11.5px; font-weight:700; border-radius:99px; padding:3px 9px; white-space:nowrap; }
+.qb .ac-tag-adm { background:#dcfce7; color:#15803d; } .qb .ac-tag-nao { background:#f1f5f9; color:#64748b; } .qb .ac-tag-exc { background:#fef3c7; color:#b45309; }
+.qb .ac-txt { margin:0; font-size:13px; color:#475569; }
+.qb .ac-deps { display:flex; flex-wrap:wrap; gap:5px; }
+.qb .ac-dep { font-size:12px; font-weight:600; border-radius:8px; padding:4px 8px; display:inline-flex; align-items:center; gap:5px; }
+.qb .ac-dep i { font-size:10px; }
+.qb .ac-dep.sim { background:#dcfce7; color:#166534; }
+.qb .ac-dep.nao { background:#fff; color:#cbd5e1; border:1px dashed #e2e8f0; text-decoration:line-through; }
+.qb .ac-dep.bloq { background:#f1f5f9; color:#94a3b8; }
+.qb .ac-det summary { font-size:12.5px; font-weight:600; color:#15803d; cursor:pointer; }
+.qb .ac-det dl { display:grid; grid-template-columns:minmax(0,32%) minmax(0,1fr); gap:4px 10px; margin:8px 0 0; font-size:12.5px; background:#fff; border:1px solid #e8eeeb; border-radius:11px; padding:9px 11px; }
+.qb .ac-det dt { color:#64748b; font-weight:700; } .qb .ac-det dd { margin:0; color:#0f172a; overflow-wrap:anywhere; }
+.qb .ac-exc { display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:#b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:6px 10px; cursor:pointer; }
+.qb .ac-exc[hidden] { display:none; }
+.qb .ac-exc input { accent-color:#b45309; }
+.qb .ac-rodape { display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:space-between; }
+.qb .ac-rodape p { margin:0; font-size:12.5px; color:#64748b; flex:1; min-width:240px; }
+@media (max-width:480px) { .qb .ac-grade { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:480px) { .qb .hc-grade { grid-template-columns:minmax(0,1fr); } .qb .hc-busca { width:100%; margin-left:0; } }
 .qb .hist-tab { border-radius:10px; font-size:12.5px; }
 
@@ -1534,45 +1572,78 @@
             </section>
 
             {% if reserva is not none %}
-            {# Aba só do ADMIN: empresa reservada + exceções (utils/acesso.py). #}
-            <section class="qb-b s12 qb-reuso"><div id="acesso" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Quem vê esta empresa</h3>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" action="{{ url_for('clientes.acesso_reservado', id=cliente.id) }}" class="acesso-form">
-                            <input type="hidden" name="csrf_token" value="{{ reserva_csrf }}">
-                            <label class="acesso-opcao">
-                                <input type="checkbox" name="reservado" value="1" id="acesso-reservado"
-                                       {% if reserva.reservado %}checked{% endif %}>
-                                <span>
-                                    <strong>Empresa reservada</strong><br>
-                                    <small>Só administradores veem: some da lista de clientes, das buscas, dos seletores,
-                                    das notas, dos downloads e do Q-Robô, mesmo para quem tem o perfil do departamento.</small>
-                                </span>
-                            </label>
+            {# Só do ADMIN: quem vê esta empresa e em quais departamentos (09/11/2026, cartões).
+               Mesma regra do portão (utils/acesso.py): perfil + empresa reservada + exceção. #}
+            {% set quem = reserva.quem or [] %}
+            {% set veem = quem | selectattr('ve') | list %}
+            <section class="qb-b s12" id="acesso">
+                <div class="qb-bh"><span class="qb-ico i-cinza"><i class="fas fa-user-shield"></i></span>
+                    <div><h3>Quem vê esta empresa</h3><small class="qb-sub2">o que cada pessoa abre desta empresa, pelo perfil dela</small></div>
+                    <span class="qb-selo {{ 'qb-selo-amb' if reserva.reservado else 'qb-selo-ok' }}">{{ 'reservada' if reserva.reservado else 'liberada para a equipe' }}</span></div>
 
-                            <fieldset class="acesso-excecoes" id="acesso-excecoes">
-                                <legend>Exceções: estas pessoas também veem</legend>
-                                <p class="acesso-ajuda">Vale só para esta empresa e só no que o perfil da pessoa já permite
-                                    (quem não tem Financeiro continua sem Financeiro).</p>
-                                {% for u in reserva.usuarios %}
-                                <label class="acesso-pessoa">
-                                    <input type="checkbox" name="excecao" value="{{ u.id }}"
-                                           {% if u.id in reserva.excecoes %}checked{% endif %}>
-                                    {{ u.nome }} <small>({{ u.login }})</small>
-                                </label>
-                                {% else %}
-                                <p class="acesso-ajuda">Nenhum usuário além dos administradores.</p>
+                <form method="POST" action="{{ url_for('clientes.acesso_reservado', id=cliente.id) }}" class="ac-form">
+                    <input type="hidden" name="csrf_token" value="{{ reserva_csrf }}">
+                    <label class="ac-reserva{{ ' on' if reserva.reservado }}">
+                        <input type="checkbox" name="reservado" value="1" id="acesso-reservado" {% if reserva.reservado %}checked{% endif %}>
+                        <span class="ac-reserva-ic"><i class="fas fa-lock"></i></span>
+                        <span><b>Empresa reservada</b>
+                            <small>Só administradores veem: some da lista de clientes, das buscas, das notas, dos downloads e do Q-Robô, mesmo para quem tem o perfil do departamento. Marque abaixo quem pode ver mesmo assim.</small></span>
+                    </label>
+
+                    <div class="ac-resumo">
+                        {% for d in (quem[0].deps if quem else []) %}{% set i = loop.index0 %}
+                        {% set n = reserva.contagem[i] %}
+                        <button type="button" class="ac-res" data-dep="{{ i }}" title="Mostrar só quem abre {{ d.rotulo }} desta empresa">
+                            <i class="fas {{ d.ico }}"></i><span>{{ d.rotulo }}</span><b>{{ n }}</b></button>
+                        {% endfor %}
+                        <button type="button" class="ac-res ac-res-todos on" data-dep="">Todos <b>{{ quem | length }}</b></button>
+                    </div>
+
+                    <div class="ac-grade">
+                        {% for u in quem %}
+                        <article class="ac-p{{ ' ac-nao' if not u.ve }}{{ ' ac-adm' if u.admin }}" data-tem="{% for d in u.deps %}{{ '1' if (d.tem and u.ve) else '0' }}{% endfor %}">
+                            <div class="ac-cab">
+                                <span class="qb-av" style="background:{{ rs_cores[u.id % 8] }}">{{ rs_ini(u.nome) }}</span>
+                                <div class="ac-nome"><b>{{ u.nome }}</b>
+                                    <small>{{ u.login }}{% if u.perfis %} · {{ u.perfis | join(', ') }}{% endif %}</small></div>
+                                {% if u.admin %}<span class="ac-tag ac-tag-adm"><i class="fas fa-crown"></i> Administrador</span>
+                                {% elif not u.ve %}<span class="ac-tag ac-tag-nao"><i class="fas fa-eye-slash"></i> Não vê</span>
+                                {% elif u.excecao and reserva.reservado %}<span class="ac-tag ac-tag-exc"><i class="fas fa-key"></i> Exceção</span>
+                                {% elif u.sem_perfil %}<span class="ac-tag ac-tag-nao">Sem perfil</span>{% endif %}
+                            </div>
+                            {% if u.admin %}
+                            <p class="ac-txt">Vê tudo desta empresa, em todos os departamentos.</p>
+                            {% elif not u.ve %}
+                            <p class="ac-txt">A empresa é reservada: não aparece para esta pessoa em lugar nenhum.</p>
+                            {% elif u.sem_perfil %}
+                            <p class="ac-txt">Sem perfil de acesso: não abre nenhum departamento.</p>
+                            {% endif %}
+                            {% if not u.admin and not u.sem_perfil %}
+                            <div class="ac-deps">
+                                {% for d in u.deps %}
+                                <span class="ac-dep {{ 'sim' if (d.tem and u.ve) else ('bloq' if d.tem else 'nao') }}" title="{{ d.permissoes | join(', ') if d.tem else 'não tem no perfil' }}{{ ' — bloqueado: empresa reservada' if d.tem and not u.ve }}">
+                                    <i class="fas {{ 'fa-check' if (d.tem and u.ve) else ('fa-lock' if d.tem else 'fa-minus') }}"></i>{{ d.rotulo }}</span>
                                 {% endfor %}
-                            </fieldset>
-
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar acesso</button>
-                        </form>
+                            </div>
+                            {% if u.deps | selectattr('tem') | list %}
+                            <details class="ac-det"><summary>ver o que pode fazer</summary>
+                                <dl>{% for d in u.deps if d.tem %}<dt>{{ d.rotulo }}</dt><dd>{{ d.permissoes | join(' · ') }}</dd>{% endfor %}</dl>
+                            </details>
+                            {% endif %}
+                            {% endif %}
+                            {% if not u.admin %}
+                            <label class="ac-exc"{% if not reserva.reservado %} hidden{% endif %}>
+                                <input type="checkbox" name="excecao" value="{{ u.id }}" {% if u.excecao %}checked{% endif %}>
+                                Pode ver esta empresa mesmo reservada</label>
+                            {% endif %}
+                        </article>
+                        {% endfor %}
                     </div>
-                </div>
-            </div>
+                    <div class="ac-rodape">
+                        <p><i class="fas fa-circle-info"></i> O que cada um abre vem do <b>perfil de acesso</b> (Configurações → Perfis). Para tirar o Fiscal de alguém em todas as empresas, mude o perfil; para esconder <b>só esta</b> empresa, marque "Empresa reservada".</p>
+                        <button type="submit" class="qb-add"><i class="fas fa-save"></i> Salvar acesso</button>
+                    </div>
+                </form>
             </section>
             {% endif %}
 
@@ -2287,11 +2358,23 @@
 <script>
 (function () {
     var chk = document.getElementById('acesso-reservado');
-    var box = document.getElementById('acesso-excecoes');
-    if (!chk || !box) return;
-    function sync() { box.disabled = !chk.checked; }
+    if (!chk) return;
+    function sync() {
+        document.querySelectorAll('#acesso .ac-exc').forEach(function (l) { l.hidden = !chk.checked; });
+        chk.closest('.ac-reserva').classList.toggle('on', chk.checked);
+    }
     chk.addEventListener('change', sync);
     sync();
+    // Quem vê (09/11/2026): clicar num departamento mostra só quem o abre desta empresa
+    document.querySelectorAll('#acesso .ac-res').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.querySelectorAll('#acesso .ac-res').forEach(function (x) { x.classList.toggle('on', x === b); });
+            var i = b.getAttribute('data-dep');
+            document.querySelectorAll('#acesso .ac-p').forEach(function (c) {
+                c.style.display = (i === '' || (c.getAttribute('data-tem') || '').charAt(+i) === '1') ? '' : 'none';
+            });
+        });
+    });
 })();
 </script>
 <script>
